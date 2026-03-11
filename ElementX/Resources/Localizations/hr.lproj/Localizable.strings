@@ -1198,7 +1198,7 @@
 "screen_room_timeline_add_reaction" = "Dodaj reakciju";
 "screen_room_timeline_beginning_of_room" = "Ovo je početak sobe %1$@.";
 "screen_room_timeline_beginning_of_room_no_name" = "Ovo je početak ovog razgovora.";
-"screen_room_timeline_legacy_call" = "Nepodržani poziv. Pitajte pozivatelja može li se služiti novom aplikacijom Element X.";
+"screen_room_timeline_legacy_call" = "Nepodržani poziv. Pitajte pozivatelja može li se služiti novom aplikacijom SalemX.";
 "screen_room_timeline_less_reactions" = "Prikaži manje";
 "screen_room_timeline_message_copied" = "Poruka je kopirana";
 "screen_room_timeline_no_permission_to_post" = "Nemate dopuštenje za objavljivanje u ovoj sobi";
