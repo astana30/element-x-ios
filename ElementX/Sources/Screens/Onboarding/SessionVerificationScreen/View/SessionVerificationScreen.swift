@@ -237,7 +237,7 @@ struct SessionVerification_Previews: PreviewProvider, TestablePreview {
                                                                                         avatarURL: .mockMXCUserAvatar),
                                                         flowID: "123",
                                                         deviceID: "CODEMISTAKE",
-                                                        deviceDisplayName: "Bob's Element X iOS",
+                                                        deviceDisplayName: "Bob's SalemX iOS",
                                                         firstSeenDate: .init(timeIntervalSince1970: 0))
         
         sessionVerificationScreen(state: .initial,
