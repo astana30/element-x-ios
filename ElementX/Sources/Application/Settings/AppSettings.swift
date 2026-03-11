@@ -199,7 +199,7 @@ final class AppSettings {
     private(set) var hideBrandChrome = false
     
     /// The task identifier used for background app refresh. Also used in main target's the Info.plist
-    let backgroundAppRefreshTaskIdentifier = "io.element.elementx.background.refresh"
+    let backgroundAppRefreshTaskIdentifier = "kz.salemx.msg.background.refresh"
 
     /// A URL where users can go read more about the app.
     private(set) var websiteURL: URL = "https://element.io"
