@@ -36,28 +36,10 @@ class AuthenticationStartScreenViewModel: AuthenticationStartScreenViewModelType
         self.userIndicatorController = userIndicatorController
         canReportProblem = isBugReportServiceEnabled
         
-        let isQRCodeScanningSupported = !ProcessInfo.processInfo.isiOSAppOnMac
-        
-        let initialViewState = if !appSettings.allowOtherAccountProviders {
-            // We don't show the create account button when custom providers are disallowed.
-            // The assumption here being that if you're running a custom app, your users will already be created.
-            AuthenticationStartScreenViewState(serverName: appSettings.accountProviders.count == 1 ? appSettings.accountProviders[0] : nil,
-                                               showCreateAccountButton: false,
-                                               showQRCodeLoginButton: isQRCodeScanningSupported,
-                                               hideBrandChrome: appSettings.hideBrandChrome)
-        } else if let provisioningParameters {
-            // We only show the "Sign in to …" button when using a provisioning link.
-            AuthenticationStartScreenViewState(serverName: provisioningParameters.accountProvider,
-                                               showCreateAccountButton: false,
-                                               showQRCodeLoginButton: false,
-                                               hideBrandChrome: appSettings.hideBrandChrome)
-        } else {
-            // The default configuration.
-            AuthenticationStartScreenViewState(serverName: nil,
-                                               showCreateAccountButton: appSettings.showCreateAccountButton,
-                                               showQRCodeLoginButton: isQRCodeScanningSupported,
-                                               hideBrandChrome: appSettings.hideBrandChrome)
-        }
+        let initialViewState = AuthenticationStartScreenViewState(serverName: nil,
+                                                                   showCreateAccountButton: false,
+                                                                   showQRCodeLoginButton: false,
+                                                                   hideBrandChrome: appSettings.hideBrandChrome)
         
         super.init(initialViewState: initialViewState)
     }
@@ -83,11 +65,8 @@ class AuthenticationStartScreenViewModel: AuthenticationStartScreenViewModelType
     // MARK: - Private
     
     private func login() async {
-        if let serverName = state.serverName {
-            await configureAccountProvider(serverName, loginHint: provisioningParameters?.loginHint)
-        } else {
-            actionsSubject.send(.login) // No need to configure anything here, continue the flow.
-        }
+        await configureAccountProvider(LoginHomeserver.sanitized("wd.mertis.kz"),
+                                       loginHint: provisioningParameters?.loginHint)
     }
     
     private func configureAccountProvider(_ accountProvider: String, loginHint: String? = nil) async {

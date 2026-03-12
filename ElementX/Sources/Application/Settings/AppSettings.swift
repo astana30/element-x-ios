@@ -249,8 +249,13 @@ final class AppSettings {
     
     /// Any pre-defined static client registrations for OIDC issuers.
     let oidcStaticRegistrations: [URL: String] = ["https://id.thirdroom.io/realms/thirdroom": "elementx"]
-    /// The redirect URL used for OIDC. This no longer uses universal links so we don't need the bundle ID to avoid conflicts between Element X, Nightly and PR builds.
-    private(set) var oidcRedirectURL: URL = "https://element.io/oidc/login"
+    /// The redirect URL used for OIDC. Use the app's custom URL scheme so the callback works for the rebranded bundle identifier.
+    private(set) lazy var oidcRedirectURL: URL = {
+        guard let url = URL(string: "\(InfoPlistReader.main.baseBundleIdentifier)://oidc/login") else {
+            fatalError("Invalid OIDC redirect URL")
+        }
+        return url
+    }()
     
     private(set) lazy var oidcConfiguration = OIDCConfiguration(clientName: InfoPlistReader.main.bundleDisplayName,
                                                                 redirectURI: oidcRedirectURL,
