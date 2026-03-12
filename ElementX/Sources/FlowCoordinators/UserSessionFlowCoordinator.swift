@@ -293,12 +293,7 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
     // MARK: - Onboarding
     
     private func attemptStartingOnboarding() {
-        MXLog.info("Attempting to start onboarding")
-        
-        if onboardingFlowCoordinator.shouldStart {
-            clearRoute(animated: false)
-            onboardingFlowCoordinator.start()
-        }
+        MXLog.info("Skipping onboarding and opening chats directly")
     }
     
     // MARK: - Settings
