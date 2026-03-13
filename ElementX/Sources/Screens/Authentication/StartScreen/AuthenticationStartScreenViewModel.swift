@@ -37,9 +37,9 @@ class AuthenticationStartScreenViewModel: AuthenticationStartScreenViewModelType
         canReportProblem = isBugReportServiceEnabled
         
         let initialViewState = AuthenticationStartScreenViewState(serverName: nil,
-                                                                   showCreateAccountButton: false,
-                                                                   showQRCodeLoginButton: false,
-                                                                   hideBrandChrome: appSettings.hideBrandChrome)
+                                                                  showCreateAccountButton: false,
+                                                                  showQRCodeLoginButton: false,
+                                                                  hideBrandChrome: appSettings.hideBrandChrome)
         
         super.init(initialViewState: initialViewState)
     }

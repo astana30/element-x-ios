@@ -35,17 +35,6 @@ struct AuthenticationStartScreen: View {
                     .frame(height: UIConstants.spacerHeight(in: geometry))
             }
             .frame(maxHeight: .infinity)
-            .safeAreaInset(edge: .bottom) {
-                versionText
-                    .font(.compound.bodySM)
-                    .foregroundColor(.compound.textSecondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.bottom)
-                    .onTapGesture(count: 7) {
-                        context.send(viewAction: .reportProblem)
-                    }
-                    .accessibilityIdentifier(A11yIdentifiers.authenticationStartScreen.appVersion)
-            }
         }
         .navigationBarHidden(true)
         .background {
@@ -60,27 +49,20 @@ struct AuthenticationStartScreen: View {
         VStack(spacing: 0) {
             Spacer()
             
-            if verticalSizeClass == .regular {
-                Spacer()
-                
+            VStack(spacing: 16) {
                 AuthenticationStartLogo(hideBrandChrome: context.viewState.hideBrandChrome)
-            }
-            
-            Spacer()
-            
-            if !context.viewState.hideBrandChrome {
-                VStack(spacing: 8) {
-                    Text(L10n.screenOnboardingWelcomeTitle)
+                
+                if !context.viewState.hideBrandChrome {
+                    Text(InfoPlistReader.main.productionAppName)
                         .font(.compound.headingLGBold)
                         .foregroundColor(.compound.textPrimary)
                         .multilineTextAlignment(.center)
-                    Text(L10n.screenOnboardingWelcomeMessage(InfoPlistReader.main.productionAppName))
-                        .font(.compound.bodyLG)
-                        .foregroundColor(.compound.textSecondary)
-                        .multilineTextAlignment(.center)
                 }
-                .padding()
-                .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            .onTapGesture(count: 7) {
+                context.send(viewAction: .reportProblem)
             }
             
             Spacer()
@@ -93,35 +75,14 @@ struct AuthenticationStartScreen: View {
     /// The main action buttons.
     var buttons: some View {
         VStack(spacing: 16) {
-            if context.viewState.showQRCodeLoginButton {
-                Button { context.send(viewAction: .loginWithQR) } label: {
-                    Label(L10n.screenOnboardingSignInWithQrCode, icon: \.qrCode)
-                }
-                .buttonStyle(.compound(.primary))
-                .accessibilityIdentifier(A11yIdentifiers.authenticationStartScreen.signInWithQr)
-            }
-            
             Button { context.send(viewAction: .login) } label: {
                 Text(context.viewState.loginButtonTitle)
             }
             .buttonStyle(.compound(.primary))
             .accessibilityIdentifier(A11yIdentifiers.authenticationStartScreen.signIn)
-            
-            if context.viewState.showCreateAccountButton {
-                Button { context.send(viewAction: .register) } label: {
-                    Text(L10n.screenCreateAccountTitle)
-                }
-                .buttonStyle(.compound(.tertiary))
-            }
         }
         .padding(.horizontal, verticalSizeClass == .compact ? 128 : 24)
         .readableFrame()
-    }
-    
-    var versionText: Text {
-        // Let's not deal with snapshotting a changing version string.
-        let shortVersionString = ProcessInfo.isRunningTests ? "0.0.0" : InfoPlistReader.main.bundleShortVersionString
-        return Text(L10n.screenOnboardingAppVersion(shortVersionString))
     }
 }
 

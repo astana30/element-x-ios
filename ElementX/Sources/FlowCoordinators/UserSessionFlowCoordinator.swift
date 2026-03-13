@@ -64,6 +64,7 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
     private var cancellables: Set<AnyCancellable> = []
     
     private let actionsSubject: PassthroughSubject<UserSessionFlowCoordinatorAction, Never> = .init()
+    private var hasHandledInitialSecurityGate = false
     var actionsPublisher: AnyPublisher<UserSessionFlowCoordinatorAction, Never> {
         actionsSubject.eraseToAnyPublisher()
     }
@@ -293,9 +294,60 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
     // MARK: - Onboarding
     
     private func attemptStartingOnboarding() {
-        MXLog.info("Skipping onboarding and opening chats directly")
+        let recoveryState = userSession.clientProxy.secureBackupController.recoveryState.value
+
+        if hasHandledInitialSecurityGate {
+            return
+        }
+
+        switch recoveryState {
+        case .unknown:
+            MXLog.info("Security state is still unknown, waiting before deciding post-login flow")
+            return
+
+        case .incomplete:
+            hasHandledInitialSecurityGate = true
+            MXLog.info("Recovery is incomplete, presenting recovery key screen")
+            presentInitialRecoveryKeyScreen()
+
+        case .enabled:
+            hasHandledInitialSecurityGate = true
+            MXLog.info("Recovery is enabled, skipping onboarding and opening chats directly")
+
+        case .disabled:
+            hasHandledInitialSecurityGate = true
+            MXLog.warning("Recovery is disabled, skipping onboarding and opening chats directly")
+
+        @unknown default:
+            hasHandledInitialSecurityGate = true
+            MXLog.warning("Unhandled recovery state, skipping onboarding and opening chats directly")
+        }
     }
-    
+
+    private func presentInitialRecoveryKeyScreen() {
+        let sheetNavigationStackCoordinator = NavigationStackCoordinator()
+
+        let parameters = SecureBackupRecoveryKeyScreenCoordinatorParameters(secureBackupController: userSession.clientProxy.secureBackupController,
+                                                                            userIndicatorController: flowParameters.userIndicatorController,
+                                                                            isModallyPresented: true)
+
+        let coordinator = SecureBackupRecoveryKeyScreenCoordinator(parameters: parameters)
+
+        coordinator.actions
+            .sink { [weak self] action in
+                guard let self else { return }
+
+                switch action {
+                case .complete:
+                    navigationTabCoordinator.setSheetCoordinator(nil)
+                }
+            }
+            .store(in: &cancellables)
+
+        sheetNavigationStackCoordinator.setRootCoordinator(coordinator)
+        navigationTabCoordinator.setSheetCoordinator(sheetNavigationStackCoordinator, animated: true)
+    }
+
     // MARK: - Settings
     
     private func startSettingsFlow() {

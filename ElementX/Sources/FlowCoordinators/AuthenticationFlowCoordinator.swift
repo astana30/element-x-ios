@@ -252,6 +252,12 @@ class AuthenticationFlowCoordinator: FlowCoordinatorProtocol {
             switch (context.fromState, context.toState) {
             case (.complete, .complete):
                 break // Ignore all events triggered by
+            case (.oidcAuthentication, .oidcAuthentication):
+                if case .continueWithOIDC? = context.event {
+                    break
+                } else {
+                    fatalError("Unexpected transition: \(context)")
+                }
             default:
                 fatalError("Unexpected transition: \(context)")
             }
