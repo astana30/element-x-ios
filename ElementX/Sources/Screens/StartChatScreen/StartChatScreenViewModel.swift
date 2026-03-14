@@ -30,14 +30,36 @@ class StartChatScreenViewModel: StartChatScreenViewModelType, StartChatScreenVie
          analytics: AnalyticsService,
          userIndicatorController: UserIndicatorControllerProtocol,
          userDiscoveryService: UserDiscoveryServiceProtocol,
-         appSettings: AppSettings) {
+         appSettings: AppSettings,
+         mode: StartChatScreenMode = .startChatFlow) {
         self.userSession = userSession
         self.analytics = analytics
         self.userIndicatorController = userIndicatorController
         self.userDiscoveryService = userDiscoveryService
         self.appSettings = appSettings
         
-        super.init(initialViewState: StartChatScreenViewState(userID: userSession.clientProxy.userID), mediaProvider: userSession.mediaProvider)
+        let initialViewState: StartChatScreenViewState
+        
+        switch mode {
+        case .startChatFlow:
+            initialViewState = StartChatScreenViewState(userID: userSession.clientProxy.userID,
+                                                        screenTitle: "Contacts",
+                                                        showsCloseButton: true,
+                                                        showsCreateRoomSection: true,
+                                                        showsRoomDirectorySection: true,
+                                                        showsJoinByAddressSection: true,
+                                                        showsInviteFriendsSection: true)
+        case .contactsTab:
+            initialViewState = StartChatScreenViewState(userID: userSession.clientProxy.userID,
+                                                        screenTitle: "Contacts",
+                                                        showsCloseButton: false,
+                                                        showsCreateRoomSection: false,
+                                                        showsRoomDirectorySection: false,
+                                                        showsJoinByAddressSection: false,
+                                                        showsInviteFriendsSection: true)
+        }
+        
+        super.init(initialViewState: initialViewState, mediaProvider: userSession.mediaProvider)
         
         setupBindings()
         

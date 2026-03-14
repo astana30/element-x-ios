@@ -186,7 +186,8 @@ class StartChatFlowCoordinator: FlowCoordinatorProtocol {
                                                               userDiscoveryService: userDiscoveryService,
                                                               userIndicatorController: flowParameters.userIndicatorController,
                                                               appSettings: flowParameters.appSettings,
-                                                              analytics: flowParameters.analytics)
+                                                              analytics: flowParameters.analytics,
+                                                              mode: .startChatFlow)
         
         let coordinator = StartChatScreenCoordinator(parameters: parameters)
         coordinator.actions.sink { [weak self] action in

@@ -23,7 +23,7 @@ struct StartChatScreen: View {
         .compoundList()
         .track(screen: .StartChat)
         .scrollDismissesKeyboard(.immediately)
-        .navigationTitle("Contacts")
+        .navigationTitle(context.viewState.screenTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
         .searchController(query: $context.searchQuery,
@@ -49,12 +49,18 @@ struct StartChatScreen: View {
     /// The content shown in the form when the search query is empty.
     @ViewBuilder
     private var mainContent: some View {
-        createRoomSection
-        if context.viewState.isRoomDirectoryEnabled {
+        if context.viewState.showsCreateRoomSection {
+            createRoomSection
+        }
+        if context.viewState.showsRoomDirectorySection, context.viewState.isRoomDirectoryEnabled {
             roomDirectorySearch
         }
-        inviteFriendsSection
-        joinRoomByAddressSection
+        if context.viewState.showsInviteFriendsSection {
+            inviteFriendsSection
+        }
+        if context.viewState.showsJoinByAddressSection {
+            joinRoomByAddressSection
+        }
         usersSection
     }
     
@@ -141,12 +147,15 @@ struct StartChatScreen: View {
             .accessibilityIdentifier(A11yIdentifiers.startChatScreen.searchNoResults)
     }
     
+    @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
-        ToolbarItem(placement: .cancellationAction) {
-            Button(L10n.actionCancel) {
-                context.send(viewAction: .close)
+        if context.viewState.showsCloseButton {
+            ToolbarItem(placement: .cancellationAction) {
+                Button(L10n.actionCancel) {
+                    context.send(viewAction: .close)
+                }
+                .accessibilityIdentifier(A11yIdentifiers.startChatScreen.closeStartChat)
             }
-            .accessibilityIdentifier(A11yIdentifiers.startChatScreen.closeStartChat)
         }
     }
 }

@@ -8,6 +8,11 @@
 
 import Foundation
 
+enum StartChatScreenMode {
+    case startChatFlow
+    case contactsTab
+}
+
 enum StartChatScreenErrorType: Error {
     case failedCreatingRoom
     case unknown
@@ -22,6 +27,13 @@ enum StartChatScreenViewModelAction: Equatable {
 
 struct StartChatScreenViewState: BindableState {
     let userID: String
+    let screenTitle: String
+    let showsCloseButton: Bool
+    let showsCreateRoomSection: Bool
+    let showsRoomDirectorySection: Bool
+    let showsJoinByAddressSection: Bool
+    let showsInviteFriendsSection: Bool
+
     var bindings = StartChatScreenViewStateBindings()
     var usersSection: UserDiscoverySection = .init(type: .suggestions, users: [])
     var isRoomDirectoryEnabled = false

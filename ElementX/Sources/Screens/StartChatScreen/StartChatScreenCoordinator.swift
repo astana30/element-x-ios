@@ -15,6 +15,7 @@ struct StartChatScreenCoordinatorParameters {
     let userIndicatorController: UserIndicatorControllerProtocol
     let appSettings: AppSettings
     let analytics: AnalyticsService
+    let mode: StartChatScreenMode
 }
 
 enum StartChatScreenCoordinatorAction {
@@ -41,7 +42,8 @@ final class StartChatScreenCoordinator: CoordinatorProtocol {
                                              analytics: parameters.analytics,
                                              userIndicatorController: parameters.userIndicatorController,
                                              userDiscoveryService: parameters.userDiscoveryService,
-                                             appSettings: parameters.appSettings)
+                                             appSettings: parameters.appSettings,
+                                             mode: parameters.mode)
     }
     
     func start() {
