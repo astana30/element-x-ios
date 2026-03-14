@@ -96,7 +96,7 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
         contactsTabFlowCoordinator = ContactsTabFlowCoordinator(navigationStackCoordinator: contactsTabNavigationStackCoordinator,
                                                                 flowParameters: flowParameters)
         contactsTabDetails = .init(tag: HomeTab.contacts,
-                                   title: "Контакты",
+                                   title: L10n.screenContactsTitle,
                                    icon: \.chat,
                                    selectedIcon: \.chatSolid)
         

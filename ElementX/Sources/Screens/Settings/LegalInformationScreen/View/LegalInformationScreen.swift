@@ -16,16 +16,36 @@ struct LegalInformationScreen: View {
     var body: some View {
         Form {
             Section {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("SalemX")
+                        .font(.compound.headingLG)
+                        .foregroundColor(.compound.textPrimary)
+                    
+                    Text(L10n.screenAboutSalemxDescriptionPrimary)
+                        .font(.compound.bodyMD)
+                        .foregroundColor(.compound.textPrimary)
+                    
+                    Text(L10n.screenAboutSalemxDescriptionSecondary)
+                        .font(.compound.bodyMD)
+                        .foregroundColor(.compound.textSecondary)
+                }
+                .padding(.vertical, 8)
+                .listRowBackground(Color.compound.bgCanvasDefault)
+            }
+            
+            Section(L10n.screenAboutSalemxDocumentsTitle) {
                 ListRow(label: .plain(title: L10n.commonCopyright),
                         kind: .button { openURL(context.viewState.copyrightURL) })
+                
                 ListRow(label: .plain(title: L10n.commonAcceptableUsePolicy),
                         kind: .button { openURL(context.viewState.acceptableUseURL) })
+                
                 ListRow(label: .plain(title: L10n.commonPrivacyPolicy),
                         kind: .button { openURL(context.viewState.privacyURL) })
             }
         }
         .compoundList()
-        .navigationTitle(L10n.commonAbout)
+        .navigationTitle(L10n.screenAboutSalemxTitle)
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -34,6 +54,7 @@ struct LegalInformationScreen: View {
 
 struct LegalInformationScreen_Previews: PreviewProvider, TestablePreview {
     static let viewModel = LegalInformationScreenViewModel(appSettings: AppSettings())
+    
     static var previews: some View {
         LegalInformationScreen(context: viewModel.context)
     }

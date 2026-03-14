@@ -1293,6 +1293,7 @@
 "screen_signout_recovery_disabled_title" = "Recovery not set up";
 "screen_signout_save_recovery_key_subtitle" = "You are about to sign out of your last session. If you sign out now, you might lose access to your encrypted messages.";
 "screen_start_chat_error_starting_chat" = "An error occurred when trying to start a chat";
+"screen_contacts_title" = "Contacts";
 "screen_view_location_title" = "Location";
 "session_verification_banner_message" = "Looks like you’re using a new device. Verify with another device to access your encrypted messages.";
 "session_verification_banner_title" = "Verify it’s you";
@@ -1560,3 +1561,13 @@
 "troubleshoot_notifications_test_blocked_users_title" = "Blocked users";
 "troubleshoot_notifications_entry_point_push_history_title" = "Push history";
 "troubleshoot_notifications_entry_point_title" = "Troubleshoot notifications";
+
+"screen_settings_account_and_security_title" = "Account & Security";
+
+"screen_about_salemx_title" = "About SalemX";
+
+"screen_about_salemx_documents_title" = "Documents";
+
+"screen_about_salemx_description_primary" = "A corporate messaging app for communication between company employees.";
+
+"screen_about_salemx_description_secondary" = "End-to-end encryption is used to protect conversations.";

@@ -13,21 +13,11 @@ import SwiftUI
 struct SettingsScreen: View {
     let context: SettingsScreenViewModel.Context
     
-    private var shouldHideManageAccountSection: Bool {
-        context.viewState.accountProfileURL == nil &&
-            context.viewState.accountSessionsListURL == nil &&
-            !context.viewState.showBlockedUsers
-    }
-    
     var body: some View {
         Form {
             userSection
             
-            manageMyAppSection
-            
-            if !shouldHideManageAccountSection {
-                manageAccountSection
-            }
+            accountAndSecuritySection
             
             generalSection
             
@@ -77,8 +67,8 @@ struct SettingsScreen: View {
         }
     }
     
-    private var manageMyAppSection: some View {
-        Section {
+    private var accountAndSecuritySection: some View {
+        Section(L10n.screenSettingsAccountAndSecurityTitle) {
             ListRow(label: .default(title: L10n.screenNotificationSettingsTitle,
                                     icon: \.notifications),
                     kind: .navigationLink {
@@ -103,11 +93,7 @@ struct SettingsScreen: View {
             default:
                 EmptyView()
             }
-        }
-    }
-    
-    private var manageAccountSection: some View {
-        Section {
+            
             if context.viewState.showLinkNewDeviceButton {
                 ListRow(label: .default(title: L10n.commonLinkNewDevice,
                                         icon: \.devices),
@@ -153,36 +139,12 @@ struct SettingsScreen: View {
                     })
                     .accessibilityIdentifier(A11yIdentifiers.settingsScreen.advancedSettings)
             
-            ListRow(label: .default(title: L10n.screenAdvancedSettingsLabs,
-                                    icon: \.labs),
-                    kind: .navigationLink {
-                        context.send(viewAction: .labs)
-                    })
-            
-            ListRow(label: .default(title: L10n.commonAbout,
+            ListRow(label: .default(title: L10n.screenAboutSalemxTitle,
                                     icon: \.info),
                     kind: .navigationLink {
                         context.send(viewAction: .about)
                     })
                     .accessibilityIdentifier(A11yIdentifiers.settingsScreen.about)
-            
-            if context.viewState.isBugReportServiceEnabled {
-                ListRow(label: .default(title: L10n.commonReportAProblem,
-                                        icon: \.chatProblem),
-                        kind: .navigationLink {
-                            context.send(viewAction: .reportBug)
-                        })
-                        .accessibilityIdentifier(A11yIdentifiers.settingsScreen.reportBug)
-            }
-            
-            if context.viewState.showAnalyticsSettings {
-                ListRow(label: .default(title: L10n.commonAnalytics,
-                                        icon: \.chart),
-                        kind: .navigationLink {
-                            context.send(viewAction: .analytics)
-                        })
-                        .accessibilityIdentifier(A11yIdentifiers.settingsScreen.analytics)
-            }
         }
     }
     
@@ -204,10 +166,6 @@ struct SettingsScreen: View {
                             context.send(viewAction: .deactivateAccount)
                         })
             }
-        } footer: {
-            if !context.viewState.showDeveloperOptions {
-                versionSection
-            }
         }
     }
     
@@ -219,30 +177,7 @@ struct SettingsScreen: View {
                         context.send(viewAction: .developerOptions)
                     })
                     .accessibilityIdentifier(A11yIdentifiers.settingsScreen.developerOptions)
-        } footer: {
-            versionSection
         }
-    }
-    
-    private var versionSection: some View {
-        VStack(spacing: 0) {
-            versionText
-                .frame(maxWidth: .infinity)
-            
-            if let deviceID = context.viewState.deviceID {
-                Text(deviceID)
-            }
-        }
-        .compoundListSectionFooter()
-        .textSelection(.enabled)
-        .padding(.top, 24)
-        .onTapGesture(count: 7) {
-            context.send(viewAction: .enableDeveloperOptions)
-        }
-    }
-    
-    private var versionText: Text {
-        Text(L10n.settingsVersionNumber(InfoPlistReader.main.bundleShortVersionString, InfoPlistReader.main.bundleVersion))
     }
     
     private var toolbar: some ToolbarContent {

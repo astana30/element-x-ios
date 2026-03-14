@@ -1226,6 +1226,14 @@ internal enum L10n {
   internal static var richTextEditorUnindent: String { return L10n.tr("Localizable", "rich_text_editor_unindent") }
   /// Link
   internal static var richTextEditorUrlPlaceholder: String { return L10n.tr("Localizable", "rich_text_editor_url_placeholder") }
+  /// A corporate messaging app for communication between company employees.
+  internal static var screenAboutSalemxDescriptionPrimary: String { return L10n.tr("Localizable", "screen_about_salemx_description_primary") }
+  /// End-to-end encryption is used to protect conversations.
+  internal static var screenAboutSalemxDescriptionSecondary: String { return L10n.tr("Localizable", "screen_about_salemx_description_secondary") }
+  /// Documents
+  internal static var screenAboutSalemxDocumentsTitle: String { return L10n.tr("Localizable", "screen_about_salemx_documents_title") }
+  /// About SalemX
+  internal static var screenAboutSalemxTitle: String { return L10n.tr("Localizable", "screen_about_salemx_title") }
   /// Change account provider
   internal static var screenAccountProviderChange: String { return L10n.tr("Localizable", "screen_account_provider_change") }
   /// Homeserver address
@@ -1577,6 +1585,8 @@ internal enum L10n {
   internal static func screenChatBackupRecoveryActionSetupDescription(_ p1: Any) -> String {
     return L10n.tr("Localizable", "screen_chat_backup_recovery_action_setup_description", String(describing: p1))
   }
+  /// Contacts
+  internal static var screenContactsTitle: String { return L10n.tr("Localizable", "screen_contacts_title") }
   /// Create account
   internal static var screenCreateAccountTitle: String { return L10n.tr("Localizable", "screen_create_account_title") }
   /// Open %1$@ in a desktop device
@@ -3161,6 +3171,8 @@ internal enum L10n {
   internal static var screenSessionVerificationWaitingToAcceptSubtitle: String { return L10n.tr("Localizable", "screen_session_verification_waiting_to_accept_subtitle") }
   /// Waiting to accept request
   internal static var screenSessionVerificationWaitingToAcceptTitle: String { return L10n.tr("Localizable", "screen_session_verification_waiting_to_accept_title") }
+  /// Account & Security
+  internal static var screenSettingsAccountAndSecurityTitle: String { return L10n.tr("Localizable", "screen_settings_account_and_security_title") }
   /// Share location
   internal static var screenShareLocationTitle: String { return L10n.tr("Localizable", "screen_share_location_title") }
   /// Share my location
