@@ -43,7 +43,7 @@ class StartChatScreenViewModel: StartChatScreenViewModelType, StartChatScreenVie
         switch mode {
         case .startChatFlow:
             initialViewState = StartChatScreenViewState(userID: userSession.clientProxy.userID,
-                                                        screenTitle: "Contacts",
+                                                        screenTitle: "Контакты",
                                                         showsCloseButton: true,
                                                         showsCreateRoomSection: true,
                                                         showsRoomDirectorySection: true,
@@ -51,7 +51,7 @@ class StartChatScreenViewModel: StartChatScreenViewModelType, StartChatScreenVie
                                                         showsInviteFriendsSection: true)
         case .contactsTab:
             initialViewState = StartChatScreenViewState(userID: userSession.clientProxy.userID,
-                                                        screenTitle: "Contacts",
+                                                        screenTitle: "Контакты",
                                                         showsCloseButton: false,
                                                         showsCreateRoomSection: false,
                                                         showsRoomDirectorySection: false,

@@ -21,7 +21,7 @@ enum UserSessionFlowCoordinatorAction {
 
 class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
     enum HomeTab: Hashable {
-        case chats, settings
+        case chats, contacts, settings
     }
     
     private let navigationRootCoordinator: NavigationRootCoordinator
@@ -37,6 +37,9 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
     private let onboardingStackCoordinator: NavigationStackCoordinator
     private let chatsTabFlowCoordinator: ChatsTabFlowCoordinator
     private let chatsTabDetails: NavigationTabCoordinator<HomeTab>.TabDetails
+    private let contactsTabNavigationStackCoordinator: NavigationStackCoordinator
+    private let contactsTabFlowCoordinator: ContactsTabFlowCoordinator
+    private let contactsTabDetails: NavigationTabCoordinator<HomeTab>.TabDetails
     private let settingsTabNavigationStackCoordinator: NavigationStackCoordinator
     private let settingsTabDetails: NavigationTabCoordinator<HomeTab>.TabDetails
     
@@ -88,6 +91,14 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
                                                           flowParameters: flowParameters)
         chatsTabDetails = .init(tag: HomeTab.chats, title: L10n.screenHomeTabChats, icon: \.chat, selectedIcon: \.chatSolid)
         chatsTabDetails.navigationSplitCoordinator = chatsSplitCoordinator
+
+        contactsTabNavigationStackCoordinator = NavigationStackCoordinator()
+        contactsTabFlowCoordinator = ContactsTabFlowCoordinator(navigationStackCoordinator: contactsTabNavigationStackCoordinator,
+                                                                flowParameters: flowParameters)
+        contactsTabDetails = .init(tag: HomeTab.contacts,
+                                   title: "Контакты",
+                                   icon: \.chat,
+                                   selectedIcon: \.chatSolid)
         
         settingsTabNavigationStackCoordinator = NavigationStackCoordinator()
         settingsTabDetails = .init(tag: HomeTab.settings,
@@ -106,6 +117,7 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
         
         navigationTabCoordinator.setTabs([
             .init(coordinator: chatsSplitCoordinator, details: chatsTabDetails),
+            .init(coordinator: contactsTabNavigationStackCoordinator, details: contactsTabDetails),
             .init(coordinator: settingsTabNavigationStackCoordinator, details: settingsTabDetails)
         ])
         
@@ -181,6 +193,7 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
             guard let self else { return }
             
             chatsTabFlowCoordinator.start()
+            contactsTabFlowCoordinator.start(animated: false)
             settingsFlowCoordinator?.handleAppRoute(.settings, animated: false)
             attemptStartingOnboarding()
         }
@@ -216,6 +229,18 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
                     hideCallScreenOverlay()
                 case .logout:
                     Task { await self.runLogoutFlow() }
+                }
+            }
+            .store(in: &cancellables)
+
+        contactsTabFlowCoordinator.actionsPublisher
+            .sink { [weak self] action in
+                guard let self else { return }
+
+                switch action {
+                case .openRoom(let roomID):
+                    navigationTabCoordinator.selectedTab = .chats
+                    chatsTabFlowCoordinator.openRoom(roomID: roomID, animated: true)
                 }
             }
             .store(in: &cancellables)
