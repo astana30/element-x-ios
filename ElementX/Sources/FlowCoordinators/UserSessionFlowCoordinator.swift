@@ -36,9 +36,9 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
     private let onboardingFlowCoordinator: OnboardingFlowCoordinator
     private let onboardingStackCoordinator: NavigationStackCoordinator
     private let chatsTabFlowCoordinator: ChatsTabFlowCoordinator
-    private let chatsTabDetails: NavigationTabCoordinator.TabDetails
+    private let chatsTabDetails: NavigationTabCoordinator<HomeTab>.TabDetails
     private let settingsTabNavigationStackCoordinator: NavigationStackCoordinator
-    private let settingsTabDetails: NavigationTabCoordinator.TabDetails
+    private let settingsTabDetails: NavigationTabCoordinator<HomeTab>.TabDetails
     
     // periphery:ignore - retaining purpose
     private var settingsFlowCoordinator: SettingsFlowCoordinator?
@@ -312,7 +312,7 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
         }
 
         switch recoveryState {
-        case .unknown:
+        case .unknown, .settingUp:
             MXLog.info("Security state is still unknown, waiting before deciding post-login flow")
             return
 
