@@ -10,19 +10,17 @@ import MatrixRustSDK
 import SwiftUI
 
 struct MatrixUserShareLink<Label: View>: View {
-    private let permalink: URL?
+    private let shareText: String
     private let label: Label
     
     init(userID: String, @ViewBuilder label: () -> Label) {
         self.label = label()
-        permalink = try? URL(string: matrixToUserPermalink(userId: userID))
+        shareText = L10n.inviteFriendsText(InfoPlistReader.main.bundleDisplayName, userID)
     }
     
     var body: some View {
-        if let permalink {
-            ShareLink(item: L10n.inviteFriendsText(InfoPlistReader.main.bundleDisplayName, permalink.absoluteString)) {
-                label
-            }
+        ShareLink(item: shareText) {
+            label
         }
     }
 }

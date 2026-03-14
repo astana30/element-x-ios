@@ -23,7 +23,7 @@ struct StartChatScreen: View {
         .compoundList()
         .track(screen: .StartChat)
         .scrollDismissesKeyboard(.immediately)
-        .navigationTitle(L10n.actionStartChat)
+        .navigationTitle("Contacts")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
         .searchController(query: $context.searchQuery,
