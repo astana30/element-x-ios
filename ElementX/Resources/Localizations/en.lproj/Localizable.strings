@@ -73,8 +73,8 @@
 "action_copy_link_to_message" = "Copy link to message";
 "action_copy_text" = "Copy text";
 "action_create" = "Create";
-"action_create_room" = "Create room";
-"action_create_space" = "Create space";
+"action_create_room" = "Create chat";
+"action_create_space" = "Create group";
 "action_deactivate" = "Deactivate";
 "action_deactivate_account" = "Deactivate account";
 "action_decline" = "Decline";
@@ -326,7 +326,7 @@
 "common_something_went_wrong_message" = "We encountered an issue. Please try again.";
 "common_space" = "Group";
 "common_space_members" = "Group members";
-"common_space_topic_placeholder" = "What is this space about?";
+"common_space_topic_placeholder" = "What is this group about?";
 "common_starting_chat" = "Starting chat…";
 "common_sticker" = "Sticker";
 "common_success" = "Success";
@@ -555,10 +555,10 @@
 "screen_create_poll_options_section_title" = "Options";
 "screen_create_poll_remove_accessibility_label" = "Remove %1$@";
 "screen_create_poll_settings_section_title" = "Settings";
-"screen_create_room_error_creating_space" = "The space could not be created because of an unknown error. Try again later.";
+"screen_create_room_error_creating_space" = "The group could not be created because of an unknown error. Try again later.";
 "screen_create_room_name_placeholder" = "Add name…";
-"screen_create_room_new_room_title" = "New room";
-"screen_create_room_new_space_title" = "New space";
+"screen_create_room_new_room_title" = "New chat";
+"screen_create_room_new_space_title" = "New group";
 "screen_create_room_public_option_short_description" = "Anyone can join.";
 "screen_create_room_room_access_section_knocking_option_description" = "Anyone can ask to join but an administrator or a moderator must accept the request.";
 "screen_create_room_room_access_section_knocking_option_title" = "Allow ask to join";
@@ -569,13 +569,13 @@
 "screen_create_room_room_access_section_restricted_option_description" = "Anyone in %1$@ can join.";
 "screen_create_room_room_access_section_restricted_option_title" = "Standard";
 "screen_create_room_room_access_section_title" = "Who has access";
-"screen_create_room_room_address_section_footer" = "You’ll need an address in order to make it visible in the public directory.";
+"screen_create_room_room_address_section_footer" = "You’ll need an address in order to make the chat visible in the public directory.";
 "screen_create_room_room_address_section_title" = "Address";
 "screen_create_room_room_visibility_section_title" = "Chat visibility";
-"screen_create_room_space_selection_no_space_description" = "(no space)";
-"screen_create_room_space_selection_no_space_option" = "Do not add to a space";
-"screen_create_room_space_selection_no_space_title" = "No space selected";
-"screen_create_room_space_selection_sheet_title" = "Add to space";
+"screen_create_room_space_selection_no_space_description" = "(no group)";
+"screen_create_room_space_selection_no_space_option" = "Do not add to a group";
+"screen_create_room_space_selection_no_space_title" = "No group selected";
+"screen_create_room_space_selection_sheet_title" = "Add to group";
 "screen_create_room_topic_placeholder" = "Add description…";
 "screen_decline_and_block_block_user_option_description" = "You will not see any messages or room invites from this user";
 "screen_decline_and_block_report_user_option_description" = "Report this room to your account provider.";
@@ -889,10 +889,11 @@
 "screen_create_poll_question_desc" = "Question or topic";
 "screen_create_poll_question_hint" = "What is the poll about?";
 "screen_create_poll_title" = "Create Poll";
-"screen_create_room_action_create_room" = "New room";
-"screen_create_room_error_creating_room" = "An error occurred when creating the room";
+"screen_create_room_action_create_room" = "New chat";
+"screen_create_room_error_creating_room" = "An error occurred when creating the chat";
 "screen_create_room_private_option_description" = "Only people invited can join.";
-"screen_create_room_public_option_description" = "Anyone can find this room.\nYou can change this anytime in room settings.";
+"screen_create_room_public_option_description" = "Anyone can find this chat.
+You can change this anytime in chat settings.";
 "screen_create_room_topic_label" = "Topic (optional)";
 "screen_deactivate_account_confirmation_dialog_content" = "Please confirm that you want to deactivate your account. This action cannot be undone.";
 "screen_deactivate_account_delete_all_messages" = "Delete all my messages";
