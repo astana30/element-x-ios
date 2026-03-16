@@ -557,7 +557,7 @@
 "screen_create_poll_settings_section_title" = "Settings";
 "screen_create_room_error_creating_space" = "The group could not be created because of an unknown error. Try again later.";
 "screen_create_room_name_placeholder" = "Add name…";
-"screen_create_room_new_room_title" = "New chat";
+"screen_create_room_new_room_title" = "New group";
 "screen_create_room_new_space_title" = "New group";
 "screen_create_room_public_option_short_description" = "Anyone can join.";
 "screen_create_room_room_access_section_knocking_option_description" = "Anyone can ask to join but an administrator or a moderator must accept the request.";
@@ -569,7 +569,7 @@
 "screen_create_room_room_access_section_restricted_option_description" = "Anyone in %1$@ can join.";
 "screen_create_room_room_access_section_restricted_option_title" = "Standard";
 "screen_create_room_room_access_section_title" = "Who has access";
-"screen_create_room_room_address_section_footer" = "You’ll need an address in order to make the chat visible in the public directory.";
+"screen_create_room_room_address_section_footer" = "You’ll need an address in order to make the group visible in the public directory.";
 "screen_create_room_room_address_section_title" = "Address";
 "screen_create_room_room_visibility_section_title" = "Chat visibility";
 "screen_create_room_space_selection_no_space_description" = "(no group)";
@@ -771,8 +771,8 @@
 "screen_start_chat_join_room_by_address_action" = "Join room by address";
 "screen_start_chat_join_room_by_address_invalid_address" = "Not a valid address";
 "screen_start_chat_join_room_by_address_placeholder" = "Enter...";
-"screen_start_chat_join_room_by_address_room_found" = "Matching room found";
-"screen_start_chat_join_room_by_address_room_not_found" = "Chat not found";
+"screen_start_chat_join_room_by_address_room_found" = "Group found";
+"screen_start_chat_join_room_by_address_room_not_found" = "Group not found";
 "screen_start_chat_join_room_by_address_supporting_text" = "e.g. #room-name:mertis.kz";
 "screen_static_location_sheet_timestamp_description" = "Shared %1$@";
 "screen_static_location_sheet_title" = "On the map";
@@ -889,11 +889,11 @@
 "screen_create_poll_question_desc" = "Question or topic";
 "screen_create_poll_question_hint" = "What is the poll about?";
 "screen_create_poll_title" = "Create Poll";
-"screen_create_room_action_create_room" = "New group";
-"screen_create_room_error_creating_room" = "An error occurred when creating the chat";
+"screen_create_room_action_create_room" = "Create group";
+"screen_create_room_error_creating_room" = "An error occurred when creating the group";
 "screen_create_room_private_option_description" = "Only people invited can join.";
-"screen_create_room_public_option_description" = "Anyone can find this chat.
-You can change this anytime in chat settings.";
+"screen_create_room_public_option_description" = "Anyone can find this group.
+You can change this anytime in group settings.";
 "screen_create_room_topic_label" = "Topic (optional)";
 "screen_deactivate_account_confirmation_dialog_content" = "Please confirm that you want to deactivate your account. This action cannot be undone.";
 "screen_deactivate_account_delete_all_messages" = "Delete all my messages";
@@ -1494,7 +1494,7 @@ You can change this anytime in chat settings.";
 "screen_chat_backup_recovery_action_setup" = "Set up recovery";
 "screen_create_account_title" = "Create account";
 "screen_create_poll_cancel_confirmation_content_ios" = "Your changes won’t be saved";
-"screen_create_room_add_people_title" = "Invite people";
+"screen_create_room_add_people_title" = "Invite to group";
 "screen_create_room_private_option_title" = "Private";
 "screen_create_room_public_option_title" = "Public";
 "screen_deactivate_account_title" = "Deactivate account";
@@ -1572,4 +1572,4 @@ You can change this anytime in chat settings.";
 "screen_about_salemx_description_primary" = "A corporate messaging app for communication between company employees.";
 
 "screen_about_salemx_description_secondary" = "End-to-end encryption is used to protect conversations.";
-"screen_start_chat_join_room_by_address_title" = "Join by address";
+"screen_start_chat_join_room_by_address_title" = "Join group by address";

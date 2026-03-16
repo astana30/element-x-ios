@@ -557,7 +557,7 @@
 "screen_create_poll_settings_section_title" = "Настройки";
 "screen_create_room_error_creating_space" = "Не удалось создать группу из-за неизвестной ошибки. Попробуйте позже.";
 "screen_create_room_name_placeholder" = "Добавить имя…";
-"screen_create_room_new_room_title" = "Новый чат";
+"screen_create_room_new_room_title" = "Новая группа";
 "screen_create_room_new_space_title" = "Новая группа";
 "screen_create_room_public_option_short_description" = "Кто угодно может присоединиться.";
 "screen_create_room_room_access_section_knocking_option_description" = "Кто угодно может подать заявку, но администратор или модератор должен будет принять запрос.";
@@ -569,7 +569,7 @@
 "screen_create_room_room_access_section_restricted_option_description" = "Кто угодно в %1$@ может присоединиться.";
 "screen_create_room_room_access_section_restricted_option_title" = "Стандарт";
 "screen_create_room_room_access_section_title" = "У кого есть доступ";
-"screen_create_room_room_address_section_footer" = "Адрес нужен, чтобы чат можно было сделать видимым в общем каталоге.";
+"screen_create_room_room_address_section_footer" = "Адрес нужен, чтобы группу можно было сделать видимой в общем каталоге.";
 "screen_create_room_room_address_section_title" = "Адрес";
 "screen_create_room_room_visibility_section_title" = "Видимость чата";
 "screen_create_room_space_selection_no_space_description" = "(без группы)";
@@ -770,8 +770,8 @@
 "screen_start_chat_join_room_by_address_action" = "Присоединиться к комнате по адресу";
 "screen_start_chat_join_room_by_address_invalid_address" = "Недействительный адрес";
 "screen_start_chat_join_room_by_address_placeholder" = "Ввести...";
-"screen_start_chat_join_room_by_address_room_found" = "Комната найдена";
-"screen_start_chat_join_room_by_address_room_not_found" = "Комната не найдена";
+"screen_start_chat_join_room_by_address_room_found" = "Группа найдена";
+"screen_start_chat_join_room_by_address_room_not_found" = "Группа не найдена";
 "screen_start_chat_join_room_by_address_supporting_text" = "прим. #room-name:matrix.org";
 "screen_static_location_sheet_timestamp_description" = "Поделился %1$@";
 "screen_static_location_sheet_title" = "На карте";
@@ -888,11 +888,11 @@
 "screen_create_poll_question_desc" = "Вопрос или тема";
 "screen_create_poll_question_hint" = "О чём будет опрос?";
 "screen_create_poll_title" = "Создать опрос";
-"screen_create_room_action_create_room" = "Новая группа";
-"screen_create_room_error_creating_room" = "Произошла ошибка при создании чата";
+"screen_create_room_action_create_room" = "Создать группу";
+"screen_create_room_error_creating_room" = "Произошла ошибка при создании группы";
 "screen_create_room_private_option_description" = "Присоединиться могут только приглашенные.";
-"screen_create_room_public_option_description" = "Любой желающий может найти этот чат.
-Вы можете изменить это в любое время в настройках чата.";
+"screen_create_room_public_option_description" = "Любой желающий может найти эту группу.
+Вы можете изменить это в любое время в настройках группы.";
 "screen_create_room_topic_label" = "Тема (необязательно)";
 "screen_deactivate_account_confirmation_dialog_content" = "Вы уверены, что хотите отключить свою учётную запись? Данное действие необратимо.";
 "screen_deactivate_account_delete_all_messages" = "Удалить все мои сообщения";
@@ -1492,7 +1492,7 @@
 "screen_chat_backup_recovery_action_setup" = "Настроить восстановление";
 "screen_create_account_title" = "Создать аккаунт";
 "screen_create_poll_cancel_confirmation_content_ios" = "Ваши изменения не будут сохранены";
-"screen_create_room_add_people_title" = "Пригласить участников";
+"screen_create_room_add_people_title" = "Пригласить в группу";
 "screen_create_room_private_option_title" = "Приватный";
 "screen_create_room_public_option_title" = "Публичный";
 "screen_deactivate_account_title" = "Отключить учётную запись";
@@ -1572,4 +1572,4 @@
 "screen_about_salemx_description_secondary" = "Для защиты переписки используется сквозное шифрование.";
 
 "screen_contacts_title" = "Контакты";
-"screen_start_chat_join_room_by_address_title" = "Присоединиться по адресу";
+"screen_start_chat_join_room_by_address_title" = "Присоединиться к группе по адресу";

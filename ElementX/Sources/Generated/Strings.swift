@@ -180,7 +180,7 @@ internal enum L10n {
   internal static var actionCopyText: String { return L10n.tr("Localizable", "action_copy_text") }
   /// Create
   internal static var actionCreate: String { return L10n.tr("Localizable", "action_create") }
-  /// Create chat
+  /// Create group
   internal static var actionCreateRoom: String { return L10n.tr("Localizable", "action_create_room") }
   /// Create group
   internal static var actionCreateSpace: String { return L10n.tr("Localizable", "action_create_space") }
@@ -1643,7 +1643,7 @@ internal enum L10n {
   internal static var screenCreatePollSettingsSectionTitle: String { return L10n.tr("Localizable", "screen_create_poll_settings_section_title") }
   /// Create Poll
   internal static var screenCreatePollTitle: String { return L10n.tr("Localizable", "screen_create_poll_title") }
-  /// New chat
+  /// New group
   internal static var screenCreateRoomActionCreateRoom: String { return L10n.tr("Localizable", "screen_create_room_action_create_room") }
   /// Invite people
   internal static var screenCreateRoomAddPeopleTitle: String { return L10n.tr("Localizable", "screen_create_room_add_people_title") }
@@ -3297,6 +3297,8 @@ internal enum L10n {
   internal static var screenStartChatJoinRoomByAddressRoomNotFound: String { return L10n.tr("Localizable", "screen_start_chat_join_room_by_address_room_not_found") }
   /// e.g. #room-name:mertis.kz
   internal static var screenStartChatJoinRoomByAddressSupportingText: String { return L10n.tr("Localizable", "screen_start_chat_join_room_by_address_supporting_text") }
+  /// Join by address
+  internal static var screenStartChatJoinRoomByAddressTitle: String { return L10n.tr("Localizable", "screen_start_chat_join_room_by_address_title") }
   /// Shared %1$@
   internal static func screenStaticLocationSheetTimestampDescription(_ p1: Any) -> String {
     return L10n.tr("Localizable", "screen_static_location_sheet_timestamp_description", String(describing: p1))
