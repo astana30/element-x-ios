@@ -19,7 +19,7 @@ class StartChatScreenViewModel: StartChatScreenViewModelType, StartChatScreenVie
     private let userDiscoveryService: UserDiscoveryServiceProtocol
     private let appSettings: AppSettings
     
-    private var suggestedUsers = [UserProfileProxy]()
+    private var knownUsers = [UserProfileProxy]()
     
     private let actionsSubject: PassthroughSubject<StartChatScreenViewModelAction, Never> = .init()
     var actions: AnyPublisher<StartChatScreenViewModelAction, Never> {
@@ -64,10 +64,10 @@ class StartChatScreenViewModel: StartChatScreenViewModelType, StartChatScreenVie
         setupBindings()
         
         Task {
-            suggestedUsers = await userSession.clientProxy.recentConversationCounterparts()
+            knownUsers = await userSession.clientProxy.recentConversationCounterparts()
             
             if state.usersSection.type == .suggestions {
-                state.usersSection = .init(type: .suggestions, users: suggestedUsers)
+                state.usersSection = .init(type: .suggestions, users: knownUsers)
             }
         }
     }
@@ -188,13 +188,13 @@ class StartChatScreenViewModel: StartChatScreenViewModelType, StartChatScreenVie
         let query = context.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         
         guard !query.isEmpty else {
-            state.usersSection = .init(type: .suggestions, users: suggestedUsers)
+            state.usersSection = .init(type: .suggestions, users: knownUsers)
             return
         }
         
         let normalizedQuery = query.lowercased()
         
-        let localMatches = suggestedUsers.filter { user in
+        let localMatches = knownUsers.filter { user in
             let displayName = user.displayName?.lowercased() ?? ""
             let userID = user.userID.lowercased()
             return displayName.contains(normalizedQuery) || userID.contains(normalizedQuery)
