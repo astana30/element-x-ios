@@ -43,7 +43,7 @@ class StartChatScreenViewModel: StartChatScreenViewModelType, StartChatScreenVie
         switch mode {
         case .startChatFlow:
             initialViewState = StartChatScreenViewState(userID: userSession.clientProxy.userID,
-                                                        screenTitle: "Контакты",
+                                                        screenTitle: L10n.screenContactsTitle,
                                                         showsCloseButton: true,
                                                         showsCreateRoomSection: true,
                                                         showsRoomDirectorySection: true,
@@ -51,7 +51,7 @@ class StartChatScreenViewModel: StartChatScreenViewModelType, StartChatScreenVie
                                                         showsInviteFriendsSection: true)
         case .contactsTab:
             initialViewState = StartChatScreenViewState(userID: userSession.clientProxy.userID,
-                                                        screenTitle: "Контакты",
+                                                        screenTitle: L10n.screenContactsTitle,
                                                         showsCloseButton: false,
                                                         showsCreateRoomSection: false,
                                                         showsRoomDirectorySection: false,
@@ -185,23 +185,56 @@ class StartChatScreenViewModel: StartChatScreenViewModelType, StartChatScreenVie
     private var fetchUsersTask: Task<Void, Never>?
     
     private func fetchUsers() {
-        guard context.searchQuery.count >= 3 else {
+        let query = context.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        guard !query.isEmpty else {
             state.usersSection = .init(type: .suggestions, users: suggestedUsers)
             return
         }
         
+        let normalizedQuery = query.lowercased()
+        
+        let localMatches = suggestedUsers.filter { user in
+            let displayName = user.displayName?.lowercased() ?? ""
+            let userID = user.userID.lowercased()
+            return displayName.contains(normalizedQuery) || userID.contains(normalizedQuery)
+        }
+        
+        // Показываем локальные результаты сразу.
+        state.usersSection = .init(type: .searchResult, users: localMatches)
+        
+        // Короткие запросы не отправляем на сервер, чтобы не шуметь directory search.
+        guard query.count >= 2 else {
+            return
+        }
+        
         fetchUsersTask = Task {
-            let result = await userDiscoveryService.searchProfiles(with: context.searchQuery)
+            let result = await userDiscoveryService.searchProfiles(with: query)
             
             guard !Task.isCancelled else { return }
             
             switch result {
-            case .success(let users):
-                state.usersSection = .init(type: .searchResult, users: users)
+            case .success(let remoteUsers):
+                let mergedUsers = mergeUsers(local: localMatches, remote: remoteUsers)
+                state.usersSection = .init(type: .searchResult, users: mergedUsers)
             case .failure:
-                break
+                // Если серверный поиск не удался, оставляем локальные результаты.
+                state.usersSection = .init(type: .searchResult, users: localMatches)
             }
         }
+    }
+    
+    private func mergeUsers(local: [UserProfileProxy], remote: [UserProfileProxy]) -> [UserProfileProxy] {
+        var seen = Set<String>()
+        var result: [UserProfileProxy] = []
+        
+        for user in local + remote {
+            if seen.insert(user.userID).inserted {
+                result.append(user)
+            }
+        }
+        
+        return result
     }
         
     private func createDirectRoom(user: UserProfileProxy) async {

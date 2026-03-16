@@ -30,6 +30,8 @@ struct StartChatScreen: View {
                           placeholder: L10n.commonSearchForSomeone,
                           showsCancelButton: false,
                           disablesInteractiveDismiss: true)
+        .textInputAutocapitalization(.never)
+        .autocorrectionDisabled()
         .compoundSearchField()
         .alert(item: $context.alertInfo)
         .sheet(item: $context.selectedUserToInvite) { user in

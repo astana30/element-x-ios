@@ -80,6 +80,11 @@ class ChatsTabFlowCoordinator: FlowCoordinatorProtocol {
     func isDisplayingRoomScreen(withRoomID roomID: String) -> Bool {
         stateMachine.isDisplayingRoomScreen(withRoomID: roomID)
     }
+
+    func openRoom(roomID: String, animated: Bool) {
+        stateMachine.processEvent(.selectRoom(roomID: roomID, via: [], entryPoint: .room),
+                                  userInfo: .init(animated: animated))
+    }
     
     // MARK: - FlowCoordinatorProtocol
     
