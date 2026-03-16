@@ -10,3 +10,11 @@
 "screen_about_salemx_description_secondary" = "Хат алмасуды қорғау үшін ұштан-ұшқа дейінгі шифрлау қолданылады.";
 
 "screen_contacts_title" = "Контактілер";
+
+"screen_roomlist_filter_unreads" = "Оқылмаған";
+
+"screen_roomlist_filter_favourites" = "Таңдаулылар";
+
+"screen_roomlist_filter_rooms" = "Топтар";
+
+"screen_roomlist_filter_rooms_empty_state_title" = "Сізде әзірге топтар жоқ";

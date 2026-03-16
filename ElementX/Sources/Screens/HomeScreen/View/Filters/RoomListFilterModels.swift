@@ -24,7 +24,7 @@ enum RoomListFilter: Int, CaseIterable, Identifiable {
     case lowPriority
     
     static var availableFilters: [RoomListFilter] {
-        RoomListFilter.allCases
+        [.unreads, .favourites, .rooms]
     }
     
     var localizedName: String {

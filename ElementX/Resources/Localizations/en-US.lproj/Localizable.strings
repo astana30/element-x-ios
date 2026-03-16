@@ -1224,9 +1224,9 @@
 "screen_roomlist_filter_mixed_empty_state_subtitle" = "You can deselect filters in order to see your other chats";
 "screen_roomlist_filter_mixed_empty_state_title" = "You don’t have chats for this selection";
 "screen_roomlist_filter_people_empty_state_title" = "You don’t have any DMs yet";
-"screen_roomlist_filter_rooms" = "Chats";
-"screen_roomlist_filter_rooms_empty_state_title" = "You’re not in any room yet";
-"screen_roomlist_filter_unreads" = "Unreads";
+"screen_roomlist_filter_rooms" = "Groups";
+"screen_roomlist_filter_rooms_empty_state_title" = "You don’t have any groups yet";
+"screen_roomlist_filter_unreads" = "Unread";
 "screen_roomlist_filter_unreads_empty_state_title" = "Congrats!\nYou don’t have any unread messages!";
 "screen_roomlist_main_space_title" = "Chats";
 "screen_roomlist_mark_as_read" = "Mark as read";
@@ -1544,7 +1544,7 @@
 "screen_room_roles_and_permissions_permissions_header" = "Permissions";
 "screen_room_timeline_reactions_show_less" = "Show less";
 "screen_roomlist_filter_invites" = "Invites";
-"screen_roomlist_filter_people" = "People";
+"screen_roomlist_filter_people" = "Direct";
 "screen_server_confirmation_change_server" = "Change account provider";
 "screen_session_verification_device_verified" = "Device verified";
 "screen_session_verification_request_failure_subtitle" = "Either the request timed out, the request was denied, or there was a verification mismatch.";

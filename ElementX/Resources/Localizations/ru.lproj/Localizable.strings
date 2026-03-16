@@ -1223,9 +1223,9 @@
 "screen_roomlist_filter_mixed_empty_state_subtitle" = "Вы можете убрать фильтры, чтобы увидеть другие ваши чаты.";
 "screen_roomlist_filter_mixed_empty_state_title" = "У вас нет чатов, соответствующих фильтрам";
 "screen_roomlist_filter_people_empty_state_title" = "У вас пока нет личных сообщений";
-"screen_roomlist_filter_rooms" = "Комнаты";
-"screen_roomlist_filter_rooms_empty_state_title" = "Вас пока нет ни в одной комнате";
-"screen_roomlist_filter_unreads" = "Новые";
+"screen_roomlist_filter_rooms" = "Группы";
+"screen_roomlist_filter_rooms_empty_state_title" = "У вас пока нет групп";
+"screen_roomlist_filter_unreads" = "Непрочитанные";
 "screen_roomlist_filter_unreads_empty_state_title" = "Поздравляем!\nУ вас нет непрочитанных сообщений!";
 "screen_roomlist_main_space_title" = "Чаты";
 "screen_roomlist_mark_as_read" = "Пометить как прочитанное";
@@ -1542,7 +1542,7 @@
 "screen_room_roles_and_permissions_permissions_header" = "Разрешения";
 "screen_room_timeline_reactions_show_less" = "Показать меньше";
 "screen_roomlist_filter_invites" = "Приглашения";
-"screen_roomlist_filter_people" = "Пользователи";
+"screen_roomlist_filter_people" = "Личные";
 "screen_server_confirmation_change_server" = "Сменить сервер";
 "screen_session_verification_device_verified" = "Устройство проверено";
 "screen_session_verification_request_failure_subtitle" = "Время ожидания подтверждения истекло, запрос был отклонён, или произошла ошибка.";
