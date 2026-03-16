@@ -19,7 +19,7 @@
 
 "screen_roomlist_filter_rooms_empty_state_title" = "Сізде әзірге топтар жоқ";
 
-"action_create_room" = "Чат құру";
+"action_create_room" = "Топ құру";
 
 "action_create_space" = "Топ құру";
 
@@ -47,10 +47,11 @@
 "common_space_topic_placeholder" = "Бұл топ не туралы?";
 "screen_create_room_new_room_title" = "Жаңа чат";
 "screen_create_room_new_space_title" = "Жаңа топ";
-"screen_create_room_action_create_room" = "Жаңа чат";
+"screen_create_room_action_create_room" = "Жаңа топ";
 "screen_create_room_error_creating_room" = "Чат құру кезінде қате пайда болды";
 "screen_create_room_error_creating_space" = "Белгісіз қате салдарынан топ құру мүмкін болмады. Кейінірек қайталап көріңіз.";
 "screen_create_room_public_option_description" = "Бұл чатты кез келген адам таба алады.
 Мұны чат баптауларында кез келген уақытта өзгерте аласыз.";
 "screen_create_room_add_people_title" = "Қатысушыларды шақыру";
 "screen_create_room_space_selection_sheet_title" = "Топқа қосу";
+"screen_start_chat_join_room_by_address_title" = "Мекенжай арқылы қосылу";
