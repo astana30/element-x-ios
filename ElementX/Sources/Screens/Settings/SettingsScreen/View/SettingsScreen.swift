@@ -23,9 +23,6 @@ struct SettingsScreen: View {
             
             signOutSection
             
-            if context.viewState.showDeveloperOptions {
-                developerOptionsSection
-            }
         }
         .compoundList()
         .navigationTitle(L10n.commonSettings)
@@ -139,7 +136,7 @@ struct SettingsScreen: View {
                     })
                     .accessibilityIdentifier(A11yIdentifiers.settingsScreen.advancedSettings)
             
-            ListRow(label: .default(title: UntranslatedL10n.screenAboutSalemxLegalTitle,
+            ListRow(label: .default(title: L10n.screenAboutSalemxTitle,
                                     icon: \.info),
                     kind: .navigationLink {
                         context.send(viewAction: .about)
