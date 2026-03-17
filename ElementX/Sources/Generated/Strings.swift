@@ -1260,9 +1260,9 @@ internal enum L10n {
   internal static var screenAdvancedSettingsDeveloperMode: String { return L10n.tr("Localizable", "screen_advanced_settings_developer_mode") }
   /// Enable to have access to features and functionality for developers.
   internal static var screenAdvancedSettingsDeveloperModeDescription: String { return L10n.tr("Localizable", "screen_advanced_settings_developer_mode_description") }
-  /// Custom Element Call base URL
+  /// Custom call service base URL
   internal static var screenAdvancedSettingsElementCallBaseUrl: String { return L10n.tr("Localizable", "screen_advanced_settings_element_call_base_url") }
-  /// Set a custom base URL for Element Call.
+  /// Set a custom base URL for the call service.
   internal static var screenAdvancedSettingsElementCallBaseUrlDescription: String { return L10n.tr("Localizable", "screen_advanced_settings_element_call_base_url_description") }
   /// Invalid URL, please make sure you include the protocol (http/https) and the correct address.
   internal static var screenAdvancedSettingsElementCallBaseUrlValidationError: String { return L10n.tr("Localizable", "screen_advanced_settings_element_call_base_url_validation_error") }

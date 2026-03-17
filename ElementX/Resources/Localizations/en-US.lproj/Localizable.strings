@@ -513,8 +513,8 @@
 "rich_text_editor_url_placeholder" = "Link";
 "rich_text_editor_a11y_add_attachment" = "Add attachment";
 "rich_text_editor_composer_caption_placeholder" = "Add a caption";
-"screen_advanced_settings_element_call_base_url" = "Custom Element Call base URL";
-"screen_advanced_settings_element_call_base_url_description" = "Set a custom base URL for Element Call.";
+"screen_advanced_settings_element_call_base_url" = "Custom call service base URL";
+"screen_advanced_settings_element_call_base_url_description" = "Set a custom base URL for the call service.";
 "screen_advanced_settings_element_call_base_url_validation_error" = "Invalid URL, please make sure you include the protocol (http/https) and the correct address.";
 "screen_advanced_settings_hide_invite_avatars_toggle_title" = "Hide avatars in room invite requests";
 "screen_advanced_settings_hide_timeline_media_toggle_title" = "Hide media previews in timeline";

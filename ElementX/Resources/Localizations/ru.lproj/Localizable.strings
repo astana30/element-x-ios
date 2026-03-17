@@ -513,8 +513,8 @@
 "rich_text_editor_url_placeholder" = "Ссылка";
 "rich_text_editor_a11y_add_attachment" = "Прикрепить файл";
 "rich_text_editor_composer_caption_placeholder" = "Добавить подпись (опционально)";
-"screen_advanced_settings_element_call_base_url" = "URL сервера Element Call";
-"screen_advanced_settings_element_call_base_url_description" = "Укажите собственный сервер Element Call.";
+"screen_advanced_settings_element_call_base_url" = "URL сервиса звонков";
+"screen_advanced_settings_element_call_base_url_description" = "Укажите собственный URL сервиса звонков.";
 "screen_advanced_settings_element_call_base_url_validation_error" = "Адрес указан неверно, удостоверьтесь, что вы указали протокол (http/https) и правильный адрес.";
 "screen_advanced_settings_hide_invite_avatars_toggle_title" = "Скрывать аватары в приглашениях";
 "screen_advanced_settings_hide_timeline_media_toggle_title" = "Скрывать предпросмотр медиа в истории сообщений";

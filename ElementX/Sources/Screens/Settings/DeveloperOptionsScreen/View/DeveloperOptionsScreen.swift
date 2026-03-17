@@ -124,7 +124,7 @@ struct DeveloperOptionsScreen: View {
                         }
                     }
             } header: {
-                Text("Element Call remote URL override")
+                Text("Call service remote URL override")
             }
             
             Section("Notifications") {
