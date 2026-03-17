@@ -16,15 +16,16 @@ struct AuthenticationStartLogo: View {
         Group {
             if hideBrandChrome {
                 logo
-                    .frame(width: 96, height: 96)
+                    .frame(width: 88, height: 88)
             } else {
                 logo
-                    .frame(width: 112, height: 112)
-                    .padding(20)
-                    .background(RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .fill(Color.white.opacity(0.12)))
-                    .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(Color.white.opacity(0.35), lineWidth: 1))
+                    .frame(width: 104, height: 104)
+                    .padding(18)
+                    .background(RoundedRectangle(cornerRadius: 26, style: .continuous)
+                        .fill(Color.white.opacity(0.10)))
+                    .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous)
+                        .stroke(Color.white.opacity(0.28), lineWidth: 1))
+                    .shadow(color: Color.black.opacity(0.10), radius: 18, x: 0, y: 8)
             }
         }
         .accessibilityHidden(true)

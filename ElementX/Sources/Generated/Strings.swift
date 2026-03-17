@@ -2106,7 +2106,7 @@ internal enum L10n {
   internal static var screenLoginFormHeader: String { return L10n.tr("Localizable", "screen_login_form_header") }
   /// Matrix is an open network for secure, decentralised communication.
   internal static var screenLoginSubtitle: String { return L10n.tr("Localizable", "screen_login_subtitle") }
-  /// Welcome back!
+  /// Sign in
   internal static var screenLoginTitle: String { return L10n.tr("Localizable", "screen_login_title") }
   /// Sign in to %1$@
   internal static func screenLoginTitleWithHomeserver(_ p1: Any) -> String {
@@ -2250,7 +2250,7 @@ internal enum L10n {
   internal static func screenOnboardingAppVersion(_ p1: Any) -> String {
     return L10n.tr("Localizable", "screen_onboarding_app_version", String(describing: p1))
   }
-  /// Sign in manually
+  /// Sign in
   internal static var screenOnboardingSignInManually: String { return L10n.tr("Localizable", "screen_onboarding_sign_in_manually") }
   /// Sign in to %1$@
   internal static func screenOnboardingSignInTo(_ p1: Any) -> String {
@@ -2260,16 +2260,14 @@ internal enum L10n {
   internal static var screenOnboardingSignInWithQrCode: String { return L10n.tr("Localizable", "screen_onboarding_sign_in_with_qr_code") }
   /// Create account
   internal static var screenOnboardingSignUp: String { return L10n.tr("Localizable", "screen_onboarding_sign_up") }
-  /// Welcome back
+  /// Welcome
   internal static var screenOnboardingWelcomeBack: String { return L10n.tr("Localizable", "screen_onboarding_welcome_back") }
-  /// Welcome to the fastest %1$@ ever. Supercharged for speed and simplicity.
+  /// Welcome to %1$@. Secure communication for your team.
   internal static func screenOnboardingWelcomeMessage(_ p1: Any) -> String {
     return L10n.tr("Localizable", "screen_onboarding_welcome_message", String(describing: p1))
   }
-  /// Welcome to %1$@. Supercharged, for speed and simplicity.
-  internal static func screenOnboardingWelcomeSubtitle(_ p1: Any) -> String {
-    return L10n.tr("Localizable", "screen_onboarding_welcome_subtitle", String(describing: p1))
-  }
+  /// Secure messaging, calls and team communication.
+  internal static var screenOnboardingWelcomeSubtitle: String { return L10n.tr("Localizable", "screen_onboarding_welcome_subtitle") }
   /// Be in your element
   internal static var screenOnboardingWelcomeTitle: String { return L10n.tr("Localizable", "screen_onboarding_welcome_title") }
   /// Press on a message and choose “%1$@” to include here.

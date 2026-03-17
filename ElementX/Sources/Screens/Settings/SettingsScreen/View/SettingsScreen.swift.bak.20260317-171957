@@ -22,7 +22,11 @@ struct SettingsScreen: View {
             generalSection
             
             signOutSection
-         }
+            
+            if context.viewState.showDeveloperOptions {
+                developerOptionsSection
+            }
+        }
         .compoundList()
         .navigationTitle(L10n.commonSettings)
         .navigationBarTitleDisplayMode(.inline)
@@ -135,7 +139,7 @@ struct SettingsScreen: View {
                     })
                     .accessibilityIdentifier(A11yIdentifiers.settingsScreen.advancedSettings)
             
-            ListRow(label: .default(title: L10n.screenAboutSalemxTitle,
+            ListRow(label: .default(title: UntranslatedL10n.screenAboutSalemxLegalTitle,
                                     icon: \.info),
                     kind: .navigationLink {
                         context.send(viewAction: .about)

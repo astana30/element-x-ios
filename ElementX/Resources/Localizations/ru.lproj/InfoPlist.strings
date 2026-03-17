@@ -1,3 +1,5 @@
+"CFBundleDisplayName" = "SalemX";
+"CFBundleName" = "SalemX";
 "NSCameraUsageDescription" = "SalemX требуется доступ к камере, для того чтобы отправлять фото и видео";
 "NSFaceIDUsageDescription" = "Для доступа к приложению используется Face ID.";
 "NSLocationWhenInUseUsageDescription" = "SalemX необходимо предоставить доступ к местоположению.";

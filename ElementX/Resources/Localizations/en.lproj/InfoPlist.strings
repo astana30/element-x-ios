@@ -1,3 +1,5 @@
+"CFBundleDisplayName" = "SalemX";
+"CFBundleName" = "SalemX";
 "NSCameraUsageDescription" = "To take pictures or videos and send them as a message SalemX needs access to the camera.";
 "NSFaceIDUsageDescription" = "Face ID is used to access your app.";
 "NSLocationWhenInUseUsageDescription" = "Grant location access so that SalemX can share your location.";

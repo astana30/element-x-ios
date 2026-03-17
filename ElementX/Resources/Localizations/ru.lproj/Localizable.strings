@@ -428,7 +428,7 @@
 "emoji_picker_category_recent" = "Недавние эмодзи";
 "emoji_picker_category_symbols" = "Символы";
 "emoji_picker_search_placeholder" = "Поиск эмодзи";
-"error_invalid_invite" = "Комната не существует или приглашение недействительно.";
+"error_invalid_invite" = "Чат не существует или приглашение недействительно.";
 "error_network_or_server_issue" = "Это может быть связано с проблемами сети или сервера.";
 "error_room_address_already_exists" = "Такой адрес комнаты уже существует. Смените адрес или имя комнаты";
 "error_room_address_invalid_symbols" = "Некоторые символы запрещены. Поддерживаются только буквы A-Z, цифры и символы ! $ & '() * +/; =? @ [] - . _";
@@ -748,7 +748,7 @@
 "screen_security_and_privacy_room_visibility_section_footer" = "Адреса комнат позволяют находить комнаты и присоединяться к ним. Также вы сможете делиться комнатой с другими пользователями.";
 "screen_security_and_privacy_room_visibility_section_header" = "Видимость";
 "screen_security_and_privacy_title" = "Безопасность и конфиденциальность";
-"screen_space_add_room_action" = "Комната";
+"screen_space_add_room_action" = "Чат";
 "screen_space_empty_state_title" = "Добавьте свою первую комнату";
 "screen_space_menu_action_members" = "Просмотреть участников";
 "screen_space_remove_rooms_confirmation_content" = "Удаление комнаты не повлияет на доступ к ней. Чтобы изменить доступ, перейдите в раздел «Информация о комнате > Конфиденциальность и безопасность.";

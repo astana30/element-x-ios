@@ -139,11 +139,11 @@
 			<key>NSStringFormatValueTypeKey</key>
 			<string>d</string>
 			<key>one</key>
-			<string>%1$d Комната</string>
+			<string>%1$d Чат</string>
 			<key>few</key>
-			<string>%1$d Комнат</string>
+			<string>%1$d Чата</string>
 			<key>many</key>
-			<string>%1$d Комнат</string>
+			<string>%1$d Чатов</string>
 		</dict>
 	</dict>
 	<key>common_selected_count</key>

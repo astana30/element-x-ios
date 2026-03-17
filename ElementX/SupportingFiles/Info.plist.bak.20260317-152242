@@ -41,7 +41,7 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>Element Call</string>
+			<string>SalemX Call</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>io.element.call</string>
@@ -55,6 +55,7 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>$(BASE_BUNDLE_IDENTIFIER)</string>
+				<string>matrix</string>
 			</array>
 		</dict>
 	</array>

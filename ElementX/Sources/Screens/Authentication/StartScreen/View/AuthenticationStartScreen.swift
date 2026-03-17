@@ -49,7 +49,7 @@ struct AuthenticationStartScreen: View {
         VStack(spacing: 0) {
             Spacer()
             
-            VStack(spacing: 16) {
+            VStack(spacing: 12) {
                 AuthenticationStartLogo(hideBrandChrome: context.viewState.hideBrandChrome)
                 
                 if !context.viewState.hideBrandChrome {
