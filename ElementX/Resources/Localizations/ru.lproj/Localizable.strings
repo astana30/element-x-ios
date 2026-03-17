@@ -181,7 +181,7 @@
 "banner_new_sound_title" = "Мы обновили ваши звуки";
 "banner_set_up_recovery_content" = "Создайте новый ключ восстановления, который можно использовать для восстановления зашифрованной истории сообщений в случае потери доступа к своим устройствам.";
 "banner_set_up_recovery_title" = "Настройте восстановления для защиты вашей учетной записи";
-"call_invalid_audio_device_bluetooth_devices_disabled" = "Element Call не поддерживает использование устройств Bluetooth в данной версии Android. Пожалуйста, выберите другое устройство.";
+"call_invalid_audio_device_bluetooth_devices_disabled" = "Сервис звонков не поддерживает использование устройств Bluetooth в данной версии Android. Пожалуйста, выберите другое устройство.";
 "common_about" = "О приложении";
 "common_acceptable_use_policy" = "Политика допустимого использования";
 "common_add_account" = "Добавить аккаунт";

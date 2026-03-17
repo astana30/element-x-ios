@@ -404,7 +404,7 @@ internal enum L10n {
   internal static var bannerSetUpRecoverySubmit: String { return L10n.tr("Localizable", "banner_set_up_recovery_submit") }
   /// Set up recovery to protect your account
   internal static var bannerSetUpRecoveryTitle: String { return L10n.tr("Localizable", "banner_set_up_recovery_title") }
-  /// Element Call does not support using Bluetooth audio devices in this Android version. Please select a different audio device.
+  /// The call service does not support using Bluetooth audio devices in this Android version. Please select a different audio device.
   internal static var callInvalidAudioDeviceBluetoothDevicesDisabled: String { return L10n.tr("Localizable", "call_invalid_audio_device_bluetooth_devices_disabled") }
   /// About
   internal static var commonAbout: String { return L10n.tr("Localizable", "common_about") }

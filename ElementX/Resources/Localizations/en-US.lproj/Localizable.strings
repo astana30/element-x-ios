@@ -181,7 +181,7 @@
 "banner_new_sound_title" = "We’ve refreshed your sounds";
 "banner_set_up_recovery_content" = "Recover your cryptographic identity and message history with a recovery key if you have lost all your existing devices.";
 "banner_set_up_recovery_title" = "Set up recovery to protect your account";
-"call_invalid_audio_device_bluetooth_devices_disabled" = "Element Call does not support using Bluetooth audio devices in this Android version. Please select a different audio device.";
+"call_invalid_audio_device_bluetooth_devices_disabled" = "The call service does not support using Bluetooth audio devices in this Android version. Please select a different audio device.";
 "common_about" = "About";
 "common_acceptable_use_policy" = "Acceptable use policy";
 "common_add_account" = "Add an account";
