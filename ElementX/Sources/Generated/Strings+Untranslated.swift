@@ -10,6 +10,14 @@ import Foundation
 // swiftlint:disable explicit_type_interface function_parameter_count identifier_name line_length
 // swiftlint:disable nesting type_body_length type_name vertical_whitespace_opening_braces
 internal enum UntranslatedL10n {
+  /// SalemX includes open-source components licensed under AGPL v3 and other licenses.
+  internal static var screenAboutSalemxLegalDescriptionPrimary: String { return UntranslatedL10n.tr("Untranslated", "screen_about_salemx_legal_description_primary") }
+  /// Privacy policy, acceptable use and copyright information are available below.
+  internal static var screenAboutSalemxLegalDescriptionSecondary: String { return UntranslatedL10n.tr("Untranslated", "screen_about_salemx_legal_description_secondary") }
+  /// Legal documents
+  internal static var screenAboutSalemxLegalDocumentsTitle: String { return UntranslatedL10n.tr("Untranslated", "screen_about_salemx_legal_documents_title") }
+  /// Legal information
+  internal static var screenAboutSalemxLegalTitle: String { return UntranslatedL10n.tr("Untranslated", "screen_about_salemx_legal_title") }
   /// Clear all data currently stored on this device?
   /// Sign in again to access your account data and messages.
   internal static var softLogoutClearDataDialogContent: String { return UntranslatedL10n.tr("Untranslated", "soft_logout_clear_data_dialog_content") }
