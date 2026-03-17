@@ -15,17 +15,17 @@ struct LegalInformationScreen: View {
     
     var body: some View {
         Form {
-            Section {
+            Section(footer: Text("Privacy policy and legal notices remain available from this screen.")) {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("SalemX")
                         .font(.compound.headingLG)
                         .foregroundColor(.compound.textPrimary)
                     
-                    Text(L10n.screenAboutSalemxDescriptionPrimary)
+                    Text(UntranslatedL10n.screenAboutSalemxLegalDescriptionPrimary)
                         .font(.compound.bodyMD)
                         .foregroundColor(.compound.textPrimary)
                     
-                    Text(L10n.screenAboutSalemxDescriptionSecondary)
+                    Text(UntranslatedL10n.screenAboutSalemxLegalDescriptionSecondary)
                         .font(.compound.bodyMD)
                         .foregroundColor(.compound.textSecondary)
                 }
@@ -33,7 +33,7 @@ struct LegalInformationScreen: View {
                 .listRowBackground(Color.compound.bgCanvasDefault)
             }
             
-            Section(L10n.screenAboutSalemxDocumentsTitle) {
+            Section(UntranslatedL10n.screenAboutSalemxLegalDocumentsTitle) {
                 ListRow(label: .plain(title: L10n.commonCopyright),
                         kind: .button { openURL(context.viewState.copyrightURL) })
                 
@@ -45,7 +45,7 @@ struct LegalInformationScreen: View {
             }
         }
         .compoundList()
-        .navigationTitle(L10n.screenAboutSalemxTitle)
+        .navigationTitle(UntranslatedL10n.screenAboutSalemxLegalTitle)
         .navigationBarTitleDisplayMode(.inline)
     }
 }
