@@ -503,7 +503,7 @@
 			<key>few</key>
 			<string>%1$d изменения в комнате</string>
 			<key>many</key>
-			<string>%1$d изменений в комнате</string>
+			<string>%1$d изменений в группе</string>
 		</dict>
 	</dict>
 	<key>screen_room_typing_many_members</key>
