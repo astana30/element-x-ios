@@ -768,7 +768,7 @@
 "screen_space_list_empty_state_title" = "Create spaces to organize rooms";
 "screen_space_list_parent_space" = "%1$@ space";
 "screen_space_list_title" = "Groups";
-"screen_start_chat_join_room_by_address_action" = "Join room by address";
+"screen_start_chat_join_room_by_address_action" = "Join group by address";
 "screen_start_chat_join_room_by_address_invalid_address" = "Not a valid address";
 "screen_start_chat_join_room_by_address_placeholder" = "Enter...";
 "screen_start_chat_join_room_by_address_room_found" = "Group found";
@@ -850,8 +850,8 @@
 "screen_change_account_provider_subtitle" = "Use a different account provider, such as your own private server or a work account.";
 "screen_change_account_provider_title" = "Change account provider";
 "screen_change_server_error_element_pro_required_action_ios" = "App Store";
-"screen_change_server_error_element_pro_required_message" = "The Element Pro app is required on %1$@. Please download it from the store.";
-"screen_change_server_error_element_pro_required_title" = "Element Pro required";
+"screen_change_server_error_element_pro_required_message" = "This server requires a different managed client on %1$@. Please contact your administrator.";
+"screen_change_server_error_element_pro_required_title" = "Managed client required";
 "screen_change_server_error_invalid_homeserver" = "We couldn't reach this homeserver. Please check that you have entered the homeserver URL correctly. If the URL is correct, contact your homeserver administrator for further help.";
 "screen_change_server_error_invalid_well_known" = "Server isn't available due to an issue in the .well-known file:\n%1$@";
 "screen_change_server_error_no_sliding_sync_message" = "The selected account provider does not support sliding sync. An upgrade to the server is needed to use %1$@.";
@@ -1232,7 +1232,7 @@ You can change this anytime in group settings.";
 "screen_roomlist_main_space_title" = "Chats";
 "screen_roomlist_mark_as_read" = "Mark as read";
 "screen_roomlist_mark_as_unread" = "Mark as unread";
-"screen_server_confirmation_message_login_element_dot_io" = "A private server for Element employees.";
+"screen_server_confirmation_message_login_element_dot_io" = "A private corporate server.";
 "screen_server_confirmation_message_login_matrix_dot_org" = "Matrix is an open network for secure, decentralised communication.";
 "screen_server_confirmation_message_register" = "This is where your conversations will live — just like you would use an email provider to keep your emails.";
 "screen_server_confirmation_title_login" = "You’re about to sign in to %1$@";
@@ -1323,14 +1323,14 @@ You can change this anytime in group settings.";
 "state_event_room_ban_by_you_with_reason" = "You banned %1$@: %2$@";
 "state_event_room_ban_with_reason" = "%1$@ banned %2$@: %3$@";
 "state_event_room_created" = "%1$@ created the room";
-"state_event_room_created_by_you" = "You created the room";
+"state_event_room_created_by_you" = "You created the group";
 "state_event_room_invite" = "%1$@ invited %2$@";
 "state_event_room_invite_accepted" = "%1$@ accepted the invite";
 "state_event_room_invite_accepted_by_you" = "You accepted the invite";
 "state_event_room_invite_by_you" = "You invited %1$@";
 "state_event_room_invite_you" = "%1$@ invited you";
 "state_event_room_join" = "%1$@ joined the room";
-"state_event_room_join_by_you" = "You joined the room";
+"state_event_room_join_by_you" = "You joined the group";
 "state_event_room_knock" = "%1$@ is requesting to join";
 "state_event_room_knock_accepted" = "%1$@ granted access to %2$@";
 "state_event_room_knock_accepted_by_you" = "You allowed %1$@ to join";
@@ -1565,11 +1565,11 @@ You can change this anytime in group settings.";
 
 "screen_settings_account_and_security_title" = "Account & Security";
 
-"screen_about_salemx_title" = "About SalemX";
+"screen_about_salemx_title" = "Legal information";
 
-"screen_about_salemx_documents_title" = "Documents";
+"screen_about_salemx_documents_title" = "Legal documents";
 
-"screen_about_salemx_description_primary" = "A corporate messaging app for communication between company employees.";
+"screen_about_salemx_description_primary" = "SalemX includes open-source components licensed under AGPL v3 and other licenses.";
 
-"screen_about_salemx_description_secondary" = "End-to-end encryption is used to protect conversations.";
+"screen_about_salemx_description_secondary" = "Privacy policy, acceptable use and copyright information are available below.";
 "screen_start_chat_join_room_by_address_title" = "Join group by address";
