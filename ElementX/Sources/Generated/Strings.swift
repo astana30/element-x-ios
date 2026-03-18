@@ -2867,7 +2867,7 @@ internal enum L10n {
   }
   /// This is the beginning of this conversation.
   internal static var screenRoomTimelineBeginningOfRoomNoName: String { return L10n.tr("Localizable", "screen_room_timeline_beginning_of_room_no_name") }
-  /// Unsupported call. Ask if the caller can use the new SalemX app.
+  /// Unsupported call. Ask whether the caller can use the new SalemX app.
   internal static var screenRoomTimelineLegacyCall: String { return L10n.tr("Localizable", "screen_room_timeline_legacy_call") }
   /// Show less
   internal static var screenRoomTimelineLessReactions: String { return L10n.tr("Localizable", "screen_room_timeline_less_reactions") }
@@ -2905,7 +2905,7 @@ internal enum L10n {
   internal static var screenRoomTimelineTombstonedRoomMessage: String { return L10n.tr("Localizable", "screen_room_timeline_tombstoned_room_message") }
   /// See old messages
   internal static var screenRoomTimelineUpgradedRoomAction: String { return L10n.tr("Localizable", "screen_room_timeline_upgraded_room_action") }
-  /// This chat is a continuation of another chat
+  /// This chat continues an older chat
   internal static var screenRoomTimelineUpgradedRoomMessage: String { return L10n.tr("Localizable", "screen_room_timeline_upgraded_room_message") }
   /// Chat
   internal static var screenRoomTitle: String { return L10n.tr("Localizable", "screen_room_title") }
@@ -3490,11 +3490,11 @@ internal enum L10n {
   }
   /// You made no changes
   internal static var stateEventRoomNoneByYou: String { return L10n.tr("Localizable", "state_event_room_none_by_you") }
-  /// %1$@ changed the pinned messages in the chat
+  /// %1$@ changed the pinned messages
   internal static func stateEventRoomPinnedEventsChanged(_ p1: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_pinned_events_changed", String(describing: p1))
   }
-  /// You changed the pinned messages in the chat
+  /// You changed the pinned messages
   internal static var stateEventRoomPinnedEventsChangedByYou: String { return L10n.tr("Localizable", "state_event_room_pinned_events_changed_by_you") }
   /// %1$@ pinned a message
   internal static func stateEventRoomPinnedEventsPinned(_ p1: Any) -> String {
