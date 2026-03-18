@@ -760,9 +760,9 @@
 "screen_space_announcement_item4" = "Присоединяться к публичным пространствам";
 "screen_space_announcement_item5" = "Покидать все пространства, к которым вы присоединились";
 "screen_space_announcement_notice" = "Фильтровать, создавать пространства и управлять ими можно будет позже.";
-"screen_space_announcement_subtitle" = "Добро пожаловать в бета-версию сообществ! В первой версии вы можете:";
+"screen_space_announcement_subtitle" = "Добро пожаловать в бета-версию сообществ! В первой версии вы сможете:";
 "screen_space_announcement_title" = "Представляем сообщества";
-"screen_space_list_description" = "Сообщества, которые вы создали или к которым присоединились.";
+"screen_space_list_description" = "Сообщества, которые вы создали или в которые вступили.";
 "screen_space_list_details" = "%1$@ • %2$@";
 "screen_space_list_empty_state_title" = "Создайте пространства для организации комнат";
 "screen_space_list_parent_space" = "%1$@ пространство";

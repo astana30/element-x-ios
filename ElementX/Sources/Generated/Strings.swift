@@ -2112,7 +2112,7 @@ internal enum L10n {
   internal static func screenLoginTitleWithHomeserver(_ p1: Any) -> String {
     return L10n.tr("Localizable", "screen_login_title_with_homeserver", String(describing: p1))
   }
-  /// Communities whose members can join the chat without an invitation.
+  /// Communities where members can join the chat without an invitation.
   internal static var screenManageAuthorizedSpacesHeader: String { return L10n.tr("Localizable", "screen_manage_authorized_spaces_header") }
   /// Manage spaces
   internal static var screenManageAuthorizedSpacesTitle: String { return L10n.tr("Localizable", "screen_manage_authorized_spaces_title") }
@@ -2544,7 +2544,7 @@ internal enum L10n {
   internal static var screenRoomChangePermissionsInvitePeople: String { return L10n.tr("Localizable", "screen_room_change_permissions_invite_people") }
   /// Manage space
   internal static var screenRoomChangePermissionsManageSpace: String { return L10n.tr("Localizable", "screen_room_change_permissions_manage_space") }
-  /// Manage rooms
+  /// Manage chats
   internal static var screenRoomChangePermissionsManageSpaceRooms: String { return L10n.tr("Localizable", "screen_room_change_permissions_manage_space_rooms") }
   /// Manage members
   internal static var screenRoomChangePermissionsMemberModeration: String { return L10n.tr("Localizable", "screen_room_change_permissions_member_moderation") }
@@ -3409,7 +3409,7 @@ internal enum L10n {
   }
   /// You created the chat
   internal static var stateEventRoomCreatedByYou: String { return L10n.tr("Localizable", "state_event_room_created_by_you") }
-  /// %1$@ invited %2$@ to the chat
+  /// %1$@ invited %2$@
   internal static func stateEventRoomInvite(_ p1: Any, _ p2: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_invite", String(describing: p1), String(describing: p2))
   }
@@ -3423,7 +3423,7 @@ internal enum L10n {
   internal static func stateEventRoomInviteByYou(_ p1: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_invite_by_you", String(describing: p1))
   }
-  /// %1$@ invited you to the chat
+  /// %1$@ invited you
   internal static func stateEventRoomInviteYou(_ p1: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_invite_you", String(describing: p1))
   }
@@ -3441,7 +3441,7 @@ internal enum L10n {
   internal static func stateEventRoomKnockAccepted(_ p1: Any, _ p2: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_knock_accepted", String(describing: p1), String(describing: p2))
   }
-  /// You allowed %1$@ to join the chat
+  /// You allowed %1$@ to join
   internal static func stateEventRoomKnockAcceptedByYou(_ p1: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_knock_accepted_by_you", String(describing: p1))
   }
@@ -3455,7 +3455,7 @@ internal enum L10n {
   internal static func stateEventRoomKnockDeniedByYou(_ p1: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_knock_denied_by_you", String(describing: p1))
   }
-  /// %1$@ rejected your request to join the chat
+  /// %1$@ rejected your request to join
   internal static func stateEventRoomKnockDeniedYou(_ p1: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_knock_denied_you", String(describing: p1))
   }
@@ -3547,11 +3547,11 @@ internal enum L10n {
   internal static func stateEventRoomThirdPartyRevokedInviteByYou(_ p1: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_third_party_revoked_invite_by_you", String(describing: p1))
   }
-  /// %1$@ changed the topic to: %2$@
+  /// %1$@ changed the chat topic to: %2$@
   internal static func stateEventRoomTopicChanged(_ p1: Any, _ p2: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_topic_changed", String(describing: p1), String(describing: p2))
   }
-  /// You changed the topic to: %1$@
+  /// You changed the chat topic to: %1$@
   internal static func stateEventRoomTopicChangedByYou(_ p1: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_topic_changed_by_you", String(describing: p1))
   }
