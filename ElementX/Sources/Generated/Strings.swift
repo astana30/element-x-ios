@@ -122,7 +122,7 @@ internal enum L10n {
   internal static var a11yStartCall: String { return L10n.tr("Localizable", "a11y_start_call") }
   /// Start a voice call
   internal static var a11yStartVoiceCall: String { return L10n.tr("Localizable", "a11y_start_voice_call") }
-  /// Tombstoned room
+  /// Archived chat
   internal static var a11yTombstonedRoom: String { return L10n.tr("Localizable", "a11y_tombstoned_room") }
   /// User menu
   internal static var a11yUserMenu: String { return L10n.tr("Localizable", "a11y_user_menu") }
@@ -422,7 +422,7 @@ internal enum L10n {
   internal static var commonAnImage: String { return L10n.tr("Localizable", "common_an_image") }
   /// Analytics
   internal static var commonAnalytics: String { return L10n.tr("Localizable", "common_analytics") }
-  /// You left the room
+  /// You left the chat
   internal static var commonAndroidShortcutsRemoveReasonLeftRoom: String { return L10n.tr("Localizable", "common_android_shortcuts_remove_reason_left_room") }
   /// You were logged out of the session
   internal static var commonAndroidShortcutsRemoveReasonSessionLoggedOut: String { return L10n.tr("Localizable", "common_android_shortcuts_remove_reason_session_logged_out") }
@@ -3375,17 +3375,17 @@ internal enum L10n {
   internal static func stateEventPromotedToModerator(_ p1: Any) -> String {
     return L10n.tr("Localizable", "state_event_promoted_to_moderator", String(describing: p1))
   }
-  /// %1$@ changed the room avatar
+  /// %1$@ changed the chat avatar
   internal static func stateEventRoomAvatarChanged(_ p1: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_avatar_changed", String(describing: p1))
   }
-  /// You changed the room avatar
+  /// You changed the chat avatar
   internal static var stateEventRoomAvatarChangedByYou: String { return L10n.tr("Localizable", "state_event_room_avatar_changed_by_you") }
-  /// %1$@ removed the room avatar
+  /// %1$@ removed the chat avatar
   internal static func stateEventRoomAvatarRemoved(_ p1: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_avatar_removed", String(describing: p1))
   }
-  /// You removed the room avatar
+  /// You removed the chat avatar
   internal static var stateEventRoomAvatarRemovedByYou: String { return L10n.tr("Localizable", "state_event_room_avatar_removed_by_you") }
   /// %1$@ banned %2$@
   internal static func stateEventRoomBan(_ p1: Any, _ p2: Any) -> String {
@@ -3403,13 +3403,13 @@ internal enum L10n {
   internal static func stateEventRoomBanWithReason(_ p1: Any, _ p2: Any, _ p3: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_ban_with_reason", String(describing: p1), String(describing: p2), String(describing: p3))
   }
-  /// %1$@ created the room
+  /// %1$@ created the chat
   internal static func stateEventRoomCreated(_ p1: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_created", String(describing: p1))
   }
-  /// You created the group
+  /// You created the chat
   internal static var stateEventRoomCreatedByYou: String { return L10n.tr("Localizable", "state_event_room_created_by_you") }
-  /// %1$@ invited %2$@
+  /// %1$@ invited %2$@ to the chat
   internal static func stateEventRoomInvite(_ p1: Any, _ p2: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_invite", String(describing: p1), String(describing: p2))
   }
@@ -3423,15 +3423,15 @@ internal enum L10n {
   internal static func stateEventRoomInviteByYou(_ p1: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_invite_by_you", String(describing: p1))
   }
-  /// %1$@ invited you
+  /// %1$@ invited you to the chat
   internal static func stateEventRoomInviteYou(_ p1: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_invite_you", String(describing: p1))
   }
-  /// %1$@ joined the room
+  /// %1$@ joined the chat
   internal static func stateEventRoomJoin(_ p1: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_join", String(describing: p1))
   }
-  /// You joined the group
+  /// You joined the chat
   internal static var stateEventRoomJoinByYou: String { return L10n.tr("Localizable", "state_event_room_join_by_you") }
   /// %1$@ is requesting to join
   internal static func stateEventRoomKnock(_ p1: Any) -> String {
@@ -3441,7 +3441,7 @@ internal enum L10n {
   internal static func stateEventRoomKnockAccepted(_ p1: Any, _ p2: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_knock_accepted", String(describing: p1), String(describing: p2))
   }
-  /// You allowed %1$@ to join
+  /// You allowed %1$@ to join the chat
   internal static func stateEventRoomKnockAcceptedByYou(_ p1: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_knock_accepted_by_you", String(describing: p1))
   }
@@ -3455,7 +3455,7 @@ internal enum L10n {
   internal static func stateEventRoomKnockDeniedByYou(_ p1: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_knock_denied_by_you", String(describing: p1))
   }
-  /// %1$@ rejected your request to join
+  /// %1$@ rejected your request to join the chat
   internal static func stateEventRoomKnockDeniedYou(_ p1: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_knock_denied_you", String(describing: p1))
   }
@@ -3465,25 +3465,25 @@ internal enum L10n {
   }
   /// You cancelled your request to join
   internal static var stateEventRoomKnockRetractedByYou: String { return L10n.tr("Localizable", "state_event_room_knock_retracted_by_you") }
-  /// %1$@ left the room
+  /// %1$@ left the chat
   internal static func stateEventRoomLeave(_ p1: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_leave", String(describing: p1))
   }
-  /// You left the room
+  /// You left the chat
   internal static var stateEventRoomLeaveByYou: String { return L10n.tr("Localizable", "state_event_room_leave_by_you") }
-  /// %1$@ changed the room name to: %2$@
+  /// %1$@ changed the chat name to: %2$@
   internal static func stateEventRoomNameChanged(_ p1: Any, _ p2: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_name_changed", String(describing: p1), String(describing: p2))
   }
-  /// You changed the room name to: %1$@
+  /// You changed the chat name to: %1$@
   internal static func stateEventRoomNameChangedByYou(_ p1: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_name_changed_by_you", String(describing: p1))
   }
-  /// %1$@ removed the room name
+  /// %1$@ removed the chat name
   internal static func stateEventRoomNameRemoved(_ p1: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_name_removed", String(describing: p1))
   }
-  /// You removed the room name
+  /// You removed the chat name
   internal static var stateEventRoomNameRemovedByYou: String { return L10n.tr("Localizable", "state_event_room_name_removed_by_you") }
   /// %1$@ made no changes
   internal static func stateEventRoomNone(_ p1: Any) -> String {
@@ -3491,11 +3491,11 @@ internal enum L10n {
   }
   /// You made no changes
   internal static var stateEventRoomNoneByYou: String { return L10n.tr("Localizable", "state_event_room_none_by_you") }
-  /// %1$@ changed the pinned messages
+  /// %1$@ changed the pinned messages in the chat
   internal static func stateEventRoomPinnedEventsChanged(_ p1: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_pinned_events_changed", String(describing: p1))
   }
-  /// You changed the pinned messages
+  /// You changed the pinned messages in the chat
   internal static var stateEventRoomPinnedEventsChangedByYou: String { return L10n.tr("Localizable", "state_event_room_pinned_events_changed_by_you") }
   /// %1$@ pinned a message
   internal static func stateEventRoomPinnedEventsPinned(_ p1: Any) -> String {
@@ -3531,19 +3531,19 @@ internal enum L10n {
   internal static func stateEventRoomRemoveWithReason(_ p1: Any, _ p2: Any, _ p3: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_remove_with_reason", String(describing: p1), String(describing: p2), String(describing: p3))
   }
-  /// %1$@ sent an invitation to %2$@ to join the room
+  /// %1$@ sent an invitation to %2$@ to join the chat
   internal static func stateEventRoomThirdPartyInvite(_ p1: Any, _ p2: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_third_party_invite", String(describing: p1), String(describing: p2))
   }
-  /// You sent an invitation to %1$@ to join the room
+  /// You sent an invitation to %1$@ to join the chat
   internal static func stateEventRoomThirdPartyInviteByYou(_ p1: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_third_party_invite_by_you", String(describing: p1))
   }
-  /// %1$@ revoked the invitation for %2$@ to join the room
+  /// %1$@ revoked the invitation for %2$@ to join the chat
   internal static func stateEventRoomThirdPartyRevokedInvite(_ p1: Any, _ p2: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_third_party_revoked_invite", String(describing: p1), String(describing: p2))
   }
-  /// You revoked the invitation for %1$@ to join the room
+  /// You revoked the invitation for %1$@ to join the chat
   internal static func stateEventRoomThirdPartyRevokedInviteByYou(_ p1: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_third_party_revoked_invite_by_you", String(describing: p1))
   }
@@ -3555,11 +3555,11 @@ internal enum L10n {
   internal static func stateEventRoomTopicChangedByYou(_ p1: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_topic_changed_by_you", String(describing: p1))
   }
-  /// %1$@ removed the room topic
+  /// %1$@ removed the chat topic
   internal static func stateEventRoomTopicRemoved(_ p1: Any) -> String {
     return L10n.tr("Localizable", "state_event_room_topic_removed", String(describing: p1))
   }
-  /// You removed the room topic
+  /// You removed the chat topic
   internal static var stateEventRoomTopicRemovedByYou: String { return L10n.tr("Localizable", "state_event_room_topic_removed_by_you") }
   /// %1$@ unbanned %2$@
   internal static func stateEventRoomUnban(_ p1: Any, _ p2: Any) -> String {
