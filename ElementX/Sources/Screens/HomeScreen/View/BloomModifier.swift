@@ -24,6 +24,18 @@ extension View {
     }
 }
 
+private let salemxToolbarBloomBaseColor = Color(red: 0.90, green: 0.96, blue: 1.00)
+
+private extension Gradient {
+    static let salemxToolbarBloom = Gradient(stops: [
+        .init(color: Color.white.opacity(0.94), location: 0.00),
+        .init(color: Color(red: 0.82, green: 0.93, blue: 1.00).opacity(0.82), location: 0.18),
+        .init(color: Color(red: 0.58, green: 0.82, blue: 0.98).opacity(0.62), location: 0.46),
+        .init(color: Color(red: 0.30, green: 0.67, blue: 0.93).opacity(0.28), location: 0.74),
+        .init(color: Color.clear, location: 1.00)
+    ])
+}
+
 private struct BloomModifier: ViewModifier {
     let hasSearchBar: Bool
     
@@ -41,7 +53,7 @@ private struct BloomModifier: ViewModifier {
                 self.height = height
             }
             .overlay(alignment: .top) {
-                LinearGradient(gradient: .compound.subtle,
+                LinearGradient(gradient: .salemxToolbarBloom,
                                startPoint: .top,
                                endPoint: .init(x: 0.5, y: endPointY))
                     .ignoresSafeArea(edges: .all)
@@ -100,7 +112,7 @@ private struct OldBloomModifier: ViewModifier {
         
         bloom.image = newImage
         bloom.colorScheme = colorScheme
-        bloom.baseColor = .compound.gradientSubtleStop1
+        bloom.baseColor = salemxToolbarBloomBaseColor
         return bloom
     }
     
@@ -109,7 +121,7 @@ private struct OldBloomModifier: ViewModifier {
     }
     
     private var bloomGradient: some View {
-        LinearGradient(gradient: .compound.subtle,
+        LinearGradient(gradient: .salemxToolbarBloom,
                        startPoint: .top,
                        endPoint: .init(x: 0.5, y: endPointY))
             .ignoresSafeArea(edges: .all)
@@ -118,7 +130,7 @@ private struct OldBloomModifier: ViewModifier {
     
     private func canUse(_ bloom: Bloom) -> Bool {
         // Don't check for a nil image in here, there's no point re-rendering over and over if the render fails.
-        bloom.colorScheme == colorScheme && bloom.baseColor == .compound.gradientSubtleStop1
+        bloom.colorScheme == colorScheme && bloom.baseColor == salemxToolbarBloomBaseColor
     }
     
     /// This is a class to avoid a "Modifying state during view update" warning when storing

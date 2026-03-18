@@ -10,6 +10,44 @@ import Compound
 import SFSafeSymbols
 import SwiftUI
 
+private struct SettingsTintedIcon: View {
+    let icon: KeyPath<CompoundIcons, Image>
+    let foreground: Color
+    let background: Color
+
+    var body: some View {
+        CompoundIcon(icon, size: .medium, relativeTo: .compound.bodyLG)
+            .foregroundColor(foreground)
+            .frame(width: 36, height: 36)
+            .background {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(LinearGradient(stops: [
+                            .init(color: background.opacity(0.98), location: 0.00),
+                            .init(color: background.opacity(0.90), location: 0.62),
+                            .init(color: background.opacity(0.82), location: 1.00)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color.white.opacity(0.42), lineWidth: 0.8)
+                            .blendMode(.plusLighter)
+                    }
+                    .overlay(alignment: .top) {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(LinearGradient(stops: [
+                                    .init(color: Color.white.opacity(0.24), location: 0.00),
+                                    .init(color: Color.white.opacity(0.10), location: 0.30),
+                                    .init(color: Color.clear, location: 0.62)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom))
+                    }
+                    .shadow(color: foreground.opacity(0.10), radius: 8, x: 0, y: 4)
+            }
+    }
+}
+
 struct SettingsScreen: View {
     let context: SettingsScreenViewModel.Context
     
@@ -22,7 +60,7 @@ struct SettingsScreen: View {
             generalSection
             
             signOutSection
-         }
+        }
         .compoundList()
         .navigationTitle(L10n.commonSettings)
         .navigationBarTitleDisplayMode(.inline)
@@ -66,14 +104,18 @@ struct SettingsScreen: View {
     private var accountAndSecuritySection: some View {
         Section(L10n.screenSettingsAccountAndSecurityTitle) {
             ListRow(label: .default(title: L10n.screenNotificationSettingsTitle,
-                                    icon: \.notifications),
+                                    icon: SettingsTintedIcon(icon: \.notifications,
+                                                             foreground: Color(red: 0.77, green: 0.58, blue: 0.06),
+                                                             background: Color(red: 1.00, green: 0.94, blue: 0.79))),
                     kind: .navigationLink {
                         context.send(viewAction: .notifications)
                     })
                     .accessibilityIdentifier(A11yIdentifiers.settingsScreen.notifications)
             
             ListRow(label: .default(title: L10n.commonScreenLock,
-                                    icon: \.lock),
+                                    icon: SettingsTintedIcon(icon: \.lock,
+                                                             foreground: Color(red: 0.76, green: 0.28, blue: 0.24),
+                                                             background: Color(red: 1.00, green: 0.90, blue: 0.88))),
                     kind: .navigationLink {
                         context.send(viewAction: .appLock)
                     })
@@ -82,7 +124,9 @@ struct SettingsScreen: View {
             switch context.viewState.securitySectionMode {
             case .secureBackup:
                 ListRow(label: .default(title: L10n.commonEncryption,
-                                        icon: \.key),
+                                        icon: SettingsTintedIcon(icon: \.key,
+                                                                 foreground: Color(red: 0.19, green: 0.57, blue: 0.28),
+                                                                 background: Color(red: 0.88, green: 0.97, blue: 0.89))),
                         details: context.viewState.showSecuritySectionBadge ? .icon(securitySectionBadge) : nil,
                         kind: .navigationLink { context.send(viewAction: .secureBackup) })
                     .accessibilityIdentifier(A11yIdentifiers.settingsScreen.secureBackup)
@@ -100,7 +144,9 @@ struct SettingsScreen: View {
             
             if let url = context.viewState.accountProfileURL {
                 ListRow(label: .default(title: L10n.actionManageAccount,
-                                        icon: \.userProfile),
+                                        icon: SettingsTintedIcon(icon: \.userProfile,
+                                                                 foreground: Color(red: 0.13, green: 0.43, blue: 0.82),
+                                                                 background: Color(red: 0.88, green: 0.94, blue: 1.00))),
                         kind: .button {
                             context.send(viewAction: .manageAccount(url: url))
                         })
@@ -109,7 +155,9 @@ struct SettingsScreen: View {
             
             if let url = context.viewState.accountSessionsListURL {
                 ListRow(label: .default(title: L10n.actionManageDevices,
-                                        icon: \.devices),
+                                        icon: SettingsTintedIcon(icon: \.devices,
+                                                                 foreground: Color(red: 0.13, green: 0.43, blue: 0.82),
+                                                                 background: Color(red: 0.88, green: 0.94, blue: 1.00))),
                         kind: .button {
                             context.send(viewAction: .manageAccount(url: url))
                         })
@@ -129,14 +177,18 @@ struct SettingsScreen: View {
     private var generalSection: some View {
         Section {
             ListRow(label: .default(title: L10n.commonAdvancedSettings,
-                                    icon: \.settings),
+                                    icon: SettingsTintedIcon(icon: \.settings,
+                                                             foreground: Color(red: 0.53, green: 0.38, blue: 0.20),
+                                                             background: Color(red: 0.95, green: 0.90, blue: 0.84))),
                     kind: .navigationLink {
                         context.send(viewAction: .advancedSettings)
                     })
                     .accessibilityIdentifier(A11yIdentifiers.settingsScreen.advancedSettings)
             
             ListRow(label: .default(title: L10n.screenAboutSalemxTitle,
-                                    icon: \.info),
+                                    icon: SettingsTintedIcon(icon: \.info,
+                                                             foreground: Color(red: 0.34, green: 0.42, blue: 0.54),
+                                                             background: Color(red: 0.92, green: 0.94, blue: 0.97))),
                     kind: .navigationLink {
                         context.send(viewAction: .about)
                     })

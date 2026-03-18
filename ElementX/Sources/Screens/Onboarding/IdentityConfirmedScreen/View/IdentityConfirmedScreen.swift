@@ -29,7 +29,7 @@ struct IdentityConfirmedScreen: View {
     
     private var screenHeader: some View {
         VStack(spacing: 0) {
-            BigIcon(icon: \.checkCircle, style: .successSolid)
+            BigIcon(icon: \.checkCircle, style: .defaultSolid)
                 .padding(.bottom, 16)
             
             Text(L10n.screenIdentityConfirmedTitle)

@@ -49,7 +49,7 @@ struct SessionVerificationScreenViewState: BindableState {
         case .decliningChallenge:
             return (\.reaction, .defaultSolid)
         case .verified:
-            return (\.checkCircleSolid, .successSolid)
+            return (\.checkCircleSolid, .defaultSolid)
         case .cancelled:
             return (\.infoSolid, .alertSolid)
         }

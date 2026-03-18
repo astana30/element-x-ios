@@ -335,9 +335,36 @@ private struct NavigationTabCoordinatorView<Tag: Hashable>: View {
     
     private func configureAppearance(_ tabBarController: UITabBarController) {
         standardAppearance.configureWithDefaultBackground()
-        standardAppearance.stackedLayoutAppearance.normal.badgeBackgroundColor = .compound.iconAccentPrimary // iPhone Portrait
-        standardAppearance.compactInlineLayoutAppearance.normal.badgeBackgroundColor = .compound.iconAccentPrimary // iPhone Landscape
-        standardAppearance.inlineLayoutAppearance.normal.badgeBackgroundColor = .compound.iconAccentPrimary // iPadOS 17 (doesn't work for 18+)
+        standardAppearance.configureWithOpaqueBackground()
+        standardAppearance.backgroundColor = .compound.bgCanvasDefault
+        standardAppearance.shadowColor = UIColor(red: 0.09, green: 0.14, blue: 0.20, alpha: 0.08)
+
+        let selectedColor = UIColor(red: 0.13, green: 0.43, blue: 0.82, alpha: 1.0)
+        let normalColor = UIColor(red: 0.47, green: 0.54, blue: 0.62, alpha: 1.0)
+
+        let stacked = standardAppearance.stackedLayoutAppearance
+        stacked.normal.iconColor = normalColor
+        stacked.normal.titleTextAttributes = [.foregroundColor: normalColor]
+        stacked.selected.iconColor = selectedColor
+        stacked.selected.titleTextAttributes = [.foregroundColor: selectedColor]
+        stacked.normal.badgeBackgroundColor = .compound.iconAccentPrimary
+        stacked.selected.badgeBackgroundColor = .compound.iconAccentPrimary
+
+        let compactInline = standardAppearance.compactInlineLayoutAppearance
+        compactInline.normal.iconColor = normalColor
+        compactInline.normal.titleTextAttributes = [.foregroundColor: normalColor]
+        compactInline.selected.iconColor = selectedColor
+        compactInline.selected.titleTextAttributes = [.foregroundColor: selectedColor]
+        compactInline.normal.badgeBackgroundColor = .compound.iconAccentPrimary
+        compactInline.selected.badgeBackgroundColor = .compound.iconAccentPrimary
+
+        let inline = standardAppearance.inlineLayoutAppearance
+        inline.normal.iconColor = normalColor
+        inline.normal.titleTextAttributes = [.foregroundColor: normalColor]
+        inline.selected.iconColor = selectedColor
+        inline.selected.titleTextAttributes = [.foregroundColor: selectedColor]
+        inline.normal.badgeBackgroundColor = .compound.iconAccentPrimary
+        inline.selected.badgeBackgroundColor = .compound.iconAccentPrimary
         tabBarController.tabBar.standardAppearance = standardAppearance
     }
 }

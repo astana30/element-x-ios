@@ -254,7 +254,7 @@ internal enum L10n {
   internal static var actionLeave: String { return L10n.tr("Localizable", "action_leave") }
   /// Leave conversation
   internal static var actionLeaveConversation: String { return L10n.tr("Localizable", "action_leave_conversation") }
-  /// Leave room
+  /// Leave chat
   internal static var actionLeaveRoom: String { return L10n.tr("Localizable", "action_leave_room") }
   /// Leave space
   internal static var actionLeaveSpace: String { return L10n.tr("Localizable", "action_leave_space") }
@@ -312,7 +312,7 @@ internal enum L10n {
   internal static var actionReportContent: String { return L10n.tr("Localizable", "action_report_content") }
   /// Report conversation
   internal static var actionReportDm: String { return L10n.tr("Localizable", "action_report_dm") }
-  /// Report room
+  /// Report chat
   internal static var actionReportRoom: String { return L10n.tr("Localizable", "action_report_room") }
   /// Reset
   internal static var actionReset: String { return L10n.tr("Localizable", "action_reset") }
@@ -450,7 +450,7 @@ internal enum L10n {
   internal static var commonCreatingSpace: String { return L10n.tr("Localizable", "common_creating_space") }
   /// Request canceled
   internal static var commonCurrentUserCanceledKnock: String { return L10n.tr("Localizable", "common_current_user_canceled_knock") }
-  /// Left room
+  /// You left the chat
   internal static var commonCurrentUserLeftRoom: String { return L10n.tr("Localizable", "common_current_user_left_room") }
   /// Left space
   internal static var commonCurrentUserLeftSpace: String { return L10n.tr("Localizable", "common_current_user_left_space") }
@@ -530,7 +530,7 @@ internal enum L10n {
   }
   /// This Matrix ID can't be found, so the invite might not be received.
   internal static var commonInviteUnknownProfile: String { return L10n.tr("Localizable", "common_invite_unknown_profile") }
-  /// Leaving room
+  /// Leaving chat
   internal static var commonLeavingRoom: String { return L10n.tr("Localizable", "common_leaving_room") }
   /// Leaving space
   internal static var commonLeavingSpace: String { return L10n.tr("Localizable", "common_leaving_space") }
@@ -730,9 +730,9 @@ internal enum L10n {
   internal static var commonSomethingWentWrong: String { return L10n.tr("Localizable", "common_something_went_wrong") }
   /// We encountered an issue. Please try again.
   internal static var commonSomethingWentWrongMessage: String { return L10n.tr("Localizable", "common_something_went_wrong_message") }
-  /// Group
+  /// Community
   internal static var commonSpace: String { return L10n.tr("Localizable", "common_space") }
-  /// Group members
+  /// Community members
   internal static var commonSpaceMembers: String { return L10n.tr("Localizable", "common_space_members") }
   /// What is this group about?
   internal static var commonSpaceTopicPlaceholder: String { return L10n.tr("Localizable", "common_space_topic_placeholder") }
@@ -1643,7 +1643,7 @@ internal enum L10n {
   internal static var screenCreatePollSettingsSectionTitle: String { return L10n.tr("Localizable", "screen_create_poll_settings_section_title") }
   /// Create Poll
   internal static var screenCreatePollTitle: String { return L10n.tr("Localizable", "screen_create_poll_title") }
-  /// Create group
+  /// Create chat
   internal static var screenCreateRoomActionCreateRoom: String { return L10n.tr("Localizable", "screen_create_room_action_create_room") }
   /// Invite to group
   internal static var screenCreateRoomAddPeopleTitle: String { return L10n.tr("Localizable", "screen_create_room_add_people_title") }
@@ -1653,7 +1653,7 @@ internal enum L10n {
   internal static var screenCreateRoomErrorCreatingSpace: String { return L10n.tr("Localizable", "screen_create_room_error_creating_space") }
   /// Add name…
   internal static var screenCreateRoomNamePlaceholder: String { return L10n.tr("Localizable", "screen_create_room_name_placeholder") }
-  /// New group
+  /// New chat
   internal static var screenCreateRoomNewRoomTitle: String { return L10n.tr("Localizable", "screen_create_room_new_room_title") }
   /// New group
   internal static var screenCreateRoomNewSpaceTitle: String { return L10n.tr("Localizable", "screen_create_room_new_space_title") }
@@ -1692,11 +1692,11 @@ internal enum L10n {
   }
   /// Standard
   internal static var screenCreateRoomRoomAccessSectionRestrictedOptionTitle: String { return L10n.tr("Localizable", "screen_create_room_room_access_section_restricted_option_title") }
-  /// Who has access
+  /// Chat access
   internal static var screenCreateRoomRoomAccessSectionTitle: String { return L10n.tr("Localizable", "screen_create_room_room_access_section_title") }
-  /// You’ll need an address in order to make the group visible in the public directory.
+  /// A chat address lets people find this chat more easily.
   internal static var screenCreateRoomRoomAddressSectionFooter: String { return L10n.tr("Localizable", "screen_create_room_room_address_section_footer") }
-  /// Address
+  /// Chat address
   internal static var screenCreateRoomRoomAddressSectionTitle: String { return L10n.tr("Localizable", "screen_create_room_room_address_section_title") }
   /// Chat visibility
   internal static var screenCreateRoomRoomVisibilitySectionTitle: String { return L10n.tr("Localizable", "screen_create_room_room_visibility_section_title") }
@@ -1704,7 +1704,7 @@ internal enum L10n {
   internal static var screenCreateRoomSpaceSelectionNoSpaceDescription: String { return L10n.tr("Localizable", "screen_create_room_space_selection_no_space_description") }
   /// Do not add to a group
   internal static var screenCreateRoomSpaceSelectionNoSpaceOption: String { return L10n.tr("Localizable", "screen_create_room_space_selection_no_space_option") }
-  /// No group selected
+  /// No community selected
   internal static var screenCreateRoomSpaceSelectionNoSpaceTitle: String { return L10n.tr("Localizable", "screen_create_room_space_selection_no_space_title") }
   /// Add to group
   internal static var screenCreateRoomSpaceSelectionSheetTitle: String { return L10n.tr("Localizable", "screen_create_room_space_selection_sheet_title") }
@@ -1796,7 +1796,7 @@ internal enum L10n {
   internal static var screenEncryptionResetTitle: String { return L10n.tr("Localizable", "screen_encryption_reset_title") }
   /// Chats
   internal static var screenHomeTabChats: String { return L10n.tr("Localizable", "screen_home_tab_chats") }
-  /// Groups
+  /// Communities
   internal static var screenHomeTabSpaces: String { return L10n.tr("Localizable", "screen_home_tab_spaces") }
   /// Can't confirm?
   internal static var screenIdentityConfirmationCannotConfirm: String { return L10n.tr("Localizable", "screen_identity_confirmation_cannot_confirm") }
@@ -1902,7 +1902,7 @@ internal enum L10n {
   internal static func screenJoinRoomSpaceNotSupportedDescription(_ p1: Any) -> String {
     return L10n.tr("Localizable", "screen_join_room_space_not_supported_description", String(describing: p1))
   }
-  /// Groups are not supported yet
+  /// Communities are not supported yet
   internal static var screenJoinRoomSpaceNotSupportedTitle: String { return L10n.tr("Localizable", "screen_join_room_space_not_supported_title") }
   /// Click the button below and a room administrator will be notified. You’ll be able to join the conversation once approved.
   internal static var screenJoinRoomSubtitleKnock: String { return L10n.tr("Localizable", "screen_join_room_subtitle_knock") }
@@ -1910,7 +1910,7 @@ internal enum L10n {
   internal static var screenJoinRoomSubtitleNoPreview: String { return L10n.tr("Localizable", "screen_join_room_subtitle_no_preview") }
   /// Want to join this room?
   internal static var screenJoinRoomTitleKnock: String { return L10n.tr("Localizable", "screen_join_room_title_knock") }
-  /// Preview is not available
+  /// Chat
   internal static var screenJoinRoomTitleNoPreview: String { return L10n.tr("Localizable", "screen_join_room_title_no_preview") }
   /// Turn off
   internal static var screenKeyBackupDisableConfirmationActionTurnOff: String { return L10n.tr("Localizable", "screen_key_backup_disable_confirmation_action_turn_off") }
@@ -2112,7 +2112,7 @@ internal enum L10n {
   internal static func screenLoginTitleWithHomeserver(_ p1: Any) -> String {
     return L10n.tr("Localizable", "screen_login_title_with_homeserver", String(describing: p1))
   }
-  /// Groups where members can join the chat without an invitation.
+  /// Communities whose members can join the chat without an invitation.
   internal static var screenManageAuthorizedSpacesHeader: String { return L10n.tr("Localizable", "screen_manage_authorized_spaces_header") }
   /// Manage spaces
   internal static var screenManageAuthorizedSpacesTitle: String { return L10n.tr("Localizable", "screen_manage_authorized_spaces_title") }
@@ -2462,11 +2462,11 @@ internal enum L10n {
   internal static var screenReportRoomLeaveFailedAlertMessage: String { return L10n.tr("Localizable", "screen_report_room_leave_failed_alert_message") }
   /// Unable to Leave Chat
   internal static var screenReportRoomLeaveFailedAlertTitle: String { return L10n.tr("Localizable", "screen_report_room_leave_failed_alert_title") }
-  /// Report this room to your admin. If the messages are encrypted, your admin will not be able to read them.
+  /// Explain why you are reporting this chat.
   internal static var screenReportRoomReasonFooter: String { return L10n.tr("Localizable", "screen_report_room_reason_footer") }
   /// Describe the reason to report…
   internal static var screenReportRoomReasonPlaceholder: String { return L10n.tr("Localizable", "screen_report_room_reason_placeholder") }
-  /// Report room
+  /// Report chat
   internal static var screenReportRoomTitle: String { return L10n.tr("Localizable", "screen_report_room_title") }
   /// Yes, reset now
   internal static var screenResetEncryptionConfirmationAlertAction: String { return L10n.tr("Localizable", "screen_reset_encryption_confirmation_alert_action") }
@@ -2614,7 +2614,7 @@ internal enum L10n {
   internal static var screenRoomDetailsBadgeNotEncrypted: String { return L10n.tr("Localizable", "screen_room_details_badge_not_encrypted") }
   /// Public room
   internal static var screenRoomDetailsBadgePublic: String { return L10n.tr("Localizable", "screen_room_details_badge_public") }
-  /// Edit details
+  /// Edit chat details
   internal static var screenRoomDetailsEditRoomTitle: String { return L10n.tr("Localizable", "screen_room_details_edit_room_title") }
   /// There was an unknown error and the information couldn't be changed.
   internal static var screenRoomDetailsEditionError: String { return L10n.tr("Localizable", "screen_room_details_edition_error") }
@@ -2638,7 +2638,7 @@ internal enum L10n {
   internal static var screenRoomDetailsInvitePeopleTitle: String { return L10n.tr("Localizable", "screen_room_details_invite_people_title") }
   /// Leave conversation
   internal static var screenRoomDetailsLeaveConversationTitle: String { return L10n.tr("Localizable", "screen_room_details_leave_conversation_title") }
-  /// Leave room
+  /// Leave chat
   internal static var screenRoomDetailsLeaveRoomTitle: String { return L10n.tr("Localizable", "screen_room_details_leave_room_title") }
   /// Media and files
   internal static var screenRoomDetailsMediaGalleryTitle: String { return L10n.tr("Localizable", "screen_room_details_media_gallery_title") }
@@ -2646,7 +2646,7 @@ internal enum L10n {
   internal static var screenRoomDetailsNotificationModeCustom: String { return L10n.tr("Localizable", "screen_room_details_notification_mode_custom") }
   /// Default
   internal static var screenRoomDetailsNotificationModeDefault: String { return L10n.tr("Localizable", "screen_room_details_notification_mode_default") }
-  /// Notifications
+  /// Chat notifications
   internal static var screenRoomDetailsNotificationTitle: String { return L10n.tr("Localizable", "screen_room_details_notification_title") }
   /// Pinned messages
   internal static var screenRoomDetailsPinnedEventsRowTitle: String { return L10n.tr("Localizable", "screen_room_details_pinned_events_row_title") }
@@ -2664,7 +2664,7 @@ internal enum L10n {
   internal static var screenRoomDetailsSecurityTitle: String { return L10n.tr("Localizable", "screen_room_details_security_title") }
   /// Share room
   internal static var screenRoomDetailsShareRoomTitle: String { return L10n.tr("Localizable", "screen_room_details_share_room_title") }
-  /// Chat info
+  /// Chat details
   internal static var screenRoomDetailsTitle: String { return L10n.tr("Localizable", "screen_room_details_title") }
   /// Topic
   internal static var screenRoomDetailsTopicTitle: String { return L10n.tr("Localizable", "screen_room_details_topic_title") }
@@ -2672,7 +2672,7 @@ internal enum L10n {
   internal static var screenRoomDetailsUpdatingRoom: String { return L10n.tr("Localizable", "screen_room_details_updating_room") }
   /// Failed loading
   internal static var screenRoomDirectorySearchLoadingError: String { return L10n.tr("Localizable", "screen_room_directory_search_loading_error") }
-  /// Chat directory
+  /// Public chats
   internal static var screenRoomDirectorySearchTitle: String { return L10n.tr("Localizable", "screen_room_directory_search_title") }
   /// Message history is currently unavailable.
   internal static var screenRoomEncryptedHistoryBanner: String { return L10n.tr("Localizable", "screen_room_encrypted_history_banner") }
@@ -2700,7 +2700,7 @@ internal enum L10n {
   internal static var screenRoomMemberDetailsBlockAlertDescription: String { return L10n.tr("Localizable", "screen_room_member_details_block_alert_description") }
   /// Block user
   internal static var screenRoomMemberDetailsBlockUser: String { return L10n.tr("Localizable", "screen_room_member_details_block_user") }
-  /// Profile
+  /// Chat member
   internal static var screenRoomMemberDetailsTitle: String { return L10n.tr("Localizable", "screen_room_member_details_title") }
   /// Unblock
   internal static var screenRoomMemberDetailsUnblockAlertAction: String { return L10n.tr("Localizable", "screen_room_member_details_unblock_alert_action") }
@@ -2848,7 +2848,7 @@ internal enum L10n {
   internal static var screenRoomRolesAndPermissionsRolesHeader: String { return L10n.tr("Localizable", "screen_room_roles_and_permissions_roles_header") }
   /// Chat details
   internal static var screenRoomRolesAndPermissionsRoomDetails: String { return L10n.tr("Localizable", "screen_room_roles_and_permissions_room_details") }
-  /// Group details
+  /// Community details
   internal static var screenRoomRolesAndPermissionsSpaceDetails: String { return L10n.tr("Localizable", "screen_room_roles_and_permissions_space_details") }
   /// Roles & permissions
   internal static var screenRoomRolesAndPermissionsTitle: String { return L10n.tr("Localizable", "screen_room_roles_and_permissions_title") }
@@ -2963,7 +2963,7 @@ internal enum L10n {
   internal static var screenRoomlistFilterPeople: String { return L10n.tr("Localizable", "screen_roomlist_filter_people") }
   /// You don’t have any DMs yet
   internal static var screenRoomlistFilterPeopleEmptyStateTitle: String { return L10n.tr("Localizable", "screen_roomlist_filter_people_empty_state_title") }
-  /// Groups
+  /// Chats
   internal static var screenRoomlistFilterRooms: String { return L10n.tr("Localizable", "screen_roomlist_filter_rooms") }
   /// You don’t have any groups yet
   internal static var screenRoomlistFilterRoomsEmptyStateTitle: String { return L10n.tr("Localizable", "screen_roomlist_filter_rooms_empty_state_title") }
@@ -2984,7 +2984,7 @@ internal enum L10n {
   internal static var screenRoomlistTombstonedRoomDescription: String { return L10n.tr("Localizable", "screen_roomlist_tombstoned_room_description") }
   /// Your spaces
   internal static var screenRoomlistYourSpaces: String { return L10n.tr("Localizable", "screen_roomlist_your_spaces") }
-  /// Add address
+  /// Add chat address
   internal static var screenSecurityAndPrivacyAddRoomAddressAction: String { return L10n.tr("Localizable", "screen_security_and_privacy_add_room_address_action") }
   /// Anyone in authorised spaces can join, but everyone else must request access.
   internal static var screenSecurityAndPrivacyAskToJoinMultipleSpacesMembersOptionDescription: String { return L10n.tr("Localizable", "screen_security_and_privacy_ask_to_join_multiple_spaces_members_option_description") }
@@ -3032,13 +3032,13 @@ internal enum L10n {
   internal static func screenSecurityAndPrivacyRoomAccessSpaceMembersOptionSingleParentDescription(_ p1: Any) -> String {
     return L10n.tr("Localizable", "screen_security_and_privacy_room_access_space_members_option_single_parent_description", String(describing: p1))
   }
-  /// Group members
+  /// Community members
   internal static var screenSecurityAndPrivacyRoomAccessSpaceMembersOptionTitle: String { return L10n.tr("Localizable", "screen_security_and_privacy_room_access_space_members_option_title") }
-  /// Groups are not currently supported
+  /// Communities are not currently supported
   internal static var screenSecurityAndPrivacyRoomAccessSpaceMembersOptionUnavailableDescription: String { return L10n.tr("Localizable", "screen_security_and_privacy_room_access_space_members_option_unavailable_description") }
-  /// You’ll need an address in order to make it visible in the public directory.
+  /// Chat addresses make the chat easier to find.
   internal static var screenSecurityAndPrivacyRoomAddressSectionFooter: String { return L10n.tr("Localizable", "screen_security_and_privacy_room_address_section_footer") }
-  /// Address
+  /// Chat address
   internal static var screenSecurityAndPrivacyRoomAddressSectionHeader: String { return L10n.tr("Localizable", "screen_security_and_privacy_room_address_section_header") }
   /// Allow for this room to be found by searching %1$@ public room directory
   internal static func screenSecurityAndPrivacyRoomDirectoryVisibilitySectionFooter(_ p1: Any) -> String {
@@ -3243,13 +3243,13 @@ internal enum L10n {
   internal static var screenSpaceAnnouncementItem5: String { return L10n.tr("Localizable", "screen_space_announcement_item5") }
   /// Filtering, creating and managing spaces is coming soon.
   internal static var screenSpaceAnnouncementNotice: String { return L10n.tr("Localizable", "screen_space_announcement_notice") }
-  /// Welcome to the beta version of Groups! With this first version you can:
+  /// Welcome to the beta version of Communities! With this first version you can:
   internal static var screenSpaceAnnouncementSubtitle: String { return L10n.tr("Localizable", "screen_space_announcement_subtitle") }
-  /// Introducing Groups
+  /// Introducing Communities
   internal static var screenSpaceAnnouncementTitle: String { return L10n.tr("Localizable", "screen_space_announcement_title") }
   /// Add your first room
   internal static var screenSpaceEmptyStateTitle: String { return L10n.tr("Localizable", "screen_space_empty_state_title") }
-  /// Groups you have created or joined.
+  /// Communities you have created or joined.
   internal static var screenSpaceListDescription: String { return L10n.tr("Localizable", "screen_space_list_description") }
   /// %1$@ • %2$@
   internal static func screenSpaceListDetails(_ p1: Any, _ p2: Any) -> String {
@@ -3261,7 +3261,7 @@ internal enum L10n {
   internal static func screenSpaceListParentSpace(_ p1: Any) -> String {
     return L10n.tr("Localizable", "screen_space_list_parent_space", String(describing: p1))
   }
-  /// Groups
+  /// Communities
   internal static var screenSpaceListTitle: String { return L10n.tr("Localizable", "screen_space_list_title") }
   /// View members
   internal static var screenSpaceMenuActionMembers: String { return L10n.tr("Localizable", "screen_space_menu_action_members") }
@@ -3283,17 +3283,17 @@ internal enum L10n {
   internal static var screenSpaceSettingsSecurityAndPrivacy: String { return L10n.tr("Localizable", "screen_space_settings_security_and_privacy") }
   /// An error occurred when trying to start a chat
   internal static var screenStartChatErrorStartingChat: String { return L10n.tr("Localizable", "screen_start_chat_error_starting_chat") }
-  /// Join group by address
+  /// Join chat by address
   internal static var screenStartChatJoinRoomByAddressAction: String { return L10n.tr("Localizable", "screen_start_chat_join_room_by_address_action") }
   /// Not a valid address
   internal static var screenStartChatJoinRoomByAddressInvalidAddress: String { return L10n.tr("Localizable", "screen_start_chat_join_room_by_address_invalid_address") }
-  /// Enter...
+  /// #chat:server.com
   internal static var screenStartChatJoinRoomByAddressPlaceholder: String { return L10n.tr("Localizable", "screen_start_chat_join_room_by_address_placeholder") }
-  /// Group found
+  /// Chat found
   internal static var screenStartChatJoinRoomByAddressRoomFound: String { return L10n.tr("Localizable", "screen_start_chat_join_room_by_address_room_found") }
-  /// Group not found
+  /// Chat not found
   internal static var screenStartChatJoinRoomByAddressRoomNotFound: String { return L10n.tr("Localizable", "screen_start_chat_join_room_by_address_room_not_found") }
-  /// e.g. #room-name:mertis.kz
+  /// Enter a chat address to find and join a chat.
   internal static var screenStartChatJoinRoomByAddressSupportingText: String { return L10n.tr("Localizable", "screen_start_chat_join_room_by_address_supporting_text") }
   /// Join group by address
   internal static var screenStartChatJoinRoomByAddressTitle: String { return L10n.tr("Localizable", "screen_start_chat_join_room_by_address_title") }
