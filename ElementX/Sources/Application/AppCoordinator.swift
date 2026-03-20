@@ -749,7 +749,12 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
         
     private func logout(isSoft: Bool) {
         guard let userSession else {
-            fatalError("User session not setup")
+            MXLog.error("logout(isSoft: \(isSoft)) called without a user session. Falling back to completed sign-out.")
+            tearDownUserSession()
+            DispatchQueue.main.async { [weak self] in
+                self?.stateMachine.processEvent(.completedSigningOut)
+            }
+            return
         }
         
         showLoadingIndicator()

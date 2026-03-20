@@ -271,7 +271,7 @@ class CreateRoomScreenViewModel: CreateRoomScreenViewModelType, CreateRoomScreen
             guard case let .joined(roomProxy) = await userSession.clientProxy.roomForIdentifier(roomID) else {
                 state.bindings.alertInfo = AlertInfo(id: .failedCreatingRoom,
                                                      title: L10n.commonError,
-                                                     message: L10n.screenStartChatErrorStartingChat)
+                                                     message: L10n.screenCreateRoomErrorCreatingRoom)
                 return
             }
             analytics.trackCreatedRoom(isDM: false)
@@ -295,7 +295,7 @@ class CreateRoomScreenViewModel: CreateRoomScreenViewModelType, CreateRoomScreen
         case .failure:
             state.bindings.alertInfo = AlertInfo(id: .failedCreatingRoom,
                                                  title: L10n.commonError,
-                                                 message: L10n.screenStartChatErrorStartingChat)
+                                                 message: L10n.screenCreateRoomErrorCreatingRoom)
         }
     }
     

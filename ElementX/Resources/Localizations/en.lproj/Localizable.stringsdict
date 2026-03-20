@@ -445,9 +445,9 @@
 			<key>NSStringFormatValueTypeKey</key>
 			<string>d</string>
 			<key>one</key>
-			<string>%1$d room change</string>
+			<string>%1$d update</string>
 			<key>other</key>
-			<string>%1$d room changes</string>
+			<string>%1$d updates</string>
 		</dict>
 	</dict>
 	<key>screen_room_typing_many_members</key>

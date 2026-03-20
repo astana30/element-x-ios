@@ -73,7 +73,7 @@
 "action_copy_link_to_message" = "Скопировать ссылку в сообщение";
 "action_copy_text" = "Копировать текст";
 "action_create" = "Создать";
-"action_create_room" = "Создать чат";
+"action_create_room" = "Создать группу";
 "action_create_space" = "Создать сообщество";
 "action_deactivate" = "Отключить";
 "action_deactivate_account" = "Отключить учётную запись";
@@ -153,9 +153,9 @@
 "action_share_link" = "Поделиться ссылкой";
 "action_share_live_location" = "Поделиться местоположением в реальном времени";
 "action_show" = "Показать";
-"action_sign_in_again" = "Повторить вход";
+"action_sign_in_again" = "Войти снова";
 "action_signout" = "Выйти";
-"action_signout_anyway" = "Всё равно выйти";
+"action_signout_anyway" = "Выйти всё равно";
 "action_skip" = "Пропустить";
 "action_start" = "Начать";
 "action_start_chat" = "Начать чат";
@@ -533,7 +533,7 @@
 "screen_advanced_settings_show_media_timeline_title" = "Показать медиа в истории сообщений";
 "screen_bottom_sheet_create_dm_confirmation_button_title" = "Отправить приглашение";
 "screen_bottom_sheet_create_dm_message" = "Хотите начать чат с %1$@?";
-"screen_bottom_sheet_create_dm_title" = "Отправить приглашение?";
+"screen_bottom_sheet_create_dm_title" = "Начать чат?";
 "screen_bottom_sheet_manage_room_member_ban" = "Удалить и заблокировать участника";
 "screen_bottom_sheet_manage_room_member_ban_member_confirmation_action" = "Заблокировать";
 "screen_bottom_sheet_manage_room_member_ban_member_confirmation_description" = "Пользователь не сможет присоединиться, если будет приглашен.";
@@ -556,8 +556,8 @@
 "screen_create_poll_remove_accessibility_label" = "Удалить %1$@";
 "screen_create_poll_settings_section_title" = "Настройки";
 "screen_create_room_error_creating_space" = "Не удалось создать сообщество из-за неизвестной ошибки. Попробуйте позже.";
-"screen_create_room_name_placeholder" = "Название чата";
-"screen_create_room_new_room_title" = "Новый чат";
+"screen_create_room_name_placeholder" = "Название группы";
+"screen_create_room_new_room_title" = "Новая группа";
 "screen_create_room_new_space_title" = "Новое сообщество";
 "screen_create_room_public_option_short_description" = "Кто угодно может присоединиться.";
 "screen_create_room_room_access_section_knocking_option_description" = "Кто угодно может подать заявку, но администратор или модератор должен будет принять запрос.";
@@ -568,10 +568,10 @@
 "screen_create_room_room_access_section_public_option_description" = "Кто угодно может присоедниться.";
 "screen_create_room_room_access_section_restricted_option_description" = "Кто угодно в %1$@ может присоединиться.";
 "screen_create_room_room_access_section_restricted_option_title" = "Стандарт";
-"screen_create_room_room_access_section_title" = "Доступ к чату";
-"screen_create_room_room_address_section_footer" = "Адрес чата помогает другим быстрее находить этот чат.";
-"screen_create_room_room_address_section_title" = "Адрес чата";
-"screen_create_room_room_visibility_section_title" = "Видимость чата";
+"screen_create_room_room_access_section_title" = "Доступ к группе";
+"screen_create_room_room_address_section_footer" = "Адрес группы помогает другим легче находить эту группу.";
+"screen_create_room_room_address_section_title" = "Адрес группы";
+"screen_create_room_room_visibility_section_title" = "Видимость группы";
 "screen_create_room_space_selection_no_space_description" = "(без сообщества)";
 "screen_create_room_space_selection_no_space_option" = "Не добавлять в сообщество";
 "screen_create_room_space_selection_no_space_title" = "Сообщество не выбрано";
@@ -593,7 +593,7 @@
 "screen_join_room_invited_by" = "Приглашен";
 "screen_join_room_knock_message_characters_count" = "Разрешенные символы %1$d %2$d";
 "screen_join_room_knock_message_description" = "Сообщение (опционально)";
-"screen_join_room_knock_sent_description" = "Вы получите приглашение, как только ваш запрос будет принят.";
+"screen_join_room_knock_sent_description" = "Вы получите приглашение в группу, если ваш запрос будет одобрен.";
 "screen_join_room_knock_sent_title" = "Запрос на присоединение отправлен";
 "screen_join_room_loading_alert_message" = "Не удалось отобразить предпросмотр чата. Это может быть связано с проблемами сети или сервера.";
 "screen_join_room_loading_alert_title" = "Не удалось показать предпросмотр чата";
@@ -721,9 +721,6 @@
 "screen_security_and_privacy_ask_to_join_option_title" = "По запросам";
 "screen_security_and_privacy_ask_to_join_single_space_members_option_description" = "Кто угодно из %1$@ может присоединиться, а всем остальным нужно запросить доступ.";
 "screen_security_and_privacy_enable_encryption_alert_confirm_button_title" = "Да, включить шифрование";
-"screen_security_and_privacy_enable_encryption_alert_description" = "После включения шифрование в чате нельзя будет отключить. История сообщений будет видна только участникам чата с момента приглашения или вступления.
-Никто, кроме участников чата, не сможет читать сообщения. Это может помешать корректной работе ботов и мостов.
-Мы не рекомендуем включать шифрование для чатов, которые может найти и в которые может войти любой желающий.";
 "screen_security_and_privacy_enable_encryption_alert_title" = "Включить шифрование?";
 "screen_security_and_privacy_encryption_section_footer" = "После включения, шифрование не может быть отключено.";
 "screen_security_and_privacy_encryption_toggle_title" = "Включить сквозное шифрование";
@@ -745,8 +742,6 @@
 "screen_security_and_privacy_room_history_section_header" = "Кто может читать историю";
 "screen_security_and_privacy_room_history_since_invite_option_title" = "Участники с момента приглашения";
 "screen_security_and_privacy_room_history_since_selecting_option_title" = "Участники (полная история)";
-"screen_security_and_privacy_room_publishing_section_footer" = "Адреса чатов помогают находить и открывать чаты. Они также упрощают отправку ссылки на чат другим пользователям.
-Вы можете опубликовать этот чат в публичном каталоге вашего сервера.";
 "screen_security_and_privacy_room_publishing_section_header" = "Публикация чата";
 "screen_security_and_privacy_room_visibility_section_footer" = "Адреса чатов помогают находить чаты и сообщества, а также делиться ими с другими.";
 "screen_security_and_privacy_room_visibility_section_header" = "Видимость";
@@ -770,12 +765,12 @@
 "screen_space_list_empty_state_title" = "Создайте сообщества для организации чатов";
 "screen_space_list_parent_space" = "%1$@ пространство";
 "screen_space_list_title" = "Сообщества";
-"screen_start_chat_join_room_by_address_action" = "Вступить в чат по адресу";
+"screen_start_chat_join_room_by_address_action" = "Присоединиться к группе по адресу";
 "screen_start_chat_join_room_by_address_invalid_address" = "Недействительный адрес";
 "screen_start_chat_join_room_by_address_placeholder" = "#chat:server.com";
-"screen_start_chat_join_room_by_address_room_found" = "Чат найден";
-"screen_start_chat_join_room_by_address_room_not_found" = "Чат не найден";
-"screen_start_chat_join_room_by_address_supporting_text" = "Введите адрес чата, чтобы найти его и вступить.";
+"screen_start_chat_join_room_by_address_room_found" = "Группа найдена";
+"screen_start_chat_join_room_by_address_room_not_found" = "Группа не найдена";
+"screen_start_chat_join_room_by_address_supporting_text" = "Введите адрес группы, чтобы найти её и присоединиться.";
 "screen_static_location_sheet_timestamp_description" = "Поделился %1$@";
 "screen_static_location_sheet_title" = "На карте";
 "screen_timeline_item_menu_send_failure_changed_identity" = "Сообщение не отправлено, потому что подтвержденная личность %1$@ была сброшена.";
@@ -891,11 +886,10 @@
 "screen_create_poll_question_desc" = "Вопрос или тема";
 "screen_create_poll_question_hint" = "О чём будет опрос?";
 "screen_create_poll_title" = "Создать опрос";
-"screen_create_room_action_create_room" = "Создать чат";
-"screen_create_room_error_creating_room" = "Произошла ошибка при создании чата.";
+"screen_create_room_action_create_room" = "Создать группу";
+"screen_create_room_error_creating_room" = "Произошла ошибка при создании группы.";
 "screen_create_room_private_option_description" = "Присоединиться могут только приглашенные.";
-"screen_create_room_public_option_description" = "Любой желающий может найти эту группу.
-Вы можете изменить это в любое время в настройках группы.";
+"screen_create_room_public_option_description" = "Любой желающий может найти эту группу.";
 "screen_create_room_topic_label" = "Тема (необязательно)";
 "screen_deactivate_account_confirmation_dialog_content" = "Вы уверены, что хотите отключить свою учётную запись? Данное действие необратимо.";
 "screen_deactivate_account_delete_all_messages" = "Удалить все мои сообщения";
@@ -935,21 +929,21 @@
 "screen_invites_decline_direct_chat_title" = "Отклонить чат";
 "screen_invites_empty_list" = "Нет приглашений";
 "screen_invites_invited_you" = "%1$@ (%2$@) пригласил(а) вас";
-"screen_join_room_ban_by_message" = "%1$@ заблокировал(а) вас в чате.";
-"screen_join_room_ban_message" = "Вы были заблокированы в этом чате";
+"screen_join_room_ban_by_message" = "%1$@ заблокировал(а) вас в этой группе.";
+"screen_join_room_ban_message" = "Вы были заблокированы в этой группе";
 "screen_join_room_ban_reason" = "Причина: %1$@.";
-"screen_join_room_fail_message" = "Не удалось присоединиться к чату.";
-"screen_join_room_fail_reason" = "Доступ к чату ограничен. Возможно, вам нужно приглашение.";
-"screen_join_room_forget_action" = "Забыть чат";
-"screen_join_room_invite_required_message" = "Чтобы присоединиться к этому чату, нужно приглашение.";
-"screen_join_room_join_restricted_message" = "Чтобы присоединиться, вам необходимо приглашение или быть участником сообщества.";
+"screen_join_room_fail_message" = "Не удалось присоединиться к группе.";
+"screen_join_room_fail_reason" = "Возможно, для присоединения к этой группе нужно приглашение, либо доступ ограничен.";
+"screen_join_room_forget_action" = "Забыть эту группу";
+"screen_join_room_invite_required_message" = "Вам нужно приглашение, чтобы присоединиться к этой группе";
+"screen_join_room_join_restricted_message" = "Возможно, вам нужно приглашение или членство в сообществе, чтобы присоединиться к этой группе.";
 "screen_join_room_knock_action" = "Отправить запрос на присоединение";
-"screen_join_room_space_not_supported_description" = "%1$@ еще не поддерживает пространства. Вы можете получить к ним доступ в веб-версии.";
+"screen_join_room_space_not_supported_description" = "%1$@ еще не поддерживает сообщества. Вы можете получить к ним доступ в веб-версии.";
 "screen_join_room_space_not_supported_title" = "Сообщества пока не поддерживаются";
-"screen_join_room_subtitle_knock" = "Нажмите кнопку ниже, и администратор чата получит уведомление. После одобрения вы сможете присоединиться к обсуждению.";
-"screen_join_room_subtitle_no_preview" = "Вы должны быть участником этого чата, чтобы просматривать историю сообщений.";
-"screen_join_room_title_knock" = "Хотите присоединиться к этому чату?";
-"screen_join_room_title_no_preview" = "Чат";
+"screen_join_room_subtitle_knock" = "Нажмите кнопку ниже, и администратор группы получит уведомление. После одобрения вы сможете присоединиться к группе.";
+"screen_join_room_subtitle_no_preview" = "Вы должны быть участником этой группы, чтобы просмотреть историю сообщений.";
+"screen_join_room_title_knock" = "Хотите присоединиться к этой группе?";
+"screen_join_room_title_no_preview" = "Группа";
 "screen_key_backup_disable_confirmation_action_turn_off" = "Выключить";
 "screen_key_backup_disable_confirmation_description" = "Вы потеряете зашифрованные сообщения, если выйдете из всех устройств.";
 "screen_key_backup_disable_confirmation_title" = "Вы действительно хотите отключить резервное копирование?";
@@ -963,7 +957,7 @@
 "screen_login_error_refresh_tokens" = "Этот сервер настроен на использование токенов обновления. Они не поддерживаются при использовании входа на основе пароля.";
 "screen_login_error_unsupported_authentication" = "Выбранный сервер не поддерживает вход по паролю и OIDC. Пожалуйста, свяжитесь с администратором или выберите другой сервер.";
 "screen_login_form_header" = "Введите свои данные";
-"screen_login_title" = "Рады видеть вас снова!";
+"screen_login_title" = "Войти";
 "screen_login_title_with_homeserver" = "Войти в %1$@";
 "screen_media_browser_delete_confirmation_subtitle" = "Этот файл будет удалён из чата, и участники потеряют к нему доступ.";
 "screen_media_browser_delete_confirmation_title" = "Удалить файл?";
@@ -1216,8 +1210,8 @@
 "screen_room_typing_two_members" = "%1$@ и %2$@";
 "screen_room_voice_message_tooltip" = "Удерживайте для записи";
 "screen_roomlist_a11y_create_message" = "Создать новый диалог или чат";
-"screen_roomlist_empty_message" = "Начните переписку, отправив сообщение.";
-"screen_roomlist_empty_title" = "Пока нет чатов.";
+"screen_roomlist_empty_message" = "Начните общение, отправив первое сообщение.";
+"screen_roomlist_empty_title" = "Пока нет сообщений.";
 "screen_roomlist_filter_favourites" = "Избранные";
 "screen_roomlist_filter_favourites_empty_state_subtitle" = "Добавить чат в избранное можно в настройках чата.\nНа данный момент вы можете убрать фильтры, чтобы увидеть другие ваши чаты.";
 "screen_roomlist_filter_favourites_empty_state_title" = "У вас пока нет избранных чатов";
@@ -1226,9 +1220,9 @@
 "screen_roomlist_filter_low_priority_empty_state_title" = "У вас пока нет чатов с низким приоритетом.";
 "screen_roomlist_filter_mixed_empty_state_subtitle" = "Вы можете убрать фильтры, чтобы увидеть другие ваши чаты.";
 "screen_roomlist_filter_mixed_empty_state_title" = "У вас нет чатов, соответствующих фильтрам";
-"screen_roomlist_filter_people_empty_state_title" = "У вас пока нет личных сообщений";
-"screen_roomlist_filter_rooms" = "Чаты";
-"screen_roomlist_filter_rooms_empty_state_title" = "У вас пока нет групповых чатов";
+"screen_roomlist_filter_people_empty_state_title" = "У вас пока нет чатов";
+"screen_roomlist_filter_rooms" = "Группы";
+"screen_roomlist_filter_rooms_empty_state_title" = "У вас пока нет групп";
 "screen_roomlist_filter_unreads" = "Непрочитанные";
 "screen_roomlist_filter_unreads_empty_state_title" = "Поздравляем!\nУ вас нет непрочитанных сообщений!";
 "screen_roomlist_main_space_title" = "Чаты";
@@ -1495,7 +1489,7 @@
 "screen_chat_backup_recovery_action_setup" = "Настроить восстановление";
 "screen_create_account_title" = "Создать аккаунт";
 "screen_create_poll_cancel_confirmation_content_ios" = "Ваши изменения не будут сохранены";
-"screen_create_room_add_people_title" = "Пригласить участников";
+"screen_create_room_add_people_title" = "Пригласить в группу";
 "screen_create_room_private_option_title" = "Приватный";
 "screen_create_room_public_option_title" = "Публичный";
 "screen_deactivate_account_title" = "Отключить учётную запись";
@@ -1508,7 +1502,7 @@
 "screen_edit_poll_delete_confirmation_title" = "Удалить опрос";
 "screen_edit_poll_title" = "Редактировать опрос";
 "screen_identity_use_another_device" = "Использовать другое устройство";
-"screen_join_room_join_action" = "Присоединиться";
+"screen_join_room_join_action" = "Вступить в группу";
 "screen_login_subtitle" = "Matrix — это открытая сеть для безопасной децентрализованной связи.";
 "screen_notification_settings_mentions_section_title" = "Упоминания";
 "screen_onboarding_sign_in_to" = "Войти в %1$@";
@@ -1546,7 +1540,7 @@
 "screen_room_roles_and_permissions_permissions_header" = "Разрешения";
 "screen_room_timeline_reactions_show_less" = "Показать меньше";
 "screen_roomlist_filter_invites" = "Приглашения";
-"screen_roomlist_filter_people" = "Личные";
+"screen_roomlist_filter_people" = "Чаты";
 "screen_server_confirmation_change_server" = "Сменить сервер";
 "screen_session_verification_device_verified" = "Устройство проверено";
 "screen_session_verification_request_failure_subtitle" = "Время ожидания подтверждения истекло, запрос был отклонён, или произошла ошибка.";
@@ -1563,16 +1557,10 @@
 "troubleshoot_notifications_test_blocked_users_title" = "Заблокированные пользователи";
 "troubleshoot_notifications_entry_point_push_history_title" = "История уведомлений";
 "troubleshoot_notifications_entry_point_title" = "Уведомления об устранении неполадок";
-
 "screen_settings_account_and_security_title" = "Аккаунт и безопасность";
-
 "screen_about_salemx_title" = "Правовая информация";
-
 "screen_about_salemx_documents_title" = "Правовые документы";
-
 "screen_about_salemx_description_primary" = "SalemX использует компоненты с открытым исходным кодом, распространяемые по AGPL v3 и другим лицензиям.";
-
 "screen_about_salemx_description_secondary" = "Ниже доступны политика конфиденциальности, условия использования и сведения об авторских правах.";
-
 "screen_contacts_title" = "Контакты";
-"screen_start_chat_join_room_by_address_title" = "Присоединиться к чату по адресу";
+"screen_start_chat_join_room_by_address_title" = "Присоединиться к группе по адресу";

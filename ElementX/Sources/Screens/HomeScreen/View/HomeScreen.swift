@@ -16,11 +16,6 @@ struct HomeScreen: View {
     
     @State private var scrollViewAdapter = ScrollViewAdapter()
     
-    @Namespace private var navigationTransitionNamespace
-    private enum NavigationTransitionSourceID {
-        case spaceFilters
-    }
-    
     var body: some View {
         HomeScreenContent(context: context, scrollViewAdapter: scrollViewAdapter)
             .alert(item: $context.alertInfo)
@@ -33,21 +28,12 @@ struct HomeScreen: View {
             .track(screen: .Home)
             .toolbarBloom(hasSearchBar: true)
             .sentryTrace("\(Self.self)")
-            .sheet(item: $context.spaceFiltersViewModel) { vm in
-                ChatsSpaceFiltersScreen(context: vm.context)
-                    .navigationTransition(.zoom(sourceID: NavigationTransitionSourceID.spaceFilters,
-                                                in: navigationTransitionNamespace))
-            }
     }
     
     // MARK: - Private
     
     private var title: String {
-        if let selectedSpace = context.viewState.selectedSpaceFilter {
-            selectedSpace.room.name
-        } else {
-            L10n.screenRoomlistMainSpaceTitle
-        }
+        L10n.screenRoomlistMainSpaceTitle
     }
         
     @ToolbarContentBuilder
@@ -58,20 +44,6 @@ struct HomeScreen: View {
             } else {
                 newRoomButton
                     .buttonStyle(.compound(.super, size: .toolbarIcon))
-            }
-        }
-        
-        if context.viewState.shouldShowSpaceFilters {
-            if #available(iOS 26, *) {
-                ToolbarSpacer(.fixed, placement: .primaryAction)
-            }
-               
-            ToolbarItem(placement: .primaryAction) {
-                SpaceFiltersButton(selected: context.viewState.selectedSpaceFilter != nil) {
-                    context.send(viewAction: .spaceFilters)
-                }
-                .matchedTransitionSource(id: NavigationTransitionSourceID.spaceFilters,
-                                         in: navigationTransitionNamespace)
             }
         }
     }
@@ -102,42 +74,6 @@ struct HomeScreen: View {
     
     private func leaveRoomAlertMessage(_ item: LeaveRoomAlertItem) -> some View {
         Text(item.subtitle)
-    }
-    
-    private struct SpaceFiltersButton: View {
-        var selected = false
-        var action: () -> Void
-        
-        var body: some View {
-            if #available(iOS 26, *) {
-                if selected {
-                    content
-                        .backportButtonStyleGlassProminent()
-                        .tint(.compound.bgActionPrimaryRest)
-                } else {
-                    content
-                }
-            } else {
-                if selected {
-                    content
-                        .buttonStyle(.compound(.primary, size: .toolbarIcon))
-                } else {
-                    content
-                        .buttonStyle(.compound(.tertiary, size: .toolbarIcon))
-                }
-            }
-        }
-        
-        private var content: some View {
-            Button {
-                action()
-            } label: {
-                CompoundIcon(\.filter)
-            }
-            .accessibilityLabel(L10n.screenRoomlistYourSpaces)
-            .accessibilityAddTraits(selected ? .isSelected : [])
-            .accessibilityIdentifier(A11yIdentifiers.homeScreen.spaceFilters)
-        }
     }
 }
 

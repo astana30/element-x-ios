@@ -499,9 +499,9 @@
 			<key>NSStringFormatValueTypeKey</key>
 			<string>d</string>
 			<key>one</key>
-			<string>%1$d изменение в комнате</string>
+			<string>%1$d изменение</string>
 			<key>few</key>
-			<string>%1$d изменения в комнате</string>
+			<string>%1$d изменения</string>
 			<key>many</key>
 			<string>%1$d изменений в группе</string>
 		</dict>

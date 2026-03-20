@@ -24,7 +24,6 @@ enum StartChatFlowCoordinatorAction {
 /// A value that represents where the flow will be started.
 enum StartChatFlowCoordinatorEntryPoint {
     case startChat
-    case createSpace
     case createRoomInSpace(SpaceServiceRoom)
 }
 
@@ -99,8 +98,6 @@ class StartChatFlowCoordinator: FlowCoordinatorProtocol {
         switch entryPoint {
         case .startChat:
             stateMachine.tryEvent(.start)
-        case .createSpace:
-            stateMachine.tryEvent(.createRoom(isSpace: true))
         case .createRoomInSpace(let space):
             stateMachine.tryEvent(.createRoom(isSpace: false), userInfo: space)
         }
@@ -135,9 +132,6 @@ class StartChatFlowCoordinator: FlowCoordinatorProtocol {
     private func configureStateMachine() {
         stateMachine.addRoutes(event: .start, transitions: [.initial => .startChat]) { [weak self] _ in
             self?.presentStartChatScreen()
-        }
-        stateMachine.addRoutes(event: .createRoom(isSpace: true), transitions: [.initial => .createRoom]) { [weak self] _ in
-            self?.presentCreateRoomScreen(isSpace: true, spaceSelectionMode: .none, isRoot: true)
         }
         stateMachine.addRoutes(event: .createRoom(isSpace: false), transitions: [.initial => .createRoom]) { [weak self] context in
             guard context.fromState == .initial else { return } // Required check because the event is used in another route.

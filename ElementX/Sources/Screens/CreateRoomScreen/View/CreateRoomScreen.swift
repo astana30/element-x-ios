@@ -39,9 +39,6 @@ struct CreateRoomScreen: View {
         Form {
             roomSection
             topicSection
-            if context.viewState.canSelectSpace {
-                selectSpaceSection
-            }
             roomAccessSection
             if !context.viewState.roomAccessType.isVisibilityPrivate {
                 roomAliasSection
@@ -55,9 +52,6 @@ struct CreateRoomScreen: View {
         .toolbar { toolbar }
         .alert(item: $context.alertInfo)
         .shouldScrollOnKeyboardDidShow(focus == .alias, to: Focus.alias)
-        .sheet(isPresented: $context.showSpaceSelectionSheet) {
-            CreateRoomSpaceSelectionSheet(context: context)
-        }
     }
     
     private var nameTextFieldShape: AnyShape {
@@ -221,31 +215,9 @@ struct CreateRoomScreen: View {
             }
         }
     }
-    
-    private var selectSpaceSection: some View {
-        Section {
-            if let selectedSpace = context.selectedSpace {
-                ListRow(label: .avatar(title: selectedSpace.name,
-                                       description: selectedSpace.canonicalAlias,
-                                       icon: RoomAvatarImage(avatar: selectedSpace.avatar,
-                                                             avatarSize: .room(on: .createRoomSelectSpace),
-                                                             mediaProvider: context.mediaProvider)),
-                        kind: .navigationLink {
-                            context.showSpaceSelectionSheet = true
-                        })
-            } else {
-                ListRow(label: .plain(title: L10n.screenCreateRoomSpaceSelectionNoSpaceTitle),
-                        kind: .navigationLink {
-                            context.showSpaceSelectionSheet = true
-                        })
-            }
-        } header: {
-            Text(L10n.commonSpace)
-                .compoundListSectionHeader()
-        }
-    }
-    
+
     @ToolbarContentBuilder
+
     private var toolbar: some ToolbarContent {
         if context.viewState.shouldShowCancelButton {
             ToolbarItem(placement: .topBarLeading) {
