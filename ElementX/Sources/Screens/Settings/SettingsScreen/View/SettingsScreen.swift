@@ -184,7 +184,7 @@ struct SettingsScreen: View {
                         context.send(viewAction: .advancedSettings)
                     })
                     .accessibilityIdentifier(A11yIdentifiers.settingsScreen.advancedSettings)
-            
+
             ListRow(label: .default(title: L10n.screenAboutSalemxTitle,
                                     icon: SettingsTintedIcon(icon: \.info,
                                                              foreground: Color(red: 0.34, green: 0.42, blue: 0.54),
@@ -216,18 +216,7 @@ struct SettingsScreen: View {
             }
         }
     }
-    
-    private var developerOptionsSection: some View {
-        Section {
-            ListRow(label: .default(title: L10n.commonDeveloperOptions,
-                                    icon: \.code),
-                    kind: .navigationLink {
-                        context.send(viewAction: .developerOptions)
-                    })
-                    .accessibilityIdentifier(A11yIdentifiers.settingsScreen.developerOptions)
-        }
-    }
-    
+
     private var toolbar: some ToolbarContent {
         ToolbarItem(placement: .confirmationAction) {
             Button(L10n.actionDone) { context.send(viewAction: .close) }

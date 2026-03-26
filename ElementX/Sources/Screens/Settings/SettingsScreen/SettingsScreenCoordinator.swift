@@ -30,7 +30,6 @@ enum SettingsScreenCoordinatorAction {
     case notifications
     case advancedSettings
     case labs
-    case developerOptions
     case deactivateAccount
 }
 
@@ -70,8 +69,6 @@ final class SettingsScreenCoordinator: CoordinatorProtocol {
                     actionsSubject.send(.appLock)
                 case .reportBug:
                     actionsSubject.send(.bugReport)
-                case .about:
-                    actionsSubject.send(.about)
                 case .blockedUsers:
                     actionsSubject.send(.blockedUsers)
                 case .secureBackup:
@@ -80,10 +77,10 @@ final class SettingsScreenCoordinator: CoordinatorProtocol {
                     actionsSubject.send(.notifications)
                 case .advancedSettings:
                     actionsSubject.send(.advancedSettings)
+                case .about:
+                    actionsSubject.send(.about)
                 case .labs:
                     actionsSubject.send(.labs)
-                case .developerOptions:
-                    actionsSubject.send(.developerOptions)
                 case .logout:
                     actionsSubject.send(.logout)
                 case .deactivateAccount:

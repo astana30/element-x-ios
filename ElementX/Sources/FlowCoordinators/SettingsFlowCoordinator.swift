@@ -109,8 +109,6 @@ class SettingsFlowCoordinator: FlowCoordinatorProtocol {
                     presentAdvancedSettings()
                 case .labs:
                     presentLabs()
-                case .developerOptions:
-                    presentDeveloperOptions()
                 case .deactivateAccount:
                     presentDeactivateAccount()
                 }
@@ -221,11 +219,11 @@ class SettingsFlowCoordinator: FlowCoordinatorProtocol {
         appLockSetupFlowCoordinator = coordinator
         coordinator.start()
     }
-    
+
     private func presentLegalInformationScreen() {
         navigationStackCoordinator.push(LegalInformationScreenCoordinator(appSettings: flowParameters.appSettings))
     }
-    
+
     private func presentBlockedUsersScreen() {
         let coordinator = BlockedUsersScreenCoordinator(parameters: .init(hideProfiles: flowParameters.appSettings.hideIgnoredUserProfiles,
                                                                           userSession: flowParameters.userSession,
@@ -250,26 +248,7 @@ class SettingsFlowCoordinator: FlowCoordinatorProtocol {
                                                                               userIndicatorController: flowParameters.userIndicatorController))
         navigationStackCoordinator.push(coordinator)
     }
-    
-    private func presentDeveloperOptions() {
-        let coordinator = DeveloperOptionsScreenCoordinator(appSettings: flowParameters.appSettings,
-                                                            appHooks: flowParameters.appHooks,
-                                                            clientProxy: flowParameters.userSession.clientProxy)
-        
-        coordinator.actions
-            .sink { [weak self] action in
-                guard let self else { return }
-                
-                switch action {
-                case .clearCache:
-                    actionsSubject.send(.clearCache)
-                }
-            }
-            .store(in: &cancellables)
-        
-        navigationStackCoordinator.push(coordinator)
-    }
-    
+
     private func presentDeactivateAccount() {
         let parameters = DeactivateAccountScreenCoordinatorParameters(clientProxy: flowParameters.userSession.clientProxy,
                                                                       userIndicatorController: flowParameters.userIndicatorController)
