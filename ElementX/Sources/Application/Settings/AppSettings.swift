@@ -181,7 +181,7 @@ final class AppSettings {
     @UserPreference(key: UserDefaultsKeys.seenInvites, defaultValue: [], storageType: .userDefaults(store))
     var seenInvites: Set<String>
     
-    @UserPreference(key: UserDefaultsKeys.hasSeenSpacesAnnouncement, defaultValue: false, storageType: .userDefaults(store))
+    @UserPreference(key: UserDefaultsKeys.hasSeenSpacesAnnouncement, defaultValue: true, storageType: .userDefaults(store))
     var hasSeenSpacesAnnouncement
     
     /// Defaults to `true` for new users, and we use a migration to set it to `false` for existing users.
