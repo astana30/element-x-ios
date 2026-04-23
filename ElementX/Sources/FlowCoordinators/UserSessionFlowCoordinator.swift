@@ -21,7 +21,7 @@ enum UserSessionFlowCoordinatorAction {
 
 class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
     enum HomeTab: Hashable {
-        case chats, contacts, settings
+        case chats, calls, contacts, settings
     }
     
     private let navigationRootCoordinator: NavigationRootCoordinator
@@ -37,6 +37,9 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
     private let onboardingStackCoordinator: NavigationStackCoordinator
     private let chatsTabFlowCoordinator: ChatsTabFlowCoordinator
     private let chatsTabDetails: NavigationTabCoordinator<HomeTab>.TabDetails
+    private let callsTabNavigationStackCoordinator: NavigationStackCoordinator
+    private let callsTabFlowCoordinator: CallsTabFlowCoordinator
+    private let callsTabDetails: NavigationTabCoordinator<HomeTab>.TabDetails
     private let contactsTabNavigationStackCoordinator: NavigationStackCoordinator
     private let contactsTabFlowCoordinator: ContactsTabFlowCoordinator
     private let contactsTabDetails: NavigationTabCoordinator<HomeTab>.TabDetails
@@ -67,6 +70,7 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
     
     private let stateMachine: StateMachine<State, Event>
     private var cancellables: Set<AnyCancellable> = []
+    private var activeCallStartMode: ElementCallStartMode?
     
     private let actionsSubject: PassthroughSubject<UserSessionFlowCoordinatorAction, Never> = .init()
     private var hasHandledInitialSecurityGate = false
@@ -92,14 +96,21 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
         chatsTabDetails = .init(tag: HomeTab.chats, title: L10n.screenHomeTabChats, icon: \.chat, selectedIcon: \.chatSolid)
         chatsTabDetails.navigationSplitCoordinator = chatsSplitCoordinator
 
+        callsTabNavigationStackCoordinator = NavigationStackCoordinator()
+        callsTabFlowCoordinator = CallsTabFlowCoordinator(navigationStackCoordinator: callsTabNavigationStackCoordinator,
+                                                          flowParameters: flowParameters)
+        callsTabDetails = .init(tag: HomeTab.calls,
+                                title: UntranslatedL10n.screenHomeTabCalls,
+                                icon: \.voiceCall,
+                                selectedIcon: \.voiceCallSolid)
+
         contactsTabNavigationStackCoordinator = NavigationStackCoordinator()
         contactsTabFlowCoordinator = ContactsTabFlowCoordinator(navigationStackCoordinator: contactsTabNavigationStackCoordinator,
                                                                 flowParameters: flowParameters)
         contactsTabDetails = .init(tag: HomeTab.contacts,
                                    title: L10n.screenContactsTitle,
-                                   icon: \.chat,
-                                   selectedIcon: \.chatSolid)
-        
+                                   icon: \.userProfile,
+                                   selectedIcon: \.userProfileSolid)
         settingsTabNavigationStackCoordinator = NavigationStackCoordinator()
         settingsTabDetails = .init(tag: HomeTab.settings,
                                    title: L10n.commonSettings,
@@ -117,6 +128,7 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
         
         navigationTabCoordinator.setTabs([
             .init(coordinator: chatsSplitCoordinator, details: chatsTabDetails),
+            .init(coordinator: callsTabNavigationStackCoordinator, details: callsTabDetails),
             .init(coordinator: contactsTabNavigationStackCoordinator, details: contactsTabDetails),
             .init(coordinator: settingsTabNavigationStackCoordinator, details: settingsTabDetails)
         ])
@@ -165,6 +177,10 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
         clearPresentedSheets(animated: animated)
         chatsTabFlowCoordinator.clearRoute(animated: animated)
     }
+
+    func startCall(roomID: String, startMode: ElementCallStartMode) {
+        Task { await presentCallScreen(roomID: roomID, startMode: startMode) }
+    }
     
     /// Clearing routes is more complicated than it first seems. When passing routes
     /// to the chats flow we can't clear all routes as e.g. childRoom/childEvent etc
@@ -193,6 +209,7 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
             guard let self else { return }
             
             chatsTabFlowCoordinator.start()
+            callsTabFlowCoordinator.start(animated: false)
             contactsTabFlowCoordinator.start(animated: false)
             settingsFlowCoordinator?.handleAppRoute(.settings, animated: false)
             attemptStartingOnboarding()
@@ -223,8 +240,8 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
                     handleAppRoute(.chatBackupSettings, animated: true)
                 case .sessionVerification(let flow):
                     presentSessionVerificationScreen(flow: flow)
-                case .showCallScreen(let roomProxy):
-                    presentCallScreen(roomProxy: roomProxy)
+                case .showCallScreen(let roomProxy, let startMode):
+                    presentCallScreen(roomProxy: roomProxy, startMode: startMode)
                 case .hideCallScreenOverlay:
                     hideCallScreenOverlay()
                 case .logout:
@@ -233,36 +250,10 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
             }
             .store(in: &cancellables)
 
-        contactsTabFlowCoordinator.actionsPublisher
-            .sink { [weak self] action in
-                guard let self else { return }
+        observeContactsTabActions()
+        observeCallsTabActions()
 
-                switch action {
-                case .openRoom(let roomID):
-                    navigationTabCoordinator.selectedTab = .chats
-                    chatsTabFlowCoordinator.openRoom(roomID: roomID, animated: true)
-                }
-            }
-            .store(in: &cancellables)
-
-        if let settingsFlowCoordinator {
-            settingsFlowCoordinator.actions
-                .sink { [weak self] action in
-                    guard let self else { return }
-
-                    switch action {
-                    case .dismiss:
-                        navigationTabCoordinator.selectedTab = .chats
-                    case .clearCache:
-                        actionsSubject.send(.clearCache)
-                    case .runLogoutFlow:
-                        Task { await self.runLogoutFlow() }
-                    case .forceLogout:
-                        actionsSubject.send(.forceLogout)
-                    }
-                }
-                .store(in: &cancellables)
-        }
+        observeSettingsFlowActionsIfNeeded()
         
         userSession.sessionSecurityStatePublisher
             .map(\.verificationState)
@@ -326,7 +317,60 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
             }
             .store(in: &cancellables)
     }
-    
+
+    private func observeSettingsFlowActionsIfNeeded() {
+        guard let settingsFlowCoordinator else {
+            return
+        }
+
+        settingsFlowCoordinator.actions
+            .sink { [weak self] action in
+                guard let self else { return }
+
+                switch action {
+                case .dismiss:
+                    navigationTabCoordinator.selectedTab = .chats
+                case .clearCache:
+                    actionsSubject.send(.clearCache)
+                case .runLogoutFlow:
+                    Task { await self.runLogoutFlow() }
+                case .forceLogout:
+                    actionsSubject.send(.forceLogout)
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    private func observeContactsTabActions() {
+        contactsTabFlowCoordinator.actionsPublisher
+            .sink { [weak self] action in
+                guard let self else { return }
+
+                switch action {
+                case .openRoom(let roomID):
+                    navigationTabCoordinator.selectedTab = .chats
+                    chatsTabFlowCoordinator.openRoom(roomID: roomID, animated: true)
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    private func observeCallsTabActions() {
+        callsTabFlowCoordinator.actionsPublisher
+            .sink { [weak self] action in
+                guard let self else { return }
+
+                switch action {
+                case .openRoom(let roomID):
+                    navigationTabCoordinator.selectedTab = .chats
+                    chatsTabFlowCoordinator.openRoom(roomID: roomID, animated: true)
+                case .startCall(let roomID, let startMode):
+                    Task { await self.presentCallScreen(roomID: roomID, startMode: startMode) }
+                }
+            }
+            .store(in: &cancellables)
+    }
+
     // MARK: - Onboarding
     
     private func attemptStartingOnboarding() {
@@ -477,22 +521,23 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
         presentCallScreen(configuration: .init(genericCallLink: url))
     }
     
-    private func presentCallScreen(roomID: String) async {
+    private func presentCallScreen(roomID: String, startMode: ElementCallStartMode = .video) async {
         guard case let .joined(roomProxy) = await userSession.clientProxy.roomForIdentifier(roomID) else {
             return
         }
         
-        presentCallScreen(roomProxy: roomProxy)
+        presentCallScreen(roomProxy: roomProxy, startMode: startMode)
     }
     
-    private func presentCallScreen(roomProxy: JoinedRoomProxyProtocol) {
+    private func presentCallScreen(roomProxy: JoinedRoomProxyProtocol, startMode: ElementCallStartMode = .video) {
         let colorScheme: ColorScheme = flowParameters.windowManager.mainWindow.traitCollection.userInterfaceStyle == .light ? .light : .dark
         presentCallScreen(configuration: .init(roomProxy: roomProxy,
                                                clientProxy: userSession.clientProxy,
                                                clientID: InfoPlistReader.main.bundleIdentifier,
                                                elementCallBaseURL: flowParameters.appSettings.elementCallBaseURL,
                                                elementCallBaseURLOverride: flowParameters.appSettings.elementCallBaseURLOverride,
-                                               colorScheme: colorScheme))
+                                               colorScheme: colorScheme,
+                                               startMode: startMode))
     }
     
     private var callScreenPictureInPictureController: AVPictureInPictureController?
@@ -500,12 +545,16 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
         guard flowParameters.ongoingCallRoomIDPublisher.value != configuration.callRoomID else {
             MXLog.info("Returning to existing call.")
             callScreenPictureInPictureController?.stopPictureInPicture()
+            navigationTabCoordinator.setOverlayPresentationMode(.fullScreen)
             return
         }
+
+        activeCallStartMode = configuration.startMode
         
         let callScreenCoordinator = CallScreenCoordinator(parameters: .init(elementCallService: flowParameters.elementCallService,
                                                                             configuration: configuration,
-                                                                            allowPictureInPicture: true,
+                                                                            allowPictureInPicture: configuration.startMode == .video,
+                                                                            mediaProvider: userSession.mediaProvider,
                                                                             appSettings: flowParameters.appSettings,
                                                                             appHooks: flowParameters.appHooks,
                                                                             analytics: flowParameters.analytics))
@@ -517,12 +566,11 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
                 case .pictureInPictureIsAvailable(let controller):
                     callScreenPictureInPictureController = controller
                 case .pictureInPictureStarted:
-                    MXLog.info("Hiding call for PiP presentation.")
                     navigationTabCoordinator.setOverlayPresentationMode(.minimized)
                 case .pictureInPictureStopped:
-                    MXLog.info("Restoring call after PiP presentation.")
                     navigationTabCoordinator.setOverlayPresentationMode(.fullScreen)
                 case .dismiss:
+                    activeCallStartMode = nil
                     callScreenPictureInPictureController = nil
                     navigationTabCoordinator.setOverlayCoordinator(nil)
                 }
@@ -535,13 +583,18 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
     }
     
     private func hideCallScreenOverlay() {
+        guard activeCallStartMode == .video else {
+            MXLog.info("Minimizing audio call without Picture in Picture.")
+            navigationTabCoordinator.setOverlayPresentationMode(.minimized)
+            return
+        }
+
         guard let callScreenPictureInPictureController else {
-            MXLog.warning("Picture in picture isn't available, dismissing the call screen.")
-            dismissCallScreenIfNeeded()
+            MXLog.warning("Picture in picture isn't available, keeping the call screen visible.")
+            navigationTabCoordinator.setOverlayPresentationMode(.fullScreen)
             return
         }
         
-        MXLog.info("Starting picture in picture to hide the call screen overlay.")
         callScreenPictureInPictureController.startPictureInPicture()
         navigationTabCoordinator.setOverlayPresentationMode(.minimized)
     }
@@ -550,7 +603,7 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
         guard navigationTabCoordinator.overlayCoordinator is CallScreenCoordinator else {
             return
         }
-        
+
         navigationTabCoordinator.setOverlayCoordinator(nil)
     }
 

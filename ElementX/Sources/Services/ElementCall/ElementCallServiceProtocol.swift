@@ -10,8 +10,9 @@ import Combine
 
 enum ElementCallServiceAction {
     case receivedIncomingCallRequest
-    case startCall(roomID: String)
+    case startCall(roomID: String, startMode: ElementCallStartMode)
     case endCall(roomID: String)
+    case requestCallTermination(roomID: String)
     case setAudioEnabled(_ enabled: Bool, roomID: String)
 }
 
@@ -23,9 +24,19 @@ protocol ElementCallServiceProtocol {
     
     func setClientProxy(_ clientProxy: ClientProxyProtocol)
     
-    func setupCallSession(roomID: String, roomDisplayName: String) async
+    func setupCallSession(roomID: String, roomDisplayName: String, startMode: ElementCallStartMode) async
+    
+    func declineIncomingCall() async
+    
+    func requestCallTermination(roomID: String) async
     
     func tearDownCallSession()
     
     func setAudioEnabled(_ enabled: Bool, roomID: String)
+}
+
+extension ElementCallServiceProtocol {
+    func setupCallSession(roomID: String, roomDisplayName: String) async {
+        await setupCallSession(roomID: roomID, roomDisplayName: roomDisplayName, startMode: .video)
+    }
 }

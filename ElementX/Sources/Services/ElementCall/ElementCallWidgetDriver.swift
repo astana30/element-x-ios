@@ -7,6 +7,7 @@
 //
 
 import Combine
+import Foundation
 import MatrixRustSDK
 import SwiftUI
 
@@ -37,7 +38,7 @@ struct ElementCallWidgetMessage: Codable {
     var data: Data = .init()
     
     let widgetId: String
-    var requestId = "widgetapi-\(UUID())"
+    var requestId = UUID().uuidString
     
     enum CodingKeys: String, CodingKey {
         case direction = "api"
@@ -48,11 +49,24 @@ struct ElementCallWidgetMessage: Codable {
     }
 }
 
-final class ElementCallWidgetDriver: WidgetCapabilitiesProvider, ElementCallWidgetDriverProtocol {
+final class ElementCallWidgetDriver: WidgetCapabilitiesProvider, ElementCallWidgetDriverProtocol, ElementCallStartModeConfigurable, @unchecked Sendable {
+    private enum CallURLParameter {
+        static let controlledAudioDevices = "controlledAudioDevices"
+        static let header = "header"
+        static let showControls = "showControls"
+        static let hideScreensharing = "hideScreensharing"
+        static let autoLeave = "autoLeave"
+    }
+    
+    private enum HeaderStyle: String {
+        case none
+    }
+    
     private let room: RoomProtocol
     private let deviceID: String
     
     private var widgetDriver: WidgetDriverAndHandle?
+    var startMode: ElementCallStartMode = .video
     
     let widgetID = UUID().uuidString
     let messagePublisher = PassthroughSubject<String, Never>()
@@ -77,7 +91,8 @@ final class ElementCallWidgetDriver: WidgetCapabilitiesProvider, ElementCallWidg
         }
         
         async let useEncryption = (try? room.latestEncryptionState() == .encrypted) ?? false
-        async let intent = room.joinCallIntent
+        async let intent = room.joinCallIntent(for: startMode)
+        async let isDirectRoomCall = room.isDirect()
         
         let widgetSettings: WidgetSettings
         do {
@@ -113,7 +128,9 @@ final class ElementCallWidgetDriver: WidgetCapabilitiesProvider, ElementCallWidg
             return .failure(.failedBuildingCallURL)
         }
         
-        guard let url = URL(string: urlString) else {
+        let usesNativeDirectCallChrome = await isDirectRoomCall
+        
+        guard let url = adjustedCallURL(from: urlString, isDirectRoomCall: usesNativeDirectCallChrome) else {
             return .failure(.failedParsingCallURL)
         }
         
@@ -180,6 +197,46 @@ final class ElementCallWidgetDriver: WidgetCapabilitiesProvider, ElementCallWidg
     }
     
     // MARK: - Private
+
+    private func adjustedCallURL(from urlString: String, isDirectRoomCall: Bool) -> URL? {
+        guard var components = URLComponents(string: urlString) else {
+            return nil
+        }
+        
+        // Element Call reads configuration from the fragment first and falls back
+        // to the regular query string for backwards compatibility, so we mirror
+        // the parameters into both places.
+        var queryItems = components.queryItems ?? []
+        updateCallURLParameters(&queryItems, isDirectRoomCall: isDirectRoomCall)
+        components.queryItems = queryItems
+        
+        var fragmentQueryItems = components.fragmentQueryItems ?? []
+        updateCallURLParameters(&fragmentQueryItems, isDirectRoomCall: isDirectRoomCall)
+        components.fragmentQueryItems = fragmentQueryItems
+        
+        return components.url
+    }
+    
+    private func updateCallURLParameters(_ queryItems: inout [URLQueryItem], isDirectRoomCall: Bool) {
+        setQueryItem(&queryItems, name: CallURLParameter.controlledAudioDevices, value: "false")
+        
+        guard isDirectRoomCall else {
+            return
+        }
+        
+        setQueryItem(&queryItems, name: CallURLParameter.header, value: HeaderStyle.none.rawValue)
+        setQueryItem(&queryItems, name: CallURLParameter.showControls, value: "false")
+        setQueryItem(&queryItems, name: CallURLParameter.hideScreensharing, value: "true")
+        // In 1:1 widget calls we want telephone-like teardown semantics.
+        // When the remote peer leaves, Element Call should auto-leave instead of
+        // remaining in a waiting/ringing state until notification timeout.
+        setQueryItem(&queryItems, name: CallURLParameter.autoLeave, value: "true")
+    }
+    
+    private func setQueryItem(_ queryItems: inout [URLQueryItem], name: String, value: String) {
+        queryItems.removeAll { $0.name == name }
+        queryItems.append(URLQueryItem(name: name, value: value))
+    }
     
     func handleMessageIfNeeded(_ message: String) {
         guard let data = message.data(using: .utf8) else {
@@ -191,9 +248,9 @@ final class ElementCallWidgetDriver: WidgetCapabilitiesProvider, ElementCallWidg
             if widgetMessage.direction == .fromWidget {
                 switch widgetMessage.action {
                 case .hangup:
-                    break
+                    actionsSubject.send(.callEnded(reason: .hangup))
                 case .close:
-                    actionsSubject.send(.callEnded)
+                    actionsSubject.send(.callEnded(reason: .close))
                 case .mediaState:
                     guard let audioEnabled = widgetMessage.data.audioEnabled,
                           let videoEnabled = widgetMessage.data.videoEnabled else {

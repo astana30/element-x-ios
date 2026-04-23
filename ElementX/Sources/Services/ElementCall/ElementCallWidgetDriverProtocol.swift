@@ -19,8 +19,17 @@ enum ElementCallWidgetDriverError: Error {
 }
 
 enum ElementCallWidgetDriverAction {
-    case callEnded
+    case callEnded(reason: ElementCallWidgetEndReason)
     case mediaStateChanged(audioEnabled: Bool, videoEnabled: Bool)
+}
+
+enum ElementCallWidgetEndReason: String {
+    case hangup
+    case close
+}
+
+protocol ElementCallStartModeConfigurable: AnyObject {
+    var startMode: ElementCallStartMode { get set }
 }
 
 // sourcery: AutoMockable

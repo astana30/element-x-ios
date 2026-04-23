@@ -14,23 +14,246 @@ import MatrixRustSDK
 import PushKit
 import UIKit
 
+private enum CallSessionState: String, Equatable {
+    case idle
+    case outgoingRinging = "outgoing_ringing"
+    case incomingRinging = "incoming_ringing"
+    case accepted
+    case connected
+    case declined
+    case cancelled
+    case missed
+    case ended
+    case failed
+
+    var isTerminal: Bool {
+        switch self {
+        case .declined, .cancelled, .missed, .ended, .failed:
+            true
+        case .idle, .outgoingRinging, .incomingRinging, .accepted, .connected:
+            false
+        }
+    }
+}
+
+private enum CallSessionEventType: String, Equatable {
+    case invite
+    case ringing
+    case accept
+    case reject
+    case hangup
+    case timeout
+    case ack
+    case answeredElsewhere = "answered_elsewhere"
+}
+
+private enum CallSessionDirection: Equatable {
+    case outgoing
+    case incoming
+}
+
+private enum CallSessionRejectionReason: Equatable {
+    case terminal
+    case duplicate
+    case outOfOrder
+    case invalidTransition
+}
+
+private struct CallSessionEvent: Equatable {
+    let type: CallSessionEventType
+    let direction: CallSessionDirection?
+    let sequence: UInt64?
+    let deduplicationID: String?
+    let timestamp: Date
+
+    init(type: CallSessionEventType,
+         direction: CallSessionDirection? = nil,
+         sequence: UInt64? = nil,
+         deduplicationID: String? = nil,
+         timestamp: Date = Date()) {
+        self.type = type
+        self.direction = direction
+        self.sequence = sequence
+        self.deduplicationID = deduplicationID
+        self.timestamp = timestamp
+    }
+}
+
+private struct CallSessionTransitionResult: Equatable {
+    let previousState: CallSessionState
+    let state: CallSessionState
+    let rejectionReason: CallSessionRejectionReason?
+
+    var isApplied: Bool {
+        rejectionReason == nil
+    }
+}
+
+private struct CallSession: Equatable {
+    let callID: String
+    let roomID: String
+    let callKitID: UUID
+    let direction: CallSessionDirection
+    private(set) var remoteCallID: String?
+
+    private(set) var state: CallSessionState = .idle
+    private(set) var lastSequence: UInt64?
+    private(set) var processedDeduplicationIDs = Set<String>()
+
+    init(callID: String = UUID().uuidString,
+         roomID: String,
+         callKitID: UUID,
+         direction: CallSessionDirection,
+         remoteCallID: String? = nil,
+         state: CallSessionState = .idle) {
+        self.callID = callID
+        self.roomID = roomID
+        self.callKitID = callKitID
+        self.direction = direction
+        self.remoteCallID = remoteCallID
+        self.state = state
+    }
+
+    mutating func updateRemoteCallID(_ remoteCallID: String) {
+        guard self.remoteCallID != remoteCallID else {
+            return
+        }
+
+        self.remoteCallID = remoteCallID
+    }
+
+    mutating func apply(_ event: CallSessionEvent) -> CallSessionTransitionResult {
+        let previousState = state
+
+        guard !state.isTerminal else {
+            return .init(previousState: previousState, state: state, rejectionReason: .terminal)
+        }
+
+        if let deduplicationID = event.deduplicationID {
+            guard !processedDeduplicationIDs.contains(deduplicationID) else {
+                return .init(previousState: previousState, state: state, rejectionReason: .duplicate)
+            }
+        }
+
+        if let sequence = event.sequence,
+           let lastSequence,
+           sequence <= lastSequence {
+            return .init(previousState: previousState, state: state, rejectionReason: .outOfOrder)
+        }
+
+        guard let nextState = Self.reduce(state: state, event: event) else {
+            return .init(previousState: previousState, state: state, rejectionReason: .invalidTransition)
+        }
+
+        state = nextState
+        if let deduplicationID = event.deduplicationID {
+            processedDeduplicationIDs.insert(deduplicationID)
+        }
+        if let sequence = event.sequence {
+            lastSequence = sequence
+        }
+
+        return .init(previousState: previousState, state: nextState, rejectionReason: nil)
+    }
+
+    private static func reduce(state: CallSessionState, event: CallSessionEvent) -> CallSessionState? {
+        switch (state, event.type) {
+        case (.idle, .invite), (.idle, .ringing):
+            switch event.direction {
+            case .outgoing:
+                return .outgoingRinging
+            case .incoming:
+                return .incomingRinging
+            case .none:
+                return nil
+            }
+
+        case (.outgoingRinging, .ringing):
+            return .outgoingRinging
+        case (.incomingRinging, .ringing):
+            return .incomingRinging
+
+        case (.outgoingRinging, .accept), (.incomingRinging, .accept):
+            return .accepted
+        case (.accepted, .ack):
+            return .connected
+        case (.connected, .ack):
+            return .connected
+
+        case (.outgoingRinging, .reject), (.incomingRinging, .reject), (.accepted, .reject):
+            return .declined
+
+        case (.outgoingRinging, .hangup):
+            return .cancelled
+        case (.incomingRinging, .hangup), (.accepted, .hangup), (.connected, .hangup):
+            return .ended
+
+        case (.outgoingRinging, .timeout), (.incomingRinging, .timeout):
+            return .missed
+        case (.accepted, .timeout), (.connected, .timeout):
+            return .failed
+
+        case (.outgoingRinging, .answeredElsewhere), (.incomingRinging, .answeredElsewhere), (.accepted, .answeredElsewhere):
+            return .cancelled
+
+        default:
+            return nil
+        }
+    }
+}
+
 /// Keep this class testable
 struct TimeProvider {
     var clock: any Clock<Duration>
     var now: () -> Date
 }
 
+// swiftlint:disable type_body_length
 class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDelegate, CXProviderDelegate {
+    private enum IncomingFallbackConstants {
+        static let unansweredTimeout: Duration = .seconds(45)
+        static let suppressionDuration: TimeInterval = 30
+    }
+
+    private enum CallTerminationConstants {
+        static let duplicateSuppression: TimeInterval = 1
+        static let noForeignParticipantGraceWindow: TimeInterval = 2
+    }
+
     private struct CallID: Equatable {
         let callKitID: UUID
         let roomID: String
         let rtcNotificationID: String?
+        let remoteCallID: String?
+        let startMode: ElementCallStartMode
+        let startedAt: Date
+    }
+
+    private final class TerminationEventTracker {
+        var eventID: String?
+    }
+
+    private final class RoomCallPresenceTracker {
+        var hasSeenActiveCall = false
+        var hasSeenRemoteParticipant = false
+        var noForeignParticipantSince: Date?
+    }
+
+    private enum DeclineAttemptResult {
+        case sent
+        case notFound
+        case ownEvent
+        case failed
     }
     
     private let pushRegistry: PKPushRegistry
     private let callController = CXCallController()
     private let callProvider: CXProviderProtocol
     private let timeProvider: TimeProvider
+    private let appSettings: AppSettings
+    
+    private var voIPPushToken: Data?
+    private var registeredVoIPPushToken: Data?
     
     private weak var clientProxy: ClientProxyProtocol? {
         didSet {
@@ -38,9 +261,12 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             // observation set in `incomingCallID` occurs *before* the user session is restored.
             // So observe when the client proxy is set to fix this (the method guards for the call).
             Task { await observeIncomingCall() }
+            Task { await observeOngoingCall() }
+            observeIncomingCallFallback()
         }
     }
     
+    private var incomingCallTimelineCancellable: AnyCancellable?
     private var incomingCallRoomInfoCancellable: AnyCancellable?
     private var incomingCallID: CallID? {
         didSet {
@@ -50,8 +276,20 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     
     private var endUnansweredCallTask: Task<Void, Never>?
     
+    private var ongoingCallTimelineCancellable: AnyCancellable?
+    private var ongoingCallRoomInfoCancellable: AnyCancellable?
+    private var recentlyEndedCallID: CallID?
+    private var cachedRTCNotificationIDByRoomID: [String: String] = [:]
+    private var cachedRTCNotificationOwnershipByRoomID: [String: Bool] = [:]
+    private var cachedRemoteCallIDByRoomID: [String: String] = [:]
+    private var activeCallSession: CallSession?
+    private var recentCallSessionByRoomID: [String: CallSession] = [:]
+    private var callSessionSequence: UInt64 = 0
     private var ongoingCallID: CallID? {
-        didSet { ongoingCallRoomIDSubject.send(ongoingCallID?.roomID) }
+        didSet {
+            ongoingCallRoomIDSubject.send(ongoingCallID?.roomID)
+            Task { await observeOngoingCall() }
+        }
     }
     
     let ongoingCallRoomIDSubject = CurrentValueSubject<String?, Never>(nil)
@@ -65,10 +303,21 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     }
     
     private var declineListenerHandle: TaskHandle?
+    private var incomingCallFallbackCancellable: AnyCancellable?
+    private var incomingFallbackSuppressionByRoomID: [String: Date] = [:]
+    private var ongoingDeclineListenerHandles: [String: TaskHandle] = [:]
+    private var isResolvingOngoingDeclines = false
+    private let ongoingDeclineObservationLock = NSLock()
+    @CancellableTask
+    private var ongoingDeclineRefreshTask: Task<Void, Never>?
+    private let callTerminationLock = NSLock()
+    private var inProgressCallTerminations = Set<String>()
+    private var lastCallTerminationAttemptByRoomID: [String: Date] = [:]
     
-    init(callProvider: CXProviderProtocol? = nil, timeProvider: TimeProvider? = nil) {
+    init(appSettings: AppSettings = AppSettings(), callProvider: CXProviderProtocol? = nil, timeProvider: TimeProvider? = nil) {
         pushRegistry = PKPushRegistry(queue: nil)
         
+        self.appSettings = appSettings
         self.timeProvider = timeProvider ?? TimeProvider(clock: ContinuousClock(), now: Date.init)
         
         if let callProvider {
@@ -77,6 +326,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             let configuration = CXProviderConfiguration()
             configuration.supportsVideo = true
             configuration.includesCallsInRecents = true
+            configuration.ringtoneSound = "message.caf"
             
             if let callKitIcon = UIImage(named: "images/app-logo") {
                 configuration.iconTemplateImageData = callKitIcon.pngData()
@@ -98,9 +348,14 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     
     func setClientProxy(_ clientProxy: any ClientProxyProtocol) {
         self.clientProxy = clientProxy
+        Task { await registerVoIPPusherIfNeeded() }
     }
     
     func setupCallSession(roomID: String, roomDisplayName: String) async {
+        await setupCallSession(roomID: roomID, roomDisplayName: roomDisplayName, startMode: .video)
+    }
+
+    func setupCallSession(roomID: String, roomDisplayName: String, startMode: ElementCallStartMode) async {
         // Drop any ongoing calls when starting a new one
         if ongoingCallID != nil {
             tearDownCallSession()
@@ -108,14 +363,37 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         
         // If this starting from a ring reuse those identifiers
         // Make sure the roomID matches
-        let callID = if let incomingCallID, incomingCallID.roomID == roomID {
-            incomingCallID
+        let callID: CallID
+        if let incomingCallID, incomingCallID.roomID == roomID {
+            callID = incomingCallID
         } else {
-            CallID(callKitID: UUID(), roomID: roomID, rtcNotificationID: nil)
+            cachedRemoteCallIDByRoomID.removeValue(forKey: roomID)
+            callID = CallID(callKitID: UUID(),
+                            roomID: roomID,
+                            rtcNotificationID: nil,
+                            remoteCallID: nil,
+                            startMode: startMode,
+                            startedAt: timeProvider.now())
         }
+        let isIncomingCallSession = incomingCallID?.roomID == roomID
         
         incomingCallID = nil
         ongoingCallID = callID
+        recentlyEndedCallID = nil
+        if let rtcNotificationID = callID.rtcNotificationID {
+            cacheRTCNotificationID(rtcNotificationID, for: roomID)
+        }
+        if let remoteCallID = callID.remoteCallID {
+            cacheRemoteCallID(remoteCallID, for: roomID)
+        }
+
+        openCallSession(roomID: roomID,
+                        callKitID: callID.callKitID,
+                        direction: isIncomingCallSession ? .incoming : .outgoing,
+                        remoteCallID: callID.remoteCallID)
+        if isIncomingCallSession {
+            applySessionEvent(type: .accept, roomID: roomID)
+        }
         
         // Don't bother starting another CallKit session as it won't work properly
         // https://developer.apple.com/forums//thread/767949?answerId=812951022#812951022
@@ -131,8 +409,41 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         // }
     }
     
+    func declineIncomingCall() async {
+        if let incomingCallID {
+            applySessionEvent(type: .reject, roomID: incomingCallID.roomID)
+            _ = await sendDeclineCallEventWithRetry(in: incomingCallID.roomID,
+                                                    preferredRTCNotificationID: incomingCallID.rtcNotificationID)
+            reportEndedCall(incomingCallID: incomingCallID, reason: .declinedElsewhere)
+            return
+        }
+
+        guard let roomID = resolveIncomingDirectCallRoomIDForDecline() else {
+            MXLog.info("No incoming call to decline.")
+            return
+        }
+
+        applySessionEvent(type: .reject, roomID: roomID)
+        _ = await sendDeclineCallEventWithRetry(in: roomID, preferredRTCNotificationID: nil)
+    }
+    
+    func requestCallTermination(roomID: String) async {
+        guard beginCallTermination(for: roomID) else {
+            MXLog.verbose("Ignoring duplicate call termination request for room \(roomID)")
+            return
+        }
+        defer { finishCallTermination(for: roomID) }
+
+        suppressIncomingFallback(for: roomID)
+        applySessionEvent(type: .hangup, roomID: roomID)
+        actionsSubject.send(.endCall(roomID: roomID))
+    }
+
     func tearDownCallSession() {
-        tearDownCallSession(sendEndCallAction: true)
+        // The embedded call UI doesn't keep an active CallKit call around once it
+        // takes over media, so ending our local session shouldn't emit a new
+        // CXEndCallAction for a call that no longer exists.
+        tearDownCallSession(sendEndCallAction: false)
     }
     
     func setAudioEnabled(_ enabled: Bool, roomID: String) {
@@ -145,18 +456,19 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             MXLog.error("Failed toggling call microphone, rooms don't match: \(ongoingCallID.roomID) != \(roomID)")
             return
         }
-        
-        let transaction = CXTransaction(action: CXSetMutedCallAction(call: ongoingCallID.callKitID, muted: !enabled))
-        callController.request(transaction) { error in
-            if let error {
-                MXLog.error("Failed toggling call microphone with error: \(error)")
-            }
-        }
     }
 
     // MARK: - PKPushRegistryDelegate
     
-    func pushRegistry(_ registry: PKPushRegistry, didUpdate pushCredentials: PKPushCredentials, for type: PKPushType) { }
+    func pushRegistry(_ registry: PKPushRegistry, didUpdate pushCredentials: PKPushCredentials, for type: PKPushType) {
+        guard type == .voIP else {
+            return
+        }
+        
+        voIPPushToken = pushCredentials.token
+        
+        Task { await registerVoIPPusherIfNeeded() }
+    }
     
     func pushRegistry(_ registry: PKPushRegistry, didReceiveIncomingPushWith payload: PKPushPayload, for type: PKPushType, completion: @escaping () -> Void) {
         guard let roomID = payload.dictionaryPayload[ElementCallServiceNotificationKey.roomID.rawValue] as? String else {
@@ -171,14 +483,11 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             return
         }
         
-        guard ongoingCallID?.roomID != roomID else {
-            MXLog.warning("Call already ongoing for room \(roomID), ignoring incoming push")
+        guard ongoingCallID == nil, incomingCallID == nil else {
+            MXLog.warning("A call is already active, ignoring incoming push for room \(roomID)")
             completion()
             return
         }
-        
-        let callID = CallID(callKitID: UUID(), roomID: roomID, rtcNotificationID: rtcNotificationID)
-        incomingCallID = callID
         
         guard let expirationDate = (payload.dictionaryPayload[ElementCallServiceNotificationKey.expirationDate.rawValue] as? Date) else {
             MXLog.error("Something went wrong, missing expiration timestamp for incoming voip call: \(payload)")
@@ -193,13 +502,30 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             completion()
             return
         }
+
+        let incomingStartMode = incomingStartMode(for: payload.dictionaryPayload, roomID: roomID)
+        cachedRemoteCallIDByRoomID.removeValue(forKey: roomID)
+        
+        let callID = CallID(callKitID: UUID(),
+                            roomID: roomID,
+                            rtcNotificationID: rtcNotificationID,
+                            remoteCallID: nil,
+                            startMode: incomingStartMode,
+                            startedAt: nowDate)
+        incomingCallID = callID
+        cacheRTCNotificationID(rtcNotificationID, for: roomID, isOwnEvent: false)
+        openCallSession(roomID: roomID,
+                        callKitID: callID.callKitID,
+                        direction: .incoming,
+                        remoteCallID: callID.remoteCallID)
         
         let ringDuration: Duration = .seconds(min(expirationDate.timeIntervalSince1970 - nowDate.timeIntervalSince1970, 90))
         
         let roomDisplayName = payload.dictionaryPayload[ElementCallServiceNotificationKey.roomDisplayName.rawValue] as? String
         
         let update = CXCallUpdate()
-        update.hasVideo = true
+        // Incoming direct calls behave as regular phone calls unless proven video.
+        update.hasVideo = incomingStartMode == .video
         update.localizedCallerName = roomDisplayName
         // https://stackoverflow.com/a/41230020/730924
         update.remoteHandle = .init(type: .generic, value: roomID)
@@ -222,7 +548,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             }
             
             if let incomingCallID, incomingCallID.callKitID == callID.callKitID {
-                callProvider.reportCall(with: incomingCallID.callKitID, endedAt: nil, reason: .unanswered)
+                reportEndedCall(incomingCallID: incomingCallID, reason: .unanswered)
             }
         }
     }
@@ -246,6 +572,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             MXLog.error("Failed answering incoming call, missing incomingCallID")
             return
         }
+        
+        applySessionEvent(type: .accept, roomID: incomingCallID.roomID)
         
         // Fixes broken videos on EC web when a CallKit session is established.
         //
@@ -271,7 +599,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             // Then end the and call rely on `setupCallSession` to create a new one
             provider.reportCall(with: incomingCallID.callKitID, endedAt: nil, reason: .remoteEnded)
             
-            self.actionsSubject.send(.startCall(roomID: incomingCallID.roomID))
+            self.actionsSubject.send(.startCall(roomID: incomingCallID.roomID, startMode: incomingCallID.startMode))
             self.endUnansweredCallTask?.cancel()
         }
     }
@@ -292,17 +620,22 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         // isn't even supported, ignore it.
         #else
         if let ongoingCallID {
-            actionsSubject.send(.endCall(roomID: ongoingCallID.roomID))
+            applySessionEvent(type: .hangup, roomID: ongoingCallID.roomID)
+            suppressIncomingFallback(for: ongoingCallID.roomID)
+            actionsSubject.send(.requestCallTermination(roomID: ongoingCallID.roomID))
+            tearDownCallSession(sendEndCallAction: false)
         }
         
         if let incomingCallID {
+            applySessionEvent(type: .reject, roomID: incomingCallID.roomID)
+            suppressIncomingFallback(for: incomingCallID.roomID)
+            clearIncomingCallState()
             Task {
-                await sendDeclineCallEvent(incomingCallID)
+                _ = await sendDeclineCallEventWithRetry(in: incomingCallID.roomID,
+                                                        preferredRTCNotificationID: incomingCallID.rtcNotificationID)
             }
         }
-        
-        tearDownCallSession(sendEndCallAction: false)
-        
+
         action.fulfill()
         #endif
     }
@@ -310,6 +643,9 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     // MARK: - Private
     
     private func tearDownCallSession(sendEndCallAction: Bool = true) {
+        #if targetEnvironment(simulator)
+        ongoingCallID = nil
+        #else
         if sendEndCallAction, let ongoingCallID {
             let transaction = CXTransaction(action: CXEndCallAction(call: ongoingCallID.callKitID))
             callController.request(transaction) { error in
@@ -318,34 +654,580 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
                 }
             }
         }
+        #endif
         
+        if let ongoingCallID {
+            suppressIncomingFallback(for: ongoingCallID.roomID)
+            recentlyEndedCallID = ongoingCallID
+            if let rtcNotificationID = ongoingCallID.rtcNotificationID {
+                cacheRTCNotificationID(rtcNotificationID, for: ongoingCallID.roomID)
+            }
+        }
+        
+        if let activeCallSession {
+            recentCallSessionByRoomID[activeCallSession.roomID] = activeCallSession
+        }
+        activeCallSession = nil
+
+        ongoingDeclineRefreshTask?.cancel()
+        ongoingDeclineRefreshTask = nil
+        let ongoingDeclineHandles = drainOngoingDeclineListenerHandles()
+        ongoingDeclineHandles.forEach { $0.cancel() }
+        finishResolvingOngoingDeclines()
         ongoingCallID = nil
+        ongoingCallTimelineCancellable = nil
     }
     
-    private func sendDeclineCallEvent(_ incomingCallID: CallID) async {
-        guard let rtcNotificationID = incomingCallID.rtcNotificationID else {
-            MXLog.info("No rtc notification event to decline.")
+    private func registerVoIPPusherIfNeeded() async {
+        guard let voIPPushToken, let clientProxy else {
             return
         }
         
+        guard registeredVoIPPushToken != voIPPushToken else {
+            return
+        }
+        
+        registeredVoIPPushToken = voIPPushToken
+        
+        do {
+            let defaultPayload = APNSPayload(aps: APSInfo(mutableContent: 1,
+                                                          alert: APSAlert(locKey: "Notification",
+                                                                          locArgs: [])),
+                                             pusherNotificationClientIdentifier: clientProxy.pusherNotificationClientIdentifier)
+            
+            let configuration = try await PusherConfiguration(identifiers: .init(pushkey: voIPPushToken.base64EncodedString(),
+                                                                                 appId: appSettings.voIPPusherAppID),
+                                                              kind: .http(data: .init(url: appSettings.pushGatewayNotifyEndpoint.absoluteString,
+                                                                                      format: .eventIdOnly,
+                                                                                      defaultPayload: defaultPayload.toJsonString())),
+                                                              appDisplayName: "\(InfoPlistReader.main.bundleDisplayName) (iOS)",
+                                                              deviceDisplayName: UIDevice.current.name,
+                                                              profileTag: voIPPusherProfileTag(),
+                                                              lang: Bundle.app.preferredLocalizations.first ?? "en")
+            try await clientProxy.setPusher(with: configuration)
+            MXLog.info("Set VoIP pusher succeeded")
+        } catch {
+            registeredVoIPPushToken = nil
+            MXLog.error("Set VoIP pusher failed: \(error)")
+        }
+    }
+
+    private func observeIncomingCallFallback() {
+        incomingCallFallbackCancellable = nil
+
+        guard let clientProxy else {
+            return
+        }
+
+        incomingCallFallbackCancellable = clientProxy.roomSummaryProvider.roomListPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] roomSummaries in
+                self?.handleIncomingCallFallback(roomSummaries: roomSummaries)
+            }
+    }
+
+    private func handleIncomingCallFallback(roomSummaries: [RoomSummary]) {
+        guard let clientProxy else {
+            return
+        }
+
+        pruneIncomingFallbackSuppression(using: roomSummaries)
+
+        guard incomingCallID == nil, ongoingCallID == nil else {
+            return
+        }
+
+        let ownUserID = clientProxy.userID
+        guard let roomSummary = roomSummaries.first(where: { isIncomingFallbackCandidate(roomSummary: $0, ownUserID: ownUserID) }) else {
+            return
+        }
+
+        suppressIncomingFallback(for: roomSummary.id)
+        Task { [weak self] in
+            let isVideoIntent: Bool
+            if let lastCallEvent = roomSummary.lastCallEvent,
+               !Self.isTerminalCallEvent(lastCallEvent) {
+                isVideoIntent = lastCallEvent.intent != .audio
+            } else {
+                isVideoIntent = true
+            }
+            await self?.reportIncomingCallFromFallback(roomID: roomSummary.id,
+                                                       roomDisplayName: roomSummary.name,
+                                                       isVideo: isVideoIntent)
+        }
+    }
+
+    private func isIncomingFallbackCandidate(roomSummary: RoomSummary, ownUserID: String) -> Bool {
+        guard roomSummary.isDirect, roomSummary.hasOngoingCall else {
+            return false
+        }
+
+        guard !roomSummary.activeRoomCallParticipants.contains(ownUserID) else {
+            return false
+        }
+
+        guard !isIncomingFallbackSuppressed(roomID: roomSummary.id) else {
+            return false
+        }
+
+        guard !Self.isTerminalCallEvent(roomSummary.lastCallEvent) else {
+            return false
+        }
+
+        // Avoid showing a new incoming call from fallback right after we just placed/cancelled
+        // an outgoing call in the same room.
+        if roomSummary.lastCallEvent?.state == .outgoing {
+            return false
+        }
+
+        return true
+    }
+
+    private func reportIncomingCallFromFallback(roomID: String, roomDisplayName: String?, isVideo: Bool) async {
+        guard incomingCallID == nil, ongoingCallID == nil else {
+            return
+        }
+
+        let nowDate = timeProvider.now()
+        cachedRemoteCallIDByRoomID.removeValue(forKey: roomID)
+        let callID = CallID(callKitID: UUID(),
+                            roomID: roomID,
+                            rtcNotificationID: nil,
+                            remoteCallID: nil,
+                            startMode: isVideo ? .video : .audio,
+                            startedAt: nowDate)
+
+        incomingCallID = callID
+        openCallSession(roomID: roomID,
+                        callKitID: callID.callKitID,
+                        direction: .incoming,
+                        remoteCallID: callID.remoteCallID)
+
+        let update = CXCallUpdate()
+        update.hasVideo = isVideo
+        update.localizedCallerName = roomDisplayName
+        update.remoteHandle = .init(type: .generic, value: roomID)
+
+        callProvider.reportNewIncomingCall(with: callID.callKitID, update: update) { [weak self] error in
+            if let error {
+                MXLog.error("Fallback incoming call reporting failed: \(error)")
+                self?.clearIncomingCallState()
+                return
+            }
+
+            self?.actionsSubject.send(.receivedIncomingCallRequest)
+        }
+
+        endUnansweredCallTask?.cancel()
+        endUnansweredCallTask = Task { [weak self] in
+            try? await self?.timeProvider.clock.sleep(for: IncomingFallbackConstants.unansweredTimeout)
+
+            guard let self, !Task.isCancelled else {
+                return
+            }
+
+            guard let incomingCallID = self.incomingCallID, incomingCallID.callKitID == callID.callKitID else {
+                return
+            }
+
+            reportEndedCall(incomingCallID: incomingCallID, reason: .unanswered)
+        }
+    }
+
+    private static func isTerminalCallEvent(_ roomCallEvent: RoomCallEvent?) -> Bool {
+        switch roomCallEvent?.state {
+        case .ended, .missed, .declined:
+            true
+        case .incoming, .outgoing, .started, .answered, .legacyInvite, .none:
+            false
+        }
+    }
+
+    private func suppressIncomingFallback(for roomID: String) {
+        incomingFallbackSuppressionByRoomID[roomID] = Date().addingTimeInterval(IncomingFallbackConstants.suppressionDuration)
+    }
+
+    private func incomingStartMode(for payload: [AnyHashable: Any], roomID: String) -> ElementCallStartMode {
+        if let callIntent = payload[ElementCallServiceNotificationKey.callIntent.rawValue] as? String,
+           let parsedStartMode = Self.startMode(fromCallIntent: callIntent) {
+            return parsedStartMode
+        }
+
+        guard let roomSummary = clientProxy?.roomSummaryProvider.roomListPublisher.value.first(where: { $0.id == roomID }),
+              roomSummary.hasOngoingCall,
+              let lastCallEvent = roomSummary.lastCallEvent,
+              !Self.isTerminalCallEvent(lastCallEvent) else {
+            return .video
+        }
+
+        switch lastCallEvent.intent {
+        case .audio:
+            return .audio
+        case .video, .unknown:
+            return .video
+        }
+    }
+
+    private func isIncomingFallbackSuppressed(roomID: String) -> Bool {
+        guard let expirationDate = incomingFallbackSuppressionByRoomID[roomID] else {
+            return false
+        }
+
+        guard expirationDate > Date() else {
+            incomingFallbackSuppressionByRoomID.removeValue(forKey: roomID)
+            return false
+        }
+
+        return true
+    }
+
+    private func pruneIncomingFallbackSuppression(using _: [RoomSummary]) {
+        incomingFallbackSuppressionByRoomID = incomingFallbackSuppressionByRoomID.filter { _, expirationDate in
+            expirationDate > Date()
+        }
+    }
+
+    private func nextSessionSequence() -> UInt64 {
+        callSessionSequence += 1
+        return callSessionSequence
+    }
+
+    private func openCallSession(roomID: String,
+                                 callKitID: UUID,
+                                 direction: CallSessionDirection,
+                                 remoteCallID: String?) {
+        var session = CallSession(roomID: roomID,
+                                  callKitID: callKitID,
+                                  direction: direction,
+                                  remoteCallID: remoteCallID)
+        let event = CallSessionEvent(type: .invite,
+                                     direction: direction,
+                                     sequence: nextSessionSequence(),
+                                     deduplicationID: "invite:\(callKitID.uuidString)")
+        let transition = session.apply(event)
+        activeCallSession = session
+        recentCallSessionByRoomID[roomID] = session
+        logCallSessionTransition(session: session, event: event, transition: transition)
+    }
+
+    private func applySessionEvent(type: CallSessionEventType,
+                                   roomID: String,
+                                   direction: CallSessionDirection? = nil,
+                                   deduplicationID: String? = nil) {
+        let existingSession: CallSession? = if let activeCallSession, activeCallSession.roomID == roomID {
+            activeCallSession
+        } else {
+            recentCallSessionByRoomID[roomID]
+        }
+
+        guard var session = existingSession else {
+            return
+        }
+
+        let event = CallSessionEvent(type: type,
+                                     direction: direction,
+                                     sequence: nextSessionSequence(),
+                                     deduplicationID: deduplicationID)
+        let transition = session.apply(event)
+        logCallSessionTransition(session: session, event: event, transition: transition)
+
+        if activeCallSession?.roomID == roomID {
+            activeCallSession = session
+        }
+        recentCallSessionByRoomID[roomID] = session
+    }
+
+    private func logCallSessionTransition(session: CallSession, event: CallSessionEvent, transition: CallSessionTransitionResult) {
+        if transition.isApplied {
+            MXLog.info("Call session \(session.callID) transition \(transition.previousState.rawValue) -> \(transition.state.rawValue) on \(event.type.rawValue)")
+        } else if let rejectionReason = transition.rejectionReason {
+            MXLog.verbose("Ignored call session event \(event.type.rawValue) for \(session.callID): \(rejectionReason)")
+        }
+    }
+
+    private func sessionEventType(for reason: CXCallEndedReason) -> CallSessionEventType {
+        switch reason {
+        case .declinedElsewhere:
+            return .reject
+        case .answeredElsewhere:
+            return .answeredElsewhere
+        case .unanswered, .failed:
+            return .timeout
+        case .remoteEnded:
+            return .hangup
+        @unknown default:
+            return .hangup
+        }
+    }
+
+    private static func startMode(fromCallIntent callIntent: String?) -> ElementCallStartMode? {
+        guard let callIntent else {
+            return nil
+        }
+        let normalizedCallIntent = callIntent
+            .lowercased()
+            .replacingOccurrences(of: "optional(", with: "")
+            .replacingOccurrences(of: ")", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let compactIntent = normalizedCallIntent.replacingOccurrences(of: " ", with: "")
+        let knownAudioIntents = Set(["audio", "voice", "dmvoice", "startcalldmvoice", "m.intent.voice", "m.intent.audio"])
+        let knownVideoIntents = Set(["video", "startcall", "startcalldm", "dm", "m.intent.video"])
+
+        if knownAudioIntents.contains(compactIntent) {
+            return .audio
+        }
+
+        if knownVideoIntents.contains(compactIntent) {
+            return .video
+        }
+
+        if compactIntent.contains("video") {
+            return .video
+        }
+
+        if compactIntent.contains("audio") {
+            return .audio
+        }
+
+        if compactIntent.contains("voice"), !compactIntent.contains("video") {
+            return .audio
+        }
+
+        return nil
+    }
+    
+    private func voIPPusherProfileTag() -> String {
+        if let currentTag = appSettings.voIPPusherProfileTag {
+            return currentTag
+        }
+        
+        let chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+        let newTag = (0..<16).map { _ in
+            let offset = Int.random(in: 0..<chars.count)
+            return String(chars[chars.index(chars.startIndex, offsetBy: offset)])
+        }.joined()
+        
+        appSettings.voIPPusherProfileTag = newTag
+        return newTag
+    }
+    
+    @discardableResult
+    private func sendDeclineCallEvent(in roomID: String, preferredRTCNotificationID: String?) async -> DeclineAttemptResult {
         guard let clientProxy else {
             MXLog.warning("A ClientProxy is needed to fetch the room.")
-            return
+            return .failed
+        }
+
+        guard case let .joined(roomProxy) = await clientProxy.roomForIdentifier(roomID) else {
+            MXLog.warning("Failed to fetch a joined room for room ID \(roomID).")
+            return .failed
+        }
+
+        guard let rtcNotificationID = await resolveRTCNotificationID(for: roomProxy,
+                                                                     roomID: roomID,
+                                                                     preferredRTCNotificationID: preferredRTCNotificationID,
+                                                                     expectedOwnEvent: false) else {
+            MXLog.info("No rtc notification event to decline for room \(roomID).")
+            return .notFound
         }
         
-        guard case let .joined(roomProxy) = await clientProxy.roomForIdentifier(incomingCallID.roomID) else {
-            MXLog.warning("Failed to fetch a joined room for the incoming call.")
-            return
+        cacheRTCNotificationID(rtcNotificationID, for: roomID)
+
+        switch await roomProxy.declineCall(notificationID: rtcNotificationID) {
+        case .success:
+            return .sent
+        case .failure(let error):
+            if isDeclineOwnCallError(error) {
+                MXLog.info("Skipping decline for own rtc notification in room \(roomID).")
+                return .ownEvent
+            }
+            MXLog.error("Failed declining call for room \(roomID) with notification \(rtcNotificationID): \(error)")
+            return .failed
         }
-        
-        _ = await roomProxy.declineCall(notificationID: rtcNotificationID)
+    }
+
+    @discardableResult
+    private func sendDeclineCallEventWithRetry(in roomID: String, preferredRTCNotificationID: String?) async -> Bool {
+        switch await sendDeclineCallEvent(in: roomID, preferredRTCNotificationID: preferredRTCNotificationID) {
+        case .sent, .notFound, .ownEvent:
+            return true
+        case .failed:
+            return false
+        }
+    }
+
+    private func resolveIncomingDirectCallRoomIDForDecline() -> String? {
+        guard let clientProxy else {
+            MXLog.warning("A ClientProxy is needed to resolve incoming calls.")
+            return nil
+        }
+
+        let ownUserID = clientProxy.userID
+        return clientProxy.roomSummaryProvider.roomListPublisher.value.first { room in
+            room.isDirect &&
+                room.hasOngoingCall &&
+                !room.activeRoomCallParticipants.contains(ownUserID)
+        }?.id
+    }
+
+    private func resolveRTCNotificationID(for roomProxy: JoinedRoomProxyProtocol,
+                                          roomID: String,
+                                          preferredRTCNotificationID: String?,
+                                          expectedOwnEvent: Bool) async -> String? {
+        if let preferredRTCNotificationID {
+            return preferredRTCNotificationID
+        }
+
+        // The timeline item provider is lazily initialized by subscribing.
+        // Without this we can hit a crash in TimelineProxy when accessed from
+        // call teardown flows that run without an already-open room timeline.
+        await ensureTimelineSubscribed(for: roomProxy, roomID: roomID)
+
+        let itemProxies = await MainActor.run { roomProxy.timeline.timelineItemProvider.itemProxies }
+        for itemProxy in itemProxies.reversed() {
+            guard case let .event(eventProxy) = itemProxy,
+                  let eventID = eventProxy.id.eventID,
+                  eventProxy.isOwn == expectedOwnEvent,
+                  isDeclinableCallNotification(eventProxy) else {
+                continue
+            }
+
+            return eventID
+        }
+
+        return nil
+    }
+
+    private func resolveCandidateRTCNotificationIDs(for roomProxy: JoinedRoomProxyProtocol,
+                                                    roomID: String,
+                                                    preferredRTCNotificationID: String?,
+                                                    includeOwnEventIDs: Bool) async -> [String] {
+        var rtcNotificationIDs: [String] = []
+
+        await ensureTimelineSubscribed(for: roomProxy, roomID: roomID)
+        let itemProxies = await MainActor.run { roomProxy.timeline.timelineItemProvider.itemProxies }
+        var ownRTCNotificationIDs = Set<String>()
+        var remoteRTCNotificationIDs: [String] = []
+
+        for itemProxy in itemProxies.reversed() {
+            guard case let .event(eventProxy) = itemProxy,
+                  let eventID = eventProxy.id.eventID,
+                  isDeclinableCallNotification(eventProxy) else {
+                continue
+            }
+
+            if eventProxy.isOwn {
+                ownRTCNotificationIDs.insert(eventID)
+            } else if !remoteRTCNotificationIDs.contains(eventID) {
+                remoteRTCNotificationIDs.append(eventID)
+            }
+        }
+
+        func appendUnique(_ rtcNotificationID: String?) {
+            guard let rtcNotificationID, !rtcNotificationIDs.contains(rtcNotificationID) else {
+                return
+            }
+            if !includeOwnEventIDs, ownRTCNotificationIDs.contains(rtcNotificationID) {
+                return
+            }
+            if !includeOwnEventIDs,
+               cachedRTCNotificationIDByRoomID[roomID] == rtcNotificationID,
+               cachedRTCNotificationOwnershipByRoomID[roomID] == true {
+                return
+            }
+
+            rtcNotificationIDs.append(rtcNotificationID)
+        }
+
+        appendUnique(preferredRTCNotificationID)
+        appendUnique(cachedRTCNotificationIDByRoomID[roomID])
+
+        remoteRTCNotificationIDs.forEach { appendUnique($0) }
+
+        if includeOwnEventIDs {
+            ownRTCNotificationIDs.forEach { appendUnique($0) }
+        }
+
+        return rtcNotificationIDs
+    }
+
+    private func isDeclineOwnCallError(_ error: Error) -> Bool {
+        let description = String(describing: error).lowercased()
+        return description.contains("declineowncall") || description.contains("cannot decline your own call")
+    }
+
+    private func isDeclinableCallNotification(_ eventProxy: EventTimelineItemProxy) -> Bool {
+        switch eventProxy.content {
+        case .callInvite, .rtcNotification:
+            return true
+        case .msgLike(let messageLikeContent):
+            guard case let .other(eventType) = messageLikeContent.kind else {
+                return false
+            }
+
+            switch eventType {
+            case .callInvite, .callNotify, .rtcNotification:
+                return true
+            case .audio,
+                 .beacon,
+                 .callAnswer,
+                 .callCandidates,
+                 .callHangup,
+                 .callNegotiate,
+                 .callReject,
+                 .callSdpStreamMetadataChanged,
+                 .callSelectAnswer,
+                 .emote,
+                 .encrypted,
+                 .file,
+                 .image,
+                 .keyVerificationAccept,
+                 .keyVerificationCancel,
+                 .keyVerificationDone,
+                 .keyVerificationKey,
+                 .keyVerificationMac,
+                 .keyVerificationReady,
+                 .keyVerificationStart,
+                 .location,
+                 .message,
+                 .pollEnd,
+                 .pollResponse,
+                 .pollStart,
+                 .reaction,
+                 .roomEncrypted,
+                 .roomMessage,
+                 .roomRedaction,
+                 .rtcDecline,
+                 .sticker,
+                 .unstablePollEnd,
+                 .unstablePollResponse,
+                 .unstablePollStart,
+                 .video,
+                 .voice:
+                return false
+            case .other:
+                return false
+            }
+        case .failedToParseMessageLike,
+             .failedToParseState,
+             .liveLocation,
+             .profileChange,
+             .roomMembership,
+             .state:
+            return false
+        }
     }
     
     private func observeIncomingCall() async {
+        incomingCallTimelineCancellable = nil
         incomingCallRoomInfoCancellable = nil
+        declineListenerHandle?.cancel()
+        declineListenerHandle = nil
         
         guard let incomingCallID else {
-            MXLog.info("No incoming call to observe for.")
+            endUnansweredCallTask?.cancel()
+            endUnansweredCallTask = nil
             return
         }
         
@@ -353,53 +1235,32 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             MXLog.warning("A ClientProxy is needed to fetch the room.")
             return
         }
-        
+
         guard case let .joined(roomProxy) = await clientProxy.roomForIdentifier(incomingCallID.roomID) else {
             MXLog.warning("Failed to fetch a joined room for the incoming call.")
             return
         }
-        
-        roomProxy.subscribeToRoomInfoUpdates()
-        
-        incomingCallRoomInfoCancellable = roomProxy
-            .infoPublisher
-            .compactMap { ($0.hasRoomCall, $0.activeRoomCallParticipants) }
-            .removeDuplicates { $0 == $1 }
-            .drop { hasRoomCall, _ in
-                // Filter all updates before hasRoomCall becomes `true`. Then we can correctly
-                // detect its change to `false` to stop ringing when the caller hangs up.
-                !hasRoomCall
-            }
-            .sink { [weak self] hasOngoingCall, activeRoomCallParticipants in
-                guard let self else { return }
-                
-                let participants: [String] = activeRoomCallParticipants
-                
-                if !hasOngoingCall {
-                    MXLog.info("Call cancelled by remote")
-                    reportEndedCall(incomingCallID: incomingCallID, reason: .remoteEnded)
-                } else if participants.contains(roomProxy.ownUserID) {
-                    MXLog.info("Call answered elsewhere")
-                    reportEndedCall(incomingCallID: incomingCallID, reason: .answeredElsewhere)
-                }
-            }
+
+        await observeIncomingCallTimeline(roomProxy: roomProxy, incomingCallID: incomingCallID)
+        await observeIncomingCallRoomInfo(roomProxy: roomProxy, incomingCallID: incomingCallID)
         
         guard let rtcNotificationID = incomingCallID.rtcNotificationID else {
             MXLog.warning("Decline: No RTC notification ID found for the incoming call.")
             return
         }
         
-        MXLog.info("Observe decline events for notification \(rtcNotificationID)")
-        
         let listener: CallDeclineListener = SDKListener { [weak self] senderID in
             guard let self else { return }
-            
-            MXLog.debug("Call declined event received from \(senderID)")
-            
+            let deduplicationID = "decline:\(rtcNotificationID):\(senderID)"
+
             if senderID == roomProxy.ownUserID {
-                // Stop ringing!
-                MXLog.debug("Call declined elsewhere")
-                reportEndedCall(incomingCallID: incomingCallID, reason: .declinedElsewhere)
+                reportEndedCall(incomingCallID: incomingCallID,
+                                reason: .declinedElsewhere,
+                                deduplicationID: deduplicationID)
+            } else {
+                reportEndedCall(incomingCallID: incomingCallID,
+                                reason: .remoteEnded,
+                                deduplicationID: deduplicationID)
             }
         }
         
@@ -410,11 +1271,625 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         
         declineListenerHandle = handle
     }
+
+    private func observeOngoingCall() async {
+        ongoingCallTimelineCancellable = nil
+        ongoingCallRoomInfoCancellable = nil
+        ongoingDeclineRefreshTask?.cancel()
+        ongoingDeclineRefreshTask = nil
+        let ongoingDeclineHandles = drainOngoingDeclineListenerHandles()
+        ongoingDeclineHandles.forEach { $0.cancel() }
+        finishResolvingOngoingDeclines()
+
+        guard let ongoingCallID else {
+            return
+        }
+
+        guard let clientProxy else {
+            MXLog.warning("A ClientProxy is needed to observe an ongoing call.")
+            return
+        }
+
+        guard case let .joined(roomProxy) = await clientProxy.roomForIdentifier(ongoingCallID.roomID) else {
+            MXLog.warning("Failed to fetch a joined room for the ongoing call.")
+            return
+        }
+        await observeOngoingCallTimeline(roomProxy: roomProxy, ongoingCallID: ongoingCallID)
+        await observeOngoingCallRoomInfo(roomProxy: roomProxy, ongoingCallID: ongoingCallID)
+
+        await startObservingOngoingDeclines(roomProxy: roomProxy, ongoingCallID: ongoingCallID)
+        scheduleOngoingDeclineRefresh(roomProxy: roomProxy, ongoingCallID: ongoingCallID)
+    }
+
+    private func observeIncomingCallTimeline(roomProxy: JoinedRoomProxyProtocol, incomingCallID: CallID) async {
+        await ensureTimelineSubscribed(for: roomProxy, roomID: incomingCallID.roomID)
+
+        let timelineItemProvider = await MainActor.run {
+            roomProxy.timeline.timelineItemProvider
+        }
+        let tracker = TerminationEventTracker()
+
+        incomingCallTimelineCancellable = await MainActor.run {
+            timelineItemProvider.updatePublisher
+                .map(\.0)
+                .sink { [weak self] itemProxies in
+                    guard let self else { return }
+                    guard self.incomingCallID?.callKitID == incomingCallID.callKitID else { return }
+                    self.cacheLatestCallContext(in: itemProxies, for: incomingCallID.roomID)
+                    guard let terminationEvent = self.latestIncomingCallTerminationEvent(in: itemProxies, roomID: incomingCallID.roomID) else { return }
+                    guard terminationEvent.eventID != tracker.eventID else { return }
+
+                    tracker.eventID = terminationEvent.eventID
+                    self.reportEndedCall(incomingCallID: incomingCallID,
+                                         reason: terminationEvent.reason,
+                                         deduplicationID: terminationEvent.eventID)
+                }
+        }
+    }
+
+    private func observeOngoingCallTimeline(roomProxy: JoinedRoomProxyProtocol, ongoingCallID: CallID) async {
+        await ensureTimelineSubscribed(for: roomProxy, roomID: ongoingCallID.roomID)
+
+        let timelineItemProvider = await MainActor.run {
+            roomProxy.timeline.timelineItemProvider
+        }
+        let tracker = TerminationEventTracker()
+
+        ongoingCallTimelineCancellable = await MainActor.run {
+            timelineItemProvider.updatePublisher
+                .map(\.0)
+                .sink { [weak self] itemProxies in
+                    guard let self else { return }
+                    guard self.ongoingCallID?.callKitID == ongoingCallID.callKitID else { return }
+                    self.cacheLatestCallContext(in: itemProxies, for: ongoingCallID.roomID)
+                    self.refreshOngoingDeclineListeners(roomProxy: roomProxy,
+                                                        ongoingCallID: ongoingCallID,
+                                                        itemProxies: itemProxies)
+                    guard let terminationEvent = self.latestRemoteTerminationEvent(in: itemProxies, roomID: ongoingCallID.roomID) else { return }
+                    guard terminationEvent.eventID != tracker.eventID else { return }
+
+                    tracker.eventID = terminationEvent.eventID
+                    self.endOngoingCall(ongoingCallID,
+                                        reason: terminationEvent.reason,
+                                        deduplicationID: terminationEvent.eventID)
+                }
+        }
+    }
+
+    private func observeIncomingCallRoomInfo(roomProxy: JoinedRoomProxyProtocol, incomingCallID: CallID) async {
+        let tracker = RoomCallPresenceTracker()
+        let ownUserID = roomProxy.ownUserID
+
+        incomingCallRoomInfoCancellable = roomProxy.infoPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] roomInfo in
+                guard let self else { return }
+                guard self.incomingCallID?.callKitID == incomingCallID.callKitID else { return }
+
+                let participants = Set(roomInfo.activeRoomCallParticipants)
+                let hasActiveCall = roomInfo.hasRoomCall || !participants.isEmpty
+                if hasActiveCall {
+                    tracker.hasSeenActiveCall = true
+                    return
+                }
+
+                let hasRemoteParticipant = participants.contains { $0 != ownUserID }
+                if hasRemoteParticipant {
+                    tracker.hasSeenRemoteParticipant = true
+                }
+
+                guard tracker.hasSeenActiveCall else {
+                    return
+                }
+
+                self.reportEndedCall(incomingCallID: incomingCallID,
+                                     reason: .remoteEnded,
+                                     deduplicationID: self.roomInfoDeduplicationID(prefix: "incoming-info",
+                                                                                   roomInfo: roomInfo))
+            }
+    }
+
+    private func observeOngoingCallRoomInfo(roomProxy: JoinedRoomProxyProtocol, ongoingCallID: CallID) async {
+        let tracker = RoomCallPresenceTracker()
+        let ownUserID = roomProxy.ownUserID
+
+        ongoingCallRoomInfoCancellable = roomProxy.infoPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] roomInfo in
+                guard let self else { return }
+                guard self.ongoingCallID?.callKitID == ongoingCallID.callKitID else { return }
+
+                let participants = Set(roomInfo.activeRoomCallParticipants)
+                let hasActiveCall = roomInfo.hasRoomCall || !participants.isEmpty
+                if hasActiveCall {
+                    tracker.hasSeenActiveCall = true
+                }
+
+                let foreignParticipantsCount = participants.filter { !self.participantBelongsToUser($0, userID: ownUserID) }.count
+                let hasRemoteParticipant = foreignParticipantsCount > 0
+                if hasRemoteParticipant {
+                    tracker.hasSeenRemoteParticipant = true
+                    tracker.noForeignParticipantSince = nil
+                }
+
+                let shouldEndBecauseCallStopped = tracker.hasSeenActiveCall && !hasActiveCall
+                let shouldTrackNoForeignFallback = roomInfo.isDirect && tracker.hasSeenActiveCall && tracker.hasSeenRemoteParticipant
+                if shouldTrackNoForeignFallback && !hasRemoteParticipant && tracker.noForeignParticipantSince == nil {
+                    tracker.noForeignParticipantSince = self.timeProvider.now()
+                }
+
+                let noForeignParticipantElapsed: TimeInterval? = if let noForeignParticipantSince = tracker.noForeignParticipantSince {
+                    self.timeProvider.now().timeIntervalSince(noForeignParticipantSince)
+                } else {
+                    nil
+                }
+                let shouldEndBecauseRemoteLeft = shouldTrackNoForeignFallback &&
+                    !hasRemoteParticipant &&
+                    (noForeignParticipantElapsed ?? 0) >= CallTerminationConstants.noForeignParticipantGraceWindow
+
+                guard shouldEndBecauseCallStopped || shouldEndBecauseRemoteLeft else {
+                    return
+                }
+
+                self.endOngoingCall(ongoingCallID,
+                                    reason: .remoteEnded,
+                                    deduplicationID: self.roomInfoDeduplicationID(prefix: "ongoing-info",
+                                                                                  roomInfo: roomInfo))
+            }
+    }
+
+    private func roomInfoDeduplicationID(prefix: String, roomInfo: RoomInfoProxyProtocol) -> String {
+        let participants = roomInfo.activeRoomCallParticipants.sorted().joined(separator: ",")
+        return "\(prefix):\(roomInfo.id):\(roomInfo.hasRoomCall):\(participants)"
+    }
+
+    private func participantBelongsToUser(_ participant: String, userID: String) -> Bool {
+        participant == userID || participant.hasPrefix("_\(userID)_")
+    }
     
-    private func reportEndedCall(incomingCallID: CallID, reason: CXCallEndedReason) {
+    private func startObservingOngoingDeclines(roomProxy: JoinedRoomProxyProtocol, ongoingCallID: CallID) async {
+        guard beginResolvingOngoingDeclines() else {
+            return
+        }
+        defer { finishResolvingOngoingDeclines() }
+        
+        var unresolvedRTCNotificationIDs: [String] = []
+        for attempt in 0..<5 {
+            let rtcNotificationIDs = await resolveCandidateRTCNotificationIDs(for: roomProxy,
+                                                                              roomID: ongoingCallID.roomID,
+                                                                              preferredRTCNotificationID: ongoingCallID.rtcNotificationID,
+                                                                              includeOwnEventIDs: true)
+            unresolvedRTCNotificationIDs = unresolvedDeclineRTCNotificationIDs(from: rtcNotificationIDs)
+            if !unresolvedRTCNotificationIDs.isEmpty {
+                break
+            }
+
+            guard ongoingCallID.callKitID == self.ongoingCallID?.callKitID else {
+                return
+            }
+
+            guard attempt < 4 else {
+                break
+            }
+
+            try? await Task.sleep(for: .milliseconds(150))
+        }
+
+        guard !unresolvedRTCNotificationIDs.isEmpty else {
+            return
+        }
+
+        let listener: CallDeclineListener = SDKListener { [weak self] senderID in
+            guard let self else { return }
+            guard senderID != roomProxy.ownUserID else { return }
+            guard self.ongoingCallID?.callKitID == ongoingCallID.callKitID else { return }
+            let deduplicationID = "decline:\(ongoingCallID.roomID):\(senderID)"
+            
+            endOngoingCall(ongoingCallID, reason: .remoteEnded, deduplicationID: deduplicationID)
+        }
+
+        for rtcNotificationID in unresolvedRTCNotificationIDs {
+            cacheRTCNotificationID(rtcNotificationID, for: ongoingCallID.roomID)
+
+            guard case let .success(handle) = roomProxy.subscribeToCallDeclineEvents(rtcNotificationEventID: rtcNotificationID,
+                                                                                     listener: listener) else {
+                MXLog.error("Unable to listen for decline events on ongoing call for notification \(rtcNotificationID).")
+                continue
+            }
+
+            storeDeclineListenerHandle(handle, for: rtcNotificationID)
+        }
+    }
+
+    private func scheduleOngoingDeclineRefresh(roomProxy: JoinedRoomProxyProtocol, ongoingCallID: CallID) {
+        ongoingDeclineRefreshTask?.cancel()
+        ongoingDeclineRefreshTask = Task { [weak self] in
+            guard let self else { return }
+
+            for _ in 0..<12 {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else {
+                    return
+                }
+
+                guard self.ongoingCallID?.callKitID == ongoingCallID.callKitID else {
+                    return
+                }
+
+                await startObservingOngoingDeclines(roomProxy: roomProxy, ongoingCallID: ongoingCallID)
+            }
+        }
+    }
+
+    private func beginResolvingOngoingDeclines() -> Bool {
+        ongoingDeclineObservationLock.lock()
+        defer { ongoingDeclineObservationLock.unlock() }
+
+        guard !isResolvingOngoingDeclines else {
+            return false
+        }
+
+        isResolvingOngoingDeclines = true
+        return true
+    }
+
+    private func finishResolvingOngoingDeclines() {
+        ongoingDeclineObservationLock.lock()
+        isResolvingOngoingDeclines = false
+        ongoingDeclineObservationLock.unlock()
+    }
+
+    private func drainOngoingDeclineListenerHandles() -> [TaskHandle] {
+        ongoingDeclineObservationLock.lock()
+        defer { ongoingDeclineObservationLock.unlock() }
+
+        let handles = Array(ongoingDeclineListenerHandles.values)
+        ongoingDeclineListenerHandles.removeAll()
+        return handles
+    }
+
+    private func unresolvedDeclineRTCNotificationIDs(from rtcNotificationIDs: [String]) -> [String] {
+        ongoingDeclineObservationLock.lock()
+        defer { ongoingDeclineObservationLock.unlock() }
+
+        return rtcNotificationIDs.filter { ongoingDeclineListenerHandles[$0] == nil }
+    }
+
+    private func storeDeclineListenerHandle(_ handle: TaskHandle, for rtcNotificationID: String) {
+        ongoingDeclineObservationLock.lock()
+        ongoingDeclineListenerHandles[rtcNotificationID] = handle
+        ongoingDeclineObservationLock.unlock()
+    }
+
+    private func cacheRTCNotificationID(_ rtcNotificationID: String, for roomID: String, isOwnEvent: Bool? = nil) {
+        let previousRTCNotificationID = cachedRTCNotificationIDByRoomID[roomID]
+        cachedRTCNotificationIDByRoomID[roomID] = rtcNotificationID
+        if let isOwnEvent {
+            cachedRTCNotificationOwnershipByRoomID[roomID] = isOwnEvent
+        } else if previousRTCNotificationID != rtcNotificationID {
+            cachedRTCNotificationOwnershipByRoomID.removeValue(forKey: roomID)
+        }
+
+        // Keep the active call identifier stable once it has been set. Updating it on every
+        // discovered rtcNotificationID can trigger repeated observe restarts and UI stalls.
+        if let ongoingCallID,
+           ongoingCallID.roomID == roomID,
+           ongoingCallID.rtcNotificationID == nil {
+            self.ongoingCallID = CallID(callKitID: ongoingCallID.callKitID,
+                                        roomID: ongoingCallID.roomID,
+                                        rtcNotificationID: rtcNotificationID,
+                                        remoteCallID: ongoingCallID.remoteCallID,
+                                        startMode: ongoingCallID.startMode,
+                                        startedAt: ongoingCallID.startedAt)
+        }
+
+        if let recentlyEndedCallID, recentlyEndedCallID.roomID == roomID, recentlyEndedCallID.rtcNotificationID != rtcNotificationID {
+            self.recentlyEndedCallID = CallID(callKitID: recentlyEndedCallID.callKitID,
+                                              roomID: recentlyEndedCallID.roomID,
+                                              rtcNotificationID: rtcNotificationID,
+                                              remoteCallID: recentlyEndedCallID.remoteCallID,
+                                              startMode: recentlyEndedCallID.startMode,
+                                              startedAt: recentlyEndedCallID.startedAt)
+        }
+    }
+
+    private func cacheRemoteCallID(_ remoteCallID: String, for roomID: String) {
+        cachedRemoteCallIDByRoomID[roomID] = remoteCallID
+
+        if let incomingCallID,
+           incomingCallID.roomID == roomID,
+           incomingCallID.remoteCallID != remoteCallID {
+            self.incomingCallID = CallID(callKitID: incomingCallID.callKitID,
+                                         roomID: incomingCallID.roomID,
+                                         rtcNotificationID: incomingCallID.rtcNotificationID,
+                                         remoteCallID: remoteCallID,
+                                         startMode: incomingCallID.startMode,
+                                         startedAt: incomingCallID.startedAt)
+        }
+
+        if let ongoingCallID,
+           ongoingCallID.roomID == roomID,
+           ongoingCallID.remoteCallID != remoteCallID {
+            self.ongoingCallID = CallID(callKitID: ongoingCallID.callKitID,
+                                        roomID: ongoingCallID.roomID,
+                                        rtcNotificationID: ongoingCallID.rtcNotificationID,
+                                        remoteCallID: remoteCallID,
+                                        startMode: ongoingCallID.startMode,
+                                        startedAt: ongoingCallID.startedAt)
+        }
+
+        if let recentlyEndedCallID,
+           recentlyEndedCallID.roomID == roomID,
+           recentlyEndedCallID.remoteCallID != remoteCallID {
+            self.recentlyEndedCallID = CallID(callKitID: recentlyEndedCallID.callKitID,
+                                              roomID: recentlyEndedCallID.roomID,
+                                              rtcNotificationID: recentlyEndedCallID.rtcNotificationID,
+                                              remoteCallID: remoteCallID,
+                                              startMode: recentlyEndedCallID.startMode,
+                                              startedAt: recentlyEndedCallID.startedAt)
+        }
+
+        if var activeCallSession, activeCallSession.roomID == roomID {
+            activeCallSession.updateRemoteCallID(remoteCallID)
+            self.activeCallSession = activeCallSession
+            recentCallSessionByRoomID[roomID] = activeCallSession
+        } else if var recentCallSession = recentCallSessionByRoomID[roomID] {
+            recentCallSession.updateRemoteCallID(remoteCallID)
+            recentCallSessionByRoomID[roomID] = recentCallSession
+        }
+    }
+
+    private func cacheLatestCallContext(in itemProxies: [TimelineItemProxy], for roomID: String) {
+        for itemProxy in itemProxies.reversed() {
+            guard case let .event(eventProxy) = itemProxy,
+                  let eventID = eventProxy.id.eventID,
+                  let callEvent = RoomCallEventParser.parse(from: eventProxy) else {
+                continue
+            }
+
+            if let remoteCallID = callEvent.callID {
+                cacheRemoteCallID(remoteCallID, for: roomID)
+            }
+
+            if isDeclinableCallNotification(eventProxy) {
+                cacheRTCNotificationID(eventID, for: roomID, isOwnEvent: eventProxy.isOwn)
+                return
+            }
+        }
+    }
+
+    private func preferredRemoteCallID(for roomID: String) -> String? {
+        if incomingCallID?.roomID == roomID {
+            incomingCallID?.remoteCallID
+        } else if ongoingCallID?.roomID == roomID {
+            ongoingCallID?.remoteCallID
+        } else if recentlyEndedCallID?.roomID == roomID {
+            recentlyEndedCallID?.remoteCallID
+        } else {
+            cachedRemoteCallIDByRoomID[roomID]
+        }
+    }
+
+    private func beginCallTermination(for roomID: String) -> Bool {
+        callTerminationLock.lock()
+        defer { callTerminationLock.unlock() }
+
+        let now = Date()
+        if let previousAttempt = lastCallTerminationAttemptByRoomID[roomID],
+           now.timeIntervalSince(previousAttempt) < CallTerminationConstants.duplicateSuppression {
+            return false
+        }
+
+        guard !inProgressCallTerminations.contains(roomID) else {
+            return false
+        }
+
+        inProgressCallTerminations.insert(roomID)
+        lastCallTerminationAttemptByRoomID[roomID] = now
+        return true
+    }
+
+    private func finishCallTermination(for roomID: String) {
+        callTerminationLock.lock()
+        inProgressCallTerminations.remove(roomID)
+        callTerminationLock.unlock()
+    }
+
+    private func ensureTimelineSubscribed(for roomProxy: JoinedRoomProxyProtocol, roomID _: String) async {
+        await roomProxy.timeline.subscribeForUpdates()
+    }
+
+    private func preferredCallStartedAt(for roomID: String) -> Date? {
+        if incomingCallID?.roomID == roomID {
+            incomingCallID?.startedAt
+        } else if ongoingCallID?.roomID == roomID {
+            ongoingCallID?.startedAt
+        } else if recentlyEndedCallID?.roomID == roomID {
+            recentlyEndedCallID?.startedAt
+        } else {
+            nil
+        }
+    }
+
+    private func matchesKnownCallContext(_ callEvent: RoomCallEvent, eventTimestamp: Date, roomID: String) -> Bool {
+        if let preferredRemoteCallID = preferredRemoteCallID(for: roomID),
+           let callEventID = callEvent.callID {
+            return callEventID == preferredRemoteCallID
+        }
+
+        guard callEvent.callID == nil,
+              let preferredCallStartedAt = preferredCallStartedAt(for: roomID) else { return true }
+
+        let threshold = preferredCallStartedAt.addingTimeInterval(-5)
+        return eventTimestamp >= threshold
+    }
+
+    private func refreshOngoingDeclineListeners(roomProxy: JoinedRoomProxyProtocol,
+                                                ongoingCallID: CallID,
+                                                itemProxies: [TimelineItemProxy]) {
+        guard beginResolvingOngoingDeclines() else {
+            return
+        }
+        defer { finishResolvingOngoingDeclines() }
+
+        guard self.ongoingCallID?.callKitID == ongoingCallID.callKitID else {
+            return
+        }
+
+        var rtcNotificationIDs: [String] = []
+        func appendUnique(_ rtcNotificationID: String?) {
+            guard let rtcNotificationID, !rtcNotificationIDs.contains(rtcNotificationID) else {
+                return
+            }
+            rtcNotificationIDs.append(rtcNotificationID)
+        }
+
+        appendUnique(ongoingCallID.rtcNotificationID)
+        appendUnique(cachedRTCNotificationIDByRoomID[ongoingCallID.roomID])
+
+        for itemProxy in itemProxies.reversed() {
+            guard case let .event(eventProxy) = itemProxy,
+                  let eventID = eventProxy.id.eventID,
+                  isDeclinableCallNotification(eventProxy) else {
+                continue
+            }
+
+            appendUnique(eventID)
+        }
+
+        let unresolvedRTCNotificationIDs = unresolvedDeclineRTCNotificationIDs(from: rtcNotificationIDs)
+        guard !unresolvedRTCNotificationIDs.isEmpty else {
+            return
+        }
+
+        let listener: CallDeclineListener = SDKListener { [weak self] senderID in
+            guard let self else { return }
+            guard senderID != roomProxy.ownUserID else { return }
+            guard self.ongoingCallID?.callKitID == ongoingCallID.callKitID else { return }
+            let deduplicationID = "decline:\(ongoingCallID.roomID):\(senderID)"
+
+            endOngoingCall(ongoingCallID, reason: .remoteEnded, deduplicationID: deduplicationID)
+        }
+
+        for rtcNotificationID in unresolvedRTCNotificationIDs {
+            guard case let .success(handle) = roomProxy.subscribeToCallDeclineEvents(rtcNotificationEventID: rtcNotificationID,
+                                                                                     listener: listener) else {
+                MXLog.error("Unable to refresh decline listener for ongoing call notification \(rtcNotificationID).")
+                continue
+            }
+
+            storeDeclineListenerHandle(handle, for: rtcNotificationID)
+        }
+    }
+    
+    private func reportEndedCall(incomingCallID: CallID, reason: CXCallEndedReason, deduplicationID: String? = nil) {
+        suppressIncomingFallback(for: incomingCallID.roomID)
+        applySessionEvent(type: sessionEventType(for: reason),
+                          roomID: incomingCallID.roomID,
+                          deduplicationID: deduplicationID)
+        clearIncomingCallState()
+        callProvider.reportCall(with: incomingCallID.callKitID, endedAt: nil, reason: reason)
+    }
+
+    private func clearIncomingCallState() {
+        incomingCallTimelineCancellable = nil
         declineListenerHandle?.cancel()
         declineListenerHandle = nil
         endUnansweredCallTask?.cancel()
-        callProvider.reportCall(with: incomingCallID.callKitID, endedAt: nil, reason: reason)
+        endUnansweredCallTask = nil
+        incomingCallID = nil
+    }
+
+    private func latestIncomingCallTerminationEvent(in itemProxies: [TimelineItemProxy], roomID: String) -> (eventID: String, reason: CXCallEndedReason)? {
+        for itemProxy in itemProxies.reversed() {
+            guard case let .event(eventProxy) = itemProxy,
+                  let eventID = eventProxy.id.eventID,
+                  let callEvent = RoomCallEventParser.parse(from: eventProxy),
+                  matchesKnownCallContext(callEvent, eventTimestamp: eventProxy.timestamp, roomID: roomID) else {
+                continue
+            }
+
+            if eventProxy.isOwn {
+                switch callEvent.state {
+                case .answered:
+                    return (eventID, .answeredElsewhere)
+                case .declined, .missed:
+                    return (eventID, .declinedElsewhere)
+                case .ended:
+                    return (eventID, .remoteEnded)
+                case .incoming, .outgoing, .started, .legacyInvite:
+                    continue
+                }
+            } else {
+                switch callEvent.state {
+                case .ended:
+                    return (eventID, .remoteEnded)
+                case .declined, .missed:
+                    return (eventID, .declinedElsewhere)
+                case .incoming, .outgoing, .started, .answered, .legacyInvite:
+                    continue
+                }
+            }
+        }
+
+        return nil
+    }
+
+    private func latestRemoteTerminationEvent(in itemProxies: [TimelineItemProxy], roomID: String) -> (eventID: String, reason: CXCallEndedReason)? {
+        for itemProxy in itemProxies.reversed() {
+            guard case let .event(eventProxy) = itemProxy,
+                  let eventID = eventProxy.id.eventID,
+                  let callEvent = RoomCallEventParser.parse(from: eventProxy) else {
+                continue
+            }
+
+            guard !eventProxy.isOwn,
+                  matchesKnownCallContext(callEvent, eventTimestamp: eventProxy.timestamp, roomID: roomID) else {
+                continue
+            }
+
+            switch callEvent.state {
+            case .ended:
+                return (eventID, .remoteEnded)
+            case .declined, .missed:
+                return (eventID, .declinedElsewhere)
+            case .incoming, .outgoing, .started, .answered, .legacyInvite:
+                continue
+            }
+        }
+
+        return nil
+    }
+
+    private func endOngoingCall(_ ongoingCallID: CallID, reason: CXCallEndedReason, deduplicationID: String? = nil) {
+        guard self.ongoingCallID?.callKitID == ongoingCallID.callKitID else {
+            return
+        }
+
+        suppressIncomingFallback(for: ongoingCallID.roomID)
+        
+        applySessionEvent(type: sessionEventType(for: reason),
+                          roomID: ongoingCallID.roomID,
+                          deduplicationID: deduplicationID)
+        
+        switch reason {
+        case .remoteEnded:
+            MXLog.info("Call ended remotely for room \(ongoingCallID.roomID)")
+        case .declinedElsewhere:
+            MXLog.info("Call declined by remote for room \(ongoingCallID.roomID)")
+        case .failed:
+            MXLog.error("Call failed for room \(ongoingCallID.roomID)")
+        case .answeredElsewhere:
+            MXLog.info("Call answered elsewhere for room \(ongoingCallID.roomID)")
+        case .unanswered:
+            MXLog.info("Call unanswered for room \(ongoingCallID.roomID)")
+        @unknown default:
+            MXLog.info("Call ended for room \(ongoingCallID.roomID)")
+        }
+        
+        actionsSubject.send(.endCall(roomID: ongoingCallID.roomID))
+        tearDownCallSession(sendEndCallAction: false)
     }
 }
+
+// swiftlint:enable type_body_length

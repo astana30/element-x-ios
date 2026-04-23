@@ -14,6 +14,7 @@ struct CallScreenCoordinatorParameters {
     let elementCallService: ElementCallServiceProtocol
     let configuration: ElementCallConfiguration
     let allowPictureInPicture: Bool
+    let mediaProvider: MediaProviderProtocol?
     let appSettings: AppSettings
     let appHooks: AppHooks
     let analytics: AnalyticsService
@@ -46,6 +47,7 @@ final class CallScreenCoordinator: CoordinatorProtocol {
         viewModel = CallScreenViewModel(elementCallService: parameters.elementCallService,
                                         configuration: parameters.configuration,
                                         allowPictureInPicture: parameters.allowPictureInPicture,
+                                        mediaProvider: parameters.mediaProvider,
                                         appHooks: parameters.appHooks,
                                         appSettings: parameters.appSettings,
                                         analyticsService: parameters.analytics)

@@ -12,7 +12,7 @@ import SwiftState
 
 enum SpacesTabFlowCoordinatorAction {
     case showSettings
-    case presentCallScreen(roomProxy: JoinedRoomProxyProtocol)
+    case presentCallScreen(roomProxy: JoinedRoomProxyProtocol, startMode: ElementCallStartMode)
     case verifyUser(userID: String)
 }
 
@@ -130,7 +130,7 @@ class SpacesTabFlowCoordinator: FlowCoordinatorProtocol {
                 case .showSettings:
                     actionsSubject.send(.showSettings)
                 case .showCreateSpace:
-                    MXLog.info("Ignoring createSpace action in SalemX.")
+                    MXLog.info("Ignoring createSpace action in \(InfoPlistReader.main.bundleDisplayName).")
                 }
             }
             .store(in: &cancellables)
@@ -150,8 +150,8 @@ class SpacesTabFlowCoordinator: FlowCoordinatorProtocol {
                 guard let self else { return }
                 
                 switch action {
-                case .presentCallScreen(let roomProxy):
-                    actionsSubject.send(.presentCallScreen(roomProxy: roomProxy))
+                case .presentCallScreen(let roomProxy, let startMode):
+                    actionsSubject.send(.presentCallScreen(roomProxy: roomProxy, startMode: startMode))
                 case .verifyUser(let userID):
                     actionsSubject.send(.verifyUser(userID: userID))
                 case .finished:

@@ -16,10 +16,22 @@ enum CallScreenViewModelAction {
     case dismiss
 }
 
+struct DirectRoomCallDetails {
+    let title: String
+    let subtitle: String?
+    let avatar: RoomAvatar
+    let startMode: ElementCallStartMode
+}
+
 struct CallScreenViewState: BindableState {
     let script: String?
+    let rtcTransportScript: String?
     var url: URL?
     let isGenericCallLink: Bool
+    let directRoomCallDetails: DirectRoomCallDetails?
+    var isMicrophoneEnabled: Bool
+    var isVideoEnabled: Bool
+    var isSpeakerphoneEnabled: Bool
     
     let certificateValidator: CertificateValidatorHookProtocol
     
@@ -39,6 +51,9 @@ enum CallScreenViewAction {
     case navigateBack
     case pictureInPictureWillStop
     case endCall
+    case toggleMicrophone
+    case toggleVideo
+    case toggleSpeakerphone
     case mediaCapturePermissionGranted
     case outputDeviceSelected(deviceID: String)
     case widgetAction(message: String)
@@ -123,4 +138,24 @@ struct DecodedWidgetMessage: Decodable {
     var hasLoaded: Bool {
         action == Self.contentLoadedAction && api == Self.fromWidget
     }
+}
+
+struct ElementCallWidgetRequest: Decodable {
+    struct Data: Decodable {
+        let audioEnabled: Bool?
+        let videoEnabled: Bool?
+        let value: Bool?
+        
+        enum CodingKeys: String, CodingKey {
+            case audioEnabled = "audio_enabled"
+            case videoEnabled = "video_enabled"
+            case value
+        }
+    }
+    
+    let api: String
+    let action: String
+    let widgetId: String
+    let requestId: String
+    let data: Data?
 }

@@ -63,6 +63,7 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
     private var storedAppRoute: AppRoute?
     @Consumable private var storedInlineReply: (roomID: String, message: String)?
     @Consumable private var storedRoomsToAwait: Set<String>?
+    @Consumable private var storedPendingCallStart: (roomID: String, startMode: ElementCallStartMode)?
 
     init(appDelegate: AppDelegate) {
         let appHooks = AppHooks()
@@ -106,7 +107,7 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
         let analyticsService = AnalyticsService(client: posthogAnalyticsClient, appSettings: appSettings)
         ServiceLocator.shared.register(analytics: analyticsService)
         
-        elementCallService = ElementCallService()
+        elementCallService = ElementCallService(appSettings: appSettings)
         
         navigationRootCoordinator = NavigationRootCoordinator()
         
@@ -158,7 +159,6 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
         appSettings.lastVersionLaunched = currentVersion.description
 
         setupStateMachine()
-
         observeApplicationState()
         observeAppLockChanges()
         
@@ -175,8 +175,12 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
             .receive(on: DispatchQueue.main)
             .sink { [weak self] action in
                 switch action {
-                case .startCall(let roomID):
-                    self?.handleAppRoute(.call(roomID: roomID))
+                case .startCall(let roomID, let startMode):
+                    if let userSessionFlowCoordinator = self?.userSessionFlowCoordinator {
+                        userSessionFlowCoordinator.startCall(roomID: roomID, startMode: startMode)
+                    } else {
+                        self?.storedPendingCallStart = (roomID, startMode)
+                    }
                 case .receivedIncomingCallRequest:
                     // When reporting a VoIP call through the CXProvider's `reportNewIncomingVoIPPushPayload`
                     // the UIApplication states don't change and syncing is neither started nor ran on
@@ -300,9 +304,9 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
     
     func handleUserActivity(_ userActivity: NSUserActivity) {
         // `INStartVideoCallIntent` is to be replaced with `INStartCallIntent`
-        // but calls from Recents still send it ¯\_(ツ)_/¯
-        guard let intent = userActivity.interaction?.intent as? INStartVideoCallIntent,
-              let contact = intent.contacts?.first,
+        // but calls from Recents still send the legacy intent type with the same `contacts` payload.
+        guard let intent = userActivity.interaction?.intent,
+              let contact = ((intent as? INStartCallIntent)?.contacts ?? intent.value(forKey: "contacts") as? [INPerson])?.first,
               let roomIdentifier = contact.personHandle?.value else {
             MXLog.error("Failed retrieving information from userActivity: \(userActivity)")
             return
@@ -636,6 +640,11 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
         if let storedRoomsToAwait {
             userSession.clientProxy.roomsToAwait = storedRoomsToAwait
         }
+
+        if let storedPendingCallStart = storedPendingCallStart.take() {
+            userSessionFlowCoordinator.startCall(roomID: storedPendingCallStart.roomID,
+                                                 startMode: storedPendingCallStart.startMode)
+        }
         
         if storedAppRoute?.isAuthenticationRoute == false,
            let storedAppRoute = storedAppRoute.take() {
@@ -839,6 +848,7 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
         let callScreenCoordinator = CallScreenCoordinator(parameters: .init(elementCallService: elementCallService,
                                                                             configuration: configuration,
                                                                             allowPictureInPicture: false,
+                                                                            mediaProvider: userSession?.mediaProvider,
                                                                             appSettings: appSettings,
                                                                             appHooks: appHooks,
                                                                             analytics: ServiceLocator.shared.analytics))

@@ -9,14 +9,26 @@
 import MatrixRustSDK
 
 extension RoomProtocol {
+    func joinCallIntent(for startMode: ElementCallStartMode) async -> Intent {
+        let isDirectRoom = await isDirect()
+        
+        if isDirectRoom {
+            // Direct calls should behave like regular 1:1 calls instead of persistent
+            // conference rooms, so we always start a fresh DM call intent.
+            switch startMode {
+            case .audio:
+                return .startCallDmVoice
+            case .video:
+                return .startCallDm
+            }
+        }
+        
+        return await hasActiveRoomCall() ? .joinExisting : .startCall
+    }
+    
     var joinCallIntent: Intent {
         get async {
-            switch await (hasActiveRoomCall(), isDirect()) {
-            case (true, true): .joinExistingDm
-            case (true, false): .joinExisting
-            case (false, true): .startCallDm
-            case (false, false): .startCall
-            }
+            await joinCallIntent(for: .video)
         }
     }
 }

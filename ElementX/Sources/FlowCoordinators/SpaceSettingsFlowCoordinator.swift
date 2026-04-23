@@ -11,7 +11,7 @@ import SwiftState
 
 enum SpaceSettingsFlowCoordinatorAction {
     case finished(leftRoom: Bool)
-    case presentCallScreen(roomProxy: JoinedRoomProxyProtocol)
+    case presentCallScreen(roomProxy: JoinedRoomProxyProtocol, startMode: ElementCallStartMode)
     case verifyUser(userID: String)
 }
 
@@ -395,8 +395,8 @@ final class SpaceSettingsFlowCoordinator: FlowCoordinatorProtocol {
             switch action {
             case .finished:
                 stateMachine.tryEvent(.stopMembersListFlow)
-            case .presentCallScreen(let roomProxy):
-                actionsSubject.send(.presentCallScreen(roomProxy: roomProxy))
+            case .presentCallScreen(let roomProxy, let startMode):
+                actionsSubject.send(.presentCallScreen(roomProxy: roomProxy, startMode: startMode))
             case .verifyUser(let userID):
                 actionsSubject.send(.verifyUser(userID: userID))
             }

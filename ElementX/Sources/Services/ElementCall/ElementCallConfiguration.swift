@@ -13,6 +13,11 @@ private enum GenericCallLinkQueryParameters {
     static let confineToRoom = "confineToRoom"
 }
 
+enum ElementCallStartMode: Equatable {
+    case audio
+    case video
+}
+
 /// Information about how a call should be configured.
 struct ElementCallConfiguration {
     enum Kind {
@@ -22,7 +27,8 @@ struct ElementCallConfiguration {
                       clientID: String,
                       elementCallBaseURL: URL,
                       elementCallBaseURLOverride: URL?,
-                      colorScheme: ColorScheme)
+                      colorScheme: ColorScheme,
+                      startMode: ElementCallStartMode)
     }
     
     /// The type of call being configured i.e. whether it's an external URL or an internal room call.
@@ -59,13 +65,15 @@ struct ElementCallConfiguration {
          clientID: String,
          elementCallBaseURL: URL,
          elementCallBaseURLOverride: URL?,
-         colorScheme: ColorScheme) {
+         colorScheme: ColorScheme,
+         startMode: ElementCallStartMode = .video) {
         kind = .roomCall(roomProxy: roomProxy,
                          clientProxy: clientProxy,
                          clientID: clientID,
                          elementCallBaseURL: elementCallBaseURL,
                          elementCallBaseURLOverride: elementCallBaseURLOverride,
-                         colorScheme: colorScheme)
+                         colorScheme: colorScheme,
+                         startMode: startMode)
     }
     
     /// A string representing the call being configured.
@@ -73,8 +81,17 @@ struct ElementCallConfiguration {
         switch kind {
         case .genericCallLink(let url):
             url.absoluteString
-        case .roomCall(let roomProxy, _, _, _, _, _):
+        case .roomCall(let roomProxy, _, _, _, _, _, _):
             roomProxy.id
+        }
+    }
+
+    var startMode: ElementCallStartMode {
+        switch kind {
+        case .genericCallLink:
+            .video
+        case .roomCall(_, _, _, _, _, _, let startMode):
+            startMode
         }
     }
 }

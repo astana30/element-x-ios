@@ -11,6 +11,7 @@ import Foundation
 enum ElementCallServiceNotificationKey: String {
     case roomID
     case roomDisplayName
+    case callIntent
     /// When an incoming call is set to ring, there will be a `m.rtc.notification`event  (MSC4075).
     /// Keep the notification event id as it is needed to decline calls (MSC4310).
     case rtcNotifyEventID
