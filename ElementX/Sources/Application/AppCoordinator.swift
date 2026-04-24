@@ -50,6 +50,7 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
     private var appLockSetupFlowCoordinator: AppLockSetupFlowCoordinator?
     private var userSessionFlowCoordinator: UserSessionFlowCoordinator?
     private var softLogoutCoordinator: SoftLogoutScreenCoordinator?
+    private var directCallEngineSignalBridge: DirectCallEngineSignalBridge?
     private var appDelegateObserver: AnyCancellable?
     private var userSessionObserver: AnyCancellable?
     private var clientProxyObserver: AnyCancellable?
@@ -722,6 +723,14 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
             return roomSummary.heroes.first?.userID
         }
 
+        if appSettings.directOneToOneCallsEnabled {
+            directCallEngineSignalBridge = DirectCallEngineSignalBridge(ownUserID: userSession.clientProxy.userID,
+                                                                        engine: directCallEngine,
+                                                                        signalTransport: InMemoryDirectCallSignalTransport.shared)
+        } else {
+            directCallEngineSignalBridge = nil
+        }
+
         let flowParameters = CommonFlowParameters(userSession: userSession,
                                                   bugReportService: bugReportService,
                                                   elementCallService: elementCallService,
@@ -819,6 +828,7 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
         ServiceLocator.shared.userIndicatorController.retractAllIndicators()
         
         userSession = nil
+        directCallEngineSignalBridge = nil
         
         userSessionFlowCoordinator = nil
 

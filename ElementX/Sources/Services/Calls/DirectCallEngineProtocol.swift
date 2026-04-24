@@ -20,6 +20,8 @@ protocol DirectCallEngineProtocol {
     func rejectCall(callID: String) async -> Result<DirectCallSession, DirectCallEngineError>
     func cancelOutgoingBeforeAnswer(callID: String) async -> Result<DirectCallSession, DirectCallEngineError>
     func hangupActiveCall(callID: String) async -> Result<DirectCallSession, DirectCallEngineError>
+    func markEncryptionEstablished(callID: String) async -> Result<DirectCallSession, DirectCallEngineError>
+    func markEncryptionFailed(callID: String, reason: DirectCallEncryptionFailureReason) async -> Result<DirectCallSession, DirectCallEngineError>
     func timeoutIncoming(callID: String) async -> Result<DirectCallSession, DirectCallEngineError>
     func cleanupCall(callID: String) async
 }

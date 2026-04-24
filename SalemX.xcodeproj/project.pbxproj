@@ -402,6 +402,7 @@
 		4385A2A6BC54556F25539209 /* VoiceMessageRoomTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68123723DB417A2CC9A5B17A /* VoiceMessageRoomTimelineView.swift */; };
 		43D19501079F6065734BA3B4 /* NotificationSettingsScreenCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81614452E908AEDEA6FAFDDE /* NotificationSettingsScreenCoordinator.swift */; };
 		43D7C45986C1EA8AEECF3229 /* KeychainController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65CA708F6647DC5F9E29B0FF /* KeychainController.swift */; };
+		441146D3F2E96AFFC8B5454B /* DirectCallSignalTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00E3AEF46A0ECB55A388804E /* DirectCallSignalTransport.swift */; };
 		44609F6465B969625F8F4317 /* PollFormScreenViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2440A44A9356F234AF63494C /* PollFormScreenViewModelTests.swift */; };
 		446FAB0B47B881CED118044F /* NSRegularExpresion.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1C37B15184D9C85C6C8B88 /* NSRegularExpresion.swift */; };
 		44EDD4997C8D5A75D49A069B /* IdentityConfirmationScreenModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80F5EC017145C734FB51F880 /* IdentityConfirmationScreenModels.swift */; };
@@ -1353,6 +1354,7 @@
 		E6F35463FDFD6FDDBE877FB4 /* PhotoLibraryManagerMock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25CE78FC78B1BD627634AC53 /* PhotoLibraryManagerMock.swift */; };
 		E6FEF4D19D287470FC357DF0 /* ConfettiScene.scn in Resources */ = {isa = PBXBuildFile; fileRef = A4D00A17914C1BAD865F440D /* ConfettiScene.scn */; };
 		E750099BE4C9DB700706FEE9 /* FileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E85F8CD06B32AFE86CD4F44C /* FileManager.swift */; };
+		E76EF5C6D5DE7230075C3D83 /* DirectCallEngineSignalTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDAA016499DB917439FF2C7D /* DirectCallEngineSignalTransportTests.swift */; };
 		E770A2E381D95248BD50AF0C /* FormButtonStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = D756ACC8F37F3E1925F8CA70 /* FormButtonStyles.swift */; };
 		E7C2563B0F0CED1EABF9BEF5 /* UserSessionFlowCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 832731B95CD31944B2199727 /* UserSessionFlowCoordinator.swift */; };
 		E841DFAAA04DABBA906B2765 /* StaticLocationSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 177B9CCB075ECC0BE894FCA3 /* StaticLocationSheet.swift */; };
@@ -1474,6 +1476,7 @@
 		FC1444E6024A6469DB961A43 /* CollapsibleFlowLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AB096F7E5D6A58EB2D3BC1B /* CollapsibleFlowLayoutTests.swift */; };
 		FC59D6D9543751990235655A /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8CA2A04EF2EFFD76FFB6471 /* NetworkMonitor.swift */; };
 		FCD24E0130557413D7AF40AC /* SessionDirectoriesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B6798079BDCBE496AC2AB8D /* SessionDirectoriesTests.swift */; };
+		FD24648B903DAE7601659E73 /* DirectCallEncryptionDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = C31A73F8DA4CEFDB89AD2B4C /* DirectCallEncryptionDesign.swift */; };
 		FD747322C523C9640CD65BFC /* TracingHook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D32A4AC90A3E0A5A1CB35B6 /* TracingHook.swift */; };
 		FD9CCBEAFC3A78892CC32E24 /* UserPreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58829DC3E3ED8242296AF3AA /* UserPreference.swift */; };
 		FDB5479978DE3EF35E4E2778 /* CXProviderProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = C96D53B756BB780F85A41F75 /* CXProviderProtocol.swift */; };
@@ -1581,6 +1584,7 @@
 		00B4359FFD9EA5548FB2D990 /* SecurityAndPrivacyScreenCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityAndPrivacyScreenCoordinator.swift; sourceTree = "<group>"; };
 		00CBDC2E80F26EE426E64898 /* EncryptionKeyProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncryptionKeyProvider.swift; sourceTree = "<group>"; };
 		00E07D61E71F786928FFC9B6 /* PlainMentionBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlainMentionBuilder.swift; sourceTree = "<group>"; };
+		00E3AEF46A0ECB55A388804E /* DirectCallSignalTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectCallSignalTransport.swift; sourceTree = "<group>"; };
 		00F46BB3C89DF599B6AA7376 /* AppLockSetupBiometricsScreenViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLockSetupBiometricsScreenViewModel.swift; sourceTree = "<group>"; };
 		0104E55F0FADAA14BCFD07D2 /* CoordinatorProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoordinatorProtocol.swift; sourceTree = "<group>"; };
 		0109A44AA15D4F4A11860F7C /* NavigationSplitCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationSplitCoordinatorTests.swift; sourceTree = "<group>"; };
@@ -2657,6 +2661,7 @@
 		C2D3D88CDBC1EA8B2772C5B0 /* ReadMarkerRoomTimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadMarkerRoomTimelineView.swift; sourceTree = "<group>"; };
 		C2E434B9D2090C6E8A34D9AB /* TimelineItemMenuAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineItemMenuAction.swift; sourceTree = "<group>"; };
 		C319CD98951025B63CFFE463 /* JoinRoomScreenViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JoinRoomScreenViewModelTests.swift; sourceTree = "<group>"; };
+		C31A73F8DA4CEFDB89AD2B4C /* DirectCallEncryptionDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectCallEncryptionDesign.swift; sourceTree = "<group>"; };
 		C33B61E7950F392974762654 /* LocationPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationPickerSheet.swift; sourceTree = "<group>"; };
 		C34FF30D37D90A473795EF7E /* UserDiscoveryServiceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDiscoveryServiceProtocol.swift; sourceTree = "<group>"; };
 		C36AA139525BDCF3935C79DD /* RoomDirectorySearchScreenScreenModelProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomDirectorySearchScreenScreenModelProtocol.swift; sourceTree = "<group>"; };
@@ -2791,6 +2796,7 @@
 		DD3C1DEE973C8AB757B6017F /* WaveformSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveformSource.swift; sourceTree = "<group>"; };
 		DD3FB24E8074874989644429 /* pt-BR */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "pt-BR"; path = "pt-BR.lproj/SAS.strings"; sourceTree = "<group>"; };
 		DD7715745D9585171C32A963 /* EncryptionSettingsFlowCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncryptionSettingsFlowCoordinator.swift; sourceTree = "<group>"; };
+		DDAA016499DB917439FF2C7D /* DirectCallEngineSignalTransportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectCallEngineSignalTransportTests.swift; sourceTree = "<group>"; };
 		DDF60748C0F3C2BB28A40A5A /* pt-BR */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "pt-BR"; path = "pt-BR.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		DE0F2288C029900C23BC252A /* AppLockSetupPINScreenViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLockSetupPINScreenViewModelTests.swift; sourceTree = "<group>"; };
 		DE68116C68F4F6D554C51022 /* AppLockSetupSettingsScreenModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLockSetupSettingsScreenModels.swift; sourceTree = "<group>"; };
@@ -3181,9 +3187,11 @@
 		03B9E87260D0DB5282ECB392 /* Calls */ = {
 			isa = PBXGroup;
 			children = (
+				C31A73F8DA4CEFDB89AD2B4C /* DirectCallEncryptionDesign.swift */,
 				D38EDBAED42864D326E9F1E6 /* DirectCallEngine.swift */,
 				67773FB6049BAF3954A914E5 /* DirectCallEngineProtocol.swift */,
 				B0BA3DF65C53AD0238BBA612 /* DirectCallModels.swift */,
+				00E3AEF46A0ECB55A388804E /* DirectCallSignalTransport.swift */,
 				8E5E72F3677F7B24929AE258 /* RoomCallEvent.swift */,
 			);
 			path = Calls;
@@ -6429,6 +6437,7 @@
 				0296032BD6B877501FE99B7C /* DeactivateAccountScreenViewModelTests.swift */,
 				3199D1AA1CF1D20D8213D8EB /* DeclineAndBlockScreenViewModelTests.swift */,
 				81D4C8A3D8D0115935066784 /* DeferredFulfillmentTests.swift */,
+				DDAA016499DB917439FF2C7D /* DirectCallEngineSignalTransportTests.swift */,
 				177C6D65F84C84ABBC77B5DC /* DirectCallEngineTests.swift */,
 				4C32CAF0343C7330058CF646 /* EditRoomAddressScreenViewModelTests.swift */,
 				5120B4BA5662E97750E2C6B4 /* ElementCallServiceTests.swift */,
@@ -8037,9 +8046,11 @@
 				2D9EB17DF41A0331BE1CCFC4 /* DeveloperOptionsScreenViewModel.swift in Sources */,
 				54C7A90CE43122F50206AB54 /* DeveloperOptionsScreenViewModelProtocol.swift in Sources */,
 				2A96B61E96A3DC7367FF833D /* Dictionary.swift in Sources */,
+				FD24648B903DAE7601659E73 /* DirectCallEncryptionDesign.swift in Sources */,
 				D82D288DF89F2C3E0A9AB2D8 /* DirectCallEngine.swift in Sources */,
 				DB52A92F2E9E8F12427E6900 /* DirectCallEngineProtocol.swift in Sources */,
 				306C1CB9890B6674B79665DD /* DirectCallModels.swift in Sources */,
+				441146D3F2E96AFFC8B5454B /* DirectCallSignalTransport.swift in Sources */,
 				A758BE5152318D881151D406 /* DocumentPicker.swift in Sources */,
 				10FE3E8CCBAC5D4F4EE4CE61 /* Duration.swift in Sources */,
 				A9B949CDB5983CCA8D752B70 /* EditRoomAddressListRow.swift in Sources */,
@@ -8900,6 +8911,7 @@
 				99C65DBD1F280CC9D79F19CC /* DeclineAndBlockScreenViewModelTests.swift in Sources */,
 				463259E9577A057B255CBB1A /* DeferredFulfillment.swift in Sources */,
 				4E63BBC2C470DD931273F897 /* DeferredFulfillmentTests.swift in Sources */,
+				E76EF5C6D5DE7230075C3D83 /* DirectCallEngineSignalTransportTests.swift in Sources */,
 				AC70DBDDE6D23D21918F1D32 /* DirectCallEngineTests.swift in Sources */,
 				DFDA41373014B1B9FDC84BE2 /* EditRoomAddressScreenViewModelTests.swift in Sources */,
 				A8D5DB14590F9A7306C49E51 /* ElementCallServiceTests.swift in Sources */,

@@ -22,8 +22,10 @@ final class DirectCallEngine: DirectCallEngineProtocol {
     private let expectedPeerProvider: (String) -> String?
     private let configuration: DirectCallEngineConfiguration
     private let now: () -> Date
+    private let encryptionService: DirectCallEncryptionServiceProtocol
 
     private var knownPeerByRoomID = [String: String]()
+    private var keyClearedCallIDs = Set<String>()
 
     private var activeSessionSubject = CurrentValueSubject<DirectCallSession?, Never>(nil)
     private let actionsSubject = PassthroughSubject<DirectCallEngineAction, Never>()
@@ -39,10 +41,12 @@ final class DirectCallEngine: DirectCallEngineProtocol {
     init(ownUserID: String,
          configuration: DirectCallEngineConfiguration = .init(),
          now: @escaping () -> Date = Date.init,
+         encryptionService: DirectCallEncryptionServiceProtocol? = nil,
          expectedPeerProvider: @escaping (String) -> String?) {
         self.ownUserID = ownUserID
         self.configuration = configuration
         self.now = now
+        self.encryptionService = encryptionService ?? NoOpDirectCallEncryptionService()
         self.expectedPeerProvider = expectedPeerProvider
     }
 
@@ -159,6 +163,60 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         return .success(session)
     }
 
+    func markEncryptionEstablished(callID: String) async -> Result<DirectCallSession, DirectCallEngineError> {
+        guard !callID.isEmpty else {
+            return .failure(.invalidCallID)
+        }
+
+        guard let session = activeSessionSubject.value,
+              session.callID == callID,
+              !session.state.isTerminal else {
+            return .failure(.invalidEncryptionTransition)
+        }
+
+        switch session.encryptionState {
+        case .ready:
+            return .success(session)
+        case .failed:
+            return .failure(.invalidEncryptionTransition)
+        case .pending:
+            updateSession { updated in
+                updated.encryptionState = .ready
+            }
+            guard let updatedSession = activeSessionSubject.value else {
+                return .failure(.invalidEncryptionTransition)
+            }
+            return .success(updatedSession)
+        }
+    }
+
+    func markEncryptionFailed(callID: String, reason: DirectCallEncryptionFailureReason) async -> Result<DirectCallSession, DirectCallEngineError> {
+        guard !callID.isEmpty else {
+            return .failure(.invalidCallID)
+        }
+
+        guard let session = activeSessionSubject.value,
+              session.callID == callID else {
+            return .failure(.invalidEncryptionTransition)
+        }
+
+        if session.state.isTerminal {
+            return .success(session)
+        }
+
+        updateSession { updated in
+            updated.encryptionState = .failed(reason)
+        }
+
+        transitionSession(to: .failed)
+        scheduleCleanup(for: callID)
+
+        guard let updatedSession = activeSessionSubject.value else {
+            return .failure(.invalidEncryptionTransition)
+        }
+        return .success(updatedSession)
+    }
+
     func timeoutIncoming(callID: String) async -> Result<DirectCallSession, DirectCallEngineError> {
         guard !callID.isEmpty else {
             return .failure(.invalidCallID)
@@ -184,6 +242,7 @@ final class DirectCallEngine: DirectCallEngineProtocol {
             return
         }
 
+        clearPerCallKeyIfNeeded(callID: callID)
         cancelAllTasks()
         activeSessionSubject.send(nil)
         actionsSubject.send(.sessionCleared(callID: session.callID, roomID: session.roomID))
@@ -205,6 +264,11 @@ final class DirectCallEngine: DirectCallEngineProtocol {
             return .failure(.sessionAlreadyActive)
         }
 
+        if let activeSession = activeSessionSubject.value,
+           activeSession.state.isTerminal {
+            clearPerCallKeyIfNeeded(callID: activeSession.callID)
+        }
+
         knownPeerByRoomID[roomID] = peer
         cancelAllTasks()
 
@@ -214,9 +278,11 @@ final class DirectCallEngine: DirectCallEngineProtocol {
                                         peerUserID: peer,
                                         direction: .outgoing,
                                         intent: intent,
+                                        encryptionMode: .e2eeRequired,
                                         startedAt: timestamp,
                                         updatedAt: timestamp,
-                                        state: .outgoingRinging)
+                                        state: .outgoingRinging,
+                                        encryptionState: .pending)
         publish(session)
         emitSignal(type: .invite, from: session)
         scheduleOutgoingTimeout(for: session.callID)
@@ -255,6 +321,11 @@ final class DirectCallEngine: DirectCallEngineProtocol {
             return .failure(.sessionAlreadyActive)
         }
 
+        if let activeSession = activeSessionSubject.value,
+           activeSession.state.isTerminal {
+            clearPerCallKeyIfNeeded(callID: activeSession.callID)
+        }
+
         knownPeerByRoomID[event.roomID] = event.senderID
         cancelAllTasks()
 
@@ -264,9 +335,11 @@ final class DirectCallEngine: DirectCallEngineProtocol {
                                         peerUserID: event.senderID,
                                         direction: .incoming,
                                         intent: intent,
+                                        encryptionMode: .e2eeRequired,
                                         startedAt: timestamp,
                                         updatedAt: timestamp,
-                                        state: .incomingRinging)
+                                        state: .incomingRinging,
+                                        encryptionState: .pending)
         publish(session)
         scheduleIncomingTimeout(for: session.callID)
         return .success(session)
@@ -366,6 +439,22 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         actionsSubject.send(.stateChanged(session))
     }
 
+    private func updateSession(_ update: (inout DirectCallSession) -> Void) {
+        guard var session = activeSessionSubject.value else {
+            return
+        }
+
+        let previous = session
+        update(&session)
+
+        if previous == session {
+            return
+        }
+
+        session.updatedAt = now()
+        publish(session)
+    }
+
     private func emitSignal(type: DirectCallSignalType, from session: DirectCallSession) {
         actionsSubject.send(.emitSignal(.init(roomID: session.roomID,
                                               peerUserID: session.peerUserID,
@@ -451,5 +540,17 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         incomingTimeoutTask?.cancel()
         connectingTimeoutTask?.cancel()
         cleanupTask?.cancel()
+    }
+
+    private func clearPerCallKeyIfNeeded(callID: String) {
+        guard !callID.isEmpty else {
+            return
+        }
+
+        guard keyClearedCallIDs.insert(callID).inserted else {
+            return
+        }
+
+        encryptionService.clearPerCallKey(callID: callID)
     }
 }

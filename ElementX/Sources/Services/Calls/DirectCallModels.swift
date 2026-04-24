@@ -27,6 +27,32 @@ enum DirectCallIntent: String, CaseIterable, Equatable {
     }
 }
 
+enum DirectCallEncryptionMode: Equatable {
+    case e2eeRequired
+}
+
+enum DirectCallEncryptionFailureReason: Error, Equatable {
+    case missingKeyExchange
+    case keyMismatch
+    case keyExchangeFailed
+    case e2eeNotProven
+}
+
+enum DirectCallEncryptionState: Equatable {
+    case pending
+    case ready
+    case failed(DirectCallEncryptionFailureReason)
+
+    var isReadyForMediaPublishing: Bool {
+        switch self {
+        case .ready:
+            true
+        case .pending, .failed:
+            false
+        }
+    }
+}
+
 enum DirectCallState: Equatable {
     case idle
     case outgoingRinging
@@ -97,9 +123,18 @@ struct DirectCallSession: Equatable {
     let peerUserID: String
     let direction: DirectCallDirection
     let intent: DirectCallIntent
+    let encryptionMode: DirectCallEncryptionMode
     let startedAt: Date
     var updatedAt: Date
     var state: DirectCallState
+    var encryptionState: DirectCallEncryptionState
+
+    var isMediaPublishingAllowed: Bool {
+        switch encryptionMode {
+        case .e2eeRequired:
+            encryptionState.isReadyForMediaPublishing
+        }
+    }
 }
 
 struct DirectCallEngineConfiguration {
@@ -127,4 +162,5 @@ enum DirectCallEngineError: Error, Equatable {
     case callIDMismatch
     case sessionAlreadyActive
     case invalidTransition
+    case invalidEncryptionTransition
 }
