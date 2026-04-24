@@ -1,0 +1,191 @@
+//
+// Copyright 2026 Element Creations Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
+// Please see LICENSE files in the repository root for full details.
+//
+
+import Combine
+@testable import ElementX
+import Testing
+
+@MainActor
+final class DirectCallEngineSignalTransportTests {
+    private let userA = "@a:example.com"
+    private let userB = "@b:example.com"
+    private let roomID = "!dm:example.com"
+
+    @Test
+    func callerCancelBeforeAnswerClearsIncomingAndStaleAnswerStaysBlocked() async {
+        let harness = makeHarness()
+
+        let outgoingResult = await harness.engineA.startOutgoingAudioCall(peer: userB, roomID: roomID)
+        guard case .success(let outgoingSession) = outgoingResult else {
+            Issue.record("Expected outgoing call start to succeed.")
+            return
+        }
+
+        #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .incomingRinging })
+
+        _ = await harness.engineA.cancelOutgoingBeforeAnswer(callID: outgoingSession.callID)
+
+        #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .cancelled })
+        #expect(await waitUntil { harness.engineB.activeSessionPublisher.value == nil })
+
+        let staleAnswerResult = await harness.engineB.acceptCall(callID: outgoingSession.callID)
+        #expect(staleAnswerResult == .failure(.invalidTransition))
+    }
+
+    @Test
+    func calleeRejectEndsCallerWithoutMediaPath() async {
+        let harness = makeHarness()
+
+        let outgoingResult = await harness.engineA.startOutgoingAudioCall(peer: userB, roomID: roomID)
+        guard case .success(let outgoingSession) = outgoingResult else {
+            Issue.record("Expected outgoing call start to succeed.")
+            return
+        }
+
+        #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .incomingRinging })
+        _ = await harness.engineB.rejectCall(callID: outgoingSession.callID)
+
+        #expect(await waitUntil { harness.engineA.activeSessionPublisher.value?.state == .cancelled })
+    }
+
+    @Test
+    func acceptThenCallerHangupTransitionsBothSidesToTerminalState() async {
+        let harness = makeHarness()
+
+        let outgoingResult = await harness.engineA.startOutgoingAudioCall(peer: userB, roomID: roomID)
+        guard case .success(let outgoingSession) = outgoingResult else {
+            Issue.record("Expected outgoing call start to succeed.")
+            return
+        }
+
+        #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .incomingRinging })
+
+        _ = await harness.engineB.acceptCall(callID: outgoingSession.callID)
+
+        #expect(await waitUntil { harness.engineA.activeSessionPublisher.value?.state == .activeAudio })
+        #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .activeAudio })
+
+        _ = await harness.engineA.hangupActiveCall(callID: outgoingSession.callID)
+
+        #expect(await waitUntil { harness.engineA.activeSessionPublisher.value?.state == .ended })
+        #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .ended })
+    }
+
+    @Test
+    func transportRejectsInvalidSignalsBeforeDelivery() async {
+        let transport = InMemoryDirectCallSignalTransport()
+        var receivedEvents = [DirectCallSignalEvent]()
+        var cancellables = Set<AnyCancellable>()
+
+        transport.signalsPublisher(for: userB)
+            .sink { receivedEvents.append($0) }
+            .store(in: &cancellables)
+
+        transport.send(.init(roomID: roomID,
+                             peerUserID: userB,
+                             callID: "",
+                             type: .invite,
+                             intent: .audio), from: userA)
+        transport.send(.init(roomID: "",
+                             peerUserID: userB,
+                             callID: "call-1",
+                             type: .invite,
+                             intent: .audio), from: userA)
+        transport.send(.init(roomID: roomID,
+                             peerUserID: "",
+                             callID: "call-2",
+                             type: .invite,
+                             intent: .audio), from: userA)
+        transport.send(.init(roomID: roomID,
+                             peerUserID: userB,
+                             callID: "call-3",
+                             type: .invite,
+                             intent: .audio), from: "")
+
+        await Task.yield()
+        #expect(receivedEvents.isEmpty)
+    }
+
+    @Test
+    func transportDetachRemovesRecipientDeliveryPath() async {
+        let transport = InMemoryDirectCallSignalTransport()
+        var receivedEvents = [DirectCallSignalEvent]()
+        var cancellables = Set<AnyCancellable>()
+
+        transport.signalsPublisher(for: userB)
+            .sink { receivedEvents.append($0) }
+            .store(in: &cancellables)
+
+        transport.send(.init(roomID: roomID,
+                             peerUserID: userB,
+                             callID: "call-before-detach",
+                             type: .invite,
+                             intent: .audio), from: userA)
+        #expect(receivedEvents.count == 1)
+
+        transport.detachSignalsPublisher(for: userB)
+
+        transport.send(.init(roomID: roomID,
+                             peerUserID: userB,
+                             callID: "call-after-detach",
+                             type: .invite,
+                             intent: .audio), from: userA)
+
+        await Task.yield()
+        #expect(receivedEvents.count == 1)
+    }
+
+    private func makeHarness() -> Harness {
+        let transport = InMemoryDirectCallSignalTransport()
+
+        let engineA = makeEngine(ownUserID: userA, peerUserID: userB)
+        let engineB = makeEngine(ownUserID: userB, peerUserID: userA)
+
+        let bridgeA = DirectCallEngineSignalBridge(ownUserID: userA,
+                                                   engine: engineA,
+                                                   signalTransport: transport)
+        let bridgeB = DirectCallEngineSignalBridge(ownUserID: userB,
+                                                   engine: engineB,
+                                                   signalTransport: transport)
+
+        return Harness(engineA: engineA,
+                       engineB: engineB,
+                       bridgeA: bridgeA,
+                       bridgeB: bridgeB)
+    }
+
+    private func makeEngine(ownUserID: String, peerUserID: String) -> DirectCallEngine {
+        DirectCallEngine(ownUserID: ownUserID,
+                         configuration: .init(incomingRingingTimeout: .seconds(120),
+                                              outgoingRingingTimeout: .seconds(120),
+                                              connectingTimeout: .seconds(120),
+                                              cleanupDelay: .milliseconds(20),
+                                              processedTerminalEventLimit: 64)) { [roomID] resolvedRoomID in
+            resolvedRoomID == roomID ? peerUserID : nil
+        }
+    }
+
+    private func waitUntil(timeout: Duration = .seconds(2),
+                           checkInterval: Duration = .milliseconds(20),
+                           condition: @MainActor () -> Bool) async -> Bool {
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            if condition() {
+                return true
+            }
+            try? await Task.sleep(for: checkInterval)
+        }
+        return condition()
+    }
+}
+
+private struct Harness {
+    let engineA: DirectCallEngine
+    let engineB: DirectCallEngine
+    let bridgeA: DirectCallEngineSignalBridge
+    let bridgeB: DirectCallEngineSignalBridge
+}

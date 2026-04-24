@@ -724,9 +724,8 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
         }
 
         if appSettings.directOneToOneCallsEnabled {
-            directCallEngineSignalBridge = DirectCallEngineSignalBridge(ownUserID: userSession.clientProxy.userID,
-                                                                        engine: directCallEngine,
-                                                                        signalTransport: InMemoryDirectCallSignalTransport.shared)
+            MXLog.error("Direct 1:1 calls feature flag is enabled but no production signal transport is configured. Direct call signalling is disabled.")
+            directCallEngineSignalBridge = nil
         } else {
             directCallEngineSignalBridge = nil
         }
