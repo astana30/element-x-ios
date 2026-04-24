@@ -92,8 +92,8 @@ struct RoomListFiltersState {
     var availableFilters: [RoomListFilter] {
         var availableFilters = OrderedSet(RoomListFilter.availableFilters)
         
-        if !appSettings.lowPriorityFilterEnabled {
-            availableFilters.remove(.lowPriority)
+        if appSettings.lowPriorityFilterEnabled {
+            availableFilters.append(.lowPriority)
         }
         
         for filter in activeFilters {

@@ -29,15 +29,14 @@ struct HomeScreenKnockedCell: View {
             
             mainContent
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.bottom, 16)
-                .padding(.trailing, 16)
+                .padding(.trailing, 8)
                 .multilineTextAlignment(.leading)
-                .overlay(alignment: .bottom) {
-                    separator
-                }
         }
-        .padding(.top, 12)
-        .padding(.leading, 16)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .salemCard()
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
         .onTapGesture {
             if let roomID = room.roomID {
                 context.send(viewAction: .selectRoom(roomIdentifier: roomID))
@@ -79,12 +78,6 @@ struct HomeScreenKnockedCell: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-    
-    private var separator: some View {
-        Rectangle()
-            .fill(Color.compound.borderDisabled)
-            .frame(height: 1 / UIScreen.main.scale)
     }
         
     private var title: String {
@@ -157,6 +150,7 @@ private extension HomeScreenRoom {
                                   avatarURL: nil,
                                   heroes: [.init(userID: "@someone:somewhere.com")],
                                   activeMembersCount: 0,
+                                  lastCallEvent: nil,
                                   lastMessage: nil,
                                   lastMessageDate: nil,
                                   lastMessageState: nil,
@@ -189,6 +183,7 @@ private extension HomeScreenRoom {
                                   avatarURL: avatarURL,
                                   heroes: [.init(userID: "@someone:somewhere.com")],
                                   activeMembersCount: 0,
+                                  lastCallEvent: nil,
                                   lastMessage: nil,
                                   lastMessageDate: nil,
                                   lastMessageState: nil,

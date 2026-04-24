@@ -192,6 +192,11 @@ class StartChatScreenViewModel: StartChatScreenViewModelType, StartChatScreenVie
             return
         }
         
+        guard query.count >= 3 else {
+            state.usersSection = .init(type: .suggestions, users: knownUsers)
+            return
+        }
+        
         let normalizedQuery = query.lowercased()
         
         let localMatches = knownUsers.filter { user in
@@ -200,13 +205,7 @@ class StartChatScreenViewModel: StartChatScreenViewModelType, StartChatScreenVie
             return displayName.contains(normalizedQuery) || userID.contains(normalizedQuery)
         }
         
-        // Показываем локальные результаты сразу.
         state.usersSection = .init(type: .searchResult, users: localMatches)
-        
-        // Короткие запросы не отправляем на сервер, чтобы не шуметь directory search.
-        guard query.count >= 2 else {
-            return
-        }
         
         fetchUsersTask = Task {
             let result = await userDiscoveryService.searchProfiles(with: query)
@@ -218,7 +217,6 @@ class StartChatScreenViewModel: StartChatScreenViewModelType, StartChatScreenVie
                 let mergedUsers = mergeUsers(local: localMatches, remote: remoteUsers)
                 state.usersSection = .init(type: .searchResult, users: mergedUsers)
             case .failure:
-                // Если серверный поиск не удался, оставляем локальные результаты.
                 state.usersSection = .init(type: .searchResult, users: localMatches)
             }
         }
@@ -228,10 +226,8 @@ class StartChatScreenViewModel: StartChatScreenViewModelType, StartChatScreenVie
         var seen = Set<String>()
         var result: [UserProfileProxy] = []
         
-        for user in local + remote {
-            if seen.insert(user.userID).inserted {
-                result.append(user)
-            }
+        for user in local + remote where seen.insert(user.userID).inserted {
+            result.append(user)
         }
         
         return result

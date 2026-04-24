@@ -792,56 +792,45 @@ final class ElementCallServiceTests {
     }
 
     @Test
-    func incomingPushWithStartCallIntentUsesVideoMode() async {
-        let pushPayload = PKPushPayloadMock().updatingExpiration(currentDate, lifetime: 30)
-            .settingCallIntent("startcall")
+    func incomingPushCallIntentAliasesUseExpectedStartMode() async {
+        let intentKeys = [
+            ElementCallServiceNotificationKey.callIntent.rawValue,
+            "call_intent",
+            "intent",
+            "call_type",
+            "callType"
+        ]
 
-        await confirmation { confirmation in
-            callProvider.reportNewIncomingCallWithUpdateCompletionClosure = { _, update, completion in
-                #expect(update.hasVideo)
-                completion(nil)
-                confirmation()
-            }
-
-            service.pushRegistry(pushRegistry,
-                                 didReceiveIncomingPushWith: pushPayload,
-                                 for: .voIP) { }
+        for intentKey in intentKeys {
+            await assertIncomingPush(callIntentKey: intentKey,
+                                     callIntent: "StartCallDMVoice",
+                                     expectsVideo: false)
+            await assertIncomingPush(callIntentKey: intentKey,
+                                     callIntent: "StartCallDM",
+                                     expectsVideo: true)
         }
     }
 
     @Test
-    func incomingPushWithVoiceIntentUsesAudioMode() async {
-        let pushPayload = PKPushPayloadMock().updatingExpiration(currentDate, lifetime: 30)
-            .settingCallIntent("startcalldmvoice")
-
-        await confirmation { confirmation in
-            callProvider.reportNewIncomingCallWithUpdateCompletionClosure = { _, update, completion in
-                #expect(!update.hasVideo)
-                completion(nil)
-                confirmation()
-            }
-
-            service.pushRegistry(pushRegistry,
-                                 didReceiveIncomingPushWith: pushPayload,
-                                 for: .voIP) { }
-        }
+    func incomingPushCallIntentParsingIsCaseInsensitive() async {
+        await assertIncomingPush(callIntentKey: "CALL_INTENT",
+                                 callIntent: "STARTCALLDMVOICE",
+                                 expectsVideo: false)
+        await assertIncomingPush(callIntentKey: "INTENT",
+                                 callIntent: "VIDEO",
+                                 expectsVideo: true)
     }
 
     @Test
-    func incomingPushWithoutCallIntentUsesVideoMode() async {
-        let pushPayload = PKPushPayloadMock().updatingExpiration(currentDate, lifetime: 30)
+    func incomingPushWithUnknownCallIntentUsesVideoFallback() async {
+        await assertIncomingPush(callIntentKey: "callIntent",
+                                 callIntent: "unknown",
+                                 expectsVideo: true)
+    }
 
-        await confirmation { confirmation in
-            callProvider.reportNewIncomingCallWithUpdateCompletionClosure = { _, update, completion in
-                #expect(update.hasVideo)
-                completion(nil)
-                confirmation()
-            }
-
-            service.pushRegistry(pushRegistry,
-                                 didReceiveIncomingPushWith: pushPayload,
-                                 for: .voIP) { }
-        }
+    @Test
+    func incomingPushWithoutCallIntentUsesVideoFallback() async {
+        await assertIncomingPush(expectsVideo: true)
     }
 
     @Test
@@ -1091,6 +1080,33 @@ final class ElementCallServiceTests {
                     isTombstoned: false,
                     activeRoomCallParticipants: participants)
     }
+
+    private func assertIncomingPush(callIntentKey: String? = nil,
+                                    callIntent: String? = nil,
+                                    expectsVideo: Bool) async {
+        let pushPayload = PKPushPayloadMock().updatingExpiration(currentDate, lifetime: 30)
+        if let callIntentKey, let callIntent {
+            pushPayload.settingCallIntent(callIntentKey, callIntent)
+        }
+
+        let callProvider = CXProviderMock(.init())
+        let dateProvider: () -> Date = { self.currentDate }
+        let service = ElementCallService(appSettings: appSettings,
+                                         callProvider: callProvider,
+                                         timeProvider: TimeProvider(clock: testClock, now: dateProvider))
+
+        await confirmation { confirmation in
+            callProvider.reportNewIncomingCallWithUpdateCompletionClosure = { _, update, completion in
+                #expect(update.hasVideo == expectsVideo)
+                completion(nil)
+                confirmation()
+            }
+
+            service.pushRegistry(pushRegistry,
+                                 didReceiveIncomingPushWith: pushPayload,
+                                 for: .voIP) { }
+        }
+    }
 }
 
 private class PKPushPayloadMock: PKPushPayload {
@@ -1112,8 +1128,8 @@ private class PKPushPayloadMock: PKPushPayload {
         return self
     }
 
-    func settingCallIntent(_ callIntent: String) -> Self {
-        dict[ElementCallServiceNotificationKey.callIntent.rawValue] = callIntent
+    func settingCallIntent(_ key: String, _ callIntent: String) -> Self {
+        dict[key] = callIntent
         return self
     }
 }

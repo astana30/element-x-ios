@@ -29,6 +29,8 @@ protocol ElementCallServiceProtocol {
     func declineIncomingCall() async
     
     func requestCallTermination(roomID: String) async
+
+    func isPreAnswerOutgoingCall(roomID: String) -> Bool
     
     func tearDownCallSession()
     
@@ -38,5 +40,9 @@ protocol ElementCallServiceProtocol {
 extension ElementCallServiceProtocol {
     func setupCallSession(roomID: String, roomDisplayName: String) async {
         await setupCallSession(roomID: roomID, roomDisplayName: roomDisplayName, startMode: .video)
+    }
+
+    func isPreAnswerOutgoingCall(roomID: String) -> Bool {
+        false
     }
 }

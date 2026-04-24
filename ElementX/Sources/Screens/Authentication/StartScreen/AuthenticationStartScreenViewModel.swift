@@ -65,8 +65,20 @@ class AuthenticationStartScreenViewModel: AuthenticationStartScreenViewModelType
     // MARK: - Private
     
     private func login() async {
-        await configureAccountProvider(LoginHomeserver.sanitized("wd.mertis.kz"),
-                                       loginHint: provisioningParameters?.loginHint)
+        if let provisioningParameters {
+            await configureAccountProvider(provisioningParameters.accountProvider,
+                                           loginHint: provisioningParameters.loginHint)
+            return
+        }
+        
+        if !appSettings.allowOtherAccountProviders,
+           let accountProvider = appSettings.accountProviders.first,
+           appSettings.accountProviders.count == 1 {
+            await configureAccountProvider(accountProvider)
+            return
+        }
+        
+        actionsSubject.send(.login)
     }
     
     private func configureAccountProvider(_ accountProvider: String, loginHint: String? = nil) async {

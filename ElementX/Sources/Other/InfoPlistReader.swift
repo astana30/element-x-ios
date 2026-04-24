@@ -13,6 +13,7 @@ struct InfoPlistReader {
         static let appGroupIdentifier = "appGroupIdentifier"
         static let baseBundleIdentifier = "baseBundleIdentifier"
         static let keychainAccessGroupIdentifier = "keychainAccessGroupIdentifier"
+        static let pushGatewayBaseURL = "pushGatewayBaseURL"
         static let bundleShortVersion = "CFBundleShortVersionString"
         static let bundleDisplayName = "CFBundleDisplayName"
         static let productionAppName = "productionAppName"
@@ -26,6 +27,7 @@ struct InfoPlistReader {
     }
     
     private enum Values {
+        static let defaultPushGatewayBaseURL = "https://matrix.org"
         static let mentionPills = "Mention Pills"
     }
 
@@ -56,6 +58,28 @@ struct InfoPlistReader {
     /// Keychain access group identifier set in Info.plist of the target
     var keychainAccessGroupIdentifier: String {
         infoPlistValue(forKey: Keys.keychainAccessGroupIdentifier)
+    }
+    
+    /// Push gateway base URL set in Info.plist of the target
+    var pushGatewayBaseURL: URL {
+        let stringValue: String = infoPlistValue(forKey: Keys.pushGatewayBaseURL)
+        let resolvedValue: String
+        if stringValue.hasPrefix("$(") {
+            NSLog("[InfoPlistReader] Unresolved \(Keys.pushGatewayBaseURL) build setting. Falling back to \(Values.defaultPushGatewayBaseURL).")
+            resolvedValue = Values.defaultPushGatewayBaseURL
+        } else {
+            resolvedValue = stringValue
+        }
+        
+        if let url = URL(string: resolvedValue) {
+            return url
+        }
+        
+        assertionFailure("Invalid \(Keys.pushGatewayBaseURL), falling back to \(Values.defaultPushGatewayBaseURL)")
+        guard let fallbackURL = URL(string: Values.defaultPushGatewayBaseURL) else {
+            fatalError("Invalid default \(Keys.pushGatewayBaseURL)")
+        }
+        return fallbackURL
     }
 
     /// Bundle executable of the target
@@ -137,14 +161,14 @@ struct InfoPlistReader {
         let fallbackScheme = urlTypes
             .compactMap { $0[Keys.bundleURLSchemes] as? [String] }
             .flatMap { $0 }
-            .first(where: { !$0.isEmpty && $0 != "matrix" && $0 != "io.element.call" })
+            .first { !$0.isEmpty && $0 != "matrix" && $0 != "io.element.call" }
         
         if let fallbackScheme {
             assertionFailure("Missing URL type named \(name). Falling back to \(fallbackScheme)")
             return fallbackScheme
         }
         
-        let bundleID = bundle.bundleIdentifier ?? "kz.salemx.msg"
+        let bundleID = bundle.bundleIdentifier ?? "app"
         assertionFailure("Invalid custom application scheme configuration, falling back to bundle identifier")
         return bundleID.lowercased()
     }

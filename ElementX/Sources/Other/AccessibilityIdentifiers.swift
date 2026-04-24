@@ -16,6 +16,7 @@ enum A11yIdentifiers {
     static let appLockSetupPINScreen = AppLockSetupPINScreen()
     static let appLockSetupSettingsScreen = AppLockSetupSettingsScreen()
     static let bugReportScreen = BugReportScreen()
+    static let callScreen = CallScreen()
     static let changeServerScreen = ChangeServer()
     static let encryptionResetScreen = EncryptionResetScreen()
     static let encryptionResetPasswordScreen = EncryptionResetPasswordScreen()
@@ -91,6 +92,13 @@ enum A11yIdentifiers {
         let attachScreenshot = "bug-report-attach_screenshot"
         let cancel = "bug_report-cancel"
     }
+
+    struct CallScreen {
+        let mute = "call_screen-mute"
+        let camera = "call_screen-camera"
+        let speaker = "call_screen-speaker"
+        let endCall = "call_screen-end_call"
+    }
     
     struct ChangeServer {
         let server = "change_server-server"
@@ -157,6 +165,8 @@ enum A11yIdentifiers {
         let attachmentPickerTextFormatting = "room-attachment_picker_text_formatting"
         let timelineItemActionMenu = "room-timeline_item_action_menu"
         let joinCall = "room-join_call"
+        let voiceCall = "room-voice_call"
+        let videoCall = "room-video_call"
         let scrollToBottom = "room-scroll_to_bottom"
         
         let messageComposer = "room-message_composer"

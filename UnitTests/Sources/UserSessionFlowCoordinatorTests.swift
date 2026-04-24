@@ -38,6 +38,10 @@ struct UserSessionFlowCoordinatorTests {
         detailCoordinator as? NavigationStackCoordinator
     }
     
+    private var settingsNavigationStack: NavigationStackCoordinator? {
+        tabCoordinator?.tabCoordinators.last as? NavigationStackCoordinator
+    }
+    
     init() async throws {
         rootCoordinator = NavigationRootCoordinator()
         
@@ -83,8 +87,9 @@ struct UserSessionFlowCoordinatorTests {
     
     @Test
     mutating func settingsPresentation() async throws {
-        try await process(route: .settings, expectedUserSessionState: .settingsScreen)
-        #expect((tabCoordinator?.sheetCoordinator as? NavigationStackCoordinator)?.rootCoordinator is SettingsScreenCoordinator)
+        try await process(route: .settings)
+        #expect(tabCoordinator?.selectedTab == .settings)
+        #expect(settingsNavigationStack?.rootCoordinator is SettingsScreenCoordinator)
     }
     
     @Test
@@ -96,12 +101,13 @@ struct UserSessionFlowCoordinatorTests {
     
     @Test
     mutating func roomPresentationClearsSettings() async throws {
-        try await process(route: .settings, expectedUserSessionState: .settingsScreen)
-        #expect((tabCoordinator?.sheetCoordinator as? NavigationStackCoordinator)?.rootCoordinator is SettingsScreenCoordinator)
+        try await process(route: .settings)
+        #expect(tabCoordinator?.selectedTab == .settings)
+        #expect(settingsNavigationStack?.rootCoordinator is SettingsScreenCoordinator)
         #expect(detailCoordinator == nil)
         
         try await process(route: .room(roomID: "1", via: []), expectedChatsState: .roomList(detailState: .room(roomID: "1")))
-        #expect(tabCoordinator?.sheetCoordinator == nil)
+        #expect(tabCoordinator?.selectedTab == .chats)
         #expect(detailNavigationStack?.rootCoordinator is RoomScreenCoordinator)
         #expect(detailCoordinator != nil)
     }
@@ -124,13 +130,13 @@ struct UserSessionFlowCoordinatorTests {
     
     @Test
     mutating func shareMediaRouteWithoutRoom() async throws {
-        try await process(route: .settings, expectedUserSessionState: .settingsScreen)
-        #expect((tabCoordinator?.sheetCoordinator as? NavigationStackCoordinator)?.rootCoordinator is SettingsScreenCoordinator)
+        try await process(route: .settings)
+        #expect(tabCoordinator?.selectedTab == .settings)
+        #expect(settingsNavigationStack?.rootCoordinator is SettingsScreenCoordinator)
         #expect(chatsSplitCoordinator?.sheetCoordinator == nil)
         
         let sharePayload: ShareExtensionPayload = .mediaFiles(roomID: nil, mediaFiles: [.init(url: .picturesDirectory, suggestedName: nil)])
         try await process(route: .share(sharePayload),
-                          expectedUserSessionState: .tabBar,
                           expectedChatsState: .shareExtensionRoomList(sharePayload: sharePayload))
         #expect(tabCoordinator?.sheetCoordinator == nil)
         #expect((chatsSplitCoordinator?.sheetCoordinator as? NavigationStackCoordinator)?.rootCoordinator is RoomSelectionScreenCoordinator)
@@ -154,13 +160,13 @@ struct UserSessionFlowCoordinatorTests {
     
     @Test
     mutating func shareTextRouteWithoutRoom() async throws {
-        try await process(route: .settings, expectedUserSessionState: .settingsScreen)
-        #expect((tabCoordinator?.sheetCoordinator as? NavigationStackCoordinator)?.rootCoordinator is SettingsScreenCoordinator)
+        try await process(route: .settings)
+        #expect(tabCoordinator?.selectedTab == .settings)
+        #expect(settingsNavigationStack?.rootCoordinator is SettingsScreenCoordinator)
         #expect(chatsSplitCoordinator?.sheetCoordinator == nil)
         
         let sharePayload: ShareExtensionPayload = .text(roomID: nil, text: "Important Text")
         try await process(route: .share(sharePayload),
-                          expectedUserSessionState: .tabBar,
                           expectedChatsState: .shareExtensionRoomList(sharePayload: sharePayload))
         #expect(tabCoordinator?.sheetCoordinator == nil)
         #expect((chatsSplitCoordinator?.sheetCoordinator as? NavigationStackCoordinator)?.rootCoordinator is RoomSelectionScreenCoordinator)

@@ -203,6 +203,7 @@ struct HomeScreenRoom: Identifiable, Equatable {
     
     let timestamp: String?
     
+    let lastCallEvent: RoomCallEvent?
     let lastMessage: AttributedString?
     
     enum LastMessageState { case sending, failed }
@@ -234,6 +235,7 @@ struct HomeScreenRoom: Identifiable, Equatable {
                        isHighlighted: false,
                        isFavourite: false,
                        timestamp: "Now",
+                       lastCallEvent: nil,
                        lastMessage: placeholderLastMessage,
                        lastMessageState: nil,
                        avatar: .room(id: "", name: "", avatarURL: nil),
@@ -243,6 +245,7 @@ struct HomeScreenRoom: Identifiable, Equatable {
 }
 
 extension HomeScreenRoom {
+    @MainActor
     init(summary: RoomSummary, hideUnreadMessagesBadge: Bool, seenInvites: Set<String> = []) {
         let roomID = summary.id
         
@@ -256,7 +259,7 @@ extension HomeScreenRoom {
         let isHighlighted = summary.isMarkedUnread || (!summary.isMuted && (summary.hasUnreadNotifications || summary.hasUnreadMentions)) || isUnseenInvite
         
         let type: HomeScreenRoom.RoomType = switch summary.joinRequestType {
-        case .invite(let inviter): .invite(inviterDetails: inviter.map(RoomInviterDetails.init))
+        case .invite(let inviter): .invite(inviterDetails: inviter.map { RoomInviterDetails(member: $0) })
         case .knock: .knock
         case .none: .room
         }
@@ -273,6 +276,7 @@ extension HomeScreenRoom {
                   isHighlighted: isHighlighted,
                   isFavourite: summary.isFavourite,
                   timestamp: summary.lastMessageDate?.formattedMinimal(),
+                  lastCallEvent: summary.lastCallEvent,
                   lastMessage: summary.lastMessage,
                   lastMessageState: summary.homeScreenLastMessageState,
                   avatar: summary.avatar,

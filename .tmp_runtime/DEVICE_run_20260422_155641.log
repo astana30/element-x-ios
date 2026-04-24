@@ -1,0 +1,14 @@
+15:56:41  Acquired tunnel connection to device.
+15:56:41  Enabling developer disk image services.
+15:56:42  Acquired usage assertion.
+ERROR: The application failed to launch. (com.apple.dt.CoreDeviceError error 10002 (0x2712))
+       BundleIdentifier = kz.salemx.msg
+       ----------------------------------------
+           The request to open "kz.salemx.msg" failed. (FBSOpenApplicationServiceErrorDomain error 1 (0x01))
+           FBSOpenApplicationRequestID = 0xa3d4
+           NSLocalizedFailureReason = The request was denied by service delegate (SBMainWorkspace) for reason: Locked ("Unable to launch kz.salemx.msg because the device was not, or could not be, unlocked").
+           BSErrorCodeDescription = RequestDenied
+       ----------------------------------------
+               The operation couldn’t be completed. Unable to launch kz.salemx.msg because the device was not, or could not be, unlocked. (FBSOpenApplicationErrorDomain error 7 (0x07))
+               NSLocalizedFailureReason = Unable to launch kz.salemx.msg because the device was not, or could not be, unlocked.
+               BSErrorCodeDescription = Locked

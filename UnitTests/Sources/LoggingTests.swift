@@ -81,6 +81,7 @@ final class LoggingTests {
                                       avatarURL: nil,
                                       heroes: [.init(userID: "", displayName: heroName)],
                                       activeMembersCount: 0,
+                                      lastCallEvent: nil,
                                       lastMessage: AttributedString(lastMessage),
                                       lastMessageDate: .mock,
                                       lastMessageState: nil,

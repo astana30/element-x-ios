@@ -10,6 +10,24 @@ import Foundation
 // swiftlint:disable explicit_type_interface function_parameter_count identifier_name line_length
 // swiftlint:disable nesting type_body_length type_name vertical_whitespace_opening_braces
 internal enum UntranslatedL10n {
+  /// Завершить звонок
+  internal static var actionEndCall: String { return UntranslatedL10n.tr("Untranslated", "action_end_call") }
+  /// Звонок принят
+  internal static var commonCallAnswered: String { return UntranslatedL10n.tr("Untranslated", "common_call_answered") }
+  /// Звонок завершён
+  internal static var commonCallEnded: String { return UntranslatedL10n.tr("Untranslated", "common_call_ended") }
+  /// Отклонённый звонок
+  internal static var commonDeclinedCall: String { return UntranslatedL10n.tr("Untranslated", "common_declined_call") }
+  /// Входящий звонок
+  internal static var commonIncomingCall: String { return UntranslatedL10n.tr("Untranslated", "common_incoming_call") }
+  /// Пропущенный звонок
+  internal static var commonMissedCall: String { return UntranslatedL10n.tr("Untranslated", "common_missed_call") }
+  /// Идёт звонок
+  internal static var commonOngoingCall: String { return UntranslatedL10n.tr("Untranslated", "common_ongoing_call") }
+  /// Исходящий звонок
+  internal static var commonOutgoingCall: String { return UntranslatedL10n.tr("Untranslated", "common_outgoing_call") }
+  /// Динамик
+  internal static var commonSpeaker: String { return UntranslatedL10n.tr("Untranslated", "common_speaker") }
   /// Version and related information.
   internal static var screenAboutSalemxLegalDescriptionPrimary: String { return UntranslatedL10n.tr("Untranslated", "screen_about_salemx_legal_description_primary") }
   /// Documents and acknowledgements.
@@ -18,6 +36,12 @@ internal enum UntranslatedL10n {
   internal static var screenAboutSalemxLegalDocumentsTitle: String { return UntranslatedL10n.tr("Untranslated", "screen_about_salemx_legal_documents_title") }
   /// About SalemX
   internal static var screenAboutSalemxLegalTitle: String { return UntranslatedL10n.tr("Untranslated", "screen_about_salemx_legal_title") }
+  /// Здесь будут отображаться недавние и текущие звонки.
+  internal static var screenCallsEmptySubtitle: String { return UntranslatedL10n.tr("Untranslated", "screen_calls_empty_subtitle") }
+  /// Пока нет звонков
+  internal static var screenCallsEmptyTitle: String { return UntranslatedL10n.tr("Untranslated", "screen_calls_empty_title") }
+  /// Звонки
+  internal static var screenHomeTabCalls: String { return UntranslatedL10n.tr("Untranslated", "screen_home_tab_calls") }
   /// Clear all data currently stored on this device?
   /// Sign in again to access your account data and messages.
   internal static var softLogoutClearDataDialogContent: String { return UntranslatedL10n.tr("Untranslated", "soft_logout_clear_data_dialog_content") }

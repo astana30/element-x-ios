@@ -1,0 +1,6 @@
+12:38:44  Acquired tunnel connection to device.
+12:38:44  Enabling developer disk image services.
+12:38:44  Acquired usage assertion.
+Launched application with kz.salemx.msg bundle identifier.
+Waiting for the application to terminate…
+ERROR: Command timeout of 8.0 seconds exceeded. Assuming command got stuck and aborting.

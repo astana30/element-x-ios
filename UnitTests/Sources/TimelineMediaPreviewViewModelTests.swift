@@ -12,6 +12,7 @@ import MatrixRustSDK
 import QuickLook
 import SwiftUI
 import Testing
+import UniformTypeIdentifiers
 
 @MainActor
 struct TimelineMediaPreviewViewModelTests {
@@ -197,7 +198,7 @@ struct TimelineMediaPreviewViewModelTests {
             Issue.record("There should be a current item")
             return
         }
-        #expect(mediaItem.contentType == "JPEG image")
+        #expect(mediaItem.contentType == UTType.jpeg.localizedDescription)
         
         // When choosing to save the image.
         context.send(viewAction: .menuAction(.save, item: mediaItem))
@@ -218,7 +219,7 @@ struct TimelineMediaPreviewViewModelTests {
             Issue.record("There should be a current item")
             return
         }
-        #expect(mediaItem.contentType == "JPEG image")
+        #expect(mediaItem.contentType == UTType.jpeg.localizedDescription)
         
         // When choosing to save the image.
         let deferred = deferFulfillment(context.viewState.previewControllerDriver) { $0.isAuthorizationRequired }
@@ -238,7 +239,7 @@ struct TimelineMediaPreviewViewModelTests {
             Issue.record("There should be a current item")
             return
         }
-        #expect(mediaItem.contentType == "MPEG-4 movie")
+        #expect(mediaItem.contentType == UTType.mpeg4Movie.localizedDescription)
         
         // When choosing to save the video.
         context.send(viewAction: .menuAction(.save, item: mediaItem))
@@ -259,7 +260,7 @@ struct TimelineMediaPreviewViewModelTests {
             Issue.record("There should be a current item")
             return
         }
-        #expect(mediaItem.contentType == "PDF document")
+        #expect(mediaItem.contentType == UTType.pdf.localizedDescription)
         
         // When choosing to save the file.
         let deferred = deferFulfillment(context.viewState.previewControllerDriver) { $0.isExportFile }

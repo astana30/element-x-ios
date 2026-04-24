@@ -12,7 +12,8 @@ import Testing
 final class RoomListFiltersStateTests {
     var appSettings: AppSettings
     var state: RoomListFiltersState
-    let allCasesWithoutLowPriority = RoomListFilter.allCases.filter { $0 != .lowPriority }
+    let defaultAvailableFilters = RoomListFilter.availableFilters
+    let availableFiltersWithLowPriority = RoomListFilter.availableFilters + [.lowPriority]
     
     init() {
         AppSettings.resetAllSettings()
@@ -28,7 +29,7 @@ final class RoomListFiltersStateTests {
     func initialState() {
         #expect(!state.isFiltering)
         #expect(state.activeFilters == [])
-        #expect(state.availableFilters == allCasesWithoutLowPriority)
+        #expect(state.availableFilters == defaultAvailableFilters)
     }
     
     @Test
@@ -36,11 +37,11 @@ final class RoomListFiltersStateTests {
         state.activateFilter(.unreads)
         #expect(state.isFiltering)
         #expect(state.activeFilters == [.unreads])
-        #expect(state.availableFilters == [.people, .rooms, .favourites])
+        #expect(state.availableFilters == [.favourites, .rooms])
         state.deactivateFilter(.unreads)
         #expect(!state.isFiltering)
         #expect(state.activeFilters == [])
-        #expect(state.availableFilters == allCasesWithoutLowPriority)
+        #expect(state.availableFilters == defaultAvailableFilters)
     }
     
     @Test
@@ -53,7 +54,7 @@ final class RoomListFiltersStateTests {
         state.deactivateFilter(.people)
         #expect(!state.isFiltering)
         #expect(state.activeFilters == [])
-        #expect(state.availableFilters == allCasesWithoutLowPriority)
+        #expect(state.availableFilters == defaultAvailableFilters)
         
         state.activateFilter(.rooms)
         #expect(state.isFiltering)
@@ -83,18 +84,18 @@ final class RoomListFiltersStateTests {
         state.clearFilters()
         #expect(!state.isFiltering)
         #expect(state.activeFilters == [])
-        #expect(state.availableFilters == allCasesWithoutLowPriority)
+        #expect(state.availableFilters == defaultAvailableFilters)
     }
     
     @Test
     func order() {
         state.activateFilter(.favourites)
         #expect(state.activeFilters == [.favourites])
-        #expect(state.availableFilters == [.unreads, .people, .rooms])
+        #expect(state.availableFilters == [.unreads, .rooms])
 
         state.deactivateFilter(.favourites)
         #expect(state.activeFilters == [])
-        #expect(state.availableFilters == allCasesWithoutLowPriority)
+        #expect(state.availableFilters == defaultAvailableFilters)
         
         state.activateFilter(.rooms)
         #expect(state.activeFilters == [.rooms])
@@ -117,11 +118,11 @@ final class RoomListFiltersStateTests {
         enableLowPriorityFeature()
         #expect(!state.isFiltering)
         #expect(state.activeFilters == [])
-        #expect(state.availableFilters == RoomListFilter.allCases)
+        #expect(state.availableFilters == availableFiltersWithLowPriority)
         
         state.activateFilter(.lowPriority)
         #expect(state.activeFilters == [.lowPriority])
-        #expect(state.availableFilters == [.unreads, .people, .rooms])
+        #expect(state.availableFilters == [.unreads, .rooms])
     }
     
     // MARK: - Helpers

@@ -16,12 +16,24 @@ struct RoomEventStringBuilder {
     let shouldPrefixSenderName: Bool
     
     func buildAttributedString(for eventItemProxy: EventTimelineItemProxy) -> AttributedString? {
-        buildAttributedString(for: eventItemProxy.content,
-                              sender: eventItemProxy.sender,
-                              isOutgoing: eventItemProxy.isOwn)
+        if let callEvent = RoomCallEventParser.parse(from: eventItemProxy) {
+            return buildAttributedString(forCallEvent: callEvent,
+                                         sender: eventItemProxy.sender,
+                                         isOutgoing: eventItemProxy.isOwn)
+        }
+
+        return buildAttributedString(for: eventItemProxy.content,
+                                     sender: eventItemProxy.sender,
+                                     isOutgoing: eventItemProxy.isOwn)
     }
-    
+
     func buildAttributedString(for content: TimelineItemContent, sender: TimelineItemSender, isOutgoing: Bool) -> AttributedString? {
+        if let callEvent = RoomCallEventParser.parse(content: content, isOutgoing: isOutgoing) {
+            return buildAttributedString(forCallEvent: callEvent,
+                                         sender: sender,
+                                         isOutgoing: isOutgoing)
+        }
+
         let displayName = if shouldDisambiguateDisplayNames {
             sender.disambiguatedDisplayName ?? sender.id
         } else {
@@ -61,7 +73,7 @@ struct RoomEventStringBuilder {
                 }
                 return prefix(errorMessage, with: displayName, isOutgoing: isOutgoing)
             case .other:
-                return nil // We shouldn't receive these without asking for custom event types.
+                return nil
             }
         case .failedToParseMessageLike, .failedToParseState:
             return prefix(L10n.commonUnsupportedEvent, with: displayName, isOutgoing: isOutgoing)
@@ -82,14 +94,24 @@ struct RoomEventStringBuilder {
                                           member: sender.id,
                                           memberIsYou: isOutgoing)
                 .map(AttributedString.init)
-        case .callInvite:
-            return prefix(L10n.commonUnsupportedCall, with: displayName, isOutgoing: isOutgoing)
-        case .rtcNotification:
-            return prefix(L10n.commonCallStarted, with: displayName, isOutgoing: isOutgoing)
+        case .callInvite, .rtcNotification:
+            return nil
         case .liveLocation:
-            // TODO: Implement
+            // Live location summaries are not available yet.
             return nil
         }
+    }
+
+    private func buildAttributedString(forCallEvent callEvent: RoomCallEvent,
+                                       sender: TimelineItemSender,
+                                       isOutgoing: Bool) -> AttributedString {
+        let displayName = if shouldDisambiguateDisplayNames {
+            sender.disambiguatedDisplayName ?? sender.id
+        } else {
+            sender.displayName ?? sender.id
+        }
+
+        return prefix(callEvent.title, with: displayName, isOutgoing: isOutgoing)
     }
     
     private func prefix(_ eventSummary: String, with senderDisplayName: String, isOutgoing: Bool) -> AttributedString {

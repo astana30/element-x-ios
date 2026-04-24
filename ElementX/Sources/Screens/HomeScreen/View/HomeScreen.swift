@@ -24,7 +24,7 @@ struct HomeScreen: View {
                    message: leaveRoomAlertMessage)
             .navigationTitle(title)
             .toolbar { toolbar }
-            .background(Color.compound.bgCanvasDefault.ignoresSafeArea())
+            .salemScreenBackground()
             .track(screen: .Home)
             .toolbarBloom(hasSearchBar: true)
             .sentryTrace("\(Self.self)")

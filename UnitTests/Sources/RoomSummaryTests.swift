@@ -104,6 +104,7 @@ struct RoomSummaryTests {
                     avatarURL: hasRoomAvatar ? roomDetails.avatarURL : nil,
                     heroes: heroes,
                     activeMembersCount: 0,
+                    lastCallEvent: nil,
                     lastMessage: nil,
                     lastMessageDate: nil,
                     lastMessageState: nil,

@@ -174,14 +174,32 @@ struct RoomScreen: View {
     
     @ViewBuilder
     private var callButton: some View {
-        if context.viewState.hasOngoingCall {
+        if timelineContext.viewState.isDirectOneToOneRoom {
+            HStack(spacing: 16) {
+                Button {
+                    context.send(viewAction: .displayCall(startMode: .audio))
+                } label: {
+                    Image(systemName: "phone.fill")
+                }
+                .accessibilityLabel(L10n.a11yStartVoiceCall)
+                .accessibilityIdentifier(A11yIdentifiers.roomScreen.voiceCall)
+                
+                Button {
+                    context.send(viewAction: .displayCall(startMode: .video))
+                } label: {
+                    CompoundIcon(\.videoCallSolid)
+                }
+                .accessibilityLabel(L10n.a11yStartCall)
+                .accessibilityIdentifier(A11yIdentifiers.roomScreen.videoCall)
+            }
+        } else if context.viewState.hasOngoingCall {
             JoinCallButton {
-                context.send(viewAction: .displayCall)
+                context.send(viewAction: .displayCall(startMode: .video))
             }
             .accessibilityIdentifier(A11yIdentifiers.roomScreen.joinCall)
         } else {
             Button {
-                context.send(viewAction: .displayCall)
+                context.send(viewAction: .displayCall(startMode: .video))
             } label: {
                 CompoundIcon(\.videoCallSolid)
             }
@@ -195,6 +213,7 @@ struct RoomScreen: View {
 
 struct RoomScreen_Previews: PreviewProvider, TestablePreview {
     static let viewModels = makeViewModels()
+    static let directMessageViewModels = makeViewModels(isDirect: true, hasOngoingCall: false)
     static let readOnlyViewModels = makeViewModels(canSendMessage: false)
     static let tombstonedViewModels = makeViewModels(hasSuccessor: true)
 
@@ -215,6 +234,13 @@ struct RoomScreen_Previews: PreviewProvider, TestablePreview {
         .snapshotPreferences(expect: readOnlyViewModels.room.context.$viewState.map { !$0.canSendMessage })
         
         ElementNavigationStack {
+            RoomScreen(context: directMessageViewModels.room.context,
+                       timelineContext: directMessageViewModels.timeline.context,
+                       composerToolbar: ComposerToolbar.mock())
+        }
+        .previewDisplayName("Direct message")
+        
+        ElementNavigationStack {
             RoomScreen(context: tombstonedViewModels.room.context,
                        timelineContext: tombstonedViewModels.timeline.context,
                        composerToolbar: ComposerToolbar.mock())
@@ -223,10 +249,14 @@ struct RoomScreen_Previews: PreviewProvider, TestablePreview {
         .snapshotPreferences(expect: tombstonedViewModels.room.context.$viewState.map(\.hasSuccessor))
     }
     
-    static func makeViewModels(canSendMessage: Bool = true, hasSuccessor: Bool = false) -> ViewModels {
+    static func makeViewModels(canSendMessage: Bool = true,
+                               hasSuccessor: Bool = false,
+                               isDirect: Bool = false,
+                               hasOngoingCall: Bool = true) -> ViewModels {
         let roomProxyMock = JoinedRoomProxyMock(.init(id: "stable_id",
                                                       name: "Preview room",
-                                                      hasOngoingCall: true,
+                                                      isDirect: isDirect,
+                                                      hasOngoingCall: hasOngoingCall,
                                                       successor: hasSuccessor ? .init(roomId: UUID().uuidString, reason: nil) : nil,
                                                       powerLevelsConfiguration: .init(canUserSendMessage: canSendMessage)))
         let roomViewModel = RoomScreenViewModel.mock(roomProxyMock: roomProxyMock)

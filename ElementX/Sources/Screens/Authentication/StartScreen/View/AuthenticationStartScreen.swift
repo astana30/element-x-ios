@@ -51,13 +51,6 @@ struct AuthenticationStartScreen: View {
             
             VStack(spacing: 12) {
                 AuthenticationStartLogo(hideBrandChrome: context.viewState.hideBrandChrome)
-                
-                if !context.viewState.hideBrandChrome {
-                    Text(InfoPlistReader.main.productionAppName)
-                        .font(.compound.headingLGBold)
-                        .foregroundColor(.compound.textPrimary)
-                        .multilineTextAlignment(.center)
-                }
             }
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
@@ -76,7 +69,7 @@ struct AuthenticationStartScreen: View {
     var buttons: some View {
         VStack(spacing: 16) {
             Button { context.send(viewAction: .login) } label: {
-                Text(context.viewState.loginButtonTitle)
+                Text("Войти")
             }
             .buttonStyle(.compound(.primary))
             .accessibilityIdentifier(A11yIdentifiers.authenticationStartScreen.signIn)

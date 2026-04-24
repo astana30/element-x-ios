@@ -434,9 +434,14 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         }
         defer { finishCallTermination(for: roomID) }
 
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SERVICE-ENDCALL] room_id=\(roomID)")
         suppressIncomingFallback(for: roomID)
         applySessionEvent(type: .hangup, roomID: roomID)
         actionsSubject.send(.endCall(roomID: roomID))
+    }
+
+    func isPreAnswerOutgoingCall(roomID: String) -> Bool {
+        activeCallSession?.roomID == roomID && activeCallSession?.state == .outgoingRinging
     }
 
     func tearDownCallSession() {
@@ -504,6 +509,10 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         }
 
         let incomingStartMode = incomingStartMode(for: payload.dictionaryPayload, roomID: roomID)
+        let intentTrace = callIntentTrace(from: payload.dictionaryPayload)
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-PUSH] room_id=\(roomID) payload_fields=\(Self.callTracePayloadSummary(payload.dictionaryPayload)) " +
+            "parsed_intent_key=\(intentTrace.key ?? "nil") parsed_intent_value=\(intentTrace.value ?? "nil") " +
+            "parsed_intent_start_mode=\(Self.callTraceStartMode(intentTrace.parsedStartMode)) incoming_start_mode=\(incomingStartMode)")
         cachedRemoteCallIDByRoomID.removeValue(forKey: roomID)
         
         let callID = CallID(callKitID: UUID(),
@@ -529,6 +538,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         update.localizedCallerName = roomDisplayName
         // https://stackoverflow.com/a/41230020/730924
         update.remoteHandle = .init(type: .generic, value: roomID)
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-CALLKIT] room_id=\(roomID) start_mode=\(incomingStartMode) has_video=\(update.hasVideo) caller_name_source=roomDisplayName")
         
         callProvider.reportNewIncomingCall(with: callID.callKitID, update: update) { [weak self] error in
             if let error {
@@ -548,6 +558,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             }
             
             if let incomingCallID, incomingCallID.callKitID == callID.callKitID {
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-RECIPIENT-TIMEOUT] room_id=\(incomingCallID.roomID) callkit_id=\(incomingCallID.callKitID)")
                 reportEndedCall(incomingCallID: incomingCallID, reason: .unanswered)
             }
         }
@@ -572,6 +583,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             MXLog.error("Failed answering incoming call, missing incomingCallID")
             return
         }
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-ANSWER] room_id=\(incomingCallID.roomID) callkit_id=\(incomingCallID.callKitID) start_mode=\(incomingCallID.startMode)")
         
         applySessionEvent(type: .accept, roomID: incomingCallID.roomID)
         
@@ -596,11 +608,30 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         // And delay ending the call so that the app has enough time
         // to get deeplinked into
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            // Then end the and call rely on `setupCallSession` to create a new one
-            provider.reportCall(with: incomingCallID.callKitID, endedAt: nil, reason: .remoteEnded)
-            
-            self.actionsSubject.send(.startCall(roomID: incomingCallID.roomID, startMode: incomingCallID.startMode))
-            self.endUnansweredCallTask?.cancel()
+            Task { @MainActor in
+                guard self.incomingCallID?.callKitID == incomingCallID.callKitID else {
+                    return
+                }
+
+                let isIncomingCallAlive = await self.isIncomingCallStillAliveBeforeAnswer(incomingCallID)
+                guard self.incomingCallID?.callKitID == incomingCallID.callKitID else {
+                    return
+                }
+
+                guard isIncomingCallAlive else {
+                    self.reportEndedCall(incomingCallID: incomingCallID,
+                                         reason: .remoteEnded,
+                                         deduplicationID: "stale-answer:\(incomingCallID.callKitID.uuidString)")
+                    return
+                }
+
+                // Then end the and call rely on `setupCallSession` to create a new one
+                provider.reportCall(with: incomingCallID.callKitID, endedAt: nil, reason: .remoteEnded)
+
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-START-CALL-SEND] room_id=\(incomingCallID.roomID) start_mode=\(incomingCallID.startMode)")
+                self.actionsSubject.send(.startCall(roomID: incomingCallID.roomID, startMode: incomingCallID.startMode))
+                self.endUnansweredCallTask?.cancel()
+            }
         }
     }
     
@@ -619,11 +650,33 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         // This gets called for no reason on simulators, where CallKit
         // isn't even supported, ignore it.
         #else
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-ENDCALL-ENTRY] " +
+            "ongoing_room_id=\(ongoingCallID?.roomID ?? "nil") " +
+            "ongoing_callkit_id=\(ongoingCallID?.callKitID.uuidString ?? "nil") " +
+            "active_room_id=\(activeCallSession?.roomID ?? "nil") " +
+            "active_state=\(activeCallSession?.state.rawValue ?? "nil")")
         if let ongoingCallID {
+            let isPreAnswerOutgoing = activeCallSession?.roomID == ongoingCallID.roomID &&
+                activeCallSession?.state == .outgoingRinging
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-ENDCALL-BRANCH] " +
+                "room_id=\(ongoingCallID.roomID) is_pre_answer_outgoing=\(isPreAnswerOutgoing)")
             applySessionEvent(type: .hangup, roomID: ongoingCallID.roomID)
             suppressIncomingFallback(for: ongoingCallID.roomID)
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SERVICE-ACTION-SEND] room_id=\(ongoingCallID.roomID) " +
+                "state=\(activeCallSession?.state.rawValue ?? "nil")")
             actionsSubject.send(.requestCallTermination(roomID: ongoingCallID.roomID))
+            if isPreAnswerOutgoing {
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-ENDCALL-DIRECT-HELPER] room_id=\(ongoingCallID.roomID) called=true")
+                Task { [weak self] in
+                    await self?.emitPreJoinOutgoingCancelSignal(roomID: ongoingCallID.roomID)
+                }
+            } else {
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-ENDCALL-DIRECT-HELPER] room_id=\(ongoingCallID.roomID) called=false reason=branch_false")
+            }
             tearDownCallSession(sendEndCallAction: false)
+        } else {
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-ENDCALL-BRANCH] room_id=nil is_pre_answer_outgoing=false reason=missing_ongoing_call_id")
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-ENDCALL-DIRECT-HELPER] room_id=nil called=false reason=missing_ongoing_call_id")
         }
         
         if let incomingCallID {
@@ -747,10 +800,14 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             let isVideoIntent: Bool
             if let lastCallEvent = roomSummary.lastCallEvent,
                !Self.isTerminalCallEvent(lastCallEvent) {
-                isVideoIntent = lastCallEvent.intent != .audio
+                isVideoIntent = lastCallEvent.intent == .video
             } else {
                 isVideoIntent = true
             }
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-FALLBACK-CANDIDATE] room_id=\(roomSummary.id) source=app_fallback " +
+                "raw_payload_keys=nil raw_source=room_summary is_direct=\(roomSummary.isDirect) has_ongoing_call=\(roomSummary.hasOngoingCall) " +
+                "active_participants=\(roomSummary.activeRoomCallParticipants) last_call_state=\(String(describing: roomSummary.lastCallEvent?.state)) " +
+                "last_call_intent=\(String(describing: roomSummary.lastCallEvent?.intent)) parsed_intent_result=\(isVideoIntent ? "video" : "audio")")
             await self?.reportIncomingCallFromFallback(roomID: roomSummary.id,
                                                        roomDisplayName: roomSummary.name,
                                                        isVideo: isVideoIntent)
@@ -807,6 +864,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         update.hasVideo = isVideo
         update.localizedCallerName = roomDisplayName
         update.remoteHandle = .init(type: .generic, value: roomID)
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-FALLBACK-CALLKIT] room_id=\(roomID) source=app_fallback " +
+            "start_mode=\(callID.startMode) has_video=\(update.hasVideo) caller_name_source=roomSummary")
 
         callProvider.reportNewIncomingCall(with: callID.callKitID, update: update) { [weak self] error in
             if let error {
@@ -848,11 +907,14 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     }
 
     private func incomingStartMode(for payload: [AnyHashable: Any], roomID: String) -> ElementCallStartMode {
-        if let callIntent = payload[ElementCallServiceNotificationKey.callIntent.rawValue] as? String,
+        if let callIntent = callIntent(from: payload),
            let parsedStartMode = Self.startMode(fromCallIntent: callIntent) {
             return parsedStartMode
         }
 
+        // Keep the legacy fallback explicit: if the push payload has no
+        // recognised intent, prefer the latest known room call event and
+        // otherwise default to video.
         guard let roomSummary = clientProxy?.roomSummaryProvider.roomListPublisher.value.first(where: { $0.id == roomID }),
               roomSummary.hasOngoingCall,
               let lastCallEvent = roomSummary.lastCallEvent,
@@ -866,6 +928,84 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         case .video, .unknown:
             return .video
         }
+    }
+
+    private func callIntent(from payload: [AnyHashable: Any]) -> String? {
+        let intentKeys = [
+            ElementCallServiceNotificationKey.callIntent.rawValue,
+            "call_intent",
+            "intent",
+            "call_type",
+            "callType"
+        ]
+
+        for intentKey in intentKeys {
+            if let callIntent = payload.first(where: { payloadKey, _ in
+                guard let payloadKey = payloadKey as? String else {
+                    return false
+                }
+
+                return payloadKey.localizedCaseInsensitiveCompare(intentKey) == .orderedSame
+            })?.value as? String {
+                return callIntent
+            }
+        }
+
+        return nil
+    }
+
+    private struct CallIntentTrace {
+        let key: String?
+        let value: String?
+        let parsedStartMode: ElementCallStartMode?
+    }
+
+    private func callIntentTrace(from payload: [AnyHashable: Any]) -> CallIntentTrace {
+        let intentKeys = [
+            ElementCallServiceNotificationKey.callIntent.rawValue,
+            "call_intent",
+            "intent",
+            "call_type",
+            "callType"
+        ]
+
+        for intentKey in intentKeys {
+            if let entry = payload.first(where: { payloadKey, _ in
+                guard let payloadKey = payloadKey as? String else {
+                    return false
+                }
+
+                return payloadKey.localizedCaseInsensitiveCompare(intentKey) == .orderedSame
+            }), let callIntent = entry.value as? String {
+                return CallIntentTrace(key: String(describing: entry.key),
+                                       value: callIntent,
+                                       parsedStartMode: Self.startMode(fromCallIntent: callIntent))
+            }
+        }
+
+        return CallIntentTrace(key: nil, value: nil, parsedStartMode: nil)
+    }
+
+    private static func callTracePayloadSummary(_ payload: [AnyHashable: Any]) -> String {
+        payload.keys.map { String(describing: $0) }.sorted().map { key in
+            let value = payload.first { String(describing: $0.key) == key }?.value
+            let renderedValue: String
+            switch key {
+            case ElementCallServiceNotificationKey.roomDisplayName.rawValue:
+                renderedValue = "<redacted>"
+            default:
+                renderedValue = String(describing: value ?? "nil")
+            }
+            return "\(key)=\(renderedValue)"
+        }.joined(separator: ",")
+    }
+
+    private static func callTraceStartMode(_ startMode: ElementCallStartMode?) -> String {
+        guard let startMode else {
+            return "nil"
+        }
+
+        return String(describing: startMode)
     }
 
     private func isIncomingFallbackSuppressed(roomID: String) -> Bool {
@@ -1054,6 +1194,34 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             return true
         case .failed:
             return false
+        }
+    }
+
+    private func emitPreJoinOutgoingCancelSignal(roomID: String) async {
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DIRECT] room_id=\(roomID) step=start")
+
+        guard let clientProxy else {
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DIRECT] room_id=\(roomID) step=abort reason=missing_client_proxy")
+            return
+        }
+
+        guard case let .joined(roomProxy) = await clientProxy.roomForIdentifier(roomID) else {
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DIRECT] room_id=\(roomID) step=abort reason=room_not_joined")
+            return
+        }
+
+        guard let joinedRoomProxy = roomProxy as? JoinedRoomProxy else {
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DIRECT] room_id=\(roomID) step=abort reason=joined_proxy_not_concrete")
+            return
+        }
+
+        let callID = preferredRemoteCallID(for: roomID)
+        switch await joinedRoomProxy.sendPreJoinCallHangup(callID: callID) {
+        case .success:
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DIRECT] room_id=\(roomID) step=done call_id=\(callID ?? "nil")")
+        case .failure(let error):
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DIRECT] room_id=\(roomID) step=failed call_id=\(callID ?? "nil")")
+            MXLog.error("Failed sending direct pre-join cancel signal for room \(roomID): \(error)")
         }
     }
 
@@ -1320,6 +1488,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
                     guard terminationEvent.eventID != tracker.eventID else { return }
 
                     tracker.eventID = terminationEvent.eventID
+                    IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-RECIPIENT-TERMINAL] room_id=\(incomingCallID.roomID) " +
+                        "event_id=\(terminationEvent.eventID) reason=\(terminationEvent.reason)")
                     self.reportEndedCall(incomingCallID: incomingCallID,
                                          reason: terminationEvent.reason,
                                          deduplicationID: terminationEvent.eventID)
@@ -1445,6 +1615,35 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
 
     private func participantBelongsToUser(_ participant: String, userID: String) -> Bool {
         participant == userID || participant.hasPrefix("_\(userID)_")
+    }
+
+    private func isIncomingCallStillAliveBeforeAnswer(_ incomingCallID: CallID) async -> Bool {
+        guard let clientProxy else {
+            MXLog.warning("Incoming answer guard missing ClientProxy for room \(incomingCallID.roomID)")
+            return true
+        }
+
+        guard case let .joined(roomProxy) = await clientProxy.roomForIdentifier(incomingCallID.roomID) else {
+            MXLog.warning("Incoming answer guard missing joined room for room \(incomingCallID.roomID)")
+            return true
+        }
+
+        for attempt in 0..<6 {
+            let participants = Set(roomProxy.infoPublisher.value.activeRoomCallParticipants)
+            let hasForeignParticipant = participants.contains { !participantBelongsToUser($0, userID: roomProxy.ownUserID) }
+            if hasForeignParticipant {
+                return true
+            }
+
+            guard attempt < 5 else {
+                break
+            }
+
+            try? await timeProvider.clock.sleep(for: .milliseconds(250))
+        }
+
+        MXLog.info("Incoming answer guard marked stale incoming for room \(incomingCallID.roomID)")
+        return false
     }
     
     private func startObservingOngoingDeclines(roomProxy: JoinedRoomProxyProtocol, ongoingCallID: CallID) async {
@@ -1783,6 +1982,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     }
     
     private func reportEndedCall(incomingCallID: CallID, reason: CXCallEndedReason, deduplicationID: String? = nil) {
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-RECIPIENT-CLEAR] room_id=\(incomingCallID.roomID) " +
+            "callkit_id=\(incomingCallID.callKitID) reason=\(reason) deduplication_id=\(deduplicationID ?? "nil")")
         suppressIncomingFallback(for: incomingCallID.roomID)
         applySessionEvent(type: sessionEventType(for: reason),
                           roomID: incomingCallID.roomID,

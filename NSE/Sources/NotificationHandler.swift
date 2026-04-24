@@ -126,8 +126,10 @@ class NotificationHandler {
                 }
                 
                 return .processedShouldDiscard
-            case .rtcNotification(let notificationType, let expirationTimestamp, _):
+            case .rtcNotification(let notificationType, let expirationTimestamp, let intent):
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][NSE-RTC] room_id=\(itemProxy.roomID) event_id=\(event.eventId()) notification_type=\(notificationType) intent_raw=\(String(describing: intent)) expiration_ts=\(expirationTimestamp)")
                 return await handleCallNotification(notificationType: notificationType,
+                                                    intentDescription: String(describing: intent),
                                                     rtcNotifyEventID: event.eventId(),
                                                     timestamp: event.timestamp(),
                                                     expirationTimestamp: expirationTimestamp,
@@ -157,6 +159,7 @@ class NotificationHandler {
     /// Handle incoming call notifications.
     /// - Returns: A boolean indicating whether the notification was handled and should now be discarded.
     private func handleCallNotification(notificationType: RtcNotificationType,
+                                        intentDescription: String?,
                                         rtcNotifyEventID: String,
                                         timestamp: Timestamp,
                                         expirationTimestamp: Timestamp,
@@ -212,10 +215,16 @@ class NotificationHandler {
         }
         
         let expirationDate = Date(timeIntervalSince1970: TimeInterval(expirationTimestamp / 1000))
-        let payload = [ElementCallServiceNotificationKey.roomID.rawValue: roomID,
+        var payload = [ElementCallServiceNotificationKey.roomID.rawValue: roomID,
                        ElementCallServiceNotificationKey.roomDisplayName.rawValue: roomDisplayName,
                        ElementCallServiceNotificationKey.expirationDate.rawValue: expirationDate,
                        ElementCallServiceNotificationKey.rtcNotifyEventID.rawValue: rtcNotifyEventID] as [String: Any]
+        if let callIntent = callIntentString(from: intentDescription) {
+            payload[ElementCallServiceNotificationKey.callIntent.rawValue] = callIntent
+        }
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][NSE-VOIP-PAYLOAD] room_id=\(roomID) event_id=\(rtcNotifyEventID) notification_type=\(notificationType) " +
+            "intent_description=\(intentDescription ?? "nil") parsed_call_intent=\(payload[ElementCallServiceNotificationKey.callIntent.rawValue] ?? "nil") " +
+            "payload_fields=\(Self.callTracePayloadSummary(payload))")
         
         do {
             try await CXProvider.reportNewIncomingVoIPPushPayload(payload)
@@ -226,6 +235,52 @@ class NotificationHandler {
         }
         
         return .processedShouldDiscard
+    }
+
+    private func callIntentString(from intentDescription: String?) -> String? {
+        guard let intentDescription else {
+            return nil
+        }
+        let normalizedIntentDescription = intentDescription
+            .lowercased()
+            .replacingOccurrences(of: "optional(", with: "")
+            .replacingOccurrences(of: ")", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let compactIntent = normalizedIntentDescription.replacingOccurrences(of: " ", with: "")
+        let knownAudioIntents = Set(["audio", "voice", "dmvoice", "startcalldmvoice", "m.intent.voice", "m.intent.audio"])
+        let knownVideoIntents = Set(["video", "startcall", "startcalldm", "dm", "m.intent.video"])
+
+        if knownAudioIntents.contains(compactIntent) {
+            return "audio"
+        }
+
+        if knownVideoIntents.contains(compactIntent) || compactIntent.contains("video") {
+            return "video"
+        }
+
+        if compactIntent.contains("audio") {
+            return "audio"
+        }
+
+        if compactIntent.contains("voice"), !compactIntent.contains("video") {
+            return "audio"
+        }
+
+        return compactIntent.isEmpty ? nil : compactIntent
+    }
+
+    private static func callTracePayloadSummary(_ payload: [String: Any]) -> String {
+        payload.keys.sorted().map { key in
+            let value = payload[key]
+            let renderedValue: String
+            switch key {
+            case ElementCallServiceNotificationKey.roomDisplayName.rawValue:
+                renderedValue = "<redacted>"
+            default:
+                renderedValue = String(describing: value ?? "nil")
+            }
+            return "\(key)=\(renderedValue)"
+        }.joined(separator: ",")
     }
     
     private enum NotificationProcessingResult {

@@ -33,14 +33,17 @@ class SettingsScreenViewModel: SettingsScreenViewModelType, SettingsScreenViewMo
         
         appSettings.$linkNewDeviceEnabled
             .weakAssign(to: \.state.showLinkNewDeviceButton, on: self)
+            .store(in: &cancellables)
         
         userSession.clientProxy.userAvatarURLPublisher
             .receive(on: DispatchQueue.main)
             .weakAssign(to: \.state.userAvatarURL, on: self)
+            .store(in: &cancellables)
         
         userSession.clientProxy.userDisplayNamePublisher
             .receive(on: DispatchQueue.main)
             .weakAssign(to: \.state.userDisplayName, on: self)
+            .store(in: &cancellables)
         
         userSession.sessionSecurityStatePublisher
             .receive(on: DispatchQueue.main)
@@ -62,6 +65,7 @@ class SettingsScreenViewModel: SettingsScreenViewModelType, SettingsScreenViewMo
                     state.securitySectionMode = .secureBackup
                 }
             }
+            .store(in: &cancellables)
         
         userSession.clientProxy.ignoredUsersPublisher
             .receive(on: DispatchQueue.main)
@@ -73,6 +77,7 @@ class SettingsScreenViewModel: SettingsScreenViewModelType, SettingsScreenViewMo
                 return !blockedUsers.isEmpty
             }
             .weakAssign(to: \.state.showBlockedUsers, on: self)
+            .store(in: &cancellables)
         
         Task {
             await userSession.clientProxy.loadUserAvatarURL()

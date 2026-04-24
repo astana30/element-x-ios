@@ -7,6 +7,7 @@
 //
 
 @testable import ElementX
+import Foundation
 import MatrixRustSDK
 import Testing
 
@@ -28,93 +29,120 @@ struct RoomEventStringBuilderTests {
     
     @Test
     func senderPrefix() {
-        let ownMessageString = stringBuilder.buildAttributedString(for: makeMessageItem(senderID: ownUserID, senderDisplayName: "Alice"))
-        #expect(ownMessageString?.string == "You: Hello, World!", "Your own messages should be prefixed with 'You'")
+        let ownMessageString = buildAttributedString(for: makeMessageContent(message: "Hello, World!"),
+                                                     senderID: ownUserID,
+                                                     senderDisplayName: "Alice")
+        #expect(ownMessageString?.string == "\(L10n.commonYou): Hello, World!", "Your own messages should be prefixed with 'You'")
         
-        let otherMessageString = stringBuilder.buildAttributedString(for: makeMessageItem(senderID: "@bob:matrix.org", senderDisplayName: "Bob"))
+        let otherMessageString = buildAttributedString(for: makeMessageContent(message: "Hello, World!"),
+                                                       senderID: "@bob:matrix.org",
+                                                       senderDisplayName: "Bob")
         #expect(otherMessageString?.string == "Bob: Hello, World!", "Everyone else's messages should be prefixed with their display name.")
         
-        let ambiguousMessageString = stringBuilder.buildAttributedString(for: makeMessageItem(senderID: "@charlie:matrix.org",
-                                                                                              senderDisplayName: "Charlie",
-                                                                                              senderDisplayNameAmbiguous: true))
+        let ambiguousMessageString = buildAttributedString(for: makeMessageContent(message: "Hello, World!"),
+                                                           senderID: "@charlie:matrix.org",
+                                                           senderDisplayName: "Charlie",
+                                                           senderDisplayNameAmbiguous: true)
         #expect(ambiguousMessageString?.string == "Charlie (@charlie:matrix.org): Hello, World!",
                 "Messages from senders with ambiguous display names should include their user ID in the prefix.")
         
-        let ownEmoteString = stringBuilder.buildAttributedString(for: makeMessageItem(senderID: ownUserID,
-                                                                                      senderDisplayName: "Alice",
-                                                                                      type: .emote,
-                                                                                      message: "laughs"))
-        #expect(ownEmoteString?.string == "* Alice laughs", "Your own emotes shouldn't contain 'You'")
+        let ownEmoteString = buildAttributedString(for: makeEmoteContent(message: "laughs"),
+                                                   senderID: ownUserID,
+                                                   senderDisplayName: "Alice")
+        #expect(ownEmoteString?.string == L10n.commonEmote("Alice", "laughs"), "Your own emotes shouldn't contain 'You'")
         
-        let otherEmoteString = stringBuilder.buildAttributedString(for: makeMessageItem(senderID: "@bob:matrix.org",
-                                                                                        senderDisplayName: "Bob",
-                                                                                        type: .emote,
-                                                                                        message: "sighs"))
-        #expect(otherEmoteString?.string == "* Bob sighs", "Everyone else's emotes should contain their display name.")
+        let otherEmoteString = buildAttributedString(for: makeEmoteContent(message: "sighs"),
+                                                     senderID: "@bob:matrix.org",
+                                                     senderDisplayName: "Bob")
+        #expect(otherEmoteString?.string == L10n.commonEmote("Bob", "sighs"), "Everyone else's emotes should contain their display name.")
         
-        let ownPollString = stringBuilder.buildAttributedString(for: makePollItem(senderID: ownUserID, senderDisplayName: "Alice"))
-        #expect(ownPollString?.string == "You: Poll: Which is better?", "Your own polls should be prefixed with 'You'")
+        let ownPollString = buildAttributedString(for: makePollContent(question: "Which is better?"),
+                                                  senderID: ownUserID,
+                                                  senderDisplayName: "Alice")
+        #expect(ownPollString?.string == "\(L10n.commonYou): \(L10n.commonPollSummary("Which is better?"))", "Your own polls should be prefixed with 'You'")
         
-        let otherPollString = stringBuilder.buildAttributedString(for: makePollItem(senderID: "@bob:matrix.org", senderDisplayName: "Bob"))
-        #expect(otherPollString?.string == "Bob: Poll: Which is better?", "Everyone else's polls should be prefixed with their display name.")
+        let otherPollString = buildAttributedString(for: makePollContent(question: "Which is better?"),
+                                                    senderID: "@bob:matrix.org",
+                                                    senderDisplayName: "Bob")
+        #expect(otherPollString?.string == "Bob: \(L10n.commonPollSummary("Which is better?"))", "Everyone else's polls should be prefixed with their display name.")
+    }
+
+    @Test
+    func callStatusStrings() {
+        let ownAnsweredCallString = buildAttributedString(for: makeCallContent(eventType: .callAnswer),
+                                                          senderID: ownUserID,
+                                                          senderDisplayName: "Alice")
+        #expect(ownAnsweredCallString?.string == "\(L10n.commonYou): \(UntranslatedL10n.commonCallAnswered)",
+                "Answered calls should use a natural full status string.")
+
+        let ownDeclinedCallString = buildAttributedString(for: makeCallContent(eventType: .callReject),
+                                                          senderID: ownUserID,
+                                                          senderDisplayName: "Alice")
+        #expect(ownDeclinedCallString?.string == "\(L10n.commonYou): \(UntranslatedL10n.commonDeclinedCall)",
+                "Your own declined calls should stay declined.")
+
+        let otherMissedCallString = buildAttributedString(for: makeCallContent(eventType: .callReject),
+                                                          senderID: "@bob:matrix.org",
+                                                          senderDisplayName: "Bob")
+        #expect(otherMissedCallString?.string == "Bob: \(UntranslatedL10n.commonMissedCall)",
+                "Remote decline should read as a missed call for the caller.")
     }
     
     // MARK: - Helpers
-    
-    private enum MockMessageType { case textMessage, emote }
-    
-    private func makeMessageItem(senderID: String,
-                                 senderDisplayName: String? = nil,
-                                 senderDisplayNameAmbiguous: Bool = false,
-                                 type: MockMessageType = .textMessage,
-                                 message: String = "Hello, World!") -> EventTimelineItemProxy {
-        let content = switch type {
-        case .textMessage: makeTextContent(message: message)
-        case .emote: makeEmoteContent(message: message)
-        }
-        
-        return .init(item: .init(configuration: .init(eventID: "1234",
-                                                      sender: senderID,
-                                                      senderProfile: .ready(displayName: senderDisplayName, displayNameAmbiguous: senderDisplayNameAmbiguous, avatarUrl: nil),
-                                                      isOwn: senderID == ownUserID,
-                                                      content: .msgLike(content: .init(kind: .message(content: .init(msgType: content,
-                                                                                                                     body: message,
-                                                                                                                     isEdited: false,
-                                                                                                                     mentions: nil)),
-                                                                                       reactions: [],
-                                                                                       inReplyTo: nil,
-                                                                                       threadRoot: nil,
-                                                                                       threadSummary: nil)))),
-                     uniqueID: .init("0"))
+
+    private func buildAttributedString(for content: TimelineItemContent,
+                                       senderID: String,
+                                       senderDisplayName: String? = nil,
+                                       senderDisplayNameAmbiguous: Bool = false) -> AttributedString? {
+        stringBuilder.buildAttributedString(for: content,
+                                            sender: .init(senderID: senderID,
+                                                          senderProfile: .ready(displayName: senderDisplayName,
+                                                                                displayNameAmbiguous: senderDisplayNameAmbiguous,
+                                                                                avatarUrl: nil)),
+                                            isOutgoing: senderID == ownUserID)
+    }
+
+    private func makeMessageContent(message: String) -> TimelineItemContent {
+        .msgLike(content: .init(kind: .message(content: .init(msgType: .text(content: .init(body: message, formatted: nil)),
+                                                              body: message,
+                                                              isEdited: false,
+                                                              mentions: nil)),
+                                reactions: [],
+                                inReplyTo: nil,
+                                threadRoot: nil,
+                                threadSummary: nil))
     }
     
-    private func makeTextContent(message: String) -> MessageType {
-        .text(content: .init(body: message, formatted: nil))
+    private func makeEmoteContent(message: String) -> TimelineItemContent {
+        .msgLike(content: .init(kind: .message(content: .init(msgType: .emote(content: .init(body: message, formatted: nil)),
+                                                              body: message,
+                                                              isEdited: false,
+                                                              mentions: nil)),
+                                reactions: [],
+                                inReplyTo: nil,
+                                threadRoot: nil,
+                                threadSummary: nil))
     }
     
-    private func makeEmoteContent(message: String) -> MessageType {
-        .emote(content: .init(body: message, formatted: nil))
+    private func makePollContent(question: String) -> TimelineItemContent {
+        .msgLike(content: .init(kind: .poll(question: question,
+                                            kind: .disclosed,
+                                            maxSelections: 1,
+                                            answers: [],
+                                            votes: [:],
+                                            endTime: nil,
+                                            hasBeenEdited: false),
+                                reactions: [],
+                                inReplyTo: nil,
+                                threadRoot: nil,
+                                threadSummary: nil))
     }
-    
-    private func makePollItem(senderID: String,
-                              senderDisplayName: String? = nil,
-                              senderDisplayNameAmbiguous: Bool = false,
-                              question: String = "Which is better?") -> EventTimelineItemProxy {
-        .init(item: .init(configuration: .init(eventID: "1234",
-                                               sender: senderID,
-                                               senderProfile: .ready(displayName: senderDisplayName, displayNameAmbiguous: senderDisplayNameAmbiguous, avatarUrl: nil),
-                                               isOwn: senderID == ownUserID,
-                                               content: .msgLike(content: .init(kind: .poll(question: question,
-                                                                                            kind: .disclosed,
-                                                                                            maxSelections: 1,
-                                                                                            answers: [],
-                                                                                            votes: [:],
-                                                                                            endTime: nil,
-                                                                                            hasBeenEdited: false),
-                                                                                reactions: [],
-                                                                                inReplyTo: nil,
-                                                                                threadRoot: nil,
-                                                                                threadSummary: nil)))),
-              uniqueID: .init("0"))
+
+    private func makeCallContent(eventType: MessageLikeEventType) -> TimelineItemContent {
+        .msgLike(content: .init(kind: .other(eventType: eventType),
+                                reactions: [],
+                                inReplyTo: nil,
+                                threadRoot: nil,
+                                threadSummary: nil))
     }
 }

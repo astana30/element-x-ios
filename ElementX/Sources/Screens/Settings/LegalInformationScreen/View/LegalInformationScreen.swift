@@ -17,7 +17,7 @@ struct LegalInformationScreen: View {
         Form {
             Section {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("SalemX")
+                    Text(InfoPlistReader.main.bundleDisplayName)
                         .font(.compound.headingLG)
                         .foregroundColor(.compound.textPrimary)
                     

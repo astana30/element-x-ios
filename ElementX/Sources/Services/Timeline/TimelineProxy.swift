@@ -12,6 +12,7 @@ import MatrixRustSDK
 
 final class TimelineProxy: TimelineProxyProtocol {
     private let timeline: Timeline
+    private let fallbackTimelineItemProvider: TimelineItemProviderProtocol
     
     private var backPaginationStateObservationToken: TaskHandle?
     
@@ -25,9 +26,14 @@ final class TimelineProxy: TimelineProxyProtocol {
     
     private let kind: TimelineKind
    
-    private var innerTimelineItemProvider: TimelineItemProviderProtocol!
+    private var innerTimelineItemProvider: TimelineItemProviderProtocol?
     var timelineItemProvider: TimelineItemProviderProtocol {
-        innerTimelineItemProvider
+        guard let innerTimelineItemProvider else {
+            MXLog.error("Accessed timeline item provider before subscribing for updates.")
+            return fallbackTimelineItemProvider
+        }
+
+        return innerTimelineItemProvider
     }
     
     deinit {
@@ -37,6 +43,7 @@ final class TimelineProxy: TimelineProxyProtocol {
     init(timeline: Timeline, kind: TimelineKind) {
         self.timeline = timeline
         self.kind = kind
+        fallbackTimelineItemProvider = UnsubscribedTimelineItemProvider(kind: kind)
     }
     
     func subscribeForUpdates() async {
@@ -122,6 +129,12 @@ final class TimelineProxy: TimelineProxyProtocol {
             
             return .success(())
         } catch {
+            if isRecoverableBackPaginationError(error) {
+                MXLog.warning("Treating recoverable back pagination failure as end reached: \(error)")
+                backPaginationStateSubject.send(.endReached)
+                return .success(())
+            }
+            
             MXLog.error("Failed paginating backwards with error: \(error)")
             return .failure(.sdkError(error))
         }
@@ -153,6 +166,12 @@ final class TimelineProxy: TimelineProxyProtocol {
             subject.send(timelineEndReached ? .endReached : .idle)
             return .success(())
         } catch {
+            if direction == .backwards, isRecoverableBackPaginationError(error) {
+                MXLog.warning("Treating recoverable focussed back pagination failure as end reached: \(error)")
+                subject.send(.endReached)
+                return .success(())
+            }
+            
             MXLog.error("Failed paginating \(direction.rawValue) with error: \(error)")
             subject.send(.idle)
             return .failure(.sdkError(error))
@@ -615,6 +634,43 @@ final class TimelineProxy: TimelineProxyProtocol {
             backPaginationStateSubject.send(.endReached)
             forwardPaginationStateSubject.send(.endReached)
         }
+    }
+    
+    private func isRecoverableBackPaginationError(_ error: Error) -> Bool {
+        let errorDescription = String(describing: error).lowercased()
+        
+        return errorDescription.contains("query returned no rows") ||
+            errorDescription.contains("queryreturnednorows") ||
+            errorDescription.contains("foreign key constraint failed") ||
+            errorDescription.contains("constraintviolation") ||
+            errorDescription.contains("the chunk is not found") ||
+            errorDescription.contains("chunk is not found") ||
+            errorDescription.contains("poisonerror") ||
+            errorDescription.contains("rustpanic")
+    }
+}
+
+private final class UnsubscribedTimelineItemProvider: TimelineItemProviderProtocol {
+    let kind: TimelineKind
+
+    nonisolated init(kind: TimelineKind) {
+        self.kind = kind
+    }
+
+    var updatePublisher: AnyPublisher<([TimelineItemProxy], TimelinePaginationState), Never> {
+        Empty(completeImmediately: false).eraseToAnyPublisher()
+    }
+
+    var itemProxies: [TimelineItemProxy] {
+        []
+    }
+
+    var paginationState: TimelinePaginationState {
+        .initial
+    }
+
+    var membershipChangePublisher: AnyPublisher<Void, Never> {
+        Empty(completeImmediately: false).eraseToAnyPublisher()
     }
 }
 

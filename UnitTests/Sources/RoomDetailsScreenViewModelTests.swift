@@ -526,7 +526,7 @@ struct RoomDetailsScreenViewModelTests {
         notificationSettingsProxyMock.callbacks.send(.settingsDidChange)
         try await deferred.fulfill()
         
-        #expect(context.viewState.notificationSettingsState.label == "Default")
+        #expect(context.viewState.notificationSettingsState.label == L10n.screenRoomDetailsNotificationModeDefault)
     }
     
     @Test
@@ -538,7 +538,7 @@ struct RoomDetailsScreenViewModelTests {
         notificationSettingsProxyMock.callbacks.send(.settingsDidChange)
         try await deferred.fulfill()
         
-        #expect(context.viewState.notificationSettingsState.label == "Custom")
+        #expect(context.viewState.notificationSettingsState.label == L10n.screenRoomDetailsNotificationModeCustom)
     }
     
     @Test

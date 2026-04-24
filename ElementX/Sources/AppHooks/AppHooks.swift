@@ -8,7 +8,7 @@
 
 import Foundation
 
-class AppHooks: AppHooksProtocol {
+class AppHooks: AppHooksProtocol, @unchecked Sendable {
     #if IS_MAIN_APP
     func configure(with userSession: UserSessionProtocol?) async {
         await roomScreenHook.configure(with: userSession)

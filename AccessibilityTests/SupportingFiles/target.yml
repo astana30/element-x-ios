@@ -26,7 +26,7 @@ targets:
     platform: iOS
 
     dependencies:
-    - target: ElementX
+    - target: SalemX
     - package: KZFileWatchers
 
     info:
@@ -52,4 +52,3 @@ targets:
     - path: ../../ElementX/Sources/Other/MatrixEntityRegex.swift
     - path: ../../ElementX/Sources/Other/Pills/PillUtilities.swift
     - path: ../../ElementX/Sources/Other/Extensions/NSRegularExpresion.swift
-

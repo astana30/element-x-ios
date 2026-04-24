@@ -1,0 +1,16 @@
+Filtering the log data using "process BEGINSWITH[cd] "SalemX""
+Timestamp               Ty Process[PID:TID]
+2026-04-22 12:48:33.508 Df SalemX[30312:3c7b3] [com.apple.UserNotifications:Connections] [kz.salemx.msg] Getting delivered notifications
+2026-04-22 12:48:33.511 Df SalemX[30312:3c611] [com.apple.UserNotifications:Connections] [kz.salemx.msg] Got 0 delivered notifications [ hasCompletionHandler: 1 ]
+2026-04-22 12:48:33.511 Df SalemX[30312:3c611] [com.apple.UserNotifications:Connections] [kz.salemx.msg] Removing 0 delivered notifications with identifiers (
+)
+2026-04-22 12:48:35.887 Df SalemX[30312:3949d] [com.apple.UIKit:AppLifecycle] sceneOfRecord: sceneID: sceneID:kz.salemx.msg-default  persistentID: A2854A3E-ECD5-415E-AAF2-8D9DD6972AD0
+2026-04-22 12:48:35.890 Db SalemX[30312:3949d] [com.apple.BacklightServices:scenes] 0x600000c3cd20 environment updated:sceneID:kz.salemx.msg-default
+  delta:{ visualState:0 date:0 active:0 seed:0 }
+  diff:(null)
+  new:(null) (null)
+  old:(null) (null)
+  new:(null)
+2026-04-22 12:48:35.891 Db SalemX[30312:3949d] [com.apple.BaseBoard:Common] [BSBlockSentinel:FBSScene] signaled! 1 of 2
+2026-04-22 12:48:35.898 Db SalemX[30312:3c611] [com.apple.BaseBoard:Common] [BSBlockSentinel:FBSScene] signaled! 2 of 2
+2026-04-22 12:48:35.898 Db SalemX[30312:3c611] [com.apple.BaseBoard:Common] [BSBlockSentinel:FBSScene] dealloc

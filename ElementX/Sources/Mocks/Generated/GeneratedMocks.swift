@@ -6318,15 +6318,15 @@ class ElementCallServiceMock: ElementCallServiceProtocol, @unchecked Sendable {
     }
     //MARK: - setupCallSession
 
-    var setupCallSessionRoomIDRoomDisplayNameUnderlyingCallsCount = 0
-    var setupCallSessionRoomIDRoomDisplayNameCallsCount: Int {
+    var setupCallSessionRoomIDRoomDisplayNameStartModeUnderlyingCallsCount = 0
+    var setupCallSessionRoomIDRoomDisplayNameStartModeCallsCount: Int {
         get {
             if Thread.isMainThread {
-                return setupCallSessionRoomIDRoomDisplayNameUnderlyingCallsCount
+                return setupCallSessionRoomIDRoomDisplayNameStartModeUnderlyingCallsCount
             } else {
                 var returnValue: Int? = nil
                 DispatchQueue.main.sync {
-                    returnValue = setupCallSessionRoomIDRoomDisplayNameUnderlyingCallsCount
+                    returnValue = setupCallSessionRoomIDRoomDisplayNameStartModeUnderlyingCallsCount
                 }
 
                 return returnValue!
@@ -6334,28 +6334,174 @@ class ElementCallServiceMock: ElementCallServiceProtocol, @unchecked Sendable {
         }
         set {
             if Thread.isMainThread {
-                setupCallSessionRoomIDRoomDisplayNameUnderlyingCallsCount = newValue
+                setupCallSessionRoomIDRoomDisplayNameStartModeUnderlyingCallsCount = newValue
             } else {
                 DispatchQueue.main.sync {
-                    setupCallSessionRoomIDRoomDisplayNameUnderlyingCallsCount = newValue
+                    setupCallSessionRoomIDRoomDisplayNameStartModeUnderlyingCallsCount = newValue
                 }
             }
         }
     }
-    var setupCallSessionRoomIDRoomDisplayNameCalled: Bool {
-        return setupCallSessionRoomIDRoomDisplayNameCallsCount > 0
+    var setupCallSessionRoomIDRoomDisplayNameStartModeCalled: Bool {
+        return setupCallSessionRoomIDRoomDisplayNameStartModeCallsCount > 0
     }
-    var setupCallSessionRoomIDRoomDisplayNameReceivedArguments: (roomID: String, roomDisplayName: String)?
-    var setupCallSessionRoomIDRoomDisplayNameReceivedInvocations: [(roomID: String, roomDisplayName: String)] = []
-    var setupCallSessionRoomIDRoomDisplayNameClosure: ((String, String) async -> Void)?
+    var setupCallSessionRoomIDRoomDisplayNameStartModeReceivedArguments: (roomID: String, roomDisplayName: String, startMode: ElementCallStartMode)?
+    var setupCallSessionRoomIDRoomDisplayNameStartModeReceivedInvocations: [(roomID: String, roomDisplayName: String, startMode: ElementCallStartMode)] = []
+    var setupCallSessionRoomIDRoomDisplayNameStartModeClosure: ((String, String, ElementCallStartMode) async -> Void)?
 
-    func setupCallSession(roomID: String, roomDisplayName: String) async {
-        setupCallSessionRoomIDRoomDisplayNameCallsCount += 1
-        setupCallSessionRoomIDRoomDisplayNameReceivedArguments = (roomID: roomID, roomDisplayName: roomDisplayName)
+    func setupCallSession(roomID: String, roomDisplayName: String, startMode: ElementCallStartMode) async {
+        setupCallSessionRoomIDRoomDisplayNameStartModeCallsCount += 1
+        setupCallSessionRoomIDRoomDisplayNameStartModeReceivedArguments = (roomID: roomID, roomDisplayName: roomDisplayName, startMode: startMode)
         DispatchQueue.main.async {
-            self.setupCallSessionRoomIDRoomDisplayNameReceivedInvocations.append((roomID: roomID, roomDisplayName: roomDisplayName))
+            self.setupCallSessionRoomIDRoomDisplayNameStartModeReceivedInvocations.append((roomID: roomID, roomDisplayName: roomDisplayName, startMode: startMode))
         }
-        await setupCallSessionRoomIDRoomDisplayNameClosure?(roomID, roomDisplayName)
+        await setupCallSessionRoomIDRoomDisplayNameStartModeClosure?(roomID, roomDisplayName, startMode)
+    }
+    //MARK: - declineIncomingCall
+
+    var declineIncomingCallUnderlyingCallsCount = 0
+    var declineIncomingCallCallsCount: Int {
+        get {
+            if Thread.isMainThread {
+                return declineIncomingCallUnderlyingCallsCount
+            } else {
+                var returnValue: Int? = nil
+                DispatchQueue.main.sync {
+                    returnValue = declineIncomingCallUnderlyingCallsCount
+                }
+
+                return returnValue!
+            }
+        }
+        set {
+            if Thread.isMainThread {
+                declineIncomingCallUnderlyingCallsCount = newValue
+            } else {
+                DispatchQueue.main.sync {
+                    declineIncomingCallUnderlyingCallsCount = newValue
+                }
+            }
+        }
+    }
+    var declineIncomingCallCalled: Bool {
+        return declineIncomingCallCallsCount > 0
+    }
+    var declineIncomingCallClosure: (() async -> Void)?
+
+    func declineIncomingCall() async {
+        declineIncomingCallCallsCount += 1
+        await declineIncomingCallClosure?()
+    }
+    //MARK: - requestCallTermination
+
+    var requestCallTerminationRoomIDUnderlyingCallsCount = 0
+    var requestCallTerminationRoomIDCallsCount: Int {
+        get {
+            if Thread.isMainThread {
+                return requestCallTerminationRoomIDUnderlyingCallsCount
+            } else {
+                var returnValue: Int? = nil
+                DispatchQueue.main.sync {
+                    returnValue = requestCallTerminationRoomIDUnderlyingCallsCount
+                }
+
+                return returnValue!
+            }
+        }
+        set {
+            if Thread.isMainThread {
+                requestCallTerminationRoomIDUnderlyingCallsCount = newValue
+            } else {
+                DispatchQueue.main.sync {
+                    requestCallTerminationRoomIDUnderlyingCallsCount = newValue
+                }
+            }
+        }
+    }
+    var requestCallTerminationRoomIDCalled: Bool {
+        return requestCallTerminationRoomIDCallsCount > 0
+    }
+    var requestCallTerminationRoomIDReceivedRoomID: String?
+    var requestCallTerminationRoomIDReceivedInvocations: [String] = []
+    var requestCallTerminationRoomIDClosure: ((String) async -> Void)?
+
+    func requestCallTermination(roomID: String) async {
+        requestCallTerminationRoomIDCallsCount += 1
+        requestCallTerminationRoomIDReceivedRoomID = roomID
+        DispatchQueue.main.async {
+            self.requestCallTerminationRoomIDReceivedInvocations.append(roomID)
+        }
+        await requestCallTerminationRoomIDClosure?(roomID)
+    }
+    //MARK: - isPreAnswerOutgoingCall
+
+    var isPreAnswerOutgoingCallRoomIDUnderlyingCallsCount = 0
+    var isPreAnswerOutgoingCallRoomIDCallsCount: Int {
+        get {
+            if Thread.isMainThread {
+                return isPreAnswerOutgoingCallRoomIDUnderlyingCallsCount
+            } else {
+                var returnValue: Int? = nil
+                DispatchQueue.main.sync {
+                    returnValue = isPreAnswerOutgoingCallRoomIDUnderlyingCallsCount
+                }
+
+                return returnValue!
+            }
+        }
+        set {
+            if Thread.isMainThread {
+                isPreAnswerOutgoingCallRoomIDUnderlyingCallsCount = newValue
+            } else {
+                DispatchQueue.main.sync {
+                    isPreAnswerOutgoingCallRoomIDUnderlyingCallsCount = newValue
+                }
+            }
+        }
+    }
+    var isPreAnswerOutgoingCallRoomIDCalled: Bool {
+        return isPreAnswerOutgoingCallRoomIDCallsCount > 0
+    }
+    var isPreAnswerOutgoingCallRoomIDReceivedRoomID: String?
+    var isPreAnswerOutgoingCallRoomIDReceivedInvocations: [String] = []
+
+    var isPreAnswerOutgoingCallRoomIDUnderlyingReturnValue: Bool!
+    var isPreAnswerOutgoingCallRoomIDReturnValue: Bool! {
+        get {
+            if Thread.isMainThread {
+                return isPreAnswerOutgoingCallRoomIDUnderlyingReturnValue
+            } else {
+                var returnValue: Bool? = nil
+                DispatchQueue.main.sync {
+                    returnValue = isPreAnswerOutgoingCallRoomIDUnderlyingReturnValue
+                }
+
+                return returnValue!
+            }
+        }
+        set {
+            if Thread.isMainThread {
+                isPreAnswerOutgoingCallRoomIDUnderlyingReturnValue = newValue
+            } else {
+                DispatchQueue.main.sync {
+                    isPreAnswerOutgoingCallRoomIDUnderlyingReturnValue = newValue
+                }
+            }
+        }
+    }
+    var isPreAnswerOutgoingCallRoomIDClosure: ((String) -> Bool)?
+
+    func isPreAnswerOutgoingCall(roomID: String) -> Bool {
+        isPreAnswerOutgoingCallRoomIDCallsCount += 1
+        isPreAnswerOutgoingCallRoomIDReceivedRoomID = roomID
+        DispatchQueue.main.async {
+            self.isPreAnswerOutgoingCallRoomIDReceivedInvocations.append(roomID)
+        }
+        if let isPreAnswerOutgoingCallRoomIDClosure = isPreAnswerOutgoingCallRoomIDClosure {
+            return isPreAnswerOutgoingCallRoomIDClosure(roomID)
+        } else {
+            return isPreAnswerOutgoingCallRoomIDReturnValue
+        }
     }
     //MARK: - tearDownCallSession
 

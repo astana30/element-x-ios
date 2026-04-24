@@ -80,7 +80,8 @@ struct AppRouteURLParserTests {
     @Test
     func webRoomIDURL() throws {
         let id = "!abcdefghijklmnopqrstuvwxyz1234567890:matrix.org"
-        let url = try #require(URL(string: "https://app.element.io/#/room/\(id)"))
+        let host = try #require(appSettings.elementWebHosts.first)
+        let url = try #require(URL(string: "https://\(host)/#/room/\(id)"))
         
         let route = appRouteURLParser.route(from: url)
         
@@ -90,7 +91,8 @@ struct AppRouteURLParserTests {
     @Test
     func webUserIDURL() throws {
         let id = "@alice:matrix.org"
-        let url = try #require(URL(string: "https://develop.element.io/#/user/\(id)"))
+        let host = try #require(appSettings.elementWebHosts.first)
+        let url = try #require(URL(string: "https://\(host)/#/user/\(id)"))
         
         let route = appRouteURLParser.route(from: url)
         

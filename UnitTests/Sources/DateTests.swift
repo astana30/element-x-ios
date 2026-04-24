@@ -12,6 +12,14 @@ import Testing
 
 struct DateTests {
     let calendar = Calendar.current
+    let relativeDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.doesRelativeDateFormatting = true
+        formatter.dateStyle = .long
+        formatter.timeStyle = .none
+        return formatter
+    }()
+    
     var startOfToday: Date {
         Calendar.current.startOfDay(for: .now)
     }
@@ -45,10 +53,10 @@ struct DateTests {
     @Test
     func dateSeparatorFormatting() throws {
         let today = try #require(calendar.date(byAdding: DateComponents(hour: 9, minute: 30), to: startOfToday))
-        #expect(today.formattedDateSeparator() == "Today")
+        #expect(today.formattedDateSeparator() == relativeDateFormatter.string(from: today))
         
         let yesterday = try #require(calendar.date(byAdding: .hour, value: 1, to: startOfYesterday))
-        #expect(yesterday.formattedDateSeparator() == "Yesterday")
+        #expect(yesterday.formattedDateSeparator() == relativeDateFormatter.string(from: yesterday))
         
         let nearYesterday = try #require(calendar.date(byAdding: DateComponents(hour: -10), to: today))
         #expect(nearYesterday.formattedDateSeparator() == yesterday.formatted(Date.RelativeFormatStyle(presentation: .named, capitalizationContext: .beginningOfSentence)))

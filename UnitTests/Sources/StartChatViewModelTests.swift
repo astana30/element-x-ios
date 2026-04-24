@@ -32,15 +32,23 @@ struct StartChatScreenViewModelTests {
     }
     
     @Test
-    mutating func queryShowingNoResults() async {
+    mutating func queryShowingNoResults() async throws {
+        let userDiscoveryService = try #require(userDiscoveryService)
+        
         await search(query: "A")
         #expect(context.viewState.usersSection.type == .suggestions)
         
         await search(query: "AA")
         #expect(context.viewState.usersSection.type == .suggestions)
         #expect(!userDiscoveryService.searchProfilesWithCalled)
-        
-        await search(query: "AAA")
+
+        let deferred = deferFulfillment(context.$viewState) { viewState in
+            viewState.usersSection.type == .searchResult &&
+                userDiscoveryService.searchProfilesWithReceivedSearchQuery == "AAA"
+        }
+        userDiscoveryService.searchProfilesWithCallsCount = 0
+        viewModel.context.searchQuery = "AAA"
+        try await deferred.fulfill()
         assertSearchResults(toBe: 0)
         
         #expect(userDiscoveryService.searchProfilesWithCalled)

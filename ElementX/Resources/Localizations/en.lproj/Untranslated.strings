@@ -19,3 +19,16 @@
 "screen_about_salemx_legal_documents_title" = "Documents";
 "screen_about_salemx_legal_description_primary" = "Version and related information.";
 "screen_about_salemx_legal_description_secondary" = "Documents and acknowledgements.";
+
+"action_end_call" = "Завершить звонок";
+"common_speaker" = "Динамик";
+"common_incoming_call" = "Входящий звонок";
+"common_outgoing_call" = "Исходящий звонок";
+"common_call_answered" = "Звонок принят";
+"common_call_ended" = "Звонок завершён";
+"common_missed_call" = "Пропущенный звонок";
+"common_declined_call" = "Отклонённый звонок";
+"common_ongoing_call" = "Идёт звонок";
+"screen_home_tab_calls" = "Звонки";
+"screen_calls_empty_title" = "Пока нет звонков";
+"screen_calls_empty_subtitle" = "Здесь будут отображаться недавние и текущие звонки.";

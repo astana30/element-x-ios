@@ -10,7 +10,7 @@ import Foundation
 import MatrixRustSDK
 
 /// A quick summary of a Room, useful to describe and give quick informations for the room list
-struct RoomSummary {
+struct RoomSummary: @unchecked Sendable {
     enum JoinRequestType {
         case invite(inviter: RoomMemberProxyProtocol?)
         case knock
@@ -46,6 +46,7 @@ struct RoomSummary {
     let heroes: [UserProfileProxy]
     let activeMembersCount: UInt
     
+    let lastCallEvent: RoomCallEvent?
     let lastMessage: AttributedString?
     let lastMessageDate: Date?
     let lastMessageState: LastMessageState?
@@ -56,11 +57,62 @@ struct RoomSummary {
     let canonicalAlias: String?
     let alternativeAliases: Set<String>
     
+    let activeRoomCallParticipants: [String]
     let hasOngoingCall: Bool
     
     let isMarkedUnread: Bool
     let isFavourite: Bool
     let isTombstoned: Bool
+
+    init(room: Room,
+         id: String,
+         joinRequestType: JoinRequestType?,
+         name: String,
+         isDirect: Bool,
+         isSpace: Bool,
+         avatarURL: URL?,
+         heroes: [UserProfileProxy],
+         activeMembersCount: UInt,
+         lastCallEvent: RoomCallEvent?,
+         lastMessage: AttributedString?,
+         lastMessageDate: Date?,
+         lastMessageState: LastMessageState?,
+         unreadMessagesCount: UInt,
+         unreadMentionsCount: UInt,
+         unreadNotificationsCount: UInt,
+         notificationMode: RoomNotificationModeProxy?,
+         canonicalAlias: String?,
+         alternativeAliases: Set<String>,
+         hasOngoingCall: Bool,
+         isMarkedUnread: Bool,
+         isFavourite: Bool,
+         isTombstoned: Bool,
+         activeRoomCallParticipants: [String] = []) {
+        self.room = room
+        self.id = id
+        self.joinRequestType = joinRequestType
+        self.name = name
+        self.isDirect = isDirect
+        self.isSpace = isSpace
+        self.avatarURL = avatarURL
+        self.heroes = heroes
+        self.activeMembersCount = activeMembersCount
+        self.lastCallEvent = lastCallEvent
+        self.lastMessage = lastMessage
+        self.lastMessageDate = lastMessageDate
+        self.lastMessageState = lastMessageState
+        self.unreadMessagesCount = unreadMessagesCount
+        self.unreadMentionsCount = unreadMentionsCount
+        self.unreadNotificationsCount = unreadNotificationsCount
+        self.notificationMode = notificationMode
+        self.canonicalAlias = canonicalAlias
+        self.alternativeAliases = alternativeAliases
+        self.activeRoomCallParticipants = activeRoomCallParticipants
+        self.hasOngoingCall = hasOngoingCall
+        self.isMarkedUnread = isMarkedUnread
+        self.isFavourite = isFavourite
+        self.isTombstoned = isTombstoned
+    }
     
     var hasUnreadMessages: Bool {
         unreadMessagesCount > 0
@@ -130,6 +182,7 @@ extension RoomSummary {
         heroes = []
         activeMembersCount = 0
         
+        lastCallEvent = nil
         lastMessage = AttributedString(string)
         lastMessageDate = .mock
         lastMessageState = nil
@@ -139,6 +192,7 @@ extension RoomSummary {
         notificationMode = settingsMode
         canonicalAlias = nil
         alternativeAliases = []
+        activeRoomCallParticipants = []
         hasOngoingCall = false
         
         joinRequestType = nil

@@ -8,6 +8,7 @@
 
 import Compound
 import SwiftUI
+import UIKit
 
 /// Class responsible for displaying an arbitrary number of coordinators within the tab bar.
 @Observable class NavigationTabCoordinator<Tag: Hashable>: CoordinatorProtocol, CustomStringConvertible {
@@ -278,11 +279,7 @@ import SwiftUI
     
     // MARK: - Private
     
-    private func logPresentationChange(_ change: String, _ module: NavigationModule) {
-        if let coordinator = module.coordinator {
-            MXLog.info("\(self) \(change): \(coordinator)")
-        }
-    }
+    private func logPresentationChange(_: String, _: NavigationModule) { }
 }
 
 private struct NavigationTabCoordinatorView<Tag: Hashable>: View {
@@ -334,13 +331,13 @@ private struct NavigationTabCoordinatorView<Tag: Hashable>: View {
     }
     
     private func configureAppearance(_ tabBarController: UITabBarController) {
-        standardAppearance.configureWithDefaultBackground()
-        standardAppearance.configureWithOpaqueBackground()
-        standardAppearance.backgroundColor = .compound.bgCanvasDefault
-        standardAppearance.shadowColor = UIColor(red: 0.09, green: 0.14, blue: 0.20, alpha: 0.08)
+        standardAppearance.configureWithTransparentBackground()
+        standardAppearance.backgroundEffect = UIBlurEffect(style: .systemThinMaterialDark)
+        standardAppearance.backgroundColor = UIColor(red: 0.03, green: 0.08, blue: 0.10, alpha: 0.76)
+        standardAppearance.shadowColor = UIColor(SalemBrandPalette.glow).withAlphaComponent(0.34)
 
-        let selectedColor = UIColor(red: 0.13, green: 0.43, blue: 0.82, alpha: 1.0)
-        let normalColor = UIColor(red: 0.47, green: 0.54, blue: 0.62, alpha: 1.0)
+        let selectedColor = UIColor(SalemBrandPalette.sky)
+        let normalColor = UIColor(red: 0.55, green: 0.62, blue: 0.66, alpha: 1.0)
 
         let stacked = standardAppearance.stackedLayoutAppearance
         stacked.normal.iconColor = normalColor
@@ -365,6 +362,54 @@ private struct NavigationTabCoordinatorView<Tag: Hashable>: View {
         inline.selected.titleTextAttributes = [.foregroundColor: selectedColor]
         inline.normal.badgeBackgroundColor = .compound.iconAccentPrimary
         inline.selected.badgeBackgroundColor = .compound.iconAccentPrimary
-        tabBarController.tabBar.standardAppearance = standardAppearance
+
+        let tabBar = tabBarController.tabBar
+        tabBar.standardAppearance = standardAppearance
+        tabBar.scrollEdgeAppearance = standardAppearance
+        tabBar.tintColor = selectedColor
+        tabBar.unselectedItemTintColor = normalColor
+        tabBar.isTranslucent = true
+        tabBar.selectionIndicatorImage = makeSelectionIndicatorImage(in: tabBar)
+
+        tabBar.layer.masksToBounds = false
+        tabBar.layer.cornerRadius = 22
+        tabBar.layer.cornerCurve = .continuous
+        tabBar.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+        tabBar.layer.shadowColor = UIColor(SalemBrandPalette.sky).withAlphaComponent(0.55).cgColor
+        tabBar.layer.shadowOpacity = 0.22
+        tabBar.layer.shadowOffset = CGSize(width: 0, height: -2)
+        tabBar.layer.shadowRadius = 14
+    }
+
+    private func makeSelectionIndicatorImage(in tabBar: UITabBar) -> UIImage? {
+        guard let items = tabBar.items,
+              !items.isEmpty else {
+            return nil
+        }
+
+        let itemWidth = tabBar.bounds.width / CGFloat(items.count)
+        guard itemWidth > 0 else {
+            return nil
+        }
+
+        let size = CGSize(width: itemWidth, height: tabBar.bounds.height)
+        let indicatorWidth = max(56, itemWidth - 18)
+        let indicatorHeight: CGFloat = 34
+        let xInset = (itemWidth - indicatorWidth) / 2
+        let yInset: CGFloat = 6
+
+        return UIGraphicsImageRenderer(size: size).image { _ in
+            let indicatorRect = CGRect(x: xInset,
+                                       y: yInset,
+                                       width: indicatorWidth,
+                                       height: indicatorHeight)
+            let indicatorPath = UIBezierPath(roundedRect: indicatorRect, cornerRadius: 14)
+            UIColor(red: 0.27, green: 0.70, blue: 0.98, alpha: 0.20).setFill()
+            indicatorPath.fill()
+
+            UIColor(red: 0.66, green: 0.89, blue: 1.00, alpha: 0.38).setStroke()
+            indicatorPath.lineWidth = 1
+            indicatorPath.stroke()
+        }
     }
 }

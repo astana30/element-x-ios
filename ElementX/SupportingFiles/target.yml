@@ -1,14 +1,14 @@
-name: ElementX
+name: SalemX
 
 schemes:
-  ElementX:
+  SalemX:
     analyze:
       config: Debug
     archive:
       config: Release
     build:
       targets:
-        ElementX:
+        SalemX:
           - running
           - testing
           - profiling
@@ -32,13 +32,13 @@ schemes:
       config: Debug
       gatherCoverageData: true
       coverageTargets:
-        - ElementX
+        - SalemX
       testPlans:
         - path: ../../UnitTests/SupportingFiles/UnitTests.xctestplan
           defaultPlan: true
 
 targets:
-  ElementX:
+  SalemX:
     type: application
     platform: iOS
 
@@ -76,6 +76,7 @@ targets:
         appGroupIdentifier: $(APP_GROUP_IDENTIFIER)
         baseBundleIdentifier: $(BASE_BUNDLE_IDENTIFIER)
         keychainAccessGroupIdentifier: $(KEYCHAIN_ACCESS_GROUP_IDENTIFIER)
+        pushGatewayBaseURL: $(PUSH_GATEWAY_BASE_URL)
         productionAppName: $(PRODUCTION_APP_NAME)
         ITSAppUsesNonExemptEncryption: false
         NSUserActivityTypes: [
@@ -94,7 +95,7 @@ targets:
           voip
         ]
         BGTaskSchedulerPermittedIdentifiers: [
-          kz.salemx.msg.background.refresh
+          $(BASE_BUNDLE_IDENTIFIER).background.refresh
         ]
         UTExportedTypeDeclarations:
         - UTTypeConformsTo: [public.text]
@@ -179,6 +180,17 @@ targets:
         else
             echo "warning: Sourcery not installed, run swift run tools setup-project"
         fi
+    - name: 🔧 Patch Embedded Element Call RTC
+      runOnlyWhenInstalling: false
+      basedOnDependencyAnalysis: false
+      shell: /bin/sh
+      script: |
+        ELEMENT_CALL_SOURCES="${BUILD_DIR%/Build/*}/SourcePackages/checkouts/element-call-swift/Sources"
+        if [ -d "$ELEMENT_CALL_SOURCES/dist" ]; then
+            python3 Tools/branding/patch_embedded_element_call_rtc.py "$ELEMENT_CALL_SOURCES"
+        else
+            echo "warning: Embedded Element Call sources not found, skipping RTC patch"
+        fi
 
     postBuildScripts:
     - name: ⚠️ SwiftLint
@@ -245,6 +257,7 @@ targets:
       excludes:
         - Other/Extensions/XCTestCase.swift
         - Other/Extensions/XCUIElement.swift
+        - "**/*.bak*"
     - path: ../../Secrets/Secrets.swift
     - path: ../Resources
     - path: ../SupportingFiles

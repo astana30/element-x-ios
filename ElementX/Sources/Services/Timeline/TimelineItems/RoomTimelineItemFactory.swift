@@ -27,6 +27,10 @@ struct RoomTimelineItemFactory: RoomTimelineItemFactoryProtocol {
     
     func buildTimelineItem(for eventItemProxy: EventTimelineItemProxy, isDM: Bool) -> RoomTimelineItemProtocol? {
         let isOutgoing = eventItemProxy.isOwn
+
+        if let callEvent = RoomCallEventParser.parse(from: eventItemProxy) {
+            return buildCallTimelineItem(for: eventItemProxy, details: callEvent)
+        }
         
         switch eventItemProxy.content {
         case .msgLike(let messageLikeContent):
@@ -42,7 +46,7 @@ struct RoomTimelineItemFactory: RoomTimelineItemFactoryProtocol {
             case .unableToDecrypt(let encryptedMessage):
                 return buildEncryptedTimelineItem(eventItemProxy, messageLikeContent, encryptedMessage, isOutgoing)
             case .other:
-                return nil // We shouldn't receive these without asking for custom event types.
+                return nil
             }
         case .failedToParseMessageLike(let eventType, let error):
             return buildUnsupportedTimelineItem(eventItemProxy, eventType, error, isOutgoing)
@@ -65,12 +69,10 @@ struct RoomTimelineItemFactory: RoomTimelineItemFactoryProtocol {
                                                        avatarURLString: avatarUrl,
                                                        previousAvatarURLString: prevAvatarUrl,
                                                        isOutgoing: isOutgoing)
-        case .callInvite:
-            return buildCallInviteTimelineItem(for: eventItemProxy)
-        case .rtcNotification:
-            return buildCallNotificationTimelineItem(for: eventItemProxy)
+        case .callInvite, .rtcNotification:
+            return nil
         case .liveLocation:
-            // TODO: Implement
+            // Live location timeline items are not available yet.
             return nil
         }
     }
@@ -743,20 +745,30 @@ struct RoomTimelineItemFactory: RoomTimelineItemFactoryProtocol {
                                     properties: .init())
     }
     
-    private func buildCallInviteTimelineItem(for eventItemProxy: EventTimelineItemProxy) -> RoomTimelineItemProtocol {
+    private func buildCallTimelineItem(for eventItemProxy: EventTimelineItemProxy, details: RoomCallEvent) -> RoomTimelineItemProtocol {
+        if details.state == .legacyInvite {
+            return buildCallInviteTimelineItem(for: eventItemProxy, details: details)
+        } else {
+            return buildCallNotificationTimelineItem(for: eventItemProxy, details: details)
+        }
+    }
+
+    private func buildCallInviteTimelineItem(for eventItemProxy: EventTimelineItemProxy, details: RoomCallEvent) -> RoomTimelineItemProtocol {
         CallInviteRoomTimelineItem(id: eventItemProxy.id,
                                    timestamp: eventItemProxy.timestamp,
                                    isEditable: eventItemProxy.isEditable,
                                    canBeRepliedTo: eventItemProxy.canBeRepliedTo,
-                                   sender: eventItemProxy.sender)
+                                   sender: eventItemProxy.sender,
+                                   details: details)
     }
     
-    private func buildCallNotificationTimelineItem(for eventItemProxy: EventTimelineItemProxy) -> RoomTimelineItemProtocol {
+    private func buildCallNotificationTimelineItem(for eventItemProxy: EventTimelineItemProxy, details: RoomCallEvent) -> RoomTimelineItemProtocol {
         CallNotificationRoomTimelineItem(id: eventItemProxy.id,
                                          timestamp: eventItemProxy.timestamp,
                                          isEditable: eventItemProxy.isEditable,
                                          canBeRepliedTo: eventItemProxy.canBeRepliedTo,
-                                         sender: eventItemProxy.sender)
+                                         sender: eventItemProxy.sender,
+                                         details: details)
     }
     
     // MARK: - State Events

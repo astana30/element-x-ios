@@ -183,6 +183,10 @@ class ClientProxy: ClientProxyProtocol {
         hideInviteAvatarsSubject.asCurrentValuePublisher()
     }
     
+    var accessToken: String? {
+        try? client.session().accessToken
+    }
+    
     var roomsToAwait: Set<String> = []
     
     private let sendQueueStatusSubject = CurrentValueSubject<Bool, Never>(false)
@@ -228,6 +232,11 @@ class ClientProxy: ClientProxyProtocol {
             switch error {
             case .panic(let message, let backtrace):
                 MXLog.error("Received background task panic: \(message ?? "Missing message")\nBacktrace:\n\(backtrace ?? "Missing backtrace")")
+                
+                if Self.isRecoverableBackgroundTaskPanic(message: message) {
+                    MXLog.warning("Ignoring recoverable background task panic.")
+                    return
+                }
                 
                 if AppSettings.appBuildType == .debug || AppSettings.appBuildType == .nightly {
                     fatalError(message ?? "")
@@ -1065,6 +1074,17 @@ class ClientProxy: ClientProxyProtocol {
         } catch {
             MXLog.error("Failed retrieving session verification controller proxy with error: \(error)")
         }
+    }
+    
+    private static func isRecoverableBackgroundTaskPanic(message: String?) -> Bool {
+        guard let message else {
+            return false
+        }
+        
+        let normalizedMessage = message.lowercased()
+        
+        return normalizedMessage.contains("the chunk is not found") ||
+            normalizedMessage.contains("poisonerror")
     }
 
     private func loadUserAvatarURLFromCache() {

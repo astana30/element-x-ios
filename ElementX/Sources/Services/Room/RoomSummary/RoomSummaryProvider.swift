@@ -235,10 +235,11 @@ class RoomSummaryProvider: RoomSummaryProviderProtocol {
         return updatedItems
     }
 
-    private func fetchRoomDetails(from room: Room) -> (roomInfo: RoomInfo?, latestEvent: LatestEventValue?) {
+    private func fetchRoomDetails(from room: Room) -> (roomInfo: RoomInfo?, latestEvent: LatestEventValue?, lastCallEvent: RoomCallEvent?) {
         class FetchResult {
             var roomInfo: RoomInfo?
             var latestEvent: LatestEventValue?
+            var lastCallEvent: RoomCallEvent?
         }
         
         let semaphore = DispatchSemaphore(value: 0)
@@ -248,13 +249,16 @@ class RoomSummaryProvider: RoomSummaryProviderProtocol {
             do {
                 result.latestEvent = await room.latestEvent()
                 result.roomInfo = try await room.roomInfo()
+                if let latestEvent = result.latestEvent {
+                    result.lastCallEvent = await fetchLastCallEvent(from: room, latestEvent: latestEvent)
+                }
             } catch {
                 MXLog.error("Failed fetching room info with error: \(error)")
             }
             semaphore.signal()
         }
         semaphore.wait()
-        return (result.roomInfo, result.latestEvent)
+        return (result.roomInfo, result.latestEvent, result.lastCallEvent)
     }
     
     private func buildRoomSummary(from room: Room) -> RoomSummary {
@@ -265,6 +269,7 @@ class RoomSummaryProvider: RoomSummaryProviderProtocol {
         }
         
         var attributedLastMessage: AttributedString?
+        var lastCallEvent: RoomCallEvent?
         var lastMessageDate: Date?
         var lastMessageState: RoomSummary.LastMessageState?
         
@@ -272,6 +277,7 @@ class RoomSummaryProvider: RoomSummaryProviderProtocol {
             switch latestRoomMessage {
             case .local(let timestamp, let senderID, let profile, let content, let state):
                 let sender = TimelineItemSender(senderID: senderID, senderProfile: profile)
+                lastCallEvent = roomDetails.lastCallEvent ?? RoomCallEventParser.parse(content: content, isOutgoing: true)
                 attributedLastMessage = eventStringBuilder.buildAttributedString(for: content, sender: sender, isOutgoing: true)
                 lastMessageDate = Date(timeIntervalSince1970: TimeInterval(timestamp / 1000))
                 
@@ -285,6 +291,7 @@ class RoomSummaryProvider: RoomSummaryProviderProtocol {
                 }
             case .remote(let timestamp, let senderID, let isOwn, let profile, let content):
                 let sender = TimelineItemSender(senderID: senderID, senderProfile: profile)
+                lastCallEvent = roomDetails.lastCallEvent ?? RoomCallEventParser.parse(content: content, isOutgoing: isOwn)
                 attributedLastMessage = eventStringBuilder.buildAttributedString(for: content, sender: sender, isOutgoing: isOwn)
                 lastMessageDate = Date(timeIntervalSince1970: TimeInterval(timestamp / 1000))
             case .remoteInvite(let timestamp, let senderID, let profile):
@@ -323,6 +330,7 @@ class RoomSummaryProvider: RoomSummaryProviderProtocol {
                            avatarURL: roomInfo.avatarUrl.flatMap(URL.init(string:)),
                            heroes: roomInfo.heroes.map(UserProfileProxy.init),
                            activeMembersCount: UInt(roomInfo.activeMembersCount),
+                           lastCallEvent: lastCallEvent,
                            lastMessage: attributedLastMessage,
                            lastMessageDate: lastMessageDate,
                            lastMessageState: lastMessageState,
@@ -335,7 +343,38 @@ class RoomSummaryProvider: RoomSummaryProviderProtocol {
                            hasOngoingCall: roomInfo.hasRoomCall,
                            isMarkedUnread: roomInfo.isMarkedUnread,
                            isFavourite: roomInfo.isFavourite,
-                           isTombstoned: roomInfo.successorRoom != nil)
+                           isTombstoned: roomInfo.successorRoom != nil,
+                           activeRoomCallParticipants: roomInfo.activeRoomCallParticipants)
+    }
+
+    private func fetchLastCallEvent(from room: Room, latestEvent: LatestEventValue) async -> RoomCallEvent? {
+        guard let fallbackCallEvent = fallbackCallEvent(from: latestEvent) else {
+            return nil
+        }
+        
+        do {
+            let timeline = try await room.timeline()
+            guard let latestEventID = await timeline.latestEventId() else {
+                return fallbackCallEvent
+            }
+            
+            let latestTimelineItem = try await timeline.getEventTimelineItemByEventId(eventId: latestEventID)
+            return RoomCallEventParser.parse(eventTimelineItem: latestTimelineItem) ?? fallbackCallEvent
+        } catch {
+            MXLog.verbose("Failed resolving detailed call event for \(room.id()) with error: \(error)")
+            return fallbackCallEvent
+        }
+    }
+
+    private func fallbackCallEvent(from latestEvent: LatestEventValue) -> RoomCallEvent? {
+        switch latestEvent {
+        case .local(_, _, _, let content, _):
+            return RoomCallEventParser.parse(content: content, isOutgoing: true)
+        case .remote(_, _, let isOwn, _, let content):
+            return RoomCallEventParser.parse(content: content, isOutgoing: isOwn)
+        case .none, .remoteInvite:
+            return nil
+        }
     }
     
     private func buildDiff(from diff: RoomListEntriesUpdate, on rooms: [RoomSummary]) -> CollectionDifference<RoomSummary>? {

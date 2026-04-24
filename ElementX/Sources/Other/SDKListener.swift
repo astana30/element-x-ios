@@ -13,7 +13,7 @@ import MatrixRustSDK
 ///
 /// To use this you'll need to add a conformance to the required listener
 /// protocol with a specialisation for the type it listens for.
-final class SDKListener<T> {
+final class SDKListener<T>: @unchecked Sendable {
     private let onUpdateClosure: (T) -> Void
     
     /// Creates a new listener.

@@ -21,6 +21,8 @@ struct StartChatScreen: View {
             }
         }
         .compoundList()
+        .scrollContentBackground(.hidden)
+        .salemScreenBackground()
         .track(screen: .StartChat)
         .scrollDismissesKeyboard(.immediately)
         .navigationTitle(context.viewState.screenTitle)

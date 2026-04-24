@@ -35,7 +35,7 @@ enum AppBuildType {
 }
 
 /// Store Element specific app settings.
-final class AppSettings {
+final class AppSettings: @unchecked Sendable {
     private enum UserDefaultsKeys: String {
         case lastVersionLaunched
         case seenInvites
@@ -54,6 +54,7 @@ final class AppSettings {
         case enableNotifications
         case enableInAppNotifications
         case pusherProfileTag
+        case voIPPusherProfileTag
         case lastNotificationBootTime
         case logLevel
         case traceLogPacks
@@ -88,7 +89,7 @@ final class AppSettings {
     private static var suiteName: String = InfoPlistReader.main.appGroupIdentifier
 
     /// UserDefaults to be used on reads and writes.
-    private static var store: UserDefaults! = UserDefaults(suiteName: suiteName)
+    private static var store = makeStore(suiteName: suiteName)
     
     static var appBuildType: AppBuildType {
         #if DEBUG
@@ -115,12 +116,16 @@ final class AppSettings {
     
     static func configureWithSuiteName(_ name: String) {
         suiteName = name
-        
-        guard let userDefaults = UserDefaults(suiteName: name) else {
-            fatalError("Fail to load shared UserDefaults")
+        store = makeStore(suiteName: name)
+    }
+
+    private static func makeStore(suiteName: String) -> UserDefaults {
+        guard let userDefaults = UserDefaults(suiteName: suiteName) else {
+            MXLog.error("Failed loading shared UserDefaults for suite \(suiteName). Falling back to standard UserDefaults.")
+            return .standard
         }
-        
-        store = userDefaults
+
+        return userDefaults
     }
     
     // MARK: - Hooks
@@ -153,9 +158,9 @@ final class AppSettings {
         self.oidcRedirectURL = oidcRedirectURL
         self.websiteURL = websiteURL
         self.logoURL = logoURL
-        self.copyrightURL = copyrightURL
-        self.acceptableUseURL = acceptableUseURL
-        self.privacyURL = privacyURL
+        self.copyrightURL = sanitizedLegalURL(copyrightURL, fallback: "https://wd.mertis.kz/legal/")
+        self.acceptableUseURL = sanitizedLegalURL(acceptableUseURL, fallback: "https://wd.mertis.kz/acceptable-use/")
+        self.privacyURL = sanitizedLegalURL(privacyURL, fallback: "https://wd.mertis.kz/privacy/")
         self.encryptionURL = encryptionURL
         self.deviceVerificationURL = deviceVerificationURL
         self.chatBackupDetailsURL = chatBackupDetailsURL
@@ -166,6 +171,26 @@ final class AppSettings {
         self.bugReportApplicationID = bugReportApplicationID
         self.analyticsTermsURL = analyticsTermsURL
         self.mapTilerConfiguration = mapTilerConfiguration
+    }
+
+    private func sanitizedLegalURL(_ url: URL, fallback: URL) -> URL {
+        let normalizedPath = url.path
+            .lowercased()
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let looksInvalidForLegalDocs = normalizedPath.isEmpty || normalizedPath == "mobile_guide"
+        guard looksInvalidForLegalDocs else {
+            return url
+        }
+
+        // Keep custom domains working. Only normalize when we detect the configured website host.
+        let configuredHost = websiteURL.host?.lowercased()
+        let urlHost = url.host?.lowercased()
+        guard let configuredHost, configuredHost == urlHost else {
+            return url
+        }
+
+        MXLog.warning("Invalid legal URL '\(url.absoluteString)' detected, using '\(fallback.absoluteString)' instead.")
+        return fallback
     }
     
     // MARK: - Application
@@ -192,25 +217,27 @@ final class AppSettings {
     ///
     /// Account provider is the friendly term for the server name. It should not contain an `https` prefix and should
     /// match the last part of the user ID. For example `example.com` and not `https://matrix.example.com`.
-    private(set) var accountProviders = ["matrix.org"]
+    private(set) var accountProviders = ["mertis.kz"]
     /// Whether or not the user is allowed to manually enter their own account provider or must select from one of `defaultAccountProviders`.
-    private(set) var allowOtherAccountProviders = true
+    private(set) var allowOtherAccountProviders = false
     /// Whether the components surrounding the app brand/logo should be hidden or not
     private(set) var hideBrandChrome = false
     
-    /// The task identifier used for background app refresh. Also used in main target's the Info.plist
-    let backgroundAppRefreshTaskIdentifier = "kz.salemx.msg.background.refresh"
+    /// The task identifier used for background app refresh. Also used in the main target's Info.plist.
+    var backgroundAppRefreshTaskIdentifier: String {
+        "\(InfoPlistReader.main.baseBundleIdentifier).background.refresh"
+    }
 
     /// A URL where users can go read more about the app.
     private(set) var websiteURL: URL = "https://wd.mertis.kz"
     /// A URL that contains the app's logo that may be used when showing content in a web view.
     private(set) var logoURL: URL = "https://wd.mertis.kz/logo.png"
     /// A URL that contains that app's copyright notice.
-    private(set) var copyrightURL: URL = "https://wd.mertis.kz/legal"
+    private(set) var copyrightURL: URL = "https://wd.mertis.kz/legal/"
     /// A URL that contains the app's Terms of use.
-    private(set) var acceptableUseURL: URL = "https://wd.mertis.kz/acceptable-use"
+    private(set) var acceptableUseURL: URL = "https://wd.mertis.kz/acceptable-use/"
     /// A URL that contains the app's Privacy Policy.
-    private(set) var privacyURL: URL = "https://wd.mertis.kz/privacy"
+    private(set) var privacyURL: URL = "https://wd.mertis.kz/privacy/"
     /// A URL where users can go read more about encryption in general.
     private(set) var encryptionURL: URL = "https://wd.mertis.kz/help/encryption"
     /// A URL where users can go read more about device verification..
@@ -225,7 +252,7 @@ final class AppSettings {
     /// Any domains that Element web may be hosted on - used for handling links.
     private(set) var elementWebHosts = ["wd.mertis.kz"]
     /// The domain that account provisioning links will be hosted on - used for handling the links.
-    private(set) var accountProvisioningHost = "mobile.element.io"
+    private(set) var accountProvisioningHost = "wd.mertis.kz"
     /// The App Store URL for Element Pro, shown to the user when a homeserver requires that app.
     /// **Note:** This property isn't overridable as it in unexpected for forks to come across the error (or to even have a "Pro" app).
     let elementProAppStoreURL: URL = "https://apps.apple.com/app/element-pro-for-work/id6502951615"
@@ -280,7 +307,15 @@ final class AppSettings {
         #endif
     }
     
-    private(set) var pushGatewayBaseURL: URL = "https://matrix.org"
+    var voIPPusherAppID: String {
+        #if DEBUG
+        InfoPlistReader.main.baseBundleIdentifier + ".ios.voip.dev"
+        #else
+        InfoPlistReader.main.baseBundleIdentifier + ".ios.voip.prod"
+        #endif
+    }
+    
+    private(set) var pushGatewayBaseURL: URL = InfoPlistReader.main.pushGatewayBaseURL
     var pushGatewayNotifyEndpoint: URL {
         pushGatewayBaseURL.appending(path: "_matrix/push/v1/notify")
     }
@@ -297,6 +332,10 @@ final class AppSettings {
     /// Tag describing which set of device specific rules a pusher executes.
     @UserPreference(key: UserDefaultsKeys.pusherProfileTag, storageType: .userDefaults(store))
     var pusherProfileTag: String?
+    
+    /// Tag describing which set of device specific rules the VoIP pusher executes.
+    @UserPreference(key: UserDefaultsKeys.voIPPusherProfileTag, storageType: .userDefaults(store))
+    var voIPPusherProfileTag: String?
     
     /// The device's last boot time as recorded by the NSE.
     @UserPreference(key: UserDefaultsKeys.lastNotificationBootTime, storageType: .userDefaults(store))

@@ -27,7 +27,7 @@ struct RoomTests {
         
         room.hasActiveRoomCallReturnValue = true
         callIntent = await room.joinCallIntent
-        #expect(callIntent == .joinExistingDm)
+        #expect(callIntent == .startCallDm)
         
         room.isDirectReturnValue = false
         callIntent = await room.joinCallIntent

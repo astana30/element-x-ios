@@ -1,0 +1,52 @@
+2026-04-23T12:51:06Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio
+2026-04-23T12:51:06Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio is_video_enabled=false preferred_audio_route=earpiece is_speakerphone_enabled=false
+2026-04-23T12:51:48Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio
+2026-04-23T12:51:48Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio is_video_enabled=false preferred_audio_route=earpiece is_speakerphone_enabled=false
+2026-04-23T12:52:20Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio
+2026-04-23T12:52:20Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio is_video_enabled=false preferred_audio_route=earpiece is_speakerphone_enabled=false
+2026-04-23T12:52:59Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio
+2026-04-23T12:52:59Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio is_video_enabled=false preferred_audio_route=earpiece is_speakerphone_enabled=false
+2026-04-23T13:15:45Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio
+2026-04-23T13:15:45Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio is_video_enabled=false preferred_audio_route=earpiece is_speakerphone_enabled=false
+2026-04-23T13:25:02Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio
+2026-04-23T13:25:02Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio is_video_enabled=false preferred_audio_route=earpiece is_speakerphone_enabled=false
+2026-04-23T13:25:47Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=video
+2026-04-23T13:25:47Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=video is_video_enabled=true preferred_audio_route=systemDefault is_speakerphone_enabled=false
+2026-04-23T13:26:34Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=video
+2026-04-23T13:26:34Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=video is_video_enabled=true preferred_audio_route=systemDefault is_speakerphone_enabled=false
+2026-04-23T13:27:14Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio
+2026-04-23T13:27:14Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio is_video_enabled=false preferred_audio_route=earpiece is_speakerphone_enabled=false
+2026-04-23T13:27:33Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio
+2026-04-23T13:27:33Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio is_video_enabled=false preferred_audio_route=earpiece is_speakerphone_enabled=false
+2026-04-23T13:28:07Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=video
+2026-04-23T13:28:07Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=video is_video_enabled=true preferred_audio_route=systemDefault is_speakerphone_enabled=false
+2026-04-23T13:28:55Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio
+2026-04-23T13:28:55Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio is_video_enabled=false preferred_audio_route=earpiece is_speakerphone_enabled=false
+2026-04-23T13:29:40Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio
+2026-04-23T13:29:40Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio is_video_enabled=false preferred_audio_route=earpiece is_speakerphone_enabled=false
+2026-04-23T13:29:50Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio
+2026-04-23T13:29:50Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio is_video_enabled=false preferred_audio_route=earpiece is_speakerphone_enabled=false
+2026-04-23T13:30:16Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio
+2026-04-23T13:30:16Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio is_video_enabled=false preferred_audio_route=earpiece is_speakerphone_enabled=false
+2026-04-23T13:33:53Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio
+2026-04-23T13:33:53Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio is_video_enabled=false preferred_audio_route=earpiece is_speakerphone_enabled=false
+2026-04-23T13:35:29Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio
+2026-04-23T13:35:29Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio is_video_enabled=false preferred_audio_route=earpiece is_speakerphone_enabled=false
+2026-04-24T04:18:27Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio
+2026-04-24T04:18:27Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio is_video_enabled=false preferred_audio_route=earpiece is_speakerphone_enabled=false
+2026-04-24T04:31:23Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio
+2026-04-24T04:31:23Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio is_video_enabled=false preferred_audio_route=earpiece is_speakerphone_enabled=false
+2026-04-24T04:57:37Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio
+2026-04-24T04:57:37Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio is_video_enabled=false preferred_audio_route=earpiece is_speakerphone_enabled=false
+2026-04-24T05:11:43Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio
+2026-04-24T05:11:43Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio is_video_enabled=false preferred_audio_route=earpiece is_speakerphone_enabled=false
+2026-04-24T05:12:19Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio
+2026-04-24T05:12:19Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio is_video_enabled=false preferred_audio_route=earpiece is_speakerphone_enabled=false
+2026-04-24T05:12:47Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio
+2026-04-24T05:12:47Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio is_video_enabled=false preferred_audio_route=earpiece is_speakerphone_enabled=false
+2026-04-24T05:24:27Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio
+2026-04-24T05:24:27Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio is_video_enabled=false preferred_audio_route=earpiece is_speakerphone_enabled=false
+2026-04-24T05:57:38Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio
+2026-04-24T05:57:38Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio is_video_enabled=false preferred_audio_route=earpiece is_speakerphone_enabled=false
+2026-04-24T06:20:23Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio
+2026-04-24T06:20:23Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=audio is_video_enabled=false preferred_audio_route=earpiece is_speakerphone_enabled=false

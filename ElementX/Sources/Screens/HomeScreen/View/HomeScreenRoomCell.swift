@@ -33,7 +33,6 @@ struct HomeScreenRoomCell: View {
                 
                 content
                     .padding(.vertical, verticalInsets)
-                    .rowDivider(horizontalInsets: horizontalInsets)
             }
             .padding(.horizontal, horizontalInsets)
             .accessibilityElement(children: .combine)
@@ -97,20 +96,7 @@ struct HomeScreenRoomCell: View {
                     .environment(\.redactionReasons, []) // Always maintain consistent height
                 
                 HStack(alignment: .top, spacing: 4.0) {
-                    switch room.lastMessageState {
-                    case .sending:
-                        CompoundIcon(\.time, size: .small, relativeTo: .compound.bodyMD)
-                            .foregroundStyle(.compound.iconTertiary)
-                            .offset(y: -1)
-                            .accessibilityLabel(L10n.commonSending)
-                    case .failed:
-                        CompoundIcon(\.errorSolid, size: .small, relativeTo: .compound.bodyMD)
-                            .foregroundStyle(.compound.iconCriticalPrimary)
-                            .offset(y: -1)
-                            .accessibilityHidden(true) // The last message contains the error.
-                    case .none:
-                        EmptyView()
-                    }
+                    lastMessageLeadingIcon
                     
                     lastMessage
                 }
@@ -120,7 +106,9 @@ struct HomeScreenRoomCell: View {
             
             HStack(spacing: 8) {
                 if room.badges.isCallShown {
-                    CompoundIcon(\.videoCallSolid, size: .xSmall, relativeTo: .compound.bodySM)
+                    CompoundIcon(room.lastCallEvent?.intent == .video ? \.videoCallSolid : \.voiceCallSolid,
+                                 size: .xSmall,
+                                 relativeTo: .compound.bodySM)
                         .accessibilityLabel(L10n.a11yNotificationsOngoingCall)
                 }
                 
@@ -147,6 +135,37 @@ struct HomeScreenRoomCell: View {
         CompoundIcon(\.mention, size: .custom(15), relativeTo: .compound.bodyMD)
             .accessibilityLabel(L10n.a11yNotificationsNewMentions)
     }
+
+    @ViewBuilder @MainActor
+    private var lastMessageLeadingIcon: some View {
+        switch room.lastMessageState {
+        case .sending:
+            CompoundIcon(\.time, size: .small, relativeTo: .compound.bodyMD)
+                .foregroundStyle(.compound.iconTertiary)
+                .offset(y: -1)
+                .accessibilityLabel(L10n.commonSending)
+        case .failed:
+            CompoundIcon(\.errorSolid, size: .small, relativeTo: .compound.bodyMD)
+                .foregroundStyle(.compound.iconCriticalPrimary)
+                .offset(y: -1)
+                .accessibilityHidden(true) // The last message contains the error.
+        case .none:
+            if let lastCallEvent = room.lastCallEvent {
+                HStack(spacing: 2) {
+                    CompoundIcon(lastCallEvent.compoundIcon, size: .xSmall, relativeTo: .compound.bodyMD)
+                        .foregroundStyle(lastCallEvent.compoundTintColor)
+                        .offset(y: 1)
+
+                    if let kindCompoundIcon = lastCallEvent.kindCompoundIcon {
+                        CompoundIcon(kindCompoundIcon, size: .custom(11), relativeTo: .compound.bodyMD)
+                            .foregroundStyle(.compound.textSecondary)
+                            .offset(y: 1)
+                    }
+                }
+                .accessibilityHidden(true)
+            }
+        }
+    }
     
     @ViewBuilder
     private var lastMessage: some View {
@@ -161,10 +180,44 @@ struct HomeScreenRoomCellButtonStyle: ButtonStyle {
     let isSelected: Bool
     
     func makeBody(configuration: Configuration) -> some View {
+        let isActive = isSelected || configuration.isPressed
+        let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+
         configuration.label
-            .background(isSelected ? Color.compound.bgSubtleSecondary : Color.compound.bgCanvasDefault)
-            .contentShape(Rectangle())
+            .padding(.vertical, 3)
+            .padding(.horizontal, 12)
+            .background {
+                shape
+                    .fill(Color.clear)
+                    .overlay {
+                        shape
+                            .fill(LinearGradient(colors: [
+                                SalemBrandPalette.skyLight.opacity(isActive ? 0.22 : 0.04),
+                                SalemBrandPalette.sky.opacity(isActive ? 0.14 : 0.01),
+                                Color.clear
+                            ], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    }
+                    .overlay {
+                        shape
+                            .stroke(SalemBrandPalette.sky.opacity(isActive ? 0.46 : 0.10), lineWidth: isActive ? 1.2 : 1)
+                    }
+                    .overlay(alignment: .bottom) {
+                        Capsule(style: .continuous)
+                            .fill(LinearGradient(colors: [
+                                SalemBrandPalette.skyLight.opacity(isActive ? 0.80 : 0),
+                                SalemBrandPalette.sky.opacity(isActive ? 0.45 : 0),
+                                Color.clear
+                            ], startPoint: .top, endPoint: .bottom))
+                            .frame(height: isActive ? 5 : 0)
+                            .padding(.horizontal, 28)
+                            .padding(.bottom, 5)
+                            .blur(radius: isActive ? 0.8 : 0)
+                    }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .scaleEffect(configuration.isPressed ? 0.995 : 1)
             .animation(isSelected ? .none : .easeOut(duration: 0.1).disabledDuringTests(), value: isSelected)
+            .animation(.easeOut(duration: 0.12).disabledDuringTests(), value: configuration.isPressed)
     }
 }
 
@@ -243,6 +296,7 @@ struct HomeScreenRoomCell_Previews: PreviewProvider, TestablePreview {
                                   avatarURL: .mockMXCAvatar,
                                   heroes: [],
                                   activeMembersCount: 0,
+                                  lastCallEvent: nil,
                                   lastMessage: AttributedString("How do you see the Emperor then? You think he keeps office hours?"),
                                   lastMessageDate: .mock,
                                   lastMessageState: lastMessageState,

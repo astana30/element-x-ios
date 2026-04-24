@@ -1,0 +1,463 @@
+//
+// Copyright 2025 Element Creations Ltd.
+// Copyright 2022-2025 New Vector Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
+// Please see LICENSE files in the repository root for full details.
+//
+
+import AVKit
+import CallKit
+import Combine
+import SwiftUI
+
+typealias CallScreenViewModelType = StateStoreViewModel<CallScreenViewState, CallScreenViewAction>
+
+class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol {
+    private let elementCallService: ElementCallServiceProtocol
+    private let configuration: ElementCallConfiguration
+    private let isPictureInPictureAllowed: Bool
+    private let appSettings: AppSettings
+    private let analyticsService: AnalyticsService
+    
+    private let widgetDriver: ElementCallWidgetDriverProtocol
+    
+    private let actionsSubject: PassthroughSubject<CallScreenViewModelAction, Never> = .init()
+    var actions: AnyPublisher<CallScreenViewModelAction, Never> {
+        actionsSubject.eraseToAnyPublisher()
+    }
+    
+    @CancellableTask
+    private var timeoutTask: Task<Void, Never>?
+        
+    /// Designated initialiser
+    /// - Parameters:
+    ///   - elementCallService: service responsible for setting up CallKit
+    ///   - roomProxy: The room in which the call should be created
+    ///   - callBaseURL: Which Element Call instance should be used
+    ///   - clientID: Something to identify the current client on the Element Call side
+    init(elementCallService: ElementCallServiceProtocol,
+         configuration: ElementCallConfiguration,
+         allowPictureInPicture: Bool,
+         appHooks: AppHooks,
+         appSettings: AppSettings,
+         analyticsService: AnalyticsService) {
+        self.elementCallService = elementCallService
+        self.configuration = configuration
+        self.appSettings = appSettings
+        self.analyticsService = analyticsService
+        isPictureInPictureAllowed = allowPictureInPicture
+        
+        var isGenericCallLink = false
+        var transportAuthScript: String? = nil
+        switch configuration.kind {
+        case .genericCallLink(let url):
+            widgetDriver = GenericCallLinkWidgetDriver(url: url)
+            isGenericCallLink = true
+        case .roomCall(let roomProxy, let clientProxy, _, _, _, _):
+            guard let deviceID = clientProxy.deviceID else { fatalError("Missing device ID for the call.") }
+            widgetDriver = roomProxy.elementCallWidgetDriver(deviceID: deviceID)
+            let rtcAccessToken = clientProxy.accessToken
+            print("SalemX RTC accessToken present:", !(rtcAccessToken?.isEmpty ?? true))
+            print("SalemX RTC accessToken prefix:", rtcAccessToken.map { String($0.prefix(12)) } ?? "nil")
+            transportAuthScript = Self.makeMatrixRTCTransportAuthScript(accessToken: rtcAccessToken)
+            print("SalemX RTC transportAuthScript present:", transportAuthScript != nil)
+            print("SalemX RTC transportAuthScript length:", transportAuthScript?.count ?? 0)
+        }
+        
+        super.init(initialViewState: CallScreenViewState(script: CallScreenJavaScriptMessageName.allCasesInjectionScript,
+                                                         transportAuthScript: transportAuthScript,
+                                                         isGenericCallLink: isGenericCallLink,
+                                                         certificateValidator: appHooks.certificateValidatorHook))
+        
+        elementCallService.actions
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] action in
+                guard let self else { return }
+                
+                switch action {
+                case let .setAudioEnabled(enabled, roomID):
+                    guard roomID == configuration.callRoomID else {
+                        MXLog.error("Received mute request for a different room: \(roomID) != \(configuration.callRoomID)")
+                        return
+                    }
+                    
+                    Task {
+                        await self.setAudioEnabled(enabled)
+                    }
+                default:
+                    break
+                }
+            }
+            .store(in: &cancellables)
+        
+        widgetDriver.messagePublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] receivedMessage in
+                guard let self else { return }
+                
+                Task {
+                    await self.postJSONToWidget(receivedMessage)
+                }
+            }
+            .store(in: &cancellables)
+        
+        widgetDriver.actions
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] action in
+                guard let self else { return }
+                
+                switch action {
+                case .callEnded:
+                    actionsSubject.send(.dismiss)
+                case .mediaStateChanged(let audioEnabled, _):
+                    elementCallService.setAudioEnabled(audioEnabled, roomID: configuration.callRoomID)
+                }
+            }
+            .store(in: &cancellables)
+        
+        NotificationCenter.default
+            .publisher(for: AVAudioSession.routeChangeNotification)
+            .sink { [weak self] _ in
+                Task { await self?.updateOutputsListOnWeb() }
+            }
+            .store(in: &cancellables)
+        
+        setupCall()
+    }
+    
+    override func process(viewAction: CallScreenViewAction) {
+        switch viewAction {
+        case .urlChanged(let url):
+            guard let url else { return }
+            MXLog.info("URL changed to: \(url)")
+        case .pictureInPictureIsAvailable(let controller):
+            actionsSubject.send(.pictureInPictureIsAvailable(controller))
+        case .navigateBack:
+            Task { await handleBackwardsNavigation() }
+        case .pictureInPictureWillStop:
+            actionsSubject.send(.pictureInPictureStopped)
+        case .endCall:
+            actionsSubject.send(.dismiss)
+        case .mediaCapturePermissionGranted:
+            Task { await updateOutputsListOnWeb() }
+        case .outputDeviceSelected(deviceID: let deviceID):
+            handleOutputDeviceSelected(deviceID: deviceID)
+        case .widgetAction(let message):
+            Task { await handleWidgetAction(message: message) }
+        }
+    }
+    
+    func stop() {
+        Task {
+            await hangup()
+        }
+        
+        elementCallService.tearDownCallSession()
+        UIDevice.current.isProximityMonitoringEnabled = false
+    }
+    
+    // MARK: - Private
+
+    private static func makeMatrixRTCTransportAuthScript(accessToken: String?) -> String? {
+        guard let accessToken, !accessToken.isEmpty else { return nil }
+
+        let tokenLiteral = String(reflecting: accessToken)
+
+        return """
+        (() => {
+          const SALEMX_MATRIX_TOKEN = \(tokenLiteral);
+          const AUTH_VALUE = "Bearer " + SALEMX_MATRIX_TOKEN;
+
+          const shouldPatch = (input) => {
+            const url = typeof input === "string" ? input : (input && input.url) || "";
+            return url.includes("/_matrix/client/unstable/org.matrix.msc4143/rtc/transports") ||
+                   url.includes("/_matrix/client/v1/rtc/transports");
+          };
+
+          const withAuthHeaders = (headersLike) => {
+            const headers = new Headers(headersLike || {});
+            if (!headers.has("Authorization")) {
+              headers.set("Authorization", AUTH_VALUE);
+            }
+            return headers;
+          };
+
+          const originalFetch = window.fetch.bind(window);
+          window.fetch = function(input, init = {}) {
+            try {
+              if (shouldPatch(input)) {
+                init = { ...init, headers: withAuthHeaders(init.headers) };
+              }
+            } catch (_) {}
+            return originalFetch(input, init);
+          };
+
+          const originalOpen = XMLHttpRequest.prototype.open;
+          const originalSend = XMLHttpRequest.prototype.send;
+
+          XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+            try {
+              this.__salemxNeedsMatrixAuth = shouldPatch(url);
+            } catch (_) {
+              this.__salemxNeedsMatrixAuth = false;
+            }
+            return originalOpen.call(this, method, url, ...rest);
+          };
+
+          XMLHttpRequest.prototype.send = function(body) {
+            try {
+              if (this.__salemxNeedsMatrixAuth) {
+                this.setRequestHeader("Authorization", AUTH_VALUE);
+              }
+            } catch (_) {}
+            return originalSend.call(this, body);
+          };
+        })();
+        """
+    }
+
+    private func handleWidgetAction(message: String) async {
+        print("SalemX raw widget message:", message)
+
+        guard let decodedMessage = try? DecodedWidgetMessage.decode(message: message) else {
+            print("SalemX widget decode failed, forwarding to widgetDriver")
+            await widgetDriver.handleMessage(message)
+            return
+        }
+
+        print("SalemX decoded widget action:", decodedMessage.action ?? "nil",
+              "api:", decodedMessage.api ?? "nil",
+              "requestId:", decodedMessage.requestId ?? "nil")
+
+        if decodedMessage.api == "toWidget" {
+            print("SalemX ignoring toWidget message")
+            return
+        }
+
+        if timeoutTask != nil, decodedMessage.hasLoaded {
+            timeoutTask = nil
+        }
+
+        guard let action = decodedMessage.action else {
+            print("SalemX widget action missing, ignoring message")
+            return
+        }
+
+        switch action {
+        case "io.element.join":
+            print("SalemX intercepting io.element.join")
+            timeoutTask = nil
+            await postWidgetSuccessResponse(decodedMessage)
+            return
+
+        case "io.element.close":
+            print("SalemX intercepting io.element.close")
+            actionsSubject.send(.dismiss)
+            await postWidgetSuccessResponse(decodedMessage)
+            return
+
+        case "io.element.device_mute":
+            print("SalemX intercepting io.element.device_mute")
+            if let audioEnabled = decodedMessage.data?.audioEnabled {
+                elementCallService.setAudioEnabled(audioEnabled, roomID: configuration.callRoomID)
+            }
+            await postWidgetSuccessResponse(decodedMessage)
+            return
+
+        case "set_always_on_screen":
+            print("SalemX intercepting set_always_on_screen")
+            await postWidgetSuccessResponse(decodedMessage)
+            return
+
+        default:
+            print("SalemX forwarding unsupported widget action:", action)
+            await widgetDriver.handleMessage(message)
+        }
+    }
+    
+    
+    private func postWidgetSuccessResponse(_ decodedMessage: DecodedWidgetMessage) async {
+        guard let requestId = decodedMessage.requestId else {
+            return
+        }
+
+        var payload: [String: Any] = [
+            "api": "toWidget",
+            "requestId": requestId,
+            "response": [:]
+        ]
+
+        payload["widgetId"] = decodedMessage.widgetId ?? widgetDriver.widgetID
+        payload["action"] = decodedMessage.action
+
+        do {
+            let data = try JSONSerialization.data(withJSONObject: payload, options: [])
+            guard let json = String(data: data, encoding: .utf8) else {
+                MXLog.error("Failed converting widget success response to JSON string")
+                return
+            }
+            await postJSONToWidget(json)
+        } catch {
+            MXLog.error("Failed encoding widget success response with error: \(error)")
+        }
+    }
+
+private func setupCall() {
+        switch configuration.kind {
+        case .genericCallLink(let url):
+            state.url = url
+            // We need widget messaging to work before enabling CallKit, otherwise mute, hangup etc do nothing.
+            
+        case .roomCall(let roomProxy, _, let clientID, let elementCallBaseURL, let elementCallBaseURLOverride, let colorScheme):
+            Task { [weak self] in
+                guard let self else { return }
+                
+                let baseURL = if let elementCallBaseURLOverride {
+                    elementCallBaseURLOverride
+                } else {
+                    elementCallBaseURL
+                }
+                
+                // We only set the analytics configuration if analytics are enabled
+                let analyticsConfiguration: ElementCallAnalyticsConfiguration? = if analyticsService.isEnabled {
+                    .init(posthogAPIHost: appSettings.elementCallPosthogAPIHost,
+                          posthogAPIKey: appSettings.elementCallPosthogAPIKey,
+                          sentryDSN: appSettings.elementCallPosthogSentryDSN)
+                } else {
+                    nil
+                }
+                let rageshakeURL: String? = if case let .url(baseURL) = appSettings.bugReportRageshakeURL.publisher.value {
+                    baseURL.absoluteString
+                } else {
+                    nil
+                }
+                
+                switch await widgetDriver.start(baseURL: baseURL,
+                                                clientID: clientID,
+                                                colorScheme: colorScheme,
+                                                rageshakeURL: rageshakeURL,
+                                                analyticsConfiguration: analyticsConfiguration) {
+                case .success(let url):
+                    state.url = url
+                case .failure(let error):
+                    MXLog.error("Failed starting ElementCall Widget Driver with error: \(error)")
+                    state.bindings.alertInfo = .init(id: UUID(),
+                                                     title: L10n.errorUnknown,
+                                                     primaryButton: .init(title: L10n.actionOk) {
+                                                         self.actionsSubject.send(.dismiss)
+                                                     })
+                    return
+                }
+                
+                await elementCallService.setupCallSession(roomID: roomProxy.id,
+                                                          roomDisplayName: roomProxy.infoPublisher.value.displayName ?? roomProxy.id)
+            }
+            
+            timeoutTask = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(10))
+                guard !Task.isCancelled, let self else { return }
+                MXLog.error("Failed to join Element Call: Timeout")
+                state.bindings.alertInfo = .init(id: UUID(),
+                                                 title: L10n.commonError,
+                                                 message: L10n.errorUnknown,
+                                                 primaryButton: .init(title: L10n.actionDismiss) { [weak self] in self?.actionsSubject.send(.dismiss) })
+                timeoutTask = nil
+            }
+        }
+    }
+    
+    /// This should always match the web app value
+    private static let earpieceID = "earpiece-id"
+    
+    private func handleOutputDeviceSelected(deviceID: String) {
+        let isEarpiece = deviceID == Self.earpieceID
+        MXLog.info("Is earpiece: \(isEarpiece)")
+        UIDevice.current.isProximityMonitoringEnabled = isEarpiece
+    }
+    
+    private func handleBackwardsNavigation() async {
+        guard state.url != nil,
+              isPictureInPictureAllowed,
+              let requestPictureInPictureHandler = state.bindings.requestPictureInPictureHandler else {
+            actionsSubject.send(.dismiss)
+            return
+        }
+        
+        switch await requestPictureInPictureHandler() {
+        case .success:
+            actionsSubject.send(.pictureInPictureStarted)
+        case .failure:
+            actionsSubject.send(.dismiss)
+        }
+    }
+    
+    private func setAudioEnabled(_ enabled: Bool) async {
+        let message = ElementCallWidgetMessage(direction: .toWidget,
+                                               action: .mediaState,
+                                               data: .init(audioEnabled: enabled),
+                                               widgetId: widgetDriver.widgetID)
+        await postMessageToWidget(message)
+    }
+    
+    func hangup() async {
+        let message = ElementCallWidgetMessage(direction: .fromWidget,
+                                               action: .hangup,
+                                               widgetId: widgetDriver.widgetID)
+        
+        await postMessageToWidget(message)
+    }
+    
+    private func postMessageToWidget(_ message: ElementCallWidgetMessage) async {
+        let data: Data
+        do {
+            data = try JSONEncoder().encode(message)
+        } catch {
+            MXLog.error("Failed encoding widget message with error: \(error)")
+            return
+        }
+        
+        guard let json = String(data: data, encoding: .utf8) else {
+            MXLog.error("Invalid data for widget message")
+            return
+        }
+        
+        await postJSONToWidget(json)
+    }
+    
+    private func postJSONToWidget(_ json: String) async {
+        do {
+            let message = "postMessage(\(json), '*')"
+            let result = try await state.bindings.javaScriptEvaluator?(message)
+            MXLog.debug("Evaluated javascript: \(json) with result: \(String(describing: result))")
+        } catch {
+            MXLog.error("Received javascript evaluation error: \(error)")
+        }
+    }
+    
+    /// This function updates the list of available audio outputs on the web side
+    /// however since we actually handle switching the audio output through the OS,
+    /// this is only used to inform the webview when the speaker is selected,
+    /// so that the option to use the earpiece can be displayed.
+    private func updateOutputsListOnWeb() async {
+        guard let currentOutput = AVAudioSession.sharedInstance().currentRoute.outputs.first else {
+            return
+        }
+        
+        let deviceList = if currentOutput.portType == .builtInSpeaker {
+            // This allows the webview to display the earpiece option
+            "{id: '\(currentOutput.uid)', name: '\(currentOutput.portName)', forEarpiece: true, isSpeaker: true}"
+        } else {
+            // Doesn't matter because the switch is handled through the OS
+            "{id: 'dummy', name: 'dummy'}"
+        }
+        
+        let javaScript = "window.controls.setAvailableOutputDevices([\(deviceList)])"
+        do {
+            let result = try await state.bindings.javaScriptEvaluator?(javaScript)
+            MXLog.debug("Evaluated  with result: \(String(describing: result))")
+        } catch {
+            MXLog.error("Received javascript evaluation error: \(error)")
+        }
+    }
+}

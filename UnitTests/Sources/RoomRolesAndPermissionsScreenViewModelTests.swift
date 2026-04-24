@@ -55,7 +55,7 @@ struct RoomRolesAndPermissionsScreenViewModelTests {
         context.send(viewAction: .editOwnUserRole)
         #expect(context.alertInfo != nil)
 
-        context.alertInfo?.verticalButtons?.first { $0.title.localizedStandardContains("moderator") }?.action?()
+        context.alertInfo?.verticalButtons?.first { $0.title == L10n.screenRoomRolesAndPermissionsChangeRoleDemoteToModerator }?.action?()
 
         try await Task.sleep(for: .milliseconds(100))
 
@@ -70,7 +70,7 @@ struct RoomRolesAndPermissionsScreenViewModelTests {
         context.send(viewAction: .editOwnUserRole)
         #expect(context.alertInfo != nil)
 
-        context.alertInfo?.verticalButtons?.first { $0.title.localizedStandardContains("member") }?.action?()
+        context.alertInfo?.verticalButtons?.first { $0.title == L10n.screenRoomRolesAndPermissionsChangeRoleDemoteToMember }?.action?()
 
         try await Task.sleep(for: .milliseconds(100))
 

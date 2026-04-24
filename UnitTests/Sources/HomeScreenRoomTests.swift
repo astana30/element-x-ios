@@ -8,6 +8,7 @@
 
 import Combine
 @testable import ElementX
+import Foundation
 import Testing
 
 @MainActor
@@ -29,6 +30,7 @@ struct HomeScreenRoomTests {
                                   avatarURL: nil,
                                   heroes: [],
                                   activeMembersCount: 0,
+                                  lastCallEvent: nil,
                                   lastMessage: nil,
                                   lastMessageDate: nil,
                                   lastMessageState: nil,
@@ -242,5 +244,36 @@ struct HomeScreenRoomTests {
         #expect(room.badges.isCallShown)
         #expect(room.badges.isMuteShown)
         #expect(!room.badges.isMentionShown)
+    }
+
+    @Test
+    mutating func lastCallEventIsPreserved() {
+        roomSummary = RoomSummary(room: .init(noHandle: .init()),
+                                  id: "Test room",
+                                  joinRequestType: nil,
+                                  name: "Test room",
+                                  isDirect: true,
+                                  isSpace: false,
+                                  avatarURL: nil,
+                                  heroes: [],
+                                  activeMembersCount: 0,
+                                  lastCallEvent: .init(state: .missed, intent: .video),
+                                  lastMessage: AttributedString("Missed video call"),
+                                  lastMessageDate: nil,
+                                  lastMessageState: nil,
+                                  unreadMessagesCount: 0,
+                                  unreadMentionsCount: 0,
+                                  unreadNotificationsCount: 0,
+                                  notificationMode: .allMessages,
+                                  canonicalAlias: nil,
+                                  alternativeAliases: [],
+                                  hasOngoingCall: false,
+                                  isMarkedUnread: false,
+                                  isFavourite: false,
+                                  isTombstoned: false)
+
+        let room = HomeScreenRoom(summary: roomSummary, hideUnreadMessagesBadge: false)
+
+        #expect(room.lastCallEvent == .init(state: .missed, intent: .video))
     }
 }

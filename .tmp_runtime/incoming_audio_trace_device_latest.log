@@ -1,0 +1,16 @@
+2026-04-23T12:51:58Z [CALL-INCOMING-TRACE][APP-ANSWER] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz callkit_id=A7B0C0C1-181F-4F35-A29F-A762CA934C83 start_mode=video
+2026-04-23T12:51:59Z [CALL-INCOMING-TRACE][APP-START-CALL-SEND] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=video
+2026-04-23T12:51:59Z [CALL-INCOMING-TRACE][APP-COORDINATOR-START-CALL] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=video
+2026-04-23T12:51:59Z [CALL-INCOMING-TRACE][USER-SESSION-START-CALL] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=video
+2026-04-23T12:51:59Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-BY-ID] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=video
+2026-04-23T12:51:59Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=video
+2026-04-23T12:51:59Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=video is_video_enabled=true preferred_audio_route=systemDefault is_speakerphone_enabled=false
+2026-04-23T13:15:48Z [CALL-INCOMING-TRACE][APP-FALLBACK-CANDIDATE] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz source=app_fallback raw_payload_keys=nil raw_source=room_summary is_direct=true has_ongoing_call=true active_participants=["@aktau:mertis.kz"] last_call_state=Optional(SalemX.RoomCallEvent.State.started) last_call_intent=Optional(SalemX.RoomCallEvent.Intent.unknown) parsed_intent_result=video
+2026-04-23T13:15:48Z [CALL-INCOMING-TRACE][APP-FALLBACK-CALLKIT] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz source=app_fallback start_mode=video has_video=true caller_name_source=roomSummary
+2026-04-23T13:15:55Z [CALL-INCOMING-TRACE][APP-ANSWER] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz callkit_id=3E773EE4-A1C3-4F2D-B294-FFC10B2E76E9 start_mode=video
+2026-04-23T13:15:56Z [CALL-INCOMING-TRACE][APP-START-CALL-SEND] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=video
+2026-04-23T13:15:56Z [CALL-INCOMING-TRACE][APP-COORDINATOR-START-CALL] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=video
+2026-04-23T13:15:56Z [CALL-INCOMING-TRACE][USER-SESSION-START-CALL] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=video
+2026-04-23T13:15:56Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-BY-ID] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=video
+2026-04-23T13:15:56Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=video
+2026-04-23T13:15:56Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=video is_video_enabled=true preferred_audio_route=systemDefault is_speakerphone_enabled=false

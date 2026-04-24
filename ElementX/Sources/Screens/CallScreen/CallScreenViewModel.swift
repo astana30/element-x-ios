@@ -108,6 +108,9 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                                                          isSpeakerphoneEnabled: preferredAudioRoute == .speaker,
                                                          certificateValidator: appHooks.certificateValidatorHook),
                    mediaProvider: mediaProvider)
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=\(configuration.callRoomID) start_mode=\(configuration.startMode) " +
+            "is_video_enabled=\(state.isVideoEnabled) preferred_audio_route=\(preferredAudioRoute) " +
+            "is_speakerphone_enabled=\(state.isSpeakerphoneEnabled)")
         
         elementCallService.actions
             .receive(on: DispatchQueue.main)
@@ -133,6 +136,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                     requestLocalCallTermination(sendHangupMessage: false)
                 case let .requestCallTermination(roomID):
                     guard roomID == configuration.callRoomID else { return }
+                    IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-VM-REQUEST-RECEIVED] room_id=\(roomID)")
                     requestLocalCallTermination()
                 default:
                     break
@@ -478,6 +482,13 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     }
     
     private func handleBackwardsNavigation() async {
+        if case .roomCall(let roomProxy, _, _, _, _, _, _) = configuration.kind,
+           !hasJoinedWidgetCall,
+           elementCallService.isPreAnswerOutgoingCall(roomID: roomProxy.id) {
+            requestLocalCallTermination(sendHangupMessage: true)
+            return
+        }
+
         guard state.url != nil,
               isPictureInPictureAllowed,
               let requestPictureInPictureHandler = state.bindings.requestPictureInPictureHandler else {
@@ -543,9 +554,11 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         case .genericCallLink:
             _ = await hangup(waitingFor: setupTask)
         case .roomCall(let roomProxy, _, _, _, _, _, _):
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DISPATCH] room_id=\(roomProxy.id) step=start")
             async let widgetHangup: Bool = hangup(waitingFor: setupTask)
             await elementCallService.requestCallTermination(roomID: roomProxy.id)
-            _ = await widgetHangup
+            let widgetHangupSent = await widgetHangup
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DISPATCH] room_id=\(roomProxy.id) step=done widget_hangup_sent=\(widgetHangupSent)")
         }
     }
     
@@ -596,7 +609,16 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
 
         switch action {
         case .close:
-            let sendHangupMessage = hasJoinedWidgetCall
+            let sendHangupMessage: Bool
+            switch configuration.kind {
+            case .roomCall:
+                // Pre-join close in a direct room call must still emit a cancel/hangup signal.
+                sendHangupMessage = true
+            case .genericCallLink:
+                sendHangupMessage = hasJoinedWidgetCall
+            }
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-LOCAL-CLOSE] room_id=\(configuration.callRoomID) " +
+                "has_joined_widget_call=\(hasJoinedWidgetCall) send_hangup_message=\(sendHangupMessage)")
             requestLocalCallTermination(sendHangupMessage: sendHangupMessage)
             Task { [weak self] in
                 await self?.acknowledgeWidgetRequest(requestPayload)

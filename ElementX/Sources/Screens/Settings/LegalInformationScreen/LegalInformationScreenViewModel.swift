@@ -13,8 +13,9 @@ typealias LegalInformationScreenViewModelType = StateStoreViewModelV2<LegalInfor
 
 class LegalInformationScreenViewModel: LegalInformationScreenViewModelType, LegalInformationScreenViewModelProtocol {
     init(appSettings: AppSettings) {
-        super.init(initialViewState: LegalInformationScreenViewState(copyrightURL: appSettings.copyrightURL,
-                                                                     acceptableUseURL: appSettings.acceptableUseURL,
-                                                                     privacyURL: appSettings.privacyURL))
+        let viewState = LegalInformationScreenViewState(copyrightURL: appSettings.copyrightURL,
+                                                        acceptableUseURL: appSettings.acceptableUseURL,
+                                                        privacyURL: appSettings.privacyURL)
+        super.init(initialViewState: viewState)
     }
 }

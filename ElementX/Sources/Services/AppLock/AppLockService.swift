@@ -38,8 +38,7 @@ class AppLockService: AppLockServiceProtocol {
     }
     
     var biometryType: LABiometryType {
-        updateBiometrics()
-        guard context.evaluatedPolicyDomainState != nil else { return .none }
+        guard currentBiometricStateHash() != nil else { return .none }
         return context.biometryType
     }
     
@@ -49,8 +48,7 @@ class AppLockService: AppLockServiceProtocol {
     
     var biometricUnlockTrusted: Bool {
         guard let state = keychainController.pinCodeBiometricState() else { return false }
-        updateBiometrics()
-        return state == context.evaluatedPolicyDomainState
+        return state == currentBiometricStateHash()
     }
     
     var numberOfPINAttempts: AnyPublisher<Int, Never> {
@@ -88,7 +86,7 @@ class AppLockService: AppLockServiceProtocol {
     
     func enableBiometricUnlock() -> Result<Void, AppLockServiceError> {
         guard isEnabled else { return .failure(.pinNotSet) }
-        guard let state = context.evaluatedPolicyDomainState else { return .failure(.biometricUnlockNotSupported) }
+        guard let state = currentBiometricStateHash() else { return .failure(.biometricUnlockNotSupported) }
         
         do {
             try keychainController.setPINCodeBiometricState(state)
@@ -173,6 +171,21 @@ class AppLockService: AppLockServiceProtocol {
         if let error {
             MXLog.error("Biometrics error: \(error)")
         }
+    }
+    
+    private func currentBiometricStateHash() -> Data? {
+        updateBiometrics()
+        
+        // LAContextMock still drives the legacy state value, so keep the lookup aligned in tests.
+        if let context = context as? LAContextMock {
+            return context.evaluatedPolicyDomainState
+        }
+        
+        if #available(iOS 18.0, *) {
+            return context.domainState.biometry.stateHash
+        }
+        
+        return context.value(forKey: "evaluatedPolicyDomainState") as? Data
     }
     
     /// Creates a context specifically for unlocking the app. The titles are customised,

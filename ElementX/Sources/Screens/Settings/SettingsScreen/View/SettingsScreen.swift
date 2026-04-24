@@ -7,44 +7,88 @@
 //
 
 import Compound
-import SFSafeSymbols
 import SwiftUI
 
 private struct SettingsTintedIcon: View {
+    struct Palette {
+        let icon: Color
+        let gradientStart: Color
+        let gradientEnd: Color
+        let glow: Color
+
+        static let amber = Palette(icon: Color(red: 0.39, green: 0.26, blue: 0.02),
+                                   gradientStart: Color(red: 1.00, green: 0.90, blue: 0.58),
+                                   gradientEnd: Color(red: 0.95, green: 0.73, blue: 0.24),
+                                   glow: Color(red: 1.00, green: 0.78, blue: 0.28))
+        static let coral = Palette(icon: Color(red: 0.43, green: 0.07, blue: 0.11),
+                                   gradientStart: Color(red: 1.00, green: 0.78, blue: 0.76),
+                                   gradientEnd: Color(red: 0.95, green: 0.44, blue: 0.44),
+                                   glow: Color(red: 0.98, green: 0.46, blue: 0.46))
+        static let emerald = Palette(icon: Color(red: 0.05, green: 0.35, blue: 0.15),
+                                     gradientStart: Color(red: 0.73, green: 0.95, blue: 0.77),
+                                     gradientEnd: Color(red: 0.34, green: 0.80, blue: 0.47),
+                                     glow: Color(red: 0.29, green: 0.83, blue: 0.49))
+        static let cyan = Palette(icon: Color(red: 0.05, green: 0.29, blue: 0.45),
+                                  gradientStart: Color(red: 0.74, green: 0.93, blue: 1.00),
+                                  gradientEnd: Color(red: 0.40, green: 0.73, blue: 0.95),
+                                  glow: Color(red: 0.37, green: 0.78, blue: 0.98))
+        static let indigo = Palette(icon: Color(red: 0.06, green: 0.18, blue: 0.39),
+                                    gradientStart: Color(red: 0.74, green: 0.84, blue: 1.00),
+                                    gradientEnd: Color(red: 0.44, green: 0.58, blue: 0.95),
+                                    glow: Color(red: 0.46, green: 0.66, blue: 1.00))
+        static let violet = Palette(icon: Color(red: 0.20, green: 0.11, blue: 0.45),
+                                    gradientStart: Color(red: 0.88, green: 0.83, blue: 1.00),
+                                    gradientEnd: Color(red: 0.64, green: 0.55, blue: 0.95),
+                                    glow: Color(red: 0.65, green: 0.53, blue: 0.96))
+        static let slate = Palette(icon: Color(red: 0.17, green: 0.22, blue: 0.32),
+                                   gradientStart: Color(red: 0.90, green: 0.93, blue: 0.98),
+                                   gradientEnd: Color(red: 0.66, green: 0.74, blue: 0.86),
+                                   glow: Color(red: 0.56, green: 0.66, blue: 0.82))
+    }
+
     let icon: KeyPath<CompoundIcons, Image>
-    let foreground: Color
-    let background: Color
+    let palette: Palette
 
     var body: some View {
-        CompoundIcon(icon, size: .medium, relativeTo: .compound.bodyLG)
-            .foregroundColor(foreground)
-            .frame(width: 36, height: 36)
-            .background {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(LinearGradient(stops: [
-                            .init(color: background.opacity(0.98), location: 0.00),
-                            .init(color: background.opacity(0.90), location: 0.62),
-                            .init(color: background.opacity(0.82), location: 1.00)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color.white.opacity(0.42), lineWidth: 0.8)
-                            .blendMode(.plusLighter)
-                    }
-                    .overlay(alignment: .top) {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(LinearGradient(stops: [
-                                    .init(color: Color.white.opacity(0.24), location: 0.00),
-                                    .init(color: Color.white.opacity(0.10), location: 0.30),
-                                    .init(color: Color.clear, location: 0.62)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom))
-                    }
-                    .shadow(color: foreground.opacity(0.10), radius: 8, x: 0, y: 4)
-            }
+        ZStack {
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .fill(LinearGradient(colors: [
+                    palette.gradientStart,
+                    palette.gradientEnd
+                ], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .stroke(LinearGradient(colors: [
+                            Color.white.opacity(0.65),
+                            Color.white.opacity(0.18)
+                        ], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 0.9)
+                }
+                .overlay(alignment: .topLeading) {
+                    Circle()
+                        .fill(LinearGradient(colors: [
+                            Color.white.opacity(0.42),
+                            Color.white.opacity(0.02)
+                        ], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 13, height: 13)
+                        .offset(x: 5, y: 4)
+                }
+                .overlay(alignment: .bottom) {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(LinearGradient(colors: [
+                            Color.white.opacity(0.36),
+                            Color.clear
+                        ], startPoint: .top, endPoint: .bottom))
+                        .frame(height: 8)
+                        .padding(.horizontal, 5)
+                        .offset(y: 1)
+                }
+                .shadow(color: palette.glow.opacity(0.32), radius: 9, x: 0, y: 4)
+
+            CompoundIcon(icon, size: .medium, relativeTo: .compound.bodyLG)
+                .foregroundColor(palette.icon)
+                .shadow(color: Color.white.opacity(0.25), radius: 0, x: 0, y: 1)
+        }
+        .frame(width: 40, height: 40)
     }
 }
 
@@ -62,6 +106,8 @@ struct SettingsScreen: View {
             signOutSection
         }
         .compoundList()
+        .scrollContentBackground(.hidden)
+        .salemScreenBackground()
         .navigationTitle(L10n.commonSettings)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
@@ -105,8 +151,7 @@ struct SettingsScreen: View {
         Section(L10n.screenSettingsAccountAndSecurityTitle) {
             ListRow(label: .default(title: L10n.screenNotificationSettingsTitle,
                                     icon: SettingsTintedIcon(icon: \.notifications,
-                                                             foreground: Color(red: 0.77, green: 0.58, blue: 0.06),
-                                                             background: Color(red: 1.00, green: 0.94, blue: 0.79))),
+                                                             palette: .amber)),
                     kind: .navigationLink {
                         context.send(viewAction: .notifications)
                     })
@@ -114,8 +159,7 @@ struct SettingsScreen: View {
             
             ListRow(label: .default(title: L10n.commonScreenLock,
                                     icon: SettingsTintedIcon(icon: \.lock,
-                                                             foreground: Color(red: 0.76, green: 0.28, blue: 0.24),
-                                                             background: Color(red: 1.00, green: 0.90, blue: 0.88))),
+                                                             palette: .coral)),
                     kind: .navigationLink {
                         context.send(viewAction: .appLock)
                     })
@@ -125,8 +169,7 @@ struct SettingsScreen: View {
             case .secureBackup:
                 ListRow(label: .default(title: L10n.commonEncryption,
                                         icon: SettingsTintedIcon(icon: \.key,
-                                                                 foreground: Color(red: 0.19, green: 0.57, blue: 0.28),
-                                                                 background: Color(red: 0.88, green: 0.97, blue: 0.89))),
+                                                                 palette: .emerald)),
                         details: context.viewState.showSecuritySectionBadge ? .icon(securitySectionBadge) : nil,
                         kind: .navigationLink { context.send(viewAction: .secureBackup) })
                     .accessibilityIdentifier(A11yIdentifiers.settingsScreen.secureBackup)
@@ -136,7 +179,8 @@ struct SettingsScreen: View {
             
             if context.viewState.showLinkNewDeviceButton {
                 ListRow(label: .default(title: L10n.commonLinkNewDevice,
-                                        icon: \.devices),
+                                        icon: SettingsTintedIcon(icon: \.devices,
+                                                                 palette: .cyan)),
                         kind: .navigationLink {
                             context.send(viewAction: .linkNewDevice)
                         })
@@ -145,8 +189,7 @@ struct SettingsScreen: View {
             if let url = context.viewState.accountProfileURL {
                 ListRow(label: .default(title: L10n.actionManageAccount,
                                         icon: SettingsTintedIcon(icon: \.userProfile,
-                                                                 foreground: Color(red: 0.13, green: 0.43, blue: 0.82),
-                                                                 background: Color(red: 0.88, green: 0.94, blue: 1.00))),
+                                                                 palette: .indigo)),
                         kind: .button {
                             context.send(viewAction: .manageAccount(url: url))
                         })
@@ -156,8 +199,7 @@ struct SettingsScreen: View {
             if let url = context.viewState.accountSessionsListURL {
                 ListRow(label: .default(title: L10n.actionManageDevices,
                                         icon: SettingsTintedIcon(icon: \.devices,
-                                                                 foreground: Color(red: 0.13, green: 0.43, blue: 0.82),
-                                                                 background: Color(red: 0.88, green: 0.94, blue: 1.00))),
+                                                                 palette: .violet)),
                         kind: .button {
                             context.send(viewAction: .manageAccount(url: url))
                         })
@@ -165,7 +207,8 @@ struct SettingsScreen: View {
             
             if context.viewState.showBlockedUsers {
                 ListRow(label: .default(title: L10n.commonBlockedUsers,
-                                        icon: \.block),
+                                        icon: SettingsTintedIcon(icon: \.block,
+                                                                 palette: .coral)),
                         kind: .navigationLink {
                             context.send(viewAction: .blockedUsers)
                         })
@@ -178,8 +221,7 @@ struct SettingsScreen: View {
         Section {
             ListRow(label: .default(title: L10n.commonAdvancedSettings,
                                     icon: SettingsTintedIcon(icon: \.settings,
-                                                             foreground: Color(red: 0.53, green: 0.38, blue: 0.20),
-                                                             background: Color(red: 0.95, green: 0.90, blue: 0.84))),
+                                                             palette: .amber)),
                     kind: .navigationLink {
                         context.send(viewAction: .advancedSettings)
                     })
@@ -187,8 +229,7 @@ struct SettingsScreen: View {
 
             ListRow(label: .default(title: L10n.screenAboutSalemxTitle,
                                     icon: SettingsTintedIcon(icon: \.info,
-                                                             foreground: Color(red: 0.34, green: 0.42, blue: 0.54),
-                                                             background: Color(red: 0.92, green: 0.94, blue: 0.97))),
+                                                             palette: .slate)),
                     kind: .navigationLink {
                         context.send(viewAction: .about)
                     })

@@ -8,6 +8,41 @@
 
 import Foundation
 
+enum IncomingCallTraceFile {
+    private static let fileName = "incoming-call-trace.log"
+
+    static var fileURL: URL {
+        URL.appGroupContainerDirectory.appending(component: fileName)
+    }
+
+    static func log(_ message: String) {
+        MXLog.info(message)
+        append(message)
+    }
+
+    private static func append(_ message: String) {
+        let line = "\(ISO8601DateFormatter().string(from: Date())) \(message)\n"
+        guard let data = line.data(using: .utf8) else {
+            return
+        }
+
+        do {
+            let fileManager = FileManager.default
+            let url = fileURL
+            if !fileManager.fileExists(atPath: url.path) {
+                try Data().write(to: url, options: .atomic)
+            }
+
+            let handle = try FileHandle(forWritingTo: url)
+            try handle.seekToEnd()
+            handle.write(data)
+            try handle.close()
+        } catch {
+            NSLog("[CALL-INCOMING-TRACE][FILE-WRITE-ERROR] \(error)")
+        }
+    }
+}
+
 // MARK: - Custom URLs
 
 extension URL {

@@ -115,7 +115,7 @@ struct SessionVerificationRequestDetailsView_Previews: PreviewProvider, Testable
                                                                                            avatarURL: .mockMXCUserAvatar),
                                                            flowID: "123",
                                                            deviceID: "CODEMISTAKE",
-                                                           deviceDisplayName: "Bob's SalemX iOS",
+                                                           deviceDisplayName: "Bob's \(InfoPlistReader.main.bundleDisplayName) iOS",
                                                            firstSeenDate: .init(timeIntervalSince1970: 0))
     
     static var previews: some View {

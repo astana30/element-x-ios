@@ -176,6 +176,7 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
             .sink { [weak self] action in
                 switch action {
                 case .startCall(let roomID, let startMode):
+                    IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-COORDINATOR-START-CALL] room_id=\(roomID) start_mode=\(startMode)")
                     if let userSessionFlowCoordinator = self?.userSessionFlowCoordinator {
                         userSessionFlowCoordinator.startCall(roomID: roomID, startMode: startMode)
                     } else {

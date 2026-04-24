@@ -78,9 +78,9 @@ struct CompletionSuggestionServiceTests {
         try await deferred.fulfill()
         
         deferred = deferFulfillment(service.suggestionsPublisher) { suggestions in
-            suggestions == [.init(suggestionType: .allUsers(.room(id: "roomID", name: "test", avatarURL: nil)), range: .init(), rawSuggestionText: "every")]
+            suggestions == [.init(suggestionType: .allUsers(.room(id: "roomID", name: "test", avatarURL: nil)), range: .init(), rawSuggestionText: L10n.commonEveryone)]
         }
-        service.setSuggestionTrigger(.init(type: .user, text: "every", range: .init()))
+        service.setSuggestionTrigger(.init(type: .user, text: L10n.commonEveryone, range: .init()))
         try await deferred.fulfill()
     }
     

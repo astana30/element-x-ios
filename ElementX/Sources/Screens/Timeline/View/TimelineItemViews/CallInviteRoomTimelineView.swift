@@ -6,23 +6,15 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
-import Compound
-import Foundation
 import SwiftUI
 
 struct CallInviteRoomTimelineView: View {
     let timelineItem: CallInviteRoomTimelineItem
     
     var body: some View {
-        Label {
-            Text(L10n.screenRoomTimelineLegacyCall)
-        } icon: {
-            CompoundIcon(\.voiceCallSolid, size: .medium, relativeTo: .compound.bodyMD)
-        }
-        .font(.compound.bodyMD)
-        .foregroundColor(.compound.textSecondary)
-        .frame(maxWidth: .infinity, alignment: .center)
-        .padding()
+        RoomCallTimelineRow(sender: timelineItem.sender,
+                            timestamp: timelineItem.timestamp,
+                            callEvent: timelineItem.details)
     }
 }
 
@@ -38,6 +30,7 @@ struct CallInviteRoomTimelineView_Previews: PreviewProvider, TestablePreview {
                                                        timestamp: .mock,
                                                        isEditable: false,
                                                        canBeRepliedTo: false,
-                                                       sender: .init(id: "Bob")))
+                                                       sender: .init(id: "Bob"),
+                                                       details: .init(state: .legacyInvite, intent: .audio)))
     }
 }

@@ -668,6 +668,34 @@ class JoinedRoomProxy: JoinedRoomProxyProtocol {
             return .failure(.sdkError(error))
         }
     }
+
+    func sendPreJoinCallHangup(callID: String?) async -> Result<Void, RoomProxyError> {
+        var contentPayload: [String: Any] = ["reason": "user_hangup"]
+        if let callID {
+            contentPayload["call_id"] = callID
+        }
+
+        let contentData: Data
+        do {
+            contentData = try JSONSerialization.data(withJSONObject: contentPayload)
+        } catch {
+            MXLog.error("Failed encoding pre-join call hangup payload with error: \(error)")
+            return .failure(.sdkError(error))
+        }
+
+        guard let content = String(data: contentData, encoding: .utf8) else {
+            MXLog.error("Failed encoding pre-join call hangup payload to UTF-8 string")
+            return .failure(.sdkError(NSError(domain: "ElementCallService", code: -1)))
+        }
+
+        do {
+            try await room.sendRaw(eventType: "m.call.hangup", content: content)
+            return .success(())
+        } catch {
+            MXLog.error("Failed sending pre-join call hangup with error: \(error)")
+            return .failure(.sdkError(error))
+        }
+    }
     
     /// Subscribe to call decline events from that rtc notification event.
     func subscribeToCallDeclineEvents(rtcNotificationEventID: String, listener: CallDeclineListener) -> Result<TaskHandle, RoomProxyError> {

@@ -24,6 +24,7 @@ final class SpacesScreenViewModelTests {
     init() {
         AppSettings.resetAllSettings()
         appSettings = AppSettings()
+        appSettings.hasSeenSpacesAnnouncement = false
         
         let clientProxy = ClientProxyMock(.init())
         let userSession = UserSessionMock(.init(clientProxy: clientProxy))
@@ -43,7 +44,7 @@ final class SpacesScreenViewModelTests {
         
         viewModel = SpacesScreenViewModel(userSession: userSession,
                                           selectedSpacePublisher: .init(nil),
-                                          appSettings: ServiceLocator.shared.settings,
+                                          appSettings: appSettings,
                                           userIndicatorController: UserIndicatorControllerMock())
     }
     

@@ -1,0 +1,7 @@
+2026-04-23T12:51:58Z [CALL-INCOMING-TRACE][APP-ANSWER] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz callkit_id=A7B0C0C1-181F-4F35-A29F-A762CA934C83 start_mode=video
+2026-04-23T12:51:59Z [CALL-INCOMING-TRACE][APP-START-CALL-SEND] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=video
+2026-04-23T12:51:59Z [CALL-INCOMING-TRACE][APP-COORDINATOR-START-CALL] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=video
+2026-04-23T12:51:59Z [CALL-INCOMING-TRACE][USER-SESSION-START-CALL] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=video
+2026-04-23T12:51:59Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-BY-ID] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=video
+2026-04-23T12:51:59Z [CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=video
+2026-04-23T12:51:59Z [CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=!jFGCYbgmpjrPGtgDqt:mertis.kz start_mode=video is_video_enabled=true preferred_audio_route=systemDefault is_speakerphone_enabled=false

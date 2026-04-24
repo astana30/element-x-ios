@@ -15,6 +15,7 @@ struct CallInviteRoomTimelineItem: RoomTimelineItemProtocol, Equatable {
     let canBeRepliedTo: Bool
     
     let sender: TimelineItemSender
+    let details: RoomCallEvent
     
     var properties = RoomTimelineItemProperties()
 }
