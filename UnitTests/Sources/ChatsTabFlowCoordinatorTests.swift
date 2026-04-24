@@ -41,6 +41,7 @@ struct ChatsTabFlowCoordinatorTests {
         let flowParameters = CommonFlowParameters(userSession: UserSessionMock(.init(clientProxy: clientProxy)),
                                                   bugReportService: BugReportServiceMock(.init()),
                                                   elementCallService: ElementCallServiceMock(.init()),
+                                                  directCallEngine: DirectCallEngine(ownUserID: "hi@bob") { _ in nil },
                                                   timelineControllerFactory: timelineControllerFactory,
                                                   emojiProvider: EmojiProvider(appSettings: ServiceLocator.shared.settings),
                                                   linkMetadataProvider: LinkMetadataProvider(),

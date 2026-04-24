@@ -714,9 +714,18 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
             ServiceLocator.shared.analytics.signpost.startTransaction(.cachedRoomList)
         }
         
+        let roomSummaryProvider = userSession.clientProxy.roomSummaryProvider
+        let directCallEngine = DirectCallEngine(ownUserID: userSession.clientProxy.userID) { roomID in
+            guard let roomSummary = roomSummaryProvider.roomListPublisher.value.first(where: { $0.id == roomID && $0.isDirect }) else {
+                return nil
+            }
+            return roomSummary.heroes.first?.userID
+        }
+
         let flowParameters = CommonFlowParameters(userSession: userSession,
                                                   bugReportService: bugReportService,
                                                   elementCallService: elementCallService,
+                                                  directCallEngine: directCallEngine,
                                                   timelineControllerFactory: TimelineControllerFactory(),
                                                   emojiProvider: EmojiProvider(appSettings: appSettings),
                                                   linkMetadataProvider: LinkMetadataProvider(),

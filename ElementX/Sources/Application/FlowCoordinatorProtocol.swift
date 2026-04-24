@@ -30,6 +30,7 @@ struct CommonFlowParameters {
     let userSession: UserSessionProtocol
     let bugReportService: BugReportServiceProtocol
     let elementCallService: ElementCallServiceProtocol
+    let directCallEngine: DirectCallEngineProtocol
     let timelineControllerFactory: TimelineControllerFactoryProtocol
     let emojiProvider: EmojiProviderProtocol
     let linkMetadataProvider: LinkMetadataProviderProtocol

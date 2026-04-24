@@ -25,6 +25,7 @@ protocol CommonSettingsProtocol: AnyObject {
     var enableOnlySignedDeviceIsolationMode: Bool { get }
     var enableKeyShareOnInvite: Bool { get }
     var threadsEnabled: Bool { get }
+    var directOneToOneCallsEnabled: Bool { get }
     var hideQuietNotificationAlerts: Bool { get }
 }
 
@@ -80,6 +81,7 @@ final class AppSettings: @unchecked Sendable {
         case focusEventOnNotificationTap
         case linkNewDeviceEnabled
         case liveLocationSharingEnabled
+        case directOneToOneCallsEnabled
         
         // Doug's tweaks 🔧
         case hideUnreadMessagesBadge
@@ -479,6 +481,9 @@ final class AppSettings: @unchecked Sendable {
     
     @UserPreference(key: UserDefaultsKeys.liveLocationSharingEnabled, defaultValue: false, storageType: .userDefaults(store))
     var liveLocationSharingEnabled
+
+    @UserPreference(key: UserDefaultsKeys.directOneToOneCallsEnabled, defaultValue: false, storageType: .userDefaults(store))
+    var directOneToOneCallsEnabled
     
     @UserPreference(key: UserDefaultsKeys.developerOptionsEnabled, defaultValue: appBuildType == .debug, storageType: .userDefaults(store))
     var developerOptionsEnabled
