@@ -274,14 +274,14 @@ final class DirectCallEngineTests {
         #expect(encryptionService.clearedCallIDs.contains(session.callID))
     }
 
-    private func makeEngine(encryptionService: DirectCallEncryptionServiceProtocol = NoOpDirectCallEncryptionService()) -> DirectCallEngine {
+    private func makeEngine(encryptionService: DirectCallEncryptionServiceProtocol? = nil) -> DirectCallEngine {
         DirectCallEngine(ownUserID: ownUserID,
                          configuration: .init(incomingRingingTimeout: .seconds(120),
                                               outgoingRingingTimeout: .seconds(120),
                                               connectingTimeout: .seconds(120),
                                               cleanupDelay: .milliseconds(20),
                                               processedTerminalEventLimit: 64),
-                         encryptionService: encryptionService) { [roomID, peerUserID] id in
+                         encryptionService: encryptionService ?? NoOpDirectCallEncryptionService()) { [roomID, peerUserID] id in
             id == roomID ? peerUserID : nil
         }
     }

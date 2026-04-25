@@ -38,7 +38,7 @@ final class DirectCallEngineSignalTransportTests {
 
     @Test
     func calleeRejectEndsCallerWithoutMediaPath() async {
-        let harness = makeHarness()
+        let harness = makeHarness(cleanupDelay: .seconds(1))
 
         let outgoingResult = await harness.engineA.startOutgoingAudioCall(peer: userB, roomID: roomID)
         guard case .success(let outgoingSession) = outgoingResult else {
@@ -94,6 +94,7 @@ final class DirectCallEngineSignalTransportTests {
 
         #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .incomingRinging })
         _ = await harness.engineB.acceptCall(callID: outgoingSession.callID)
+        #expect(await waitUntil { harness.engineA.activeSessionPublisher.value?.state == .activeAudio })
         #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .activeAudio })
 
         _ = await harness.engineA.hangupActiveCall(callID: outgoingSession.callID)
