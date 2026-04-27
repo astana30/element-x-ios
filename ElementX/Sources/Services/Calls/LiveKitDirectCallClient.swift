@@ -15,16 +15,41 @@ protocol DirectCallLiveKitE2EEContextProtocol: DirectCallMediaE2EEContextProtoco
 
 @MainActor
 final class LiveKitDirectCallClient: DirectCallLiveKitClientProtocol {
-    private let roomFactory: (ConnectOptions, RoomOptions) -> Room
+    typealias RoomFactory = (ConnectOptions, RoomOptions) -> Room
+    typealias RoomConnector = (Room, DirectCallMediaConnectionInfo, ConnectOptions, RoomOptions) async throws -> Void
+    
+    private let roomFactory: RoomFactory
+    private let roomConnector: RoomConnector
     private var room: Room?
     private var e2eeContext: (any DirectCallMediaE2EEContextProtocol)?
     private var isConnected = false
     private var microphoneEnabled = false
 
-    init(roomFactory: @escaping (ConnectOptions, RoomOptions) -> Room = { connectOptions, roomOptions in
-        Room(connectOptions: connectOptions, roomOptions: roomOptions)
-    }) {
+    init() {
+        roomFactory = { connectOptions, roomOptions in
+            Room(connectOptions: connectOptions, roomOptions: roomOptions)
+        }
+        roomConnector = { room, connectionInfo, connectOptions, roomOptions in
+            try await room.connect(url: connectionInfo.serverURL.absoluteString,
+                                   token: connectionInfo.token,
+                                   connectOptions: connectOptions,
+                                   roomOptions: roomOptions)
+        }
+    }
+
+    init(roomFactory: @escaping RoomFactory) {
         self.roomFactory = roomFactory
+        roomConnector = { room, connectionInfo, connectOptions, roomOptions in
+            try await room.connect(url: connectionInfo.serverURL.absoluteString,
+                                   token: connectionInfo.token,
+                                   connectOptions: connectOptions,
+                                   roomOptions: roomOptions)
+        }
+    }
+
+    init(roomFactory: @escaping RoomFactory, roomConnector: @escaping RoomConnector) {
+        self.roomFactory = roomFactory
+        self.roomConnector = roomConnector
     }
 
     func connect(connectionInfo: DirectCallMediaConnectionInfo, e2eeContext: any DirectCallMediaE2EEContextProtocol) async -> Result<Void, DirectCallMediaError> {
@@ -47,13 +72,22 @@ final class LiveKitDirectCallClient: DirectCallLiveKitClientProtocol {
             return .failure(error)
         }
 
-        room = roomFactory(ConnectOptions(enableMicrophone: false), roomOptions)
+        let connectOptions = ConnectOptions(autoSubscribe: false, enableMicrophone: false)
+        let preparedRoom = roomFactory(connectOptions, roomOptions)
+        room = preparedRoom
         self.e2eeContext = e2eeContext
         isConnected = false
         microphoneEnabled = false
 
-        // Real network connection remains disabled until the safe connection phase lands.
-        return .failure(.mediaSetupUnavailable)
+        do {
+            try await roomConnector(preparedRoom, connectionInfo, connectOptions, roomOptions)
+            isConnected = true
+            microphoneEnabled = false
+            return .success(())
+        } catch {
+            await cleanup()
+            return .failure(.mediaSetupUnavailable)
+        }
     }
 
     func setMicrophoneEnabled(_ isEnabled: Bool) async -> Result<Void, DirectCallMediaError> {

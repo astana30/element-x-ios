@@ -145,32 +145,75 @@ final class DirectCallMediaEngineTests {
     }
 
     @Test
-    func liveKitClientPreparesE2EEConfiguredRoomWithoutConnecting() async {
+    func liveKitClientConnectsWithE2EEConfiguredRoomAndSafeConnectOptions() async {
         var createdConnectOptions: ConnectOptions?
         var createdRoomOptions: RoomOptions?
+        var connectedRoomOptions: RoomOptions?
+        var connectedConnectOptions: ConnectOptions?
+        var connectCallCount = 0
         let client = LiveKitDirectCallClient { connectOptions, roomOptions in
             createdConnectOptions = connectOptions
             createdRoomOptions = roomOptions
             return Room(connectOptions: connectOptions, roomOptions: roomOptions)
+        } roomConnector: { _, _, connectOptions, roomOptions in
+            connectCallCount += 1
+            connectedConnectOptions = connectOptions
+            connectedRoomOptions = roomOptions
         }
         let context = LiveKitMediaE2EEContextSpy()
 
         let result = await client.connect(connectionInfo: makeConnectionInfo(), e2eeContext: context)
 
-        guard case .failure(.mediaSetupUnavailable) = result else {
-            Issue.record("Expected compile-only SDK client to fail closed after E2EE setup.")
+        guard case .success = result else {
+            Issue.record("Expected SDK client to connect after E2EE setup.")
             return
         }
         #expect(context.makeRoomOptionsCount == 1)
+        #expect(connectCallCount == 1)
+        #expect(createdConnectOptions?.autoSubscribe == false)
         #expect(createdConnectOptions?.enableMicrophone == false)
+        #expect(connectedConnectOptions?.autoSubscribe == false)
+        #expect(connectedConnectOptions?.enableMicrophone == false)
         #expect(createdRoomOptions?.encryptionOptions != nil)
         #expect(createdRoomOptions?.e2eeOptions == nil)
+        #expect(connectedRoomOptions?.encryptionOptions != nil)
         await client.cleanup()
     }
 
     @Test
+    func liveKitClientConnectFailureCleansPartialRoomAndContext() async {
+        let context = LiveKitMediaE2EEContextSpy()
+        var connectCallCount = 0
+        let client = LiveKitDirectCallClient { connectOptions, roomOptions in
+            Room(connectOptions: connectOptions, roomOptions: roomOptions)
+        } roomConnector: { _, _, _, _ in
+            connectCallCount += 1
+            throw LiveKitClientTestError()
+        }
+
+        let result = await client.connect(connectionInfo: makeConnectionInfo(), e2eeContext: context)
+
+        guard case .failure(.mediaSetupUnavailable) = result else {
+            Issue.record("Expected SDK connect failure to map to a safe media setup error.")
+            return
+        }
+        #expect(connectCallCount == 1)
+        #expect(context.cleanupCount == 1)
+
+        let retryResult = await client.connect(connectionInfo: makeConnectionInfo(), e2eeContext: context)
+        guard case .failure(.mediaSetupUnavailable) = retryResult else {
+            Issue.record("Expected retry to reach the connector after partial cleanup.")
+            return
+        }
+        #expect(connectCallCount == 2)
+        #expect(context.cleanupCount == 2)
+    }
+
+    @Test
     func liveKitClientCleanupReleasesPreparedE2EEContextIdempotently() async {
-        let client = LiveKitDirectCallClient()
+        let client = LiveKitDirectCallClient { connectOptions, roomOptions in
+            Room(connectOptions: connectOptions, roomOptions: roomOptions)
+        } roomConnector: { _, _, _, _ in }
         let context = LiveKitMediaE2EEContextSpy()
 
         _ = await client.connect(connectionInfo: makeConnectionInfo(), e2eeContext: context)
@@ -230,6 +273,27 @@ final class DirectCallMediaEngineTests {
             Issue.record("Expected pre-connect microphone enable to fail closed.")
             return
         }
+    }
+
+    @Test
+    func liveKitClientDisconnectAndCleanupAreIdempotentAfterConnect() async {
+        let context = LiveKitMediaE2EEContextSpy()
+        let client = LiveKitDirectCallClient { connectOptions, roomOptions in
+            Room(connectOptions: connectOptions, roomOptions: roomOptions)
+        } roomConnector: { _, _, _, _ in }
+
+        let result = await client.connect(connectionInfo: makeConnectionInfo(), e2eeContext: context)
+        guard case .success = result else {
+            Issue.record("Expected SDK client connect seam to succeed.")
+            return
+        }
+
+        await client.disconnect()
+        await client.disconnect()
+        await client.cleanup()
+        await client.cleanup()
+
+        #expect(context.cleanupCount == 1)
     }
     
     @Test
@@ -597,6 +661,8 @@ private final class MediaE2EEContextProviderSpy: DirectCallMediaE2EEContextProvi
         contextsByCallID.removeValue(forKey: callID)?.cleanup()
     }
 }
+
+private struct LiveKitClientTestError: Error { }
 
 @MainActor
 private final class LiveKitClientSpy: DirectCallLiveKitClientProtocol {
