@@ -233,6 +233,7 @@ targets:
     - package: KeychainAccess
     - package: Kingfisher
     - package: KZFileWatchers
+    - package: LiveKit
     - package: LoremSwiftum
     - package: LRUCache
     - package: MapLibre

@@ -131,6 +131,9 @@ packages:
   KZFileWatchers:
     url: https://github.com/krzysztofzablocki/KZFileWatchers
     minorVersion: 1.2.0
+  LiveKit:
+    url: https://github.com/livekit/client-sdk-swift.git
+    exactVersion: 2.13.0
   LoremSwiftum:
     url: https://github.com/lukaskubanek/LoremSwiftum
     minorVersion: 2.2.3
