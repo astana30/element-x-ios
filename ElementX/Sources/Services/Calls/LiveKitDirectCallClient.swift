@@ -9,22 +9,50 @@ import Foundation
 import LiveKit
 
 @MainActor
+protocol DirectCallLiveKitE2EEContextProtocol: DirectCallMediaE2EEContextProtocol {
+    func makeLiveKitRoomOptions() -> Result<RoomOptions, DirectCallMediaError>
+}
+
+@MainActor
 final class LiveKitDirectCallClient: DirectCallLiveKitClientProtocol {
+    private let roomFactory: (ConnectOptions, RoomOptions) -> Room
     private var room: Room?
+    private var e2eeContext: (any DirectCallMediaE2EEContextProtocol)?
     private var isConnected = false
     private var microphoneEnabled = false
+
+    init(roomFactory: @escaping (ConnectOptions, RoomOptions) -> Room = { connectOptions, roomOptions in
+        Room(connectOptions: connectOptions, roomOptions: roomOptions)
+    }) {
+        self.roomFactory = roomFactory
+    }
 
     func connect(connectionInfo: DirectCallMediaConnectionInfo, e2eeContext: any DirectCallMediaE2EEContextProtocol) async -> Result<Void, DirectCallMediaError> {
         guard room == nil else {
             return .failure(.mediaSetupUnavailable)
         }
 
-        room = Room(connectOptions: ConnectOptions(enableMicrophone: false),
-                    roomOptions: RoomOptions())
+        guard let liveKitE2EEContext = e2eeContext as? any DirectCallLiveKitE2EEContextProtocol else {
+            return .failure(.e2eeContextUnavailable)
+        }
+
+        let roomOptions: RoomOptions
+        switch liveKitE2EEContext.makeLiveKitRoomOptions() {
+        case .success(let options):
+            guard options.e2eeOptions != nil || options.encryptionOptions != nil else {
+                return .failure(.e2eeContextUnavailable)
+            }
+            roomOptions = options
+        case .failure(let error):
+            return .failure(error)
+        }
+
+        room = roomFactory(ConnectOptions(enableMicrophone: false), roomOptions)
+        self.e2eeContext = e2eeContext
         isConnected = false
         microphoneEnabled = false
 
-        // Real connect remains disabled until the SDK E2EE key-provider boundary exists.
+        // Real network connection remains disabled until the safe connection phase lands.
         return .failure(.mediaSetupUnavailable)
     }
 
@@ -75,6 +103,8 @@ final class LiveKitDirectCallClient: DirectCallLiveKitClientProtocol {
 
     func cleanup() async {
         await disconnect()
+        e2eeContext?.cleanup()
+        e2eeContext = nil
         room = nil
     }
 }
