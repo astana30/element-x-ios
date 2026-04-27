@@ -485,6 +485,57 @@ final class DirectCallMediaEngineTests {
         #expect(labels.contains("rawKey") == false)
     }
 
+    @Test
+    func liveKitRoomConnectIntegrationHarnessSkipsByDefault() {
+        let environment = DirectCallLiveKitIntegrationEnvironment(environment: [:])
+
+        #expect(environment == nil)
+    }
+
+    @Test
+    func liveKitRoomConnectIntegrationHarnessRejectsProductionLikeURL() {
+        #expect(DirectCallLiveKitIntegrationEnvironment.usesProductionLikeHost("matrix.mertis.kz") == true)
+        #expect(DirectCallLiveKitIntegrationEnvironment.usesProductionLikeHost("calls.customer01.kz") == true)
+        #expect(DirectCallLiveKitIntegrationEnvironment.usesProductionLikeHost("prod-livekit.example.com") == true)
+        #expect(DirectCallLiveKitIntegrationEnvironment.usesProductionLikeHost("test-livekit.example.com") == false)
+    }
+
+    @Test(.enabled(if: DirectCallLiveKitIntegrationEnvironment.isRunnableInCurrentProcess))
+    func liveKitRoomConnectIntegrationCompletesWhenExplicitlyEnabled() async {
+        guard let environment = DirectCallLiveKitIntegrationEnvironment.current else {
+            Issue.record("Integration environment is not enabled.")
+            return
+        }
+
+        guard environment.usesProductionLikeURL == false else {
+            Issue.record("Integration environment uses a production-like LiveKit URL.")
+            return
+        }
+
+        let client = LiveKitDirectCallClient()
+        let context = DirectCallLiveKitIntegrationE2EEContext(testKey: environment.e2eeTestKey)
+        let connectionInfo = DirectCallMediaConnectionInfo(serverURL: environment.serverURL,
+                                                           roomName: environment.roomName,
+                                                           token: environment.token)
+
+        let connectResult = await client.connect(connectionInfo: connectionInfo, e2eeContext: context)
+        let disableMicResult = await client.setMicrophoneEnabled(false)
+        await client.cleanup()
+
+        guard case .success = connectResult else {
+            Issue.record("Expected LiveKit Room.connect integration to succeed.")
+            return
+        }
+
+        guard case .success = disableMicResult else {
+            Issue.record("Expected microphone disable to remain safe after integration connect.")
+            return
+        }
+
+        #expect(environment.identity.isEmpty == false)
+        #expect(context.cleanupCount == 1)
+    }
+
     private func makeEngine(tokenProvider: DirectCallMediaTokenProviderProtocol? = nil,
                             audioRouteController: DirectCallAudioRouteControllerProtocol? = nil,
                             encryptionService: DirectCallEncryptionServiceProtocol? = nil) -> NoOpDirectCallMediaEngine {
@@ -663,6 +714,96 @@ private final class MediaE2EEContextProviderSpy: DirectCallMediaE2EEContextProvi
 }
 
 private struct LiveKitClientTestError: Error { }
+
+private struct DirectCallLiveKitIntegrationEnvironment: Equatable {
+    static var current: DirectCallLiveKitIntegrationEnvironment? {
+        DirectCallLiveKitIntegrationEnvironment(environment: ProcessInfo.processInfo.environment)
+    }
+
+    static var isRunnableInCurrentProcess: Bool {
+        current?.isRunnable == true
+    }
+
+    let serverURL: URL
+    let token: String
+    let roomName: String
+    let identity: String
+    let e2eeTestKey: String
+
+    var isRunnable: Bool {
+        usesProductionLikeURL == false
+    }
+
+    var usesProductionLikeURL: Bool {
+        guard let host = serverURL.host?.lowercased() else {
+            return true
+        }
+
+        return Self.usesProductionLikeHost(host)
+    }
+
+    static func usesProductionLikeHost(_ host: String) -> Bool {
+        let host = host.lowercased()
+        let knownProductionHosts = ["mertis.kz", "customer01.kz"]
+        if knownProductionHosts.contains(where: { host == $0 || host.hasSuffix(".\($0)") }) {
+            return true
+        }
+
+        if host.contains("production") || host.contains("prod") {
+            let explicitTestMarkers = ["test", "staging", "stage", "dev", "localhost", "127.0.0.1"]
+            return explicitTestMarkers.allSatisfy { host.contains($0) == false }
+        }
+
+        return false
+    }
+
+    init?(environment: [String: String]) {
+        guard environment["SALEMX_DIRECTCALL_LIVEKIT_INTEGRATION"] == "1",
+              let urlValue = environment["SALEMX_DIRECTCALL_LIVEKIT_URL"]?.nonEmpty,
+              let url = URL(string: urlValue),
+              let token = environment["SALEMX_DIRECTCALL_LIVEKIT_TOKEN"]?.nonEmpty,
+              let roomName = environment["SALEMX_DIRECTCALL_LIVEKIT_ROOM"]?.nonEmpty,
+              let identity = environment["SALEMX_DIRECTCALL_LIVEKIT_IDENTITY"]?.nonEmpty,
+              let e2eeTestKey = environment["SALEMX_DIRECTCALL_LIVEKIT_E2EE_TEST_KEY"]?.nonEmpty else {
+            return nil
+        }
+
+        serverURL = url
+        self.token = token
+        self.roomName = roomName
+        self.identity = identity
+        self.e2eeTestKey = e2eeTestKey
+    }
+}
+
+@MainActor
+private final class DirectCallLiveKitIntegrationE2EEContext: DirectCallLiveKitE2EEContextProtocol {
+    private var keyProvider: BaseKeyProvider?
+    private(set) var cleanupCount = 0
+
+    init(testKey: String) {
+        keyProvider = BaseKeyProvider(isSharedKey: true, sharedKey: testKey)
+    }
+
+    func makeLiveKitRoomOptions() -> Result<RoomOptions, DirectCallMediaError> {
+        guard let keyProvider else {
+            return .failure(.e2eeContextUnavailable)
+        }
+
+        return .success(RoomOptions(encryptionOptions: EncryptionOptions(keyProvider: keyProvider)))
+    }
+
+    func cleanup() {
+        cleanupCount += 1
+        keyProvider = nil
+    }
+}
+
+private extension String {
+    var nonEmpty: String? {
+        isEmpty ? nil : self
+    }
+}
 
 @MainActor
 private final class LiveKitClientSpy: DirectCallLiveKitClientProtocol {
