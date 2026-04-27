@@ -22,6 +22,7 @@ enum DirectCallMediaError: Error, Equatable {
     case unsupportedIntent
     case e2eeNotReady
     case keyMismatch
+    case e2eeContextUnavailable
     case tokenUnavailable
     case audioRouteFailed
     case mediaSetupUnavailable

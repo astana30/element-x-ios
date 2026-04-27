@@ -10,15 +10,26 @@ import Foundation
 
 @MainActor
 protocol DirectCallLiveKitClientProtocol {
-    func connect(connectionInfo: DirectCallMediaConnectionInfo) async -> Result<Void, DirectCallMediaError>
+    func connect(connectionInfo: DirectCallMediaConnectionInfo, e2eeContext: any DirectCallMediaE2EEContextProtocol) async -> Result<Void, DirectCallMediaError>
     func setMicrophoneEnabled(_ isEnabled: Bool) async -> Result<Void, DirectCallMediaError>
     func disconnect() async
     func cleanup() async
 }
 
 @MainActor
+protocol DirectCallMediaE2EEContextProtocol: AnyObject {
+    func cleanup()
+}
+
+@MainActor
+protocol DirectCallMediaE2EEContextProviderProtocol {
+    func context(for session: DirectCallSession, keyHandle: DirectCallMediaKeyHandle) -> Result<any DirectCallMediaE2EEContextProtocol, DirectCallMediaError>
+    func clearContext(callID: String)
+}
+
+@MainActor
 final class UnavailableDirectCallLiveKitClient: DirectCallLiveKitClientProtocol {
-    func connect(connectionInfo: DirectCallMediaConnectionInfo) async -> Result<Void, DirectCallMediaError> {
+    func connect(connectionInfo: DirectCallMediaConnectionInfo, e2eeContext: any DirectCallMediaE2EEContextProtocol) async -> Result<Void, DirectCallMediaError> {
         .failure(.mediaSetupUnavailable)
     }
     
@@ -32,11 +43,21 @@ final class UnavailableDirectCallLiveKitClient: DirectCallLiveKitClientProtocol 
 }
 
 @MainActor
+final class UnavailableDirectCallMediaE2EEContextProvider: DirectCallMediaE2EEContextProviderProtocol {
+    func context(for session: DirectCallSession, keyHandle: DirectCallMediaKeyHandle) -> Result<any DirectCallMediaE2EEContextProtocol, DirectCallMediaError> {
+        .failure(.e2eeContextUnavailable)
+    }
+
+    func clearContext(callID: String) { }
+}
+
+@MainActor
 final class LiveKitDirectCallMediaEngine: DirectCallMediaEngineProtocol {
     private let mediaStateSubject = CurrentValueSubject<DirectCallMediaState, Never>(.idle)
     private let tokenProvider: DirectCallMediaTokenProviderProtocol
     private let audioRouteController: DirectCallAudioRouteControllerProtocol
     private let encryptionService: DirectCallEncryptionServiceProtocol
+    private let e2eeContextProvider: DirectCallMediaE2EEContextProviderProtocol
     private let liveKitClient: DirectCallLiveKitClientProtocol
     private var clearedCallIDs = Set<String>()
     private var disconnectedCallIDs = Set<String>()
@@ -49,10 +70,12 @@ final class LiveKitDirectCallMediaEngine: DirectCallMediaEngineProtocol {
     init(tokenProvider: DirectCallMediaTokenProviderProtocol? = nil,
          audioRouteController: DirectCallAudioRouteControllerProtocol? = nil,
          encryptionService: DirectCallEncryptionServiceProtocol? = nil,
+         e2eeContextProvider: DirectCallMediaE2EEContextProviderProtocol? = nil,
          liveKitClient: DirectCallLiveKitClientProtocol? = nil) {
         self.tokenProvider = tokenProvider ?? NoOpDirectCallMediaTokenProvider()
         self.audioRouteController = audioRouteController ?? NoOpDirectCallAudioRouteController()
         self.encryptionService = encryptionService ?? NoOpDirectCallEncryptionService()
+        self.e2eeContextProvider = e2eeContextProvider ?? UnavailableDirectCallMediaE2EEContextProvider()
         self.liveKitClient = liveKitClient ?? UnavailableDirectCallLiveKitClient()
     }
 
@@ -86,6 +109,14 @@ final class LiveKitDirectCallMediaEngine: DirectCallMediaEngineProtocol {
             return fail(callID: session.callID, error: error)
         }
 
+        let e2eeContext: any DirectCallMediaE2EEContextProtocol
+        switch e2eeContextProvider.context(for: session, keyHandle: keyHandle) {
+        case .success(let context):
+            e2eeContext = context
+        case .failure(let error):
+            return fail(callID: session.callID, error: error)
+        }
+
         switch await tokenProvider.connectionInfo(for: session) {
         case .success(let connectionInfo):
             guard case .success = audioRouteController.configureDefaultAudioRoute(for: session) else {
@@ -99,7 +130,7 @@ final class LiveKitDirectCallMediaEngine: DirectCallMediaEngineProtocol {
                                                        isE2EEReady: true)
             mediaStateSubject.send(connectingState)
 
-            switch await liveKitClient.connect(connectionInfo: connectionInfo) {
+            switch await liveKitClient.connect(connectionInfo: connectionInfo, e2eeContext: e2eeContext) {
             case .success:
                 let activeState = DirectCallMediaState(callID: session.callID,
                                                        phase: .activeAudio,
@@ -204,6 +235,7 @@ final class LiveKitDirectCallMediaEngine: DirectCallMediaEngineProtocol {
         }
 
         encryptionService.clearPerCallKey(callID: callID)
+        e2eeContextProvider.clearContext(callID: callID)
         clearedCallIDs.insert(callID)
     }
 }

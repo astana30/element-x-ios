@@ -14,7 +14,7 @@ final class LiveKitDirectCallClient: DirectCallLiveKitClientProtocol {
     private var isConnected = false
     private var microphoneEnabled = false
 
-    func connect(connectionInfo: DirectCallMediaConnectionInfo) async -> Result<Void, DirectCallMediaError> {
+    func connect(connectionInfo: DirectCallMediaConnectionInfo, e2eeContext: any DirectCallMediaE2EEContextProtocol) async -> Result<Void, DirectCallMediaError> {
         guard room == nil else {
             return .failure(.mediaSetupUnavailable)
         }
