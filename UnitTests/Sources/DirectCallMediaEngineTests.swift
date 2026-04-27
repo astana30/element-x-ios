@@ -110,6 +110,71 @@ final class DirectCallMediaEngineTests {
         #expect(engine.mediaStatePublisher.value.canPublishMicrophone == false)
         #expect(engine.mediaStatePublisher.value.canPlayRemoteAudio == false)
     }
+
+    @Test
+    func liveKitClientCanBeInitializedAndFailsClosedWithoutE2EEBoundary() async {
+        let client = LiveKitDirectCallClient()
+
+        let result = await client.connect(connectionInfo: makeConnectionInfo())
+
+        guard case .failure(.mediaSetupUnavailable) = result else {
+            Issue.record("Expected SDK-backed client to fail closed until E2EE SDK boundary exists.")
+            return
+        }
+        await client.cleanup()
+    }
+
+    @Test
+    func liveKitClientCleanupIsIdempotentBeforeConnect() async {
+        let client = LiveKitDirectCallClient()
+
+        await client.cleanup()
+        await client.cleanup()
+
+        let result = await client.setMicrophoneEnabled(false)
+        guard case .success = result else {
+            Issue.record("Expected pre-connect microphone disable to be safe.")
+            return
+        }
+    }
+
+    @Test
+    func liveKitClientDisconnectIsIdempotentBeforeConnect() async {
+        let client = LiveKitDirectCallClient()
+
+        await client.disconnect()
+        await client.disconnect()
+
+        let result = await client.setMicrophoneEnabled(false)
+        guard case .success = result else {
+            Issue.record("Expected pre-connect microphone disable to be safe.")
+            return
+        }
+    }
+
+    @Test
+    func liveKitClientMicrophoneDisableBeforeConnectIsSafe() async {
+        let client = LiveKitDirectCallClient()
+
+        let result = await client.setMicrophoneEnabled(false)
+
+        guard case .success = result else {
+            Issue.record("Expected pre-connect microphone disable to be safe.")
+            return
+        }
+    }
+
+    @Test
+    func liveKitClientMicrophoneEnableBeforeConnectFailsClosed() async {
+        let client = LiveKitDirectCallClient()
+
+        let result = await client.setMicrophoneEnabled(true)
+
+        guard case .failure(.mediaSetupUnavailable) = result else {
+            Issue.record("Expected pre-connect microphone enable to fail closed.")
+            return
+        }
+    }
     
     @Test
     func liveKitDoesNotRequestTokenOrConnectBeforeE2EEReady() async {
@@ -276,6 +341,12 @@ final class DirectCallMediaEngineTests {
                           updatedAt: .now,
                           state: state,
                           encryptionState: encryptionState)
+    }
+
+    private func makeConnectionInfo() -> DirectCallMediaConnectionInfo {
+        DirectCallMediaConnectionInfo(serverURL: URL(fileURLWithPath: "/tmp/livekit.example.com"),
+                                      roomName: "direct-call",
+                                      token: "test-token")
     }
 }
 

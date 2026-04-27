@@ -237,6 +237,7 @@
 		2552968B457D3B9EDE689D1E /* ImageRoomTimelineItemContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E612B9555E0E08A42F09260D /* ImageRoomTimelineItemContent.swift */; };
 		25AEA1D0CA88C0DCF7284D9E /* EmbeddedElementCall in Frameworks */ = {isa = PBXBuildFile; productRef = CAE06EEB5A937DBF25FE3DB8 /* EmbeddedElementCall */; };
 		25B420352A4CA780726632B1 /* TimelineItemProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF9F5E3C4510E4C11AAAD6A2 /* TimelineItemProvider.swift */; };
+		26134C2842E36D87B54FEEB2 /* LiveKitDirectCallClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE5D88B12B3142D7D30268B /* LiveKitDirectCallClient.swift */; };
 		263B40B3CA916A53F4770588 /* PinnedEventsBannerStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 215DABC2B31CB203DEA25E16 /* PinnedEventsBannerStateTests.swift */; };
 		2654742D8A3D6AD614A9F7D2 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95436C6571DCA1D24BFE58C1 /* SceneDelegate.swift */; };
 		267A669B60F7D704066D52F1 /* AppLockSetupSettingsScreenViewModelProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC76B75E3406C557CFED0C42 /* AppLockSetupSettingsScreenViewModelProtocol.swift */; };
@@ -2642,6 +2643,7 @@
 		BF53622A2F339C905FB00093 /* ReadMarkerRoomTimelineItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadMarkerRoomTimelineItem.swift; sourceTree = "<group>"; };
 		BF731F542FE011BFC7608997 /* RoomInviterLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomInviterLabel.swift; sourceTree = "<group>"; };
 		BFB38D552B2A7B46A356AF46 /* da */ = {isa = PBXFileReference; lastKnownFileType = text.plist.stringsdict; name = da; path = da.lproj/Localizable.stringsdict; sourceTree = "<group>"; };
+		BFE5D88B12B3142D7D30268B /* LiveKitDirectCallClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveKitDirectCallClient.swift; sourceTree = "<group>"; };
 		BFFB39800453E1DA0D0EFA55 /* MapLibreMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapLibreMapView.swift; sourceTree = "<group>"; };
 		C00FF66B92F347D2DE174C5C /* preview_image.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = preview_image.jpg; sourceTree = "<group>"; };
 		C06D612FC553830B4C2B136E /* id */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = id; path = id.lproj/InfoPlist.strings; sourceTree = "<group>"; };
@@ -3206,6 +3208,7 @@
 				DDB7A4D93C4C14E188C3664D /* DirectCallMediaModels.swift */,
 				B0BA3DF65C53AD0238BBA612 /* DirectCallModels.swift */,
 				00E3AEF46A0ECB55A388804E /* DirectCallSignalTransport.swift */,
+				BFE5D88B12B3142D7D30268B /* LiveKitDirectCallClient.swift */,
 				8ED0010AA472E6BF4CF29A0E /* LiveKitDirectCallMediaEngine.swift */,
 				457CB85C7313E71588D9CBC1 /* NoOpDirectCallMediaEngine.swift */,
 				8E5E72F3677F7B24929AE258 /* RoomCallEvent.swift */,
@@ -8252,6 +8255,7 @@
 				10CE0B4042E2C7A76314ACF7 /* LinkNewDeviceService.swift in Sources */,
 				1D4A5573E7E83FDDAE928A15 /* LinkNewDeviceServiceMock.swift in Sources */,
 				A9BA63BED108B65D389FA1FB /* LinkPreviewView.swift in Sources */,
+				26134C2842E36D87B54FEEB2 /* LiveKitDirectCallClient.swift in Sources */,
 				3EBC134158DEBAC6163A3D4C /* LiveKitDirectCallMediaEngine.swift in Sources */,
 				4920D544F46CDE28A1DEDA90 /* LoadableAvatarImage.swift in Sources */,
 				6D154DB446881B8956636242 /* LoadableImage.swift in Sources */,
