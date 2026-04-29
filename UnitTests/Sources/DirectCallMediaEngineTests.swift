@@ -660,6 +660,13 @@ final class DirectCallMediaEngineTests {
         #expect(DirectCallLiveKitIntegrationEnvironment.usesProductionLikeHost("test-livekit.example.com") == false)
     }
 
+    @Test
+    func liveKitTwoEndpointRemoteAudioIntegrationHarnessSkipsByDefault() {
+        let environment = DirectCallLiveKitTwoEndpointIntegrationEnvironment(environment: [:])
+
+        #expect(environment == nil)
+    }
+
     @Test(.enabled(if: DirectCallLiveKitIntegrationEnvironment.isRunnableInCurrentProcess))
     func liveKitRoomConnectIntegrationCompletesWhenExplicitlyEnabled() async {
         guard let environment = DirectCallLiveKitIntegrationEnvironment.current else {
@@ -694,6 +701,70 @@ final class DirectCallMediaEngineTests {
 
         #expect(environment.identity.isEmpty == false)
         #expect(context.cleanupCount == 1)
+    }
+
+    @Test(.enabled(if: DirectCallLiveKitTwoEndpointIntegrationEnvironment.isRunnableInCurrentProcess))
+    func liveKitTwoEndpointRemoteAudioGateIntegrationCompletesWhenExplicitlyEnabled() async {
+        guard let environment = DirectCallLiveKitTwoEndpointIntegrationEnvironment.current else {
+            Issue.record("Two-endpoint integration environment is not enabled.")
+            return
+        }
+
+        guard environment.usesProductionLikeURL == false else {
+            Issue.record("Two-endpoint integration environment uses a production-like LiveKit URL.")
+            return
+        }
+
+        let primaryClient = LiveKitDirectCallClient()
+        let peerClient = LiveKitDirectCallClient()
+        let primaryContext = DirectCallLiveKitIntegrationE2EEContext(testKey: environment.e2eeTestKey)
+        let peerContext = DirectCallLiveKitIntegrationE2EEContext(testKey: environment.e2eeTestKey)
+        let primaryConnectionInfo = DirectCallMediaConnectionInfo(serverURL: environment.serverURL,
+                                                                  roomName: environment.roomName,
+                                                                  token: environment.token)
+        let peerConnectionInfo = DirectCallMediaConnectionInfo(serverURL: environment.serverURL,
+                                                               roomName: environment.roomName,
+                                                               token: environment.peerToken)
+
+        let primaryConnectResult = await primaryClient.connect(connectionInfo: primaryConnectionInfo, e2eeContext: primaryContext)
+        let peerConnectResult = await peerClient.connect(connectionInfo: peerConnectionInfo, e2eeContext: peerContext)
+        let primaryMicDisableResult = await primaryClient.setMicrophoneEnabled(false)
+        let peerMicDisableResult = await peerClient.setMicrophoneEnabled(false)
+        let remoteAudioEnableResult = await primaryClient.setRemoteAudioPlaybackEnabled(true)
+        let remoteAudioDisableResult = await primaryClient.setRemoteAudioPlaybackEnabled(false)
+        await primaryClient.cleanup()
+        await peerClient.cleanup()
+
+        guard case .success = primaryConnectResult else {
+            Issue.record("Expected primary LiveKit Room.connect integration to succeed.")
+            return
+        }
+        guard case .success = peerConnectResult else {
+            Issue.record("Expected peer LiveKit Room.connect integration to succeed.")
+            return
+        }
+        guard case .success = primaryMicDisableResult else {
+            Issue.record("Expected primary microphone disable to remain safe after integration connect.")
+            return
+        }
+        guard case .success = peerMicDisableResult else {
+            Issue.record("Expected peer microphone disable to remain safe after integration connect.")
+            return
+        }
+        guard case .success = remoteAudioEnableResult else {
+            Issue.record("Expected remote audio enable gate to be callable after two endpoint connect.")
+            return
+        }
+        guard case .success = remoteAudioDisableResult else {
+            Issue.record("Expected remote audio disable to be safe after two endpoint connect.")
+            return
+        }
+
+        #expect(environment.identity.isEmpty == false)
+        #expect(environment.peerIdentity.isEmpty == false)
+        #expect(environment.identity != environment.peerIdentity)
+        #expect(primaryContext.cleanupCount == 1)
+        #expect(peerContext.cleanupCount == 1)
     }
 
     private func makeEngine(tokenProvider: DirectCallMediaTokenProviderProtocol? = nil,
@@ -932,6 +1003,59 @@ private struct DirectCallLiveKitIntegrationEnvironment: Equatable {
         self.token = token
         self.roomName = roomName
         self.identity = identity
+        self.e2eeTestKey = e2eeTestKey
+    }
+}
+
+private struct DirectCallLiveKitTwoEndpointIntegrationEnvironment: Equatable {
+    static var current: DirectCallLiveKitTwoEndpointIntegrationEnvironment? {
+        DirectCallLiveKitTwoEndpointIntegrationEnvironment(environment: ProcessInfo.processInfo.environment)
+    }
+
+    static var isRunnableInCurrentProcess: Bool {
+        current?.isRunnable == true
+    }
+
+    let serverURL: URL
+    let token: String
+    let roomName: String
+    let identity: String
+    let peerToken: String
+    let peerIdentity: String
+    let e2eeTestKey: String
+
+    var isRunnable: Bool {
+        usesProductionLikeURL == false
+    }
+
+    var usesProductionLikeURL: Bool {
+        guard let host = serverURL.host?.lowercased() else {
+            return true
+        }
+
+        return DirectCallLiveKitIntegrationEnvironment.usesProductionLikeHost(host)
+    }
+
+    init?(environment: [String: String]) {
+        guard environment["SALEMX_DIRECTCALL_LIVEKIT_TWO_ENDPOINT_INTEGRATION"] == "1",
+              let urlValue = environment["SALEMX_DIRECTCALL_LIVEKIT_URL"]?.nonEmpty,
+              let url = URL(string: urlValue),
+              let token = environment["SALEMX_DIRECTCALL_LIVEKIT_TOKEN"]?.nonEmpty,
+              let roomName = environment["SALEMX_DIRECTCALL_LIVEKIT_ROOM"]?.nonEmpty,
+              let identity = environment["SALEMX_DIRECTCALL_LIVEKIT_IDENTITY"]?.nonEmpty,
+              let peerToken = environment["SALEMX_DIRECTCALL_LIVEKIT_PEER_TOKEN"]?.nonEmpty,
+              let peerIdentity = environment["SALEMX_DIRECTCALL_LIVEKIT_PEER_IDENTITY"]?.nonEmpty,
+              let e2eeTestKey = environment["SALEMX_DIRECTCALL_LIVEKIT_E2EE_TEST_KEY"]?.nonEmpty,
+              identity != peerIdentity else {
+            return nil
+        }
+
+        serverURL = url
+        self.token = token
+        self.roomName = roomName
+        self.identity = identity
+        self.peerToken = peerToken
+        self.peerIdentity = peerIdentity
         self.e2eeTestKey = e2eeTestKey
     }
 }
