@@ -728,43 +728,139 @@ final class DirectCallMediaEngineTests {
 
         let primaryConnectResult = await primaryClient.connect(connectionInfo: primaryConnectionInfo, e2eeContext: primaryContext)
         let peerConnectResult = await peerClient.connect(connectionInfo: peerConnectionInfo, e2eeContext: peerContext)
+        guard case .success = primaryConnectResult,
+              case .success = peerConnectResult,
+              let primaryRoom = liveKitRoom(from: primaryClient),
+              let peerRoom = liveKitRoom(from: peerClient) else {
+            await primaryClient.cleanup()
+            await peerClient.cleanup()
+            Issue.record("Expected two LiveKit clients to connect and expose test-only rooms.")
+            return
+        }
+
+        var peerAudioPublication: LocalTrackPublication?
+        func cleanupIntegrationClients() async {
+            await primaryClient.cleanup()
+
+            if let peerAudioPublication {
+                try? await peerRoom.localParticipant.unpublish(publication: peerAudioPublication)
+            }
+
+            await peerClient.cleanup()
+        }
+
+        let peerAudioTrack = LocalAudioTrack.createTrack(name: "salemx-test-remote-audio",
+                                                         options: .noProcessing)
+        do {
+            peerAudioPublication = try await peerRoom.localParticipant.publish(audioTrack: peerAudioTrack)
+        } catch {
+            await cleanupIntegrationClients()
+            Issue.record("Expected test-only peer audio publication to succeed.")
+            return
+        }
+
+        let primarySawRemoteAudio = await waitForLiveKitIntegrationCondition {
+            firstRemoteAudioPublication(in: primaryRoom) != nil
+        }
+        guard primarySawRemoteAudio,
+              let primaryRemoteAudioPublication = firstRemoteAudioPublication(in: primaryRoom) else {
+            await cleanupIntegrationClients()
+            Issue.record("Expected primary endpoint to see peer audio publication.")
+            return
+        }
+
+        #expect(primaryRemoteAudioPublication.isSubscribed == false)
+        #expect(hasRemoteVideoPublications(in: primaryRoom) == false)
+        #expect(peerRoom.localParticipant.localVideoTracks.isEmpty)
+
         let primaryMicDisableResult = await primaryClient.setMicrophoneEnabled(false)
         let peerMicDisableResult = await peerClient.setMicrophoneEnabled(false)
         let remoteAudioEnableResult = await primaryClient.setRemoteAudioPlaybackEnabled(true)
+        let primarySubscribedRemoteAudio = await waitForLiveKitIntegrationCondition {
+            primaryRemoteAudioPublication.isSubscribed
+        }
         let remoteAudioDisableResult = await primaryClient.setRemoteAudioPlaybackEnabled(false)
-        await primaryClient.cleanup()
-        await peerClient.cleanup()
+        let primaryUnsubscribedRemoteAudio = await waitForLiveKitIntegrationCondition {
+            primaryRemoteAudioPublication.isSubscribed == false
+        }
+        let remoteAudioReenableResult = await primaryClient.setRemoteAudioPlaybackEnabled(true)
+        let primaryResubscribedRemoteAudio = await waitForLiveKitIntegrationCondition {
+            primaryRemoteAudioPublication.isSubscribed
+        }
+        await cleanupIntegrationClients()
+        let primaryCleanupUnsubscribedRemoteAudio = await waitForLiveKitIntegrationCondition {
+            primaryRemoteAudioPublication.isSubscribed == false
+        }
 
-        guard case .success = primaryConnectResult else {
-            Issue.record("Expected primary LiveKit Room.connect integration to succeed.")
+        guard case .success = primaryMicDisableResult,
+              case .success = peerMicDisableResult else {
+            Issue.record("Expected microphone disable to remain safe after integration connect.")
             return
         }
-        guard case .success = peerConnectResult else {
-            Issue.record("Expected peer LiveKit Room.connect integration to succeed.")
+
+        guard case .success = remoteAudioEnableResult,
+              case .success = remoteAudioDisableResult,
+              case .success = remoteAudioReenableResult else {
+            Issue.record("Expected remote audio gate changes to be safe after two endpoint connect.")
             return
         }
-        guard case .success = primaryMicDisableResult else {
-            Issue.record("Expected primary microphone disable to remain safe after integration connect.")
-            return
-        }
-        guard case .success = peerMicDisableResult else {
-            Issue.record("Expected peer microphone disable to remain safe after integration connect.")
-            return
-        }
-        guard case .success = remoteAudioEnableResult else {
-            Issue.record("Expected remote audio enable gate to be callable after two endpoint connect.")
-            return
-        }
-        guard case .success = remoteAudioDisableResult else {
-            Issue.record("Expected remote audio disable to be safe after two endpoint connect.")
-            return
-        }
+
+        #expect(primarySubscribedRemoteAudio == true)
+        #expect(primaryUnsubscribedRemoteAudio == true)
+        #expect(primaryResubscribedRemoteAudio == true)
+        #expect(primaryCleanupUnsubscribedRemoteAudio == true)
 
         #expect(environment.identity.isEmpty == false)
         #expect(environment.peerIdentity.isEmpty == false)
         #expect(environment.identity != environment.peerIdentity)
+        #expect(peerAudioPublication != nil)
         #expect(primaryContext.cleanupCount == 1)
         #expect(peerContext.cleanupCount == 1)
+    }
+
+    private func liveKitRoom(from client: LiveKitDirectCallClient) -> Room? {
+        guard let roomValue = Mirror(reflecting: client).children.first(where: { $0.label == "room" })?.value else {
+            return nil
+        }
+
+        if let room = roomValue as? Room {
+            return room
+        }
+
+        let optionalMirror = Mirror(reflecting: roomValue)
+        guard optionalMirror.displayStyle == .optional else {
+            return nil
+        }
+
+        return optionalMirror.children.first?.value as? Room
+    }
+
+    private func waitForLiveKitIntegrationCondition(timeoutNanoseconds: UInt64 = 5_000_000_000,
+                                                    pollNanoseconds: UInt64 = 100_000_000,
+                                                    _ condition: () -> Bool) async -> Bool {
+        let maxAttempts = Int(timeoutNanoseconds / pollNanoseconds)
+        for _ in 0..<maxAttempts {
+            if condition() {
+                return true
+            }
+
+            try? await Task.sleep(nanoseconds: pollNanoseconds)
+        }
+
+        return condition()
+    }
+
+    private func firstRemoteAudioPublication(in room: Room) -> RemoteTrackPublication? {
+        room.remoteParticipants.values
+            .flatMap(\.audioTracks)
+            .compactMap { $0 as? RemoteTrackPublication }
+            .first
+    }
+
+    private func hasRemoteVideoPublications(in room: Room) -> Bool {
+        room.remoteParticipants.values.contains { participant in
+            participant.videoTracks.isEmpty == false
+        }
     }
 
     private func makeEngine(tokenProvider: DirectCallMediaTokenProviderProtocol? = nil,
