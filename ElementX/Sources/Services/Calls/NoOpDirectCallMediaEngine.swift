@@ -94,6 +94,23 @@ final class NoOpDirectCallMediaEngine: DirectCallMediaEngineProtocol {
         return .success(state)
     }
 
+    func setRemoteAudioPlaybackEnabled(_ isEnabled: Bool, callID: String) async -> Result<DirectCallMediaState, DirectCallMediaError> {
+        let state = mediaStateSubject.value
+        guard isEnabled else {
+            return .success(state)
+        }
+
+        guard state.callID == callID else {
+            return fail(callID: callID, error: .invalidSession)
+        }
+
+        guard state.canPlayRemoteAudio else {
+            return fail(callID: callID, error: .e2eeNotReady)
+        }
+
+        return .success(state)
+    }
+
     func setSpeakerEnabled(_ isEnabled: Bool, callID: String) async -> Result<DirectCallMediaState, DirectCallMediaError> {
         var state = mediaStateSubject.value
         guard state.callID == callID else {

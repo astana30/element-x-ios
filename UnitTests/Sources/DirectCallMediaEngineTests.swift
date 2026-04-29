@@ -276,6 +276,102 @@ final class DirectCallMediaEngineTests {
     }
 
     @Test
+    func liveKitClientRemoteAudioDisableBeforeConnectIsSafe() async {
+        let client = LiveKitDirectCallClient()
+
+        let result = await client.setRemoteAudioPlaybackEnabled(false)
+
+        guard case .success = result else {
+            Issue.record("Expected pre-connect remote audio disable to be safe.")
+            return
+        }
+    }
+
+    @Test
+    func liveKitClientRemoteAudioEnableBeforeConnectFailsClosed() async {
+        let client = LiveKitDirectCallClient()
+
+        let result = await client.setRemoteAudioPlaybackEnabled(true)
+
+        guard case .failure(.mediaSetupUnavailable) = result else {
+            Issue.record("Expected pre-connect remote audio enable to fail closed.")
+            return
+        }
+    }
+
+    @Test
+    func liveKitClientConnectDoesNotSubscribeRemoteAudio() async {
+        var remoteAudioValues = [Bool]()
+        let client = LiveKitDirectCallClient { connectOptions, roomOptions in
+            Room(connectOptions: connectOptions, roomOptions: roomOptions)
+        } roomConnector: { _, _, _, _ in
+        } remoteAudioSubscriptionUpdater: { _, isEnabled in
+            remoteAudioValues.append(isEnabled)
+        }
+
+        let result = await client.connect(connectionInfo: makeConnectionInfo(), e2eeContext: LiveKitMediaE2EEContextSpy())
+
+        guard case .success = result else {
+            Issue.record("Expected SDK client connect seam to succeed.")
+            return
+        }
+        #expect(remoteAudioValues.isEmpty)
+        await client.cleanup()
+    }
+
+    @Test
+    func liveKitClientRemoteAudioEnableFailureRollsBackSubscription() async {
+        var remoteAudioValues = [Bool]()
+        let client = LiveKitDirectCallClient { connectOptions, roomOptions in
+            Room(connectOptions: connectOptions, roomOptions: roomOptions)
+        } roomConnector: { _, _, _, _ in
+        } remoteAudioSubscriptionUpdater: { _, isEnabled in
+            remoteAudioValues.append(isEnabled)
+            if isEnabled {
+                throw DirectCallMediaError.mediaSetupUnavailable
+            }
+        }
+
+        let connectResult = await client.connect(connectionInfo: makeConnectionInfo(), e2eeContext: LiveKitMediaE2EEContextSpy())
+        guard case .success = connectResult else {
+            Issue.record("Expected SDK client connect seam to succeed.")
+            return
+        }
+
+        let result = await client.setRemoteAudioPlaybackEnabled(true)
+
+        guard case .failure(.mediaSetupUnavailable) = result else {
+            Issue.record("Expected remote audio enable failure to fail closed.")
+            return
+        }
+        #expect(remoteAudioValues == [true, false])
+        await client.cleanup()
+    }
+
+    @Test
+    func liveKitClientCleanupUnsubscribesRemoteAudioIdempotently() async {
+        var remoteAudioValues = [Bool]()
+        let client = LiveKitDirectCallClient { connectOptions, roomOptions in
+            Room(connectOptions: connectOptions, roomOptions: roomOptions)
+        } roomConnector: { _, _, _, _ in
+        } remoteAudioSubscriptionUpdater: { _, isEnabled in
+            remoteAudioValues.append(isEnabled)
+        }
+
+        let result = await client.connect(connectionInfo: makeConnectionInfo(), e2eeContext: LiveKitMediaE2EEContextSpy())
+        guard case .success = result else {
+            Issue.record("Expected SDK client connect seam to succeed.")
+            return
+        }
+
+        _ = await client.setRemoteAudioPlaybackEnabled(true)
+        await client.cleanup()
+        await client.cleanup()
+
+        #expect(remoteAudioValues == [true, false])
+    }
+
+    @Test
     func liveKitClientDisconnectAndCleanupAreIdempotentAfterConnect() async {
         let context = LiveKitMediaE2EEContextSpy()
         let client = LiveKitDirectCallClient { connectOptions, roomOptions in
@@ -295,7 +391,7 @@ final class DirectCallMediaEngineTests {
 
         #expect(context.cleanupCount == 1)
     }
-    
+
     @Test
     func liveKitDoesNotRequestTokenOrConnectBeforeE2EEReady() async {
         let tokenProvider = MediaTokenProviderSpy()
@@ -367,9 +463,9 @@ final class DirectCallMediaEngineTests {
                                        e2eeContextProvider: e2eeContextProvider,
                                        liveKitClient: liveKitClient)
         let session = makeSession(encryptionState: .ready)
-        
+
         let result = await engine.connectAudio(for: session, keyHandle: .init(callID: callID, keyID: "key-a"))
-        
+
         #expect(e2eeContextProvider.requestedSessions == [session])
         #expect(e2eeContextProvider.requestedKeyHandles == [.init(callID: callID, keyID: "key-a")])
         #expect(tokenProvider.requestedSessions == [session])
@@ -386,29 +482,29 @@ final class DirectCallMediaEngineTests {
         #expect(state.canPlayRemoteAudio == true)
         #expect(state.isMicrophoneEnabled == false)
     }
-    
+
     @Test
     func liveKitMicrophoneEnableIsBlockedBeforeEncryptedAudioIsActive() async {
         let liveKitClient = LiveKitClientSpy()
         let engine = makeLiveKitEngine(liveKitClient: liveKitClient)
         let session = makeSession(encryptionState: .ready)
-        
+
         _ = await engine.prepareAudioSession(for: session)
         let result = await engine.setMicrophoneEnabled(true, callID: callID)
-        
+
         #expect(result == .failure(.e2eeNotReady))
         #expect(liveKitClient.microphoneValues.isEmpty)
     }
-    
+
     @Test
     func liveKitMicrophoneEnableCallsClientOnlyAfterEncryptedAudioIsActive() async {
         let liveKitClient = LiveKitClientSpy()
         let engine = makeLiveKitEngine(liveKitClient: liveKitClient)
         let session = makeSession(encryptionState: .ready)
-        
+
         _ = await engine.connectAudio(for: session, keyHandle: .init(callID: callID, keyID: "key-a"))
         let result = await engine.setMicrophoneEnabled(true, callID: callID)
-        
+
         guard case .success(let state) = result else {
             Issue.record("Expected microphone enable to succeed after fake LiveKit connect.")
             return
@@ -416,7 +512,54 @@ final class DirectCallMediaEngineTests {
         #expect(state.isMicrophoneEnabled == true)
         #expect(liveKitClient.microphoneValues == [true])
     }
-    
+
+    @Test
+    func liveKitRemoteAudioEnableIsBlockedBeforeEncryptedAudioIsActive() async {
+        let liveKitClient = LiveKitClientSpy()
+        let engine = makeLiveKitEngine(liveKitClient: liveKitClient)
+        let session = makeSession(encryptionState: .ready)
+
+        _ = await engine.prepareAudioSession(for: session)
+        let result = await engine.setRemoteAudioPlaybackEnabled(true, callID: callID)
+
+        #expect(result == .failure(.e2eeNotReady))
+        #expect(liveKitClient.remoteAudioPlaybackValues.isEmpty)
+    }
+
+    @Test
+    func liveKitRemoteAudioEnableCallsClientOnlyAfterEncryptedAudioIsActive() async {
+        let liveKitClient = LiveKitClientSpy()
+        let engine = makeLiveKitEngine(liveKitClient: liveKitClient)
+        let session = makeSession(encryptionState: .ready)
+
+        _ = await engine.connectAudio(for: session, keyHandle: .init(callID: callID, keyID: "key-a"))
+        let result = await engine.setRemoteAudioPlaybackEnabled(true, callID: callID)
+
+        guard case .success(let state) = result else {
+            Issue.record("Expected remote audio enable to succeed after fake LiveKit connect.")
+            return
+        }
+        #expect(state.canPlayRemoteAudio == true)
+        #expect(liveKitClient.remoteAudioPlaybackValues == [true])
+        #expect(liveKitClient.microphoneValues.isEmpty)
+    }
+
+    @Test
+    func liveKitRemoteAudioDisableIsSafeBeforeConnect() async {
+        let liveKitClient = LiveKitClientSpy()
+        let engine = makeLiveKitEngine(liveKitClient: liveKitClient)
+
+        let result = await engine.setRemoteAudioPlaybackEnabled(false, callID: callID)
+
+        guard case .success(let state) = result else {
+            Issue.record("Expected remote audio disable to be safe before connect.")
+            return
+        }
+        #expect(state == .idle)
+        #expect(liveKitClient.remoteAudioPlaybackValues == [false])
+        #expect(liveKitClient.microphoneValues.isEmpty)
+    }
+
     @Test
     func liveKitRejectsVideoBeforeTokenRequest() async {
         let tokenProvider = MediaTokenProviderSpy()
@@ -426,29 +569,46 @@ final class DirectCallMediaEngineTests {
                                        e2eeContextProvider: e2eeContextProvider,
                                        liveKitClient: liveKitClient)
         let session = makeSession(intent: .video, encryptionState: .ready)
-        
+
         let result = await engine.connectAudio(for: session, keyHandle: .init(callID: callID, keyID: "key-a"))
-        
+
         #expect(result == .failure(.unsupportedIntent))
         #expect(e2eeContextProvider.requestedSessions.isEmpty)
         #expect(tokenProvider.requestedSessions.isEmpty)
         #expect(liveKitClient.connectionInfos.isEmpty)
     }
-    
+
     @Test
     func liveKitConnectFailureMapsToSafeMediaError() async {
         let liveKitClient = LiveKitClientSpy(connectResult: .failure(.mediaSetupUnavailable))
         let engine = makeLiveKitEngine(liveKitClient: liveKitClient)
         let session = makeSession(encryptionState: .ready)
-        
+
         let result = await engine.connectAudio(for: session, keyHandle: .init(callID: callID, keyID: "key-a"))
-        
+
         #expect(result == .failure(.mediaSetupUnavailable))
         #expect(liveKitClient.connectionInfos.count == 1)
+        #expect(liveKitClient.remoteAudioPlaybackValues.isEmpty)
         #expect(engine.mediaStatePublisher.value.canPublishMicrophone == false)
         #expect(engine.mediaStatePublisher.value.canPlayRemoteAudio == false)
     }
-    
+
+    @Test
+    func liveKitCleanupDisablesRemoteAudioPlayback() async {
+        let liveKitClient = LiveKitClientSpy()
+        let engine = makeLiveKitEngine(liveKitClient: liveKitClient)
+        let session = makeSession(encryptionState: .ready)
+
+        _ = await engine.connectAudio(for: session, keyHandle: .init(callID: callID, keyID: "key-a"))
+        _ = await engine.setRemoteAudioPlaybackEnabled(true, callID: callID)
+        await engine.cleanup(callID: callID)
+        await engine.cleanup(callID: callID)
+
+        #expect(liveKitClient.remoteAudioPlaybackValues == [true, false])
+        #expect(liveKitClient.microphoneValues == [false])
+        #expect(engine.mediaStatePublisher.value == .idle)
+    }
+
     @Test
     func liveKitDisconnectAndCleanupAreIdempotent() async {
         let routeController = AudioRouteControllerSpy()
@@ -461,11 +621,11 @@ final class DirectCallMediaEngineTests {
                                        e2eeContextProvider: e2eeContextProvider,
                                        liveKitClient: liveKitClient)
         let session = makeSession(encryptionState: .ready)
-        
+
         _ = await engine.connectAudio(for: session, keyHandle: .init(callID: callID, keyID: "key-a"))
         await engine.cleanup(callID: callID)
         await engine.cleanup(callID: callID)
-        
+
         #expect(liveKitClient.microphoneValues == [false])
         #expect(liveKitClient.disconnectCount == 1)
         #expect(liveKitClient.cleanupCount == 1)
@@ -543,7 +703,7 @@ final class DirectCallMediaEngineTests {
                                   audioRouteController: audioRouteController,
                                   encryptionService: encryptionService)
     }
-    
+
     private func makeLiveKitEngine(tokenProvider: DirectCallMediaTokenProviderProtocol? = nil,
                                    audioRouteController: DirectCallAudioRouteControllerProtocol? = nil,
                                    encryptionService: DirectCallEncryptionServiceProtocol? = nil,
@@ -810,35 +970,44 @@ private final class LiveKitClientSpy: DirectCallLiveKitClientProtocol {
     private(set) var connectionInfos = [DirectCallMediaConnectionInfo]()
     private(set) var e2eeContextCount = 0
     private(set) var microphoneValues = [Bool]()
+    private(set) var remoteAudioPlaybackValues = [Bool]()
     private(set) var disconnectCount = 0
     private(set) var cleanupCount = 0
-    
+
     var callOrderRecorder: CallOrderRecorder?
     var connectResult: Result<Void, DirectCallMediaError>
     var microphoneResult: Result<Void, DirectCallMediaError>
-    
+    var remoteAudioResult: Result<Void, DirectCallMediaError>
+
     init(connectResult: Result<Void, DirectCallMediaError> = .success(()),
-         microphoneResult: Result<Void, DirectCallMediaError> = .success(())) {
+         microphoneResult: Result<Void, DirectCallMediaError> = .success(()),
+         remoteAudioResult: Result<Void, DirectCallMediaError> = .success(())) {
         self.connectResult = connectResult
         self.microphoneResult = microphoneResult
+        self.remoteAudioResult = remoteAudioResult
     }
-    
+
     func connect(connectionInfo: DirectCallMediaConnectionInfo, e2eeContext: any DirectCallMediaE2EEContextProtocol) async -> Result<Void, DirectCallMediaError> {
         callOrderRecorder?.events.append("clientConnect")
         connectionInfos.append(connectionInfo)
         e2eeContextCount += 1
         return connectResult
     }
-    
+
     func setMicrophoneEnabled(_ isEnabled: Bool) async -> Result<Void, DirectCallMediaError> {
         microphoneValues.append(isEnabled)
         return microphoneResult
     }
-    
+
+    func setRemoteAudioPlaybackEnabled(_ isEnabled: Bool) async -> Result<Void, DirectCallMediaError> {
+        remoteAudioPlaybackValues.append(isEnabled)
+        return remoteAudioResult
+    }
+
     func disconnect() async {
         disconnectCount += 1
     }
-    
+
     func cleanup() async {
         cleanupCount += 1
     }

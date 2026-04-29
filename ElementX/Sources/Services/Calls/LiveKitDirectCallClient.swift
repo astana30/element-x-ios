@@ -14,16 +14,19 @@ protocol DirectCallLiveKitE2EEContextProtocol: DirectCallMediaE2EEContextProtoco
 }
 
 @MainActor
-final class LiveKitDirectCallClient: DirectCallLiveKitClientProtocol {
+final class LiveKitDirectCallClient: DirectCallLiveKitClientProtocol, @unchecked Sendable {
     typealias RoomFactory = (ConnectOptions, RoomOptions) -> Room
     typealias RoomConnector = (Room, DirectCallMediaConnectionInfo, ConnectOptions, RoomOptions) async throws -> Void
-    
+    typealias RemoteAudioSubscriptionUpdater = (Room, Bool) async throws -> Void
+
     private let roomFactory: RoomFactory
     private let roomConnector: RoomConnector
+    private let remoteAudioSubscriptionUpdater: RemoteAudioSubscriptionUpdater
     private var room: Room?
     private var e2eeContext: (any DirectCallMediaE2EEContextProtocol)?
     private var isConnected = false
     private var microphoneEnabled = false
+    private var remoteAudioPlaybackEnabled = false
 
     init() {
         roomFactory = { connectOptions, roomOptions in
@@ -35,6 +38,7 @@ final class LiveKitDirectCallClient: DirectCallLiveKitClientProtocol {
                                    connectOptions: connectOptions,
                                    roomOptions: roomOptions)
         }
+        remoteAudioSubscriptionUpdater = Self.updateRemoteAudioSubscriptions
     }
 
     init(roomFactory: @escaping RoomFactory) {
@@ -45,11 +49,15 @@ final class LiveKitDirectCallClient: DirectCallLiveKitClientProtocol {
                                    connectOptions: connectOptions,
                                    roomOptions: roomOptions)
         }
+        remoteAudioSubscriptionUpdater = Self.updateRemoteAudioSubscriptions
     }
 
-    init(roomFactory: @escaping RoomFactory, roomConnector: @escaping RoomConnector) {
+    init(roomFactory: @escaping RoomFactory,
+         roomConnector: @escaping RoomConnector,
+         remoteAudioSubscriptionUpdater: @escaping RemoteAudioSubscriptionUpdater = LiveKitDirectCallClient.updateRemoteAudioSubscriptions) {
         self.roomFactory = roomFactory
         self.roomConnector = roomConnector
+        self.remoteAudioSubscriptionUpdater = remoteAudioSubscriptionUpdater
     }
 
     func connect(connectionInfo: DirectCallMediaConnectionInfo, e2eeContext: any DirectCallMediaE2EEContextProtocol) async -> Result<Void, DirectCallMediaError> {
@@ -74,10 +82,12 @@ final class LiveKitDirectCallClient: DirectCallLiveKitClientProtocol {
 
         let connectOptions = ConnectOptions(autoSubscribe: false, enableMicrophone: false)
         let preparedRoom = roomFactory(connectOptions, roomOptions)
+        preparedRoom.add(delegate: self)
         room = preparedRoom
         self.e2eeContext = e2eeContext
         isConnected = false
         microphoneEnabled = false
+        remoteAudioPlaybackEnabled = false
 
         do {
             try await roomConnector(preparedRoom, connectionInfo, connectOptions, roomOptions)
@@ -86,6 +96,36 @@ final class LiveKitDirectCallClient: DirectCallLiveKitClientProtocol {
             return .success(())
         } catch {
             await cleanup()
+            return .failure(.mediaSetupUnavailable)
+        }
+    }
+
+    func setRemoteAudioPlaybackEnabled(_ isEnabled: Bool) async -> Result<Void, DirectCallMediaError> {
+        guard isEnabled else {
+            remoteAudioPlaybackEnabled = false
+            guard let room else {
+                return .success(())
+            }
+
+            do {
+                try await remoteAudioSubscriptionUpdater(room, false)
+                return .success(())
+            } catch {
+                return .failure(.mediaSetupUnavailable)
+            }
+        }
+
+        guard isConnected, let room else {
+            return .failure(.mediaSetupUnavailable)
+        }
+
+        do {
+            try await remoteAudioSubscriptionUpdater(room, true)
+            remoteAudioPlaybackEnabled = true
+            return .success(())
+        } catch {
+            remoteAudioPlaybackEnabled = false
+            try? await remoteAudioSubscriptionUpdater(room, false)
             return .failure(.mediaSetupUnavailable)
         }
     }
@@ -123,8 +163,11 @@ final class LiveKitDirectCallClient: DirectCallLiveKitClientProtocol {
         guard room != nil else {
             isConnected = false
             microphoneEnabled = false
+            remoteAudioPlaybackEnabled = false
             return
         }
+
+        _ = await setRemoteAudioPlaybackEnabled(false)
 
         if microphoneEnabled {
             _ = await setMicrophoneEnabled(false)
@@ -136,9 +179,47 @@ final class LiveKitDirectCallClient: DirectCallLiveKitClientProtocol {
     }
 
     func cleanup() async {
+        let currentRoom = room
         await disconnect()
+        currentRoom?.remove(delegate: self)
         e2eeContext?.cleanup()
         e2eeContext = nil
         room = nil
+    }
+
+    private static func updateRemoteAudioSubscriptions(room: Room, isEnabled: Bool) async throws {
+        for participant in room.remoteParticipants.values {
+            for publication in participant.audioTracks {
+                guard let remotePublication = publication as? RemoteTrackPublication else {
+                    continue
+                }
+
+                try await remotePublication.set(subscribed: isEnabled)
+            }
+        }
+    }
+
+    private func subscribeToRemoteAudioIfNeeded(room: Room, publication: RemoteTrackPublication) async {
+        guard self.room === room,
+              isConnected,
+              remoteAudioPlaybackEnabled,
+              publication.kind == .audio else {
+            return
+        }
+
+        do {
+            try await publication.set(subscribed: true)
+        } catch {
+            remoteAudioPlaybackEnabled = false
+            try? await remoteAudioSubscriptionUpdater(room, false)
+        }
+    }
+}
+
+extension LiveKitDirectCallClient: RoomDelegate {
+    nonisolated func room(_ room: Room, participant: RemoteParticipant, didPublishTrack publication: RemoteTrackPublication) {
+        Task { @MainActor [weak self] in
+            await self?.subscribeToRemoteAudioIfNeeded(room: room, publication: publication)
+        }
     }
 }

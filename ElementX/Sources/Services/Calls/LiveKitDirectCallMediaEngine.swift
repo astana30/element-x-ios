@@ -12,6 +12,7 @@ import Foundation
 protocol DirectCallLiveKitClientProtocol {
     func connect(connectionInfo: DirectCallMediaConnectionInfo, e2eeContext: any DirectCallMediaE2EEContextProtocol) async -> Result<Void, DirectCallMediaError>
     func setMicrophoneEnabled(_ isEnabled: Bool) async -> Result<Void, DirectCallMediaError>
+    func setRemoteAudioPlaybackEnabled(_ isEnabled: Bool) async -> Result<Void, DirectCallMediaError>
     func disconnect() async
     func cleanup() async
 }
@@ -32,13 +33,17 @@ final class UnavailableDirectCallLiveKitClient: DirectCallLiveKitClientProtocol 
     func connect(connectionInfo: DirectCallMediaConnectionInfo, e2eeContext: any DirectCallMediaE2EEContextProtocol) async -> Result<Void, DirectCallMediaError> {
         .failure(.mediaSetupUnavailable)
     }
-    
+
     func setMicrophoneEnabled(_ isEnabled: Bool) async -> Result<Void, DirectCallMediaError> {
         .failure(.mediaSetupUnavailable)
     }
-    
+
+    func setRemoteAudioPlaybackEnabled(_ isEnabled: Bool) async -> Result<Void, DirectCallMediaError> {
+        isEnabled ? .failure(.mediaSetupUnavailable) : .success(())
+    }
+
     func disconnect() async { }
-    
+
     func cleanup() async { }
 }
 
@@ -170,6 +175,38 @@ final class LiveKitDirectCallMediaEngine: DirectCallMediaEngineProtocol {
         }
     }
 
+    func setRemoteAudioPlaybackEnabled(_ isEnabled: Bool, callID: String) async -> Result<DirectCallMediaState, DirectCallMediaError> {
+        let state = mediaStateSubject.value
+
+        guard isEnabled else {
+            guard state.callID == nil || state.callID == callID else {
+                return .success(state)
+            }
+
+            switch await liveKitClient.setRemoteAudioPlaybackEnabled(false) {
+            case .success:
+                return .success(state)
+            case .failure(let error):
+                return fail(callID: callID, error: error)
+            }
+        }
+
+        guard state.callID == callID else {
+            return fail(callID: callID, error: .invalidSession)
+        }
+
+        guard state.canPlayRemoteAudio else {
+            return fail(callID: callID, error: .e2eeNotReady)
+        }
+
+        switch await liveKitClient.setRemoteAudioPlaybackEnabled(true) {
+        case .success:
+            return .success(state)
+        case .failure(let error):
+            return fail(callID: callID, error: error)
+        }
+    }
+
     func setSpeakerEnabled(_ isEnabled: Bool, callID: String) async -> Result<DirectCallMediaState, DirectCallMediaError> {
         switch audioRouteController.setSpeakerEnabled(isEnabled) {
         case .success:
@@ -194,6 +231,7 @@ final class LiveKitDirectCallMediaEngine: DirectCallMediaEngineProtocol {
             mediaStateSubject.send(state)
         }
 
+        _ = await liveKitClient.setRemoteAudioPlaybackEnabled(false)
         _ = await liveKitClient.setMicrophoneEnabled(false)
         await liveKitClient.disconnect()
         audioRouteController.deactivateAudioSession()
