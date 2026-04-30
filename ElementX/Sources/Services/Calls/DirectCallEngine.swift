@@ -23,9 +23,13 @@ final class DirectCallEngine: DirectCallEngineProtocol {
     private let configuration: DirectCallEngineConfiguration
     private let now: () -> Date
     private let encryptionService: DirectCallEncryptionServiceProtocol
+    private let mediaEngine: DirectCallMediaEngineProtocol
 
     private var knownPeerByRoomID = [String: String]()
+    private var mediaKeyHandlesByCallID = [String: DirectCallMediaKeyHandle]()
     private var keyClearedCallIDs = Set<String>()
+    private var mediaDisconnectedCallIDs = Set<String>()
+    private var mediaCleanedCallIDs = Set<String>()
 
     private var activeSessionSubject = CurrentValueSubject<DirectCallSession?, Never>(nil)
     private let actionsSubject = PassthroughSubject<DirectCallEngineAction, Never>()
@@ -42,11 +46,13 @@ final class DirectCallEngine: DirectCallEngineProtocol {
          configuration: DirectCallEngineConfiguration = .init(),
          now: @escaping () -> Date = Date.init,
          encryptionService: DirectCallEncryptionServiceProtocol? = nil,
+         mediaEngine: DirectCallMediaEngineProtocol? = nil,
          expectedPeerProvider: @escaping (String) -> String?) {
         self.ownUserID = ownUserID
         self.configuration = configuration
         self.now = now
         self.encryptionService = encryptionService ?? NoOpDirectCallEncryptionService()
+        self.mediaEngine = mediaEngine ?? NoOpDirectCallMediaEngine()
         self.expectedPeerProvider = expectedPeerProvider
     }
 
@@ -75,11 +81,11 @@ final class DirectCallEngine: DirectCallEngineProtocol {
             guard let intent = event.intent else {
                 return .failure(.invalidIntent)
             }
-            return handleIncomingInvite(event: event, intent: intent)
+            return await handleIncomingInvite(event: event, intent: intent)
         case .answer:
-            return handleIncomingAnswer(event: event)
+            return await handleIncomingAnswer(event: event)
         case .reject, .cancel, .hangup, .timeout:
-            return handleIncomingTerminalEvent(event)
+            return await handleIncomingTerminalEvent(event)
         }
     }
 
@@ -96,10 +102,13 @@ final class DirectCallEngine: DirectCallEngineProtocol {
 
         transitionSession(to: .connecting)
         emitSignal(type: .answer, from: session)
-        transitionSession(to: session.intent == .video ? .activeVideo : .activeAudio)
         scheduleConnectingTimeout(for: session.callID)
 
         session = activeSessionSubject.value ?? session
+        if let keyHandle = mediaKeyHandlesByCallID[session.callID] {
+            return await connectMediaIfReady(for: session, keyHandle: keyHandle)
+        }
+
         return .success(session)
     }
 
@@ -117,6 +126,7 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         transitionSession(to: .ending)
         emitSignal(type: .reject, from: session)
         transitionSession(to: .cancelled)
+        await disconnectMediaIfNeeded(callID: session.callID)
         scheduleCleanup(for: session.callID)
 
         session = activeSessionSubject.value ?? session
@@ -137,6 +147,7 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         transitionSession(to: .ending)
         emitSignal(type: .cancel, from: session)
         transitionSession(to: .cancelled)
+        await disconnectMediaIfNeeded(callID: session.callID)
         scheduleCleanup(for: session.callID)
 
         session = activeSessionSubject.value ?? session
@@ -157,15 +168,20 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         transitionSession(to: .ending)
         emitSignal(type: .hangup, from: session)
         transitionSession(to: .ended)
+        await disconnectMediaIfNeeded(callID: session.callID)
         scheduleCleanup(for: session.callID)
 
         session = activeSessionSubject.value ?? session
         return .success(session)
     }
 
-    func markEncryptionEstablished(callID: String) async -> Result<DirectCallSession, DirectCallEngineError> {
+    func markEncryptionEstablished(callID: String, keyHandle: DirectCallMediaKeyHandle) async -> Result<DirectCallSession, DirectCallEngineError> {
         guard !callID.isEmpty else {
             return .failure(.invalidCallID)
+        }
+
+        guard keyHandle.callID == callID, !keyHandle.keyID.isEmpty else {
+            return .failure(.invalidEncryptionTransition)
         }
 
         guard let session = activeSessionSubject.value,
@@ -176,17 +192,59 @@ final class DirectCallEngine: DirectCallEngineProtocol {
 
         switch session.encryptionState {
         case .ready:
-            return .success(session)
+            mediaKeyHandlesByCallID[callID] = keyHandle
+            guard session.state == .connecting else {
+                return .success(session)
+            }
+            return await connectMediaIfReady(for: session, keyHandle: keyHandle)
         case .failed:
             return .failure(.invalidEncryptionTransition)
         case .pending:
+            mediaKeyHandlesByCallID[callID] = keyHandle
             updateSession { updated in
                 updated.encryptionState = .ready
             }
             guard let updatedSession = activeSessionSubject.value else {
                 return .failure(.invalidEncryptionTransition)
             }
-            return .success(updatedSession)
+            guard updatedSession.state == .connecting else {
+                return .success(updatedSession)
+            }
+            return await connectMediaIfReady(for: updatedSession, keyHandle: keyHandle)
+        }
+    }
+
+    private func connectMediaIfReady(for session: DirectCallSession, keyHandle: DirectCallMediaKeyHandle) async -> Result<DirectCallSession, DirectCallEngineError> {
+        guard session.callID == activeSessionSubject.value?.callID,
+              session.state == .connecting,
+              keyHandle.callID == session.callID,
+              !keyHandle.keyID.isEmpty else {
+            return .failure(.invalidEncryptionTransition)
+        }
+
+        guard session.intent == .audio else {
+            transitionSession(to: .failed)
+            await cleanupMediaIfNeeded(callID: session.callID)
+            scheduleCleanup(for: session.callID)
+            return .failure(.mediaConnectionFailed)
+        }
+
+        switch await mediaEngine.connectAudio(for: session, keyHandle: keyHandle) {
+        case .success:
+            connectingTimeoutTask?.cancel()
+            transitionSession(to: .activeAudio)
+            guard let activeSession = activeSessionSubject.value else {
+                return .failure(.invalidTransition)
+            }
+            return .success(activeSession)
+        case .failure:
+            transitionSession(to: .failed)
+            await cleanupMediaIfNeeded(callID: session.callID)
+            scheduleCleanup(for: session.callID)
+            guard activeSessionSubject.value != nil else {
+                return .failure(.mediaConnectionFailed)
+            }
+            return .failure(.mediaConnectionFailed)
         }
     }
 
@@ -209,6 +267,7 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         }
 
         transitionSession(to: .failed)
+        await disconnectMediaIfNeeded(callID: callID)
         scheduleCleanup(for: callID)
 
         guard let updatedSession = activeSessionSubject.value else {
@@ -229,6 +288,7 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         }
 
         transitionSession(to: .missed)
+        await disconnectMediaIfNeeded(callID: session.callID)
         scheduleCleanup(for: session.callID)
 
         session = activeSessionSubject.value ?? session
@@ -243,6 +303,8 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         }
 
         clearPerCallKeyIfNeeded(callID: callID)
+        await cleanupMediaIfNeeded(callID: callID)
+        mediaKeyHandlesByCallID.removeValue(forKey: callID)
         cancelAllTasks()
         activeSessionSubject.send(nil)
         actionsSubject.send(.sessionCleared(callID: session.callID, roomID: session.roomID))
@@ -267,6 +329,7 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         if let activeSession = activeSessionSubject.value,
            activeSession.state.isTerminal {
             clearPerCallKeyIfNeeded(callID: activeSession.callID)
+            await cleanupMediaIfNeeded(callID: activeSession.callID)
         }
 
         knownPeerByRoomID[roomID] = peer
@@ -311,7 +374,7 @@ final class DirectCallEngine: DirectCallEngineProtocol {
     }
 
     private func handleIncomingInvite(event: DirectCallSignalEvent,
-                                      intent: DirectCallIntent) -> Result<DirectCallSession?, DirectCallEngineError> {
+                                      intent: DirectCallIntent) async -> Result<DirectCallSession?, DirectCallEngineError> {
         if let activeSession = activeSessionSubject.value,
            !activeSession.state.isTerminal {
             if activeSession.callID == event.callID, activeSession.roomID == event.roomID {
@@ -324,6 +387,7 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         if let activeSession = activeSessionSubject.value,
            activeSession.state.isTerminal {
             clearPerCallKeyIfNeeded(callID: activeSession.callID)
+            await cleanupMediaIfNeeded(callID: activeSession.callID)
         }
 
         knownPeerByRoomID[event.roomID] = event.senderID
@@ -345,7 +409,7 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         return .success(session)
     }
 
-    private func handleIncomingAnswer(event: DirectCallSignalEvent) -> Result<DirectCallSession?, DirectCallEngineError> {
+    private func handleIncomingAnswer(event: DirectCallSignalEvent) async -> Result<DirectCallSession?, DirectCallEngineError> {
         guard let session = activeSessionSubject.value else {
             return .failure(.staleOrUnknownEvent)
         }
@@ -363,11 +427,20 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         }
 
         transitionSession(to: .connecting)
-        transitionSession(to: session.intent == .video ? .activeVideo : .activeAudio)
+        scheduleConnectingTimeout(for: session.callID)
+        if let updatedSession = activeSessionSubject.value,
+           let keyHandle = mediaKeyHandlesByCallID[session.callID] {
+            switch await connectMediaIfReady(for: updatedSession, keyHandle: keyHandle) {
+            case .success(let connectedSession):
+                return .success(connectedSession)
+            case .failure(let error):
+                return .failure(error)
+            }
+        }
         return .success(activeSessionSubject.value)
     }
 
-    private func handleIncomingTerminalEvent(_ event: DirectCallSignalEvent) -> Result<DirectCallSession?, DirectCallEngineError> {
+    private func handleIncomingTerminalEvent(_ event: DirectCallSignalEvent) async -> Result<DirectCallSession?, DirectCallEngineError> {
         guard let session = activeSessionSubject.value else {
             return .failure(.staleOrUnknownEvent)
         }
@@ -402,6 +475,7 @@ final class DirectCallEngine: DirectCallEngineProtocol {
 
         transitionSession(to: .ending)
         transitionSession(to: terminalState)
+        await disconnectMediaIfNeeded(callID: session.callID)
         scheduleCleanup(for: session.callID)
         return .success(activeSessionSubject.value)
     }
@@ -521,6 +595,7 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         }
 
         transitionSession(to: .failed)
+        await disconnectMediaIfNeeded(callID: session.callID)
         scheduleCleanup(for: session.callID)
     }
 
@@ -532,6 +607,7 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         }
 
         transitionSession(to: .failed)
+        await disconnectMediaIfNeeded(callID: session.callID)
         scheduleCleanup(for: session.callID)
     }
 
@@ -540,6 +616,22 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         incomingTimeoutTask?.cancel()
         connectingTimeoutTask?.cancel()
         cleanupTask?.cancel()
+    }
+
+    private func disconnectMediaIfNeeded(callID: String) async {
+        guard !callID.isEmpty, mediaDisconnectedCallIDs.insert(callID).inserted else {
+            return
+        }
+
+        await mediaEngine.disconnect(callID: callID)
+    }
+
+    private func cleanupMediaIfNeeded(callID: String) async {
+        guard !callID.isEmpty, mediaCleanedCallIDs.insert(callID).inserted else {
+            return
+        }
+
+        await mediaEngine.cleanup(callID: callID)
     }
 
     private func clearPerCallKeyIfNeeded(callID: String) {
@@ -552,5 +644,6 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         }
 
         encryptionService.clearPerCallKey(callID: callID)
+        mediaKeyHandlesByCallID.removeValue(forKey: callID)
     }
 }

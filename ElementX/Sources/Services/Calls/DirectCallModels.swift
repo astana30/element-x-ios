@@ -163,4 +163,5 @@ enum DirectCallEngineError: Error, Equatable {
     case sessionAlreadyActive
     case invalidTransition
     case invalidEncryptionTransition
+    case mediaConnectionFailed
 }

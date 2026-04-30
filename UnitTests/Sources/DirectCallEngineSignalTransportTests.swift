@@ -66,8 +66,8 @@ final class DirectCallEngineSignalTransportTests {
 
         _ = await harness.engineB.acceptCall(callID: outgoingSession.callID)
 
-        #expect(await waitUntil { harness.engineA.activeSessionPublisher.value?.state == .activeAudio })
-        #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .activeAudio })
+        #expect(await waitUntil { harness.engineA.activeSessionPublisher.value?.state == .connecting })
+        #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .connecting })
 
         _ = await harness.engineA.hangupActiveCall(callID: outgoingSession.callID)
 
@@ -94,8 +94,8 @@ final class DirectCallEngineSignalTransportTests {
 
         #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .incomingRinging })
         _ = await harness.engineB.acceptCall(callID: outgoingSession.callID)
-        #expect(await waitUntil { harness.engineA.activeSessionPublisher.value?.state == .activeAudio })
-        #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .activeAudio })
+        #expect(await waitUntil { harness.engineA.activeSessionPublisher.value?.state == .connecting })
+        #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .connecting })
 
         _ = await harness.engineA.hangupActiveCall(callID: outgoingSession.callID)
         #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .ended })
