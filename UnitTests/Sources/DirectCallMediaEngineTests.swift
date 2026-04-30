@@ -643,6 +643,7 @@ final class DirectCallMediaEngineTests {
         #expect(labels == ["serverURL", "roomName", "token"])
         #expect(labels.contains("key") == false)
         #expect(labels.contains("rawKey") == false)
+        #expect(String(describing: makeConnectionInfo()).contains("test-token") == false)
     }
 
     @Test
@@ -1175,6 +1176,190 @@ final class DirectCallMediaEngineTests {
 }
 
 @MainActor
+final class DirectCallMediaProviderSkeletonTests {
+    private let callID = "call-a"
+    private let roomID = "!room:example.com"
+    private let peerUserID = "@alice:example.com"
+
+    @Test
+    func liveKitTokenProviderFailsClosedWithoutTokenClient() async {
+        let provider = DirectCallLiveKitTokenProvider()
+        let session = makeSession(encryptionState: .ready)
+
+        let result = await provider.connectionInfo(for: session)
+
+        #expect(result == .failure(.tokenUnavailable))
+    }
+
+    @Test
+    func liveKitTokenProviderRejectsEmptyToken() async {
+        let tokenClient = DirectCallLiveKitTokenClientSpy(result: .success(.init(serverURLString: "wss://livekit.example.com",
+                                                                                 roomName: "direct-room",
+                                                                                 token: "")))
+        let provider = DirectCallLiveKitTokenProvider(tokenClient: tokenClient)
+        let session = makeSession(encryptionState: .ready)
+
+        let result = await provider.connectionInfo(for: session)
+
+        #expect(result == .failure(.tokenUnavailable))
+        #expect(tokenClient.requests == [.init(callID: callID, roomID: roomID, peerUserID: peerUserID)])
+    }
+
+    @Test
+    func liveKitTokenProviderRejectsInvalidServerURL() async {
+        let tokenClient = DirectCallLiveKitTokenClientSpy(result: .success(.init(serverURLString: "not-a-livekit-url",
+                                                                                 roomName: "direct-room",
+                                                                                 token: "test-token")))
+        let provider = DirectCallLiveKitTokenProvider(tokenClient: tokenClient)
+        let session = makeSession(encryptionState: .ready)
+
+        let result = await provider.connectionInfo(for: session)
+
+        #expect(result == .failure(.tokenUnavailable))
+    }
+
+    @Test
+    func liveKitTokenProviderRejectsInvalidOrNonAudioSessionBeforeTokenClient() async {
+        let tokenClient = DirectCallLiveKitTokenClientSpy()
+        let provider = DirectCallLiveKitTokenProvider(tokenClient: tokenClient)
+        let videoSession = makeSession(intent: .video, encryptionState: .ready)
+        let pendingSession = makeSession(encryptionState: .pending)
+        let invalidSession = DirectCallSession(callID: callID,
+                                               roomID: "",
+                                               peerUserID: peerUserID,
+                                               direction: .outgoing,
+                                               intent: .audio,
+                                               encryptionMode: .e2eeRequired,
+                                               startedAt: .now,
+                                               updatedAt: .now,
+                                               state: .connecting,
+                                               encryptionState: .ready)
+
+        #expect(await provider.connectionInfo(for: videoSession) == .failure(.unsupportedIntent))
+        #expect(await provider.connectionInfo(for: pendingSession) == .failure(.e2eeNotReady))
+        #expect(await provider.connectionInfo(for: invalidSession) == .failure(.invalidSession))
+        #expect(tokenClient.requests.isEmpty)
+    }
+
+    @Test
+    func liveKitTokenProviderReturnsConnectionInfoForValidMockedResponse() async throws {
+        let tokenClient = DirectCallLiveKitTokenClientSpy(result: .success(.init(serverURLString: "wss://livekit.example.com",
+                                                                                 roomName: "direct-room",
+                                                                                 token: "test-token")))
+        let provider = DirectCallLiveKitTokenProvider(tokenClient: tokenClient)
+        let session = makeSession(encryptionState: .ready)
+
+        let connectionInfo = try await provider.connectionInfo(for: session).get()
+
+        #expect(connectionInfo.serverURL.absoluteString == "wss://livekit.example.com")
+        #expect(connectionInfo.roomName == "direct-room")
+        #expect(connectionInfo.token == "test-token")
+        #expect(tokenClient.requests == [.init(callID: callID, roomID: roomID, peerUserID: peerUserID)])
+    }
+
+    @Test
+    func liveKitTokenResponseAndConnectionInfoDescriptionsRedactTokenAndURL() throws {
+        let response = DirectCallLiveKitTokenResponse(serverURLString: "wss://livekit.example.com",
+                                                      roomName: "direct-room",
+                                                      token: "secret-token")
+        let serverURL = try #require(URL(string: "wss://livekit.example.com"))
+        let connectionInfo = DirectCallMediaConnectionInfo(serverURL: serverURL,
+                                                           roomName: "direct-room",
+                                                           token: "secret-token")
+
+        #expect(String(describing: response).contains("secret-token") == false)
+        #expect(String(describing: response).contains("wss://livekit.example.com") == false)
+        #expect(String(describing: connectionInfo).contains("secret-token") == false)
+        #expect(String(describing: connectionInfo).contains("wss://livekit.example.com") == false)
+    }
+
+    @Test
+    func liveKitE2EEContextProviderFailsClosedForMissingHandle() {
+        let provider = DirectCallLiveKitE2EEContextProvider()
+        let session = makeSession(encryptionState: .ready)
+
+        let result = provider.context(for: session, keyHandle: .init(callID: callID, keyID: "missing-key"))
+
+        guard case .failure(.e2eeContextUnavailable) = result else {
+            Issue.record("Expected missing media key handle to fail closed.")
+            return
+        }
+    }
+
+    @Test
+    func liveKitE2EEContextProviderRejectsWrongCallIDOrKeyID() throws {
+        let keyStore = DirectCallLiveKitMediaKeyStore { "key-a" }
+        let keyHandle = try keyStore.storeSharedKey("test-shared-key", callID: callID).get()
+        let provider = DirectCallLiveKitE2EEContextProvider(keyStore: keyStore)
+        let session = makeSession(encryptionState: .ready)
+
+        guard case .failure(.keyMismatch) = provider.context(for: session, keyHandle: .init(callID: "other-call", keyID: keyHandle.keyID)) else {
+            Issue.record("Expected wrong call ID to fail before resolving E2EE context.")
+            return
+        }
+
+        guard case .failure(.e2eeContextUnavailable) = provider.context(for: session, keyHandle: .init(callID: callID, keyID: "other-key")) else {
+            Issue.record("Expected wrong key ID to fail closed.")
+            return
+        }
+    }
+
+    @Test
+    func liveKitE2EEContextProviderCleanupClearsContextAndKey() throws {
+        let keyStore = DirectCallLiveKitMediaKeyStore { "key-a" }
+        let keyHandle = try keyStore.storeSharedKey("test-shared-key", callID: callID).get()
+        let provider = DirectCallLiveKitE2EEContextProvider(keyStore: keyStore)
+        let session = makeSession(encryptionState: .ready)
+        let context = try provider.context(for: session, keyHandle: keyHandle).get()
+        let liveKitContext = try #require(context as? DirectCallLiveKitE2EEContextProtocol)
+
+        guard case .success = liveKitContext.makeLiveKitRoomOptions() else {
+            Issue.record("Expected stored key to build LiveKit E2EE room options before cleanup.")
+            return
+        }
+
+        provider.clearContext(callID: callID)
+
+        guard case .failure(.e2eeContextUnavailable) = liveKitContext.makeLiveKitRoomOptions() else {
+            Issue.record("Expected context cleanup to release LiveKit key provider.")
+            return
+        }
+
+        guard case .failure(.e2eeContextUnavailable) = provider.context(for: session, keyHandle: keyHandle) else {
+            Issue.record("Expected key store cleanup to remove media key.")
+            return
+        }
+    }
+
+    @Test
+    func liveKitMediaKeyStoreReturnsOpaqueHandleOnly() throws {
+        let keyStore = DirectCallLiveKitMediaKeyStore { "key-a" }
+        let sensitiveSharedKey = "secret-shared-key"
+
+        let keyHandle = try keyStore.storeSharedKey(sensitiveSharedKey, callID: callID).get()
+
+        #expect(keyHandle == .init(callID: callID, keyID: "key-a"))
+        #expect(Mirror(reflecting: keyHandle).children.compactMap(\.label) == ["callID", "keyID"])
+        #expect(String(describing: keyHandle).contains(sensitiveSharedKey) == false)
+    }
+
+    private func makeSession(intent: DirectCallIntent = .audio,
+                             encryptionState: DirectCallEncryptionState,
+                             state: DirectCallState = .connecting) -> DirectCallSession {
+        DirectCallSession(callID: callID,
+                          roomID: roomID,
+                          peerUserID: peerUserID,
+                          direction: .outgoing,
+                          intent: intent,
+                          encryptionMode: .e2eeRequired,
+                          startedAt: .now,
+                          updatedAt: .now,
+                          state: state,
+                          encryptionState: encryptionState)
+    }
+}
+
+@MainActor
 private func liveKitRoom(from client: LiveKitDirectCallClient) -> Room? {
     guard let roomValue = Mirror(reflecting: client).children.first(where: { $0.label == "room" })?.value else {
         return nil
@@ -1361,6 +1546,21 @@ private func subscribePreferredDiagnostic(for remotePublication: RemoteTrackPubl
 
 private func logLiveKitIntegration(_ message: String) {
     NSLog("%@", "[DirectCallLiveKitIntegration] \(message)")
+}
+
+@MainActor
+private final class DirectCallLiveKitTokenClientSpy: DirectCallLiveKitTokenClientProtocol {
+    private(set) var requests = [DirectCallLiveKitTokenRequest]()
+    var result: Result<DirectCallLiveKitTokenResponse, DirectCallMediaError>
+
+    init(result: Result<DirectCallLiveKitTokenResponse, DirectCallMediaError> = .failure(.tokenUnavailable)) {
+        self.result = result
+    }
+
+    func connection(for request: DirectCallLiveKitTokenRequest) async -> Result<DirectCallLiveKitTokenResponse, DirectCallMediaError> {
+        requests.append(request)
+        return result
+    }
 }
 
 @MainActor

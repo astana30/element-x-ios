@@ -35,10 +35,14 @@ enum DirectCallAudioRoute: Equatable {
     case systemDefault
 }
 
-struct DirectCallMediaConnectionInfo: Equatable {
+struct DirectCallMediaConnectionInfo: Equatable, CustomStringConvertible {
     let serverURL: URL
     let roomName: String
     let token: String
+
+    var description: String {
+        "DirectCallMediaConnectionInfo(serverURL: <redacted>, roomName: \(roomName), token: <redacted>)"
+    }
 }
 
 struct DirectCallMediaState: Equatable {

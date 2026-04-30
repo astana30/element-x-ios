@@ -14,6 +14,107 @@ protocol DirectCallLiveKitE2EEContextProtocol: DirectCallMediaE2EEContextProtoco
 }
 
 @MainActor
+final class DirectCallLiveKitMediaKeyStore {
+    private struct StoredKey {
+        let keyID: String
+        let sharedKey: String
+    }
+
+    private let keyIDProvider: () -> String
+    private var keysByCallID = [String: StoredKey]()
+
+    init(keyIDProvider: @escaping () -> String = { UUID().uuidString }) {
+        self.keyIDProvider = keyIDProvider
+    }
+
+    func storeSharedKey(_ sharedKey: String, callID: String) -> Result<DirectCallMediaKeyHandle, DirectCallMediaError> {
+        guard callID.isEmpty == false,
+              sharedKey.isEmpty == false else {
+            return .failure(.e2eeContextUnavailable)
+        }
+
+        let keyID = keyIDProvider()
+        guard keyID.isEmpty == false else {
+            return .failure(.e2eeContextUnavailable)
+        }
+
+        keysByCallID[callID] = StoredKey(keyID: keyID, sharedKey: sharedKey)
+        return .success(.init(callID: callID, keyID: keyID))
+    }
+
+    func makeKeyProvider(for keyHandle: DirectCallMediaKeyHandle) -> BaseKeyProvider? {
+        guard let storedKey = keysByCallID[keyHandle.callID],
+              storedKey.keyID == keyHandle.keyID else {
+            return nil
+        }
+
+        return BaseKeyProvider(isSharedKey: true, sharedKey: storedKey.sharedKey)
+    }
+
+    func clear(callID: String) {
+        guard callID.isEmpty == false else {
+            return
+        }
+
+        keysByCallID.removeValue(forKey: callID)
+    }
+}
+
+@MainActor
+final class DirectCallLiveKitE2EEContextProvider: DirectCallMediaE2EEContextProviderProtocol {
+    private let keyStore: DirectCallLiveKitMediaKeyStore
+    private var contextsByCallID = [String: DirectCallLiveKitE2EEContext]()
+
+    init() {
+        keyStore = DirectCallLiveKitMediaKeyStore()
+    }
+
+    init(keyStore: DirectCallLiveKitMediaKeyStore) {
+        self.keyStore = keyStore
+    }
+
+    func context(for session: DirectCallSession, keyHandle: DirectCallMediaKeyHandle) -> Result<any DirectCallMediaE2EEContextProtocol, DirectCallMediaError> {
+        if let error = session.directAudioConnectionError(keyHandle: keyHandle) {
+            return .failure(error)
+        }
+
+        guard let keyProvider = keyStore.makeKeyProvider(for: keyHandle) else {
+            return .failure(.e2eeContextUnavailable)
+        }
+
+        let context = DirectCallLiveKitE2EEContext(keyProvider: keyProvider)
+        contextsByCallID[session.callID] = context
+        return .success(context)
+    }
+
+    func clearContext(callID: String) {
+        contextsByCallID.removeValue(forKey: callID)?.cleanup()
+        keyStore.clear(callID: callID)
+    }
+}
+
+@MainActor
+final class DirectCallLiveKitE2EEContext: DirectCallLiveKitE2EEContextProtocol {
+    private var keyProvider: BaseKeyProvider?
+
+    init(keyProvider: BaseKeyProvider) {
+        self.keyProvider = keyProvider
+    }
+
+    func makeLiveKitRoomOptions() -> Result<RoomOptions, DirectCallMediaError> {
+        guard let keyProvider else {
+            return .failure(.e2eeContextUnavailable)
+        }
+
+        return .success(RoomOptions(encryptionOptions: EncryptionOptions(keyProvider: keyProvider)))
+    }
+
+    func cleanup() {
+        keyProvider = nil
+    }
+}
+
+@MainActor
 final class LiveKitDirectCallClient: DirectCallLiveKitClientProtocol, @unchecked Sendable {
     typealias RoomFactory = (ConnectOptions, RoomOptions) -> Room
     typealias RoomConnector = (Room, DirectCallMediaConnectionInfo, ConnectOptions, RoomOptions) async throws -> Void
