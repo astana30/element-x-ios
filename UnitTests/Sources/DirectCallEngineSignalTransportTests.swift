@@ -536,6 +536,70 @@ final class DirectCallEngineSignalTransportTests {
     }
 
     @Test
+    func matrixRoomRawSignalSenderCallsSendRawWithDedicatedEventTypeAndUnchangedContent() async {
+        let rawRoom = MatrixRawRoomSenderSpy()
+        let sender = DirectCallMatrixRoomRawSignalSender(roomID: roomID, room: rawRoom)
+        let content = #"{"version":1,"call_id":"call-1"}"#
+
+        let result = await sender.sendDirectCallSignal(roomID: roomID,
+                                                       eventType: DirectCallMatrixSignalCodec.eventType,
+                                                       content: content)
+
+        guard case .success = result else {
+            Issue.record("Expected Matrix room raw signal sender to send content.")
+            return
+        }
+        #expect(rawRoom.sentRawEvents == [.init(eventType: DirectCallMatrixSignalCodec.eventType, content: content)])
+    }
+
+    @Test
+    func matrixRoomRawSignalSenderMapsThrownErrorToSendFailed() async {
+        let rawRoom = MatrixRawRoomSenderSpy()
+        rawRoom.error = MatrixRawRoomSenderError()
+        let sender = DirectCallMatrixRoomRawSignalSender(roomID: roomID, room: rawRoom)
+
+        let result = await sender.sendDirectCallSignal(roomID: roomID,
+                                                       eventType: DirectCallMatrixSignalCodec.eventType,
+                                                       content: #"{"version":1}"#)
+
+        guard case .failure(.sendFailed) = result else {
+            Issue.record("Expected Matrix room raw signal sender to map SDK send errors to sendFailed.")
+            return
+        }
+        #expect(rawRoom.sentRawEvents.isEmpty)
+    }
+
+    @Test
+    func matrixRoomRawSignalSenderRejectsInvalidArguments() async {
+        let rawRoom = MatrixRawRoomSenderSpy()
+        let sender = DirectCallMatrixRoomRawSignalSender(roomID: roomID, room: rawRoom)
+
+        let emptyRoomResult = await sender.sendDirectCallSignal(roomID: "",
+                                                                eventType: DirectCallMatrixSignalCodec.eventType,
+                                                                content: #"{"version":1}"#)
+        let mismatchedRoomResult = await sender.sendDirectCallSignal(roomID: "!other:example.com",
+                                                                     eventType: DirectCallMatrixSignalCodec.eventType,
+                                                                     content: #"{"version":1}"#)
+        let emptyEventTypeResult = await sender.sendDirectCallSignal(roomID: roomID,
+                                                                     eventType: "",
+                                                                     content: #"{"version":1}"#)
+        let wrongEventTypeResult = await sender.sendDirectCallSignal(roomID: roomID,
+                                                                     eventType: "m.call.hangup",
+                                                                     content: #"{"version":1}"#)
+        let emptyContentResult = await sender.sendDirectCallSignal(roomID: roomID,
+                                                                   eventType: DirectCallMatrixSignalCodec.eventType,
+                                                                   content: "")
+
+        for result in [emptyRoomResult, mismatchedRoomResult, emptyEventTypeResult, wrongEventTypeResult, emptyContentResult] {
+            guard case .failure(.invalidSignal) = result else {
+                Issue.record("Expected Matrix room raw signal sender to reject invalid arguments.")
+                return
+            }
+        }
+        #expect(rawRoom.sentRawEvents.isEmpty)
+    }
+
+    @Test
     func transportDetachRemovesRecipientDeliveryPath() async {
         let transport = InMemoryDirectCallSignalTransport()
         var receivedEvents = [DirectCallSignalEvent]()
@@ -743,3 +807,24 @@ private struct SentRawSignal {
     let eventType: String
     let content: String
 }
+
+@MainActor
+private final class MatrixRawRoomSenderSpy: DirectCallMatrixRawRoomSending {
+    private(set) var sentRawEvents = [SentRawRoomEvent]()
+    var error: Error?
+
+    func sendRaw(eventType: String, content: String) async throws {
+        if let error {
+            throw error
+        }
+
+        sentRawEvents.append(.init(eventType: eventType, content: content))
+    }
+}
+
+private struct SentRawRoomEvent: Equatable {
+    let eventType: String
+    let content: String
+}
+
+private struct MatrixRawRoomSenderError: Error { }

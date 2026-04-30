@@ -7,6 +7,7 @@
 
 import Combine
 import Foundation
+import MatrixRustSDK
 
 struct DirectCallMatrixSignalContent: Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     static let currentVersion = 1
@@ -252,6 +253,42 @@ protocol DirectCallMatrixRawSignalSending {
 }
 
 @MainActor
+protocol DirectCallMatrixRawRoomSending {
+    func sendRaw(eventType: String, content: String) async throws
+}
+
+@MainActor
+final class DirectCallMatrixRoomRawSignalSender: DirectCallMatrixRawSignalSending {
+    private let roomID: String
+    private let room: DirectCallMatrixRawRoomSending
+
+    init(roomID: String, room: DirectCallMatrixRawRoomSending) {
+        self.roomID = roomID
+        self.room = room
+    }
+
+    convenience init(roomID: String, room: RoomProtocol) {
+        self.init(roomID: roomID, room: DirectCallMatrixSDKRawRoom(room: room))
+    }
+
+    func sendDirectCallSignal(roomID: String, eventType: String, content: String) async -> Result<Void, DirectCallMatrixSignalTransportError> {
+        guard !self.roomID.isEmpty,
+              roomID == self.roomID,
+              eventType == DirectCallMatrixSignalCodec.eventType,
+              !content.isEmpty else {
+            return .failure(.invalidSignal)
+        }
+
+        do {
+            try await room.sendRaw(eventType: DirectCallMatrixSignalCodec.eventType, content: content)
+            return .success(())
+        } catch {
+            return .failure(.sendFailed)
+        }
+    }
+}
+
+@MainActor
 final class DirectCallMatrixSignalTransport {
     private let rawSender: DirectCallMatrixRawSignalSending
 
@@ -267,6 +304,14 @@ final class DirectCallMatrixSignalTransport {
         return await rawSender.sendDirectCallSignal(roomID: signal.roomID,
                                                     eventType: DirectCallMatrixSignalCodec.eventType,
                                                     content: content)
+    }
+}
+
+private struct DirectCallMatrixSDKRawRoom: DirectCallMatrixRawRoomSending {
+    let room: RoomProtocol
+
+    func sendRaw(eventType: String, content: String) async throws {
+        try await room.sendRaw(eventType: eventType, content: content)
     }
 }
 
