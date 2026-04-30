@@ -99,7 +99,7 @@ enum DirectCallSignalType: String, Equatable {
     }
 }
 
-struct DirectCallSignalEvent: Equatable {
+struct DirectCallSignalEvent: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     let eventID: String
     let roomID: String
     let senderID: String
@@ -107,14 +107,73 @@ struct DirectCallSignalEvent: Equatable {
     let type: DirectCallSignalType
     let intent: DirectCallIntent?
     let timestamp: Date
+    let keyExchange: DirectCallEncryptedKeyExchangePayload?
+
+    init(eventID: String,
+         roomID: String,
+         senderID: String,
+         callID: String,
+         type: DirectCallSignalType,
+         intent: DirectCallIntent?,
+         timestamp: Date,
+         keyExchange: DirectCallEncryptedKeyExchangePayload? = nil) {
+        self.eventID = eventID
+        self.roomID = roomID
+        self.senderID = senderID
+        self.callID = callID
+        self.type = type
+        self.intent = intent
+        self.timestamp = timestamp
+        self.keyExchange = keyExchange
+    }
+
+    var description: String {
+        "DirectCallSignalEvent(" + [
+            "eventID: \(eventID)",
+            "roomID: \(roomID)",
+            "senderID: \(senderID)",
+            "callID: \(callID)",
+            "type: \(type)",
+            "intent: \(String(describing: intent))",
+            "timestamp: \(timestamp)",
+            "keyExchange: \(keyExchange == nil ? "nil" : "<redacted>")"
+        ].joined(separator: ", ") + ")"
+    }
+
+    var debugDescription: String {
+        description
+    }
 }
 
-struct DirectCallOutgoingSignal: Equatable {
+struct DirectCallOutgoingSignal: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     let roomID: String
     let peerUserID: String
     let callID: String
     let type: DirectCallSignalType
     let intent: DirectCallIntent?
+    let keyExchange: DirectCallEncryptedKeyExchangePayload?
+
+    init(roomID: String,
+         peerUserID: String,
+         callID: String,
+         type: DirectCallSignalType,
+         intent: DirectCallIntent?,
+         keyExchange: DirectCallEncryptedKeyExchangePayload? = nil) {
+        self.roomID = roomID
+        self.peerUserID = peerUserID
+        self.callID = callID
+        self.type = type
+        self.intent = intent
+        self.keyExchange = keyExchange
+    }
+
+    var description: String {
+        "DirectCallOutgoingSignal(roomID: \(roomID), peerUserID: \(peerUserID), callID: \(callID), type: \(type), intent: \(String(describing: intent)), keyExchange: \(keyExchange == nil ? "nil" : "<redacted>"))"
+    }
+
+    var debugDescription: String {
+        description
+    }
 }
 
 struct DirectCallSession: Equatable {

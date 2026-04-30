@@ -47,7 +47,8 @@ final class InMemoryDirectCallSignalTransport: DirectCallSignalTransportProtocol
                                           callID: signal.callID,
                                           type: signal.type,
                                           intent: signal.intent,
-                                          timestamp: now())
+                                          timestamp: now(),
+                                          keyExchange: signal.keyExchange)
         recipientSubject.send(event)
     }
 

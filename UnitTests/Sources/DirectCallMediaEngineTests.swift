@@ -1607,7 +1607,7 @@ private final class AudioRouteControllerSpy: DirectCallAudioRouteControllerProto
 private final class MediaEncryptionServiceSpy: DirectCallEncryptionServiceProtocol {
     private(set) var clearedCallIDs = [String]()
 
-    func generatePerCallKey(callID: String, roomID: String, peerUserID: String) -> Result<DirectCallEncryptedKeyExchangePayload, DirectCallEncryptionFailureReason> {
+    func generatePerCallKey(callID: String, roomID: String, peerUserID: String) -> Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason> {
         .failure(.keyExchangeFailed)
     }
 

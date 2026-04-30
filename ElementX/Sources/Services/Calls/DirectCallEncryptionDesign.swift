@@ -9,12 +9,27 @@ import Foundation
 
 /// Ciphertext-only key exchange payload.
 /// The encrypted payload must travel via Matrix E2EE-protected signalling.
-struct DirectCallEncryptedKeyExchangePayload: Equatable {
+struct DirectCallEncryptedKeyExchangePayload: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     let callID: String
     let roomID: String
     let senderUserID: String
     let keyID: String
     let encryptedPayload: String
+
+    var description: String {
+        "DirectCallEncryptedKeyExchangePayload(callID: \(callID), roomID: \(roomID), senderUserID: \(senderUserID), keyID: \(keyID), encryptedPayload: <redacted>)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+/// Generated local key handle plus the ciphertext payload that can be sent to the peer.
+/// The raw media key must remain hidden inside the encryption implementation.
+struct DirectCallGeneratedKeyExchange: Equatable {
+    let payload: DirectCallEncryptedKeyExchangePayload
+    let keyHandle: DirectCallMediaKeyHandle
 }
 
 /// Opaque per-call media key handle.
@@ -27,7 +42,7 @@ struct DirectCallMediaKeyHandle: Equatable {
 @MainActor
 protocol DirectCallEncryptionServiceProtocol {
     /// Generates a new per-call key. Keys must never be reused across calls.
-    func generatePerCallKey(callID: String, roomID: String, peerUserID: String) -> Result<DirectCallEncryptedKeyExchangePayload, DirectCallEncryptionFailureReason>
+    func generatePerCallKey(callID: String, roomID: String, peerUserID: String) -> Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason>
 
     /// Consumes remote encrypted key material and verifies compatibility for this call.
     func consumeRemoteEncryptedKey(_ payload: DirectCallEncryptedKeyExchangePayload, expectedCallID: String, expectedRoomID: String, expectedSenderUserID: String) -> Result<DirectCallMediaKeyHandle, DirectCallEncryptionFailureReason>
@@ -39,7 +54,7 @@ protocol DirectCallEncryptionServiceProtocol {
 final class NoOpDirectCallEncryptionService: DirectCallEncryptionServiceProtocol {
     private var clearedCallIDs = Set<String>()
 
-    func generatePerCallKey(callID: String, roomID: String, peerUserID: String) -> Result<DirectCallEncryptedKeyExchangePayload, DirectCallEncryptionFailureReason> {
+    func generatePerCallKey(callID: String, roomID: String, peerUserID: String) -> Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason> {
         .failure(.keyExchangeFailed)
     }
 

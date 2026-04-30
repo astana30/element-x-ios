@@ -28,7 +28,8 @@ final class DirectCallEngineTests {
                                                           callID: "call-a",
                                                           type: .invite,
                                                           intent: .audio,
-                                                          timestamp: .now))
+                                                          timestamp: .now,
+                                                          keyExchange: keyExchange(callID: "call-a")))
 
         #expect(engine.activeSessionPublisher.value?.state == .incomingRinging)
 
@@ -75,7 +76,7 @@ final class DirectCallEngineTests {
 
     @Test
     func remoteHangupEndsAcceptedCallImmediately() async {
-        let engine = makeEngine()
+        let engine = makeEngine(mediaEngine: MediaEngineSpy())
         let startResult = await engine.startOutgoingAudioCall(peer: peerUserID, roomID: roomID)
         guard case .success(let session) = startResult else {
             Issue.record("Expected outgoing call start to succeed.")
@@ -89,7 +90,7 @@ final class DirectCallEngineTests {
                                                           type: .answer,
                                                           intent: nil,
                                                           timestamp: .now))
-        #expect(engine.activeSessionPublisher.value?.state == .connecting)
+        #expect(engine.activeSessionPublisher.value?.state == .activeAudio)
 
         _ = await engine.receiveIncomingCall(event: .init(eventID: "$hangup",
                                                           roomID: roomID,
@@ -218,8 +219,56 @@ final class DirectCallEngineTests {
         }
 
         #expect(session.encryptionMode == .e2eeRequired)
-        #expect(session.encryptionState == .pending)
-        #expect(session.isMediaPublishingAllowed == false)
+        #expect(session.encryptionState == .ready)
+        #expect(session.isMediaPublishingAllowed)
+    }
+
+    @Test
+    func outgoingStartGeneratesKeyBeforeInviteEmission() async {
+        let encryptionService = EncryptionServiceSpy(senderUserID: ownUserID)
+        let engine = makeEngine(encryptionService: encryptionService)
+        var emittedSignals = [DirectCallOutgoingSignal]()
+        let cancellable = engine.actionsPublisher.sink { action in
+            guard case .emitSignal(let signal) = action else {
+                return
+            }
+            emittedSignals.append(signal)
+        }
+        defer { cancellable.cancel() }
+
+        let result = await engine.startOutgoingAudioCall(peer: peerUserID, roomID: roomID)
+
+        guard case .success(let session) = result else {
+            Issue.record("Expected outgoing call start to succeed.")
+            return
+        }
+
+        #expect(encryptionService.generatedRequests == [.init(callID: session.callID, roomID: roomID, peerUserID: peerUserID)])
+        #expect(emittedSignals.count == 1)
+        #expect(emittedSignals.first?.type == .invite)
+        #expect(emittedSignals.first?.keyExchange?.callID == session.callID)
+        #expect(emittedSignals.first?.keyExchange?.encryptedPayload == "encrypted-\(session.callID)")
+    }
+
+    @Test
+    func outgoingGenerationFailureEmitsNoInviteAndNoActiveSession() async {
+        let encryptionService = EncryptionServiceSpy(senderUserID: ownUserID,
+                                                     generateResult: .failure(.keyExchangeFailed))
+        let engine = makeEngine(encryptionService: encryptionService)
+        var emittedSignals = [DirectCallOutgoingSignal]()
+        let cancellable = engine.actionsPublisher.sink { action in
+            guard case .emitSignal(let signal) = action else {
+                return
+            }
+            emittedSignals.append(signal)
+        }
+        defer { cancellable.cancel() }
+
+        let result = await engine.startOutgoingAudioCall(peer: peerUserID, roomID: roomID)
+
+        #expect(result == .failure(.invalidEncryptionTransition))
+        #expect(engine.activeSessionPublisher.value == nil)
+        #expect(emittedSignals.isEmpty)
     }
 
     @Test
@@ -231,14 +280,6 @@ final class DirectCallEngineTests {
             Issue.record("Expected outgoing call start to succeed.")
             return
         }
-
-        _ = await engine.receiveIncomingCall(event: .init(eventID: "$answer",
-                                                          roomID: roomID,
-                                                          senderID: peerUserID,
-                                                          callID: session.callID,
-                                                          type: .answer,
-                                                          intent: nil,
-                                                          timestamp: .now))
 
         let failureResult = await engine.markEncryptionFailed(callID: session.callID, reason: .e2eeNotProven)
         guard case .success(let failedSession) = failureResult else {
@@ -252,7 +293,79 @@ final class DirectCallEngineTests {
     }
 
     @Test
-    func acceptCallDoesNotBecomeActiveBeforeEncryptionReady() async {
+    func incomingInviteMissingKeyExchangeFailsClosed() async {
+        let mediaEngine = MediaEngineSpy()
+        let engine = makeEngine(mediaEngine: mediaEngine)
+
+        let result = await engine.receiveIncomingCall(event: .init(eventID: "$invite",
+                                                                   roomID: roomID,
+                                                                   senderID: peerUserID,
+                                                                   callID: "call-a",
+                                                                   type: .invite,
+                                                                   intent: .audio,
+                                                                   timestamp: .now))
+
+        #expect(result == .failure(.invalidEncryptionTransition))
+        #expect(engine.activeSessionPublisher.value == nil)
+        #expect(mediaEngine.connectedSessions.isEmpty)
+    }
+
+    @Test
+    func incomingInviteMismatchedKeyExchangeFailsClosed() async {
+        let mismatchedPayloads: [DirectCallEncryptedKeyExchangePayload] = [
+            keyExchange(callID: "other-call"),
+            keyExchange(callID: "call-a", roomID: "!other:example.com"),
+            keyExchange(callID: "call-a", senderUserID: "@mallory:example.com")
+        ]
+
+        for payload in mismatchedPayloads {
+            let mediaEngine = MediaEngineSpy()
+            let engine = makeEngine(mediaEngine: mediaEngine)
+
+            let result = await engine.receiveIncomingCall(event: .init(eventID: "$invite",
+                                                                       roomID: roomID,
+                                                                       senderID: peerUserID,
+                                                                       callID: "call-a",
+                                                                       type: .invite,
+                                                                       intent: .audio,
+                                                                       timestamp: .now,
+                                                                       keyExchange: payload))
+
+            #expect(result == .failure(.invalidEncryptionTransition))
+            #expect(engine.activeSessionPublisher.value == nil)
+            #expect(mediaEngine.connectedSessions.isEmpty)
+        }
+    }
+
+    @Test
+    func validIncomingInviteConsumesKeyAndStoresHandleBeforeAccept() async {
+        let encryptionService = EncryptionServiceSpy(senderUserID: ownUserID)
+        let mediaEngine = MediaEngineSpy()
+        let engine = makeEngine(encryptionService: encryptionService, mediaEngine: mediaEngine)
+        let payload = keyExchange(callID: "call-a")
+
+        let result = await engine.receiveIncomingCall(event: .init(eventID: "$invite",
+                                                                   roomID: roomID,
+                                                                   senderID: peerUserID,
+                                                                   callID: "call-a",
+                                                                   type: .invite,
+                                                                   intent: .audio,
+                                                                   timestamp: .now,
+                                                                   keyExchange: payload))
+
+        guard case .success(let session) = result else {
+            Issue.record("Expected valid invite key exchange to create an incoming session.")
+            return
+        }
+
+        #expect(session?.state == .incomingRinging)
+        #expect(session?.encryptionState == .ready)
+        #expect(encryptionService.consumedPayloads == [payload])
+        #expect(mediaEngine.connectedSessions.isEmpty)
+    }
+
+    @Test
+    func acceptAfterValidIncomingInviteConnectsMediaUsingConsumedHandle() async {
         let mediaEngine = MediaEngineSpy()
         let engine = makeEngine(mediaEngine: mediaEngine)
 
@@ -262,7 +375,8 @@ final class DirectCallEngineTests {
                                                           callID: "call-a",
                                                           type: .invite,
                                                           intent: .audio,
-                                                          timestamp: .now))
+                                                          timestamp: .now,
+                                                          keyExchange: keyExchange(callID: "call-a")))
 
         let result = await engine.acceptCall(callID: "call-a")
 
@@ -271,46 +385,25 @@ final class DirectCallEngineTests {
             return
         }
 
-        #expect(session.state == .connecting)
-        #expect(session.encryptionState == .pending)
-        #expect(mediaEngine.connectedSessions.isEmpty)
+        #expect(session.state == .activeAudio)
+        #expect(session.encryptionState == .ready)
+        #expect(mediaEngine.connectedSessions.map(\.callID) == ["call-a"])
+        #expect(mediaEngine.connectedKeyHandles == [.init(callID: "call-a", keyID: "key-a")])
     }
 
     @Test
-    func incomingAnswerDoesNotBecomeActiveBeforeEncryptionReady() async {
+    func callerReceivingAnswerConnectsMediaUsingGeneratedHandle() async {
         let mediaEngine = MediaEngineSpy()
         let engine = makeEngine(mediaEngine: mediaEngine)
 
-        guard let session = await startOutgoingAndReceiveAnswer(engine: engine) else {
-            return
-        }
-
-        #expect(session.state == .connecting)
-        #expect(session.encryptionState == .pending)
-        #expect(mediaEngine.connectedSessions.isEmpty)
-    }
-
-    @Test
-    func markEncryptionEstablishedConnectsMediaAndActivatesCurrentCall() async {
-        let mediaEngine = MediaEngineSpy()
-        let engine = makeEngine(mediaEngine: mediaEngine)
-
-        guard let connectingSession = await startOutgoingAndReceiveAnswer(engine: engine) else {
-            return
-        }
-
-        let keyHandle = DirectCallMediaKeyHandle(callID: connectingSession.callID, keyID: "key-a")
-        let result = await engine.markEncryptionEstablished(callID: connectingSession.callID, keyHandle: keyHandle)
-
-        guard case .success(let activeSession) = result else {
-            Issue.record("Expected E2EE-ready media connect to succeed.")
+        guard let activeSession = await startOutgoingAndReceiveAnswer(engine: engine) else {
             return
         }
 
         #expect(activeSession.state == .activeAudio)
         #expect(activeSession.encryptionState == .ready)
-        #expect(mediaEngine.connectedSessions.map(\.callID) == [connectingSession.callID])
-        #expect(mediaEngine.connectedKeyHandles == [keyHandle])
+        #expect(mediaEngine.connectedSessions.map(\.callID) == [activeSession.callID])
+        #expect(mediaEngine.connectedKeyHandles == [.init(callID: activeSession.callID, keyID: "key-\(activeSession.callID)")])
     }
 
     @Test
@@ -318,16 +411,23 @@ final class DirectCallEngineTests {
         let mediaEngine = MediaEngineSpy(connectResult: .failure(.mediaSetupUnavailable))
         let engine = makeEngine(mediaEngine: mediaEngine)
 
-        guard let connectingSession = await startOutgoingAndReceiveAnswer(engine: engine) else {
+        let startResult = await engine.startOutgoingAudioCall(peer: peerUserID, roomID: roomID)
+        guard case .success(let startedSession) = startResult else {
+            Issue.record("Expected outgoing call start to succeed.")
             return
         }
 
-        let result = await engine.markEncryptionEstablished(callID: connectingSession.callID,
-                                                            keyHandle: .init(callID: connectingSession.callID, keyID: "key-a"))
+        let result = await engine.receiveIncomingCall(event: .init(eventID: "$answer",
+                                                                   roomID: roomID,
+                                                                   senderID: peerUserID,
+                                                                   callID: startedSession.callID,
+                                                                   type: .answer,
+                                                                   intent: nil,
+                                                                   timestamp: .now))
 
         #expect(result == .failure(.mediaConnectionFailed))
         #expect(engine.activeSessionPublisher.value?.state == .failed)
-        #expect(mediaEngine.cleanupCallIDs == [connectingSession.callID])
+        #expect(mediaEngine.cleanupCallIDs == [startedSession.callID])
     }
 
     @Test
@@ -335,15 +435,17 @@ final class DirectCallEngineTests {
         let mediaEngine = MediaEngineSpy()
         let engine = makeEngine(mediaEngine: mediaEngine)
 
-        guard let connectingSession = await startOutgoingAndReceiveAnswer(engine: engine) else {
+        let startResult = await engine.startOutgoingAudioCall(peer: peerUserID, roomID: roomID)
+        guard case .success(let startedSession) = startResult else {
+            Issue.record("Expected outgoing call start to succeed.")
             return
         }
 
-        let result = await engine.markEncryptionEstablished(callID: connectingSession.callID,
+        let result = await engine.markEncryptionEstablished(callID: startedSession.callID,
                                                             keyHandle: .init(callID: "other-call", keyID: "key-a"))
 
         #expect(result == .failure(.invalidEncryptionTransition))
-        #expect(engine.activeSessionPublisher.value?.state == .connecting)
+        #expect(engine.activeSessionPublisher.value?.state == .outgoingRinging)
         #expect(mediaEngine.connectedSessions.isEmpty)
     }
 
@@ -366,10 +468,6 @@ final class DirectCallEngineTests {
                                                           intent: nil,
                                                           timestamp: .now))
 
-        let result = await engine.markEncryptionEstablished(callID: startedSession.callID,
-                                                            keyHandle: .init(callID: startedSession.callID, keyID: "key-a"))
-
-        #expect(result == .failure(.mediaConnectionFailed))
         #expect(engine.activeSessionPublisher.value?.state == .failed)
         #expect(mediaEngine.connectedSessions.isEmpty)
         #expect(mediaEngine.cleanupCallIDs == [startedSession.callID])
@@ -495,7 +593,8 @@ final class DirectCallEngineTests {
                                                                             callID: "call-new",
                                                                             type: .invite,
                                                                             intent: .audio,
-                                                                            timestamp: .now))
+                                                                            timestamp: .now,
+                                                                            keyExchange: keyExchange(callID: "call-new")))
 
         guard case .success(let newSession) = newInviteResult else {
             Issue.record("Expected a new incoming invite to replace the terminal session.")
@@ -540,10 +639,22 @@ final class DirectCallEngineTests {
                                               connectingTimeout: .seconds(120),
                                               cleanupDelay: cleanupDelay,
                                               processedTerminalEventLimit: 64),
-                         encryptionService: encryptionService ?? NoOpDirectCallEncryptionService(),
+                         encryptionService: encryptionService ?? EncryptionServiceSpy(senderUserID: ownUserID),
                          mediaEngine: mediaEngine) { [roomID, peerUserID] id in
             id == roomID ? peerUserID : nil
         }
+    }
+
+    private func keyExchange(callID: String,
+                             roomID: String? = nil,
+                             senderUserID: String? = nil,
+                             keyID: String = "key-a",
+                             encryptedPayload: String = "encrypted") -> DirectCallEncryptedKeyExchangePayload {
+        .init(callID: callID,
+              roomID: roomID ?? self.roomID,
+              senderUserID: senderUserID ?? peerUserID,
+              keyID: keyID,
+              encryptedPayload: encryptedPayload)
     }
 
     private func startOutgoingAndReceiveAnswer(engine: DirectCallEngine) async -> DirectCallSession? {
@@ -570,31 +681,66 @@ final class DirectCallEngineTests {
     }
 
     private func startConnectedAudioCall(engine: DirectCallEngine) async -> DirectCallSession? {
-        guard let connectingSession = await startOutgoingAndReceiveAnswer(engine: engine) else {
-            return nil
-        }
-
-        let result = await engine.markEncryptionEstablished(callID: connectingSession.callID,
-                                                            keyHandle: .init(callID: connectingSession.callID, keyID: "key-a"))
-        guard case .success(let activeSession) = result else {
-            Issue.record("Expected media connect to activate audio call.")
-            return nil
-        }
-
-        return activeSession
+        await startOutgoingAndReceiveAnswer(engine: engine)
     }
 }
 
 @MainActor
 private final class EncryptionServiceSpy: DirectCallEncryptionServiceProtocol {
+    struct GenerateRequest: Equatable {
+        let callID: String
+        let roomID: String
+        let peerUserID: String
+    }
+
+    private let senderUserID: String
+    private let generateResult: Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason>?
+    private let consumeResult: Result<DirectCallMediaKeyHandle, DirectCallEncryptionFailureReason>?
+
+    private(set) var generatedRequests = [GenerateRequest]()
+    private(set) var consumedPayloads = [DirectCallEncryptedKeyExchangePayload]()
     private(set) var clearedCallIDs = Set<String>()
 
-    func generatePerCallKey(callID: String, roomID: String, peerUserID: String) -> Result<DirectCallEncryptedKeyExchangePayload, DirectCallEncryptionFailureReason> {
-        .failure(.keyExchangeFailed)
+    init(senderUserID: String = "@me:example.com",
+         generateResult: Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason>? = nil,
+         consumeResult: Result<DirectCallMediaKeyHandle, DirectCallEncryptionFailureReason>? = nil) {
+        self.senderUserID = senderUserID
+        self.generateResult = generateResult
+        self.consumeResult = consumeResult
+    }
+
+    func generatePerCallKey(callID: String, roomID: String, peerUserID: String) -> Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason> {
+        generatedRequests.append(.init(callID: callID, roomID: roomID, peerUserID: peerUserID))
+
+        if let generateResult {
+            return generateResult
+        }
+
+        let keyID = "key-\(callID)"
+        return .success(.init(payload: .init(callID: callID,
+                                             roomID: roomID,
+                                             senderUserID: senderUserID,
+                                             keyID: keyID,
+                                             encryptedPayload: "encrypted-\(callID)"),
+                              keyHandle: .init(callID: callID, keyID: keyID)))
     }
 
     func consumeRemoteEncryptedKey(_ payload: DirectCallEncryptedKeyExchangePayload, expectedCallID: String, expectedRoomID: String, expectedSenderUserID: String) -> Result<DirectCallMediaKeyHandle, DirectCallEncryptionFailureReason> {
-        .failure(.keyExchangeFailed)
+        consumedPayloads.append(payload)
+
+        if let consumeResult {
+            return consumeResult
+        }
+
+        guard payload.callID == expectedCallID,
+              payload.roomID == expectedRoomID,
+              payload.senderUserID == expectedSenderUserID,
+              !payload.keyID.isEmpty,
+              !payload.encryptedPayload.isEmpty else {
+            return .failure(.keyMismatch)
+        }
+
+        return .success(.init(callID: payload.callID, keyID: payload.keyID))
     }
 
     func clearPerCallKey(callID: String) {

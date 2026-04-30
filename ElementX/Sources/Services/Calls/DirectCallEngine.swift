@@ -217,6 +217,7 @@ final class DirectCallEngine: DirectCallEngineProtocol {
     private func connectMediaIfReady(for session: DirectCallSession, keyHandle: DirectCallMediaKeyHandle) async -> Result<DirectCallSession, DirectCallEngineError> {
         guard session.callID == activeSessionSubject.value?.callID,
               session.state == .connecting,
+              session.encryptionState == .ready,
               keyHandle.callID == session.callID,
               !keyHandle.keyID.isEmpty else {
             return .failure(.invalidEncryptionTransition)
@@ -336,7 +337,20 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         cancelAllTasks()
 
         let timestamp = now()
-        let session = DirectCallSession(callID: UUID().uuidString,
+        let callID = UUID().uuidString
+        let generatedKeyExchange: DirectCallGeneratedKeyExchange
+        switch encryptionService.generatePerCallKey(callID: callID, roomID: roomID, peerUserID: peer) {
+        case .success(let keyExchange):
+            guard isGeneratedKeyExchangeValid(keyExchange, callID: callID, roomID: roomID) else {
+                return .failure(.invalidEncryptionTransition)
+            }
+            generatedKeyExchange = keyExchange
+        case .failure:
+            return .failure(.invalidEncryptionTransition)
+        }
+
+        mediaKeyHandlesByCallID[callID] = generatedKeyExchange.keyHandle
+        let session = DirectCallSession(callID: callID,
                                         roomID: roomID,
                                         peerUserID: peer,
                                         direction: .outgoing,
@@ -345,9 +359,9 @@ final class DirectCallEngine: DirectCallEngineProtocol {
                                         startedAt: timestamp,
                                         updatedAt: timestamp,
                                         state: .outgoingRinging,
-                                        encryptionState: .pending)
+                                        encryptionState: .ready)
         publish(session)
-        emitSignal(type: .invite, from: session)
+        emitSignal(type: .invite, from: session, keyExchange: generatedKeyExchange.payload)
         scheduleOutgoingTimeout(for: session.callID)
         return .success(session)
     }
@@ -393,6 +407,25 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         knownPeerByRoomID[event.roomID] = event.senderID
         cancelAllTasks()
 
+        guard let keyExchange = event.keyExchange else {
+            return .failure(.invalidEncryptionTransition)
+        }
+
+        let keyHandle: DirectCallMediaKeyHandle
+        switch encryptionService.consumeRemoteEncryptedKey(keyExchange,
+                                                           expectedCallID: event.callID,
+                                                           expectedRoomID: event.roomID,
+                                                           expectedSenderUserID: event.senderID) {
+        case .success(let consumedKeyHandle):
+            guard consumedKeyHandle.callID == event.callID, !consumedKeyHandle.keyID.isEmpty else {
+                return .failure(.invalidEncryptionTransition)
+            }
+            keyHandle = consumedKeyHandle
+        case .failure:
+            return .failure(.invalidEncryptionTransition)
+        }
+
+        mediaKeyHandlesByCallID[event.callID] = keyHandle
         let timestamp = now()
         let session = DirectCallSession(callID: event.callID,
                                         roomID: event.roomID,
@@ -403,7 +436,7 @@ final class DirectCallEngine: DirectCallEngineProtocol {
                                         startedAt: timestamp,
                                         updatedAt: timestamp,
                                         state: .incomingRinging,
-                                        encryptionState: .pending)
+                                        encryptionState: .ready)
         publish(session)
         scheduleIncomingTimeout(for: session.callID)
         return .success(session)
@@ -428,16 +461,24 @@ final class DirectCallEngine: DirectCallEngineProtocol {
 
         transitionSession(to: .connecting)
         scheduleConnectingTimeout(for: session.callID)
-        if let updatedSession = activeSessionSubject.value,
-           let keyHandle = mediaKeyHandlesByCallID[session.callID] {
-            switch await connectMediaIfReady(for: updatedSession, keyHandle: keyHandle) {
-            case .success(let connectedSession):
-                return .success(connectedSession)
-            case .failure(let error):
-                return .failure(error)
-            }
+
+        guard let updatedSession = activeSessionSubject.value else {
+            return .failure(.invalidTransition)
         }
-        return .success(activeSessionSubject.value)
+
+        guard let keyHandle = mediaKeyHandlesByCallID[session.callID] else {
+            transitionSession(to: .failed)
+            await cleanupMediaIfNeeded(callID: session.callID)
+            scheduleCleanup(for: session.callID)
+            return .failure(.invalidEncryptionTransition)
+        }
+
+        switch await connectMediaIfReady(for: updatedSession, keyHandle: keyHandle) {
+        case .success(let connectedSession):
+            return .success(connectedSession)
+        case .failure(let error):
+            return .failure(error)
+        }
     }
 
     private func handleIncomingTerminalEvent(_ event: DirectCallSignalEvent) async -> Result<DirectCallSession?, DirectCallEngineError> {
@@ -529,12 +570,27 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         publish(session)
     }
 
-    private func emitSignal(type: DirectCallSignalType, from session: DirectCallSession) {
+    private func emitSignal(type: DirectCallSignalType,
+                            from session: DirectCallSession,
+                            keyExchange: DirectCallEncryptedKeyExchangePayload? = nil) {
         actionsSubject.send(.emitSignal(.init(roomID: session.roomID,
                                               peerUserID: session.peerUserID,
                                               callID: session.callID,
                                               type: type,
-                                              intent: type == .invite ? session.intent : nil)))
+                                              intent: type == .invite ? session.intent : nil,
+                                              keyExchange: keyExchange)))
+    }
+
+    private func isGeneratedKeyExchangeValid(_ keyExchange: DirectCallGeneratedKeyExchange,
+                                             callID: String,
+                                             roomID: String) -> Bool {
+        keyExchange.keyHandle.callID == callID &&
+            !keyExchange.keyHandle.keyID.isEmpty &&
+            keyExchange.payload.callID == callID &&
+            keyExchange.payload.roomID == roomID &&
+            keyExchange.payload.senderUserID == ownUserID &&
+            keyExchange.payload.keyID == keyExchange.keyHandle.keyID &&
+            !keyExchange.payload.encryptedPayload.isEmpty
     }
 
     private func transitionSession(to state: DirectCallState) {
