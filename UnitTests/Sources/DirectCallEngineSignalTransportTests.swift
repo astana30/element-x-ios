@@ -8,6 +8,8 @@
 import Combine
 @testable import ElementX
 import Foundation
+import MatrixRustSDK
+import MatrixRustSDKMocks
 import Testing
 
 @MainActor
@@ -1258,3 +1260,230 @@ private struct SentRawRoomEvent: Equatable {
 }
 
 private struct MatrixRawRoomSenderError: Error { }
+
+@MainActor
+final class DirectCallMatrixSDKSignalAdapterTests {
+    private let userA = "@a:example.com"
+    private let userB = "@b:example.com"
+    private let roomID = "!dm:example.com"
+
+    @Test
+    func matrixSDKTimelineSignalListenerStartsAndCancelsSDKListener() async {
+        let timeline = TimelineSDKMock()
+        let sdkHandle = TaskHandleSDKMock()
+        timeline.addListenerListenerReturnValue = sdkHandle
+        let listener = makeListener(timeline: timeline)
+
+        let handle = await listener.start { _ in }
+        handle.cancel()
+
+        #expect(timeline.addListenerListenerCallsCount == 1)
+        #expect(sdkHandle.cancelCallsCount == 1)
+    }
+
+    @Test
+    func matrixSDKTimelineSignalListenerFailsClosedWhenSafeRawContentIsUnavailable() async throws {
+        let timeline = TimelineSDKMock()
+        timeline.addListenerListenerReturnValue = TaskHandleSDKMock()
+        let listener = makeListener(timeline: timeline)
+        var envelopes = [DirectCallMatrixSignalEnvelope]()
+        let handle = await listener.start { envelope in
+            envelopes.append(envelope)
+        }
+        handle.cancel()
+
+        let sdkListener = try #require(timeline.addListenerListenerReceivedListener)
+        sdkListener.onUpdate(diff: [.append(values: [timelineItem(eventID: "$event-1",
+                                                                  content: directCallTimelineContent())])])
+
+        await Task.yield()
+        #expect(envelopes.isEmpty)
+    }
+
+    @Test
+    func matrixSDKTimelineSignalListenerEmitsOnlySanitizedEnvelopeFromInjectedExtractor() async throws {
+        let timeline = TimelineSDKMock()
+        timeline.addListenerListenerReturnValue = TaskHandleSDKMock()
+        let signal = DirectCallOutgoingSignal(roomID: roomID,
+                                              peerUserID: userB,
+                                              callID: "call-1",
+                                              type: .answer,
+                                              intent: nil)
+        let extractor = try MatrixTimelineEnvelopeExtractorSpy(rawContent: #require(DirectCallMatrixSignalCodec.encode(signal)))
+        let listener = makeListener(timeline: timeline, envelopeExtractor: extractor)
+        var envelopes = [DirectCallMatrixSignalEnvelope]()
+        let handle = await listener.start { envelope in
+            envelopes.append(envelope)
+        }
+        handle.cancel()
+
+        let sdkListener = try #require(timeline.addListenerListenerReceivedListener)
+        sdkListener.onUpdate(diff: [.append(values: [timelineItem(eventID: "$stable-direct-call-event",
+                                                                  senderUserID: userA,
+                                                                  content: directCallTimelineContent())])])
+
+        #expect(await waitUntil { envelopes.count == 1 })
+        #expect(envelopes.first?.eventID == "$stable-direct-call-event")
+        #expect(envelopes.first?.rawContent.contains("encrypted_payload") == false)
+        #expect(extractor.metadata.first?.eventID == "$stable-direct-call-event")
+    }
+
+    @Test
+    func matrixSDKTimelineSignalListenerIgnoresNonDirectCallAndOwnEventsBeforeExtraction() async {
+        let timeline = TimelineSDKMock()
+        timeline.addListenerListenerReturnValue = TaskHandleSDKMock()
+        let extractor = MatrixTimelineEnvelopeExtractorSpy(rawContent: #"{"version":1}"#)
+        let listener = makeListener(timeline: timeline, envelopeExtractor: extractor)
+        var envelopes = [DirectCallMatrixSignalEnvelope]()
+        let handle = await listener.start { envelope in
+            envelopes.append(envelope)
+        }
+        handle.cancel()
+
+        timeline.addListenerListenerReceivedListener?.onUpdate(diff: [
+            .append(values: [
+                timelineItem(eventID: "$message", content: nonDirectCallTimelineContent()),
+                timelineItem(eventID: "$own", senderUserID: userB, isOwn: true, content: directCallTimelineContent())
+            ])
+        ])
+
+        await Task.yield()
+        #expect(envelopes.isEmpty)
+        #expect(extractor.metadata.isEmpty)
+    }
+
+    @Test
+    func matrixSDKTimelineSignalMetadataPreservesStableEventIDAndRejectsTransactionID() {
+        let remoteEvent = eventTimelineItem(eventID: "$stable-direct-call-event",
+                                            content: directCallTimelineContent())
+        let transactionEvent = EventTimelineItem(isRemote: false,
+                                                 eventOrTransactionId: .transactionId(transactionId: "txn-1"),
+                                                 sender: userA,
+                                                 senderProfile: .pending,
+                                                 forwarder: nil,
+                                                 forwarderProfile: nil,
+                                                 isOwn: false,
+                                                 isEditable: false,
+                                                 content: directCallTimelineContent(),
+                                                 timestamp: 1_700_000_000_000,
+                                                 localSendState: nil,
+                                                 localCreatedAt: nil,
+                                                 readReceipts: [:],
+                                                 origin: nil,
+                                                 canBeRepliedTo: false,
+                                                 lazyProvider: LazyTimelineItemProviderSDKMock())
+
+        let metadata = DirectCallMatrixSDKTimelineSignalListener.metadata(from: remoteEvent,
+                                                                          roomID: roomID,
+                                                                          ownUserID: userB,
+                                                                          isDirectOneToOneRoom: true,
+                                                                          isEncryptedRoom: true)
+        let transactionMetadata = DirectCallMatrixSDKTimelineSignalListener.metadata(from: transactionEvent,
+                                                                                     roomID: roomID,
+                                                                                     ownUserID: userB,
+                                                                                     isDirectOneToOneRoom: true,
+                                                                                     isEncryptedRoom: true)
+
+        #expect(metadata?.eventID == "$stable-direct-call-event")
+        #expect(transactionMetadata == nil)
+    }
+
+    @Test
+    func matrixSDKTimelineSignalMetadataDescriptionsDoNotExposeRawContentOrEncryptedPayload() {
+        let metadata = DirectCallMatrixTimelineSignalMetadata(eventID: "$event",
+                                                              roomID: roomID,
+                                                              senderUserID: userA,
+                                                              ownUserID: userB,
+                                                              isDirectOneToOneRoom: true,
+                                                              isEncryptedRoom: true,
+                                                              timestamp: .now)
+
+        #expect(String(describing: metadata).contains("rawContent") == false)
+        #expect(String(reflecting: metadata).contains("rawContent") == false)
+        #expect(String(describing: metadata).contains("encrypted_payload") == false)
+        #expect(String(reflecting: metadata).contains("encrypted_payload") == false)
+    }
+
+    private func makeListener(timeline: TimelineProtocol,
+                              envelopeExtractor: DirectCallMatrixTimelineItemEnvelopeExtracting? = nil) -> DirectCallMatrixSDKTimelineSignalListener {
+        .init(timeline: timeline,
+              roomID: roomID,
+              ownUserID: userB,
+              isDirectOneToOneRoom: { true },
+              isEncryptedRoom: { true },
+              envelopeExtractor: envelopeExtractor ?? DirectCallMatrixFailClosedTimelineItemEnvelopeExtractor())
+    }
+
+    private func timelineItem(eventID: String,
+                              senderUserID: String? = nil,
+                              isOwn: Bool = false,
+                              content: TimelineItemContent) -> TimelineItem {
+        let item = TimelineItemSDKMock()
+        item.asEventReturnValue = eventTimelineItem(eventID: eventID,
+                                                    senderUserID: senderUserID,
+                                                    isOwn: isOwn,
+                                                    content: content)
+        return item
+    }
+
+    private func eventTimelineItem(eventID: String,
+                                   senderUserID: String? = nil,
+                                   isOwn: Bool = false,
+                                   content: TimelineItemContent) -> EventTimelineItem {
+        .init(configuration: .init(eventID: eventID,
+                                   sender: senderUserID ?? userA,
+                                   isOwn: isOwn,
+                                   content: content))
+    }
+
+    private func directCallTimelineContent() -> TimelineItemContent {
+        .msgLike(content: .init(kind: .other(eventType: .other(DirectCallMatrixSignalCodec.eventType)),
+                                reactions: [],
+                                inReplyTo: nil,
+                                threadRoot: nil,
+                                threadSummary: nil))
+    }
+
+    private func nonDirectCallTimelineContent() -> TimelineItemContent {
+        .msgLike(content: .init(kind: .redacted,
+                                reactions: [],
+                                inReplyTo: nil,
+                                threadRoot: nil,
+                                threadSummary: nil))
+    }
+
+    private func waitUntil(timeout: Duration = .seconds(2),
+                           checkInterval: Duration = .milliseconds(20),
+                           condition: @MainActor () -> Bool) async -> Bool {
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            if condition() {
+                return true
+            }
+            try? await Task.sleep(for: checkInterval)
+        }
+        return condition()
+    }
+}
+
+@MainActor
+private final class MatrixTimelineEnvelopeExtractorSpy: DirectCallMatrixTimelineItemEnvelopeExtracting {
+    private let rawContent: String
+    private(set) var metadata = [DirectCallMatrixTimelineSignalMetadata]()
+
+    init(rawContent: String) {
+        self.rawContent = rawContent
+    }
+
+    func envelope(from metadata: DirectCallMatrixTimelineSignalMetadata) -> DirectCallMatrixSignalEnvelope? {
+        self.metadata.append(metadata)
+        return .init(eventID: metadata.eventID,
+                     roomID: metadata.roomID,
+                     senderUserID: metadata.senderUserID,
+                     ownUserID: metadata.ownUserID,
+                     isDirectOneToOneRoom: metadata.isDirectOneToOneRoom,
+                     isEncryptedRoom: metadata.isEncryptedRoom,
+                     timestamp: metadata.timestamp,
+                     rawContent: rawContent)
+    }
+}

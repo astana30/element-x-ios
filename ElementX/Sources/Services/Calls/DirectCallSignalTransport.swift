@@ -267,6 +267,46 @@ protocol DirectCallMatrixTimelineSignalListening {
     func start(onEnvelope: @escaping @MainActor (DirectCallMatrixSignalEnvelope) -> Void) async -> DirectCallMatrixSignalListeningHandle
 }
 
+struct DirectCallMatrixTimelineSignalMetadata: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let eventID: String
+    let roomID: String
+    let senderUserID: String
+    let ownUserID: String
+    let isDirectOneToOneRoom: Bool?
+    let isEncryptedRoom: Bool?
+    let timestamp: Date
+
+    var description: String {
+        "DirectCallMatrixTimelineSignalMetadata(" + [
+            "eventID: \(eventID)",
+            "roomID: \(roomID)",
+            "senderUserID: \(senderUserID)",
+            "ownUserID: \(ownUserID)",
+            "isDirectOneToOneRoom: \(String(describing: isDirectOneToOneRoom))",
+            "isEncryptedRoom: \(String(describing: isEncryptedRoom))",
+            "timestamp: \(timestamp)"
+        ].joined(separator: ", ") + ")"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+@MainActor
+protocol DirectCallMatrixTimelineItemEnvelopeExtracting {
+    func envelope(from metadata: DirectCallMatrixTimelineSignalMetadata) -> DirectCallMatrixSignalEnvelope?
+}
+
+/// SDK timeline items expose stable event metadata for custom events, but not a safe typed raw content body.
+/// Keep the production receive path fail-closed until a non-debug raw content accessor exists.
+@MainActor
+struct DirectCallMatrixFailClosedTimelineItemEnvelopeExtractor: DirectCallMatrixTimelineItemEnvelopeExtracting {
+    func envelope(from metadata: DirectCallMatrixTimelineSignalMetadata) -> DirectCallMatrixSignalEnvelope? {
+        nil
+    }
+}
+
 @MainActor
 final class DirectCallMatrixRoomRawSignalSender: DirectCallMatrixRawSignalSending {
     private let roomID: String
@@ -295,6 +335,136 @@ final class DirectCallMatrixRoomRawSignalSender: DirectCallMatrixRawSignalSendin
         } catch {
             return .failure(.sendFailed)
         }
+    }
+}
+
+@MainActor
+final class DirectCallMatrixSDKTimelineSignalListener: DirectCallMatrixTimelineSignalListening {
+    private let timeline: TimelineProtocol
+    private let roomID: String
+    private let ownUserID: String
+    private let isDirectOneToOneRoom: () -> Bool?
+    private let isEncryptedRoom: () -> Bool?
+    private let envelopeExtractor: DirectCallMatrixTimelineItemEnvelopeExtracting
+
+    init(timeline: TimelineProtocol,
+         roomID: String,
+         ownUserID: String,
+         isDirectOneToOneRoom: @escaping () -> Bool?,
+         isEncryptedRoom: @escaping () -> Bool?,
+         envelopeExtractor: DirectCallMatrixTimelineItemEnvelopeExtracting? = nil) {
+        self.timeline = timeline
+        self.roomID = roomID
+        self.ownUserID = ownUserID
+        self.isDirectOneToOneRoom = isDirectOneToOneRoom
+        self.isEncryptedRoom = isEncryptedRoom
+        self.envelopeExtractor = envelopeExtractor ?? DirectCallMatrixFailClosedTimelineItemEnvelopeExtractor()
+    }
+
+    func start(onEnvelope: @escaping @MainActor (DirectCallMatrixSignalEnvelope) -> Void) async -> DirectCallMatrixSignalListeningHandle {
+        let handle = await timeline.addListener(listener: SDKListener { [weak self] diffs in
+            Task { @MainActor [weak self] in
+                self?.process(diffs, onEnvelope: onEnvelope)
+            }
+        })
+        return DirectCallMatrixSDKSignalListeningHandle(handle: handle)
+    }
+
+    private func process(_ diffs: [TimelineDiff], onEnvelope: @escaping @MainActor (DirectCallMatrixSignalEnvelope) -> Void) {
+        for item in Self.timelineItems(from: diffs) {
+            guard let eventItem = item.asEvent(),
+                  let metadata = Self.metadata(from: eventItem,
+                                               roomID: roomID,
+                                               ownUserID: ownUserID,
+                                               isDirectOneToOneRoom: isDirectOneToOneRoom(),
+                                               isEncryptedRoom: isEncryptedRoom()),
+                  let envelope = envelopeExtractor.envelope(from: metadata) else {
+                continue
+            }
+
+            onEnvelope(envelope)
+        }
+    }
+
+    static func metadata(from eventItem: EventTimelineItem,
+                         roomID: String,
+                         ownUserID: String,
+                         isDirectOneToOneRoom: Bool?,
+                         isEncryptedRoom: Bool?) -> DirectCallMatrixTimelineSignalMetadata? {
+        guard !roomID.isEmpty,
+              !ownUserID.isEmpty,
+              eventItem.isOwn == false,
+              isDirectCallSignalContent(eventItem.content),
+              let eventID = stableEventID(from: eventItem) else {
+            return nil
+        }
+
+        return .init(eventID: eventID,
+                     roomID: roomID,
+                     senderUserID: eventItem.sender,
+                     ownUserID: ownUserID,
+                     isDirectOneToOneRoom: isDirectOneToOneRoom,
+                     isEncryptedRoom: isEncryptedRoom,
+                     timestamp: Date(timeIntervalSince1970: TimeInterval(eventItem.timestamp / 1000)))
+    }
+
+    static func timelineItems(from diffs: [TimelineDiff]) -> [TimelineItem] {
+        var items = [TimelineItem]()
+        for diff in diffs {
+            switch diff {
+            case .append(let values), .reset(let values):
+                items.append(contentsOf: values)
+            case .pushFront(let value), .pushBack(let value), .insert(_, let value), .set(_, let value):
+                items.append(value)
+            case .clear, .popFront, .popBack, .remove, .truncate:
+                break
+            }
+        }
+        return items
+    }
+
+    private static func stableEventID(from eventItem: EventTimelineItem) -> String? {
+        guard case .eventID(let eventID) = TimelineItemIdentifier.EventOrTransactionID(rustValue: eventItem.eventOrTransactionId) else {
+            return nil
+        }
+
+        return eventID.isEmpty ? nil : eventID
+    }
+
+    private static func isDirectCallSignalContent(_ content: TimelineItemContent) -> Bool {
+        switch content {
+        case .msgLike(let content):
+            guard case .other(let eventType) = content.kind else {
+                return false
+            }
+
+            return isDirectCallSignalEventType(eventType)
+        case .failedToParseMessageLike(let eventType, _):
+            return eventType == DirectCallMatrixSignalCodec.eventType
+        case .callInvite, .rtcNotification, .roomMembership, .profileChange, .state, .failedToParseState, .liveLocation:
+            return false
+        }
+    }
+
+    private static func isDirectCallSignalEventType(_ eventType: MessageLikeEventType) -> Bool {
+        guard case .other(let eventType) = eventType else {
+            return false
+        }
+
+        return eventType == DirectCallMatrixSignalCodec.eventType
+    }
+}
+
+@MainActor
+private final class DirectCallMatrixSDKSignalListeningHandle: DirectCallMatrixSignalListeningHandle {
+    private let handle: TaskHandle
+
+    init(handle: TaskHandle) {
+        self.handle = handle
+    }
+
+    func cancel() {
+        handle.cancel()
     }
 }
 

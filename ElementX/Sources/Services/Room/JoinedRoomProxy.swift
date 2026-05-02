@@ -707,6 +707,13 @@ class JoinedRoomProxy: JoinedRoomProxyProtocol {
             return .failure(.sdkError(error))
         }
     }
+
+    // MARK: - Native Direct Calls
+
+    @MainActor
+    func directCallMatrixRawSignalSender() -> DirectCallMatrixRawSignalSending {
+        DirectCallMatrixRoomRawSignalSender(roomID: id, room: room)
+    }
     
     // MARK: - Permalinks
     
