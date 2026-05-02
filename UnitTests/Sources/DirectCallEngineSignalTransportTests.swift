@@ -509,6 +509,166 @@ final class DirectCallEngineSignalTransportTests {
     }
 
     @Test
+    func matrixSignalReceiverEmitsValidInvite() throws {
+        let payload = keyExchange(callID: "call-1", senderUserID: userA)
+        let signal = DirectCallOutgoingSignal(roomID: roomID,
+                                              peerUserID: userB,
+                                              callID: "call-1",
+                                              type: .invite,
+                                              intent: .audio,
+                                              keyExchange: payload)
+        let events = try receiveMatrixEnvelopes([matrixEnvelope(rawContent: #require(DirectCallMatrixSignalCodec.encode(signal)))])
+
+        #expect(events.count == 1)
+        #expect(events.first?.type == .invite)
+        #expect(events.first?.keyExchange == payload)
+    }
+
+    @Test
+    func matrixSignalReceiverEmitsValidAnswer() throws {
+        let signal = DirectCallOutgoingSignal(roomID: roomID,
+                                              peerUserID: userB,
+                                              callID: "call-1",
+                                              type: .answer,
+                                              intent: nil)
+        let events = try receiveMatrixEnvelopes([matrixEnvelope(rawContent: #require(DirectCallMatrixSignalCodec.encode(signal)))])
+
+        #expect(events.count == 1)
+        #expect(events.first?.type == .answer)
+        #expect(events.first?.keyExchange == nil)
+    }
+
+    @Test
+    func matrixSignalReceiverIgnoresMalformedJSON() {
+        let events = receiveMatrixEnvelopes([matrixEnvelope(rawContent: "{not-json")])
+
+        #expect(events.isEmpty)
+    }
+
+    @Test
+    func matrixSignalReceiverIgnoresOwnEvent() throws {
+        let content = DirectCallMatrixSignalContent(callID: "call-1",
+                                                    type: DirectCallSignalType.invite.rawValue,
+                                                    intent: DirectCallIntent.audio.rawValue,
+                                                    recipient: userB,
+                                                    keyExchange: keyExchange(callID: "call-1", senderUserID: userB))
+        let events = try receiveMatrixEnvelopes([matrixEnvelope(senderUserID: userB, rawContent: json(for: content))])
+
+        #expect(events.isEmpty)
+    }
+
+    @Test
+    func matrixSignalReceiverIgnoresRecipientMismatch() throws {
+        let content = DirectCallMatrixSignalContent(callID: "call-1",
+                                                    type: DirectCallSignalType.invite.rawValue,
+                                                    intent: DirectCallIntent.audio.rawValue,
+                                                    recipient: "@other:example.com",
+                                                    keyExchange: keyExchange(callID: "call-1", senderUserID: userA))
+        let events = try receiveMatrixEnvelopes([matrixEnvelope(rawContent: json(for: content))])
+
+        #expect(events.isEmpty)
+    }
+
+    @Test
+    func matrixSignalReceiverIgnoresNonDirectRoomMetadataWhenFalse() throws {
+        let content = DirectCallMatrixSignalContent(callID: "call-1",
+                                                    type: DirectCallSignalType.invite.rawValue,
+                                                    intent: DirectCallIntent.audio.rawValue,
+                                                    recipient: userB,
+                                                    keyExchange: keyExchange(callID: "call-1", senderUserID: userA))
+        let events = try receiveMatrixEnvelopes([matrixEnvelope(isDirectOneToOneRoom: false, rawContent: json(for: content))])
+
+        #expect(events.isEmpty)
+    }
+
+    @Test
+    func matrixSignalReceiverIgnoresNonEncryptedRoomMetadataWhenFalse() throws {
+        let content = DirectCallMatrixSignalContent(callID: "call-1",
+                                                    type: DirectCallSignalType.invite.rawValue,
+                                                    intent: DirectCallIntent.audio.rawValue,
+                                                    recipient: userB,
+                                                    keyExchange: keyExchange(callID: "call-1", senderUserID: userA))
+        let events = try receiveMatrixEnvelopes([matrixEnvelope(isEncryptedRoom: false, rawContent: json(for: content))])
+
+        #expect(events.isEmpty)
+    }
+
+    @Test
+    func matrixSignalReceiverIgnoresInviteWithoutKeyExchange() throws {
+        let content = DirectCallMatrixSignalContent(callID: "call-1",
+                                                    type: DirectCallSignalType.invite.rawValue,
+                                                    intent: DirectCallIntent.audio.rawValue,
+                                                    recipient: userB,
+                                                    keyExchange: nil)
+        let events = try receiveMatrixEnvelopes([matrixEnvelope(rawContent: json(for: content))])
+
+        #expect(events.isEmpty)
+    }
+
+    @Test
+    func matrixSignalReceiverIgnoresKeyExchangeMismatch() throws {
+        let content = DirectCallMatrixSignalContent(callID: "call-1",
+                                                    type: DirectCallSignalType.invite.rawValue,
+                                                    intent: DirectCallIntent.audio.rawValue,
+                                                    recipient: userB,
+                                                    keyExchange: keyExchange(callID: "other-call", senderUserID: userA))
+        let events = try receiveMatrixEnvelopes([matrixEnvelope(rawContent: json(for: content))])
+
+        #expect(events.isEmpty)
+    }
+
+    @Test
+    func matrixSignalReceiverDoesNotExposeRawContentOrEncryptedPayloadInOutputDescriptions() throws {
+        let payload = keyExchange(callID: "call-1",
+                                  senderUserID: userA,
+                                  encryptedPayload: "ciphertext-must-not-appear")
+        let signal = DirectCallOutgoingSignal(roomID: roomID,
+                                              peerUserID: userB,
+                                              callID: "call-1",
+                                              type: .invite,
+                                              intent: .audio,
+                                              keyExchange: payload)
+
+        let events = try receiveMatrixEnvelopes([matrixEnvelope(rawContent: #require(DirectCallMatrixSignalCodec.encode(signal)))])
+        let event = try #require(events.first)
+
+        #expect(String(describing: event).contains("ciphertext-must-not-appear") == false)
+        #expect(String(reflecting: event).contains("ciphertext-must-not-appear") == false)
+        #expect(String(describing: event).contains("rawContent") == false)
+        #expect(String(reflecting: event).contains("rawContent") == false)
+    }
+
+    @Test
+    func matrixSignalReceiverProcessesMultipleEventsInOrder() throws {
+        let invitePayload = keyExchange(callID: "call-1", senderUserID: userA)
+        let invite = DirectCallOutgoingSignal(roomID: roomID,
+                                              peerUserID: userB,
+                                              callID: "call-1",
+                                              type: .invite,
+                                              intent: .audio,
+                                              keyExchange: invitePayload)
+        let answer = DirectCallOutgoingSignal(roomID: roomID,
+                                              peerUserID: userB,
+                                              callID: "call-1",
+                                              type: .answer,
+                                              intent: nil)
+        let hangup = DirectCallOutgoingSignal(roomID: roomID,
+                                              peerUserID: userB,
+                                              callID: "call-1",
+                                              type: .hangup,
+                                              intent: nil)
+
+        let events = try receiveMatrixEnvelopes([
+            matrixEnvelope(eventID: "$event-1", rawContent: #require(DirectCallMatrixSignalCodec.encode(invite))),
+            matrixEnvelope(eventID: "$event-2", rawContent: #require(DirectCallMatrixSignalCodec.encode(answer))),
+            matrixEnvelope(eventID: "$event-3", rawContent: #require(DirectCallMatrixSignalCodec.encode(hangup)))
+        ])
+
+        #expect(events.map(\.eventID) == ["$event-1", "$event-2", "$event-3"])
+        #expect(events.map(\.type) == [.invite, .answer, .hangup])
+    }
+
+    @Test
     func matrixRawSenderSkeletonSendsExpectedEventTypeAndJSON() async throws {
         let rawSender = MatrixRawSignalSenderSpy()
         let transport = DirectCallMatrixSignalTransport(rawSender: rawSender)
@@ -693,6 +853,16 @@ final class DirectCallEngineSignalTransportTests {
 
     private func json(for content: DirectCallMatrixSignalContent) throws -> String {
         try String(data: JSONEncoder().encode(content), encoding: .utf8) ?? ""
+    }
+
+    private func receiveMatrixEnvelopes(_ envelopes: [DirectCallMatrixSignalEnvelope]) -> [DirectCallSignalEvent] {
+        var events = [DirectCallSignalEvent]()
+        let receiver = DirectCallMatrixSignalReceiver { event in
+            events.append(event)
+        }
+
+        envelopes.forEach(receiver.receive)
+        return events
     }
 
     private func waitUntil(timeout: Duration = .seconds(2),

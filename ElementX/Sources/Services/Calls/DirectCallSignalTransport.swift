@@ -307,6 +307,23 @@ final class DirectCallMatrixSignalTransport {
     }
 }
 
+@MainActor
+final class DirectCallMatrixSignalReceiver {
+    private let onSignal: (DirectCallSignalEvent) -> Void
+
+    init(onSignal: @escaping (DirectCallSignalEvent) -> Void) {
+        self.onSignal = onSignal
+    }
+
+    func receive(_ envelope: DirectCallMatrixSignalEnvelope) {
+        guard let event = DirectCallMatrixSignalCodec.decode(envelope) else {
+            return
+        }
+
+        onSignal(event)
+    }
+}
+
 private struct DirectCallMatrixSDKRawRoom: DirectCallMatrixRawRoomSending {
     let room: RoomProtocol
 
