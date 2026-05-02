@@ -258,6 +258,16 @@ protocol DirectCallMatrixRawRoomSending {
 }
 
 @MainActor
+protocol DirectCallMatrixSignalListeningHandle {
+    func cancel()
+}
+
+@MainActor
+protocol DirectCallMatrixTimelineSignalListening {
+    func start(onEnvelope: @escaping @MainActor (DirectCallMatrixSignalEnvelope) -> Void) async -> DirectCallMatrixSignalListeningHandle
+}
+
+@MainActor
 final class DirectCallMatrixRoomRawSignalSender: DirectCallMatrixRawSignalSending {
     private let roomID: String
     private let room: DirectCallMatrixRawRoomSending
@@ -321,6 +331,88 @@ final class DirectCallMatrixSignalReceiver {
         }
 
         onSignal(event)
+    }
+}
+
+@MainActor
+final class MatrixDirectCallSignalTransport: DirectCallSignalTransportProtocol {
+    private let ownUserID: String
+    private let sender: DirectCallMatrixSignalTransport
+    private let listener: DirectCallMatrixTimelineSignalListening
+    private let sendResultSubject = PassthroughSubject<Result<Void, DirectCallMatrixSignalTransportError>, Never>()
+
+    private var subject: PassthroughSubject<DirectCallSignalEvent, Never>?
+    private var listenerHandle: DirectCallMatrixSignalListeningHandle?
+    private var isListening = false
+    private lazy var receiver = DirectCallMatrixSignalReceiver { [weak self] event in
+        self?.subject?.send(event)
+    }
+
+    var sendResultsPublisher: AnyPublisher<Result<Void, DirectCallMatrixSignalTransportError>, Never> {
+        sendResultSubject.eraseToAnyPublisher()
+    }
+
+    init(ownUserID: String,
+         sender: DirectCallMatrixSignalTransport,
+         listener: DirectCallMatrixTimelineSignalListening) {
+        self.ownUserID = ownUserID
+        self.sender = sender
+        self.listener = listener
+    }
+
+    func attach() async {
+        guard !isListening else {
+            return
+        }
+
+        isListening = true
+        listenerHandle = await listener.start { [weak self] envelope in
+            guard let self, isListening else {
+                return
+            }
+
+            receiver.receive(envelope)
+        }
+    }
+
+    func stop() {
+        isListening = false
+        listenerHandle?.cancel()
+        listenerHandle = nil
+    }
+
+    func send(_ signal: DirectCallOutgoingSignal, from senderID: String) {
+        guard senderID == ownUserID else {
+            sendResultSubject.send(.failure(.invalidSignal))
+            return
+        }
+
+        Task { @MainActor [sender, sendResultSubject] in
+            let result = await sender.send(signal)
+            sendResultSubject.send(result)
+        }
+    }
+
+    func signalsPublisher(for recipientUserID: String) -> AnyPublisher<DirectCallSignalEvent, Never> {
+        guard recipientUserID == ownUserID else {
+            return Empty<DirectCallSignalEvent, Never>(completeImmediately: false).eraseToAnyPublisher()
+        }
+
+        if let subject {
+            return subject.eraseToAnyPublisher()
+        }
+
+        let subject = PassthroughSubject<DirectCallSignalEvent, Never>()
+        self.subject = subject
+        return subject.eraseToAnyPublisher()
+    }
+
+    func detachSignalsPublisher(for recipientUserID: String) {
+        guard recipientUserID == ownUserID else {
+            return
+        }
+
+        subject = nil
     }
 }
 

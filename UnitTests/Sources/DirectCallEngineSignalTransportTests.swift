@@ -760,6 +760,238 @@ final class DirectCallEngineSignalTransportTests {
     }
 
     @Test
+    func matrixDirectCallSignalTransportSendsEncodedInviteThroughRawSender() async throws {
+        let rawSender = MatrixRawSignalSenderSpy()
+        let listener = MatrixTimelineSignalListenerSpy()
+        let transport = MatrixDirectCallSignalTransport(ownUserID: userA,
+                                                        sender: DirectCallMatrixSignalTransport(rawSender: rawSender),
+                                                        listener: listener)
+        let payload = keyExchange(callID: "call-1", senderUserID: userA)
+        let signal = DirectCallOutgoingSignal(roomID: roomID,
+                                              peerUserID: userB,
+                                              callID: "call-1",
+                                              type: .invite,
+                                              intent: .audio,
+                                              keyExchange: payload)
+
+        transport.send(signal, from: userA)
+
+        #expect(await waitUntil { rawSender.sentSignals.count == 1 })
+        let sentSignal = try #require(rawSender.sentSignals.first)
+        #expect(sentSignal.roomID == roomID)
+        #expect(sentSignal.eventType == DirectCallMatrixSignalCodec.eventType)
+
+        let decodedEvent = DirectCallMatrixSignalCodec.decode(matrixEnvelope(rawContent: sentSignal.content))
+        #expect(decodedEvent?.keyExchange == payload)
+    }
+
+    @Test
+    func matrixDirectCallSignalTransportPublishesSendFailureSafely() async {
+        let rawSender = MatrixRawSignalSenderSpy()
+        rawSender.result = .failure(.sendFailed)
+        let listener = MatrixTimelineSignalListenerSpy()
+        let transport = MatrixDirectCallSignalTransport(ownUserID: userA,
+                                                        sender: DirectCallMatrixSignalTransport(rawSender: rawSender),
+                                                        listener: listener)
+        var results = [Result<Void, DirectCallMatrixSignalTransportError>]()
+        var cancellables = Set<AnyCancellable>()
+        transport.sendResultsPublisher
+            .sink { results.append($0) }
+            .store(in: &cancellables)
+
+        transport.send(.init(roomID: roomID,
+                             peerUserID: userB,
+                             callID: "call-1",
+                             type: .answer,
+                             intent: nil), from: userA)
+
+        #expect(await waitUntil {
+            guard case .failure(.sendFailed) = results.first else {
+                return false
+            }
+            return true
+        })
+    }
+
+    @Test
+    func matrixDirectCallSignalTransportReceivesValidInviteEnvelope() async throws {
+        let listener = MatrixTimelineSignalListenerSpy()
+        let transport = MatrixDirectCallSignalTransport(ownUserID: userB,
+                                                        sender: DirectCallMatrixSignalTransport(rawSender: MatrixRawSignalSenderSpy()),
+                                                        listener: listener)
+        let payload = keyExchange(callID: "call-1", senderUserID: userA)
+        let signal = DirectCallOutgoingSignal(roomID: roomID,
+                                              peerUserID: userB,
+                                              callID: "call-1",
+                                              type: .invite,
+                                              intent: .audio,
+                                              keyExchange: payload)
+        var events = [DirectCallSignalEvent]()
+        var cancellables = Set<AnyCancellable>()
+        transport.signalsPublisher(for: userB)
+            .sink { events.append($0) }
+            .store(in: &cancellables)
+        await transport.attach()
+
+        try listener.emit(matrixEnvelope(rawContent: #require(DirectCallMatrixSignalCodec.encode(signal))))
+
+        #expect(await waitUntil { events.count == 1 })
+        #expect(events.first?.type == .invite)
+        #expect(events.first?.keyExchange == payload)
+    }
+
+    @Test
+    func matrixDirectCallSignalTransportReceivesAnswerAndHangupInOrder() async throws {
+        let listener = MatrixTimelineSignalListenerSpy()
+        let transport = MatrixDirectCallSignalTransport(ownUserID: userB,
+                                                        sender: DirectCallMatrixSignalTransport(rawSender: MatrixRawSignalSenderSpy()),
+                                                        listener: listener)
+        let answer = DirectCallOutgoingSignal(roomID: roomID,
+                                              peerUserID: userB,
+                                              callID: "call-1",
+                                              type: .answer,
+                                              intent: nil)
+        let hangup = DirectCallOutgoingSignal(roomID: roomID,
+                                              peerUserID: userB,
+                                              callID: "call-1",
+                                              type: .hangup,
+                                              intent: nil)
+        var events = [DirectCallSignalEvent]()
+        var cancellables = Set<AnyCancellable>()
+        transport.signalsPublisher(for: userB)
+            .sink { events.append($0) }
+            .store(in: &cancellables)
+        await transport.attach()
+
+        try listener.emit(matrixEnvelope(eventID: "$event-1", rawContent: #require(DirectCallMatrixSignalCodec.encode(answer))))
+        try listener.emit(matrixEnvelope(eventID: "$event-2", rawContent: #require(DirectCallMatrixSignalCodec.encode(hangup))))
+
+        #expect(await waitUntil { events.count == 2 })
+        #expect(events.map(\.eventID) == ["$event-1", "$event-2"])
+        #expect(events.map(\.type) == [.answer, .hangup])
+    }
+
+    @Test
+    func matrixDirectCallSignalTransportIgnoresInvalidEnvelopes() async throws {
+        let listener = MatrixTimelineSignalListenerSpy()
+        let transport = MatrixDirectCallSignalTransport(ownUserID: userB,
+                                                        sender: DirectCallMatrixSignalTransport(rawSender: MatrixRawSignalSenderSpy()),
+                                                        listener: listener)
+        let validContent = DirectCallMatrixSignalContent(callID: "call-1",
+                                                         type: DirectCallSignalType.invite.rawValue,
+                                                         intent: DirectCallIntent.audio.rawValue,
+                                                         recipient: userB,
+                                                         keyExchange: keyExchange(callID: "call-1", senderUserID: userA))
+        var events = [DirectCallSignalEvent]()
+        var cancellables = Set<AnyCancellable>()
+        transport.signalsPublisher(for: userB)
+            .sink { events.append($0) }
+            .store(in: &cancellables)
+        await transport.attach()
+
+        listener.emit(matrixEnvelope(rawContent: "{not-json"))
+        try listener.emit(matrixEnvelope(senderUserID: userB, rawContent: json(for: validContent)))
+        try listener.emit(matrixEnvelope(rawContent: json(for: DirectCallMatrixSignalContent(callID: "call-1",
+                                                                                             type: DirectCallSignalType.invite.rawValue,
+                                                                                             intent: DirectCallIntent.audio.rawValue,
+                                                                                             recipient: "@other:example.com",
+                                                                                             keyExchange: keyExchange(callID: "call-1", senderUserID: userA)))))
+        try listener.emit(matrixEnvelope(isDirectOneToOneRoom: false, rawContent: json(for: validContent)))
+        try listener.emit(matrixEnvelope(isEncryptedRoom: false, rawContent: json(for: validContent)))
+
+        await Task.yield()
+        #expect(events.isEmpty)
+    }
+
+    @Test
+    func matrixDirectCallSignalTransportPreservesStableEventID() async throws {
+        let listener = MatrixTimelineSignalListenerSpy()
+        let transport = MatrixDirectCallSignalTransport(ownUserID: userB,
+                                                        sender: DirectCallMatrixSignalTransport(rawSender: MatrixRawSignalSenderSpy()),
+                                                        listener: listener)
+        let signal = DirectCallOutgoingSignal(roomID: roomID,
+                                              peerUserID: userB,
+                                              callID: "call-1",
+                                              type: .hangup,
+                                              intent: nil)
+        var events = [DirectCallSignalEvent]()
+        var cancellables = Set<AnyCancellable>()
+        transport.signalsPublisher(for: userB)
+            .sink { events.append($0) }
+            .store(in: &cancellables)
+        await transport.attach()
+
+        try listener.emit(matrixEnvelope(eventID: "$stable-terminal-event", rawContent: #require(DirectCallMatrixSignalCodec.encode(signal))))
+
+        #expect(await waitUntil { events.first?.eventID == "$stable-terminal-event" })
+    }
+
+    @Test
+    func matrixDirectCallSignalTransportDetachAndStopPreventFutureDelivery() async throws {
+        let listener = MatrixTimelineSignalListenerSpy()
+        let transport = MatrixDirectCallSignalTransport(ownUserID: userB,
+                                                        sender: DirectCallMatrixSignalTransport(rawSender: MatrixRawSignalSenderSpy()),
+                                                        listener: listener)
+        let signal = DirectCallOutgoingSignal(roomID: roomID,
+                                              peerUserID: userB,
+                                              callID: "call-1",
+                                              type: .answer,
+                                              intent: nil)
+        var events = [DirectCallSignalEvent]()
+        var cancellables = Set<AnyCancellable>()
+        transport.signalsPublisher(for: userB)
+            .sink { events.append($0) }
+            .store(in: &cancellables)
+        await transport.attach()
+
+        transport.detachSignalsPublisher(for: userB)
+        try listener.emit(matrixEnvelope(eventID: "$after-detach", rawContent: #require(DirectCallMatrixSignalCodec.encode(signal))))
+        await Task.yield()
+        #expect(events.isEmpty)
+
+        transport.signalsPublisher(for: userB)
+            .sink { events.append($0) }
+            .store(in: &cancellables)
+        transport.stop()
+        try listener.emit(matrixEnvelope(eventID: "$after-stop", rawContent: #require(DirectCallMatrixSignalCodec.encode(signal))))
+        await Task.yield()
+
+        #expect(events.isEmpty)
+        #expect(listener.cancelCount == 1)
+    }
+
+    @Test
+    func matrixDirectCallSignalTransportDoesNotExposeRawContentOrEncryptedPayloadToConsumers() async throws {
+        let listener = MatrixTimelineSignalListenerSpy()
+        let transport = MatrixDirectCallSignalTransport(ownUserID: userB,
+                                                        sender: DirectCallMatrixSignalTransport(rawSender: MatrixRawSignalSenderSpy()),
+                                                        listener: listener)
+        let signal = DirectCallOutgoingSignal(roomID: roomID,
+                                              peerUserID: userB,
+                                              callID: "call-1",
+                                              type: .invite,
+                                              intent: .audio,
+                                              keyExchange: keyExchange(callID: "call-1",
+                                                                       senderUserID: userA,
+                                                                       encryptedPayload: "ciphertext-must-not-appear"))
+        var events = [DirectCallSignalEvent]()
+        var cancellables = Set<AnyCancellable>()
+        transport.signalsPublisher(for: userB)
+            .sink { events.append($0) }
+            .store(in: &cancellables)
+        await transport.attach()
+
+        try listener.emit(matrixEnvelope(rawContent: #require(DirectCallMatrixSignalCodec.encode(signal))))
+
+        #expect(await waitUntil { events.count == 1 })
+        let event = try #require(events.first)
+        #expect(String(describing: event).contains("ciphertext-must-not-appear") == false)
+        #expect(String(reflecting: event).contains("ciphertext-must-not-appear") == false)
+        #expect(String(describing: event).contains("rawContent") == false)
+        #expect(String(reflecting: event).contains("rawContent") == false)
+    }
+
+    @Test
     func transportDetachRemovesRecipientDeliveryPath() async {
         let transport = InMemoryDirectCallSignalTransport()
         var receivedEvents = [DirectCallSignalEvent]()
@@ -969,6 +1201,34 @@ private final class MatrixRawSignalSenderSpy: DirectCallMatrixRawSignalSending {
     func sendDirectCallSignal(roomID: String, eventType: String, content: String) async -> Result<Void, DirectCallMatrixSignalTransportError> {
         sentSignals.append(.init(roomID: roomID, eventType: eventType, content: content))
         return result
+    }
+}
+
+@MainActor
+private final class MatrixTimelineSignalListenerSpy: DirectCallMatrixTimelineSignalListening {
+    private var onEnvelope: (@MainActor (DirectCallMatrixSignalEnvelope) -> Void)?
+    private let handle = MatrixSignalListeningHandleSpy()
+
+    var cancelCount: Int {
+        handle.cancelCount
+    }
+
+    func start(onEnvelope: @escaping @MainActor (DirectCallMatrixSignalEnvelope) -> Void) async -> DirectCallMatrixSignalListeningHandle {
+        self.onEnvelope = onEnvelope
+        return handle
+    }
+
+    func emit(_ envelope: DirectCallMatrixSignalEnvelope) {
+        onEnvelope?(envelope)
+    }
+}
+
+@MainActor
+private final class MatrixSignalListeningHandleSpy: DirectCallMatrixSignalListeningHandle {
+    private(set) var cancelCount = 0
+
+    func cancel() {
+        cancelCount += 1
     }
 }
 
