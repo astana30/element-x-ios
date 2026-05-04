@@ -10593,6 +10593,47 @@ open class LazyTimelineItemProviderSDKMock: MatrixRustSDK.LazyTimelineItemProvid
         }
     }
 
+    //MARK: - messageLikeCustomContent
+
+    open var messageLikeCustomContentUnderlyingCallsCount = 0
+    open var messageLikeCustomContentCallsCount: Int {
+        get {
+            if Thread.isMainThread {
+                return messageLikeCustomContentUnderlyingCallsCount
+            } else {
+                var returnValue: Int? = nil
+                DispatchQueue.main.sync {
+                    returnValue = messageLikeCustomContentUnderlyingCallsCount
+                }
+
+                return returnValue!
+            }
+        }
+        set {
+            if Thread.isMainThread {
+                messageLikeCustomContentUnderlyingCallsCount = newValue
+            } else {
+                DispatchQueue.main.sync {
+                    messageLikeCustomContentUnderlyingCallsCount = newValue
+                }
+            }
+        }
+    }
+    open var messageLikeCustomContentCalled: Bool {
+        return messageLikeCustomContentCallsCount > 0
+    }
+    open var messageLikeCustomContentReturnValue: CustomEventContent?
+    open var messageLikeCustomContentClosure: (() -> CustomEventContent?)?
+
+    open override func messageLikeCustomContent() -> CustomEventContent? {
+        messageLikeCustomContentCallsCount += 1
+        if let messageLikeCustomContentClosure = messageLikeCustomContentClosure {
+            return messageLikeCustomContentClosure()
+        } else {
+            return messageLikeCustomContentReturnValue
+        }
+    }
+
     //MARK: - getShields
 
     open var getShieldsStrictUnderlyingCallsCount = 0

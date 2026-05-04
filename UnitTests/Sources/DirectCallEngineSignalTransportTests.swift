@@ -1301,6 +1301,50 @@ final class DirectCallMatrixSDKSignalAdapterTests {
     }
 
     @Test
+    func matrixSDKTimelineItemEnvelopeExtractorUsesContentOnlyCustomEventAccessor() throws {
+        let content = try #require(DirectCallMatrixSignalCodec.encode(.init(roomID: roomID,
+                                                                            peerUserID: userB,
+                                                                            callID: "call-1",
+                                                                            type: .answer,
+                                                                            intent: nil)))
+        let lazyProvider = LazyTimelineItemProviderSDKMock()
+        lazyProvider.messageLikeCustomContentReturnValue = .init(eventType: DirectCallMatrixSignalCodec.eventType,
+                                                                 contentJson: content)
+        let eventItem = eventTimelineItem(eventID: "$event-1",
+                                          content: directCallTimelineContent(),
+                                          lazyProvider: lazyProvider)
+        let metadata = try #require(DirectCallMatrixSDKTimelineSignalListener.metadata(from: eventItem,
+                                                                                       roomID: roomID,
+                                                                                       ownUserID: userB,
+                                                                                       isDirectOneToOneRoom: true,
+                                                                                       isEncryptedRoom: true))
+        let envelope = DirectCallMatrixSDKTimelineItemEnvelopeExtractor().envelope(from: metadata, eventItem: eventItem)
+
+        #expect(envelope?.rawContent == content)
+        #expect(lazyProvider.messageLikeCustomContentCalled)
+        #expect(envelope?.rawContent.contains("event_id") == false)
+        #expect(envelope?.rawContent.contains("sender") == false)
+    }
+
+    @Test
+    func matrixSDKTimelineItemEnvelopeExtractorFailsClosedForOtherCustomEventType() throws {
+        let lazyProvider = LazyTimelineItemProviderSDKMock()
+        lazyProvider.messageLikeCustomContentReturnValue = .init(eventType: "kz.salemx.other",
+                                                                 contentJson: #"{"version":1}"#)
+        let eventItem = eventTimelineItem(eventID: "$event-1",
+                                          content: directCallTimelineContent(),
+                                          lazyProvider: lazyProvider)
+        let metadata = try #require(DirectCallMatrixSDKTimelineSignalListener.metadata(from: eventItem,
+                                                                                       roomID: roomID,
+                                                                                       ownUserID: userB,
+                                                                                       isDirectOneToOneRoom: true,
+                                                                                       isEncryptedRoom: true))
+
+        #expect(DirectCallMatrixSDKTimelineItemEnvelopeExtractor().envelope(from: metadata, eventItem: eventItem) == nil)
+        #expect(lazyProvider.messageLikeCustomContentCalled)
+    }
+
+    @Test
     func matrixSDKTimelineSignalListenerEmitsOnlySanitizedEnvelopeFromInjectedExtractor() async throws {
         let timeline = TimelineSDKMock()
         timeline.addListenerListenerReturnValue = TaskHandleSDKMock()
@@ -1411,7 +1455,7 @@ final class DirectCallMatrixSDKSignalAdapterTests {
               ownUserID: userB,
               isDirectOneToOneRoom: { true },
               isEncryptedRoom: { true },
-              envelopeExtractor: envelopeExtractor ?? DirectCallMatrixFailClosedTimelineItemEnvelopeExtractor())
+              envelopeExtractor: envelopeExtractor)
     }
 
     private func timelineItem(eventID: String,
@@ -1429,11 +1473,13 @@ final class DirectCallMatrixSDKSignalAdapterTests {
     private func eventTimelineItem(eventID: String,
                                    senderUserID: String? = nil,
                                    isOwn: Bool = false,
-                                   content: TimelineItemContent) -> EventTimelineItem {
+                                   content: TimelineItemContent,
+                                   lazyProvider: LazyTimelineItemProviderSDKMock? = nil) -> EventTimelineItem {
         .init(configuration: .init(eventID: eventID,
                                    sender: senderUserID ?? userA,
                                    isOwn: isOwn,
-                                   content: content))
+                                   content: content,
+                                   lazyProvider: lazyProvider))
     }
 
     private func directCallTimelineContent() -> TimelineItemContent {
@@ -1475,7 +1521,7 @@ private final class MatrixTimelineEnvelopeExtractorSpy: DirectCallMatrixTimeline
         self.rawContent = rawContent
     }
 
-    func envelope(from metadata: DirectCallMatrixTimelineSignalMetadata) -> DirectCallMatrixSignalEnvelope? {
+    func envelope(from metadata: DirectCallMatrixTimelineSignalMetadata, eventItem: EventTimelineItem) -> DirectCallMatrixSignalEnvelope? {
         self.metadata.append(metadata)
         return .init(eventID: metadata.eventID,
                      roomID: metadata.roomID,

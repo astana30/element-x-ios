@@ -295,15 +295,34 @@ struct DirectCallMatrixTimelineSignalMetadata: Equatable, CustomStringConvertibl
 
 @MainActor
 protocol DirectCallMatrixTimelineItemEnvelopeExtracting {
-    func envelope(from metadata: DirectCallMatrixTimelineSignalMetadata) -> DirectCallMatrixSignalEnvelope?
+    func envelope(from metadata: DirectCallMatrixTimelineSignalMetadata, eventItem: EventTimelineItem) -> DirectCallMatrixSignalEnvelope?
 }
 
-/// SDK timeline items expose stable event metadata for custom events, but not a safe typed raw content body.
-/// Keep the production receive path fail-closed until a non-debug raw content accessor exists.
+/// Keep the production receive path fail-closed when the SDK cannot provide a safe custom event content body.
 @MainActor
 struct DirectCallMatrixFailClosedTimelineItemEnvelopeExtractor: DirectCallMatrixTimelineItemEnvelopeExtracting {
-    func envelope(from metadata: DirectCallMatrixTimelineSignalMetadata) -> DirectCallMatrixSignalEnvelope? {
+    func envelope(from metadata: DirectCallMatrixTimelineSignalMetadata, eventItem: EventTimelineItem) -> DirectCallMatrixSignalEnvelope? {
         nil
+    }
+}
+
+@MainActor
+struct DirectCallMatrixSDKTimelineItemEnvelopeExtractor: DirectCallMatrixTimelineItemEnvelopeExtracting {
+    func envelope(from metadata: DirectCallMatrixTimelineSignalMetadata, eventItem: EventTimelineItem) -> DirectCallMatrixSignalEnvelope? {
+        guard let customContent = eventItem.lazyProvider.messageLikeCustomContent(),
+              customContent.eventType == DirectCallMatrixSignalCodec.eventType,
+              !customContent.contentJson.isEmpty else {
+            return nil
+        }
+
+        return .init(eventID: metadata.eventID,
+                     roomID: metadata.roomID,
+                     senderUserID: metadata.senderUserID,
+                     ownUserID: metadata.ownUserID,
+                     isDirectOneToOneRoom: metadata.isDirectOneToOneRoom,
+                     isEncryptedRoom: metadata.isEncryptedRoom,
+                     timestamp: metadata.timestamp,
+                     rawContent: customContent.contentJson)
     }
 }
 
@@ -358,7 +377,7 @@ final class DirectCallMatrixSDKTimelineSignalListener: DirectCallMatrixTimelineS
         self.ownUserID = ownUserID
         self.isDirectOneToOneRoom = isDirectOneToOneRoom
         self.isEncryptedRoom = isEncryptedRoom
-        self.envelopeExtractor = envelopeExtractor ?? DirectCallMatrixFailClosedTimelineItemEnvelopeExtractor()
+        self.envelopeExtractor = envelopeExtractor ?? DirectCallMatrixSDKTimelineItemEnvelopeExtractor()
     }
 
     func start(onEnvelope: @escaping @MainActor (DirectCallMatrixSignalEnvelope) -> Void) async -> DirectCallMatrixSignalListeningHandle {
@@ -378,7 +397,7 @@ final class DirectCallMatrixSDKTimelineSignalListener: DirectCallMatrixTimelineS
                                                ownUserID: ownUserID,
                                                isDirectOneToOneRoom: isDirectOneToOneRoom(),
                                                isEncryptedRoom: isEncryptedRoom()),
-                  let envelope = envelopeExtractor.envelope(from: metadata) else {
+                  let envelope = envelopeExtractor.envelope(from: metadata, eventItem: eventItem) else {
                 continue
             }
 

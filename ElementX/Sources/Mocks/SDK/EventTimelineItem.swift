@@ -23,6 +23,7 @@ struct EventTimelineItemSDKMockConfiguration {
                                                                inReplyTo: nil,
                                                                threadRoot: nil,
                                                                threadSummary: nil))
+    var lazyProvider: LazyTimelineItemProviderSDKMock?
 }
 
 extension EventTimelineItem {
@@ -42,7 +43,7 @@ extension EventTimelineItem {
                   readReceipts: [:],
                   origin: nil,
                   canBeRepliedTo: false,
-                  lazyProvider: LazyTimelineItemProviderSDKMock())
+                  lazyProvider: configuration.lazyProvider ?? LazyTimelineItemProviderSDKMock())
     }
     
     static var mockMessage: EventTimelineItem {

@@ -7344,7 +7344,7 @@
 				D63E4B29DF9BB6D7B8A51EB1 /* XCRemoteSwiftPackageReference "client-sdk-swift" */,
 				9E5142199D3942AB30A4A59D /* XCRemoteSwiftPackageReference "LoremSwiftum" */,
 				FC3106F7662C3182A050200D /* XCRemoteSwiftPackageReference "maplibre-gl-native-distribution" */,
-				582162E3A866CA8F891332AD /* XCRemoteSwiftPackageReference "matrix-rust-components-swift" */,
+				86513BCE9DCCB94CAE94A51E /* XCRemoteSwiftPackageReference "matrix-rust-components-swift" */,
 				D72546F5ACD46255F7D9A1BE /* XCRemoteSwiftPackageReference "posthog-ios" */,
 				1B55A7369311D82E6A0D4540 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
 				33F85295423FD8837AB8A359 /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */,
@@ -9997,14 +9997,6 @@
 				minimumVersion = 0.30.0;
 			};
 		};
-		582162E3A866CA8F891332AD /* XCRemoteSwiftPackageReference "matrix-rust-components-swift" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/element-hq/matrix-rust-components-swift";
-			requirement = {
-				kind = exactVersion;
-				version = 26.03.10;
-			};
-		};
 		60C8F82783FD7177F1A3473B /* XCRemoteSwiftPackageReference "LRUCache" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/nicklockwood/LRUCache";
@@ -10043,6 +10035,14 @@
 			requirement = {
 				kind = upToNextMinorVersion;
 				minimumVersion = 4.2.2;
+			};
+		};
+		86513BCE9DCCB94CAE94A51E /* XCRemoteSwiftPackageReference "matrix-rust-components-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/astana30/matrix-rust-components-swift";
+			requirement = {
+				kind = revision;
+				revision = 2bbb27f5600bd7325b1b88fdc5b6bfd9fe36a0db;
 			};
 		};
 		8AA79787D76E9DC70AC6512F /* XCRemoteSwiftPackageReference "Version" */ = {
@@ -10198,7 +10198,7 @@
 		};
 		077AF34600E6F5F048818331 /* MatrixRustSDK */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 582162E3A866CA8F891332AD /* XCRemoteSwiftPackageReference "matrix-rust-components-swift" */;
+			package = 86513BCE9DCCB94CAE94A51E /* XCRemoteSwiftPackageReference "matrix-rust-components-swift" */;
 			productName = MatrixRustSDK;
 		};
 		0C43FB497C748CB04F958A2D /* Emojibase */ = {
@@ -10213,7 +10213,7 @@
 		};
 		19F1110CC674E4757719A8A1 /* MatrixRustSDK */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 582162E3A866CA8F891332AD /* XCRemoteSwiftPackageReference "matrix-rust-components-swift" */;
+			package = 86513BCE9DCCB94CAE94A51E /* XCRemoteSwiftPackageReference "matrix-rust-components-swift" */;
 			productName = MatrixRustSDK;
 		};
 		1D6EDADB6A5A7094D5C1DE5D /* SentrySwiftUI */ = {
@@ -10332,7 +10332,7 @@
 		};
 		60E983C8603029E219CFDD2E /* MatrixRustSDK */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 582162E3A866CA8F891332AD /* XCRemoteSwiftPackageReference "matrix-rust-components-swift" */;
+			package = 86513BCE9DCCB94CAE94A51E /* XCRemoteSwiftPackageReference "matrix-rust-components-swift" */;
 			productName = MatrixRustSDK;
 		};
 		639370DC84266403E07E2AA0 /* AnalyticsEvents */ = {
@@ -10376,7 +10376,7 @@
 		};
 		8941154BF781400F86ED5174 /* MatrixRustSDK */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 582162E3A866CA8F891332AD /* XCRemoteSwiftPackageReference "matrix-rust-components-swift" */;
+			package = 86513BCE9DCCB94CAE94A51E /* XCRemoteSwiftPackageReference "matrix-rust-components-swift" */;
 			productName = MatrixRustSDK;
 		};
 		8D61BB4F9AEFEC116B66BB91 /* Version */ = {
@@ -10435,17 +10435,17 @@
 		};
 		B030CDEA06A338686EDAF335 /* MatrixRustSDK */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 582162E3A866CA8F891332AD /* XCRemoteSwiftPackageReference "matrix-rust-components-swift" */;
+			package = 86513BCE9DCCB94CAE94A51E /* XCRemoteSwiftPackageReference "matrix-rust-components-swift" */;
 			productName = MatrixRustSDK;
 		};
 		B9F20CD8B137EB50CE8D6DC3 /* MatrixRustSDK */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 582162E3A866CA8F891332AD /* XCRemoteSwiftPackageReference "matrix-rust-components-swift" */;
+			package = 86513BCE9DCCB94CAE94A51E /* XCRemoteSwiftPackageReference "matrix-rust-components-swift" */;
 			productName = MatrixRustSDK;
 		};
 		BE66A22CF15B7C78FCE20D74 /* MatrixRustSDK */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 582162E3A866CA8F891332AD /* XCRemoteSwiftPackageReference "matrix-rust-components-swift" */;
+			package = 86513BCE9DCCB94CAE94A51E /* XCRemoteSwiftPackageReference "matrix-rust-components-swift" */;
 			productName = MatrixRustSDK;
 		};
 		C29D4AE960CD0322F6F24D65 /* KeychainAccess */ = {
@@ -10495,7 +10495,7 @@
 		};
 		E491528210461A278CAF436C /* MatrixRustSDK */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 582162E3A866CA8F891332AD /* XCRemoteSwiftPackageReference "matrix-rust-components-swift" */;
+			package = 86513BCE9DCCB94CAE94A51E /* XCRemoteSwiftPackageReference "matrix-rust-components-swift" */;
 			productName = MatrixRustSDK;
 		};
 		E7637975091BC3BF87E1E185 /* Kingfisher */ = {
