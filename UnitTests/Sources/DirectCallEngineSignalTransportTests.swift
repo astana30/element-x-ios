@@ -1127,6 +1127,8 @@ private struct MatrixHarness {
     let senderB: MatrixRawSignalSenderSpy
     let listenerA: MatrixTimelineSignalListenerSpy
     let listenerB: MatrixTimelineSignalListenerSpy
+    let mediaEngineA: SignalMediaEngineSpy
+    let mediaEngineB: SignalMediaEngineSpy
     let transportA: MatrixDirectCallSignalTransport
     let transportB: MatrixDirectCallSignalTransport
     let engineA: DirectCallEngine
@@ -1191,6 +1193,12 @@ final class MatrixDirectCallEngineIntegrationTests {
 
         #expect(await waitUntil { harness.engineA.activeSessionPublisher.value?.state == .activeAudio })
         #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .activeAudio })
+        #expect(harness.mediaEngineA.connectedSessions.map(\.callID) == [outgoingSession.callID])
+        #expect(harness.mediaEngineB.connectedSessions.map(\.callID) == [outgoingSession.callID])
+        #expect(harness.mediaEngineA.connectedKeyHandles == [.init(callID: outgoingSession.callID,
+                                                                   keyID: "key-\(outgoingSession.callID)")])
+        #expect(harness.mediaEngineB.connectedKeyHandles == [.init(callID: outgoingSession.callID,
+                                                                   keyID: "key-\(outgoingSession.callID)")])
 
         var receiverStateChanges = 0
         let receiverStateCancellable = harness.engineB.actionsPublisher.sink { action in
@@ -1203,6 +1211,7 @@ final class MatrixDirectCallEngineIntegrationTests {
         _ = await harness.engineA.hangupActiveCall(callID: outgoingSession.callID)
 
         #expect(await waitUntil { harness.senderA.sentSignals.count == 2 })
+        #expect(harness.mediaEngineA.disconnectCallIDs == [outgoingSession.callID])
         let hangupSignal = try #require(harness.senderA.sentSignals.last)
         let terminalEnvelope = matrixEnvelope(from: hangupSignal,
                                               eventID: "$matrix-terminal",
@@ -1211,6 +1220,7 @@ final class MatrixDirectCallEngineIntegrationTests {
         harness.listenerB.emit(terminalEnvelope)
 
         #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .ended })
+        #expect(harness.mediaEngineB.disconnectCallIDs == [outgoingSession.callID])
         let stateChangesAfterFirstTerminal = receiverStateChanges
 
         harness.listenerB.emit(terminalEnvelope)
@@ -1218,6 +1228,7 @@ final class MatrixDirectCallEngineIntegrationTests {
 
         #expect(harness.engineB.activeSessionPublisher.value?.state == .ended)
         #expect(receiverStateChanges == stateChangesAfterFirstTerminal)
+        #expect(harness.mediaEngineB.disconnectCallIDs == [outgoingSession.callID])
     }
 
     @Test
@@ -1255,13 +1266,136 @@ final class MatrixDirectCallEngineIntegrationTests {
 
         #expect(harness.engineB.activeSessionPublisher.value == nil)
         #expect(harness.senderB.sentSignals.isEmpty)
+        #expect(harness.mediaEngineB.connectedSessions.isEmpty)
     }
 
-    private func makeMatrixHarness(cleanupDelay: Duration = .milliseconds(20)) async -> MatrixHarness {
+    @Test
+    func matrixSignalTransportBridgeFailsClosedWhenIncomingInviteHasNoUsableKeyExchange() async throws {
+        let harness = await makeMatrixHarness(cleanupDelay: .seconds(1))
+        defer { harness.stop() }
+
+        let missingKeyExchange = DirectCallMatrixSignalContent(callID: "call-missing-key",
+                                                               type: DirectCallSignalType.invite.rawValue,
+                                                               intent: DirectCallIntent.audio.rawValue,
+                                                               recipient: userB,
+                                                               keyExchange: nil)
+        let mismatchedKeyExchange = DirectCallMatrixSignalContent(callID: "call-mismatched-key",
+                                                                  type: DirectCallSignalType.invite.rawValue,
+                                                                  intent: DirectCallIntent.audio.rawValue,
+                                                                  recipient: userB,
+                                                                  keyExchange: keyExchange(callID: "other-call", senderUserID: userA))
+
+        try harness.listenerB.emit(matrixEnvelope(eventID: "$missing-key",
+                                                  rawContent: json(for: missingKeyExchange)))
+        try harness.listenerB.emit(matrixEnvelope(eventID: "$mismatched-key",
+                                                  rawContent: json(for: mismatchedKeyExchange)))
+
+        await Task.yield()
+
+        #expect(harness.engineB.activeSessionPublisher.value == nil)
+        #expect(harness.mediaEngineB.connectedSessions.isEmpty)
+        #expect(harness.senderB.sentSignals.isEmpty)
+    }
+
+    @Test
+    func matrixSignalTransportBridgeFailsClosedWhenOutgoingMediaConnectionFails() async throws {
+        let failingMediaEngine = SignalMediaEngineSpy(connectResult: .failure(.tokenUnavailable))
+        let harness = await makeMatrixHarness(cleanupDelay: .seconds(1),
+                                              mediaEngineA: failingMediaEngine)
+        defer { harness.stop() }
+
+        let outgoingResult = await harness.engineA.startOutgoingAudioCall(peer: userB, roomID: roomID)
+        guard case .success(let outgoingSession) = outgoingResult else {
+            Issue.record("Expected outgoing Matrix direct call start to succeed.")
+            return
+        }
+
+        #expect(await waitUntil { harness.senderA.sentSignals.count == 1 })
+        try emitMatrixSignal(#require(harness.senderA.sentSignals.last),
+                             eventID: "$matrix-invite",
+                             senderUserID: userA,
+                             ownUserID: userB,
+                             to: harness.listenerB)
+        #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .incomingRinging })
+
+        _ = await harness.engineB.acceptCall(callID: outgoingSession.callID)
+        #expect(await waitUntil { harness.senderB.sentSignals.count == 1 })
+        try emitMatrixSignal(#require(harness.senderB.sentSignals.last),
+                             eventID: "$matrix-answer",
+                             senderUserID: userB,
+                             ownUserID: userA,
+                             to: harness.listenerA)
+
+        #expect(await waitUntil { harness.engineA.activeSessionPublisher.value?.state == .failed })
+        #expect(harness.mediaEngineA.connectedSessions.map(\.callID) == [outgoingSession.callID])
+        #expect(harness.mediaEngineA.cleanupCallIDs == [outgoingSession.callID])
+        #expect(harness.engineA.activeSessionPublisher.value?.state != .activeAudio)
+    }
+
+    @Test
+    func matrixSignalTransportBridgeFailsClosedWhenIncomingMediaConnectionFails() async throws {
+        let failingMediaEngine = SignalMediaEngineSpy(connectResult: .failure(.mediaSetupUnavailable))
+        let harness = await makeMatrixHarness(cleanupDelay: .seconds(1),
+                                              mediaEngineB: failingMediaEngine)
+        defer { harness.stop() }
+
+        let outgoingResult = await harness.engineA.startOutgoingAudioCall(peer: userB, roomID: roomID)
+        guard case .success(let outgoingSession) = outgoingResult else {
+            Issue.record("Expected outgoing Matrix direct call start to succeed.")
+            return
+        }
+
+        #expect(await waitUntil { harness.senderA.sentSignals.count == 1 })
+        try emitMatrixSignal(#require(harness.senderA.sentSignals.last),
+                             eventID: "$matrix-invite",
+                             senderUserID: userA,
+                             ownUserID: userB,
+                             to: harness.listenerB)
+        #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .incomingRinging })
+
+        _ = await harness.engineB.acceptCall(callID: outgoingSession.callID)
+
+        #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .failed })
+        #expect(await waitUntil { harness.senderB.sentSignals.count == 1 })
+        #expect(harness.mediaEngineB.connectedSessions.map(\.callID) == [outgoingSession.callID])
+        #expect(harness.mediaEngineB.cleanupCallIDs == [outgoingSession.callID])
+        #expect(harness.senderB.sentSignals.map(\.eventType) == [DirectCallMatrixSignalCodec.eventType])
+    }
+
+    @Test
+    func matrixSignalTransportBridgeCleansMediaIdempotentlyAfterRemoteTerminal() async throws {
+        let harness = await makeMatrixHarness(cleanupDelay: .seconds(120))
+        defer { harness.stop() }
+
+        let activeSession = try await connectOutgoingCall(harness: harness)
+        let terminalSignal = DirectCallOutgoingSignal(roomID: roomID,
+                                                      peerUserID: userB,
+                                                      callID: activeSession.callID,
+                                                      type: .hangup,
+                                                      intent: nil)
+        let terminalContent = try #require(DirectCallMatrixSignalCodec.encode(terminalSignal))
+        let terminalEnvelope = matrixEnvelope(eventID: "$matrix-remote-hangup",
+                                              rawContent: terminalContent)
+
+        harness.listenerB.emit(terminalEnvelope)
+        #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .ended })
+        harness.listenerB.emit(terminalEnvelope)
+        await harness.engineB.cleanupCall(callID: activeSession.callID)
+        await harness.engineB.cleanupCall(callID: activeSession.callID)
+
+        #expect(harness.mediaEngineB.disconnectCallIDs == [activeSession.callID])
+        #expect(harness.mediaEngineB.cleanupCallIDs == [activeSession.callID])
+    }
+
+    private func makeMatrixHarness(cleanupDelay: Duration = .milliseconds(20),
+                                   mediaEngineA: SignalMediaEngineSpy? = nil,
+                                   mediaEngineB: SignalMediaEngineSpy? = nil) async -> MatrixHarness {
         let senderA = MatrixRawSignalSenderSpy()
         let senderB = MatrixRawSignalSenderSpy()
         let listenerA = MatrixTimelineSignalListenerSpy()
         let listenerB = MatrixTimelineSignalListenerSpy()
+        let mediaEngineA = mediaEngineA ?? SignalMediaEngineSpy()
+        let mediaEngineB = mediaEngineB ?? SignalMediaEngineSpy()
 
         let transportA = MatrixDirectCallSignalTransport(ownUserID: userA,
                                                          sender: DirectCallMatrixSignalTransport(rawSender: senderA),
@@ -1270,8 +1404,14 @@ final class MatrixDirectCallEngineIntegrationTests {
                                                          sender: DirectCallMatrixSignalTransport(rawSender: senderB),
                                                          listener: listenerB)
 
-        let engineA = makeEngine(ownUserID: userA, peerUserID: userB, cleanupDelay: cleanupDelay)
-        let engineB = makeEngine(ownUserID: userB, peerUserID: userA, cleanupDelay: cleanupDelay)
+        let engineA = makeEngine(ownUserID: userA,
+                                 peerUserID: userB,
+                                 cleanupDelay: cleanupDelay,
+                                 mediaEngine: mediaEngineA)
+        let engineB = makeEngine(ownUserID: userB,
+                                 peerUserID: userA,
+                                 cleanupDelay: cleanupDelay,
+                                 mediaEngine: mediaEngineB)
 
         let bridgeA = DirectCallEngineSignalBridge(ownUserID: userA,
                                                    engine: engineA,
@@ -1287,6 +1427,8 @@ final class MatrixDirectCallEngineIntegrationTests {
                              senderB: senderB,
                              listenerA: listenerA,
                              listenerB: listenerB,
+                             mediaEngineA: mediaEngineA,
+                             mediaEngineB: mediaEngineB,
                              transportA: transportA,
                              transportB: transportB,
                              engineA: engineA,
@@ -1297,7 +1439,8 @@ final class MatrixDirectCallEngineIntegrationTests {
 
     private func makeEngine(ownUserID: String,
                             peerUserID: String,
-                            cleanupDelay: Duration) -> DirectCallEngine {
+                            cleanupDelay: Duration,
+                            mediaEngine: DirectCallMediaEngineProtocol) -> DirectCallEngine {
         DirectCallEngine(ownUserID: ownUserID,
                          configuration: .init(incomingRingingTimeout: .seconds(120),
                                               outgoingRingingTimeout: .seconds(120),
@@ -1305,9 +1448,41 @@ final class MatrixDirectCallEngineIntegrationTests {
                                               cleanupDelay: cleanupDelay,
                                               processedTerminalEventLimit: 64),
                          encryptionService: SignalEncryptionServiceSpy(senderUserID: ownUserID),
-                         mediaEngine: SignalMediaEngineSpy()) { [roomID] resolvedRoomID in
+                         mediaEngine: mediaEngine) { [roomID] resolvedRoomID in
             resolvedRoomID == roomID ? peerUserID : nil
         }
+    }
+
+    private func connectOutgoingCall(harness: MatrixHarness) async throws -> DirectCallSession {
+        let outgoingResult = await harness.engineA.startOutgoingAudioCall(peer: userB, roomID: roomID)
+        guard case .success(let outgoingSession) = outgoingResult else {
+            Issue.record("Expected outgoing Matrix direct call start to succeed.")
+            throw MatrixIntegrationTestError()
+        }
+
+        #expect(await waitUntil { harness.senderA.sentSignals.count == 1 })
+        try emitMatrixSignal(#require(harness.senderA.sentSignals.last),
+                             eventID: "$matrix-invite",
+                             senderUserID: userA,
+                             ownUserID: userB,
+                             to: harness.listenerB)
+        #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .incomingRinging })
+
+        _ = await harness.engineB.acceptCall(callID: outgoingSession.callID)
+        #expect(await waitUntil { harness.senderB.sentSignals.count == 1 })
+        try emitMatrixSignal(#require(harness.senderB.sentSignals.last),
+                             eventID: "$matrix-answer",
+                             senderUserID: userB,
+                             ownUserID: userA,
+                             to: harness.listenerA)
+
+        #expect(await waitUntil { harness.engineA.activeSessionPublisher.value?.state == .activeAudio })
+        #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .activeAudio })
+
+        guard let activeSession = harness.engineB.activeSessionPublisher.value else {
+            throw MatrixIntegrationTestError()
+        }
+        return activeSession
     }
 
     private func keyExchange(callID: String,
@@ -1414,9 +1589,23 @@ private final class SignalEncryptionServiceSpy: DirectCallEncryptionServiceProto
 @MainActor
 private final class SignalMediaEngineSpy: DirectCallMediaEngineProtocol {
     private let mediaStateSubject = CurrentValueSubject<DirectCallMediaState, Never>(.idle)
+    private let connectResult: Result<DirectCallMediaState, DirectCallMediaError>
+
+    private(set) var connectedSessions = [DirectCallSession]()
+    private(set) var connectedKeyHandles = [DirectCallMediaKeyHandle]()
+    private(set) var disconnectCallIDs = [String]()
+    private(set) var cleanupCallIDs = [String]()
 
     var mediaStatePublisher: CurrentValuePublisher<DirectCallMediaState, Never> {
         mediaStateSubject.asCurrentValuePublisher()
+    }
+
+    init(connectResult: Result<DirectCallMediaState, DirectCallMediaError> = .success(.init(callID: "call",
+                                                                                            phase: .activeAudio,
+                                                                                            isMicrophoneEnabled: false,
+                                                                                            isSpeakerEnabled: false,
+                                                                                            isE2EEReady: true))) {
+        self.connectResult = connectResult
     }
 
     func prepareAudioSession(for session: DirectCallSession) async -> Result<DirectCallMediaState, DirectCallMediaError> {
@@ -1428,11 +1617,9 @@ private final class SignalMediaEngineSpy: DirectCallMediaEngineProtocol {
     }
 
     func connectAudio(for session: DirectCallSession, keyHandle: DirectCallMediaKeyHandle) async -> Result<DirectCallMediaState, DirectCallMediaError> {
-        .success(.init(callID: session.callID,
-                       phase: .activeAudio,
-                       isMicrophoneEnabled: false,
-                       isSpeakerEnabled: false,
-                       isE2EEReady: session.encryptionState == .ready))
+        connectedSessions.append(session)
+        connectedKeyHandles.append(keyHandle)
+        return connectResult
     }
 
     func setMicrophoneEnabled(_ isEnabled: Bool, callID: String) async -> Result<DirectCallMediaState, DirectCallMediaError> {
@@ -1447,10 +1634,16 @@ private final class SignalMediaEngineSpy: DirectCallMediaEngineProtocol {
         .success(mediaStateSubject.value)
     }
 
-    func disconnect(callID: String) async { }
+    func disconnect(callID: String) async {
+        disconnectCallIDs.append(callID)
+    }
 
-    func cleanup(callID: String) async { }
+    func cleanup(callID: String) async {
+        cleanupCallIDs.append(callID)
+    }
 }
+
+private struct MatrixIntegrationTestError: Error { }
 
 @MainActor
 private final class MatrixRawSignalSenderSpy: DirectCallMatrixRawSignalSending {
