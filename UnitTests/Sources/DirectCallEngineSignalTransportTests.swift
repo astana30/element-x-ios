@@ -1122,6 +1122,263 @@ private struct Harness {
 }
 
 @MainActor
+private struct MatrixHarness {
+    let senderA: MatrixRawSignalSenderSpy
+    let senderB: MatrixRawSignalSenderSpy
+    let listenerA: MatrixTimelineSignalListenerSpy
+    let listenerB: MatrixTimelineSignalListenerSpy
+    let transportA: MatrixDirectCallSignalTransport
+    let transportB: MatrixDirectCallSignalTransport
+    let engineA: DirectCallEngine
+    let engineB: DirectCallEngine
+    let bridgeA: DirectCallEngineSignalBridge
+    let bridgeB: DirectCallEngineSignalBridge
+
+    func stop() {
+        transportA.stop()
+        transportB.stop()
+    }
+}
+
+@MainActor
+final class MatrixDirectCallEngineIntegrationTests {
+    private let userA = "@a:example.com"
+    private let userB = "@b:example.com"
+    private let roomID = "!dm:example.com"
+
+    @Test
+    func matrixSignalTransportBridgeDrivesInviteAnswerAndHangupAcrossEngines() async throws {
+        let harness = await makeMatrixHarness(cleanupDelay: .seconds(1))
+        defer { harness.stop() }
+
+        let outgoingResult = await harness.engineA.startOutgoingAudioCall(peer: userB, roomID: roomID)
+        guard case .success(let outgoingSession) = outgoingResult else {
+            Issue.record("Expected outgoing Matrix direct call start to succeed.")
+            return
+        }
+
+        #expect(await waitUntil { harness.senderA.sentSignals.count == 1 })
+        let inviteSignal = try #require(harness.senderA.sentSignals.last)
+        #expect(inviteSignal.eventType == DirectCallMatrixSignalCodec.eventType)
+
+        let inviteEvent = DirectCallMatrixSignalCodec.decode(matrixEnvelope(rawContent: inviteSignal.content))
+        #expect(inviteEvent?.type == .invite)
+        #expect(inviteEvent?.keyExchange?.callID == outgoingSession.callID)
+
+        emitMatrixSignal(inviteSignal,
+                         eventID: "$matrix-invite",
+                         senderUserID: userA,
+                         ownUserID: userB,
+                         to: harness.listenerB)
+
+        #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .incomingRinging })
+        #expect(harness.engineB.activeSessionPublisher.value?.callID == outgoingSession.callID)
+
+        _ = await harness.engineB.acceptCall(callID: outgoingSession.callID)
+
+        #expect(await waitUntil { harness.senderB.sentSignals.count == 1 })
+        let answerSignal = try #require(harness.senderB.sentSignals.last)
+        let answerEvent = DirectCallMatrixSignalCodec.decode(matrixEnvelope(senderUserID: userB,
+                                                                            ownUserID: userA,
+                                                                            rawContent: answerSignal.content))
+        #expect(answerEvent?.type == .answer)
+
+        emitMatrixSignal(answerSignal,
+                         eventID: "$matrix-answer",
+                         senderUserID: userB,
+                         ownUserID: userA,
+                         to: harness.listenerA)
+
+        #expect(await waitUntil { harness.engineA.activeSessionPublisher.value?.state == .activeAudio })
+        #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .activeAudio })
+
+        var receiverStateChanges = 0
+        let receiverStateCancellable = harness.engineB.actionsPublisher.sink { action in
+            if case .stateChanged = action {
+                receiverStateChanges += 1
+            }
+        }
+        defer { receiverStateCancellable.cancel() }
+
+        _ = await harness.engineA.hangupActiveCall(callID: outgoingSession.callID)
+
+        #expect(await waitUntil { harness.senderA.sentSignals.count == 2 })
+        let hangupSignal = try #require(harness.senderA.sentSignals.last)
+        let terminalEnvelope = matrixEnvelope(from: hangupSignal,
+                                              eventID: "$matrix-terminal",
+                                              senderUserID: userA,
+                                              ownUserID: userB)
+        harness.listenerB.emit(terminalEnvelope)
+
+        #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .ended })
+        let stateChangesAfterFirstTerminal = receiverStateChanges
+
+        harness.listenerB.emit(terminalEnvelope)
+        await Task.yield()
+
+        #expect(harness.engineB.activeSessionPublisher.value?.state == .ended)
+        #expect(receiverStateChanges == stateChangesAfterFirstTerminal)
+    }
+
+    @Test
+    func matrixSignalTransportBridgeIgnoresOwnMalformedAndFilteredEnvelopes() async throws {
+        let harness = await makeMatrixHarness(cleanupDelay: .seconds(1))
+        defer { harness.stop() }
+
+        let validContent = DirectCallMatrixSignalContent(callID: "call-valid",
+                                                         type: DirectCallSignalType.invite.rawValue,
+                                                         intent: DirectCallIntent.audio.rawValue,
+                                                         recipient: userB,
+                                                         keyExchange: keyExchange(callID: "call-valid", senderUserID: userA))
+
+        harness.listenerB.emit(matrixEnvelope(eventID: "$malformed", rawContent: "{not-json"))
+        try harness.listenerB.emit(matrixEnvelope(eventID: "$own",
+                                                  senderUserID: userB,
+                                                  rawContent: json(for: validContent)))
+        try harness.listenerB.emit(matrixEnvelope(eventID: "$recipient-mismatch",
+                                                  rawContent: json(for: DirectCallMatrixSignalContent(callID: "call-recipient",
+                                                                                                      type: DirectCallSignalType.invite.rawValue,
+                                                                                                      intent: DirectCallIntent.audio.rawValue,
+                                                                                                      recipient: "@other:example.com",
+                                                                                                      keyExchange: keyExchange(callID: "call-recipient",
+                                                                                                                               senderUserID: userA)))))
+        try harness.listenerB.emit(matrixEnvelope(eventID: "$not-direct-room",
+                                                  isDirectOneToOneRoom: false,
+                                                  rawContent: json(for: validContent)))
+        try harness.listenerB.emit(matrixEnvelope(eventID: "$not-encrypted-room",
+                                                  isEncryptedRoom: false,
+                                                  rawContent: json(for: validContent)))
+        harness.listenerB.emit(matrixEnvelope(eventID: "$unknown-type",
+                                              rawContent: #"{"version":1,"call_id":"call-unknown","type":"unknown","intent":"audio","recipient":"@b:example.com"}"#))
+
+        await Task.yield()
+
+        #expect(harness.engineB.activeSessionPublisher.value == nil)
+        #expect(harness.senderB.sentSignals.isEmpty)
+    }
+
+    private func makeMatrixHarness(cleanupDelay: Duration = .milliseconds(20)) async -> MatrixHarness {
+        let senderA = MatrixRawSignalSenderSpy()
+        let senderB = MatrixRawSignalSenderSpy()
+        let listenerA = MatrixTimelineSignalListenerSpy()
+        let listenerB = MatrixTimelineSignalListenerSpy()
+
+        let transportA = MatrixDirectCallSignalTransport(ownUserID: userA,
+                                                         sender: DirectCallMatrixSignalTransport(rawSender: senderA),
+                                                         listener: listenerA)
+        let transportB = MatrixDirectCallSignalTransport(ownUserID: userB,
+                                                         sender: DirectCallMatrixSignalTransport(rawSender: senderB),
+                                                         listener: listenerB)
+
+        let engineA = makeEngine(ownUserID: userA, peerUserID: userB, cleanupDelay: cleanupDelay)
+        let engineB = makeEngine(ownUserID: userB, peerUserID: userA, cleanupDelay: cleanupDelay)
+
+        let bridgeA = DirectCallEngineSignalBridge(ownUserID: userA,
+                                                   engine: engineA,
+                                                   signalTransport: transportA)
+        let bridgeB = DirectCallEngineSignalBridge(ownUserID: userB,
+                                                   engine: engineB,
+                                                   signalTransport: transportB)
+
+        await transportA.attach()
+        await transportB.attach()
+
+        return MatrixHarness(senderA: senderA,
+                             senderB: senderB,
+                             listenerA: listenerA,
+                             listenerB: listenerB,
+                             transportA: transportA,
+                             transportB: transportB,
+                             engineA: engineA,
+                             engineB: engineB,
+                             bridgeA: bridgeA,
+                             bridgeB: bridgeB)
+    }
+
+    private func makeEngine(ownUserID: String,
+                            peerUserID: String,
+                            cleanupDelay: Duration) -> DirectCallEngine {
+        DirectCallEngine(ownUserID: ownUserID,
+                         configuration: .init(incomingRingingTimeout: .seconds(120),
+                                              outgoingRingingTimeout: .seconds(120),
+                                              connectingTimeout: .seconds(120),
+                                              cleanupDelay: cleanupDelay,
+                                              processedTerminalEventLimit: 64),
+                         encryptionService: SignalEncryptionServiceSpy(senderUserID: ownUserID),
+                         mediaEngine: SignalMediaEngineSpy()) { [roomID] resolvedRoomID in
+            resolvedRoomID == roomID ? peerUserID : nil
+        }
+    }
+
+    private func keyExchange(callID: String,
+                             roomID: String? = nil,
+                             senderUserID: String,
+                             encryptedPayload: String = "encrypted") -> DirectCallEncryptedKeyExchangePayload {
+        .init(callID: callID,
+              roomID: roomID ?? self.roomID,
+              senderUserID: senderUserID,
+              keyID: "key-\(callID)",
+              encryptedPayload: encryptedPayload)
+    }
+
+    private func matrixEnvelope(eventID: String = "$matrix-event",
+                                roomID: String? = nil,
+                                senderUserID: String? = nil,
+                                ownUserID: String? = nil,
+                                isDirectOneToOneRoom: Bool? = true,
+                                isEncryptedRoom: Bool? = true,
+                                rawContent: String) -> DirectCallMatrixSignalEnvelope {
+        .init(eventID: eventID,
+              roomID: roomID ?? self.roomID,
+              senderUserID: senderUserID ?? userA,
+              ownUserID: ownUserID ?? userB,
+              isDirectOneToOneRoom: isDirectOneToOneRoom,
+              isEncryptedRoom: isEncryptedRoom,
+              timestamp: .now,
+              rawContent: rawContent)
+    }
+
+    private func matrixEnvelope(from signal: SentRawSignal,
+                                eventID: String,
+                                senderUserID: String,
+                                ownUserID: String) -> DirectCallMatrixSignalEnvelope {
+        matrixEnvelope(eventID: eventID,
+                       roomID: signal.roomID,
+                       senderUserID: senderUserID,
+                       ownUserID: ownUserID,
+                       rawContent: signal.content)
+    }
+
+    private func emitMatrixSignal(_ signal: SentRawSignal,
+                                  eventID: String,
+                                  senderUserID: String,
+                                  ownUserID: String,
+                                  to listener: MatrixTimelineSignalListenerSpy) {
+        listener.emit(matrixEnvelope(from: signal,
+                                     eventID: eventID,
+                                     senderUserID: senderUserID,
+                                     ownUserID: ownUserID))
+    }
+
+    private func json(for content: DirectCallMatrixSignalContent) throws -> String {
+        try String(data: JSONEncoder().encode(content), encoding: .utf8) ?? ""
+    }
+
+    private func waitUntil(timeout: Duration = .seconds(2),
+                           checkInterval: Duration = .milliseconds(20),
+                           condition: @MainActor () -> Bool) async -> Bool {
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            if condition() {
+                return true
+            }
+            try? await Task.sleep(for: checkInterval)
+        }
+        return condition()
+    }
+}
+
+@MainActor
 private final class SignalEncryptionServiceSpy: DirectCallEncryptionServiceProtocol {
     private let senderUserID: String
 
