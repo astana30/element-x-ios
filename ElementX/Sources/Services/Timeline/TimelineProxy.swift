@@ -45,6 +45,18 @@ final class TimelineProxy: TimelineProxyProtocol {
         self.kind = kind
         fallbackTimelineItemProvider = UnsubscribedTimelineItemProvider(kind: kind)
     }
+
+    @MainActor
+    func directCallMatrixTimelineSignalListener(roomID: String,
+                                                ownUserID: String,
+                                                isDirectOneToOneRoom: @escaping () -> Bool?,
+                                                isEncryptedRoom: @escaping () -> Bool?) -> DirectCallMatrixTimelineSignalListening {
+        DirectCallMatrixSDKTimelineSignalListener(timeline: timeline,
+                                                  roomID: roomID,
+                                                  ownUserID: ownUserID,
+                                                  isDirectOneToOneRoom: isDirectOneToOneRoom,
+                                                  isEncryptedRoom: isEncryptedRoom)
+    }
     
     func subscribeForUpdates() async {
         guard innerTimelineItemProvider == nil else {

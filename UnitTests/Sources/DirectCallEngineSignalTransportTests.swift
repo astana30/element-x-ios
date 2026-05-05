@@ -1301,6 +1301,251 @@ final class NativeDirectCallCompositionFactoryTests {
     }
 }
 
+@MainActor
+final class JoinedRoomNativeDirectCallCompositionFactoryTests {
+    private let userA = "@a:example.com"
+    private let userB = "@b:example.com"
+    private let roomID = "!dm:example.com"
+
+    @Test
+    func adapterIsDisabledByDefault() {
+        let roomBoundary = roomBoundary()
+        let factory = JoinedRoomNativeDirectCallCompositionFactory(roomBoundary: roomBoundary,
+                                                                   mediaEngineFactory: fakeMediaEngineFactory(),
+                                                                   encryptionService: SignalEncryptionServiceSpy(senderUserID: userA))
+
+        expectFailure(factory.makeComposition(), .composition(.disabled))
+        #expect(roomBoundary.makeRawSignalSenderCount == 0)
+        #expect(roomBoundary.makeTimelineSignalListenerCount == 0)
+    }
+
+    @Test
+    func enabledAdapterBuildsCompositionFromRoomBoundaryFakesWithoutStartingListener() async throws {
+        let rawSender = MatrixRawSignalSenderSpy()
+        let listener = MatrixTimelineSignalListenerSpy()
+        let roomBoundary = roomBoundary(rawSender: rawSender,
+                                        timelineSignalListener: listener)
+        let mediaFactory = fakeMediaEngineFactory()
+        let factory = enabledFactory(roomBoundary: roomBoundary,
+                                     mediaEngineFactory: mediaFactory)
+
+        guard case .success(let composition) = factory.makeComposition() else {
+            Issue.record("Expected enabled joined-room native direct-call composition to build with fake room boundaries.")
+            return
+        }
+
+        #expect(composition.isStarted == false)
+        #expect(listener.startCount == 0)
+        #expect(mediaFactory.makeMediaEngineCount == 1)
+        #expect(roomBoundary.makeRawSignalSenderCount == 1)
+        #expect(roomBoundary.makeTimelineSignalListenerCount == 1)
+
+        let result = await composition.engine.startOutgoingAudioCall(peer: userB, roomID: roomID)
+        guard case .success = result else {
+            Issue.record("Expected composed joined-room engine to start outgoing audio with fake boundaries.")
+            return
+        }
+
+        #expect(await waitUntil { rawSender.sentSignals.count == 1 })
+        let sentSignal = try #require(rawSender.sentSignals.last)
+        #expect(sentSignal.eventType == DirectCallMatrixSignalCodec.eventType)
+
+        let content = try JSONDecoder().decode(DirectCallMatrixSignalContent.self,
+                                               from: #require(sentSignal.content.data(using: .utf8)))
+        #expect(content.type == DirectCallSignalType.invite.rawValue)
+        #expect(content.keyExchange != nil)
+    }
+
+    @Test
+    func enabledAdapterFailsClosedForUnsafeRoomMetadataBeforeCreatingRoomSignalObjects() {
+        let nonDirect = roomBoundary(isDirectOneToOneRoom: false)
+        expectFailure(enabledFactory(roomBoundary: nonDirect,
+                                     mediaEngineFactory: fakeMediaEngineFactory()).makeComposition(),
+                      .composition(.nonDirectRoom))
+        #expect(nonDirect.makeRawSignalSenderCount == 0)
+        #expect(nonDirect.makeTimelineSignalListenerCount == 0)
+
+        let nonEncrypted = roomBoundary(isEncryptedRoom: false)
+        expectFailure(enabledFactory(roomBoundary: nonEncrypted,
+                                     mediaEngineFactory: fakeMediaEngineFactory()).makeComposition(),
+                      .composition(.nonEncryptedRoom))
+        #expect(nonEncrypted.makeRawSignalSenderCount == 0)
+        #expect(nonEncrypted.makeTimelineSignalListenerCount == 0)
+
+        let missingPeer = roomBoundary(peerUserID: nil)
+        expectFailure(enabledFactory(roomBoundary: missingPeer,
+                                     mediaEngineFactory: fakeMediaEngineFactory()).makeComposition(),
+                      .composition(.missingPeer))
+        #expect(missingPeer.makeRawSignalSenderCount == 0)
+        #expect(missingPeer.makeTimelineSignalListenerCount == 0)
+
+        let selfPeer = roomBoundary(peerUserID: userA)
+        expectFailure(enabledFactory(roomBoundary: selfPeer,
+                                     mediaEngineFactory: fakeMediaEngineFactory()).makeComposition(),
+                      .composition(.missingPeer))
+        #expect(selfPeer.makeRawSignalSenderCount == 0)
+        #expect(selfPeer.makeTimelineSignalListenerCount == 0)
+    }
+
+    @Test
+    func enabledAdapterFailsClosedWhenSenderOrListenerCannotBeCreated() {
+        expectFailure(enabledFactory(roomBoundary: roomBoundary(createsRawSender: false),
+                                     mediaEngineFactory: fakeMediaEngineFactory()).makeComposition(),
+                      .missingSignalSender)
+
+        expectFailure(enabledFactory(roomBoundary: roomBoundary(createsTimelineSignalListener: false),
+                                     mediaEngineFactory: fakeMediaEngineFactory()).makeComposition(),
+                      .missingTimelineListener)
+    }
+
+    @Test
+    func listenerStartsOnlyWhenCompositionIsExplicitlyStartedAndStopsIdempotently() async {
+        let listener = MatrixTimelineSignalListenerSpy()
+        let factory = enabledFactory(roomBoundary: roomBoundary(timelineSignalListener: listener),
+                                     mediaEngineFactory: fakeMediaEngineFactory())
+
+        guard case .success(let composition) = factory.makeComposition() else {
+            Issue.record("Expected enabled joined-room composition to build.")
+            return
+        }
+
+        #expect(composition.isStarted == false)
+        #expect(listener.startCount == 0)
+        #expect(listener.cancelCount == 0)
+
+        await composition.start()
+        await composition.start()
+
+        #expect(composition.isStarted)
+        #expect(listener.startCount == 1)
+        #expect(listener.cancelCount == 0)
+
+        composition.stop()
+        composition.stop()
+
+        #expect(composition.isStarted == false)
+        #expect(listener.startCount == 1)
+        #expect(listener.cancelCount == 1)
+    }
+
+    @Test
+    func missingMediaFactoryUsesNoOpFailClosedPath() async {
+        let factory = enabledFactory(roomBoundary: roomBoundary(),
+                                     mediaEngineFactory: nil)
+
+        guard case .success(let composition) = factory.makeComposition() else {
+            Issue.record("Expected enabled joined-room composition to build with default NoOp media factory.")
+            return
+        }
+
+        let outgoingResult = await composition.engine.startOutgoingAudioCall(peer: userB, roomID: roomID)
+        guard case .success(let session) = outgoingResult else {
+            Issue.record("Expected outgoing call start to succeed before NoOp media connection.")
+            return
+        }
+
+        let answerEvent = DirectCallSignalEvent(eventID: "$answer",
+                                                roomID: roomID,
+                                                senderID: userB,
+                                                callID: session.callID,
+                                                type: .answer,
+                                                intent: nil,
+                                                timestamp: .now)
+        let answerResult = await composition.engine.receiveIncomingCall(event: answerEvent)
+        expectFailure(answerResult, .mediaConnectionFailed)
+        #expect(composition.engine.activeSessionPublisher.value?.state == .failed)
+    }
+
+    @Test
+    func joinedRoomPeerResolutionRequiresExactlyOneActiveNonSelfMember() {
+        #expect(JoinedRoomProxy.nativeDirectCallPeerUserID(ownUserID: userA,
+                                                           members: [member(userB)]) == userB)
+        #expect(JoinedRoomProxy.nativeDirectCallPeerUserID(ownUserID: userA,
+                                                           members: [member(userA),
+                                                                     member(userB)]) == userB)
+        #expect(JoinedRoomProxy.nativeDirectCallPeerUserID(ownUserID: userA,
+                                                           members: [member(userB, membership: .leave)]) == nil)
+        #expect(JoinedRoomProxy.nativeDirectCallPeerUserID(ownUserID: userA,
+                                                           members: [member(userB),
+                                                                     member("@c:example.com")]) == nil)
+    }
+
+    private func enabledFactory(roomBoundary: JoinedRoomNativeDirectCallCompositionBoundarySpy,
+                                mediaEngineFactory: DirectCallMediaEngineFactoryProtocol?) -> JoinedRoomNativeDirectCallCompositionFactory {
+        .init(roomBoundary: roomBoundary,
+              configuration: .init(isEnabled: true,
+                                   engineConfiguration: .init(incomingRingingTimeout: .seconds(120),
+                                                              outgoingRingingTimeout: .seconds(120),
+                                                              connectingTimeout: .seconds(120),
+                                                              cleanupDelay: .seconds(120),
+                                                              processedTerminalEventLimit: 64)),
+              mediaEngineFactory: mediaEngineFactory,
+              encryptionService: SignalEncryptionServiceSpy(senderUserID: userA))
+    }
+
+    private func roomBoundary(roomID: String? = nil,
+                              ownUserID: String? = nil,
+                              isDirectOneToOneRoom: Bool = true,
+                              isEncryptedRoom: Bool = true,
+                              peerUserID: String? = "@b:example.com",
+                              createsRawSender: Bool = true,
+                              createsTimelineSignalListener: Bool = true,
+                              rawSender: DirectCallMatrixRawSignalSending? = nil,
+                              timelineSignalListener: DirectCallMatrixTimelineSignalListening? = nil) -> JoinedRoomNativeDirectCallCompositionBoundarySpy {
+        .init(roomID: roomID ?? self.roomID,
+              ownUserID: ownUserID ?? userA,
+              isDirectOneToOneRoom: isDirectOneToOneRoom,
+              isEncryptedRoom: isEncryptedRoom,
+              peerUserID: peerUserID,
+              rawSender: createsRawSender ? (rawSender ?? MatrixRawSignalSenderSpy()) : nil,
+              timelineSignalListener: createsTimelineSignalListener ? (timelineSignalListener ?? MatrixTimelineSignalListenerSpy()) : nil)
+    }
+
+    private func fakeMediaEngineFactory() -> SignalMediaEngineFactorySpy {
+        SignalMediaEngineFactorySpy(mediaEngine: SignalMediaEngineSpy())
+    }
+
+    private func member(_ userID: String, membership: MembershipState = .join) -> RoomMemberProxyProtocol {
+        RoomMemberProxyMock(with: .init(userID: userID,
+                                        displayName: nil,
+                                        avatarURL: nil,
+                                        membership: membership))
+    }
+
+    private func expectFailure(_ result: Result<NativeDirectCallComposition, JoinedRoomNativeDirectCallCompositionError>,
+                               _ expectedError: JoinedRoomNativeDirectCallCompositionError) {
+        guard case .failure(let error) = result else {
+            Issue.record("Expected joined-room native direct-call composition to fail closed with \(expectedError).")
+            return
+        }
+
+        #expect(error == expectedError)
+    }
+
+    private func expectFailure(_ result: Result<DirectCallSession?, DirectCallEngineError>,
+                               _ expectedError: DirectCallEngineError) {
+        guard case .failure(let error) = result else {
+            Issue.record("Expected composed engine to fail closed with \(expectedError).")
+            return
+        }
+
+        #expect(error == expectedError)
+    }
+
+    private func waitUntil(timeout: Duration = .seconds(2),
+                           checkInterval: Duration = .milliseconds(20),
+                           condition: @MainActor () -> Bool) async -> Bool {
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            if condition() {
+                return true
+            }
+            try? await Task.sleep(for: checkInterval)
+        }
+        return condition()
+    }
+}
+
 private struct Harness {
     let transport: InMemoryDirectCallSignalTransport
     let engineA: DirectCallEngine
@@ -1950,12 +2195,14 @@ private final class MatrixRawSignalSenderSpy: DirectCallMatrixRawSignalSending {
 private final class MatrixTimelineSignalListenerSpy: DirectCallMatrixTimelineSignalListening {
     private var onEnvelope: (@MainActor (DirectCallMatrixSignalEnvelope) -> Void)?
     private let handle = MatrixSignalListeningHandleSpy()
+    private(set) var startCount = 0
 
     var cancelCount: Int {
         handle.cancelCount
     }
 
     func start(onEnvelope: @escaping @MainActor (DirectCallMatrixSignalEnvelope) -> Void) async -> DirectCallMatrixSignalListeningHandle {
+        startCount += 1
         self.onEnvelope = onEnvelope
         return handle
     }
@@ -1978,6 +2225,47 @@ private struct SentRawSignal {
     let roomID: String
     let eventType: String
     let content: String
+}
+
+@MainActor
+private final class JoinedRoomNativeDirectCallCompositionBoundarySpy: JoinedRoomNativeDirectCallCompositionBoundaryProtocol {
+    let nativeDirectCallRoomID: String
+    let nativeDirectCallOwnUserID: String
+    let nativeDirectCallIsDirectOneToOneRoom: Bool
+    let nativeDirectCallIsEncryptedRoom: Bool
+    let nativeDirectCallPeerUserID: String?
+
+    private let rawSender: DirectCallMatrixRawSignalSending?
+    private let timelineSignalListener: DirectCallMatrixTimelineSignalListening?
+
+    private(set) var makeRawSignalSenderCount = 0
+    private(set) var makeTimelineSignalListenerCount = 0
+
+    init(roomID: String,
+         ownUserID: String,
+         isDirectOneToOneRoom: Bool,
+         isEncryptedRoom: Bool,
+         peerUserID: String?,
+         rawSender: DirectCallMatrixRawSignalSending?,
+         timelineSignalListener: DirectCallMatrixTimelineSignalListening?) {
+        nativeDirectCallRoomID = roomID
+        nativeDirectCallOwnUserID = ownUserID
+        nativeDirectCallIsDirectOneToOneRoom = isDirectOneToOneRoom
+        nativeDirectCallIsEncryptedRoom = isEncryptedRoom
+        nativeDirectCallPeerUserID = peerUserID
+        self.rawSender = rawSender
+        self.timelineSignalListener = timelineSignalListener
+    }
+
+    func makeNativeDirectCallRawSignalSender() -> DirectCallMatrixRawSignalSending? {
+        makeRawSignalSenderCount += 1
+        return rawSender
+    }
+
+    func makeNativeDirectCallTimelineSignalListener() -> DirectCallMatrixTimelineSignalListening? {
+        makeTimelineSignalListenerCount += 1
+        return timelineSignalListener
+    }
 }
 
 @MainActor

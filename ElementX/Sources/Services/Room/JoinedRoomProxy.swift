@@ -714,6 +714,19 @@ class JoinedRoomProxy: JoinedRoomProxyProtocol {
     func directCallMatrixRawSignalSender() -> DirectCallMatrixRawSignalSending {
         DirectCallMatrixRoomRawSignalSender(roomID: id, room: room)
     }
+
+    @MainActor
+    func nativeDirectCallComposition(configuration: NativeDirectCallCompositionConfiguration = .init(),
+                                     mediaEngineFactory: DirectCallMediaEngineFactoryProtocol? = nil,
+                                     encryptionService: DirectCallEncryptionServiceProtocol? = nil,
+                                     now: @escaping () -> Date = Date.init) -> Result<NativeDirectCallComposition, JoinedRoomNativeDirectCallCompositionError> {
+        JoinedRoomNativeDirectCallCompositionFactory(roomBoundary: self,
+                                                     configuration: configuration,
+                                                     mediaEngineFactory: mediaEngineFactory,
+                                                     encryptionService: encryptionService,
+                                                     now: now)
+            .makeComposition()
+    }
     
     // MARK: - Permalinks
     
@@ -845,4 +858,141 @@ class JoinedRoomProxy: JoinedRoomProxyProtocol {
         
         return .excludeEventTypes(eventTypes: stateEventFilters.map { FilterTimelineEventType.state(eventType: $0) })
     }()
+}
+
+@MainActor
+protocol JoinedRoomNativeDirectCallCompositionBoundaryProtocol {
+    var nativeDirectCallRoomID: String { get }
+    var nativeDirectCallOwnUserID: String { get }
+    var nativeDirectCallIsDirectOneToOneRoom: Bool { get }
+    var nativeDirectCallIsEncryptedRoom: Bool { get }
+    var nativeDirectCallPeerUserID: String? { get }
+
+    func makeNativeDirectCallRawSignalSender() -> DirectCallMatrixRawSignalSending?
+    func makeNativeDirectCallTimelineSignalListener() -> DirectCallMatrixTimelineSignalListening?
+}
+
+enum JoinedRoomNativeDirectCallCompositionError: Error, Equatable {
+    case composition(NativeDirectCallCompositionError)
+    case missingSignalSender
+    case missingTimelineListener
+}
+
+@MainActor
+final class JoinedRoomNativeDirectCallCompositionFactory {
+    private let roomBoundary: JoinedRoomNativeDirectCallCompositionBoundaryProtocol
+    private let configuration: NativeDirectCallCompositionConfiguration
+    private let mediaEngineFactory: DirectCallMediaEngineFactoryProtocol?
+    private let encryptionService: DirectCallEncryptionServiceProtocol?
+    private let now: () -> Date
+
+    init(roomBoundary: JoinedRoomNativeDirectCallCompositionBoundaryProtocol,
+         configuration: NativeDirectCallCompositionConfiguration = .init(),
+         mediaEngineFactory: DirectCallMediaEngineFactoryProtocol? = nil,
+         encryptionService: DirectCallEncryptionServiceProtocol? = nil,
+         now: @escaping () -> Date = Date.init) {
+        self.roomBoundary = roomBoundary
+        self.configuration = configuration
+        self.mediaEngineFactory = mediaEngineFactory
+        self.encryptionService = encryptionService
+        self.now = now
+    }
+
+    func makeComposition() -> Result<NativeDirectCallComposition, JoinedRoomNativeDirectCallCompositionError> {
+        let metadata = NativeDirectCallRoomMetadata(roomID: roomBoundary.nativeDirectCallRoomID,
+                                                    peerUserID: roomBoundary.nativeDirectCallPeerUserID,
+                                                    isDirectOneToOneRoom: roomBoundary.nativeDirectCallIsDirectOneToOneRoom,
+                                                    isEncryptedRoom: roomBoundary.nativeDirectCallIsEncryptedRoom)
+
+        let preflightFactory = NativeDirectCallCompositionFactory(ownUserID: roomBoundary.nativeDirectCallOwnUserID,
+                                                                  configuration: configuration,
+                                                                  signalTransport: nil,
+                                                                  mediaEngineFactory: mediaEngineFactory,
+                                                                  encryptionService: encryptionService,
+                                                                  now: now)
+        switch preflightFactory.makeComposition(for: metadata) {
+        case .success:
+            break
+        case .failure(.missingSignalTransport):
+            break
+        case .failure(let error):
+            return .failure(.composition(error))
+        }
+
+        guard let rawSender = roomBoundary.makeNativeDirectCallRawSignalSender() else {
+            return .failure(.missingSignalSender)
+        }
+
+        guard let listener = roomBoundary.makeNativeDirectCallTimelineSignalListener() else {
+            return .failure(.missingTimelineListener)
+        }
+
+        let signalTransport = MatrixDirectCallSignalTransport(ownUserID: roomBoundary.nativeDirectCallOwnUserID,
+                                                              sender: DirectCallMatrixSignalTransport(rawSender: rawSender),
+                                                              listener: listener)
+        let compositionFactory = NativeDirectCallCompositionFactory(ownUserID: roomBoundary.nativeDirectCallOwnUserID,
+                                                                    configuration: configuration,
+                                                                    signalTransport: signalTransport,
+                                                                    mediaEngineFactory: mediaEngineFactory,
+                                                                    encryptionService: encryptionService,
+                                                                    listenerControl: signalTransport,
+                                                                    now: now)
+        return compositionFactory.makeComposition(for: metadata)
+            .mapError { .composition($0) }
+    }
+}
+
+extension JoinedRoomProxy: JoinedRoomNativeDirectCallCompositionBoundaryProtocol {
+    var nativeDirectCallRoomID: String {
+        id
+    }
+
+    var nativeDirectCallOwnUserID: String {
+        ownUserID
+    }
+
+    var nativeDirectCallIsDirectOneToOneRoom: Bool {
+        isDirectOneToOneRoom
+    }
+
+    var nativeDirectCallIsEncryptedRoom: Bool {
+        infoPublisher.value.isEncrypted
+    }
+
+    var nativeDirectCallPeerUserID: String? {
+        Self.nativeDirectCallPeerUserID(ownUserID: ownUserID,
+                                        members: membersPublisher.value)
+    }
+
+    func makeNativeDirectCallRawSignalSender() -> DirectCallMatrixRawSignalSending? {
+        directCallMatrixRawSignalSender()
+    }
+
+    func makeNativeDirectCallTimelineSignalListener() -> DirectCallMatrixTimelineSignalListening? {
+        guard let timeline = timeline as? TimelineProxy else {
+            return nil
+        }
+
+        return timeline.directCallMatrixTimelineSignalListener(roomID: id,
+                                                               ownUserID: ownUserID,
+                                                               isDirectOneToOneRoom: { [weak self] in
+                                                                   self?.isDirectOneToOneRoom
+                                                               },
+                                                               isEncryptedRoom: { [weak self] in
+                                                                   self?.infoPublisher.value.isEncrypted
+                                                               })
+    }
+
+    static func nativeDirectCallPeerUserID(ownUserID: String, members: [RoomMemberProxyProtocol]) -> String? {
+        var peerUserIDs = [String]()
+        for member in members where member.isActive && member.userID != ownUserID && !member.userID.isEmpty {
+            guard !peerUserIDs.contains(member.userID) else {
+                continue
+            }
+
+            peerUserIDs.append(member.userID)
+        }
+
+        return peerUserIDs.count == 1 ? peerUserIDs[0] : nil
+    }
 }
