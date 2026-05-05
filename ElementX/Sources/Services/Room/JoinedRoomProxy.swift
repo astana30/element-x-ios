@@ -1065,6 +1065,126 @@ final class NativeDirectCallRoomController {
     }
 }
 
+struct NativeDirectCallDeveloperRoomTriggerConfiguration {
+    var isEnabled: Bool
+
+    init(isEnabled: Bool = false) {
+        self.isEnabled = isEnabled
+    }
+}
+
+enum NativeDirectCallDeveloperRoomTriggerError: Error, Equatable {
+    case disabled
+    case control(NativeDirectCallRoomControlError)
+}
+
+@MainActor
+protocol NativeDirectCallRoomControlling: AnyObject {
+    var isListenerStarted: Bool { get }
+    var activeSession: DirectCallSession? { get }
+
+    func prepare() -> Result<NativeDirectCallComposition, NativeDirectCallRoomControlError>
+    func start() async -> Result<NativeDirectCallComposition, NativeDirectCallRoomControlError>
+    func startOutgoingAudioCall() async -> Result<DirectCallSession, NativeDirectCallRoomControlError>
+    func acceptIncomingCall() async -> Result<DirectCallSession, NativeDirectCallRoomControlError>
+    func hangup() async -> Result<DirectCallSession, NativeDirectCallRoomControlError>
+    func stop()
+    func reset() async
+}
+
+extension NativeDirectCallRoomController: NativeDirectCallRoomControlling { }
+
+@MainActor
+final class NativeDirectCallDeveloperRoomTrigger {
+    private let configuration: NativeDirectCallDeveloperRoomTriggerConfiguration
+    private let controller: NativeDirectCallRoomControlling
+
+    var isListenerStarted: Bool {
+        guard configuration.isEnabled else {
+            return false
+        }
+
+        return controller.isListenerStarted
+    }
+
+    var activeSession: DirectCallSession? {
+        guard configuration.isEnabled else {
+            return nil
+        }
+
+        return controller.activeSession
+    }
+
+    init(configuration: NativeDirectCallDeveloperRoomTriggerConfiguration = .init(),
+         controller: NativeDirectCallRoomControlling) {
+        self.configuration = configuration
+        self.controller = controller
+    }
+
+    func prepare() -> Result<NativeDirectCallComposition, NativeDirectCallDeveloperRoomTriggerError> {
+        guard configuration.isEnabled else {
+            return .failure(.disabled)
+        }
+
+        return controller.prepare()
+            .mapError { .control($0) }
+    }
+
+    func startListener() async -> Result<NativeDirectCallComposition, NativeDirectCallDeveloperRoomTriggerError> {
+        guard configuration.isEnabled else {
+            return .failure(.disabled)
+        }
+
+        return await controller.start()
+            .mapError { .control($0) }
+    }
+
+    func startOutgoingAudioCall() async -> Result<DirectCallSession, NativeDirectCallDeveloperRoomTriggerError> {
+        guard configuration.isEnabled else {
+            return .failure(.disabled)
+        }
+
+        return await controller.startOutgoingAudioCall()
+            .mapError { .control($0) }
+    }
+
+    func acceptIncomingCall() async -> Result<DirectCallSession, NativeDirectCallDeveloperRoomTriggerError> {
+        guard configuration.isEnabled else {
+            return .failure(.disabled)
+        }
+
+        return await controller.acceptIncomingCall()
+            .mapError { .control($0) }
+    }
+
+    func hangup() async -> Result<DirectCallSession, NativeDirectCallDeveloperRoomTriggerError> {
+        guard configuration.isEnabled else {
+            return .failure(.disabled)
+        }
+
+        return await controller.hangup()
+            .mapError { .control($0) }
+    }
+
+    func stop() -> Result<Void, NativeDirectCallDeveloperRoomTriggerError> {
+        guard configuration.isEnabled else {
+            return .failure(.disabled)
+        }
+
+        controller.stop()
+        return .success(())
+    }
+
+    func reset() async -> Result<Void, NativeDirectCallDeveloperRoomTriggerError> {
+        guard configuration.isEnabled else {
+            return .failure(.disabled)
+        }
+
+        await controller.reset()
+        return .success(())
+    }
+}
+
 @MainActor
 final class JoinedRoomNativeDirectCallCompositionFactory {
     private let roomBoundary: JoinedRoomNativeDirectCallCompositionBoundaryProtocol

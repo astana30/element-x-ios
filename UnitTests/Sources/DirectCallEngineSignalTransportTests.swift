@@ -1692,6 +1692,27 @@ final class NativeDirectCallRoomControllerTests {
     }
 
     @Test
+    func disabledDeveloperTriggerRejectsRoomCommandsSafely() async {
+        let harness = roomControlHarness()
+        let trigger = NativeDirectCallDeveloperRoomTrigger(controller: harness.controller)
+
+        expectFailure(trigger.prepare(), .disabled)
+        await expectFailure(trigger.startListener(), .disabled)
+        await expectFailure(trigger.startOutgoingAudioCall(), .disabled)
+        await expectFailure(trigger.acceptIncomingCall(), .disabled)
+        await expectFailure(trigger.hangup(), .disabled)
+        expectFailure(trigger.stop(), .disabled)
+        await expectFailure(trigger.reset(), .disabled)
+
+        #expect(trigger.isListenerStarted == false)
+        #expect(trigger.activeSession == nil)
+        #expect(harness.rawSender.sentSignals.isEmpty)
+        #expect(harness.listener.startCount == 0)
+        #expect(harness.listener.cancelCount == 0)
+        #expect(harness.mediaEngine.connectedSessions.isEmpty)
+    }
+
+    @Test
     func enabledControllerRejectsAcceptAndHangupWithoutActiveSession() async {
         let harness = roomControlHarness()
 
@@ -1706,6 +1727,23 @@ final class NativeDirectCallRoomControllerTests {
         #expect(harness.controller.activeSession == nil)
         #expect(harness.rawSender.sentSignals.isEmpty)
         #expect(harness.mediaEngine.connectedSessions.isEmpty)
+    }
+
+    @Test
+    func enabledDeveloperTriggerPreparesWithoutAutoStartingListener() {
+        let harness = roomControlHarness()
+        let trigger = enabledTrigger(controller: harness.controller)
+
+        guard case .success = trigger.prepare() else {
+            Issue.record("Expected enabled native direct-call developer trigger to prepare.")
+            return
+        }
+
+        #expect(trigger.isListenerStarted == false)
+        #expect(trigger.activeSession == nil)
+        #expect(harness.listener.startCount == 0)
+        #expect(harness.listener.cancelCount == 0)
+        #expect(harness.rawSender.sentSignals.isEmpty)
     }
 
     @Test
@@ -1736,12 +1774,89 @@ final class NativeDirectCallRoomControllerTests {
     }
 
     @Test
+    func enabledDeveloperTriggerStartsStopsAndResetsListenerExplicitly() async {
+        let harness = roomControlHarness()
+        let trigger = enabledTrigger(controller: harness.controller)
+
+        guard case .success = trigger.prepare() else {
+            Issue.record("Expected enabled native direct-call developer trigger to prepare.")
+            return
+        }
+
+        #expect(trigger.isListenerStarted == false)
+        #expect(harness.listener.startCount == 0)
+
+        _ = await trigger.startListener()
+        _ = await trigger.startListener()
+
+        #expect(trigger.isListenerStarted)
+        #expect(harness.listener.startCount == 1)
+        #expect(harness.listener.cancelCount == 0)
+
+        guard case .success = trigger.stop() else {
+            Issue.record("Expected enabled native direct-call developer trigger to stop.")
+            return
+        }
+
+        guard case .success = trigger.stop() else {
+            Issue.record("Expected repeated native direct-call developer trigger stop to remain safe.")
+            return
+        }
+
+        #expect(trigger.isListenerStarted == false)
+        #expect(harness.listener.startCount == 1)
+        #expect(harness.listener.cancelCount == 1)
+
+        guard case .success = await trigger.reset() else {
+            Issue.record("Expected enabled native direct-call developer trigger to reset.")
+            return
+        }
+
+        guard case .success = await trigger.reset() else {
+            Issue.record("Expected repeated native direct-call developer trigger reset to remain safe.")
+            return
+        }
+
+        #expect(trigger.isListenerStarted == false)
+        #expect(trigger.activeSession == nil)
+        #expect(harness.listener.cancelCount == 1)
+    }
+
+    @Test
     func outgoingCallUsesGatedPeerAndSendsInviteThroughRoomTransport() async throws {
         let harness = roomControlHarness()
 
         let result = await harness.controller.startOutgoingAudioCall()
         guard case .success(let session) = result else {
             Issue.record("Expected native direct-call room controller to start outgoing audio.")
+            return
+        }
+
+        #expect(session.roomID == roomID)
+        #expect(session.peerUserID == userB)
+        #expect(harness.listener.startCount == 0)
+        #expect(await waitUntil { harness.rawSender.sentSignals.count == 1 })
+
+        let sentSignal = try #require(harness.rawSender.sentSignals.last)
+        #expect(sentSignal.roomID == roomID)
+        #expect(sentSignal.eventType == DirectCallMatrixSignalCodec.eventType)
+
+        let content = try JSONDecoder().decode(DirectCallMatrixSignalContent.self,
+                                               from: #require(sentSignal.content.data(using: .utf8)))
+        #expect(content.type == DirectCallSignalType.invite.rawValue)
+        #expect(content.intent == DirectCallIntent.audio.rawValue)
+        #expect(content.keyExchange?.senderUserID == userA)
+        #expect(content.keyExchange?.callID == session.callID)
+    }
+
+    @Test
+    func developerTriggerOutgoingCallSendsInviteThroughRoomTransport() async throws {
+        let harness = roomControlHarness()
+        let trigger = enabledTrigger(controller: harness.controller)
+
+        let result = await trigger.startOutgoingAudioCall()
+        guard case .success(let session) = result else {
+            Issue.record("Expected native direct-call developer trigger to start outgoing audio.")
             return
         }
 
@@ -1834,6 +1949,79 @@ final class NativeDirectCallRoomControllerTests {
     }
 
     @Test
+    func developerTriggersDriveIncomingAcceptHangupAndTerminalCleanupWithFakes() async throws {
+        let harness = roomPairHarness(cleanupDelay: .seconds(120))
+        let triggerA = enabledTrigger(controller: harness.controllerA)
+        let triggerB = enabledTrigger(controller: harness.controllerB)
+
+        _ = await triggerA.startListener()
+        _ = await triggerB.startListener()
+
+        let outgoingResult = await triggerA.startOutgoingAudioCall()
+        guard case .success(let outgoingSession) = outgoingResult else {
+            Issue.record("Expected caller developer trigger to start outgoing audio.")
+            return
+        }
+
+        #expect(await waitUntil { harness.senderA.sentSignals.count == 1 })
+        try emitMatrixSignal(#require(harness.senderA.sentSignals.last),
+                             eventID: "$trigger-invite",
+                             senderUserID: userA,
+                             ownUserID: userB,
+                             to: harness.listenerB)
+
+        #expect(await waitUntil { triggerB.activeSession?.state == .incomingRinging })
+        #expect(triggerB.activeSession?.callID == outgoingSession.callID)
+
+        guard case .success(let acceptedSession) = await triggerB.acceptIncomingCall() else {
+            Issue.record("Expected callee developer trigger to accept incoming call.")
+            return
+        }
+
+        #expect(acceptedSession.state == .activeAudio)
+        #expect(harness.mediaEngineB.connectedSessions.map(\.callID) == [outgoingSession.callID])
+        #expect(await waitUntil { harness.senderB.sentSignals.count == 1 })
+
+        try emitMatrixSignal(#require(harness.senderB.sentSignals.last),
+                             eventID: "$trigger-answer",
+                             senderUserID: userB,
+                             ownUserID: userA,
+                             to: harness.listenerA)
+
+        #expect(await waitUntil { triggerA.activeSession?.state == .activeAudio })
+        #expect(harness.mediaEngineA.connectedSessions.map(\.callID) == [outgoingSession.callID])
+
+        guard case .success(let hangupSession) = await triggerB.hangup() else {
+            Issue.record("Expected callee developer trigger to hang up active call.")
+            return
+        }
+
+        #expect(hangupSession.state == .ended)
+        #expect(harness.mediaEngineB.disconnectCallIDs == [outgoingSession.callID])
+        #expect(await waitUntil { harness.senderB.sentSignals.count == 2 })
+
+        let terminalEnvelope = try matrixEnvelope(from: #require(harness.senderB.sentSignals.last),
+                                                  eventID: "$trigger-terminal",
+                                                  senderUserID: userB,
+                                                  ownUserID: userA)
+        harness.listenerA.emit(terminalEnvelope)
+        #expect(await waitUntil { triggerA.activeSession?.state == .ended })
+        #expect(harness.mediaEngineA.disconnectCallIDs == [outgoingSession.callID])
+
+        harness.listenerA.emit(terminalEnvelope)
+        await Task.yield()
+        #expect(harness.mediaEngineA.disconnectCallIDs == [outgoingSession.callID])
+
+        _ = await triggerB.reset()
+        _ = await triggerA.reset()
+
+        #expect(harness.mediaEngineB.cleanupCallIDs == [outgoingSession.callID])
+        #expect(harness.mediaEngineA.cleanupCallIDs == [outgoingSession.callID])
+        #expect(triggerA.activeSession == nil)
+        #expect(triggerB.activeSession == nil)
+    }
+
+    @Test
     func resetStopsListenerAndCancelsUnansweredOutgoingCall() async {
         let harness = roomControlHarness(cleanupDelay: .seconds(120))
 
@@ -1907,6 +2095,11 @@ final class NativeDirectCallRoomControllerTests {
                      mediaEngine: mediaEngine)
     }
 
+    private func enabledTrigger(controller: NativeDirectCallRoomController) -> NativeDirectCallDeveloperRoomTrigger {
+        NativeDirectCallDeveloperRoomTrigger(configuration: .init(isEnabled: true),
+                                             controller: controller)
+    }
+
     private func emitMatrixSignal(_ signal: SentRawSignal,
                                   eventID: String,
                                   senderUserID: String,
@@ -1936,6 +2129,16 @@ final class NativeDirectCallRoomControllerTests {
                                   _ expectedError: NativeDirectCallRoomControlError) {
         guard case .failure(let error) = result else {
             Issue.record("Expected native direct-call room controller to fail closed with \(expectedError).")
+            return
+        }
+
+        #expect(error == expectedError)
+    }
+
+    private func expectFailure<T>(_ result: Result<T, NativeDirectCallDeveloperRoomTriggerError>,
+                                  _ expectedError: NativeDirectCallDeveloperRoomTriggerError) {
+        guard case .failure(let error) = result else {
+            Issue.record("Expected native direct-call developer trigger to fail closed with \(expectedError).")
             return
         }
 
