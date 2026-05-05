@@ -2472,6 +2472,36 @@ final class MatrixDirectCallEngineIntegrationTests {
     }
 
     @Test
+    func matrixSignalTransportBridgeFailsClosedWhenE2EEContextFactoryIsUnavailable() async throws {
+        let unavailableFactory = SignalMediaEngineFactorySpy(result: .failure(.e2eeContextUnavailable))
+        let harness = await makeMatrixHarness(cleanupDelay: .seconds(1),
+                                              mediaFactoryB: unavailableFactory)
+        defer { harness.stop() }
+
+        let outgoingResult = await harness.engineA.startOutgoingAudioCall(peer: userB, roomID: roomID)
+        guard case .success(let outgoingSession) = outgoingResult else {
+            Issue.record("Expected outgoing Matrix direct call start to succeed.")
+            return
+        }
+
+        #expect(await waitUntil { harness.senderA.sentSignals.count == 1 })
+        try emitMatrixSignal(#require(harness.senderA.sentSignals.last),
+                             eventID: "$matrix-invite",
+                             senderUserID: userA,
+                             ownUserID: userB,
+                             to: harness.listenerB)
+        #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .incomingRinging })
+
+        _ = await harness.engineB.acceptCall(callID: outgoingSession.callID)
+
+        #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .failed })
+        #expect(unavailableFactory.makeMediaEngineCount == 1)
+        #expect(harness.mediaEngineB.connectedSessions.isEmpty)
+        #expect(harness.mediaEngineB.connectedKeyHandles.isEmpty)
+        #expect(harness.engineB.activeSessionPublisher.value?.state != .activeAudio)
+    }
+
+    @Test
     func matrixSignalTransportBridgeCleansMediaIdempotentlyAfterRemoteTerminal() async throws {
         let harness = await makeMatrixHarness(cleanupDelay: .seconds(120))
         defer { harness.stop() }
