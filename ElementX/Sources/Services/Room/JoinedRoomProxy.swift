@@ -728,6 +728,17 @@ class JoinedRoomProxy: JoinedRoomProxyProtocol {
         return JoinedRoomNativeDirectCallCompositionController(roomID: id,
                                                                factory: factory)
     }
+
+    @MainActor
+    func nativeDirectCallRoomController(configuration: NativeDirectCallCompositionConfiguration = .init(),
+                                        mediaEngineFactory: DirectCallMediaEngineFactoryProtocol? = nil,
+                                        encryptionService: DirectCallEncryptionServiceProtocol? = nil,
+                                        now: @escaping () -> Date = Date.init) -> NativeDirectCallRoomController {
+        NativeDirectCallRoomController(compositionController: nativeDirectCallCompositionController(configuration: configuration,
+                                                                                                    mediaEngineFactory: mediaEngineFactory,
+                                                                                                    encryptionService: encryptionService,
+                                                                                                    now: now))
+    }
     
     // MARK: - Permalinks
     
@@ -891,6 +902,10 @@ final class JoinedRoomNativeDirectCallCompositionController {
         composition?.isStarted ?? false
     }
 
+    var currentComposition: NativeDirectCallComposition? {
+        composition
+    }
+
     init(roomID: String,
          factory: JoinedRoomNativeDirectCallCompositionFactory) {
         self.roomID = roomID
@@ -938,6 +953,115 @@ final class JoinedRoomNativeDirectCallCompositionController {
     func reset() {
         stop()
         composition = nil
+    }
+}
+
+enum NativeDirectCallRoomControlError: Error, Equatable {
+    case composition(JoinedRoomNativeDirectCallCompositionError)
+    case noIncomingCall
+    case noActiveCall
+    case engine(DirectCallEngineError)
+}
+
+@MainActor
+final class NativeDirectCallRoomController {
+    private let compositionController: JoinedRoomNativeDirectCallCompositionController
+
+    var isListenerStarted: Bool {
+        compositionController.isStarted
+    }
+
+    var activeSession: DirectCallSession? {
+        compositionController.currentComposition?.engine.activeSessionPublisher.value
+    }
+
+    init(compositionController: JoinedRoomNativeDirectCallCompositionController) {
+        self.compositionController = compositionController
+    }
+
+    func prepare() -> Result<NativeDirectCallComposition, NativeDirectCallRoomControlError> {
+        compositionController.makeComposition()
+            .mapError { .composition($0) }
+    }
+
+    func start() async -> Result<NativeDirectCallComposition, NativeDirectCallRoomControlError> {
+        await compositionController.start()
+            .mapError { .composition($0) }
+    }
+
+    func startOutgoingAudioCall() async -> Result<DirectCallSession, NativeDirectCallRoomControlError> {
+        switch prepare() {
+        case .success(let composition):
+            return await composition.engine.startOutgoingAudioCall(peer: composition.peerUserID,
+                                                                   roomID: composition.roomID)
+                .mapError { .engine($0) }
+        case .failure(let error):
+            return .failure(error)
+        }
+    }
+
+    func acceptIncomingCall() async -> Result<DirectCallSession, NativeDirectCallRoomControlError> {
+        switch prepare() {
+        case .success(let composition):
+            guard let session = composition.engine.activeSessionPublisher.value,
+                  session.state == .incomingRinging else {
+                return .failure(.noIncomingCall)
+            }
+
+            return await composition.engine.acceptCall(callID: session.callID)
+                .mapError { .engine($0) }
+        case .failure(let error):
+            return .failure(error)
+        }
+    }
+
+    func hangup() async -> Result<DirectCallSession, NativeDirectCallRoomControlError> {
+        switch prepare() {
+        case .success(let composition):
+            guard let session = composition.engine.activeSessionPublisher.value else {
+                return .failure(.noActiveCall)
+            }
+
+            switch session.state {
+            case .outgoingRinging:
+                return await composition.engine.cancelOutgoingBeforeAnswer(callID: session.callID)
+                    .mapError { .engine($0) }
+            case .incomingRinging:
+                return await composition.engine.rejectCall(callID: session.callID)
+                    .mapError { .engine($0) }
+            case .connecting, .activeAudio, .activeVideo:
+                return await composition.engine.hangupActiveCall(callID: session.callID)
+                    .mapError { .engine($0) }
+            case .idle, .ending, .ended, .missed, .cancelled, .failed:
+                return .failure(.noActiveCall)
+            }
+        case .failure(let error):
+            return .failure(error)
+        }
+    }
+
+    func stop() {
+        compositionController.stop()
+    }
+
+    func reset() async {
+        guard let composition = compositionController.currentComposition else {
+            compositionController.reset()
+            return
+        }
+
+        if let session = composition.engine.activeSessionPublisher.value {
+            if session.state.isTerminal == false {
+                _ = await hangup()
+            }
+
+            if let terminalSession = composition.engine.activeSessionPublisher.value,
+               terminalSession.state.isTerminal {
+                await composition.engine.cleanupCall(callID: terminalSession.callID)
+            }
+        }
+
+        compositionController.reset()
     }
 }
 

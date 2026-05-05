@@ -1667,6 +1667,322 @@ final class JoinedRoomNativeDirectCallCompositionFactoryTests {
     }
 }
 
+@MainActor
+final class NativeDirectCallRoomControllerTests {
+    private let userA = "@a:example.com"
+    private let userB = "@b:example.com"
+    private let roomID = "!dm:example.com"
+
+    @Test
+    func disabledDefaultRejectsRoomControlCommandsSafely() async {
+        let harness = roomControlHarness(isEnabled: false)
+
+        expectFailure(harness.controller.prepare(), .composition(.composition(.disabled)))
+        await expectFailure(harness.controller.startOutgoingAudioCall(), .composition(.composition(.disabled)))
+        await expectFailure(harness.controller.acceptIncomingCall(), .composition(.composition(.disabled)))
+        await expectFailure(harness.controller.hangup(), .composition(.composition(.disabled)))
+
+        await harness.controller.reset()
+
+        #expect(harness.controller.isListenerStarted == false)
+        #expect(harness.rawSender.sentSignals.isEmpty)
+        #expect(harness.listener.startCount == 0)
+        #expect(harness.listener.cancelCount == 0)
+        #expect(harness.mediaEngine.connectedSessions.isEmpty)
+    }
+
+    @Test
+    func enabledControllerRejectsAcceptAndHangupWithoutActiveSession() async {
+        let harness = roomControlHarness()
+
+        guard case .success = harness.controller.prepare() else {
+            Issue.record("Expected enabled native direct-call room controller to prepare.")
+            return
+        }
+
+        await expectFailure(harness.controller.acceptIncomingCall(), .noIncomingCall)
+        await expectFailure(harness.controller.hangup(), .noActiveCall)
+
+        #expect(harness.controller.activeSession == nil)
+        #expect(harness.rawSender.sentSignals.isEmpty)
+        #expect(harness.mediaEngine.connectedSessions.isEmpty)
+    }
+
+    @Test
+    func enabledControllerStartsAndStopsListenerOnlyWhenExplicitlyRequested() async {
+        let harness = roomControlHarness()
+
+        guard case .success = harness.controller.prepare() else {
+            Issue.record("Expected enabled native direct-call room controller to prepare.")
+            return
+        }
+
+        #expect(harness.controller.isListenerStarted == false)
+        #expect(harness.listener.startCount == 0)
+
+        _ = await harness.controller.start()
+        _ = await harness.controller.start()
+
+        #expect(harness.controller.isListenerStarted)
+        #expect(harness.listener.startCount == 1)
+        #expect(harness.listener.cancelCount == 0)
+
+        harness.controller.stop()
+        harness.controller.stop()
+
+        #expect(harness.controller.isListenerStarted == false)
+        #expect(harness.listener.startCount == 1)
+        #expect(harness.listener.cancelCount == 1)
+    }
+
+    @Test
+    func outgoingCallUsesGatedPeerAndSendsInviteThroughRoomTransport() async throws {
+        let harness = roomControlHarness()
+
+        let result = await harness.controller.startOutgoingAudioCall()
+        guard case .success(let session) = result else {
+            Issue.record("Expected native direct-call room controller to start outgoing audio.")
+            return
+        }
+
+        #expect(session.roomID == roomID)
+        #expect(session.peerUserID == userB)
+        #expect(harness.listener.startCount == 0)
+        #expect(await waitUntil { harness.rawSender.sentSignals.count == 1 })
+
+        let sentSignal = try #require(harness.rawSender.sentSignals.last)
+        #expect(sentSignal.roomID == roomID)
+        #expect(sentSignal.eventType == DirectCallMatrixSignalCodec.eventType)
+
+        let content = try JSONDecoder().decode(DirectCallMatrixSignalContent.self,
+                                               from: #require(sentSignal.content.data(using: .utf8)))
+        #expect(content.type == DirectCallSignalType.invite.rawValue)
+        #expect(content.intent == DirectCallIntent.audio.rawValue)
+        #expect(content.keyExchange?.senderUserID == userA)
+        #expect(content.keyExchange?.callID == session.callID)
+    }
+
+    @Test
+    func roomControllersDriveIncomingAcceptHangupAndTerminalCleanupWithFakes() async throws {
+        let harness = roomPairHarness(cleanupDelay: .seconds(120))
+
+        _ = await harness.controllerA.start()
+        _ = await harness.controllerB.start()
+
+        let outgoingResult = await harness.controllerA.startOutgoingAudioCall()
+        guard case .success(let outgoingSession) = outgoingResult else {
+            Issue.record("Expected caller room controller to start outgoing audio.")
+            return
+        }
+
+        #expect(await waitUntil { harness.senderA.sentSignals.count == 1 })
+        try emitMatrixSignal(#require(harness.senderA.sentSignals.last),
+                             eventID: "$room-invite",
+                             senderUserID: userA,
+                             ownUserID: userB,
+                             to: harness.listenerB)
+
+        #expect(await waitUntil { harness.controllerB.activeSession?.state == .incomingRinging })
+        #expect(harness.controllerB.activeSession?.callID == outgoingSession.callID)
+
+        guard case .success(let acceptedSession) = await harness.controllerB.acceptIncomingCall() else {
+            Issue.record("Expected callee room controller to accept incoming call.")
+            return
+        }
+
+        #expect(acceptedSession.state == .activeAudio)
+        #expect(harness.mediaEngineB.connectedSessions.map(\.callID) == [outgoingSession.callID])
+        #expect(await waitUntil { harness.senderB.sentSignals.count == 1 })
+
+        try emitMatrixSignal(#require(harness.senderB.sentSignals.last),
+                             eventID: "$room-answer",
+                             senderUserID: userB,
+                             ownUserID: userA,
+                             to: harness.listenerA)
+
+        #expect(await waitUntil { harness.controllerA.activeSession?.state == .activeAudio })
+        #expect(harness.mediaEngineA.connectedSessions.map(\.callID) == [outgoingSession.callID])
+
+        guard case .success(let hangupSession) = await harness.controllerB.hangup() else {
+            Issue.record("Expected callee room controller to hang up active call.")
+            return
+        }
+
+        #expect(hangupSession.state == .ended)
+        #expect(harness.mediaEngineB.disconnectCallIDs == [outgoingSession.callID])
+        #expect(await waitUntil { harness.senderB.sentSignals.count == 2 })
+
+        let terminalEnvelope = try matrixEnvelope(from: #require(harness.senderB.sentSignals.last),
+                                                  eventID: "$room-terminal",
+                                                  senderUserID: userB,
+                                                  ownUserID: userA)
+        harness.listenerA.emit(terminalEnvelope)
+        #expect(await waitUntil { harness.controllerA.activeSession?.state == .ended })
+        #expect(harness.mediaEngineA.disconnectCallIDs == [outgoingSession.callID])
+
+        harness.listenerA.emit(terminalEnvelope)
+        await Task.yield()
+        #expect(harness.mediaEngineA.disconnectCallIDs == [outgoingSession.callID])
+
+        await harness.controllerB.reset()
+        await harness.controllerA.reset()
+
+        #expect(harness.mediaEngineB.cleanupCallIDs == [outgoingSession.callID])
+        #expect(harness.mediaEngineA.cleanupCallIDs == [outgoingSession.callID])
+        #expect(harness.controllerA.activeSession == nil)
+        #expect(harness.controllerB.activeSession == nil)
+    }
+
+    @Test
+    func resetStopsListenerAndCancelsUnansweredOutgoingCall() async {
+        let harness = roomControlHarness(cleanupDelay: .seconds(120))
+
+        _ = await harness.controller.start()
+        let outgoingResult = await harness.controller.startOutgoingAudioCall()
+        guard case .success(let session) = outgoingResult else {
+            Issue.record("Expected native direct-call room controller to start outgoing audio.")
+            return
+        }
+
+        #expect(await waitUntil { harness.rawSender.sentSignals.count == 1 })
+        await harness.controller.reset()
+
+        #expect(harness.controller.isListenerStarted == false)
+        #expect(harness.controller.activeSession == nil)
+        #expect(harness.listener.cancelCount == 1)
+        #expect(harness.mediaEngine.cleanupCallIDs == [session.callID])
+        #expect(await waitUntil { harness.rawSender.sentSignals.count == 2 })
+        #expect(harness.rawSender.sentSignals.compactMap { signalType(from: $0.content) } == [.invite, .cancel])
+    }
+
+    private func roomPairHarness(cleanupDelay: Duration = .seconds(120)) -> NativeDirectCallRoomPairHarness {
+        let caller = roomControlHarness(ownUserID: userA,
+                                        peerUserID: userB,
+                                        cleanupDelay: cleanupDelay)
+        let callee = roomControlHarness(ownUserID: userB,
+                                        peerUserID: userA,
+                                        cleanupDelay: cleanupDelay)
+
+        return .init(controllerA: caller.controller,
+                     controllerB: callee.controller,
+                     senderA: caller.rawSender,
+                     senderB: callee.rawSender,
+                     listenerA: caller.listener,
+                     listenerB: callee.listener,
+                     mediaEngineA: caller.mediaEngine,
+                     mediaEngineB: callee.mediaEngine)
+    }
+
+    private func roomControlHarness(ownUserID: String? = nil,
+                                    peerUserID: String? = nil,
+                                    isEnabled: Bool = true,
+                                    cleanupDelay: Duration = .seconds(120)) -> NativeDirectCallRoomControlHarness {
+        let ownUserID = ownUserID ?? userA
+        let peerUserID = peerUserID ?? userB
+        let rawSender = MatrixRawSignalSenderSpy()
+        let listener = MatrixTimelineSignalListenerSpy()
+        let mediaEngine = SignalMediaEngineSpy()
+        let roomBoundary = JoinedRoomNativeDirectCallCompositionBoundarySpy(roomID: roomID,
+                                                                            ownUserID: ownUserID,
+                                                                            isDirectOneToOneRoom: true,
+                                                                            isEncryptedRoom: true,
+                                                                            peerUserID: peerUserID,
+                                                                            rawSender: rawSender,
+                                                                            timelineSignalListener: listener)
+        let factory = JoinedRoomNativeDirectCallCompositionFactory(roomBoundary: roomBoundary,
+                                                                   configuration: .init(isEnabled: isEnabled,
+                                                                                        engineConfiguration: .init(incomingRingingTimeout: .seconds(120),
+                                                                                                                   outgoingRingingTimeout: .seconds(120),
+                                                                                                                   connectingTimeout: .seconds(120),
+                                                                                                                   cleanupDelay: cleanupDelay,
+                                                                                                                   processedTerminalEventLimit: 64)),
+                                                                   mediaEngineFactory: SignalMediaEngineFactorySpy(mediaEngine: mediaEngine),
+                                                                   encryptionService: SignalEncryptionServiceSpy(senderUserID: ownUserID))
+        let compositionController = JoinedRoomNativeDirectCallCompositionController(roomID: roomID,
+                                                                                    factory: factory)
+
+        return .init(controller: NativeDirectCallRoomController(compositionController: compositionController),
+                     rawSender: rawSender,
+                     listener: listener,
+                     mediaEngine: mediaEngine)
+    }
+
+    private func emitMatrixSignal(_ signal: SentRawSignal,
+                                  eventID: String,
+                                  senderUserID: String,
+                                  ownUserID: String,
+                                  to listener: MatrixTimelineSignalListenerSpy) throws {
+        try listener.emit(matrixEnvelope(from: signal,
+                                         eventID: eventID,
+                                         senderUserID: senderUserID,
+                                         ownUserID: ownUserID))
+    }
+
+    private func matrixEnvelope(from signal: SentRawSignal,
+                                eventID: String,
+                                senderUserID: String,
+                                ownUserID: String) throws -> DirectCallMatrixSignalEnvelope {
+        .init(eventID: eventID,
+              roomID: signal.roomID,
+              senderUserID: senderUserID,
+              ownUserID: ownUserID,
+              isDirectOneToOneRoom: true,
+              isEncryptedRoom: true,
+              timestamp: .now,
+              rawContent: signal.content)
+    }
+
+    private func expectFailure<T>(_ result: Result<T, NativeDirectCallRoomControlError>,
+                                  _ expectedError: NativeDirectCallRoomControlError) {
+        guard case .failure(let error) = result else {
+            Issue.record("Expected native direct-call room controller to fail closed with \(expectedError).")
+            return
+        }
+
+        #expect(error == expectedError)
+    }
+
+    private func signalType(from rawContent: String) -> DirectCallSignalType? {
+        guard let data = rawContent.data(using: .utf8),
+              let content = try? JSONDecoder().decode(DirectCallMatrixSignalContent.self, from: data) else {
+            return nil
+        }
+
+        return DirectCallSignalType(rawValue: content.type)
+    }
+
+    private func waitUntil(timeout: Duration = .seconds(2),
+                           checkInterval: Duration = .milliseconds(20),
+                           condition: @MainActor () -> Bool) async -> Bool {
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            if condition() {
+                return true
+            }
+            try? await Task.sleep(for: checkInterval)
+        }
+        return condition()
+    }
+}
+
+private struct NativeDirectCallRoomControlHarness {
+    let controller: NativeDirectCallRoomController
+    let rawSender: MatrixRawSignalSenderSpy
+    let listener: MatrixTimelineSignalListenerSpy
+    let mediaEngine: SignalMediaEngineSpy
+}
+
+private struct NativeDirectCallRoomPairHarness {
+    let controllerA: NativeDirectCallRoomController
+    let controllerB: NativeDirectCallRoomController
+    let senderA: MatrixRawSignalSenderSpy
+    let senderB: MatrixRawSignalSenderSpy
+    let listenerA: MatrixTimelineSignalListenerSpy
+    let listenerB: MatrixTimelineSignalListenerSpy
+    let mediaEngineA: SignalMediaEngineSpy
+    let mediaEngineB: SignalMediaEngineSpy
+}
+
 private struct Harness {
     let transport: InMemoryDirectCallSignalTransport
     let engineA: DirectCallEngine

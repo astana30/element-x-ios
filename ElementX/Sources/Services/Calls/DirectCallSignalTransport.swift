@@ -824,15 +824,21 @@ extension MatrixDirectCallSignalTransport: NativeDirectCallSignalListenerControl
 @MainActor
 final class NativeDirectCallComposition {
     let engine: DirectCallEngineProtocol
+    let roomID: String
+    let peerUserID: String
 
     private let signalBridge: DirectCallEngineSignalBridge
     private let listenerControl: NativeDirectCallSignalListenerControlProtocol?
 
     private(set) var isStarted = false
 
-    init(engine: DirectCallEngineProtocol,
+    init(roomID: String,
+         peerUserID: String,
+         engine: DirectCallEngineProtocol,
          signalBridge: DirectCallEngineSignalBridge,
          listenerControl: NativeDirectCallSignalListenerControlProtocol? = nil) {
+        self.roomID = roomID
+        self.peerUserID = peerUserID
         self.engine = engine
         self.signalBridge = signalBridge
         self.listenerControl = listenerControl
@@ -937,7 +943,9 @@ final class NativeDirectCallCompositionFactory {
                                                         engine: engine,
                                                         signalTransport: signalTransport)
 
-        return .success(NativeDirectCallComposition(engine: engine,
+        return .success(NativeDirectCallComposition(roomID: roomMetadata.roomID,
+                                                    peerUserID: peerUserID,
+                                                    engine: engine,
                                                     signalBridge: signalBridge,
                                                     listenerControl: listenerControl))
     }
