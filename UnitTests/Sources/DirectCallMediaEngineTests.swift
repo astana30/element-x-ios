@@ -1182,6 +1182,118 @@ final class DirectCallMediaProviderSkeletonTests {
     private let peerUserID = "@alice:example.com"
 
     @Test
+    func defaultMediaEngineFactoryBuildsNoOpFailClosedEngine() async throws {
+        let factory = NoOpDirectCallMediaEngineFactory()
+        let engine = try factory.makeMediaEngine().get()
+        let session = makeSession(encryptionState: .ready)
+
+        let result = await engine.connectAudio(for: session, keyHandle: .init(callID: callID, keyID: "key-a"))
+
+        #expect(engine is NoOpDirectCallMediaEngine)
+        #expect(result == .failure(.tokenUnavailable))
+        #expect(engine.mediaStatePublisher.value.canPublishMicrophone == false)
+        #expect(engine.mediaStatePublisher.value.canPlayRemoteAudio == false)
+    }
+
+    @Test
+    func liveKitMediaEngineFactoryRequiresTokenProvider() {
+        let factory = DirectCallLiveKitMediaEngineFactory(e2eeContextProvider: MediaE2EEContextProviderSpy(),
+                                                          liveKitClient: LiveKitClientSpy())
+
+        let result = factory.makeMediaEngine()
+
+        guard case .failure(.tokenUnavailable) = result else {
+            Issue.record("Expected LiveKit media engine factory to require an explicit token provider.")
+            return
+        }
+    }
+
+    @Test
+    func liveKitMediaEngineFactoryRequiresE2EEContextProvider() {
+        let factory = DirectCallLiveKitMediaEngineFactory(tokenProvider: MediaTokenProviderSpy(),
+                                                          liveKitClient: LiveKitClientSpy())
+
+        let result = factory.makeMediaEngine()
+
+        guard case .failure(.e2eeContextUnavailable) = result else {
+            Issue.record("Expected LiveKit media engine factory to require an explicit E2EE context provider.")
+            return
+        }
+    }
+
+    @Test
+    func liveKitMediaEngineFactoryRequiresLiveKitClient() {
+        let factory = DirectCallLiveKitMediaEngineFactory(tokenProvider: MediaTokenProviderSpy(),
+                                                          e2eeContextProvider: MediaE2EEContextProviderSpy())
+
+        let result = factory.makeMediaEngine()
+
+        guard case .failure(.mediaSetupUnavailable) = result else {
+            Issue.record("Expected LiveKit media engine factory to require an explicit LiveKit client.")
+            return
+        }
+    }
+
+    @Test
+    func liveKitMediaEngineFactoryBuildsEngineOnlyWithExplicitDependencies() async throws {
+        let tokenProvider = MediaTokenProviderSpy()
+        let e2eeContextProvider = MediaE2EEContextProviderSpy()
+        let liveKitClient = LiveKitClientSpy()
+        let factory = DirectCallLiveKitMediaEngineFactory(tokenProvider: tokenProvider,
+                                                          e2eeContextProvider: e2eeContextProvider,
+                                                          liveKitClient: liveKitClient)
+        let engine = try factory.makeMediaEngine().get()
+        let session = makeSession(encryptionState: .ready)
+
+        let result = await engine.connectAudio(for: session, keyHandle: .init(callID: callID, keyID: "key-a"))
+
+        #expect(engine is LiveKitDirectCallMediaEngine)
+        #expect(tokenProvider.requestedSessions == [session])
+        #expect(e2eeContextProvider.requestedSessions == [session])
+        #expect(e2eeContextProvider.requestedKeyHandles == [.init(callID: callID, keyID: "key-a")])
+        #expect(liveKitClient.connectionInfos.map(\.roomName) == ["direct-call"])
+        guard case .success(let state) = result else {
+            Issue.record("Expected explicitly wired fake LiveKit media engine to connect.")
+            return
+        }
+        #expect(state.phase == .activeAudio)
+    }
+
+    @Test
+    func liveKitMediaEngineFactoryEngineFailsClosedWhenKeyStoreDoesNotContainHandle() async throws {
+        let tokenProvider = MediaTokenProviderSpy()
+        let keyStore = DirectCallLiveKitMediaKeyStore { "key-a" }
+        let e2eeContextProvider = DirectCallLiveKitE2EEContextProvider(keyStore: keyStore)
+        let liveKitClient = LiveKitClientSpy()
+        let factory = DirectCallLiveKitMediaEngineFactory(tokenProvider: tokenProvider,
+                                                          e2eeContextProvider: e2eeContextProvider,
+                                                          liveKitClient: liveKitClient)
+        let engine = try factory.makeMediaEngine().get()
+        let session = makeSession(encryptionState: .ready)
+
+        let result = await engine.connectAudio(for: session, keyHandle: .init(callID: callID, keyID: "missing-key"))
+
+        #expect(result == .failure(.e2eeContextUnavailable))
+        #expect(tokenProvider.requestedSessions.isEmpty)
+        #expect(liveKitClient.connectionInfos.isEmpty)
+        #expect(engine.mediaStatePublisher.value.canPublishMicrophone == false)
+        #expect(engine.mediaStatePublisher.value.canPlayRemoteAudio == false)
+    }
+
+    @Test
+    func liveKitMediaEngineFactoryDescriptionsDoNotExposeSecrets() {
+        let tokenProvider = MediaTokenProviderSpy(result: .success(.init(serverURL: URL(fileURLWithPath: "/tmp/livekit.example.com"),
+                                                                         roomName: "direct-call",
+                                                                         token: "secret-token")))
+        let factory = DirectCallLiveKitMediaEngineFactory(tokenProvider: tokenProvider,
+                                                          e2eeContextProvider: MediaE2EEContextProviderSpy(),
+                                                          liveKitClient: LiveKitClientSpy())
+
+        #expect(String(describing: factory).contains("secret-token") == false)
+        #expect(String(reflecting: factory).contains("secret-token") == false)
+    }
+
+    @Test
     func liveKitTokenProviderFailsClosedWithoutTokenClient() async {
         let provider = DirectCallLiveKitTokenProvider()
         let session = makeSession(encryptionState: .ready)

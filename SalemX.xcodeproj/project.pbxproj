@@ -1139,6 +1139,7 @@
 		BF3DD3B0FB3108787ED22B8A /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7239C96C9BBA51E78536D1C6 /* AppSettings.swift */; };
 		BF49D406D9C8BD39ED165DC5 /* RemotePreferenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 961A9C9841876A433998317C /* RemotePreferenceTests.swift */; };
 		BF833AD6A8F17283F4B6E9E9 /* CompletionSuggestionServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A392264915BD254A09EA825 /* CompletionSuggestionServiceProtocol.swift */; };
+		BF8FC9C6D563AD0D8E258C5C /* DirectCallMediaEngineFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A3974B62ED7C9CA50EAC740 /* DirectCallMediaEngineFactory.swift */; };
 		BF94095FDACB7EADE9903BB1 /* Untranslated.strings in Resources */ = {isa = PBXBuildFile; fileRef = 28C4CB4B1C32E7614465FC77 /* Untranslated.strings */; };
 		BFBD1EDFC4CE2B5B8AE4FC7E /* HomeScreenContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 459971BF5EF20B683E37E9BE /* HomeScreenContent.swift */; };
 		BFC748DAD32C30E26506FC43 /* MediaFileHandleProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DFDCF0487CCF5C19ADE4E94 /* MediaFileHandleProxy.swift */; };
@@ -1818,6 +1819,7 @@
 		29ECED5227B7EAC2B3B9E72F /* BugReportScreenViewModelProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BugReportScreenViewModelProtocol.swift; sourceTree = "<group>"; };
 		2A2DE2E366DEB6E2922A5F9D /* MessageForwardingScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageForwardingScreen.swift; sourceTree = "<group>"; };
 		2A3014F13577265BD88A5FA7 /* ExpiringTaskRunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpiringTaskRunnerTests.swift; sourceTree = "<group>"; };
+		2A3974B62ED7C9CA50EAC740 /* DirectCallMediaEngineFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectCallMediaEngineFactory.swift; sourceTree = "<group>"; };
 		2A728B769A83C7783CCAF488 /* sv */ = {isa = PBXFileReference; lastKnownFileType = text.plist.stringsdict; name = sv; path = sv.lproj/Localizable.stringsdict; sourceTree = "<group>"; };
 		2AB6494B16DDC2E55702D3BA /* PollFormScreenViewModelProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PollFormScreenViewModelProtocol.swift; sourceTree = "<group>"; };
 		2AC6D9D135627D9DA4D7794D /* SpaceScreenViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceScreenViewModelTests.swift; sourceTree = "<group>"; };
@@ -3204,6 +3206,7 @@
 				C31A73F8DA4CEFDB89AD2B4C /* DirectCallEncryptionDesign.swift */,
 				D38EDBAED42864D326E9F1E6 /* DirectCallEngine.swift */,
 				67773FB6049BAF3954A914E5 /* DirectCallEngineProtocol.swift */,
+				2A3974B62ED7C9CA50EAC740 /* DirectCallMediaEngineFactory.swift */,
 				9455A2D3EEB2AEB82F421520 /* DirectCallMediaEngineProtocol.swift */,
 				DDB7A4D93C4C14E188C3664D /* DirectCallMediaModels.swift */,
 				B0BA3DF65C53AD0238BBA612 /* DirectCallModels.swift */,
@@ -8071,6 +8074,7 @@
 				FD24648B903DAE7601659E73 /* DirectCallEncryptionDesign.swift in Sources */,
 				D82D288DF89F2C3E0A9AB2D8 /* DirectCallEngine.swift in Sources */,
 				DB52A92F2E9E8F12427E6900 /* DirectCallEngineProtocol.swift in Sources */,
+				BF8FC9C6D563AD0D8E258C5C /* DirectCallMediaEngineFactory.swift in Sources */,
 				9410B1310C89BF81C62BADC8 /* DirectCallMediaEngineProtocol.swift in Sources */,
 				CE16C68210091E7AEB6342C7 /* DirectCallMediaModels.swift in Sources */,
 				306C1CB9890B6674B79665DD /* DirectCallModels.swift in Sources */,
