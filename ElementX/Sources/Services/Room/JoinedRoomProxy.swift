@@ -716,16 +716,17 @@ class JoinedRoomProxy: JoinedRoomProxyProtocol {
     }
 
     @MainActor
-    func nativeDirectCallComposition(configuration: NativeDirectCallCompositionConfiguration = .init(),
-                                     mediaEngineFactory: DirectCallMediaEngineFactoryProtocol? = nil,
-                                     encryptionService: DirectCallEncryptionServiceProtocol? = nil,
-                                     now: @escaping () -> Date = Date.init) -> Result<NativeDirectCallComposition, JoinedRoomNativeDirectCallCompositionError> {
-        JoinedRoomNativeDirectCallCompositionFactory(roomBoundary: self,
-                                                     configuration: configuration,
-                                                     mediaEngineFactory: mediaEngineFactory,
-                                                     encryptionService: encryptionService,
-                                                     now: now)
-            .makeComposition()
+    func nativeDirectCallCompositionController(configuration: NativeDirectCallCompositionConfiguration = .init(),
+                                               mediaEngineFactory: DirectCallMediaEngineFactoryProtocol? = nil,
+                                               encryptionService: DirectCallEncryptionServiceProtocol? = nil,
+                                               now: @escaping () -> Date = Date.init) -> JoinedRoomNativeDirectCallCompositionController {
+        let factory = JoinedRoomNativeDirectCallCompositionFactory(roomBoundary: self,
+                                                                   configuration: configuration,
+                                                                   mediaEngineFactory: mediaEngineFactory,
+                                                                   encryptionService: encryptionService,
+                                                                   now: now)
+        return JoinedRoomNativeDirectCallCompositionController(roomID: id,
+                                                               factory: factory)
     }
     
     // MARK: - Permalinks
@@ -864,8 +865,8 @@ class JoinedRoomProxy: JoinedRoomProxyProtocol {
 protocol JoinedRoomNativeDirectCallCompositionBoundaryProtocol {
     var nativeDirectCallRoomID: String { get }
     var nativeDirectCallOwnUserID: String { get }
-    var nativeDirectCallIsDirectOneToOneRoom: Bool { get }
-    var nativeDirectCallIsEncryptedRoom: Bool { get }
+    var nativeDirectCallIsDirectOneToOneRoom: Bool? { get }
+    var nativeDirectCallIsEncryptedRoom: Bool? { get }
     var nativeDirectCallPeerUserID: String? { get }
 
     func makeNativeDirectCallRawSignalSender() -> DirectCallMatrixRawSignalSending?
@@ -874,8 +875,70 @@ protocol JoinedRoomNativeDirectCallCompositionBoundaryProtocol {
 
 enum JoinedRoomNativeDirectCallCompositionError: Error, Equatable {
     case composition(NativeDirectCallCompositionError)
+    case unknownRoomMetadata
     case missingSignalSender
     case missingTimelineListener
+}
+
+@MainActor
+final class JoinedRoomNativeDirectCallCompositionController {
+    let roomID: String
+
+    private let factory: JoinedRoomNativeDirectCallCompositionFactory
+    private var composition: NativeDirectCallComposition?
+
+    var isStarted: Bool {
+        composition?.isStarted ?? false
+    }
+
+    init(roomID: String,
+         factory: JoinedRoomNativeDirectCallCompositionFactory) {
+        self.roomID = roomID
+        self.factory = factory
+    }
+
+    deinit {
+        guard let composition else {
+            return
+        }
+
+        Task { @MainActor in
+            composition.stop()
+        }
+    }
+
+    func makeComposition() -> Result<NativeDirectCallComposition, JoinedRoomNativeDirectCallCompositionError> {
+        if let composition {
+            return .success(composition)
+        }
+
+        switch factory.makeComposition() {
+        case .success(let composition):
+            self.composition = composition
+            return .success(composition)
+        case .failure(let error):
+            return .failure(error)
+        }
+    }
+
+    func start() async -> Result<NativeDirectCallComposition, JoinedRoomNativeDirectCallCompositionError> {
+        switch makeComposition() {
+        case .success(let composition):
+            await composition.start()
+            return .success(composition)
+        case .failure(let error):
+            return .failure(error)
+        }
+    }
+
+    func stop() {
+        composition?.stop()
+    }
+
+    func reset() {
+        stop()
+        composition = nil
+    }
 }
 
 @MainActor
@@ -899,10 +962,15 @@ final class JoinedRoomNativeDirectCallCompositionFactory {
     }
 
     func makeComposition() -> Result<NativeDirectCallComposition, JoinedRoomNativeDirectCallCompositionError> {
+        guard let isDirectOneToOneRoom = roomBoundary.nativeDirectCallIsDirectOneToOneRoom,
+              let isEncryptedRoom = roomBoundary.nativeDirectCallIsEncryptedRoom else {
+            return .failure(.unknownRoomMetadata)
+        }
+
         let metadata = NativeDirectCallRoomMetadata(roomID: roomBoundary.nativeDirectCallRoomID,
                                                     peerUserID: roomBoundary.nativeDirectCallPeerUserID,
-                                                    isDirectOneToOneRoom: roomBoundary.nativeDirectCallIsDirectOneToOneRoom,
-                                                    isEncryptedRoom: roomBoundary.nativeDirectCallIsEncryptedRoom)
+                                                    isDirectOneToOneRoom: isDirectOneToOneRoom,
+                                                    isEncryptedRoom: isEncryptedRoom)
 
         let preflightFactory = NativeDirectCallCompositionFactory(ownUserID: roomBoundary.nativeDirectCallOwnUserID,
                                                                   configuration: configuration,
@@ -951,11 +1019,11 @@ extension JoinedRoomProxy: JoinedRoomNativeDirectCallCompositionBoundaryProtocol
         ownUserID
     }
 
-    var nativeDirectCallIsDirectOneToOneRoom: Bool {
+    var nativeDirectCallIsDirectOneToOneRoom: Bool? {
         isDirectOneToOneRoom
     }
 
-    var nativeDirectCallIsEncryptedRoom: Bool {
+    var nativeDirectCallIsEncryptedRoom: Bool? {
         infoPublisher.value.isEncrypted
     }
 

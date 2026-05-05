@@ -549,6 +549,16 @@ final class MatrixDirectCallSignalTransport: DirectCallSignalTransportProtocol {
         self.listener = listener
     }
 
+    deinit {
+        guard let listenerHandle else {
+            return
+        }
+
+        Task { @MainActor in
+            listenerHandle.cancel()
+        }
+    }
+
     func attach() async {
         guard !isListening else {
             return
@@ -826,6 +836,17 @@ final class NativeDirectCallComposition {
         self.engine = engine
         self.signalBridge = signalBridge
         self.listenerControl = listenerControl
+    }
+
+    deinit {
+        guard isStarted else {
+            return
+        }
+
+        let listenerControl = listenerControl
+        Task { @MainActor in
+            listenerControl?.stop()
+        }
     }
 
     func start() async {

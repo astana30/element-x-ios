@@ -1320,6 +1320,23 @@ final class JoinedRoomNativeDirectCallCompositionFactoryTests {
     }
 
     @Test
+    func controllerIsDisabledByDefaultAndDoesNotCreateComposition() async {
+        let roomBoundary = roomBoundary()
+        let controller = JoinedRoomNativeDirectCallCompositionController(roomID: roomID,
+                                                                         factory: .init(roomBoundary: roomBoundary,
+                                                                                        mediaEngineFactory: fakeMediaEngineFactory(),
+                                                                                        encryptionService: SignalEncryptionServiceSpy(senderUserID: userA)))
+
+        expectFailure(controller.makeComposition(), .composition(.disabled))
+        let startResult = await controller.start()
+        expectFailure(startResult, .composition(.disabled))
+
+        #expect(controller.isStarted == false)
+        #expect(roomBoundary.makeRawSignalSenderCount == 0)
+        #expect(roomBoundary.makeTimelineSignalListenerCount == 0)
+    }
+
+    @Test
     func enabledAdapterBuildsCompositionFromRoomBoundaryFakesWithoutStartingListener() async throws {
         let rawSender = MatrixRawSignalSenderSpy()
         let listener = MatrixTimelineSignalListenerSpy()
@@ -1357,7 +1374,35 @@ final class JoinedRoomNativeDirectCallCompositionFactoryTests {
     }
 
     @Test
+    func controllerCreatesAtMostOneCompositionForRoomWithoutStartingListener() {
+        let listener = MatrixTimelineSignalListenerSpy()
+        let roomBoundary = roomBoundary(timelineSignalListener: listener)
+        let controller = enabledController(roomBoundary: roomBoundary,
+                                           mediaEngineFactory: fakeMediaEngineFactory())
+
+        guard case .success(let firstComposition) = controller.makeComposition(),
+              case .success(let secondComposition) = controller.makeComposition() else {
+            Issue.record("Expected controller to create and reuse a native direct-call composition.")
+            return
+        }
+
+        #expect(firstComposition === secondComposition)
+        #expect(controller.roomID == roomID)
+        #expect(controller.isStarted == false)
+        #expect(listener.startCount == 0)
+        #expect(roomBoundary.makeRawSignalSenderCount == 1)
+        #expect(roomBoundary.makeTimelineSignalListenerCount == 1)
+    }
+
+    @Test
     func enabledAdapterFailsClosedForUnsafeRoomMetadataBeforeCreatingRoomSignalObjects() {
+        let emptyRoomID = roomBoundary(roomID: "")
+        expectFailure(enabledFactory(roomBoundary: emptyRoomID,
+                                     mediaEngineFactory: fakeMediaEngineFactory()).makeComposition(),
+                      .composition(.invalidRoomID))
+        #expect(emptyRoomID.makeRawSignalSenderCount == 0)
+        #expect(emptyRoomID.makeTimelineSignalListenerCount == 0)
+
         let nonDirect = roomBoundary(isDirectOneToOneRoom: false)
         expectFailure(enabledFactory(roomBoundary: nonDirect,
                                      mediaEngineFactory: fakeMediaEngineFactory()).makeComposition(),
@@ -1388,6 +1433,23 @@ final class JoinedRoomNativeDirectCallCompositionFactoryTests {
     }
 
     @Test
+    func enabledAdapterFailsClosedForUnknownRoomMetadataBeforeCreatingRoomSignalObjects() {
+        let unknownDirectMetadata = roomBoundary(isDirectOneToOneRoom: nil)
+        expectFailure(enabledFactory(roomBoundary: unknownDirectMetadata,
+                                     mediaEngineFactory: fakeMediaEngineFactory()).makeComposition(),
+                      .unknownRoomMetadata)
+        #expect(unknownDirectMetadata.makeRawSignalSenderCount == 0)
+        #expect(unknownDirectMetadata.makeTimelineSignalListenerCount == 0)
+
+        let unknownEncryptedMetadata = roomBoundary(isEncryptedRoom: nil)
+        expectFailure(enabledFactory(roomBoundary: unknownEncryptedMetadata,
+                                     mediaEngineFactory: fakeMediaEngineFactory()).makeComposition(),
+                      .unknownRoomMetadata)
+        #expect(unknownEncryptedMetadata.makeRawSignalSenderCount == 0)
+        #expect(unknownEncryptedMetadata.makeTimelineSignalListenerCount == 0)
+    }
+
+    @Test
     func enabledAdapterFailsClosedWhenSenderOrListenerCannotBeCreated() {
         expectFailure(enabledFactory(roomBoundary: roomBoundary(createsRawSender: false),
                                      mediaEngineFactory: fakeMediaEngineFactory()).makeComposition(),
@@ -1401,31 +1463,51 @@ final class JoinedRoomNativeDirectCallCompositionFactoryTests {
     @Test
     func listenerStartsOnlyWhenCompositionIsExplicitlyStartedAndStopsIdempotently() async {
         let listener = MatrixTimelineSignalListenerSpy()
-        let factory = enabledFactory(roomBoundary: roomBoundary(timelineSignalListener: listener),
-                                     mediaEngineFactory: fakeMediaEngineFactory())
+        let controller = enabledController(roomBoundary: roomBoundary(timelineSignalListener: listener),
+                                           mediaEngineFactory: fakeMediaEngineFactory())
 
-        guard case .success(let composition) = factory.makeComposition() else {
+        guard case .success = await controller.start() else {
             Issue.record("Expected enabled joined-room composition to build.")
             return
         }
 
-        #expect(composition.isStarted == false)
-        #expect(listener.startCount == 0)
-        #expect(listener.cancelCount == 0)
-
-        await composition.start()
-        await composition.start()
-
-        #expect(composition.isStarted)
+        #expect(controller.isStarted)
         #expect(listener.startCount == 1)
         #expect(listener.cancelCount == 0)
 
-        composition.stop()
-        composition.stop()
+        _ = await controller.start()
 
-        #expect(composition.isStarted == false)
+        #expect(controller.isStarted)
+        #expect(listener.startCount == 1)
+        #expect(listener.cancelCount == 0)
+
+        controller.stop()
+        controller.stop()
+
+        #expect(controller.isStarted == false)
         #expect(listener.startCount == 1)
         #expect(listener.cancelCount == 1)
+    }
+
+    @Test
+    func controllerDeinitStopsStartedListener() async {
+        let listener = MatrixTimelineSignalListenerSpy()
+        var controller: JoinedRoomNativeDirectCallCompositionController? = enabledController(roomBoundary: roomBoundary(timelineSignalListener: listener),
+                                                                                             mediaEngineFactory: fakeMediaEngineFactory())
+
+        guard let startResult = await controller?.start(),
+              case .success = startResult else {
+            Issue.record("Expected enabled joined-room controller to start.")
+            return
+        }
+
+        #expect(listener.startCount == 1)
+        #expect(listener.cancelCount == 0)
+
+        controller = nil
+
+        #expect(listener.startCount == 1)
+        #expect(await waitUntil { listener.cancelCount == 1 })
     }
 
     @Test
@@ -1457,6 +1539,38 @@ final class JoinedRoomNativeDirectCallCompositionFactoryTests {
     }
 
     @Test
+    func controllerResetStopsExistingCompositionAndAllowsExplicitRecreation() async {
+        let listener = MatrixTimelineSignalListenerSpy()
+        let roomBoundary = roomBoundary(timelineSignalListener: listener)
+        let controller = enabledController(roomBoundary: roomBoundary,
+                                           mediaEngineFactory: fakeMediaEngineFactory())
+
+        guard case .success(let firstComposition) = controller.makeComposition() else {
+            Issue.record("Expected controller to create a native direct-call composition.")
+            return
+        }
+
+        guard case .success = await controller.start() else {
+            Issue.record("Expected enabled joined-room controller to start.")
+            return
+        }
+
+        controller.reset()
+
+        guard case .success(let secondComposition) = controller.makeComposition() else {
+            Issue.record("Expected controller to recreate a native direct-call composition after reset.")
+            return
+        }
+
+        #expect(firstComposition !== secondComposition)
+        #expect(controller.isStarted == false)
+        #expect(listener.startCount == 1)
+        #expect(listener.cancelCount == 1)
+        #expect(roomBoundary.makeRawSignalSenderCount == 2)
+        #expect(roomBoundary.makeTimelineSignalListenerCount == 2)
+    }
+
+    @Test
     func joinedRoomPeerResolutionRequiresExactlyOneActiveNonSelfMember() {
         #expect(JoinedRoomProxy.nativeDirectCallPeerUserID(ownUserID: userA,
                                                            members: [member(userB)]) == userB)
@@ -1483,10 +1597,17 @@ final class JoinedRoomNativeDirectCallCompositionFactoryTests {
               encryptionService: SignalEncryptionServiceSpy(senderUserID: userA))
     }
 
+    private func enabledController(roomBoundary: JoinedRoomNativeDirectCallCompositionBoundarySpy,
+                                   mediaEngineFactory: DirectCallMediaEngineFactoryProtocol?) -> JoinedRoomNativeDirectCallCompositionController {
+        .init(roomID: roomBoundary.nativeDirectCallRoomID,
+              factory: enabledFactory(roomBoundary: roomBoundary,
+                                      mediaEngineFactory: mediaEngineFactory))
+    }
+
     private func roomBoundary(roomID: String? = nil,
                               ownUserID: String? = nil,
-                              isDirectOneToOneRoom: Bool = true,
-                              isEncryptedRoom: Bool = true,
+                              isDirectOneToOneRoom: Bool? = true,
+                              isEncryptedRoom: Bool? = true,
                               peerUserID: String? = "@b:example.com",
                               createsRawSender: Bool = true,
                               createsTimelineSignalListener: Bool = true,
@@ -2231,8 +2352,8 @@ private struct SentRawSignal {
 private final class JoinedRoomNativeDirectCallCompositionBoundarySpy: JoinedRoomNativeDirectCallCompositionBoundaryProtocol {
     let nativeDirectCallRoomID: String
     let nativeDirectCallOwnUserID: String
-    let nativeDirectCallIsDirectOneToOneRoom: Bool
-    let nativeDirectCallIsEncryptedRoom: Bool
+    let nativeDirectCallIsDirectOneToOneRoom: Bool?
+    let nativeDirectCallIsEncryptedRoom: Bool?
     let nativeDirectCallPeerUserID: String?
 
     private let rawSender: DirectCallMatrixRawSignalSending?
@@ -2243,8 +2364,8 @@ private final class JoinedRoomNativeDirectCallCompositionBoundarySpy: JoinedRoom
 
     init(roomID: String,
          ownUserID: String,
-         isDirectOneToOneRoom: Bool,
-         isEncryptedRoom: Bool,
+         isDirectOneToOneRoom: Bool?,
+         isEncryptedRoom: Bool?,
          peerUserID: String?,
          rawSender: DirectCallMatrixRawSignalSending?,
          timelineSignalListener: DirectCallMatrixTimelineSignalListening?) {
