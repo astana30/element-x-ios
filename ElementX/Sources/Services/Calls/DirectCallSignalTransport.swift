@@ -770,3 +770,154 @@ final class DirectCallEngineSignalBridge {
             .store(in: &cancellables)
     }
 }
+
+struct NativeDirectCallCompositionConfiguration {
+    var isEnabled: Bool
+    var engineConfiguration: DirectCallEngineConfiguration
+
+    init(isEnabled: Bool = false,
+         engineConfiguration: DirectCallEngineConfiguration = .init()) {
+        self.isEnabled = isEnabled
+        self.engineConfiguration = engineConfiguration
+    }
+}
+
+struct NativeDirectCallRoomMetadata: Equatable {
+    let roomID: String
+    let peerUserID: String?
+    let isDirectOneToOneRoom: Bool
+    let isEncryptedRoom: Bool
+}
+
+enum NativeDirectCallCompositionError: Error, Equatable {
+    case disabled
+    case invalidOwnUserID
+    case invalidRoomID
+    case missingSignalTransport
+    case nonDirectRoom
+    case nonEncryptedRoom
+    case missingPeer
+}
+
+@MainActor
+protocol NativeDirectCallSignalListenerControlProtocol {
+    func start() async
+    func stop()
+}
+
+extension MatrixDirectCallSignalTransport: NativeDirectCallSignalListenerControlProtocol {
+    func start() async {
+        await attach()
+    }
+}
+
+@MainActor
+final class NativeDirectCallComposition {
+    let engine: DirectCallEngineProtocol
+
+    private let signalBridge: DirectCallEngineSignalBridge
+    private let listenerControl: NativeDirectCallSignalListenerControlProtocol?
+
+    private(set) var isStarted = false
+
+    init(engine: DirectCallEngineProtocol,
+         signalBridge: DirectCallEngineSignalBridge,
+         listenerControl: NativeDirectCallSignalListenerControlProtocol? = nil) {
+        self.engine = engine
+        self.signalBridge = signalBridge
+        self.listenerControl = listenerControl
+    }
+
+    func start() async {
+        guard !isStarted else {
+            return
+        }
+
+        isStarted = true
+        await listenerControl?.start()
+    }
+
+    func stop() {
+        guard isStarted else {
+            return
+        }
+
+        isStarted = false
+        listenerControl?.stop()
+    }
+}
+
+@MainActor
+final class NativeDirectCallCompositionFactory {
+    private let ownUserID: String
+    private let configuration: NativeDirectCallCompositionConfiguration
+    private let signalTransport: DirectCallSignalTransportProtocol?
+    private let mediaEngineFactory: DirectCallMediaEngineFactoryProtocol?
+    private let encryptionService: DirectCallEncryptionServiceProtocol?
+    private let listenerControl: NativeDirectCallSignalListenerControlProtocol?
+    private let now: () -> Date
+
+    init(ownUserID: String,
+         configuration: NativeDirectCallCompositionConfiguration = .init(),
+         signalTransport: DirectCallSignalTransportProtocol? = nil,
+         mediaEngineFactory: DirectCallMediaEngineFactoryProtocol? = nil,
+         encryptionService: DirectCallEncryptionServiceProtocol? = nil,
+         listenerControl: NativeDirectCallSignalListenerControlProtocol? = nil,
+         now: @escaping () -> Date = Date.init) {
+        self.ownUserID = ownUserID
+        self.configuration = configuration
+        self.signalTransport = signalTransport
+        self.mediaEngineFactory = mediaEngineFactory
+        self.encryptionService = encryptionService
+        self.listenerControl = listenerControl
+        self.now = now
+    }
+
+    func makeComposition(for roomMetadata: NativeDirectCallRoomMetadata) -> Result<NativeDirectCallComposition, NativeDirectCallCompositionError> {
+        guard configuration.isEnabled else {
+            return .failure(.disabled)
+        }
+
+        guard !ownUserID.isEmpty else {
+            return .failure(.invalidOwnUserID)
+        }
+
+        guard !roomMetadata.roomID.isEmpty else {
+            return .failure(.invalidRoomID)
+        }
+
+        guard roomMetadata.isDirectOneToOneRoom else {
+            return .failure(.nonDirectRoom)
+        }
+
+        guard roomMetadata.isEncryptedRoom else {
+            return .failure(.nonEncryptedRoom)
+        }
+
+        guard let peerUserID = roomMetadata.peerUserID,
+              !peerUserID.isEmpty,
+              peerUserID != ownUserID else {
+            return .failure(.missingPeer)
+        }
+
+        guard let signalTransport else {
+            return .failure(.missingSignalTransport)
+        }
+
+        let mediaEngineFactory = mediaEngineFactory ?? NoOpDirectCallMediaEngineFactory()
+        let engine = DirectCallEngine(ownUserID: ownUserID,
+                                      configuration: configuration.engineConfiguration,
+                                      now: now,
+                                      encryptionService: encryptionService,
+                                      mediaEngineFactory: mediaEngineFactory) { [roomID = roomMetadata.roomID] resolvedRoomID in
+            resolvedRoomID == roomID ? peerUserID : nil
+        }
+        let signalBridge = DirectCallEngineSignalBridge(ownUserID: ownUserID,
+                                                        engine: engine,
+                                                        signalTransport: signalTransport)
+
+        return .success(NativeDirectCallComposition(engine: engine,
+                                                    signalBridge: signalBridge,
+                                                    listenerControl: listenerControl))
+    }
+}

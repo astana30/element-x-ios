@@ -1113,6 +1113,194 @@ final class DirectCallEngineSignalTransportTests {
     }
 }
 
+@MainActor
+final class NativeDirectCallCompositionFactoryTests {
+    private let userA = "@a:example.com"
+    private let userB = "@b:example.com"
+    private let roomID = "!dm:example.com"
+
+    @Test
+    func factoryIsDisabledByDefault() {
+        let factory = NativeDirectCallCompositionFactory(ownUserID: userA,
+                                                         signalTransport: InMemoryDirectCallSignalTransport(),
+                                                         encryptionService: SignalEncryptionServiceSpy(senderUserID: userA))
+
+        expectFailure(factory.makeComposition(for: encryptedDirectRoomMetadata()), .disabled)
+    }
+
+    @Test
+    func enabledFactoryBuildsEngineWithExplicitFakesWithoutStartingListener() async {
+        let transport = InMemoryDirectCallSignalTransport(eventIDProvider: { "$native-invite" })
+        let mediaFactory = SignalMediaEngineFactorySpy(mediaEngine: SignalMediaEngineSpy())
+        let listener = NativeDirectCallListenerControlSpy()
+        let factory = enabledFactory(signalTransport: transport,
+                                     mediaEngineFactory: mediaFactory,
+                                     listenerControl: listener)
+
+        guard case .success(let composition) = factory.makeComposition(for: encryptedDirectRoomMetadata()) else {
+            Issue.record("Expected enabled native direct-call composition to build with explicit fakes.")
+            return
+        }
+
+        #expect(composition.isStarted == false)
+        #expect(listener.startCount == 0)
+        #expect(mediaFactory.makeMediaEngineCount == 1)
+
+        var receivedEvents = [DirectCallSignalEvent]()
+        var cancellables = Set<AnyCancellable>()
+        transport.signalsPublisher(for: userB)
+            .sink { receivedEvents.append($0) }
+            .store(in: &cancellables)
+
+        let result = await composition.engine.startOutgoingAudioCall(peer: userB, roomID: roomID)
+        guard case .success = result else {
+            Issue.record("Expected composed engine to start outgoing audio with fake dependencies.")
+            return
+        }
+
+        #expect(await waitUntil { receivedEvents.count == 1 })
+        #expect(receivedEvents.last?.eventID == "$native-invite")
+        #expect(receivedEvents.last?.type == .invite)
+        #expect(receivedEvents.last?.keyExchange != nil)
+    }
+
+    @Test
+    func enabledFactoryFailsClosedForUnsafeRoomMetadata() {
+        let factory = enabledFactory(signalTransport: InMemoryDirectCallSignalTransport(),
+                                     mediaEngineFactory: fakeMediaEngineFactory())
+
+        expectFailure(factory.makeComposition(for: encryptedDirectRoomMetadata(isDirectOneToOneRoom: false)), .nonDirectRoom)
+        expectFailure(factory.makeComposition(for: encryptedDirectRoomMetadata(isEncryptedRoom: false)), .nonEncryptedRoom)
+        expectFailure(factory.makeComposition(for: encryptedDirectRoomMetadata(peerUserID: nil)), .missingPeer)
+        expectFailure(factory.makeComposition(for: encryptedDirectRoomMetadata(peerUserID: userA)), .missingPeer)
+        expectFailure(factory.makeComposition(for: encryptedDirectRoomMetadata(roomID: "")), .invalidRoomID)
+        expectFailure(enabledFactory(signalTransport: nil,
+                                     mediaEngineFactory: fakeMediaEngineFactory()).makeComposition(for: encryptedDirectRoomMetadata()), .missingSignalTransport)
+    }
+
+    @Test
+    func listenerStartsOnlyWhenExplicitlyRequestedAndStopsIdempotently() async {
+        let listener = NativeDirectCallListenerControlSpy()
+        let factory = enabledFactory(signalTransport: InMemoryDirectCallSignalTransport(),
+                                     mediaEngineFactory: fakeMediaEngineFactory(),
+                                     listenerControl: listener)
+
+        guard case .success(let composition) = factory.makeComposition(for: encryptedDirectRoomMetadata()) else {
+            Issue.record("Expected enabled native direct-call composition to build.")
+            return
+        }
+
+        #expect(composition.isStarted == false)
+        #expect(listener.startCount == 0)
+        #expect(listener.stopCount == 0)
+
+        await composition.start()
+        await composition.start()
+
+        #expect(composition.isStarted)
+        #expect(listener.startCount == 1)
+        #expect(listener.stopCount == 0)
+
+        composition.stop()
+        composition.stop()
+
+        #expect(composition.isStarted == false)
+        #expect(listener.startCount == 1)
+        #expect(listener.stopCount == 1)
+    }
+
+    @Test
+    func missingMediaFactoryUsesNoOpFailClosedPath() async {
+        let factory = enabledFactory(signalTransport: InMemoryDirectCallSignalTransport(),
+                                     mediaEngineFactory: nil)
+
+        guard case .success(let composition) = factory.makeComposition(for: encryptedDirectRoomMetadata()) else {
+            Issue.record("Expected enabled native direct-call composition to build with default NoOp media factory.")
+            return
+        }
+
+        let outgoingResult = await composition.engine.startOutgoingAudioCall(peer: userB, roomID: roomID)
+        guard case .success(let session) = outgoingResult else {
+            Issue.record("Expected outgoing call start to succeed before NoOp media connection.")
+            return
+        }
+
+        let answerEvent = DirectCallSignalEvent(eventID: "$answer",
+                                                roomID: roomID,
+                                                senderID: userB,
+                                                callID: session.callID,
+                                                type: .answer,
+                                                intent: nil,
+                                                timestamp: .now)
+        let answerResult = await composition.engine.receiveIncomingCall(event: answerEvent)
+        expectFailure(answerResult, .mediaConnectionFailed)
+        #expect(composition.engine.activeSessionPublisher.value?.state == .failed)
+    }
+
+    private func enabledFactory(signalTransport: DirectCallSignalTransportProtocol?,
+                                mediaEngineFactory: DirectCallMediaEngineFactoryProtocol?,
+                                listenerControl: NativeDirectCallSignalListenerControlProtocol? = nil) -> NativeDirectCallCompositionFactory {
+        .init(ownUserID: userA,
+              configuration: .init(isEnabled: true,
+                                   engineConfiguration: .init(incomingRingingTimeout: .seconds(120),
+                                                              outgoingRingingTimeout: .seconds(120),
+                                                              connectingTimeout: .seconds(120),
+                                                              cleanupDelay: .seconds(120),
+                                                              processedTerminalEventLimit: 64)),
+              signalTransport: signalTransport,
+              mediaEngineFactory: mediaEngineFactory,
+              encryptionService: SignalEncryptionServiceSpy(senderUserID: userA),
+              listenerControl: listenerControl)
+    }
+
+    private func fakeMediaEngineFactory() -> DirectCallMediaEngineFactoryProtocol {
+        SignalMediaEngineFactorySpy(mediaEngine: SignalMediaEngineSpy())
+    }
+
+    private func encryptedDirectRoomMetadata(roomID: String? = nil,
+                                             peerUserID: String? = "@b:example.com",
+                                             isDirectOneToOneRoom: Bool = true,
+                                             isEncryptedRoom: Bool = true) -> NativeDirectCallRoomMetadata {
+        .init(roomID: roomID ?? self.roomID,
+              peerUserID: peerUserID,
+              isDirectOneToOneRoom: isDirectOneToOneRoom,
+              isEncryptedRoom: isEncryptedRoom)
+    }
+
+    private func expectFailure(_ result: Result<NativeDirectCallComposition, NativeDirectCallCompositionError>,
+                               _ expectedError: NativeDirectCallCompositionError) {
+        guard case .failure(let error) = result else {
+            Issue.record("Expected native direct-call composition to fail closed with \(expectedError).")
+            return
+        }
+
+        #expect(error == expectedError)
+    }
+
+    private func expectFailure(_ result: Result<DirectCallSession?, DirectCallEngineError>,
+                               _ expectedError: DirectCallEngineError) {
+        guard case .failure(let error) = result else {
+            Issue.record("Expected composed engine to fail closed with \(expectedError).")
+            return
+        }
+
+        #expect(error == expectedError)
+    }
+
+    private func waitUntil(timeout: Duration = .seconds(2),
+                           checkInterval: Duration = .milliseconds(20),
+                           condition: @MainActor () -> Bool) async -> Bool {
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            if condition() {
+                return true
+            }
+            try? await Task.sleep(for: checkInterval)
+        }
+        return condition()
+    }
+}
+
 private struct Harness {
     let transport: InMemoryDirectCallSignalTransport
     let engineA: DirectCallEngine
@@ -1713,6 +1901,20 @@ private final class SignalMediaEngineSpy: DirectCallMediaEngineProtocol {
 }
 
 private struct MatrixIntegrationTestError: Error { }
+
+@MainActor
+private final class NativeDirectCallListenerControlSpy: NativeDirectCallSignalListenerControlProtocol {
+    private(set) var startCount = 0
+    private(set) var stopCount = 0
+
+    func start() async {
+        startCount += 1
+    }
+
+    func stop() {
+        stopCount += 1
+    }
+}
 
 @MainActor
 private final class SignalMediaEngineFactorySpy: DirectCallMediaEngineFactoryProtocol {
