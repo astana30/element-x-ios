@@ -1260,6 +1260,157 @@ final class DirectCallMediaProviderSkeletonTests {
     }
 
     @Test
+    func liveKitMediaEngineFactoryBuiltEngineDisconnectsAndCleansClientIdempotently() async throws {
+        let routeController = AudioRouteControllerSpy()
+        let encryptionService = MediaEncryptionServiceSpy()
+        let e2eeContext = MediaE2EEContextSpy()
+        let e2eeContextProvider = MediaE2EEContextProviderSpy(result: .success(e2eeContext))
+        let liveKitClient = LiveKitClientSpy()
+        let factory = DirectCallLiveKitMediaEngineFactory(tokenProvider: MediaTokenProviderSpy(),
+                                                          audioRouteController: routeController,
+                                                          encryptionService: encryptionService,
+                                                          e2eeContextProvider: e2eeContextProvider,
+                                                          liveKitClient: liveKitClient)
+        let engine = try factory.makeMediaEngine().get()
+        let session = makeSession(encryptionState: .ready)
+
+        let connectResult = await engine.connectAudio(for: session, keyHandle: .init(callID: callID, keyID: "key-a"))
+        guard case .success(let activeState) = connectResult else {
+            Issue.record("Expected factory-built fake LiveKit media engine to connect.")
+            return
+        }
+
+        await engine.disconnect(callID: callID)
+        await engine.disconnect(callID: callID)
+        await engine.cleanup(callID: callID)
+        await engine.cleanup(callID: callID)
+
+        #expect(activeState.phase == .activeAudio)
+        #expect(liveKitClient.connectionInfos.count == 1)
+        #expect(liveKitClient.remoteAudioPlaybackValues == [false])
+        #expect(liveKitClient.microphoneValues == [false])
+        #expect(liveKitClient.disconnectCount == 1)
+        #expect(liveKitClient.cleanupCount == 1)
+        #expect(routeController.deactivateAudioSessionCount == 1)
+        #expect(encryptionService.clearedCallIDs == [callID])
+        #expect(e2eeContextProvider.clearedCallIDs == [callID])
+        #expect(e2eeContext.cleanupCount == 1)
+        #expect(engine.mediaStatePublisher.value == .idle)
+    }
+
+    @Test
+    func directCallEngineConnectsAndDisconnectsThroughLiveKitFactoryWithFakes() async {
+        let ownUserID = "@me:example.com"
+        let routeController = AudioRouteControllerSpy()
+        let mediaEncryptionService = MediaEncryptionServiceSpy()
+        let engineEncryptionService = DirectCallEngineMediaEncryptionServiceSpy(senderUserID: ownUserID)
+        let e2eeContextProvider = MediaE2EEContextProviderSpy()
+        let tokenProvider = MediaTokenProviderSpy()
+        let liveKitClient = LiveKitClientSpy()
+        let factory = DirectCallLiveKitMediaEngineFactory(tokenProvider: tokenProvider,
+                                                          audioRouteController: routeController,
+                                                          encryptionService: mediaEncryptionService,
+                                                          e2eeContextProvider: e2eeContextProvider,
+                                                          liveKitClient: liveKitClient)
+        let engine = DirectCallEngine(ownUserID: ownUserID,
+                                      configuration: .init(incomingRingingTimeout: .seconds(120),
+                                                           outgoingRingingTimeout: .seconds(120),
+                                                           connectingTimeout: .seconds(120),
+                                                           cleanupDelay: .seconds(120),
+                                                           processedTerminalEventLimit: 64),
+                                      encryptionService: engineEncryptionService,
+                                      mediaEngineFactory: factory) { [roomID, peerUserID] resolvedRoomID in
+            resolvedRoomID == roomID ? peerUserID : nil
+        }
+
+        let startResult = await engine.startOutgoingAudioCall(peer: peerUserID, roomID: roomID)
+        guard case .success(let outgoingSession) = startResult else {
+            Issue.record("Expected outgoing direct call to start before fake LiveKit answer.")
+            return
+        }
+        let answerResult = await engine.receiveIncomingCall(event: .init(eventID: "$answer",
+                                                                         roomID: roomID,
+                                                                         senderID: peerUserID,
+                                                                         callID: outgoingSession.callID,
+                                                                         type: .answer,
+                                                                         intent: nil,
+                                                                         timestamp: .now))
+
+        guard case .success(let connectedSession?) = answerResult else {
+            Issue.record("Expected fake LiveKit factory to connect media when answer is received.")
+            return
+        }
+
+        _ = await engine.hangupActiveCall(callID: outgoingSession.callID)
+        await engine.cleanupCall(callID: outgoingSession.callID)
+        await engine.cleanupCall(callID: outgoingSession.callID)
+
+        #expect(connectedSession.state == .activeAudio)
+        #expect(liveKitClient.connectionInfos.count == 1)
+        #expect(liveKitClient.e2eeContextCount == 1)
+        #expect(tokenProvider.requestedSessions.map(\.callID) == [outgoingSession.callID])
+        #expect(e2eeContextProvider.requestedKeyHandles == [.init(callID: outgoingSession.callID,
+                                                                  keyID: "key-\(outgoingSession.callID)")])
+        #expect(liveKitClient.remoteAudioPlaybackValues == [false])
+        #expect(liveKitClient.microphoneValues == [false])
+        #expect(liveKitClient.disconnectCount == 1)
+        #expect(liveKitClient.cleanupCount == 1)
+        #expect(routeController.deactivateAudioSessionCount == 1)
+        #expect(mediaEncryptionService.clearedCallIDs == [outgoingSession.callID])
+        #expect(engineEncryptionService.clearedCallIDs == [outgoingSession.callID])
+        #expect(engine.activeSessionPublisher.value == nil)
+    }
+
+    @Test
+    func directCallEngineFailsClosedWhenLiveKitFactoryClientConnectFails() async {
+        let ownUserID = "@me:example.com"
+        let mediaEncryptionService = MediaEncryptionServiceSpy()
+        let engineEncryptionService = DirectCallEngineMediaEncryptionServiceSpy(senderUserID: ownUserID)
+        let liveKitClient = LiveKitClientSpy(connectResult: .failure(.mediaSetupUnavailable))
+        let factory = DirectCallLiveKitMediaEngineFactory(tokenProvider: MediaTokenProviderSpy(),
+                                                          encryptionService: mediaEncryptionService,
+                                                          e2eeContextProvider: MediaE2EEContextProviderSpy(),
+                                                          liveKitClient: liveKitClient)
+        let engine = DirectCallEngine(ownUserID: ownUserID,
+                                      configuration: .init(incomingRingingTimeout: .seconds(120),
+                                                           outgoingRingingTimeout: .seconds(120),
+                                                           connectingTimeout: .seconds(120),
+                                                           cleanupDelay: .seconds(120),
+                                                           processedTerminalEventLimit: 64),
+                                      encryptionService: engineEncryptionService,
+                                      mediaEngineFactory: factory) { [roomID, peerUserID] resolvedRoomID in
+            resolvedRoomID == roomID ? peerUserID : nil
+        }
+
+        let startResult = await engine.startOutgoingAudioCall(peer: peerUserID, roomID: roomID)
+        guard case .success(let outgoingSession) = startResult else {
+            Issue.record("Expected outgoing direct call to start before fake LiveKit failure.")
+            return
+        }
+        let answerResult = await engine.receiveIncomingCall(event: .init(eventID: "$answer",
+                                                                         roomID: roomID,
+                                                                         senderID: peerUserID,
+                                                                         callID: outgoingSession.callID,
+                                                                         type: .answer,
+                                                                         intent: nil,
+                                                                         timestamp: .now))
+
+        guard case .failure(.mediaConnectionFailed) = answerResult else {
+            Issue.record("Expected fake LiveKit client connect failure to fail closed at the engine boundary.")
+            return
+        }
+
+        #expect(engine.activeSessionPublisher.value?.state == .failed)
+        #expect(liveKitClient.connectionInfos.count == 1)
+        #expect(liveKitClient.remoteAudioPlaybackValues == [false])
+        #expect(liveKitClient.microphoneValues == [false])
+        #expect(liveKitClient.disconnectCount == 1)
+        #expect(liveKitClient.cleanupCount == 1)
+        #expect(mediaEncryptionService.clearedCallIDs == [outgoingSession.callID])
+        #expect(engineEncryptionService.clearedCallIDs.isEmpty)
+    }
+
+    @Test
     func liveKitMediaEngineFactoryEngineFailsClosedWhenKeyStoreDoesNotContainHandle() async throws {
         let tokenProvider = MediaTokenProviderSpy()
         let keyStore = DirectCallLiveKitMediaKeyStore { "key-a" }
@@ -1721,6 +1872,38 @@ private final class MediaEncryptionServiceSpy: DirectCallEncryptionServiceProtoc
 
     func generatePerCallKey(callID: String, roomID: String, peerUserID: String) -> Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason> {
         .failure(.keyExchangeFailed)
+    }
+
+    func consumeRemoteEncryptedKey(_ payload: DirectCallEncryptedKeyExchangePayload, expectedCallID: String, expectedRoomID: String, expectedSenderUserID: String) -> Result<DirectCallMediaKeyHandle, DirectCallEncryptionFailureReason> {
+        .failure(.keyExchangeFailed)
+    }
+
+    func clearPerCallKey(callID: String) {
+        guard !clearedCallIDs.contains(callID) else {
+            return
+        }
+
+        clearedCallIDs.append(callID)
+    }
+}
+
+@MainActor
+private final class DirectCallEngineMediaEncryptionServiceSpy: DirectCallEncryptionServiceProtocol {
+    private let senderUserID: String
+    private(set) var clearedCallIDs = [String]()
+
+    init(senderUserID: String) {
+        self.senderUserID = senderUserID
+    }
+
+    func generatePerCallKey(callID: String, roomID: String, peerUserID: String) -> Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason> {
+        let keyID = "key-\(callID)"
+        return .success(.init(payload: .init(callID: callID,
+                                             roomID: roomID,
+                                             senderUserID: senderUserID,
+                                             keyID: keyID,
+                                             encryptedPayload: "encrypted-\(callID)"),
+                              keyHandle: .init(callID: callID, keyID: keyID)))
     }
 
     func consumeRemoteEncryptedKey(_ payload: DirectCallEncryptedKeyExchangePayload, expectedCallID: String, expectedRoomID: String, expectedSenderUserID: String) -> Result<DirectCallMediaKeyHandle, DirectCallEncryptionFailureReason> {
