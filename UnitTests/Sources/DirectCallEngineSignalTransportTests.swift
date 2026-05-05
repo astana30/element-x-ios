@@ -20,7 +20,7 @@ final class DirectCallEngineSignalTransportTests {
 
     @Test
     func callerCancelBeforeAnswerClearsIncomingAndStaleAnswerStaysBlocked() async {
-        let harness = makeHarness()
+        let harness = makeHarness(cleanupDelay: .seconds(1))
 
         let outgoingResult = await harness.engineA.startOutgoingAudioCall(peer: userB, roomID: roomID)
         guard case .success(let outgoingSession) = outgoingResult else {
@@ -1129,6 +1129,8 @@ private struct MatrixHarness {
     let listenerB: MatrixTimelineSignalListenerSpy
     let mediaEngineA: SignalMediaEngineSpy
     let mediaEngineB: SignalMediaEngineSpy
+    let mediaFactoryA: SignalMediaEngineFactorySpy
+    let mediaFactoryB: SignalMediaEngineFactorySpy
     let transportA: MatrixDirectCallSignalTransport
     let transportB: MatrixDirectCallSignalTransport
     let engineA: DirectCallEngine
@@ -1199,6 +1201,8 @@ final class MatrixDirectCallEngineIntegrationTests {
                                                                    keyID: "key-\(outgoingSession.callID)")])
         #expect(harness.mediaEngineB.connectedKeyHandles == [.init(callID: outgoingSession.callID,
                                                                    keyID: "key-\(outgoingSession.callID)")])
+        #expect(harness.mediaFactoryA.makeMediaEngineCount == 1)
+        #expect(harness.mediaFactoryB.makeMediaEngineCount == 1)
 
         var receiverStateChanges = 0
         let receiverStateCancellable = harness.engineB.actionsPublisher.sink { action in
@@ -1212,6 +1216,8 @@ final class MatrixDirectCallEngineIntegrationTests {
 
         #expect(await waitUntil { harness.senderA.sentSignals.count == 2 })
         #expect(harness.mediaEngineA.disconnectCallIDs == [outgoingSession.callID])
+        await harness.engineA.cleanupCall(callID: outgoingSession.callID)
+        #expect(harness.mediaEngineA.cleanupCallIDs == [outgoingSession.callID])
         let hangupSignal = try #require(harness.senderA.sentSignals.last)
         let terminalEnvelope = matrixEnvelope(from: hangupSignal,
                                               eventID: "$matrix-terminal",
@@ -1267,6 +1273,7 @@ final class MatrixDirectCallEngineIntegrationTests {
         #expect(harness.engineB.activeSessionPublisher.value == nil)
         #expect(harness.senderB.sentSignals.isEmpty)
         #expect(harness.mediaEngineB.connectedSessions.isEmpty)
+        #expect(harness.mediaFactoryB.makeMediaEngineCount == 1)
     }
 
     @Test
@@ -1363,6 +1370,35 @@ final class MatrixDirectCallEngineIntegrationTests {
     }
 
     @Test
+    func matrixSignalTransportBridgeFailsClosedWhenMediaFactoryIsUnavailable() async throws {
+        let unavailableFactory = SignalMediaEngineFactorySpy(result: .failure(.tokenUnavailable))
+        let harness = await makeMatrixHarness(cleanupDelay: .seconds(1),
+                                              mediaFactoryB: unavailableFactory)
+        defer { harness.stop() }
+
+        let outgoingResult = await harness.engineA.startOutgoingAudioCall(peer: userB, roomID: roomID)
+        guard case .success(let outgoingSession) = outgoingResult else {
+            Issue.record("Expected outgoing Matrix direct call start to succeed.")
+            return
+        }
+
+        #expect(await waitUntil { harness.senderA.sentSignals.count == 1 })
+        try emitMatrixSignal(#require(harness.senderA.sentSignals.last),
+                             eventID: "$matrix-invite",
+                             senderUserID: userA,
+                             ownUserID: userB,
+                             to: harness.listenerB)
+        #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .incomingRinging })
+
+        _ = await harness.engineB.acceptCall(callID: outgoingSession.callID)
+
+        #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .failed })
+        #expect(unavailableFactory.makeMediaEngineCount == 1)
+        #expect(harness.mediaEngineB.connectedSessions.isEmpty)
+        #expect(harness.engineB.activeSessionPublisher.value?.state != .activeAudio)
+    }
+
+    @Test
     func matrixSignalTransportBridgeCleansMediaIdempotentlyAfterRemoteTerminal() async throws {
         let harness = await makeMatrixHarness(cleanupDelay: .seconds(120))
         defer { harness.stop() }
@@ -1387,15 +1423,46 @@ final class MatrixDirectCallEngineIntegrationTests {
         #expect(harness.mediaEngineB.cleanupCallIDs == [activeSession.callID])
     }
 
+    @Test
+    func matrixSignalTransportBridgeDisconnectsOutgoingCallerAfterRemoteTerminal() async throws {
+        let harness = await makeMatrixHarness(cleanupDelay: .seconds(120))
+        defer { harness.stop() }
+
+        let activeSession = try await connectOutgoingCall(harness: harness)
+        let terminalSignal = DirectCallOutgoingSignal(roomID: roomID,
+                                                      peerUserID: userA,
+                                                      callID: activeSession.callID,
+                                                      type: .hangup,
+                                                      intent: nil)
+        let terminalContent = try #require(DirectCallMatrixSignalCodec.encode(terminalSignal))
+        let terminalEnvelope = matrixEnvelope(eventID: "$matrix-remote-hangup-outgoing",
+                                              senderUserID: userB,
+                                              ownUserID: userA,
+                                              rawContent: terminalContent)
+
+        harness.listenerA.emit(terminalEnvelope)
+        #expect(await waitUntil { harness.engineA.activeSessionPublisher.value?.state == .ended })
+        harness.listenerA.emit(terminalEnvelope)
+        await harness.engineA.cleanupCall(callID: activeSession.callID)
+        await harness.engineA.cleanupCall(callID: activeSession.callID)
+
+        #expect(harness.mediaEngineA.disconnectCallIDs == [activeSession.callID])
+        #expect(harness.mediaEngineA.cleanupCallIDs == [activeSession.callID])
+    }
+
     private func makeMatrixHarness(cleanupDelay: Duration = .milliseconds(20),
                                    mediaEngineA: SignalMediaEngineSpy? = nil,
-                                   mediaEngineB: SignalMediaEngineSpy? = nil) async -> MatrixHarness {
+                                   mediaEngineB: SignalMediaEngineSpy? = nil,
+                                   mediaFactoryA: SignalMediaEngineFactorySpy? = nil,
+                                   mediaFactoryB: SignalMediaEngineFactorySpy? = nil) async -> MatrixHarness {
         let senderA = MatrixRawSignalSenderSpy()
         let senderB = MatrixRawSignalSenderSpy()
         let listenerA = MatrixTimelineSignalListenerSpy()
         let listenerB = MatrixTimelineSignalListenerSpy()
         let mediaEngineA = mediaEngineA ?? SignalMediaEngineSpy()
         let mediaEngineB = mediaEngineB ?? SignalMediaEngineSpy()
+        let mediaFactoryA = mediaFactoryA ?? SignalMediaEngineFactorySpy(mediaEngine: mediaEngineA)
+        let mediaFactoryB = mediaFactoryB ?? SignalMediaEngineFactorySpy(mediaEngine: mediaEngineB)
 
         let transportA = MatrixDirectCallSignalTransport(ownUserID: userA,
                                                          sender: DirectCallMatrixSignalTransport(rawSender: senderA),
@@ -1407,11 +1474,11 @@ final class MatrixDirectCallEngineIntegrationTests {
         let engineA = makeEngine(ownUserID: userA,
                                  peerUserID: userB,
                                  cleanupDelay: cleanupDelay,
-                                 mediaEngine: mediaEngineA)
+                                 mediaEngineFactory: mediaFactoryA)
         let engineB = makeEngine(ownUserID: userB,
                                  peerUserID: userA,
                                  cleanupDelay: cleanupDelay,
-                                 mediaEngine: mediaEngineB)
+                                 mediaEngineFactory: mediaFactoryB)
 
         let bridgeA = DirectCallEngineSignalBridge(ownUserID: userA,
                                                    engine: engineA,
@@ -1429,6 +1496,8 @@ final class MatrixDirectCallEngineIntegrationTests {
                              listenerB: listenerB,
                              mediaEngineA: mediaEngineA,
                              mediaEngineB: mediaEngineB,
+                             mediaFactoryA: mediaFactoryA,
+                             mediaFactoryB: mediaFactoryB,
                              transportA: transportA,
                              transportB: transportB,
                              engineA: engineA,
@@ -1440,7 +1509,7 @@ final class MatrixDirectCallEngineIntegrationTests {
     private func makeEngine(ownUserID: String,
                             peerUserID: String,
                             cleanupDelay: Duration,
-                            mediaEngine: DirectCallMediaEngineProtocol) -> DirectCallEngine {
+                            mediaEngineFactory: DirectCallMediaEngineFactoryProtocol) -> DirectCallEngine {
         DirectCallEngine(ownUserID: ownUserID,
                          configuration: .init(incomingRingingTimeout: .seconds(120),
                                               outgoingRingingTimeout: .seconds(120),
@@ -1448,7 +1517,7 @@ final class MatrixDirectCallEngineIntegrationTests {
                                               cleanupDelay: cleanupDelay,
                                               processedTerminalEventLimit: 64),
                          encryptionService: SignalEncryptionServiceSpy(senderUserID: ownUserID),
-                         mediaEngine: mediaEngine) { [roomID] resolvedRoomID in
+                         mediaEngineFactory: mediaEngineFactory) { [roomID] resolvedRoomID in
             resolvedRoomID == roomID ? peerUserID : nil
         }
     }
@@ -1644,6 +1713,25 @@ private final class SignalMediaEngineSpy: DirectCallMediaEngineProtocol {
 }
 
 private struct MatrixIntegrationTestError: Error { }
+
+@MainActor
+private final class SignalMediaEngineFactorySpy: DirectCallMediaEngineFactoryProtocol {
+    private let result: Result<any DirectCallMediaEngineProtocol, DirectCallMediaError>
+    private(set) var makeMediaEngineCount = 0
+
+    init(mediaEngine: DirectCallMediaEngineProtocol) {
+        result = .success(mediaEngine)
+    }
+
+    init(result: Result<any DirectCallMediaEngineProtocol, DirectCallMediaError>) {
+        self.result = result
+    }
+
+    func makeMediaEngine() -> Result<any DirectCallMediaEngineProtocol, DirectCallMediaError> {
+        makeMediaEngineCount += 1
+        return result
+    }
+}
 
 @MainActor
 private final class MatrixRawSignalSenderSpy: DirectCallMatrixRawSignalSending {

@@ -47,12 +47,13 @@ final class DirectCallEngine: DirectCallEngineProtocol {
          now: @escaping () -> Date = Date.init,
          encryptionService: DirectCallEncryptionServiceProtocol? = nil,
          mediaEngine: DirectCallMediaEngineProtocol? = nil,
+         mediaEngineFactory: DirectCallMediaEngineFactoryProtocol? = nil,
          expectedPeerProvider: @escaping (String) -> String?) {
         self.ownUserID = ownUserID
         self.configuration = configuration
         self.now = now
         self.encryptionService = encryptionService ?? NoOpDirectCallEncryptionService()
-        self.mediaEngine = mediaEngine ?? NoOpDirectCallMediaEngine()
+        self.mediaEngine = Self.makeMediaEngine(mediaEngine: mediaEngine, mediaEngineFactory: mediaEngineFactory)
         self.expectedPeerProvider = expectedPeerProvider
     }
 
@@ -701,5 +702,23 @@ final class DirectCallEngine: DirectCallEngineProtocol {
 
         encryptionService.clearPerCallKey(callID: callID)
         mediaKeyHandlesByCallID.removeValue(forKey: callID)
+    }
+
+    private static func makeMediaEngine(mediaEngine: DirectCallMediaEngineProtocol?,
+                                        mediaEngineFactory: DirectCallMediaEngineFactoryProtocol?) -> DirectCallMediaEngineProtocol {
+        if let mediaEngine {
+            return mediaEngine
+        }
+
+        guard let mediaEngineFactory else {
+            return NoOpDirectCallMediaEngine()
+        }
+
+        switch mediaEngineFactory.makeMediaEngine() {
+        case .success(let mediaEngine):
+            return mediaEngine
+        case .failure:
+            return NoOpDirectCallMediaEngine()
+        }
     }
 }
