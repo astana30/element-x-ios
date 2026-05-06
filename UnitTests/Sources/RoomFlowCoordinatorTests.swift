@@ -548,6 +548,119 @@ final class RoomFlowCoordinatorTests {
         await Task.yield()
         #expect(owner.resetCompletionCount == 1)
     }
+
+    @Test
+    func nativeDirectCallDeveloperCommandRouterIsDisabledByDefault() async {
+        let owner = NativeDirectCallRoomFlowOwnerSpy()
+        owner.isListenerStarted = true
+        owner.activeSession = directCallSession()
+        let commandRouter = NativeDirectCallRoomDeveloperCommandRouter {
+            owner
+        }
+
+        expectFailure(commandRouter.prepare(), .disabled)
+        await expectFailure(commandRouter.startListener(), .disabled)
+        await expectFailure(commandRouter.startOutgoingAudioCall(), .disabled)
+        await expectFailure(commandRouter.acceptIncomingCall(), .disabled)
+        await expectFailure(commandRouter.hangup(), .disabled)
+        expectFailure(commandRouter.stop(), .disabled)
+        await expectFailure(commandRouter.reset(), .disabled)
+
+        #expect(commandRouter.isListenerStarted == false)
+        #expect(commandRouter.activeSession == nil)
+        #expect(owner.prepareCount == 0)
+        #expect(owner.startCount == 0)
+        #expect(owner.outgoingCount == 0)
+        #expect(owner.acceptCount == 0)
+        #expect(owner.hangupCount == 0)
+        #expect(owner.stopCount == 0)
+        #expect(owner.resetCount == 0)
+    }
+
+    @Test
+    func nativeDirectCallDeveloperCommandRouterFailsClosedWithoutOwner() async {
+        let commandRouter = NativeDirectCallRoomDeveloperCommandRouter(configuration: .init(isEnabled: true)) {
+            nil
+        }
+
+        expectFailure(commandRouter.prepare(), .unavailable)
+        await expectFailure(commandRouter.startListener(), .unavailable)
+        await expectFailure(commandRouter.startOutgoingAudioCall(), .unavailable)
+        await expectFailure(commandRouter.acceptIncomingCall(), .unavailable)
+        await expectFailure(commandRouter.hangup(), .unavailable)
+        expectFailure(commandRouter.stop(), .unavailable)
+        await expectFailure(commandRouter.reset(), .unavailable)
+
+        #expect(commandRouter.isListenerStarted == false)
+        #expect(commandRouter.activeSession == nil)
+    }
+
+    @Test
+    func nativeDirectCallDeveloperCommandRouterDelegatesExplicitCommandsOnly() async {
+        let owner = NativeDirectCallRoomFlowOwnerSpy()
+        let session = directCallSession()
+        owner.isListenerStarted = true
+        owner.activeSession = session
+        let commandRouter = NativeDirectCallRoomDeveloperCommandRouter(configuration: .init(isEnabled: true)) {
+            owner
+        }
+
+        expectFailure(commandRouter.prepare(), .owner(.disabled))
+        #expect(owner.prepareCount == 1)
+        #expect(owner.startCount == 0)
+
+        await expectFailure(commandRouter.startListener(), .owner(.disabled))
+        await expectFailure(commandRouter.startOutgoingAudioCall(), .owner(.disabled))
+        await expectFailure(commandRouter.acceptIncomingCall(), .owner(.disabled))
+        await expectFailure(commandRouter.hangup(), .owner(.disabled))
+
+        expectSuccess(commandRouter.stop())
+        let resetResult = await commandRouter.reset()
+        expectSuccess(resetResult)
+
+        #expect(commandRouter.isListenerStarted == true)
+        #expect(commandRouter.activeSession == session)
+        #expect(owner.startCount == 1)
+        #expect(owner.outgoingCount == 1)
+        #expect(owner.acceptCount == 1)
+        #expect(owner.hangupCount == 1)
+        #expect(owner.stopCount == 1)
+        #expect(owner.resetCount == 1)
+    }
+
+    @Test
+    func nativeDirectCallDeveloperCommandRouterFailsClosedWhileOwnerIsResetting() async {
+        let controller = NativeDirectCallRoomControllingSpy()
+        controller.suspendReset = true
+        let roomProxy = NativeDirectCallProvidingJoinedRoomProxyMock(controller: controller)
+        let owner = NativeDirectCallRoomFlowOwner(roomProxy: roomProxy,
+                                                  triggerConfiguration: .init(isEnabled: true))
+        let commandRouter = NativeDirectCallRoomDeveloperCommandRouter(configuration: .init(isEnabled: true)) {
+            owner
+        }
+
+        expectFailure(commandRouter.prepare(), .owner(.trigger(.control(.noActiveCall))))
+        owner.beginReset()
+        await Task.yield()
+
+        await expectFailure(commandRouter.startListener(), .owner(.resetting))
+        await expectFailure(commandRouter.startOutgoingAudioCall(), .owner(.resetting))
+        await expectFailure(commandRouter.acceptIncomingCall(), .owner(.resetting))
+        await expectFailure(commandRouter.hangup(), .owner(.resetting))
+        expectFailure(commandRouter.prepare(), .owner(.resetting))
+
+        guard controller.resetCount == 1 else {
+            Issue.record("Expected native direct-call room-flow owner reset to start.")
+            return
+        }
+
+        controller.resumeReset()
+        let resetResult = await commandRouter.reset()
+        expectSuccess(resetResult)
+
+        #expect(controller.stopCount == 1)
+        #expect(controller.resetCount == 1)
+    }
     
     // MARK: - Spaces
     
@@ -664,6 +777,24 @@ final class RoomFlowCoordinatorTests {
         }
 
         #expect(error == expectedError)
+    }
+
+    private func expectFailure<T>(_ result: Result<T, NativeDirectCallRoomDeveloperCommandError>,
+                                  _ expectedError: NativeDirectCallRoomDeveloperCommandError) {
+        guard case .failure(let error) = result else {
+            Issue.record("Expected native direct-call developer command failure: \(expectedError).")
+            return
+        }
+
+        #expect(error == expectedError)
+    }
+
+    private func expectSuccess<T>(_ result: Result<T, NativeDirectCallRoomDeveloperCommandError>) {
+        guard case .failure(let error) = result else {
+            return
+        }
+
+        Issue.record("Expected native direct-call developer command success, got: \(error).")
     }
 
     private func directCallSession() -> DirectCallSession {
