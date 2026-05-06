@@ -109,6 +109,15 @@ class ChatsTabFlowCoordinator: FlowCoordinatorProtocol {
 
         return await roomFlowCoordinator.handleNativeDirectCallDiagnosticCommand(command)
     }
+
+    func nativeDirectCallDiagnosticStatus() -> NativeDirectCallRoomDiagnosticStatus {
+        guard nativeDirectCallDiagnosticRuntimeGate(),
+              let roomFlowCoordinator else {
+            return .unavailable
+        }
+
+        return roomFlowCoordinator.nativeDirectCallDiagnosticStatus()
+    }
     #endif
 
     // MARK: - FlowCoordinatorProtocol

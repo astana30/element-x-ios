@@ -407,6 +407,10 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
             }
         }
     }
+
+    func nativeDirectCallDiagnosticStatus() -> NativeDirectCallRoomDiagnosticStatus {
+        makeNativeDirectCallDiagnosticCommandRouter().status()
+    }
     #endif
     
     // MARK: - Private
@@ -1758,6 +1762,7 @@ enum NativeDirectCallRoomFlowOwnerError: Error, Equatable {
 protocol NativeDirectCallRoomFlowOwning: AnyObject {
     var isListenerStarted: Bool { get }
     var activeSession: DirectCallSession? { get }
+    var isResetting: Bool { get }
 
     func prepare() -> Result<NativeDirectCallComposition, NativeDirectCallRoomFlowOwnerError>
     func startListener() async -> Result<NativeDirectCallComposition, NativeDirectCallRoomFlowOwnerError>
@@ -1789,6 +1794,10 @@ final class NativeDirectCallRoomFlowOwner: NativeDirectCallRoomFlowOwning {
 
     var activeSession: DirectCallSession? {
         trigger?.activeSession
+    }
+
+    var isResetting: Bool {
+        hasStartedReset
     }
 
     init(roomProxy: JoinedRoomProxyProtocol,

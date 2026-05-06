@@ -222,6 +222,15 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
 
         return await chatsTabFlowCoordinator.handleNativeDirectCallDiagnosticCommand(command)
     }
+
+    func nativeDirectCallDiagnosticStatus() -> NativeDirectCallRoomDiagnosticStatus {
+        guard nativeDirectCallDiagnosticRuntimeGate(),
+              navigationTabCoordinator.selectedTab == .chats else {
+            return .unavailable
+        }
+
+        return chatsTabFlowCoordinator.nativeDirectCallDiagnosticStatus()
+    }
     #endif
 
     // MARK: - Private

@@ -859,20 +859,31 @@ class MockScreen: Identifiable {
             let client = try UITestsSignalling.Client(mode: .app)
             client.signals
                 .sink { [weak flowCoordinator, weak client] signal in
-                    guard case .nativeDirectCallDiagnostic(let command) = signal else {
-                        return
-                    }
-
                     Task { @MainActor in
-                        let commandResult: NativeDirectCallRoomDiagnosticCommandResult
-                        if let flowCoordinator {
-                            commandResult = await flowCoordinator.handleNativeDirectCallDiagnosticCommand(command.roomFlowCommand)
-                        } else {
-                            commandResult = .failed(.unavailable)
-                        }
+                        switch signal {
+                        case .nativeDirectCallDiagnostic(let command):
+                            let commandResult: NativeDirectCallRoomDiagnosticCommandResult
+                            if let flowCoordinator {
+                                commandResult = await flowCoordinator.handleNativeDirectCallDiagnosticCommand(command.roomFlowCommand)
+                            } else {
+                                commandResult = .failed(.unavailable)
+                            }
 
-                        let result = UITestsSignal.NativeDirectCallDiagnosticResult(commandResult)
-                        try? client?.send(.nativeDirectCallDiagnosticResult(result))
+                            let result = UITestsSignal.NativeDirectCallDiagnosticResult(correlationID: command.correlationID, commandResult)
+                            try? client?.send(.nativeDirectCallDiagnosticResult(result))
+                        case .nativeDirectCallDiagnosticStatus(let request):
+                            let statusResult: NativeDirectCallRoomDiagnosticStatus
+                            if let flowCoordinator {
+                                statusResult = await flowCoordinator.nativeDirectCallDiagnosticStatus()
+                            } else {
+                                statusResult = .unavailable
+                            }
+
+                            let result = UITestsSignal.NativeDirectCallDiagnosticStatusResult(correlationID: request.correlationID, statusResult)
+                            try? client?.send(.nativeDirectCallDiagnosticStatusResult(result))
+                        default:
+                            return
+                        }
                     }
                 }
                 .store(in: &cancellables)

@@ -679,6 +679,7 @@ final class RoomFlowCoordinatorTests {
             let result = await roomFlowCoordinator.handleNativeDirectCallDiagnosticCommand(command)
             #expect(result == .failed(.disabled))
         }
+        #expect(roomFlowCoordinator.nativeDirectCallDiagnosticStatus() == .disabled)
 
         #expect(owner.makeCount == 1)
         #expect(owner.prepareCount == 0)
@@ -715,6 +716,7 @@ final class RoomFlowCoordinatorTests {
         #expect(await roomFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.startListener) == .failed(.owner(.disabled)))
         #expect(await roomFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.stop) == .stopped)
         #expect(await roomFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.reset) == .reset)
+        #expect(roomFlowCoordinator.nativeDirectCallDiagnosticStatus().state == .idle)
 
         #expect(owner.startCount == 1)
         #expect(owner.outgoingCount == 1)
@@ -746,6 +748,7 @@ final class RoomFlowCoordinatorTests {
         #expect(await roomFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.acceptIncomingCall) == .failed(.owner(.resetting)))
         #expect(await roomFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.hangup) == .failed(.owner(.resetting)))
         #expect(await roomFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.prepare) == .failed(.owner(.resetting)))
+        #expect(roomFlowCoordinator.nativeDirectCallDiagnosticStatus().state == .resetting)
 
         controller.resumeReset()
         #expect(await roomFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.reset) == .reset)
@@ -755,20 +758,42 @@ final class RoomFlowCoordinatorTests {
     
     @Test
     func nativeDirectCallUITestDiagnosticSignalEncodesRedactedCommandAndResult() throws {
-        let commandSignal = UITestsSignal.nativeDirectCallDiagnostic(.startOutgoingAudioCall)
-        let resultSignal = UITestsSignal.nativeDirectCallDiagnosticResult(.success(.outgoingStarted))
+        let command = UITestsSignal.NativeDirectCallDiagnosticCommandRequest(command: .startOutgoingAudioCall,
+                                                                             correlationID: "call-A-1")
+        let result = UITestsSignal.NativeDirectCallDiagnosticResult.success(.outgoingStarted,
+                                                                            correlationID: "call-A-1")
+        let commandSignal = UITestsSignal.nativeDirectCallDiagnostic(command)
+        let resultSignal = UITestsSignal.nativeDirectCallDiagnosticResult(result)
+        let statusRequest = UITestsSignal.NativeDirectCallDiagnosticStatusRequest(correlationID: "call-A-1")
+        let statusResult = UITestsSignal.NativeDirectCallDiagnosticStatusResult(correlationID: "call-A-1",
+                                                                                status: .init(state: .active,
+                                                                                              listenerStarted: true,
+                                                                                              hasActiveSession: true))
+        let statusSignal = UITestsSignal.nativeDirectCallDiagnosticStatus(statusRequest)
+        let statusResultSignal = UITestsSignal.nativeDirectCallDiagnosticStatusResult(statusResult)
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
 
         let encodedCommand = try #require(String(data: encoder.encode(commandSignal), encoding: .utf8))
         let encodedResult = try #require(String(data: encoder.encode(resultSignal), encoding: .utf8))
+        let encodedStatus = try #require(String(data: encoder.encode(statusSignal), encoding: .utf8))
+        let encodedStatusResult = try #require(String(data: encoder.encode(statusResultSignal), encoding: .utf8))
 
         #expect(try JSONDecoder().decode(UITestsSignal.self, from: Data(encodedCommand.utf8)) == commandSignal)
         #expect(try JSONDecoder().decode(UITestsSignal.self, from: Data(encodedResult.utf8)) == resultSignal)
+        #expect(try JSONDecoder().decode(UITestsSignal.self, from: Data(encodedStatus.utf8)) == statusSignal)
+        #expect(try JSONDecoder().decode(UITestsSignal.self, from: Data(encodedStatusResult.utf8)) == statusResultSignal)
         #expect(encodedCommand.contains("startOutgoingAudioCall"))
         #expect(encodedResult.contains("outgoingStarted"))
+        #expect(encodedStatus.contains("nativeDirectCallDiagnosticStatus"))
+        #expect(encodedStatusResult.contains("hasActiveSession"))
+        #expect(result.correlationID == command.correlationID)
+        #expect(statusResult.correlationID == statusRequest.correlationID)
 
         let forbiddenFragments = [
+            "debug" + "Info",
+            "original" + "JSON",
+            "original" + "Json",
             "raw " + "JSON",
             "encrypted_" + "payload",
             "to" + "ken",
@@ -776,27 +801,56 @@ final class RoomFlowCoordinatorTests {
             "raw " + "key",
             "livekit.example.com"
         ]
-        let combinedSignals = encodedCommand + encodedResult
+        let combinedSignals = encodedCommand + encodedResult + encodedStatus + encodedStatusResult
         for fragment in forbiddenFragments {
             #expect(combinedSignals.localizedCaseInsensitiveContains(fragment) == false)
         }
     }
 
     @Test
+    func nativeDirectCallUITestDiagnosticCorrelationIdentifiesStaleResults() {
+        let request = UITestsSignal.NativeDirectCallDiagnosticCommandRequest(command: .hangup,
+                                                                             correlationID: "call-A-1")
+        let staleResult = UITestsSignal.NativeDirectCallDiagnosticResult.success(.hungUp,
+                                                                                 correlationID: "call-B-1")
+
+        #expect(request.correlationID == "call-A-1")
+        #expect(staleResult.correlationID == "call-B-1")
+        #expect(staleResult.correlationID != request.correlationID)
+    }
+
+    @Test
+    func uiTestsSignallingFileURLUsesOptionalSanitizedChannel() {
+        let defaultURL = UITestsSignalling.Client.fileURL(deviceName: "iPhone 17",
+                                                          environment: [:])
+        let channelURL = UITestsSignalling.Client.fileURL(deviceName: "iPhone 17",
+                                                          environment: [UITestsSignalling.channelEnvironmentKey: "A"])
+        let sanitizedChannelURL = UITestsSignalling.Client.fileURL(deviceName: "iPhone 17",
+                                                                   environment: [UITestsSignalling.channelEnvironmentKey: "Client A / stale:1"])
+
+        #expect(defaultURL.path() == "/Users/Shared/UITestsSignalling-iPhone-17")
+        #expect(channelURL.path() == "/Users/Shared/UITestsSignalling-iPhone-17-A")
+        #expect(sanitizedChannelURL.path() == "/Users/Shared/UITestsSignalling-iPhone-17-Client-A-stale-1")
+    }
+
+    @Test
     func nativeDirectCallUITestDiagnosticSignalMapsToRedactedResult() {
-        #expect(UITestsSignal.NativeDirectCallDiagnosticCommand.prepare.roomFlowCommand == .prepare)
-        #expect(UITestsSignal.NativeDirectCallDiagnosticCommand.startListener.roomFlowCommand == .startListener)
-        #expect(UITestsSignal.NativeDirectCallDiagnosticCommand.startOutgoingAudioCall.roomFlowCommand == .startOutgoingAudioCall)
-        #expect(UITestsSignal.NativeDirectCallDiagnosticCommand.acceptIncomingCall.roomFlowCommand == .acceptIncomingCall)
-        #expect(UITestsSignal.NativeDirectCallDiagnosticCommand.hangup.roomFlowCommand == .hangup)
-        #expect(UITestsSignal.NativeDirectCallDiagnosticCommand.stop.roomFlowCommand == .stop)
-        #expect(UITestsSignal.NativeDirectCallDiagnosticCommand.reset.roomFlowCommand == .reset)
-        #expect(UITestsSignal.NativeDirectCallDiagnosticResult(.outgoingStarted(.init(directCallSession()))) == .success(.outgoingStarted))
-        #expect(UITestsSignal.NativeDirectCallDiagnosticResult(.failed(.disabled)) == .failure(.disabled))
-        #expect(UITestsSignal.NativeDirectCallDiagnosticResult(.failed(.unavailable)) == .failure(.unavailable))
-        #expect(UITestsSignal.NativeDirectCallDiagnosticResult(.failed(.owner(.resetting))) == .failure(.resetting))
-        #expect(UITestsSignal.NativeDirectCallDiagnosticResult(.failed(.owner(.trigger(.disabled)))) == .failure(.triggerDisabled))
-        #expect(UITestsSignal.NativeDirectCallDiagnosticResult(.failed(.owner(.trigger(.control(.noActiveCall))))) == .failure(.noActiveCall))
+        #expect(UITestsSignal.NativeDirectCallDiagnosticCommandRequest.prepare.roomFlowCommand == .prepare)
+        #expect(UITestsSignal.NativeDirectCallDiagnosticCommandRequest.startListener.roomFlowCommand == .startListener)
+        #expect(UITestsSignal.NativeDirectCallDiagnosticCommandRequest.startOutgoingAudioCall.roomFlowCommand == .startOutgoingAudioCall)
+        #expect(UITestsSignal.NativeDirectCallDiagnosticCommandRequest.acceptIncomingCall.roomFlowCommand == .acceptIncomingCall)
+        #expect(UITestsSignal.NativeDirectCallDiagnosticCommandRequest.hangup.roomFlowCommand == .hangup)
+        #expect(UITestsSignal.NativeDirectCallDiagnosticCommandRequest.stop.roomFlowCommand == .stop)
+        #expect(UITestsSignal.NativeDirectCallDiagnosticCommandRequest.reset.roomFlowCommand == .reset)
+        #expect(UITestsSignal.NativeDirectCallDiagnosticResult(.outgoingStarted(.init(directCallSession()))).outcome == .success(.outgoingStarted))
+        #expect(UITestsSignal.NativeDirectCallDiagnosticResult(.failed(.disabled)).outcome == .failure(.disabled))
+        #expect(UITestsSignal.NativeDirectCallDiagnosticResult(.failed(.unavailable)).outcome == .failure(.unavailable))
+        #expect(UITestsSignal.NativeDirectCallDiagnosticResult(.failed(.owner(.resetting))).outcome == .failure(.resetting))
+        #expect(UITestsSignal.NativeDirectCallDiagnosticResult(.failed(.owner(.trigger(.disabled)))).outcome == .failure(.triggerDisabled))
+        #expect(UITestsSignal.NativeDirectCallDiagnosticResult(.failed(.owner(.trigger(.control(.noActiveCall))))).outcome == .failure(.noActiveCall))
+        #expect(UITestsSignal.NativeDirectCallDiagnosticStatusResult(.init(state: .active,
+                                                                           listenerStarted: true,
+                                                                           hasActiveSession: true)).status.state == .active)
     }
 
     // MARK: - Spaces
@@ -983,6 +1037,7 @@ private final class NativeDirectCallRoomFlowOwnerSpy: NativeDirectCallRoomFlowOw
 
     var isListenerStarted = false
     var activeSession: DirectCallSession?
+    var isResetting = false
     var outgoingResult: Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> = .failure(.disabled)
     var acceptResult: Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> = .failure(.disabled)
     var hangupResult: Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> = .failure(.disabled)
@@ -1017,6 +1072,7 @@ private final class NativeDirectCallRoomFlowOwnerSpy: NativeDirectCallRoomFlowOw
     }
 
     func beginReset() {
+        isResetting = true
         stop()
         guard resetTask == nil else {
             return
@@ -1031,12 +1087,14 @@ private final class NativeDirectCallRoomFlowOwnerSpy: NativeDirectCallRoomFlowOw
     func reset() async {
         resetCount += 1
         guard suspendReset else {
+            isResetting = false
             return
         }
 
         await withCheckedContinuation { continuation in
             resetContinuation = continuation
         }
+        isResetting = false
         resetCompletionCount += 1
     }
 

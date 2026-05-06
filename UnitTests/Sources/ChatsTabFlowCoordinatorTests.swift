@@ -294,6 +294,7 @@ struct ChatsTabFlowCoordinatorTests {
 
         let result = await chatsTabFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.prepare)
         #expect(result == .failed(.unavailable))
+        #expect(chatsTabFlowCoordinator.nativeDirectCallDiagnosticStatus() == .unavailable)
     }
 
     @Test
@@ -303,6 +304,7 @@ struct ChatsTabFlowCoordinatorTests {
 
         let result = await chatsTabFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.prepare)
         #expect(result == .failed(.unavailable))
+        #expect(chatsTabFlowCoordinator.nativeDirectCallDiagnosticStatus() == .unavailable)
     }
 
     @Test
@@ -317,6 +319,7 @@ struct ChatsTabFlowCoordinatorTests {
         try await process(route: .room(roomID: "1", via: []), expectedState: .roomList(detailState: .room(roomID: "1")))
 
         #expect(await chatsTabFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.startOutgoingAudioCall) == .outgoingStarted(.init(session)))
+        #expect(chatsTabFlowCoordinator.nativeDirectCallDiagnosticStatus().state == .idle)
         #expect(owner.outgoingCount == 1)
         #expect(owner.startCount == 0)
     }
@@ -361,6 +364,7 @@ private final class ChatsTabNativeDirectCallRoomFlowOwnerSpy: NativeDirectCallRo
 
     var isListenerStarted = false
     var activeSession: DirectCallSession?
+    var isResetting = false
     var outgoingResult: Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> = .failure(.disabled)
 
     func prepare() -> Result<NativeDirectCallComposition, NativeDirectCallRoomFlowOwnerError> {

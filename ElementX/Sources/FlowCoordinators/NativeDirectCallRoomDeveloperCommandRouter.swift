@@ -87,6 +87,79 @@ enum NativeDirectCallRoomDiagnosticCommandResult: Equatable, CustomStringConvert
         description
     }
 }
+
+enum NativeDirectCallRoomDiagnosticStatusState: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case unavailable
+    case disabled
+    case idle
+    case ringing
+    case connecting
+    case active
+    case terminal
+    case resetting
+    case failed
+
+    init(_ callState: DirectCallState) {
+        switch callState {
+        case .idle:
+            self = .idle
+        case .outgoingRinging, .incomingRinging:
+            self = .ringing
+        case .connecting, .ending:
+            self = .connecting
+        case .activeAudio, .activeVideo:
+            self = .active
+        case .ended, .missed, .cancelled:
+            self = .terminal
+        case .failed:
+            self = .failed
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .unavailable:
+            "unavailable"
+        case .disabled:
+            "disabled"
+        case .idle:
+            "idle"
+        case .ringing:
+            "ringing"
+        case .connecting:
+            "connecting"
+        case .active:
+            "active"
+        case .terminal:
+            "terminal"
+        case .resetting:
+            "resetting"
+        case .failed:
+            "failed"
+        }
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct NativeDirectCallRoomDiagnosticStatus: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let state: NativeDirectCallRoomDiagnosticStatusState
+    let listenerStarted: Bool
+    let hasActiveSession: Bool
+
+    static let unavailable = Self(state: .unavailable, listenerStarted: false, hasActiveSession: false)
+    static let disabled = Self(state: .disabled, listenerStarted: false, hasActiveSession: false)
+
+    var description: String {
+        "NativeDirectCallRoomDiagnosticStatus(state: \(state), listenerStarted: \(listenerStarted), hasActiveSession: \(hasActiveSession))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
 #endif
 
 enum NativeDirectCallRoomDeveloperCommandError: Error, Equatable {
@@ -107,6 +180,9 @@ protocol NativeDirectCallRoomDeveloperCommanding: AnyObject {
     func hangup() async -> Result<DirectCallSession, NativeDirectCallRoomDeveloperCommandError>
     func stop() -> Result<Void, NativeDirectCallRoomDeveloperCommandError>
     func reset() async -> Result<Void, NativeDirectCallRoomDeveloperCommandError>
+    #if DEBUG
+    func status() -> NativeDirectCallRoomDiagnosticStatus
+    #endif
 }
 
 @MainActor
@@ -205,6 +281,35 @@ final class NativeDirectCallRoomDeveloperCommandRouter: NativeDirectCallRoomDeve
             return .failure(error)
         }
     }
+
+    #if DEBUG
+    func status() -> NativeDirectCallRoomDiagnosticStatus {
+        guard configuration.isEnabled else {
+            return .disabled
+        }
+
+        guard let owner = ownerProvider() else {
+            return .unavailable
+        }
+
+        let activeSession = owner.activeSession
+        if owner.isResetting {
+            return .init(state: .resetting,
+                         listenerStarted: owner.isListenerStarted,
+                         hasActiveSession: activeSession != nil)
+        }
+
+        guard let activeSession else {
+            return .init(state: .idle,
+                         listenerStarted: owner.isListenerStarted,
+                         hasActiveSession: false)
+        }
+
+        return .init(state: .init(activeSession.state),
+                     listenerStarted: owner.isListenerStarted,
+                     hasActiveSession: true)
+    }
+    #endif
 
     private func makeOwner() -> Result<NativeDirectCallRoomFlowOwning, NativeDirectCallRoomDeveloperCommandError> {
         guard configuration.isEnabled else {

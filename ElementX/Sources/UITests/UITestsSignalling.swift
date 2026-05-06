@@ -43,9 +43,23 @@ enum UITestsSignal: Codable, Equatable {
 
     #if DEBUG
     /// Sends a redacted native direct-call diagnostic command to the active room flow.
-    case nativeDirectCallDiagnostic(NativeDirectCallDiagnosticCommand)
+    case nativeDirectCallDiagnostic(NativeDirectCallDiagnosticCommandRequest)
     /// Reports a redacted native direct-call diagnostic command result.
     case nativeDirectCallDiagnosticResult(NativeDirectCallDiagnosticResult)
+    /// Requests redacted native direct-call diagnostic state from the active room flow.
+    case nativeDirectCallDiagnosticStatus(NativeDirectCallDiagnosticStatusRequest)
+    /// Reports redacted native direct-call diagnostic state.
+    case nativeDirectCallDiagnosticStatusResult(NativeDirectCallDiagnosticStatusResult)
+
+    struct NativeDirectCallDiagnosticCommandRequest: Codable, Equatable {
+        let command: NativeDirectCallDiagnosticCommand
+        let correlationID: String?
+
+        init(command: NativeDirectCallDiagnosticCommand, correlationID: String? = nil) {
+            self.command = command
+            self.correlationID = UITestsSignalling.sanitizedIdentifier(correlationID)
+        }
+    }
 
     enum NativeDirectCallDiagnosticCommand: String, Codable, Equatable {
         case prepare
@@ -57,7 +71,25 @@ enum UITestsSignal: Codable, Equatable {
         case reset
     }
 
-    enum NativeDirectCallDiagnosticResult: Codable, Equatable {
+    struct NativeDirectCallDiagnosticResult: Codable, Equatable {
+        let correlationID: String?
+        let outcome: NativeDirectCallDiagnosticOutcome
+
+        init(correlationID: String? = nil, outcome: NativeDirectCallDiagnosticOutcome) {
+            self.correlationID = UITestsSignalling.sanitizedIdentifier(correlationID)
+            self.outcome = outcome
+        }
+
+        static func success(_ success: NativeDirectCallDiagnosticSuccess, correlationID: String? = nil) -> Self {
+            .init(correlationID: correlationID, outcome: .success(success))
+        }
+
+        static func failure(_ failure: NativeDirectCallDiagnosticFailure, correlationID: String? = nil) -> Self {
+            .init(correlationID: correlationID, outcome: .failure(failure))
+        }
+    }
+
+    enum NativeDirectCallDiagnosticOutcome: Codable, Equatable {
         case success(NativeDirectCallDiagnosticSuccess)
         case failure(NativeDirectCallDiagnosticFailure)
     }
@@ -85,13 +117,57 @@ enum UITestsSignal: Codable, Equatable {
         case engineFailure
         case unknown
     }
+
+    struct NativeDirectCallDiagnosticStatusRequest: Codable, Equatable {
+        let correlationID: String?
+
+        init(correlationID: String? = nil) {
+            self.correlationID = UITestsSignalling.sanitizedIdentifier(correlationID)
+        }
+    }
+
+    struct NativeDirectCallDiagnosticStatusResult: Codable, Equatable {
+        let correlationID: String?
+        let status: NativeDirectCallDiagnosticStatus
+
+        init(correlationID: String? = nil, status: NativeDirectCallDiagnosticStatus) {
+            self.correlationID = UITestsSignalling.sanitizedIdentifier(correlationID)
+            self.status = status
+        }
+    }
+
+    struct NativeDirectCallDiagnosticStatus: Codable, Equatable {
+        let state: NativeDirectCallDiagnosticStatusState
+        let listenerStarted: Bool
+        let hasActiveSession: Bool
+    }
+
+    enum NativeDirectCallDiagnosticStatusState: String, Codable, Equatable {
+        case unavailable
+        case disabled
+        case idle
+        case ringing
+        case connecting
+        case active
+        case terminal
+        case resetting
+        case failed
+    }
     #endif
 }
 
 #if DEBUG
-extension UITestsSignal.NativeDirectCallDiagnosticCommand {
+extension UITestsSignal.NativeDirectCallDiagnosticCommandRequest {
+    static let prepare = Self(command: .prepare)
+    static let startListener = Self(command: .startListener)
+    static let startOutgoingAudioCall = Self(command: .startOutgoingAudioCall)
+    static let acceptIncomingCall = Self(command: .acceptIncomingCall)
+    static let hangup = Self(command: .hangup)
+    static let stop = Self(command: .stop)
+    static let reset = Self(command: .reset)
+
     var roomFlowCommand: NativeDirectCallRoomDiagnosticCommand {
-        switch self {
+        switch command {
         case .prepare:
             .prepare
         case .startListener:
@@ -111,24 +187,64 @@ extension UITestsSignal.NativeDirectCallDiagnosticCommand {
 }
 
 extension UITestsSignal.NativeDirectCallDiagnosticResult {
-    init(_ result: NativeDirectCallRoomDiagnosticCommandResult) {
+    init(correlationID: String? = nil, _ result: NativeDirectCallRoomDiagnosticCommandResult) {
         switch result {
         case .prepared:
-            self = .success(.prepared)
+            self = .success(.prepared, correlationID: correlationID)
         case .listenerStarted:
-            self = .success(.listenerStarted)
+            self = .success(.listenerStarted, correlationID: correlationID)
         case .outgoingStarted:
-            self = .success(.outgoingStarted)
+            self = .success(.outgoingStarted, correlationID: correlationID)
         case .incomingAccepted:
-            self = .success(.incomingAccepted)
+            self = .success(.incomingAccepted, correlationID: correlationID)
         case .hungUp:
-            self = .success(.hungUp)
+            self = .success(.hungUp, correlationID: correlationID)
         case .stopped:
-            self = .success(.stopped)
+            self = .success(.stopped, correlationID: correlationID)
         case .reset:
-            self = .success(.reset)
+            self = .success(.reset, correlationID: correlationID)
         case .failed(let error):
-            self = .failure(.init(error))
+            self = .failure(.init(error), correlationID: correlationID)
+        }
+    }
+}
+
+extension UITestsSignal.NativeDirectCallDiagnosticStatusResult {
+    init(correlationID: String? = nil, _ status: NativeDirectCallRoomDiagnosticStatus) {
+        self.init(correlationID: correlationID,
+                  status: .init(status))
+    }
+}
+
+extension UITestsSignal.NativeDirectCallDiagnosticStatus {
+    init(_ status: NativeDirectCallRoomDiagnosticStatus) {
+        self.init(state: .init(status.state),
+                  listenerStarted: status.listenerStarted,
+                  hasActiveSession: status.hasActiveSession)
+    }
+}
+
+extension UITestsSignal.NativeDirectCallDiagnosticStatusState {
+    init(_ state: NativeDirectCallRoomDiagnosticStatusState) {
+        switch state {
+        case .unavailable:
+            self = .unavailable
+        case .disabled:
+            self = .disabled
+        case .idle:
+            self = .idle
+        case .ringing:
+            self = .ringing
+        case .connecting:
+            self = .connecting
+        case .active:
+            self = .active
+        case .terminal:
+            self = .terminal
+        case .resetting:
+            self = .resetting
+        case .failed:
+            self = .failed
         }
     }
 }
@@ -194,6 +310,33 @@ enum UITestsSignalError: String, LocalizedError {
 }
 
 enum UITestsSignalling {
+    static let channelEnvironmentKey = "UI_TESTS_SIGNALLING_CHANNEL"
+
+    static func sanitizedIdentifier(_ value: String?) -> String? {
+        guard let value else {
+            return nil
+        }
+
+        var result = ""
+        var previousCharacterWasSeparator = false
+        for character in value {
+            guard result.count < 48 else {
+                break
+            }
+
+            if character.isLetter || character.isNumber || character == "_" || character == "-" {
+                result.append(character)
+                previousCharacterWasSeparator = false
+            } else if !previousCharacterWasSeparator {
+                result.append("-")
+                previousCharacterWasSeparator = true
+            }
+        }
+
+        let sanitized = result.trimmingCharacters(in: CharacterSet(charactersIn: "-_"))
+        return sanitized.isEmpty ? nil : sanitized
+    }
+
     /// A two-way file-based signalling client that can be used to signal between the app and the UI tests runner.
     /// The connection should be created as follows:
     /// - Create a `Client` in `tests` mode in your UI tests before launching the app. It will start listening for signals.
@@ -203,16 +346,22 @@ enum UITestsSignalling {
     class Client {
         /// The file watcher responsible for receiving signals.
         private let fileWatcher: FileWatcher.Local
+        private let fileURL: URL
         
         /// The file name used for the connection.
         ///
         /// The device name is included to allow UI tests to run on multiple devices simultaneously.
         /// When using parallel execution, each execution will spawn a simulator clone with its own unique name.
-        private let fileURL = {
+        static func fileURL(deviceName: String = UIDevice.current.name,
+                            environment: [String: String] = ProcessInfo.processInfo.environment) -> URL {
             let directory = URL(filePath: "/Users/Shared")
-            let deviceName = (UIDevice.current.name).replacing(" ", with: "-")
-            return directory.appending(component: "UITestsSignalling-\(deviceName)")
-        }()
+            let sanitizedDeviceName = deviceName.replacing(" ", with: "-")
+            var fileName = "UITestsSignalling-\(sanitizedDeviceName)"
+            if let channel = UITestsSignalling.sanitizedIdentifier(environment[UITestsSignalling.channelEnvironmentKey]) {
+                fileName += "-\(channel)"
+            }
+            return directory.appending(component: fileName)
+        }
         
         /// A mode that defines the behaviour of the client.
         enum Mode: Codable { case app, tests }
@@ -226,7 +375,10 @@ enum UITestsSignalling {
         private(set) var isConnected = false
         
         /// Creates a new signalling `Client`.
-        init(mode: Mode) throws {
+        init(mode: Mode,
+             deviceName: String = UIDevice.current.name,
+             environment: [String: String] = ProcessInfo.processInfo.environment) throws {
+            fileURL = Self.fileURL(deviceName: deviceName, environment: environment)
             fileWatcher = .init(path: fileURL.path())
             self.mode = mode
             
