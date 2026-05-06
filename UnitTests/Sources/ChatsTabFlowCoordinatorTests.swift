@@ -18,6 +18,7 @@ struct ChatsTabFlowCoordinatorTests {
     var chatsTabFlowCoordinator: ChatsTabFlowCoordinator!
     var splitCoordinator: NavigationSplitCoordinator!
     var notificationManager: NotificationManagerMock!
+    var flowParameters: CommonFlowParameters!
     let stateMachineFactory = PublishedStateMachineFactory()
     
     var cancellables = Set<AnyCancellable>()
@@ -38,23 +39,21 @@ struct ChatsTabFlowCoordinatorTests {
         
         notificationManager = NotificationManagerMock()
         
-        let flowParameters = CommonFlowParameters(userSession: UserSessionMock(.init(clientProxy: clientProxy)),
-                                                  bugReportService: BugReportServiceMock(.init()),
-                                                  elementCallService: ElementCallServiceMock(.init()),
-                                                  directCallEngine: DirectCallEngine(ownUserID: "hi@bob") { _ in nil },
-                                                  timelineControllerFactory: timelineControllerFactory,
-                                                  emojiProvider: EmojiProvider(appSettings: ServiceLocator.shared.settings),
-                                                  linkMetadataProvider: LinkMetadataProvider(),
-                                                  appMediator: AppMediatorMock.default,
-                                                  appSettings: ServiceLocator.shared.settings,
-                                                  appHooks: AppHooks(),
-                                                  analytics: ServiceLocator.shared.analytics,
-                                                  userIndicatorController: UserIndicatorControllerMock(),
-                                                  notificationManager: notificationManager,
-                                                  stateMachineFactory: stateMachineFactory)
-        chatsTabFlowCoordinator = ChatsTabFlowCoordinator(isNewLogin: false,
-                                                          navigationSplitCoordinator: splitCoordinator,
-                                                          flowParameters: flowParameters)
+        flowParameters = CommonFlowParameters(userSession: UserSessionMock(.init(clientProxy: clientProxy)),
+                                              bugReportService: BugReportServiceMock(.init()),
+                                              elementCallService: ElementCallServiceMock(.init()),
+                                              directCallEngine: DirectCallEngine(ownUserID: "hi@bob") { _ in nil },
+                                              timelineControllerFactory: timelineControllerFactory,
+                                              emojiProvider: EmojiProvider(appSettings: ServiceLocator.shared.settings),
+                                              linkMetadataProvider: LinkMetadataProvider(),
+                                              appMediator: AppMediatorMock.default,
+                                              appSettings: ServiceLocator.shared.settings,
+                                              appHooks: AppHooks(),
+                                              analytics: ServiceLocator.shared.analytics,
+                                              userIndicatorController: UserIndicatorControllerMock(),
+                                              notificationManager: notificationManager,
+                                              stateMachineFactory: stateMachineFactory)
+        chatsTabFlowCoordinator = makeChatsTabFlowCoordinator()
         
         let deferred = deferFulfillment(stateMachineFactory.chatsTabFlowStatePublisher) { $0 == .roomList(detailState: nil) }
         chatsTabFlowCoordinator.start()
@@ -286,8 +285,65 @@ struct ChatsTabFlowCoordinatorTests {
         #expect(splitCoordinator.sheetCoordinator == nil, "The media upload sheet shouldn't be shown when sharing text.")
     }
     
+    @Test
+    mutating func nativeDirectCallDiagnosticCommandFailsClosedWhenRuntimeGateIsDisabled() async throws {
+        chatsTabFlowCoordinator = makeChatsTabFlowCoordinator(nativeDirectCallDiagnosticRuntimeGate: Self.disabledDiagnosticRuntimeGate)
+        chatsTabFlowCoordinator.start()
+
+        try await process(route: .room(roomID: "1", via: []), expectedState: .roomList(detailState: .room(roomID: "1")))
+
+        let result = await chatsTabFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.prepare)
+        #expect(result == .failed(.unavailable))
+    }
+
+    @Test
+    mutating func nativeDirectCallDiagnosticCommandFailsClosedWithoutActiveRoom() async {
+        chatsTabFlowCoordinator = makeChatsTabFlowCoordinator(nativeDirectCallDiagnosticRuntimeGate: Self.enabledDiagnosticRuntimeGate)
+        chatsTabFlowCoordinator.start()
+
+        let result = await chatsTabFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.prepare)
+        #expect(result == .failed(.unavailable))
+    }
+
+    @Test
+    mutating func nativeDirectCallDiagnosticCommandForwardsToActiveRoomWhenEnabled() async throws {
+        let owner = ChatsTabNativeDirectCallRoomFlowOwnerSpy()
+        let session = directCallSession()
+        owner.outgoingResult = .success(session)
+        chatsTabFlowCoordinator = makeChatsTabFlowCoordinator(nativeDirectCallDiagnosticRuntimeGate: Self.enabledDiagnosticRuntimeGate,
+                                                              nativeDirectCallDiagnosticCommandConfiguration: .init(isEnabled: true)) { _ in owner }
+        chatsTabFlowCoordinator.start()
+
+        try await process(route: .room(roomID: "1", via: []), expectedState: .roomList(detailState: .room(roomID: "1")))
+
+        #expect(await chatsTabFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.startOutgoingAudioCall) == .outgoingStarted(.init(session)))
+        #expect(owner.outgoingCount == 1)
+        #expect(owner.startCount == 0)
+    }
+
     // MARK: - Private
     
+    private static func disabledDiagnosticRuntimeGate() -> Bool {
+        false
+    }
+
+    private static func enabledDiagnosticRuntimeGate() -> Bool {
+        true
+    }
+
+    private func makeChatsTabFlowCoordinator(nativeDirectCallDiagnosticRuntimeGate: @escaping () -> Bool = { ProcessInfo.isRunningUITests },
+                                             nativeDirectCallDiagnosticCommandConfiguration: NativeDirectCallRoomDeveloperCommandConfiguration = .init(),
+                                             nativeDirectCallRoomFlowOwnerFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning = { roomProxy in
+                                                 NativeDirectCallRoomFlowOwner(roomProxy: roomProxy)
+                                             }) -> ChatsTabFlowCoordinator {
+        ChatsTabFlowCoordinator(isNewLogin: false,
+                                navigationSplitCoordinator: splitCoordinator,
+                                flowParameters: flowParameters,
+                                nativeDirectCallDiagnosticRuntimeGate: nativeDirectCallDiagnosticRuntimeGate,
+                                nativeDirectCallDiagnosticCommandConfiguration: nativeDirectCallDiagnosticCommandConfiguration,
+                                nativeDirectCallRoomFlowOwnerFactory: nativeDirectCallRoomFlowOwnerFactory)
+    }
+
     private mutating func process(route: AppRoute, expectedState: ChatsTabFlowCoordinatorStateMachine.State) async throws {
         // Sometimes the state machine's state changes before the coordinators have updated the stack.
         let delayedPublisher = stateMachineFactory.chatsTabFlowStatePublisher.delay(for: .milliseconds(100), scheduler: DispatchQueue.main)
@@ -296,4 +352,55 @@ struct ChatsTabFlowCoordinatorTests {
         chatsTabFlowCoordinator.handleAppRoute(route, animated: true)
         try await deferred.fulfill()
     }
+}
+
+@MainActor
+private final class ChatsTabNativeDirectCallRoomFlowOwnerSpy: NativeDirectCallRoomFlowOwning {
+    private(set) var outgoingCount = 0
+    private(set) var startCount = 0
+
+    var isListenerStarted = false
+    var activeSession: DirectCallSession?
+    var outgoingResult: Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> = .failure(.disabled)
+
+    func prepare() -> Result<NativeDirectCallComposition, NativeDirectCallRoomFlowOwnerError> {
+        .failure(.disabled)
+    }
+
+    func startListener() async -> Result<NativeDirectCallComposition, NativeDirectCallRoomFlowOwnerError> {
+        startCount += 1
+        return .failure(.disabled)
+    }
+
+    func startOutgoingAudioCall() async -> Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> {
+        outgoingCount += 1
+        return outgoingResult
+    }
+
+    func acceptIncomingCall() async -> Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> {
+        .failure(.disabled)
+    }
+
+    func hangup() async -> Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> {
+        .failure(.disabled)
+    }
+
+    func stop() { }
+
+    func beginReset() { }
+
+    func reset() async { }
+}
+
+private func directCallSession() -> DirectCallSession {
+    .init(callID: "call",
+          roomID: "1",
+          peerUserID: "@peer:example.com",
+          direction: .outgoing,
+          intent: .audio,
+          encryptionMode: .e2eeRequired,
+          startedAt: .now,
+          updatedAt: .now,
+          state: .activeAudio,
+          encryptionState: .ready)
 }

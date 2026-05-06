@@ -48,6 +48,7 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
     
     // periphery:ignore - retaining purpose
     private var settingsFlowCoordinator: SettingsFlowCoordinator?
+    private let nativeDirectCallDiagnosticRuntimeGate: () -> Bool
     
     enum State: StateType {
         /// The state machine hasn't started.
@@ -81,10 +82,16 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
     init(isNewLogin: Bool,
          navigationRootCoordinator: NavigationRootCoordinator,
          appLockService: AppLockServiceProtocol,
-         flowParameters: CommonFlowParameters) {
+         flowParameters: CommonFlowParameters,
+         nativeDirectCallDiagnosticRuntimeGate: @escaping () -> Bool = { ProcessInfo.isRunningUITests },
+         nativeDirectCallDiagnosticCommandConfiguration: NativeDirectCallRoomDeveloperCommandConfiguration = .init(),
+         nativeDirectCallRoomFlowOwnerFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning = { roomProxy in
+             NativeDirectCallRoomFlowOwner(roomProxy: roomProxy)
+         }) {
         self.navigationRootCoordinator = navigationRootCoordinator
         self.appLockService = appLockService
         self.flowParameters = flowParameters
+        self.nativeDirectCallDiagnosticRuntimeGate = nativeDirectCallDiagnosticRuntimeGate
         
         navigationTabCoordinator = NavigationTabCoordinator()
         navigationRootCoordinator.setRootCoordinator(navigationTabCoordinator)
@@ -92,7 +99,10 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
         let chatsSplitCoordinator = NavigationSplitCoordinator(placeholderCoordinator: PlaceholderScreenCoordinator(hideBrandChrome: flowParameters.appSettings.hideBrandChrome))
         chatsTabFlowCoordinator = ChatsTabFlowCoordinator(isNewLogin: isNewLogin,
                                                           navigationSplitCoordinator: chatsSplitCoordinator,
-                                                          flowParameters: flowParameters)
+                                                          flowParameters: flowParameters,
+                                                          nativeDirectCallDiagnosticRuntimeGate: nativeDirectCallDiagnosticRuntimeGate,
+                                                          nativeDirectCallDiagnosticCommandConfiguration: nativeDirectCallDiagnosticCommandConfiguration,
+                                                          nativeDirectCallRoomFlowOwnerFactory: nativeDirectCallRoomFlowOwnerFactory)
         chatsTabDetails = .init(tag: HomeTab.chats, title: L10n.screenHomeTabChats, icon: \.chat, selectedIcon: \.chatSolid)
         chatsTabDetails.navigationSplitCoordinator = chatsSplitCoordinator
 
@@ -203,6 +213,17 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
         return chatsTabFlowCoordinator.isDisplayingRoomScreen(withRoomID: roomID)
     }
     
+    #if DEBUG
+    func handleNativeDirectCallDiagnosticCommand(_ command: NativeDirectCallRoomDiagnosticCommand) async -> NativeDirectCallRoomDiagnosticCommandResult {
+        guard nativeDirectCallDiagnosticRuntimeGate(),
+              navigationTabCoordinator.selectedTab == .chats else {
+            return .failed(.unavailable)
+        }
+
+        return await chatsTabFlowCoordinator.handleNativeDirectCallDiagnosticCommand(command)
+    }
+    #endif
+
     // MARK: - Private
     
     private func configureStateMachine() {

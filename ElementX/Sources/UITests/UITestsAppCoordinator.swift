@@ -609,26 +609,44 @@ class MockScreen: Identifiable {
             let appMediator = AppMediatorMock.default
             appMediator.underlyingWindowManager = windowManager
 
+            let flowParameters = CommonFlowParameters(userSession: UserSessionMock(.init(clientProxy: clientProxy)),
+                                                      bugReportService: BugReportServiceMock(.init()),
+                                                      elementCallService: ElementCallServiceMock(.init()),
+                                                      directCallEngine: DirectCallEngine(ownUserID: clientProxy.userID) { _ in nil },
+                                                      timelineControllerFactory: TimelineControllerFactoryMock(.init()),
+                                                      emojiProvider: EmojiProvider(appSettings: appSettings),
+                                                      linkMetadataProvider: LinkMetadataProvider(),
+                                                      appMediator: appMediator,
+                                                      appSettings: appSettings,
+                                                      appHooks: AppHooks(),
+                                                      analytics: ServiceLocator.shared.analytics,
+                                                      userIndicatorController: UserIndicatorControllerMock(),
+                                                      notificationManager: NotificationManagerMock(),
+                                                      stateMachineFactory: StateMachineFactory())
+            #if DEBUG
+            let commandsEnabled = ProcessInfo.isNativeDirectCallDiagnosticUITestCommandsEnabled
             let flowCoordinator = UserSessionFlowCoordinator(isNewLogin: false,
                                                              navigationRootCoordinator: navigationRootCoordinator,
                                                              appLockService: AppLockService(keychainController: KeychainControllerMock(),
                                                                                             appSettings: ServiceLocator.shared.settings),
-                                                             flowParameters: CommonFlowParameters(userSession: UserSessionMock(.init(clientProxy: clientProxy)),
-                                                                                                  bugReportService: BugReportServiceMock(.init()),
-                                                                                                  elementCallService: ElementCallServiceMock(.init()),
-                                                                                                  directCallEngine: DirectCallEngine(ownUserID: clientProxy.userID) { _ in nil },
-                                                                                                  timelineControllerFactory: TimelineControllerFactoryMock(.init()),
-                                                                                                  emojiProvider: EmojiProvider(appSettings: appSettings),
-                                                                                                  linkMetadataProvider: LinkMetadataProvider(),
-                                                                                                  appMediator: appMediator,
-                                                                                                  appSettings: appSettings,
-                                                                                                  appHooks: AppHooks(),
-                                                                                                  analytics: ServiceLocator.shared.analytics,
-                                                                                                  userIndicatorController: UserIndicatorControllerMock(),
-                                                                                                  notificationManager: NotificationManagerMock(),
-                                                                                                  stateMachineFactory: StateMachineFactory()))
+                                                             flowParameters: flowParameters,
+                                                             nativeDirectCallDiagnosticCommandConfiguration: .init(isEnabled: commandsEnabled)) { roomProxy in
+                NativeDirectCallRoomFlowOwner(roomProxy: roomProxy,
+                                              triggerConfiguration: .init(isEnabled: commandsEnabled),
+                                              compositionConfiguration: .init(isEnabled: commandsEnabled))
+            }
+            #else
+            let flowCoordinator = UserSessionFlowCoordinator(isNewLogin: false,
+                                                             navigationRootCoordinator: navigationRootCoordinator,
+                                                             appLockService: AppLockService(keychainController: KeychainControllerMock(),
+                                                                                            appSettings: ServiceLocator.shared.settings),
+                                                             flowParameters: flowParameters)
+            #endif
 
             flowCoordinator.start()
+            #if DEBUG
+            configureNativeDirectCallDiagnosticHarnessIfNeeded(for: flowCoordinator)
+            #endif
             
             retainedState.append(flowCoordinator)
             
@@ -830,4 +848,38 @@ class MockScreen: Identifiable {
             return nil
         }
     }()
+
+    #if DEBUG
+    private func configureNativeDirectCallDiagnosticHarnessIfNeeded(for flowCoordinator: UserSessionFlowCoordinator) {
+        guard ProcessInfo.isNativeDirectCallDiagnosticUITestHarnessEnabled else {
+            return
+        }
+
+        do {
+            let client = try UITestsSignalling.Client(mode: .app)
+            client.signals
+                .sink { [weak flowCoordinator, weak client] signal in
+                    guard case .nativeDirectCallDiagnostic(let command) = signal else {
+                        return
+                    }
+
+                    Task { @MainActor in
+                        let commandResult: NativeDirectCallRoomDiagnosticCommandResult
+                        if let flowCoordinator {
+                            commandResult = await flowCoordinator.handleNativeDirectCallDiagnosticCommand(command.roomFlowCommand)
+                        } else {
+                            commandResult = .failed(.unavailable)
+                        }
+
+                        let result = UITestsSignal.NativeDirectCallDiagnosticResult(commandResult)
+                        try? client?.send(.nativeDirectCallDiagnosticResult(result))
+                    }
+                }
+                .store(in: &cancellables)
+            self.client = client
+        } catch {
+            fatalError("Failure setting up native direct-call diagnostics signalling: \(error)")
+        }
+    }
+    #endif
 }

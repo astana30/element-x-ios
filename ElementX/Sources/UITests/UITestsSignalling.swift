@@ -40,7 +40,147 @@ enum UITestsSignal: Codable, Equatable {
         /// Tell the test runner that there are no more previews.
         case noMorePreviews
     }
+
+    #if DEBUG
+    /// Sends a redacted native direct-call diagnostic command to the active room flow.
+    case nativeDirectCallDiagnostic(NativeDirectCallDiagnosticCommand)
+    /// Reports a redacted native direct-call diagnostic command result.
+    case nativeDirectCallDiagnosticResult(NativeDirectCallDiagnosticResult)
+
+    enum NativeDirectCallDiagnosticCommand: String, Codable, Equatable {
+        case prepare
+        case startListener
+        case startOutgoingAudioCall
+        case acceptIncomingCall
+        case hangup
+        case stop
+        case reset
+    }
+
+    enum NativeDirectCallDiagnosticResult: Codable, Equatable {
+        case success(NativeDirectCallDiagnosticSuccess)
+        case failure(NativeDirectCallDiagnosticFailure)
+    }
+
+    enum NativeDirectCallDiagnosticSuccess: String, Codable, Equatable {
+        case prepared
+        case listenerStarted
+        case outgoingStarted
+        case incomingAccepted
+        case hungUp
+        case stopped
+        case reset
+    }
+
+    enum NativeDirectCallDiagnosticFailure: String, Codable, Equatable {
+        case disabled
+        case unavailable
+        case ownerDisabled
+        case missingRoomControllerProvider
+        case resetting
+        case triggerDisabled
+        case compositionUnavailable
+        case noIncomingCall
+        case noActiveCall
+        case engineFailure
+        case unknown
+    }
+    #endif
 }
+
+#if DEBUG
+extension UITestsSignal.NativeDirectCallDiagnosticCommand {
+    var roomFlowCommand: NativeDirectCallRoomDiagnosticCommand {
+        switch self {
+        case .prepare:
+            .prepare
+        case .startListener:
+            .startListener
+        case .startOutgoingAudioCall:
+            .startOutgoingAudioCall
+        case .acceptIncomingCall:
+            .acceptIncomingCall
+        case .hangup:
+            .hangup
+        case .stop:
+            .stop
+        case .reset:
+            .reset
+        }
+    }
+}
+
+extension UITestsSignal.NativeDirectCallDiagnosticResult {
+    init(_ result: NativeDirectCallRoomDiagnosticCommandResult) {
+        switch result {
+        case .prepared:
+            self = .success(.prepared)
+        case .listenerStarted:
+            self = .success(.listenerStarted)
+        case .outgoingStarted:
+            self = .success(.outgoingStarted)
+        case .incomingAccepted:
+            self = .success(.incomingAccepted)
+        case .hungUp:
+            self = .success(.hungUp)
+        case .stopped:
+            self = .success(.stopped)
+        case .reset:
+            self = .success(.reset)
+        case .failed(let error):
+            self = .failure(.init(error))
+        }
+    }
+}
+
+extension UITestsSignal.NativeDirectCallDiagnosticFailure {
+    init(_ error: NativeDirectCallRoomDeveloperCommandError) {
+        switch error {
+        case .disabled:
+            self = .disabled
+        case .unavailable:
+            self = .unavailable
+        case .owner(let ownerError):
+            self = .init(ownerError)
+        }
+    }
+
+    init(_ error: NativeDirectCallRoomFlowOwnerError) {
+        switch error {
+        case .disabled:
+            self = .ownerDisabled
+        case .missingRoomControllerProvider:
+            self = .missingRoomControllerProvider
+        case .resetting:
+            self = .resetting
+        case .trigger(let triggerError):
+            self = .init(triggerError)
+        }
+    }
+
+    init(_ error: NativeDirectCallDeveloperRoomTriggerError) {
+        switch error {
+        case .disabled:
+            self = .triggerDisabled
+        case .control(let controlError):
+            self = .init(controlError)
+        }
+    }
+
+    init(_ error: NativeDirectCallRoomControlError) {
+        switch error {
+        case .composition:
+            self = .compositionUnavailable
+        case .noIncomingCall:
+            self = .noIncomingCall
+        case .noActiveCall:
+            self = .noActiveCall
+        case .engine:
+            self = .engineFailure
+        }
+    }
+}
+#endif
 
 enum UITestsSignalError: String, LocalizedError {
     /// The app client failed to start as the tests client isn't ready.

@@ -51,6 +51,9 @@ class ChatsTabFlowCoordinator: FlowCoordinatorProtocol {
     private let sidebarNavigationStackCoordinator: NavigationStackCoordinator
 
     private let selectedRoomSubject = CurrentValueSubject<String?, Never>(nil)
+    private let nativeDirectCallDiagnosticRuntimeGate: () -> Bool
+    private let nativeDirectCallDiagnosticCommandConfiguration: NativeDirectCallRoomDeveloperCommandConfiguration
+    private let nativeDirectCallRoomFlowOwnerFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning
     
     private let actionsSubject: PassthroughSubject<ChatsTabFlowCoordinatorAction, Never> = .init()
     var actionsPublisher: AnyPublisher<ChatsTabFlowCoordinatorAction, Never> {
@@ -59,10 +62,18 @@ class ChatsTabFlowCoordinator: FlowCoordinatorProtocol {
     
     init(isNewLogin: Bool,
          navigationSplitCoordinator: NavigationSplitCoordinator,
-         flowParameters: CommonFlowParameters) {
+         flowParameters: CommonFlowParameters,
+         nativeDirectCallDiagnosticRuntimeGate: @escaping () -> Bool = { ProcessInfo.isRunningUITests },
+         nativeDirectCallDiagnosticCommandConfiguration: NativeDirectCallRoomDeveloperCommandConfiguration = .init(),
+         nativeDirectCallRoomFlowOwnerFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning = { roomProxy in
+             NativeDirectCallRoomFlowOwner(roomProxy: roomProxy)
+         }) {
         stateMachine = flowParameters.stateMachineFactory.makeChatsTabFlowStateMachine()
         self.navigationSplitCoordinator = navigationSplitCoordinator
         self.flowParameters = flowParameters
+        self.nativeDirectCallDiagnosticRuntimeGate = nativeDirectCallDiagnosticRuntimeGate
+        self.nativeDirectCallDiagnosticCommandConfiguration = nativeDirectCallDiagnosticCommandConfiguration
+        self.nativeDirectCallRoomFlowOwnerFactory = nativeDirectCallRoomFlowOwnerFactory
         
         sidebarNavigationStackCoordinator = NavigationStackCoordinator(navigationSplitCoordinator: navigationSplitCoordinator)
         navigationSplitCoordinator.setSidebarCoordinator(sidebarNavigationStackCoordinator)
@@ -86,6 +97,20 @@ class ChatsTabFlowCoordinator: FlowCoordinatorProtocol {
                                   userInfo: .init(animated: animated))
     }
     
+    #if DEBUG
+    func handleNativeDirectCallDiagnosticCommand(_ command: NativeDirectCallRoomDiagnosticCommand) async -> NativeDirectCallRoomDiagnosticCommandResult {
+        guard nativeDirectCallDiagnosticRuntimeGate() else {
+            return .failed(.unavailable)
+        }
+
+        guard let roomFlowCoordinator else {
+            return .failed(.unavailable)
+        }
+
+        return await roomFlowCoordinator.handleNativeDirectCallDiagnosticCommand(command)
+    }
+    #endif
+
     // MARK: - FlowCoordinatorProtocol
     
     func handleAppRoute(_ appRoute: AppRoute, animated: Bool) {
@@ -526,7 +551,11 @@ class ChatsTabFlowCoordinator: FlowCoordinatorProtocol {
         let coordinator = RoomFlowCoordinator(roomID: roomID,
                                               isChildFlow: false,
                                               navigationStackCoordinator: navigationStackCoordinator,
-                                              flowParameters: flowParameters)
+                                              flowParameters: flowParameters,
+                                              nativeDirectCallRoomFlowOwnerFactory: nativeDirectCallRoomFlowOwnerFactory)
+        #if DEBUG
+        coordinator.nativeDirectCallDiagnosticCommandConfiguration = nativeDirectCallDiagnosticCommandConfiguration
+        #endif
         
         coordinator.actions.sink { [weak self] action in
             guard let self else { return }

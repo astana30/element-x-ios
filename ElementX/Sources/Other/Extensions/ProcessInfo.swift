@@ -78,6 +78,22 @@ extension ProcessInfo {
         #endif
     }
     
+    static var isNativeDirectCallDiagnosticUITestHarnessEnabled: Bool {
+        #if DEBUG
+        isRunningUITests && processInfo.environment["UI_TESTS_NATIVE_DIRECT_CALL_DIAGNOSTICS"] == "1"
+        #else
+        false
+        #endif
+    }
+
+    static var isNativeDirectCallDiagnosticUITestCommandsEnabled: Bool {
+        #if DEBUG
+        isNativeDirectCallDiagnosticUITestHarnessEnabled && processInfo.environment["UI_TESTS_NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED"] == "1"
+        #else
+        false
+        #endif
+    }
+
     static var isXcodePreview: Bool {
         #if DEBUG
         processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"

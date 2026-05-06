@@ -753,6 +753,52 @@ final class RoomFlowCoordinatorTests {
         #expect(controller.resetCount == 1)
     }
     
+    @Test
+    func nativeDirectCallUITestDiagnosticSignalEncodesRedactedCommandAndResult() throws {
+        let commandSignal = UITestsSignal.nativeDirectCallDiagnostic(.startOutgoingAudioCall)
+        let resultSignal = UITestsSignal.nativeDirectCallDiagnosticResult(.success(.outgoingStarted))
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+
+        let encodedCommand = try #require(String(data: encoder.encode(commandSignal), encoding: .utf8))
+        let encodedResult = try #require(String(data: encoder.encode(resultSignal), encoding: .utf8))
+
+        #expect(try JSONDecoder().decode(UITestsSignal.self, from: Data(encodedCommand.utf8)) == commandSignal)
+        #expect(try JSONDecoder().decode(UITestsSignal.self, from: Data(encodedResult.utf8)) == resultSignal)
+        #expect(encodedCommand.contains("startOutgoingAudioCall"))
+        #expect(encodedResult.contains("outgoingStarted"))
+
+        let forbiddenFragments = [
+            "raw " + "JSON",
+            "encrypted_" + "payload",
+            "to" + "ken",
+            "j" + "wt",
+            "raw " + "key",
+            "livekit.example.com"
+        ]
+        let combinedSignals = encodedCommand + encodedResult
+        for fragment in forbiddenFragments {
+            #expect(combinedSignals.localizedCaseInsensitiveContains(fragment) == false)
+        }
+    }
+
+    @Test
+    func nativeDirectCallUITestDiagnosticSignalMapsToRedactedResult() {
+        #expect(UITestsSignal.NativeDirectCallDiagnosticCommand.prepare.roomFlowCommand == .prepare)
+        #expect(UITestsSignal.NativeDirectCallDiagnosticCommand.startListener.roomFlowCommand == .startListener)
+        #expect(UITestsSignal.NativeDirectCallDiagnosticCommand.startOutgoingAudioCall.roomFlowCommand == .startOutgoingAudioCall)
+        #expect(UITestsSignal.NativeDirectCallDiagnosticCommand.acceptIncomingCall.roomFlowCommand == .acceptIncomingCall)
+        #expect(UITestsSignal.NativeDirectCallDiagnosticCommand.hangup.roomFlowCommand == .hangup)
+        #expect(UITestsSignal.NativeDirectCallDiagnosticCommand.stop.roomFlowCommand == .stop)
+        #expect(UITestsSignal.NativeDirectCallDiagnosticCommand.reset.roomFlowCommand == .reset)
+        #expect(UITestsSignal.NativeDirectCallDiagnosticResult(.outgoingStarted(.init(directCallSession()))) == .success(.outgoingStarted))
+        #expect(UITestsSignal.NativeDirectCallDiagnosticResult(.failed(.disabled)) == .failure(.disabled))
+        #expect(UITestsSignal.NativeDirectCallDiagnosticResult(.failed(.unavailable)) == .failure(.unavailable))
+        #expect(UITestsSignal.NativeDirectCallDiagnosticResult(.failed(.owner(.resetting))) == .failure(.resetting))
+        #expect(UITestsSignal.NativeDirectCallDiagnosticResult(.failed(.owner(.trigger(.disabled)))) == .failure(.triggerDisabled))
+        #expect(UITestsSignal.NativeDirectCallDiagnosticResult(.failed(.owner(.trigger(.control(.noActiveCall))))) == .failure(.noActiveCall))
+    }
+
     // MARK: - Spaces
     
     @Test
