@@ -884,6 +884,14 @@ protocol JoinedRoomNativeDirectCallCompositionBoundaryProtocol {
     func makeNativeDirectCallTimelineSignalListener() -> DirectCallMatrixTimelineSignalListening?
 }
 
+@MainActor
+protocol NativeDirectCallRoomControllerProviding: AnyObject {
+    func makeNativeDirectCallRoomController(configuration: NativeDirectCallCompositionConfiguration,
+                                            mediaEngineFactory: DirectCallMediaEngineFactoryProtocol?,
+                                            encryptionService: DirectCallEncryptionServiceProtocol?,
+                                            now: @escaping () -> Date) -> NativeDirectCallRoomControlling
+}
+
 enum JoinedRoomNativeDirectCallCompositionError: Error, Equatable {
     case composition(NativeDirectCallCompositionError)
     case unknownRoomMetadata
@@ -1254,7 +1262,7 @@ final class JoinedRoomNativeDirectCallCompositionFactory {
     }
 }
 
-extension JoinedRoomProxy: JoinedRoomNativeDirectCallCompositionBoundaryProtocol {
+extension JoinedRoomProxy: JoinedRoomNativeDirectCallCompositionBoundaryProtocol, NativeDirectCallRoomControllerProviding {
     var nativeDirectCallRoomID: String {
         id
     }
@@ -1293,6 +1301,16 @@ extension JoinedRoomProxy: JoinedRoomNativeDirectCallCompositionBoundaryProtocol
                                                                isEncryptedRoom: { [weak self] in
                                                                    self?.infoPublisher.value.isEncrypted
                                                                })
+    }
+
+    func makeNativeDirectCallRoomController(configuration: NativeDirectCallCompositionConfiguration,
+                                            mediaEngineFactory: DirectCallMediaEngineFactoryProtocol?,
+                                            encryptionService: DirectCallEncryptionServiceProtocol?,
+                                            now: @escaping () -> Date) -> NativeDirectCallRoomControlling {
+        nativeDirectCallRoomController(configuration: configuration,
+                                       mediaEngineFactory: mediaEngineFactory,
+                                       encryptionService: encryptionService,
+                                       now: now)
     }
 
     static func nativeDirectCallPeerUserID(ownUserID: String, members: [RoomMemberProxyProtocol]) -> String? {

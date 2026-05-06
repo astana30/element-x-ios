@@ -76,6 +76,7 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
     private var roomScreenCoordinator: RoomScreenCoordinator?
     private var childThreadScreenCoordinators: [ThreadTimelineScreenCoordinator] = []
     private weak var joinRoomScreenCoordinator: JoinRoomScreenCoordinator?
+    private var nativeDirectCallRoomFlowOwner: NativeDirectCallRoomFlowOwning?
     
     // periphery:ignore - used to avoid deallocation
     private var rolesAndPermissionsFlowCoordinator: RoomRolesAndPermissionsFlowCoordinator?
@@ -91,6 +92,7 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
     private var membersFlowCoordinator: RoomMembersFlowCoordinator?
     
     private let stateMachine: StateMachine<State, Event> = .init(state: .initial)
+    private let nativeDirectCallRoomFlowOwnerFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning
     
     private var cancellables = Set<AnyCancellable>()
     
@@ -104,11 +106,15 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
     init(roomID: String,
          isChildFlow: Bool,
          navigationStackCoordinator: NavigationStackCoordinator,
-         flowParameters: CommonFlowParameters) {
+         flowParameters: CommonFlowParameters,
+         nativeDirectCallRoomFlowOwnerFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning = { roomProxy in
+             NativeDirectCallRoomFlowOwner(roomProxy: roomProxy)
+         }) {
         self.roomID = roomID
         self.isChildFlow = isChildFlow
         self.navigationStackCoordinator = navigationStackCoordinator
         self.flowParameters = flowParameters
+        self.nativeDirectCallRoomFlowOwnerFactory = nativeDirectCallRoomFlowOwnerFactory
         
         setupStateMachine()
     }
@@ -355,6 +361,7 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
         // early return above could result in trying to access the room's timeline provider
         // before it has been set which triggers a fatal error.
         self.roomProxy = roomProxy
+        nativeDirectCallRoomFlowOwner = nativeDirectCallRoomFlowOwnerFactory(roomProxy)
         
         // Subscribe to room info updates in order to detect rooms being left on other devices
         // and react accordingly by dismissing this flow coordinator.
@@ -871,6 +878,7 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
     }
     
     private func dismissFlow(animated: Bool, continuingWith spaceRoomListProxy: SpaceRoomListProxyProtocol? = nil) {
+        resetNativeDirectCallRoomFlowOwner()
         childRoomFlowCoordinator?.clearRoute(animated: animated)
         
         if isChildFlow {
@@ -896,6 +904,19 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
             actionsSubject.send(.continueWithSpaceFlow(spaceRoomListProxy))
         } else {
             actionsSubject.send(.finished)
+        }
+    }
+
+    private func resetNativeDirectCallRoomFlowOwner() {
+        guard let nativeDirectCallRoomFlowOwner else {
+            return
+        }
+
+        nativeDirectCallRoomFlowOwner.stop()
+        self.nativeDirectCallRoomFlowOwner = nil
+
+        Task { @MainActor in
+            await nativeDirectCallRoomFlowOwner.reset()
         }
     }
     
@@ -1647,5 +1668,149 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
     
     private func showErrorIndicator() {
         flowParameters.userIndicatorController.submitIndicator(.init(title: L10n.errorUnknown))
+    }
+}
+
+enum NativeDirectCallRoomFlowOwnerError: Error, Equatable {
+    case disabled
+    case missingRoomControllerProvider
+    case trigger(NativeDirectCallDeveloperRoomTriggerError)
+}
+
+@MainActor
+protocol NativeDirectCallRoomFlowOwning: AnyObject {
+    var isListenerStarted: Bool { get }
+    var activeSession: DirectCallSession? { get }
+
+    func prepare() -> Result<NativeDirectCallComposition, NativeDirectCallRoomFlowOwnerError>
+    func startListener() async -> Result<NativeDirectCallComposition, NativeDirectCallRoomFlowOwnerError>
+    func startOutgoingAudioCall() async -> Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError>
+    func acceptIncomingCall() async -> Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError>
+    func hangup() async -> Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError>
+    func stop()
+    func reset() async
+}
+
+@MainActor
+final class NativeDirectCallRoomFlowOwner: NativeDirectCallRoomFlowOwning {
+    private let roomProxy: JoinedRoomProxyProtocol
+    private let triggerConfiguration: NativeDirectCallDeveloperRoomTriggerConfiguration
+    private let compositionConfiguration: NativeDirectCallCompositionConfiguration
+    private let mediaEngineFactory: DirectCallMediaEngineFactoryProtocol?
+    private let encryptionService: DirectCallEncryptionServiceProtocol?
+    private let now: () -> Date
+
+    private var trigger: NativeDirectCallDeveloperRoomTrigger?
+
+    var isListenerStarted: Bool {
+        trigger?.isListenerStarted ?? false
+    }
+
+    var activeSession: DirectCallSession? {
+        trigger?.activeSession
+    }
+
+    init(roomProxy: JoinedRoomProxyProtocol,
+         triggerConfiguration: NativeDirectCallDeveloperRoomTriggerConfiguration = .init(),
+         compositionConfiguration: NativeDirectCallCompositionConfiguration = .init(),
+         mediaEngineFactory: DirectCallMediaEngineFactoryProtocol? = nil,
+         encryptionService: DirectCallEncryptionServiceProtocol? = nil,
+         now: @escaping () -> Date = Date.init) {
+        self.roomProxy = roomProxy
+        self.triggerConfiguration = triggerConfiguration
+        self.compositionConfiguration = compositionConfiguration
+        self.mediaEngineFactory = mediaEngineFactory
+        self.encryptionService = encryptionService
+        self.now = now
+    }
+
+    func prepare() -> Result<NativeDirectCallComposition, NativeDirectCallRoomFlowOwnerError> {
+        switch makeTrigger() {
+        case .success(let trigger):
+            return trigger.prepare()
+                .mapError { .trigger($0) }
+        case .failure(let error):
+            return .failure(error)
+        }
+    }
+
+    func startListener() async -> Result<NativeDirectCallComposition, NativeDirectCallRoomFlowOwnerError> {
+        switch makeTrigger() {
+        case .success(let trigger):
+            return await trigger.startListener()
+                .mapError { .trigger($0) }
+        case .failure(let error):
+            return .failure(error)
+        }
+    }
+
+    func startOutgoingAudioCall() async -> Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> {
+        switch makeTrigger() {
+        case .success(let trigger):
+            return await trigger.startOutgoingAudioCall()
+                .mapError { .trigger($0) }
+        case .failure(let error):
+            return .failure(error)
+        }
+    }
+
+    func acceptIncomingCall() async -> Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> {
+        switch makeTrigger() {
+        case .success(let trigger):
+            return await trigger.acceptIncomingCall()
+                .mapError { .trigger($0) }
+        case .failure(let error):
+            return .failure(error)
+        }
+    }
+
+    func hangup() async -> Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> {
+        switch makeTrigger() {
+        case .success(let trigger):
+            return await trigger.hangup()
+                .mapError { .trigger($0) }
+        case .failure(let error):
+            return .failure(error)
+        }
+    }
+
+    func stop() {
+        guard let trigger else {
+            return
+        }
+
+        _ = trigger.stop()
+    }
+
+    func reset() async {
+        guard let trigger else {
+            return
+        }
+
+        _ = await trigger.reset()
+        self.trigger = nil
+    }
+
+    private func makeTrigger() -> Result<NativeDirectCallDeveloperRoomTrigger, NativeDirectCallRoomFlowOwnerError> {
+        guard triggerConfiguration.isEnabled else {
+            return .failure(.disabled)
+        }
+
+        if let trigger {
+            return .success(trigger)
+        }
+
+        guard let provider = roomProxy as? NativeDirectCallRoomControllerProviding else {
+            return .failure(.missingRoomControllerProvider)
+        }
+
+        let controller = provider.makeNativeDirectCallRoomController(configuration: compositionConfiguration,
+                                                                     mediaEngineFactory: mediaEngineFactory,
+                                                                     encryptionService: encryptionService,
+                                                                     now: now)
+        let trigger = NativeDirectCallDeveloperRoomTrigger(configuration: triggerConfiguration,
+                                                           controller: controller)
+        self.trigger = trigger
+        return .success(trigger)
     }
 }
