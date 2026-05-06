@@ -661,6 +661,97 @@ final class RoomFlowCoordinatorTests {
         #expect(controller.stopCount == 1)
         #expect(controller.resetCount == 1)
     }
+
+    @Test
+    func nativeDirectCallDiagnosticCommandEntryIsDisabledByDefault() async throws {
+        let owner = NativeDirectCallRoomFlowOwnerSpy()
+        owner.isListenerStarted = true
+        owner.activeSession = directCallSession()
+        setupRoomFlowCoordinator { roomProxy in
+            #expect(roomProxy.id == "1")
+            owner.makeCount += 1
+            return owner
+        }
+
+        try await process(route: .room(roomID: "1", via: []))
+
+        for command in NativeDirectCallRoomDiagnosticCommand.allTestCases {
+            let result = await roomFlowCoordinator.handleNativeDirectCallDiagnosticCommand(command)
+            #expect(result == .failed(.disabled))
+        }
+
+        #expect(owner.makeCount == 1)
+        #expect(owner.prepareCount == 0)
+        #expect(owner.startCount == 0)
+        #expect(owner.outgoingCount == 0)
+        #expect(owner.acceptCount == 0)
+        #expect(owner.hangupCount == 0)
+        #expect(owner.stopCount == 0)
+        #expect(owner.resetCount == 0)
+    }
+
+    @Test
+    func nativeDirectCallDiagnosticCommandEntryDelegatesExplicitCommandsOnly() async throws {
+        let owner = NativeDirectCallRoomFlowOwnerSpy()
+        let session = directCallSession()
+        owner.outgoingResult = .success(session)
+        owner.acceptResult = .success(session)
+        owner.hangupResult = .success(session)
+        setupRoomFlowCoordinator(nativeDirectCallDiagnosticCommandConfiguration: .init(isEnabled: true)) { roomProxy in
+            #expect(roomProxy.id == "1")
+            owner.makeCount += 1
+            return owner
+        }
+
+        try await process(route: .room(roomID: "1", via: []))
+
+        #expect(await roomFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.prepare) == .failed(.owner(.disabled)))
+        #expect(owner.prepareCount == 1)
+        #expect(owner.startCount == 0)
+
+        #expect(await roomFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.startOutgoingAudioCall) == .outgoingStarted(.init(session)))
+        #expect(await roomFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.acceptIncomingCall) == .incomingAccepted(.init(session)))
+        #expect(await roomFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.hangup) == .hungUp(.init(session)))
+        #expect(await roomFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.startListener) == .failed(.owner(.disabled)))
+        #expect(await roomFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.stop) == .stopped)
+        #expect(await roomFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.reset) == .reset)
+
+        #expect(owner.startCount == 1)
+        #expect(owner.outgoingCount == 1)
+        #expect(owner.acceptCount == 1)
+        #expect(owner.hangupCount == 1)
+        #expect(owner.stopCount == 1)
+        #expect(owner.resetCount == 1)
+    }
+
+    @Test
+    func nativeDirectCallDiagnosticCommandEntryFailsClosedWhileOwnerIsResetting() async throws {
+        let controller = NativeDirectCallRoomControllingSpy()
+        controller.suspendReset = true
+        let roomProxy = NativeDirectCallProvidingJoinedRoomProxyMock(controller: controller)
+        let owner = NativeDirectCallRoomFlowOwner(roomProxy: roomProxy,
+                                                  triggerConfiguration: .init(isEnabled: true))
+        setupRoomFlowCoordinator(nativeDirectCallDiagnosticCommandConfiguration: .init(isEnabled: true)) { _ in
+            owner
+        }
+
+        try await process(route: .room(roomID: "1", via: []))
+
+        #expect(await roomFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.prepare) == .failed(.owner(.trigger(.control(.noActiveCall)))))
+        owner.beginReset()
+        await Task.yield()
+
+        #expect(await roomFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.startListener) == .failed(.owner(.resetting)))
+        #expect(await roomFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.startOutgoingAudioCall) == .failed(.owner(.resetting)))
+        #expect(await roomFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.acceptIncomingCall) == .failed(.owner(.resetting)))
+        #expect(await roomFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.hangup) == .failed(.owner(.resetting)))
+        #expect(await roomFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.prepare) == .failed(.owner(.resetting)))
+
+        controller.resumeReset()
+        #expect(await roomFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.reset) == .reset)
+        #expect(controller.stopCount == 1)
+        #expect(controller.resetCount == 1)
+    }
     
     // MARK: - Spaces
     
@@ -718,6 +809,7 @@ final class RoomFlowCoordinatorTests {
     
     private func setupRoomFlowCoordinator(asChildFlow: Bool = false,
                                           roomType: RoomType? = nil,
+                                          nativeDirectCallDiagnosticCommandConfiguration: NativeDirectCallRoomDeveloperCommandConfiguration = .init(),
                                           nativeDirectCallRoomFlowOwnerFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning = { roomProxy in
                                               NativeDirectCallRoomFlowOwner(roomProxy: roomProxy)
                                           }) {
@@ -767,6 +859,7 @@ final class RoomFlowCoordinatorTests {
                                                   navigationStackCoordinator: navigationStackCoordinator,
                                                   flowParameters: flowParameters,
                                                   nativeDirectCallRoomFlowOwnerFactory: nativeDirectCallRoomFlowOwnerFactory)
+        roomFlowCoordinator.nativeDirectCallDiagnosticCommandConfiguration = nativeDirectCallDiagnosticCommandConfiguration
     }
 
     private func expectFailure<T>(_ result: Result<T, NativeDirectCallRoomFlowOwnerError>,
@@ -815,6 +908,18 @@ private enum RoomType {
     case invited(roomID: String)
 }
 
+private extension NativeDirectCallRoomDiagnosticCommand {
+    static let allTestCases: [Self] = [
+        .prepare,
+        .startListener,
+        .startOutgoingAudioCall,
+        .acceptIncomingCall,
+        .hangup,
+        .stop,
+        .reset
+    ]
+}
+
 @MainActor
 private final class NativeDirectCallRoomFlowOwnerSpy: NativeDirectCallRoomFlowOwning {
     var makeCount = 0
@@ -832,6 +937,9 @@ private final class NativeDirectCallRoomFlowOwnerSpy: NativeDirectCallRoomFlowOw
 
     var isListenerStarted = false
     var activeSession: DirectCallSession?
+    var outgoingResult: Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> = .failure(.disabled)
+    var acceptResult: Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> = .failure(.disabled)
+    var hangupResult: Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> = .failure(.disabled)
 
     func prepare() -> Result<NativeDirectCallComposition, NativeDirectCallRoomFlowOwnerError> {
         prepareCount += 1
@@ -845,17 +953,17 @@ private final class NativeDirectCallRoomFlowOwnerSpy: NativeDirectCallRoomFlowOw
 
     func startOutgoingAudioCall() async -> Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> {
         outgoingCount += 1
-        return .failure(.disabled)
+        return outgoingResult
     }
 
     func acceptIncomingCall() async -> Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> {
         acceptCount += 1
-        return .failure(.disabled)
+        return acceptResult
     }
 
     func hangup() async -> Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> {
         hangupCount += 1
-        return .failure(.disabled)
+        return hangupResult
     }
 
     func stop() {

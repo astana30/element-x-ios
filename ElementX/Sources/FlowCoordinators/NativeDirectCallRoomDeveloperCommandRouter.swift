@@ -13,6 +13,82 @@ struct NativeDirectCallRoomDeveloperCommandConfiguration: Equatable {
     }
 }
 
+#if DEBUG
+enum NativeDirectCallRoomDiagnosticCommand: Equatable {
+    case prepare
+    case startListener
+    case startOutgoingAudioCall
+    case acceptIncomingCall
+    case hangup
+    case stop
+    case reset
+}
+
+struct NativeDirectCallRoomDiagnosticSession: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let callID: String
+    let roomID: String
+    let peerUserID: String
+    let direction: DirectCallDirection
+    let intent: DirectCallIntent
+    let state: DirectCallState
+    let encryptionState: DirectCallEncryptionState
+
+    init(_ session: DirectCallSession) {
+        callID = session.callID
+        roomID = session.roomID
+        peerUserID = session.peerUserID
+        direction = session.direction
+        intent = session.intent
+        state = session.state
+        encryptionState = session.encryptionState
+    }
+
+    var description: String {
+        "NativeDirectCallRoomDiagnosticSession(callID: \(callID), roomID: \(roomID), peerUserID: \(peerUserID), direction: \(direction), intent: \(intent), state: \(state), encryptionState: \(encryptionState))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum NativeDirectCallRoomDiagnosticCommandResult: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case prepared
+    case listenerStarted
+    case outgoingStarted(NativeDirectCallRoomDiagnosticSession)
+    case incomingAccepted(NativeDirectCallRoomDiagnosticSession)
+    case hungUp(NativeDirectCallRoomDiagnosticSession)
+    case stopped
+    case reset
+    case failed(NativeDirectCallRoomDeveloperCommandError)
+
+    var description: String {
+        switch self {
+        case .prepared:
+            "prepared"
+        case .listenerStarted:
+            "listenerStarted"
+        case .outgoingStarted(let session):
+            "outgoingStarted(\(session))"
+        case .incomingAccepted(let session):
+            "incomingAccepted(\(session))"
+        case .hungUp(let session):
+            "hungUp(\(session))"
+        case .stopped:
+            "stopped"
+        case .reset:
+            "reset"
+        case .failed(let error):
+            "failed(\(error))"
+        }
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+#endif
+
 enum NativeDirectCallRoomDeveloperCommandError: Error, Equatable {
     case disabled
     case unavailable

@@ -93,6 +93,14 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
     
     private let stateMachine: StateMachine<State, Event> = .init(state: .initial)
     private let nativeDirectCallRoomFlowOwnerFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning
+    #if DEBUG
+    private var nativeDirectCallDiagnosticCommandRouter: NativeDirectCallRoomDeveloperCommanding?
+    var nativeDirectCallDiagnosticCommandConfiguration: NativeDirectCallRoomDeveloperCommandConfiguration = .init() {
+        didSet {
+            nativeDirectCallDiagnosticCommandRouter = nil
+        }
+    }
+    #endif
     
     private var cancellables = Set<AnyCancellable>()
     
@@ -342,6 +350,64 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
         
         stateMachine.tryEvent(.dismissFlow, userInfo: EventUserInfo(animated: animated))
     }
+
+    #if DEBUG
+    func handleNativeDirectCallDiagnosticCommand(_ command: NativeDirectCallRoomDiagnosticCommand) async -> NativeDirectCallRoomDiagnosticCommandResult {
+        let commandRouter = makeNativeDirectCallDiagnosticCommandRouter()
+
+        switch command {
+        case .prepare:
+            switch commandRouter.prepare() {
+            case .success:
+                return .prepared
+            case .failure(let error):
+                return .failed(error)
+            }
+        case .startListener:
+            switch await commandRouter.startListener() {
+            case .success:
+                return .listenerStarted
+            case .failure(let error):
+                return .failed(error)
+            }
+        case .startOutgoingAudioCall:
+            switch await commandRouter.startOutgoingAudioCall() {
+            case .success(let session):
+                return .outgoingStarted(.init(session))
+            case .failure(let error):
+                return .failed(error)
+            }
+        case .acceptIncomingCall:
+            switch await commandRouter.acceptIncomingCall() {
+            case .success(let session):
+                return .incomingAccepted(.init(session))
+            case .failure(let error):
+                return .failed(error)
+            }
+        case .hangup:
+            switch await commandRouter.hangup() {
+            case .success(let session):
+                return .hungUp(.init(session))
+            case .failure(let error):
+                return .failed(error)
+            }
+        case .stop:
+            switch commandRouter.stop() {
+            case .success:
+                return .stopped
+            case .failure(let error):
+                return .failed(error)
+            }
+        case .reset:
+            switch await commandRouter.reset() {
+            case .success:
+                return .reset
+            case .failure(let error):
+                return .failed(error)
+            }
+        }
+    }
+    #endif
     
     // MARK: - Private
     
@@ -915,6 +981,20 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
         nativeDirectCallRoomFlowOwner.beginReset()
         self.nativeDirectCallRoomFlowOwner = nil
     }
+
+    #if DEBUG
+    private func makeNativeDirectCallDiagnosticCommandRouter() -> NativeDirectCallRoomDeveloperCommanding {
+        if let nativeDirectCallDiagnosticCommandRouter {
+            return nativeDirectCallDiagnosticCommandRouter
+        }
+
+        let commandRouter = NativeDirectCallRoomDeveloperCommandRouter(configuration: nativeDirectCallDiagnosticCommandConfiguration) { [weak self] in
+            self?.nativeDirectCallRoomFlowOwner
+        }
+        nativeDirectCallDiagnosticCommandRouter = commandRouter
+        return commandRouter
+    }
+    #endif
     
     private func presentRoomDetails(isRoot: Bool, animated: Bool) async {
         let params = RoomDetailsScreenCoordinatorParameters(roomProxy: roomProxy,
