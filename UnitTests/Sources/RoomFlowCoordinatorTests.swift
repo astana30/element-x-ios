@@ -462,13 +462,71 @@ final class RoomFlowCoordinatorTests {
         await owner.reset()
         await owner.reset()
 
-        #expect(controller.stopCount == 2)
+        #expect(controller.stopCount == 1)
         #expect(controller.resetCount == 1)
+    }
+
+    @Test
+    func nativeDirectCallRoomFlowOwnerDeinitStopsPreparedTrigger() {
+        let controller = NativeDirectCallRoomControllingSpy()
+        let roomProxy = NativeDirectCallProvidingJoinedRoomProxyMock(controller: controller)
+        var owner: NativeDirectCallRoomFlowOwner? = NativeDirectCallRoomFlowOwner(roomProxy: roomProxy,
+                                                                                  triggerConfiguration: .init(isEnabled: true))
+
+        do {
+            guard let unwrappedOwner = owner else {
+                Issue.record("Expected native direct-call room-flow owner to be available.")
+                return
+            }
+
+            expectFailure(unwrappedOwner.prepare(), .trigger(.control(.noActiveCall)))
+            #expect(controller.stopCount == 0)
+        }
+
+        owner = nil
+
+        #expect(controller.stopCount == 1)
+        #expect(controller.resetCount == 0)
+    }
+
+    @Test
+    func nativeDirectCallRoomFlowOwnerResetBlocksCommandsAndDeduplicatesResetTask() async {
+        let controller = NativeDirectCallRoomControllingSpy()
+        controller.activeSession = directCallSession()
+        controller.suspendReset = true
+        let roomProxy = NativeDirectCallProvidingJoinedRoomProxyMock(controller: controller)
+        let owner = NativeDirectCallRoomFlowOwner(roomProxy: roomProxy,
+                                                  triggerConfiguration: .init(isEnabled: true))
+
+        expectFailure(owner.prepare(), .trigger(.control(.noActiveCall)))
+        #expect(owner.activeSession == controller.activeSession)
+
+        owner.beginReset()
+        owner.beginReset()
+        await Task.yield()
+
+        #expect(controller.stopCount == 1)
+        #expect(controller.resetCount == 1)
+        expectFailure(owner.prepare(), .resetting)
+        await expectFailure(owner.startListener(), .resetting)
+        await expectFailure(owner.startOutgoingAudioCall(), .resetting)
+        await expectFailure(owner.acceptIncomingCall(), .resetting)
+        await expectFailure(owner.hangup(), .resetting)
+
+        controller.resumeReset()
+        await owner.reset()
+        await owner.reset()
+
+        #expect(controller.stopCount == 1)
+        #expect(controller.resetCount == 1)
+        #expect(owner.isListenerStarted == false)
+        #expect(owner.activeSession == nil)
     }
 
     @Test
     func roomFlowDismissStopsAndResetsNativeDirectCallOwner() async throws {
         let owner = NativeDirectCallRoomFlowOwnerSpy()
+        owner.suspendReset = true
 
         setupRoomFlowCoordinator { roomProxy in
             #expect(roomProxy.id == "1")
@@ -483,9 +541,12 @@ final class RoomFlowCoordinatorTests {
 
         try await clearRoute(expectedActions: [.finished])
         #expect(owner.stopCount == 1)
-
-        try await Task.sleep(for: .milliseconds(50))
         #expect(owner.resetCount == 1)
+        #expect(owner.resetCompletionCount == 0)
+
+        owner.resumeReset()
+        await Task.yield()
+        #expect(owner.resetCompletionCount == 1)
     }
     
     // MARK: - Spaces
@@ -604,6 +665,19 @@ final class RoomFlowCoordinatorTests {
 
         #expect(error == expectedError)
     }
+
+    private func directCallSession() -> DirectCallSession {
+        DirectCallSession(callID: "call-1",
+                          roomID: "room-1",
+                          peerUserID: "@alice:example.com",
+                          direction: .incoming,
+                          intent: .audio,
+                          encryptionMode: .e2eeRequired,
+                          startedAt: .now,
+                          updatedAt: .now,
+                          state: .activeAudio,
+                          encryptionState: .ready)
+    }
 }
 
 private enum RoomType {
@@ -620,6 +694,10 @@ private final class NativeDirectCallRoomFlowOwnerSpy: NativeDirectCallRoomFlowOw
     private(set) var hangupCount = 0
     private(set) var stopCount = 0
     private(set) var resetCount = 0
+    private(set) var resetCompletionCount = 0
+    var suspendReset = false
+    private var resetTask: Task<Void, Never>?
+    private var resetContinuation: CheckedContinuation<Void, Never>?
 
     var isListenerStarted = false
     var activeSession: DirectCallSession?
@@ -653,8 +731,33 @@ private final class NativeDirectCallRoomFlowOwnerSpy: NativeDirectCallRoomFlowOw
         stopCount += 1
     }
 
+    func beginReset() {
+        stop()
+        guard resetTask == nil else {
+            return
+        }
+
+        resetTask = Task { @MainActor in
+            await reset()
+            resetTask = nil
+        }
+    }
+
     func reset() async {
         resetCount += 1
+        guard suspendReset else {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            resetContinuation = continuation
+        }
+        resetCompletionCount += 1
+    }
+
+    func resumeReset() {
+        resetContinuation?.resume()
+        resetContinuation = nil
     }
 }
 
@@ -686,6 +789,8 @@ private final class NativeDirectCallRoomControllingSpy: NativeDirectCallRoomCont
     private(set) var hangupCount = 0
     private(set) var stopCount = 0
     private(set) var resetCount = 0
+    var suspendReset = false
+    private var resetContinuation: CheckedContinuation<Void, Never>?
 
     var isListenerStarted = false
     var activeSession: DirectCallSession?
@@ -721,5 +826,17 @@ private final class NativeDirectCallRoomControllingSpy: NativeDirectCallRoomCont
 
     func reset() async {
         resetCount += 1
+        guard suspendReset else {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            resetContinuation = continuation
+        }
+    }
+
+    func resumeReset() {
+        resetContinuation?.resume()
+        resetContinuation = nil
     }
 }

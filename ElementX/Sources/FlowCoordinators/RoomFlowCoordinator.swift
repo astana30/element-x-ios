@@ -912,12 +912,8 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
             return
         }
 
-        nativeDirectCallRoomFlowOwner.stop()
+        nativeDirectCallRoomFlowOwner.beginReset()
         self.nativeDirectCallRoomFlowOwner = nil
-
-        Task { @MainActor in
-            await nativeDirectCallRoomFlowOwner.reset()
-        }
     }
     
     private func presentRoomDetails(isRoot: Bool, animated: Bool) async {
@@ -1674,6 +1670,7 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
 enum NativeDirectCallRoomFlowOwnerError: Error, Equatable {
     case disabled
     case missingRoomControllerProvider
+    case resetting
     case trigger(NativeDirectCallDeveloperRoomTriggerError)
 }
 
@@ -1688,6 +1685,7 @@ protocol NativeDirectCallRoomFlowOwning: AnyObject {
     func acceptIncomingCall() async -> Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError>
     func hangup() async -> Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError>
     func stop()
+    func beginReset()
     func reset() async
 }
 
@@ -1701,6 +1699,9 @@ final class NativeDirectCallRoomFlowOwner: NativeDirectCallRoomFlowOwning {
     private let now: () -> Date
 
     private var trigger: NativeDirectCallDeveloperRoomTrigger?
+    private var resetTask: Task<Void, Never>?
+    private var hasStartedReset = false
+    private var hasStopped = false
 
     var isListenerStarted: Bool {
         trigger?.isListenerStarted ?? false
@@ -1724,6 +1725,12 @@ final class NativeDirectCallRoomFlowOwner: NativeDirectCallRoomFlowOwning {
         self.now = now
     }
 
+    deinit {
+        MainActor.assumeIsolated {
+            stop()
+        }
+    }
+
     func prepare() -> Result<NativeDirectCallComposition, NativeDirectCallRoomFlowOwnerError> {
         switch makeTrigger() {
         case .success(let trigger):
@@ -1737,8 +1744,12 @@ final class NativeDirectCallRoomFlowOwner: NativeDirectCallRoomFlowOwning {
     func startListener() async -> Result<NativeDirectCallComposition, NativeDirectCallRoomFlowOwnerError> {
         switch makeTrigger() {
         case .success(let trigger):
-            return await trigger.startListener()
-                .mapError { .trigger($0) }
+            let triggerResult = await trigger.startListener()
+            let result = triggerResult.mapError { NativeDirectCallRoomFlowOwnerError.trigger($0) }
+            if case .success = result {
+                hasStopped = false
+            }
+            return result
         case .failure(let error):
             return .failure(error)
         }
@@ -1775,23 +1786,63 @@ final class NativeDirectCallRoomFlowOwner: NativeDirectCallRoomFlowOwning {
     }
 
     func stop() {
+        guard !hasStopped else {
+            return
+        }
+
         guard let trigger else {
             return
         }
 
+        hasStopped = true
         _ = trigger.stop()
     }
 
+    func beginReset() {
+        _ = makeResetTask()
+    }
+
     func reset() async {
+        await makeResetTask().value
+    }
+
+    private func makeResetTask() -> Task<Void, Never> {
+        if let resetTask {
+            return resetTask
+        }
+
+        guard !hasStartedReset else {
+            return Task { }
+        }
+
+        hasStartedReset = true
+        stop()
+
+        let resetTask = Task { @MainActor in
+            await performReset()
+        }
+        self.resetTask = resetTask
+        return resetTask
+    }
+
+    private func performReset() async {
+        defer {
+            trigger = nil
+            resetTask = nil
+        }
+
         guard let trigger else {
             return
         }
 
         _ = await trigger.reset()
-        self.trigger = nil
     }
 
     private func makeTrigger() -> Result<NativeDirectCallDeveloperRoomTrigger, NativeDirectCallRoomFlowOwnerError> {
+        guard !hasStartedReset else {
+            return .failure(.resetting)
+        }
+
         guard triggerConfiguration.isEnabled else {
             return .failure(.disabled)
         }
