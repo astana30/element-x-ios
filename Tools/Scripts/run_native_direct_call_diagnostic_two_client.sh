@@ -369,6 +369,34 @@ sys.exit(8)
 PY
 }
 
+is_app_ready() {
+    local client="$1"
+    local file
+    file="$(signal_file "$client")"
+
+    python3 - "$file" <<'PY'
+import json
+import sys
+
+file_path = sys.argv[1]
+
+try:
+    with open(file_path, "r", encoding="utf-8") as handle:
+        message = json.load(handle)
+except Exception:
+    sys.exit(1)
+
+if message.get("mode") != "app":
+    sys.exit(2)
+
+signal = message.get("signal", {})
+if isinstance(signal, dict) and isinstance(signal.get("ready"), dict):
+    sys.exit(0)
+
+sys.exit(3)
+PY
+}
+
 pause_for_poll_interval() {
     python3 - "$POLL_INTERVAL_SECONDS" <<'PY'
 import select
@@ -394,6 +422,21 @@ wait_for_result() {
     done
 
     fail "Timed out waiting for channel=$client correlationID=$correlation_id signal=$expected_signal"
+}
+
+wait_for_app_ready() {
+    local client="$1"
+    local deadline=$((SECONDS + WAIT_TIMEOUT_SECONDS))
+
+    while (( SECONDS <= deadline )); do
+        if is_app_ready "$client"; then
+            log "channel=$client app diagnostic signalling ready"
+            return 0
+        fi
+        pause_for_poll_interval
+    done
+
+    fail "Timed out waiting for channel=$client app diagnostic signalling readiness. Ensure the app is logged in, integration diagnostics are enabled, and the real room flow has started."
 }
 
 correlation_id() {
@@ -473,12 +516,14 @@ launch_client() {
     if [[ "$DRY_RUN" == "1" ]]; then
         log "DRY_RUN: install app for channel=$client udid=$udid app=${SALEMX_APP_PATH:-<missing>}"
         log "DRY_RUN: launch bundle=$BUNDLE_ID for channel=$client udid=$udid"
+        log "DRY_RUN: wait for channel=$client app diagnostic signalling readiness"
         return
     fi
 
     xcrun simctl install "$udid" "$SALEMX_APP_PATH"
     xcrun simctl launch --terminate-running-process "$udid" "$BUNDLE_ID" >/dev/null
     log "launched channel=$client udid=$udid bundle=$BUNDLE_ID"
+    wait_for_app_ready "$client"
 }
 
 send_command() {
