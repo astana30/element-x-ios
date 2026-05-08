@@ -482,27 +482,37 @@ init_channel() {
 
 set_client_environment() {
     local client="$1"
-    local udid
-    local username
-    local credential
-    local channel
-    udid="$(client_udid "$client")"
-    username="$(client_username "$client")"
-    credential="$(client_credential "$client")"
-    channel="$(client_channel "$client")"
 
     if [[ "$DRY_RUN" == "1" ]]; then
+        local udid
+        udid="$(client_udid "$client")"
         log "DRY_RUN: set integration env for channel=$client udid=$udid host=<set> username=<set> credential=<redacted>"
         return
     fi
 
-    xcrun simctl spawn "$udid" launchctl setenv IS_RUNNING_INTEGRATION_TESTS 1
-    xcrun simctl spawn "$udid" launchctl setenv NATIVE_DIRECT_CALL_DIAGNOSTICS 1
-    xcrun simctl spawn "$udid" launchctl setenv NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED 1
-    xcrun simctl spawn "$udid" launchctl setenv UI_TESTS_SIGNALLING_CHANNEL "$channel"
-    xcrun simctl spawn "$udid" launchctl setenv INTEGRATION_TESTS_HOST "$INTEGRATION_TESTS_HOST"
-    xcrun simctl spawn "$udid" launchctl setenv INTEGRATION_TESTS_USERNAME "$username"
-    xcrun simctl spawn "$udid" launchctl setenv INTEGRATION_TESTS_PASSWORD "$credential"
+    # simctl launch reads per-process environment from SIMCTL_CHILD_* values,
+    # so the real environment is applied by launch_client_with_environment.
+    :
+}
+
+launch_client_with_environment() {
+    local client="$1"
+    local udid="$2"
+    local username
+    local credential
+    local channel
+    username="$(client_username "$client")"
+    credential="$(client_credential "$client")"
+    channel="$(client_channel "$client")"
+
+    SIMCTL_CHILD_IS_RUNNING_INTEGRATION_TESTS=1 \
+        SIMCTL_CHILD_NATIVE_DIRECT_CALL_DIAGNOSTICS=1 \
+        SIMCTL_CHILD_NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1 \
+        SIMCTL_CHILD_UI_TESTS_SIGNALLING_CHANNEL="$channel" \
+        SIMCTL_CHILD_INTEGRATION_TESTS_HOST="$INTEGRATION_TESTS_HOST" \
+        SIMCTL_CHILD_INTEGRATION_TESTS_USERNAME="$username" \
+        SIMCTL_CHILD_INTEGRATION_TESTS_PASSWORD="$credential" \
+        xcrun simctl launch --terminate-running-process "$udid" "$BUNDLE_ID" >/dev/null
 }
 
 launch_client() {
@@ -521,7 +531,7 @@ launch_client() {
     fi
 
     xcrun simctl install "$udid" "$SALEMX_APP_PATH"
-    xcrun simctl launch --terminate-running-process "$udid" "$BUNDLE_ID" >/dev/null
+    launch_client_with_environment "$client" "$udid"
     log "launched channel=$client udid=$udid bundle=$BUNDLE_ID"
     wait_for_app_ready "$client"
 }
