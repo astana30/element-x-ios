@@ -51,6 +51,10 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
     private var userSessionFlowCoordinator: UserSessionFlowCoordinator?
     private var softLogoutCoordinator: SoftLogoutScreenCoordinator?
     private var directCallEngineSignalBridge: DirectCallEngineSignalBridge?
+    #if DEBUG
+    private var nativeDirectCallDiagnosticClient: UITestsSignalling.Client?
+    private var nativeDirectCallDiagnosticCancellables = Set<AnyCancellable>()
+    #endif
     private var appDelegateObserver: AnyCancellable?
     private var userSessionObserver: AnyCancellable?
     private var clientProxyObserver: AnyCancellable?
@@ -745,10 +749,8 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
                                                   notificationManager: notificationManager,
                                                   stateMachineFactory: StateMachineFactory())
         
-        let userSessionFlowCoordinator = UserSessionFlowCoordinator(isNewLogin: isNewLogin,
-                                                                    navigationRootCoordinator: navigationRootCoordinator,
-                                                                    appLockService: appLockFlowCoordinator.appLockService,
-                                                                    flowParameters: flowParameters)
+        let userSessionFlowCoordinator = makeUserSessionFlowCoordinator(isNewLogin: isNewLogin,
+                                                                        flowParameters: flowParameters)
         
         userSessionFlowCoordinator.actionsPublisher
             .sink { [weak self] action in
@@ -768,6 +770,9 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
         userSessionFlowCoordinator.start()
         
         self.userSessionFlowCoordinator = userSessionFlowCoordinator
+        #if DEBUG
+        configureNativeDirectCallIntegrationDiagnosticHarnessIfNeeded(for: userSessionFlowCoordinator)
+        #endif
         
         Task {
             await runPostSessionSetupTasks()
@@ -828,12 +833,17 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
         
         userSession = nil
         directCallEngineSignalBridge = nil
+        #if DEBUG
+        try? nativeDirectCallDiagnosticClient?.stop()
+        nativeDirectCallDiagnosticClient = nil
+        nativeDirectCallDiagnosticCancellables.removeAll()
+        #endif
         
         userSessionFlowCoordinator = nil
 
         notificationManager.setUserSession(nil)
     }
-    
+
     private func presentSplashScreen(isSoftLogout: Bool = false, disableAppLock: Bool = false) {
         navigationRootCoordinator.setRootCoordinator(SplashScreenCoordinator())
         
@@ -1286,3 +1296,81 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
             }
     }
 }
+
+extension AppCoordinator {
+    private func makeUserSessionFlowCoordinator(isNewLogin: Bool,
+                                                flowParameters: CommonFlowParameters) -> UserSessionFlowCoordinator {
+        #if DEBUG
+        let nativeDirectCallDiagnosticCommandsEnabled = ProcessInfo.isNativeDirectCallDiagnosticIntegrationCommandsEnabled
+        let nativeDirectCallDiagnosticRuntimeGate: () -> Bool = {
+            ProcessInfo.isNativeDirectCallDiagnosticIntegrationHarnessEnabled
+        }
+        return UserSessionFlowCoordinator(isNewLogin: isNewLogin,
+                                          navigationRootCoordinator: navigationRootCoordinator,
+                                          appLockService: appLockFlowCoordinator.appLockService,
+                                          flowParameters: flowParameters,
+                                          nativeDirectCallDiagnosticRuntimeGate: nativeDirectCallDiagnosticRuntimeGate,
+                                          nativeDirectCallDiagnosticCommandConfiguration: .init(isEnabled: nativeDirectCallDiagnosticCommandsEnabled)) { roomProxy in
+            NativeDirectCallRoomFlowOwner(roomProxy: roomProxy,
+                                          triggerConfiguration: .init(isEnabled: nativeDirectCallDiagnosticCommandsEnabled),
+                                          compositionConfiguration: .init(isEnabled: nativeDirectCallDiagnosticCommandsEnabled))
+        }
+        #else
+        return UserSessionFlowCoordinator(isNewLogin: isNewLogin,
+                                          navigationRootCoordinator: navigationRootCoordinator,
+                                          appLockService: appLockFlowCoordinator.appLockService,
+                                          flowParameters: flowParameters)
+        #endif
+    }
+}
+
+#if DEBUG
+extension AppCoordinator {
+    private func configureNativeDirectCallIntegrationDiagnosticHarnessIfNeeded(for flowCoordinator: UserSessionFlowCoordinator) {
+        try? nativeDirectCallDiagnosticClient?.stop()
+        nativeDirectCallDiagnosticClient = nil
+        nativeDirectCallDiagnosticCancellables.removeAll()
+
+        guard ProcessInfo.isNativeDirectCallDiagnosticIntegrationHarnessEnabled else {
+            return
+        }
+
+        do {
+            let client = try UITestsSignalling.Client(mode: .app)
+            client.signals
+                .sink { [weak flowCoordinator, weak client] signal in
+                    Task { @MainActor in
+                        switch signal {
+                        case .nativeDirectCallDiagnostic(let command):
+                            let commandResult: NativeDirectCallRoomDiagnosticCommandResult
+                            if let flowCoordinator {
+                                commandResult = await flowCoordinator.handleNativeDirectCallDiagnosticCommand(command.roomFlowCommand)
+                            } else {
+                                commandResult = .failed(.unavailable)
+                            }
+
+                            let result = UITestsSignal.NativeDirectCallDiagnosticResult(correlationID: command.correlationID, commandResult)
+                            try? client?.send(.nativeDirectCallDiagnosticResult(result))
+                        case .nativeDirectCallDiagnosticStatus(let request):
+                            let statusResult: NativeDirectCallRoomDiagnosticStatus
+                            if let flowCoordinator {
+                                statusResult = flowCoordinator.nativeDirectCallDiagnosticStatus()
+                            } else {
+                                statusResult = .unavailable
+                            }
+
+                            let result = UITestsSignal.NativeDirectCallDiagnosticStatusResult(correlationID: request.correlationID, statusResult)
+                            try? client?.send(.nativeDirectCallDiagnosticStatusResult(result))
+                        default:
+                            return
+                        }
+                    }
+                }
+                .store(in: &nativeDirectCallDiagnosticCancellables)
+            nativeDirectCallDiagnosticClient = client
+        } catch {
+            MXLog.error("Native direct-call integration diagnostics signalling unavailable: \(error)")
+        }
+    }
+}
+#endif

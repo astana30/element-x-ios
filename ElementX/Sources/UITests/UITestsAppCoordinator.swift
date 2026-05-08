@@ -874,7 +874,7 @@ class MockScreen: Identifiable {
                         case .nativeDirectCallDiagnosticStatus(let request):
                             let statusResult: NativeDirectCallRoomDiagnosticStatus
                             if let flowCoordinator {
-                                statusResult = await flowCoordinator.nativeDirectCallDiagnosticStatus()
+                                statusResult = flowCoordinator.nativeDirectCallDiagnosticStatus()
                             } else {
                                 statusResult = .unavailable
                             }

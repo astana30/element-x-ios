@@ -12,9 +12,19 @@ enum Application {
     @discardableResult static func launch() -> XCUIApplication {
         let app = XCUIApplication()
         
-        let launchEnvironment = [
+        var launchEnvironment = [
             "IS_RUNNING_INTEGRATION_TESTS": "1"
         ]
+        let diagnosticEnvironmentKeys = [
+            "NATIVE_DIRECT_CALL_DIAGNOSTICS",
+            "NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED",
+            "UI_TESTS_SIGNALLING_CHANNEL"
+        ]
+        for key in diagnosticEnvironmentKeys {
+            if let value = ProcessInfo.processInfo.environment[key], value.isEmpty == false {
+                launchEnvironment[key] = value
+            }
+        }
         
         app.launchEnvironment = launchEnvironment
         app.launch()

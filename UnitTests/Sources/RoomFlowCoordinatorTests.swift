@@ -820,6 +820,50 @@ final class RoomFlowCoordinatorTests {
     }
 
     @Test
+    func nativeDirectCallIntegrationDiagnosticGateRequiresExplicitIntegrationEnvironment() {
+        let disabledEnvironments: [[String: String]] = [
+            [:],
+            ["IS_RUNNING_INTEGRATION_TESTS": "1"],
+            ["NATIVE_DIRECT_CALL_DIAGNOSTICS": "1"],
+            [
+                "UI_TESTS_SCREEN": "userSessionScreen",
+                "NATIVE_DIRECT_CALL_DIAGNOSTICS": "1",
+                "NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED": "1"
+            ],
+            [
+                "IS_RUNNING_INTEGRATION_TESTS": "0",
+                "NATIVE_DIRECT_CALL_DIAGNOSTICS": "1",
+                "NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED": "1"
+            ],
+            [
+                "IS_RUNNING_INTEGRATION_TESTS": "1",
+                "NATIVE_DIRECT_CALL_DIAGNOSTICS": "0",
+                "NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED": "1"
+            ]
+        ]
+
+        for environment in disabledEnvironments {
+            #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationHarnessEnabled(environment: environment) == false)
+            #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationCommandsEnabled(environment: environment) == false)
+        }
+
+        let harnessOnlyEnvironment = [
+            "IS_RUNNING_INTEGRATION_TESTS": "1",
+            "NATIVE_DIRECT_CALL_DIAGNOSTICS": "1"
+        ]
+        #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationHarnessEnabled(environment: harnessOnlyEnvironment) == true)
+        #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationCommandsEnabled(environment: harnessOnlyEnvironment) == false)
+
+        let commandsEnabledEnvironment = [
+            "IS_RUNNING_INTEGRATION_TESTS": "1",
+            "NATIVE_DIRECT_CALL_DIAGNOSTICS": "1",
+            "NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED": "1"
+        ]
+        #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationHarnessEnabled(environment: commandsEnabledEnvironment) == true)
+        #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationCommandsEnabled(environment: commandsEnabledEnvironment) == true)
+    }
+
+    @Test
     func uiTestsSignallingFileURLUsesOptionalSanitizedChannel() {
         let defaultURL = UITestsSignalling.Client.fileURL(deviceName: "iPhone 17",
                                                           environment: [:])

@@ -94,6 +94,22 @@ extension ProcessInfo {
         #endif
     }
 
+    static var isNativeDirectCallDiagnosticIntegrationHarnessEnabled: Bool {
+        #if DEBUG
+        isNativeDirectCallDiagnosticIntegrationHarnessEnabled(environment: processInfo.environment)
+        #else
+        false
+        #endif
+    }
+
+    static var isNativeDirectCallDiagnosticIntegrationCommandsEnabled: Bool {
+        #if DEBUG
+        isNativeDirectCallDiagnosticIntegrationCommandsEnabled(environment: processInfo.environment)
+        #else
+        false
+        #endif
+    }
+
     static var isXcodePreview: Bool {
         #if DEBUG
         processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
@@ -102,3 +118,15 @@ extension ProcessInfo {
         #endif
     }
 }
+
+#if DEBUG
+extension ProcessInfo {
+    static func isNativeDirectCallDiagnosticIntegrationHarnessEnabled(environment: [String: String]) -> Bool {
+        environment["IS_RUNNING_INTEGRATION_TESTS"] == "1" && environment["NATIVE_DIRECT_CALL_DIAGNOSTICS"] == "1"
+    }
+
+    static func isNativeDirectCallDiagnosticIntegrationCommandsEnabled(environment: [String: String]) -> Bool {
+        isNativeDirectCallDiagnosticIntegrationHarnessEnabled(environment: environment) && environment["NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED"] == "1"
+    }
+}
+#endif
