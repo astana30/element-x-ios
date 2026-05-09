@@ -198,6 +198,10 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
                 }
             }
             .store(in: &cancellables)
+
+        #if DEBUG
+        configureNativeDirectCallIntegrationDiagnosticHarnessIfNeeded()
+        #endif
     }
     
     func start() {
@@ -771,7 +775,7 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
         
         self.userSessionFlowCoordinator = userSessionFlowCoordinator
         #if DEBUG
-        configureNativeDirectCallIntegrationDiagnosticHarnessIfNeeded(for: userSessionFlowCoordinator)
+        configureNativeDirectCallIntegrationDiagnosticHarnessIfNeeded()
         #endif
         
         Task {
@@ -1326,24 +1330,25 @@ extension AppCoordinator {
 
 #if DEBUG
 extension AppCoordinator {
-    private func configureNativeDirectCallIntegrationDiagnosticHarnessIfNeeded(for flowCoordinator: UserSessionFlowCoordinator) {
-        try? nativeDirectCallDiagnosticClient?.stop()
-        nativeDirectCallDiagnosticClient = nil
-        nativeDirectCallDiagnosticCancellables.removeAll()
+    private func configureNativeDirectCallIntegrationDiagnosticHarnessIfNeeded() {
+        guard nativeDirectCallDiagnosticClient == nil else {
+            return
+        }
 
         guard ProcessInfo.isNativeDirectCallDiagnosticIntegrationHarnessEnabled else {
             return
         }
 
         do {
+            MXLog.info("Native direct-call integration diagnostics signalling starting.")
             let client = try UITestsSignalling.Client(mode: .app)
             client.signals
-                .sink { [weak flowCoordinator, weak client] signal in
+                .sink { [weak self, weak client] signal in
                     Task { @MainActor in
                         switch signal {
                         case .nativeDirectCallDiagnostic(let command):
                             let commandResult: NativeDirectCallRoomDiagnosticCommandResult
-                            if let flowCoordinator {
+                            if let flowCoordinator = self?.userSessionFlowCoordinator {
                                 commandResult = await flowCoordinator.handleNativeDirectCallDiagnosticCommand(command.roomFlowCommand)
                             } else {
                                 commandResult = .failed(.unavailable)
@@ -1353,7 +1358,7 @@ extension AppCoordinator {
                             try? client?.send(.nativeDirectCallDiagnosticResult(result))
                         case .nativeDirectCallDiagnosticStatus(let request):
                             let statusResult: NativeDirectCallRoomDiagnosticStatus
-                            if let flowCoordinator {
+                            if let flowCoordinator = self?.userSessionFlowCoordinator {
                                 statusResult = flowCoordinator.nativeDirectCallDiagnosticStatus()
                             } else {
                                 statusResult = .unavailable
@@ -1368,6 +1373,7 @@ extension AppCoordinator {
                 }
                 .store(in: &nativeDirectCallDiagnosticCancellables)
             nativeDirectCallDiagnosticClient = client
+            MXLog.info("Native direct-call integration diagnostics signalling ready.")
         } catch {
             MXLog.error("Native direct-call integration diagnostics signalling unavailable: \(error)")
         }
