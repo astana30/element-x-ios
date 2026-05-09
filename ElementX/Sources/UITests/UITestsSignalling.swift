@@ -74,18 +74,24 @@ enum UITestsSignal: Codable, Equatable {
     struct NativeDirectCallDiagnosticResult: Codable, Equatable {
         let correlationID: String?
         let outcome: NativeDirectCallDiagnosticOutcome
+        let reason: NativeDirectCallDiagnosticFailureReason?
 
-        init(correlationID: String? = nil, outcome: NativeDirectCallDiagnosticOutcome) {
+        init(correlationID: String? = nil,
+             outcome: NativeDirectCallDiagnosticOutcome,
+             reason: NativeDirectCallDiagnosticFailureReason? = nil) {
             self.correlationID = UITestsSignalling.sanitizedIdentifier(correlationID)
             self.outcome = outcome
+            self.reason = reason
         }
 
         static func success(_ success: NativeDirectCallDiagnosticSuccess, correlationID: String? = nil) -> Self {
             .init(correlationID: correlationID, outcome: .success(success))
         }
 
-        static func failure(_ failure: NativeDirectCallDiagnosticFailure, correlationID: String? = nil) -> Self {
-            .init(correlationID: correlationID, outcome: .failure(failure))
+        static func failure(_ failure: NativeDirectCallDiagnosticFailure,
+                            correlationID: String? = nil,
+                            reason: NativeDirectCallDiagnosticFailureReason? = nil) -> Self {
+            .init(correlationID: correlationID, outcome: .failure(failure), reason: reason)
         }
     }
 
@@ -115,6 +121,21 @@ enum UITestsSignal: Codable, Equatable {
         case noIncomingCall
         case noActiveCall
         case engineFailure
+        case unknown
+    }
+
+    enum NativeDirectCallDiagnosticFailureReason: String, Codable, Equatable {
+        case noActiveRoom
+        case controllerUnavailable
+        case diagnosticsDisabled
+        case engineStateInvalid
+        case missingPeer
+        case signalSendFailed
+        case e2eeUnavailable
+        case mediaSetupUnavailable
+        case mediaCredentialUnavailable
+        case inviteSendFailed
+        case resetting
         case unknown
     }
 
@@ -204,7 +225,7 @@ extension UITestsSignal.NativeDirectCallDiagnosticResult {
         case .reset:
             self = .success(.reset, correlationID: correlationID)
         case .failed(let error):
-            self = .failure(.init(error), correlationID: correlationID)
+            self = .failure(.init(error), correlationID: correlationID, reason: .init(error))
         }
     }
 }
@@ -293,6 +314,103 @@ extension UITestsSignal.NativeDirectCallDiagnosticFailure {
             self = .noActiveCall
         case .engine:
             self = .engineFailure
+        }
+    }
+}
+
+extension UITestsSignal.NativeDirectCallDiagnosticFailureReason {
+    init(_ error: NativeDirectCallRoomDeveloperCommandError) {
+        switch error {
+        case .disabled:
+            self = .diagnosticsDisabled
+        case .unavailable:
+            self = .noActiveRoom
+        case .owner(let ownerError):
+            self = .init(ownerError)
+        }
+    }
+
+    init(_ error: NativeDirectCallRoomFlowOwnerError) {
+        switch error {
+        case .disabled:
+            self = .diagnosticsDisabled
+        case .missingRoomControllerProvider:
+            self = .controllerUnavailable
+        case .resetting:
+            self = .resetting
+        case .trigger(let triggerError):
+            self = .init(triggerError)
+        }
+    }
+
+    init(_ error: NativeDirectCallDeveloperRoomTriggerError) {
+        switch error {
+        case .disabled:
+            self = .diagnosticsDisabled
+        case .control(let controlError):
+            self = .init(controlError)
+        }
+    }
+
+    init(_ error: NativeDirectCallRoomControlError) {
+        switch error {
+        case .composition(let compositionError):
+            self = .init(compositionError)
+        case .noIncomingCall, .noActiveCall:
+            self = .engineStateInvalid
+        case .engine(let engineError):
+            self = .init(engineError)
+        }
+    }
+
+    init(_ error: JoinedRoomNativeDirectCallCompositionError) {
+        switch error {
+        case .composition(.disabled):
+            self = .diagnosticsDisabled
+        case .composition(.invalidOwnUserID), .composition(.invalidRoomID), .unknownRoomMetadata:
+            self = .noActiveRoom
+        case .composition(.nonDirectRoom), .composition(.nonEncryptedRoom):
+            self = .controllerUnavailable
+        case .composition(.missingPeer):
+            self = .missingPeer
+        case .composition(.missingSignalTransport), .missingSignalSender, .missingTimelineListener:
+            self = .signalSendFailed
+        }
+    }
+
+    init(_ error: NativeDirectCallCompositionError) {
+        switch error {
+        case .disabled:
+            self = .diagnosticsDisabled
+        case .invalidOwnUserID, .invalidRoomID:
+            self = .noActiveRoom
+        case .missingSignalTransport:
+            self = .signalSendFailed
+        case .nonDirectRoom, .nonEncryptedRoom:
+            self = .controllerUnavailable
+        case .missingPeer:
+            self = .missingPeer
+        }
+    }
+
+    init(_ error: DirectCallEngineError) {
+        switch error {
+        case .invalidRoomID:
+            self = .noActiveRoom
+        case .invalidPeer, .invalidSender:
+            self = .missingPeer
+        case .invalidEncryptionTransition:
+            self = .e2eeUnavailable
+        case .mediaConnectionFailed:
+            self = .mediaSetupUnavailable
+        case .staleOrUnknownEvent,
+             .roomMismatch,
+             .callIDMismatch,
+             .sessionAlreadyActive,
+             .invalidTransition,
+             .invalidCallID,
+             .invalidIntent:
+            self = .engineStateInvalid
         }
     }
 }

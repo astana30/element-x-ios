@@ -347,17 +347,19 @@ if body.get("correlationID") != correlation_id:
 
 if expected_signal == "nativeDirectCallDiagnosticResult":
     outcome = body.get("outcome", {})
+    reason = body.get("reason")
+    reason_suffix = f" reason={reason}" if isinstance(reason, str) else ""
     if "success" in outcome:
         value = outcome["success"]
         if isinstance(value, dict):
             value = value.get("_0", "unknown")
-        print(f"outcome=success code={value}")
+        print(f"outcome=success code={value}{reason_suffix}")
         sys.exit(0)
     if "failure" in outcome:
         value = outcome["failure"]
         if isinstance(value, dict):
             value = value.get("_0", "unknown")
-        print(f"outcome=failure code={value}")
+        print(f"outcome=failure code={value}{reason_suffix}")
         sys.exit(0)
     sys.exit(7)
 

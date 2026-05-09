@@ -762,8 +762,12 @@ final class RoomFlowCoordinatorTests {
                                                                              correlationID: "call-A-1")
         let result = UITestsSignal.NativeDirectCallDiagnosticResult.success(.outgoingStarted,
                                                                             correlationID: "call-A-1")
+        let failureResult = UITestsSignal.NativeDirectCallDiagnosticResult.failure(.engineFailure,
+                                                                                   correlationID: "call-A-1",
+                                                                                   reason: .e2eeUnavailable)
         let commandSignal = UITestsSignal.nativeDirectCallDiagnostic(command)
         let resultSignal = UITestsSignal.nativeDirectCallDiagnosticResult(result)
+        let failureResultSignal = UITestsSignal.nativeDirectCallDiagnosticResult(failureResult)
         let statusRequest = UITestsSignal.NativeDirectCallDiagnosticStatusRequest(correlationID: "call-A-1")
         let statusResult = UITestsSignal.NativeDirectCallDiagnosticStatusResult(correlationID: "call-A-1",
                                                                                 status: .init(state: .active,
@@ -776,18 +780,22 @@ final class RoomFlowCoordinatorTests {
 
         let encodedCommand = try #require(String(data: encoder.encode(commandSignal), encoding: .utf8))
         let encodedResult = try #require(String(data: encoder.encode(resultSignal), encoding: .utf8))
+        let encodedFailureResult = try #require(String(data: encoder.encode(failureResultSignal), encoding: .utf8))
         let encodedStatus = try #require(String(data: encoder.encode(statusSignal), encoding: .utf8))
         let encodedStatusResult = try #require(String(data: encoder.encode(statusResultSignal), encoding: .utf8))
 
         #expect(try JSONDecoder().decode(UITestsSignal.self, from: Data(encodedCommand.utf8)) == commandSignal)
         #expect(try JSONDecoder().decode(UITestsSignal.self, from: Data(encodedResult.utf8)) == resultSignal)
+        #expect(try JSONDecoder().decode(UITestsSignal.self, from: Data(encodedFailureResult.utf8)) == failureResultSignal)
         #expect(try JSONDecoder().decode(UITestsSignal.self, from: Data(encodedStatus.utf8)) == statusSignal)
         #expect(try JSONDecoder().decode(UITestsSignal.self, from: Data(encodedStatusResult.utf8)) == statusResultSignal)
         #expect(encodedCommand.contains("startOutgoingAudioCall"))
         #expect(encodedResult.contains("outgoingStarted"))
+        #expect(encodedFailureResult.contains("e2eeUnavailable"))
         #expect(encodedStatus.contains("nativeDirectCallDiagnosticStatus"))
         #expect(encodedStatusResult.contains("hasActiveSession"))
         #expect(result.correlationID == command.correlationID)
+        #expect(failureResult.correlationID == command.correlationID)
         #expect(statusResult.correlationID == statusRequest.correlationID)
 
         let forbiddenFragments = [
@@ -801,7 +809,7 @@ final class RoomFlowCoordinatorTests {
             "raw " + "key",
             "livekit.example.com"
         ]
-        let combinedSignals = encodedCommand + encodedResult + encodedStatus + encodedStatusResult
+        let combinedSignals = encodedCommand + encodedResult + encodedFailureResult + encodedStatus + encodedStatusResult
         for fragment in forbiddenFragments {
             #expect(combinedSignals.localizedCaseInsensitiveContains(fragment) == false)
         }
@@ -892,6 +900,9 @@ final class RoomFlowCoordinatorTests {
         #expect(UITestsSignal.NativeDirectCallDiagnosticResult(.failed(.owner(.resetting))).outcome == .failure(.resetting))
         #expect(UITestsSignal.NativeDirectCallDiagnosticResult(.failed(.owner(.trigger(.disabled)))).outcome == .failure(.triggerDisabled))
         #expect(UITestsSignal.NativeDirectCallDiagnosticResult(.failed(.owner(.trigger(.control(.noActiveCall))))).outcome == .failure(.noActiveCall))
+        let e2eeFailure = UITestsSignal.NativeDirectCallDiagnosticResult(.failed(.owner(.trigger(.control(.engine(.invalidEncryptionTransition))))))
+        #expect(e2eeFailure.outcome == .failure(.engineFailure))
+        #expect(e2eeFailure.reason == .e2eeUnavailable)
         #expect(UITestsSignal.NativeDirectCallDiagnosticStatusResult(.init(state: .active,
                                                                            listenerStarted: true,
                                                                            hasActiveSession: true)).status.state == .active)
