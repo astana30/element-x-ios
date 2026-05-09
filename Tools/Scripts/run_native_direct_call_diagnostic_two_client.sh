@@ -229,7 +229,9 @@ import sys
 
 file_path = sys.argv[1]
 message = {
-    "mode": "tests",
+    "mode": {
+        "tests": {}
+    },
     "signal": {
         "ready": {}
     }
@@ -258,7 +260,9 @@ import sys
 
 file_path, command_name, correlation_id = sys.argv[1:4]
 message = {
-    "mode": "tests",
+    "mode": {
+        "tests": {}
+    },
     "signal": {
         "nativeDirectCallDiagnostic": {
             "_0": {
@@ -290,7 +294,9 @@ import sys
 
 file_path, correlation_id = sys.argv[1:3]
 message = {
-    "mode": "tests",
+    "mode": {
+        "tests": {}
+    },
     "signal": {
         "nativeDirectCallDiagnosticStatus": {
             "_0": {
@@ -323,7 +329,8 @@ try:
 except Exception:
     sys.exit(2)
 
-if message.get("mode") != "app":
+mode = message.get("mode")
+if not (mode == "app" or (isinstance(mode, dict) and "app" in mode)):
     sys.exit(3)
 
 signal = message.get("signal", {})
@@ -386,7 +393,8 @@ try:
 except Exception:
     sys.exit(1)
 
-if message.get("mode") != "app":
+mode = message.get("mode")
+if not (mode == "app" or (isinstance(mode, dict) and "app" in mode)):
     sys.exit(2)
 
 signal = message.get("signal", {})
