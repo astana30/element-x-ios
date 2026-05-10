@@ -51,11 +51,19 @@ final class TimelineProxy: TimelineProxyProtocol {
                                                 ownUserID: String,
                                                 isDirectOneToOneRoom: @escaping () -> Bool?,
                                                 isEncryptedRoom: @escaping () -> Bool?) -> DirectCallMatrixTimelineSignalListening {
-        DirectCallMatrixSDKTimelineSignalListener(timeline: timeline,
-                                                  roomID: roomID,
-                                                  ownUserID: ownUserID,
-                                                  isDirectOneToOneRoom: isDirectOneToOneRoom,
-                                                  isEncryptedRoom: isEncryptedRoom)
+        if let innerTimelineItemProvider {
+            return DirectCallMatrixTimelineItemProviderSignalListener(timelineItemProvider: innerTimelineItemProvider,
+                                                                      roomID: roomID,
+                                                                      ownUserID: ownUserID,
+                                                                      isDirectOneToOneRoom: isDirectOneToOneRoom,
+                                                                      isEncryptedRoom: isEncryptedRoom)
+        }
+
+        return DirectCallMatrixSDKTimelineSignalListener(timeline: timeline,
+                                                         roomID: roomID,
+                                                         ownUserID: ownUserID,
+                                                         isDirectOneToOneRoom: isDirectOneToOneRoom,
+                                                         isEncryptedRoom: isEncryptedRoom)
     }
     
     func subscribeForUpdates() async {

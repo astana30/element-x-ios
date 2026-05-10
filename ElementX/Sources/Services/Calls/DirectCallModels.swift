@@ -423,6 +423,7 @@ enum DirectCallDiagnosticTimelineDiffKind: String, Codable, Equatable, CustomStr
     case popFront
     case truncate
     case reset
+    case providerUpdate
     case mixed
 
     var description: String {

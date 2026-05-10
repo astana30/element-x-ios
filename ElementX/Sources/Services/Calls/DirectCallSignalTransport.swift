@@ -673,7 +673,7 @@ final class DirectCallMatrixSDKTimelineSignalListener: DirectCallMatrixTimelineS
     }
     #endif
 
-    private static func stableEventID(from eventItem: EventTimelineItem) -> String? {
+    fileprivate static func stableEventID(from eventItem: EventTimelineItem) -> String? {
         guard case .eventID(let eventID) = TimelineItemIdentifier.EventOrTransactionID(rustValue: eventItem.eventOrTransactionId) else {
             return nil
         }
@@ -681,7 +681,7 @@ final class DirectCallMatrixSDKTimelineSignalListener: DirectCallMatrixTimelineS
         return eventID.isEmpty ? nil : eventID
     }
 
-    private static func isDirectCallSignalContent(_ content: TimelineItemContent) -> Bool {
+    fileprivate static func isDirectCallSignalContent(_ content: TimelineItemContent) -> Bool {
         switch content {
         case .msgLike(let content):
             guard case .other(let eventType) = content.kind else {
@@ -696,7 +696,7 @@ final class DirectCallMatrixSDKTimelineSignalListener: DirectCallMatrixTimelineS
         }
     }
 
-    private static func isDirectCallSignalEventType(_ eventType: MessageLikeEventType) -> Bool {
+    fileprivate static func isDirectCallSignalEventType(_ eventType: MessageLikeEventType) -> Bool {
         guard case .other(let eventType) = eventType else {
             return false
         }
@@ -711,10 +711,10 @@ final class DirectCallMatrixSDKTimelineSignalListener: DirectCallMatrixTimelineS
         diagnosticState.lastEnvelopeRejectedReason = rejectionReason
     }
 
-    private static func diagnosticMetadataRejectionReason(from eventItem: EventTimelineItem,
-                                                          roomID: String,
-                                                          ownUserID: String,
-                                                          isDirectCallSignalContent: Bool) -> DirectCallDiagnosticEnvelopeRejectedReason? {
+    fileprivate static func diagnosticMetadataRejectionReason(from eventItem: EventTimelineItem,
+                                                              roomID: String,
+                                                              ownUserID: String,
+                                                              isDirectCallSignalContent: Bool) -> DirectCallDiagnosticEnvelopeRejectedReason? {
         guard !roomID.isEmpty, !ownUserID.isEmpty else {
             return .metadataUnavailable
         }
@@ -738,7 +738,7 @@ final class DirectCallMatrixSDKTimelineSignalListener: DirectCallMatrixTimelineS
         return nil
     }
 
-    private static func diagnosticEventKind(from content: TimelineItemContent?) -> DirectCallDiagnosticReceiveEventKind {
+    fileprivate static func diagnosticEventKind(from content: TimelineItemContent?) -> DirectCallDiagnosticReceiveEventKind {
         guard let content else {
             return .unknown
         }
@@ -764,6 +764,173 @@ extension DirectCallMatrixSDKTimelineSignalListener: DirectCallMatrixTimelineSig
 #endif
 
 @MainActor
+final class DirectCallMatrixTimelineItemProviderSignalListener: DirectCallMatrixTimelineSignalListening {
+    private let timelineItemProvider: TimelineItemProviderProtocol
+    private let roomID: String
+    private let ownUserID: String
+    private let isDirectOneToOneRoom: () -> Bool?
+    private let isEncryptedRoom: () -> Bool?
+    private let envelopeExtractor: DirectCallMatrixTimelineItemEnvelopeExtracting
+
+    private var cancellable: AnyCancellable?
+    private var processedNonDirectEventIDs = Set<String>()
+    private var deliveredDirectCallEventIDs = Set<String>()
+
+    #if DEBUG
+    private var diagnosticState = DirectCallDiagnosticSnapshot()
+
+    var diagnosticSnapshot: DirectCallDiagnosticSnapshot {
+        diagnosticState
+    }
+    #endif
+
+    init(timelineItemProvider: TimelineItemProviderProtocol,
+         roomID: String,
+         ownUserID: String,
+         isDirectOneToOneRoom: @escaping () -> Bool?,
+         isEncryptedRoom: @escaping () -> Bool?,
+         envelopeExtractor: DirectCallMatrixTimelineItemEnvelopeExtracting? = nil) {
+        self.timelineItemProvider = timelineItemProvider
+        self.roomID = roomID
+        self.ownUserID = ownUserID
+        self.isDirectOneToOneRoom = isDirectOneToOneRoom
+        self.isEncryptedRoom = isEncryptedRoom
+        self.envelopeExtractor = envelopeExtractor ?? DirectCallMatrixSDKTimelineItemEnvelopeExtractor()
+    }
+
+    func start(onEnvelope: @escaping @MainActor (DirectCallMatrixSignalEnvelope) -> Void) async -> DirectCallMatrixSignalListeningHandle {
+        #if DEBUG
+        diagnosticState.receiveRoomFingerprint = DirectCallDiagnosticRedactor.roomFingerprint(roomID)
+        #endif
+
+        cancellable?.cancel()
+        processedNonDirectEventIDs.removeAll()
+        deliveredDirectCallEventIDs.removeAll()
+
+        cancellable = timelineItemProvider.updatePublisher
+            .sink { [weak self] itemProxies, _ in
+                Task { @MainActor [weak self] in
+                    self?.process(itemProxies, onEnvelope: onEnvelope)
+                }
+            }
+
+        return DirectCallMatrixCancellableSignalListeningHandle { [weak self] in
+            self?.cancellable?.cancel()
+            self?.cancellable = nil
+        }
+    }
+
+    private func process(_ itemProxies: [TimelineItemProxy],
+                         onEnvelope: @escaping @MainActor (DirectCallMatrixSignalEnvelope) -> Void) {
+        #if DEBUG
+        diagnosticState.timelineUpdateCount += 1
+        diagnosticState.timelineDiffReceivedCount += 1
+        diagnosticState.lastTimelineDiffKind = .providerUpdate
+        diagnosticState.lastTimelineDiffItemCount = itemProxies.count
+        #endif
+
+        for itemProxy in itemProxies {
+            guard case .event(let eventProxy) = itemProxy else {
+                #if DEBUG
+                recordReceive(kind: .nonEventTimelineItem, rejectionReason: .unsupportedEvent)
+                #endif
+                continue
+            }
+
+            let eventItem = eventProxy.item
+            let eventID = DirectCallMatrixSDKTimelineSignalListener.stableEventID(from: eventItem)
+            let isDirectCallSignalContent = DirectCallMatrixSDKTimelineSignalListener.isDirectCallSignalContent(eventItem.content)
+            if let eventID, isDirectCallSignalContent, deliveredDirectCallEventIDs.contains(eventID) {
+                continue
+            }
+
+            if let eventID, !isDirectCallSignalContent, !processedNonDirectEventIDs.insert(eventID).inserted {
+                continue
+            }
+
+            if process(eventItem, isDirectCallSignalContent: isDirectCallSignalContent, onEnvelope: onEnvelope),
+               let eventID {
+                deliveredDirectCallEventIDs.insert(eventID)
+            }
+        }
+    }
+
+    private func process(_ eventItem: EventTimelineItem,
+                         isDirectCallSignalContent: Bool,
+                         onEnvelope: @escaping @MainActor (DirectCallMatrixSignalEnvelope) -> Void) -> Bool {
+        #if DEBUG
+        diagnosticState.timelineEventReceivedCount += 1
+        if isDirectCallSignalContent {
+            diagnosticState.directCallEventTypeSeenCount += 1
+        }
+
+        if let rejectionReason = DirectCallMatrixSDKTimelineSignalListener.diagnosticMetadataRejectionReason(from: eventItem,
+                                                                                                             roomID: roomID,
+                                                                                                             ownUserID: ownUserID,
+                                                                                                             isDirectCallSignalContent: isDirectCallSignalContent) {
+            recordReceive(kind: DirectCallMatrixSDKTimelineSignalListener.diagnosticEventKind(from: eventItem.content),
+                          rejectionReason: rejectionReason)
+            return false
+        }
+
+        guard let metadata = DirectCallMatrixSDKTimelineSignalListener.metadata(from: eventItem,
+                                                                                roomID: roomID,
+                                                                                ownUserID: ownUserID,
+                                                                                isDirectOneToOneRoom: isDirectOneToOneRoom(),
+                                                                                isEncryptedRoom: isEncryptedRoom()) else {
+            recordReceive(kind: DirectCallMatrixSDKTimelineSignalListener.diagnosticEventKind(from: eventItem.content),
+                          rejectionReason: .metadataUnavailable)
+            return false
+        }
+
+        if let diagnosticExtractor = envelopeExtractor as? DirectCallMatrixTimelineItemEnvelopeDiagnosing {
+            let result = diagnosticExtractor.diagnosticEnvelope(from: metadata, eventItem: eventItem)
+            guard let envelope = result.envelope else {
+                recordReceive(kind: result.eventKind, rejectionReason: result.rejectionReason)
+                return false
+            }
+
+            diagnosticState.envelopeExtractedCount += 1
+            recordReceive(kind: result.eventKind, rejectionReason: .none)
+            onEnvelope(envelope)
+            return true
+        }
+        #endif
+
+        guard let metadata = DirectCallMatrixSDKTimelineSignalListener.metadata(from: eventItem,
+                                                                                roomID: roomID,
+                                                                                ownUserID: ownUserID,
+                                                                                isDirectOneToOneRoom: isDirectOneToOneRoom(),
+                                                                                isEncryptedRoom: isEncryptedRoom()),
+            let envelope = envelopeExtractor.envelope(from: metadata, eventItem: eventItem) else {
+            #if DEBUG
+            recordReceive(kind: .unknown, rejectionReason: .contentUnavailable)
+            #endif
+            return false
+        }
+
+        #if DEBUG
+        diagnosticState.envelopeExtractedCount += 1
+        recordReceive(kind: DirectCallMatrixSignalCodec.diagnosticReceiveEventKind(envelope), rejectionReason: .none)
+        #endif
+        onEnvelope(envelope)
+        return true
+    }
+
+    #if DEBUG
+    private func recordReceive(kind: DirectCallDiagnosticReceiveEventKind,
+                               rejectionReason: DirectCallDiagnosticEnvelopeRejectedReason) {
+        diagnosticState.lastReceiveEventKind = kind
+        diagnosticState.lastEnvelopeRejectedReason = rejectionReason
+    }
+    #endif
+}
+
+#if DEBUG
+extension DirectCallMatrixTimelineItemProviderSignalListener: DirectCallMatrixTimelineSignalDiagnosticsProviding { }
+#endif
+
+@MainActor
 private final class DirectCallMatrixSDKSignalListeningHandle: DirectCallMatrixSignalListeningHandle {
     private let handle: TaskHandle
 
@@ -773,6 +940,19 @@ private final class DirectCallMatrixSDKSignalListeningHandle: DirectCallMatrixSi
 
     func cancel() {
         handle.cancel()
+    }
+}
+
+@MainActor
+private final class DirectCallMatrixCancellableSignalListeningHandle: DirectCallMatrixSignalListeningHandle {
+    private let onCancel: @MainActor () -> Void
+
+    init(onCancel: @escaping @MainActor () -> Void) {
+        self.onCancel = onCancel
+    }
+
+    func cancel() {
+        onCancel()
     }
 }
 

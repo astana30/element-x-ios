@@ -3236,6 +3236,105 @@ final class DirectCallMatrixSDKSignalAdapterTests {
     }
 
     @Test
+    func matrixTimelineItemProviderSignalListenerReceivesLiveProviderUpdates() async throws {
+        let updates = PassthroughSubject<([TimelineItemProxy], TimelinePaginationState), Never>()
+        let timelineItemProvider = TimelineItemProviderMock()
+        timelineItemProvider.underlyingUpdatePublisher = updates.eraseToAnyPublisher()
+        timelineItemProvider.itemProxies = []
+        timelineItemProvider.paginationState = .initial
+        timelineItemProvider.kind = .live
+        timelineItemProvider.underlyingMembershipChangePublisher = Empty<Void, Never>().eraseToAnyPublisher()
+        let signal = DirectCallOutgoingSignal(roomID: roomID,
+                                              peerUserID: userB,
+                                              callID: "call-1",
+                                              type: .invite,
+                                              intent: .audio,
+                                              keyExchange: keyExchange(callID: "call-1", senderUserID: userA))
+        let content = try #require(DirectCallMatrixSignalCodec.encode(signal))
+        let lazyProvider = LazyTimelineItemProviderSDKMock()
+        lazyProvider.messageLikeCustomContentReturnValue = .init(eventType: DirectCallMatrixSignalCodec.eventType,
+                                                                 contentJson: content)
+        let listener = DirectCallMatrixTimelineItemProviderSignalListener(timelineItemProvider: timelineItemProvider,
+                                                                          roomID: roomID,
+                                                                          ownUserID: userB,
+                                                                          isDirectOneToOneRoom: { true },
+                                                                          isEncryptedRoom: { true })
+        var envelopes = [DirectCallMatrixSignalEnvelope]()
+        let handle = await listener.start { envelope in
+            envelopes.append(envelope)
+        }
+        defer { handle.cancel() }
+
+        let existingMessage = timelineItemProxy(eventID: "$message", content: nonDirectCallTimelineContent())
+        updates.send(([existingMessage], .initial))
+        await Task.yield()
+        #expect(envelopes.isEmpty)
+
+        let directCallInvite = timelineItemProxy(eventID: "$event-1",
+                                                 content: directCallTimelineContent(),
+                                                 lazyProvider: lazyProvider)
+        updates.send(([existingMessage, directCallInvite], .initial))
+
+        #expect(await waitUntil { envelopes.count == 1 })
+        #expect(listener.diagnosticSnapshot.timelineUpdateCount == 2)
+        #expect(listener.diagnosticSnapshot.timelineDiffReceivedCount == 2)
+        #expect(listener.diagnosticSnapshot.lastTimelineDiffKind == .providerUpdate)
+        #expect(listener.diagnosticSnapshot.lastTimelineDiffItemCount == 2)
+        #expect(listener.diagnosticSnapshot.timelineEventReceivedCount == 2)
+        #expect(listener.diagnosticSnapshot.directCallEventTypeSeenCount == 1)
+        #expect(listener.diagnosticSnapshot.envelopeExtractedCount == 1)
+        #expect(listener.diagnosticSnapshot.lastReceiveEventKind == .directCallInvite)
+        #expect(listener.diagnosticSnapshot.lastEnvelopeRejectedReason == .none)
+        #expect(listener.diagnosticSnapshot.receiveRoomFingerprint == DirectCallDiagnosticRedactor.roomFingerprint(roomID))
+        #expect(listener.diagnosticSnapshot.receiveRoomFingerprint != roomID)
+    }
+
+    @Test
+    func matrixTimelineItemProviderSignalListenerDeduplicatesProviderSnapshots() async throws {
+        let updates = PassthroughSubject<([TimelineItemProxy], TimelinePaginationState), Never>()
+        let timelineItemProvider = TimelineItemProviderMock()
+        timelineItemProvider.underlyingUpdatePublisher = updates.eraseToAnyPublisher()
+        timelineItemProvider.itemProxies = []
+        timelineItemProvider.paginationState = .initial
+        timelineItemProvider.kind = .live
+        timelineItemProvider.underlyingMembershipChangePublisher = Empty<Void, Never>().eraseToAnyPublisher()
+        let signal = DirectCallOutgoingSignal(roomID: roomID,
+                                              peerUserID: userB,
+                                              callID: "call-1",
+                                              type: .invite,
+                                              intent: .audio,
+                                              keyExchange: keyExchange(callID: "call-1", senderUserID: userA))
+        let content = try #require(DirectCallMatrixSignalCodec.encode(signal))
+        let lazyProvider = LazyTimelineItemProviderSDKMock()
+        lazyProvider.messageLikeCustomContentReturnValue = .init(eventType: DirectCallMatrixSignalCodec.eventType,
+                                                                 contentJson: content)
+        let listener = DirectCallMatrixTimelineItemProviderSignalListener(timelineItemProvider: timelineItemProvider,
+                                                                          roomID: roomID,
+                                                                          ownUserID: userB,
+                                                                          isDirectOneToOneRoom: { true },
+                                                                          isEncryptedRoom: { true })
+        var envelopes = [DirectCallMatrixSignalEnvelope]()
+        let handle = await listener.start { envelope in
+            envelopes.append(envelope)
+        }
+        defer { handle.cancel() }
+
+        let directCallInvite = timelineItemProxy(eventID: "$event-1",
+                                                 content: directCallTimelineContent(),
+                                                 lazyProvider: lazyProvider)
+        updates.send(([directCallInvite], .initial))
+        #expect(await waitUntil { envelopes.count == 1 })
+
+        updates.send(([directCallInvite], .initial))
+        await Task.yield()
+
+        #expect(envelopes.count == 1)
+        #expect(listener.diagnosticSnapshot.timelineUpdateCount == 2)
+        #expect(listener.diagnosticSnapshot.directCallEventTypeSeenCount == 1)
+        #expect(listener.diagnosticSnapshot.envelopeExtractedCount == 1)
+    }
+
+    @Test
     func matrixSDKTimelineSignalListenerRecordsWrongEventTypeAndOwnEventReasons() async {
         let timeline = TimelineSDKMock()
         timeline.addListenerListenerReturnValue = TaskHandleSDKMock()
@@ -3402,6 +3501,19 @@ final class DirectCallMatrixSDKSignalAdapterTests {
                                                     content: content,
                                                     lazyProvider: lazyProvider)
         return item
+    }
+
+    private func timelineItemProxy(eventID: String,
+                                   senderUserID: String? = nil,
+                                   isOwn: Bool = false,
+                                   content: TimelineItemContent,
+                                   lazyProvider: LazyTimelineItemProviderSDKMock? = nil) -> TimelineItemProxy {
+        .event(.init(item: eventTimelineItem(eventID: eventID,
+                                             senderUserID: senderUserID,
+                                             isOwn: isOwn,
+                                             content: content,
+                                             lazyProvider: lazyProvider),
+                     uniqueID: .init(eventID)))
     }
 
     private func eventTimelineItem(eventID: String,
