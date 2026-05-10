@@ -67,6 +67,10 @@ Optional environment:
                                   Avoids deriving simulator names from UDIDs.
   WAIT_TIMEOUT_SECONDS             Defaults to 30.
   DRY_RUN                          Defaults to 1.
+  NATIVE_DIRECT_CALL_DIAGNOSTIC_ENCRYPTION
+                                  Optional. Set to 1 for diagnostic-only key exchange.
+  NATIVE_DIRECT_CALL_DIAGNOSTIC_ENCRYPTION_SECRET
+                                  Optional shared diagnostic secret; never printed.
 
 Example planned signalling sequence:
   $SCRIPT_NAME init both
@@ -496,7 +500,7 @@ set_client_environment() {
     if [[ "$DRY_RUN" == "1" ]]; then
         local udid
         udid="$(client_udid "$client")"
-        log "DRY_RUN: set integration env for channel=$client udid=$udid host=<set> username=<set> credential=<redacted>"
+        log "DRY_RUN: set integration env for channel=$client udid=$udid host=<set> username=<set> credential=<redacted> diagnosticEncryption=${NATIVE_DIRECT_CALL_DIAGNOSTIC_ENCRYPTION:-0}"
         return
     fi
 
@@ -518,6 +522,8 @@ launch_client_with_environment() {
     SIMCTL_CHILD_IS_RUNNING_INTEGRATION_TESTS=1 \
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_DIAGNOSTICS=1 \
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1 \
+        SIMCTL_CHILD_NATIVE_DIRECT_CALL_DIAGNOSTIC_ENCRYPTION="${NATIVE_DIRECT_CALL_DIAGNOSTIC_ENCRYPTION:-}" \
+        SIMCTL_CHILD_NATIVE_DIRECT_CALL_DIAGNOSTIC_ENCRYPTION_SECRET="${NATIVE_DIRECT_CALL_DIAGNOSTIC_ENCRYPTION_SECRET:-}" \
         SIMCTL_CHILD_UI_TESTS_SIGNALLING_CHANNEL="$channel" \
         SIMCTL_CHILD_INTEGRATION_TESTS_HOST="$INTEGRATION_TESTS_HOST" \
         SIMCTL_CHILD_INTEGRATION_TESTS_USERNAME="$username" \

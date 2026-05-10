@@ -853,6 +853,7 @@ final class RoomFlowCoordinatorTests {
         for environment in disabledEnvironments {
             #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationHarnessEnabled(environment: environment) == false)
             #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationCommandsEnabled(environment: environment) == false)
+            #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationEncryptionEnabled(environment: environment) == false)
         }
 
         let harnessOnlyEnvironment = [
@@ -861,6 +862,7 @@ final class RoomFlowCoordinatorTests {
         ]
         #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationHarnessEnabled(environment: harnessOnlyEnvironment) == true)
         #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationCommandsEnabled(environment: harnessOnlyEnvironment) == false)
+        #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationEncryptionEnabled(environment: harnessOnlyEnvironment) == false)
 
         let commandsEnabledEnvironment = [
             "IS_RUNNING_INTEGRATION_TESTS": "1",
@@ -869,6 +871,21 @@ final class RoomFlowCoordinatorTests {
         ]
         #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationHarnessEnabled(environment: commandsEnabledEnvironment) == true)
         #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationCommandsEnabled(environment: commandsEnabledEnvironment) == true)
+        #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationEncryptionEnabled(environment: commandsEnabledEnvironment) == false)
+
+        var encryptionEnvironment = commandsEnabledEnvironment
+        encryptionEnvironment[NativeDirectCallDiagnosticEncryptionService.encryptionGateEnvironmentKey] = "1"
+        #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationEncryptionEnabled(environment: encryptionEnvironment) == false)
+        #expect(AppCoordinator.makeNativeDirectCallDiagnosticEncryptionService(ownUserID: "hi@bob",
+                                                                               environment: encryptionEnvironment) == nil)
+
+        encryptionEnvironment[NativeDirectCallDiagnosticEncryptionService.secretEnvironmentKey] = ""
+        #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationEncryptionEnabled(environment: encryptionEnvironment) == false)
+
+        encryptionEnvironment[NativeDirectCallDiagnosticEncryptionService.secretEnvironmentKey] = "diagnostic-shared-secret"
+        #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationEncryptionEnabled(environment: encryptionEnvironment) == true)
+        #expect(AppCoordinator.makeNativeDirectCallDiagnosticEncryptionService(ownUserID: "hi@bob",
+                                                                               environment: encryptionEnvironment) != nil)
     }
 
     @Test

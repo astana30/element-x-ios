@@ -669,6 +669,7 @@
 		737C5DA0AE5A5818FCDCE082 /* SecureBackupKeyBackupScreenCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46443763F5314E8E7A32FC48 /* SecureBackupKeyBackupScreenCoordinator.swift */; };
 		73B4972ABC3195C50211BB7A /* InfoPlistReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69646EC10F3C509D573F5E1D /* InfoPlistReader.swift */; };
 		73B898D8F268D184EB2FCD4F /* QRCodeLoginScreenViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8EBCE7CC4C3260B940760EA /* QRCodeLoginScreenViewModel.swift */; };
+		73F2D30C4F80DD945A755E69 /* NativeDirectCallDiagnosticEncryptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DFA5CE0F5205254A66E7320 /* NativeDirectCallDiagnosticEncryptionService.swift */; };
 		73FF16835820E31BC86E349B /* GZIP in Frameworks */ = {isa = PBXBuildFile; productRef = 5DEFE950FC731F7A537BADB0 /* GZIP */; };
 		740D1F14840C072671056151 /* SecureBackupController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D43D3CE7705D1531266E8DA /* SecureBackupController.swift */; };
 		746139DFD176B9534C7685F8 /* NotificationSettingsEditScreenViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC8044B36F16E3428FE4C0FC /* NotificationSettingsEditScreenViewModel.swift */; };
@@ -1917,6 +1918,7 @@
 		3D423EAEC41F5A0BB5B1AE80 /* SecureBackupRecoveryKeyScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureBackupRecoveryKeyScreen.swift; sourceTree = "<group>"; };
 		3D7F82ACD45481252333DBB3 /* fi */ = {isa = PBXFileReference; lastKnownFileType = text.plist.stringsdict; name = fi; path = fi.lproj/Localizable.stringsdict; sourceTree = "<group>"; };
 		3D8072A5D319C90A936A3BC4 /* TimelineModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineModels.swift; sourceTree = "<group>"; };
+		3DFA5CE0F5205254A66E7320 /* NativeDirectCallDiagnosticEncryptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeDirectCallDiagnosticEncryptionService.swift; sourceTree = "<group>"; };
 		3E76F5DE040F991C26676D09 /* AppLockSetupBiometricsScreenCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLockSetupBiometricsScreenCoordinator.swift; sourceTree = "<group>"; };
 		3E8FCE961F2AB3FD3C8EA024 /* VoiceMessageCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceMessageCacheTests.swift; sourceTree = "<group>"; };
 		3ED48347A4127DC9DEB0F82D /* PhotoLibraryPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoLibraryPicker.swift; sourceTree = "<group>"; };
@@ -3216,6 +3218,7 @@
 				00E3AEF46A0ECB55A388804E /* DirectCallSignalTransport.swift */,
 				BFE5D88B12B3142D7D30268B /* LiveKitDirectCallClient.swift */,
 				8ED0010AA472E6BF4CF29A0E /* LiveKitDirectCallMediaEngine.swift */,
+				3DFA5CE0F5205254A66E7320 /* NativeDirectCallDiagnosticEncryptionService.swift */,
 				457CB85C7313E71588D9CBC1 /* NoOpDirectCallMediaEngine.swift */,
 				8E5E72F3677F7B24929AE258 /* RoomCallEvent.swift */,
 			);
@@ -8348,6 +8351,7 @@
 				F46B2A6B8BE10DC8CCFA57DE /* NSEUserSessionMock.swift in Sources */,
 				015E459305314D880D785A70 /* NSItemProvider.swift in Sources */,
 				C5789EF25257927BAD3CA7B3 /* NSRegularExpresion.swift in Sources */,
+				73F2D30C4F80DD945A755E69 /* NativeDirectCallDiagnosticEncryptionService.swift in Sources */,
 				BCD29227031CD7F38EC8430B /* NativeDirectCallRoomDeveloperCommandRouter.swift in Sources */,
 				5876406B86DC223DC1C17B99 /* NavigationCoordinators.swift in Sources */,
 				B0CA7A2408F9D71D98414362 /* NavigationModule.swift in Sources */,

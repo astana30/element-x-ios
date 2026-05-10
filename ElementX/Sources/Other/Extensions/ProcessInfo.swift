@@ -110,6 +110,14 @@ extension ProcessInfo {
         #endif
     }
 
+    static var isNativeDirectCallDiagnosticIntegrationEncryptionEnabled: Bool {
+        #if DEBUG
+        isNativeDirectCallDiagnosticIntegrationEncryptionEnabled(environment: processInfo.environment)
+        #else
+        false
+        #endif
+    }
+
     static var isXcodePreview: Bool {
         #if DEBUG
         processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
@@ -127,6 +135,15 @@ extension ProcessInfo {
 
     static func isNativeDirectCallDiagnosticIntegrationCommandsEnabled(environment: [String: String]) -> Bool {
         isNativeDirectCallDiagnosticIntegrationHarnessEnabled(environment: environment) && environment["NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED"] == "1"
+    }
+
+    static func isNativeDirectCallDiagnosticIntegrationEncryptionEnabled(environment: [String: String]) -> Bool {
+        let encryptionGateEnvironmentKey = "NATIVE_DIRECT_CALL_DIAGNOSTIC_ENCRYPTION"
+        let secretEnvironmentKey = "NATIVE_DIRECT_CALL_DIAGNOSTIC_ENCRYPTION_SECRET"
+
+        return isNativeDirectCallDiagnosticIntegrationCommandsEnabled(environment: environment) &&
+            environment[encryptionGateEnvironmentKey] == "1" &&
+            environment[secretEnvironmentKey]?.isEmpty == false
     }
 }
 #endif

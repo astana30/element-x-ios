@@ -251,6 +251,81 @@ final class DirectCallEngineTests {
     }
 
     @Test
+    func diagnosticEncryptionServiceAllowsOutgoingInviteWithoutE2EEFailure() async throws {
+        let encryptionService = try #require(NativeDirectCallDiagnosticEncryptionService(ownUserID: ownUserID,
+                                                                                         secret: "diagnostic-shared-secret"))
+        let engine = makeEngine(encryptionService: encryptionService)
+        var emittedSignals = [DirectCallOutgoingSignal]()
+        let cancellable = engine.actionsPublisher.sink { action in
+            guard case .emitSignal(let signal) = action else {
+                return
+            }
+            emittedSignals.append(signal)
+        }
+        defer { cancellable.cancel() }
+
+        let result = await engine.startOutgoingAudioCall(peer: peerUserID, roomID: roomID)
+
+        guard case .success(let session) = result else {
+            Issue.record("Expected diagnostic encryption to allow outgoing invite emission.")
+            return
+        }
+
+        let emittedSignal = try #require(emittedSignals.first)
+        let keyExchange = try #require(emittedSignal.keyExchange)
+        #expect(session.state == .outgoingRinging)
+        #expect(emittedSignal.type == .invite)
+        #expect(keyExchange.callID == session.callID)
+        #expect(keyExchange.roomID == roomID)
+        #expect(keyExchange.senderUserID == ownUserID)
+        #expect(keyExchange.encryptedPayload.contains("diagnostic-shared-secret") == false)
+        #expect(keyExchange.keyID.contains("diagnostic-shared-secret") == false)
+    }
+
+    @Test
+    func diagnosticEncryptionServiceConsumesOnlyMatchingSecretAndMetadata() throws {
+        let sender = try #require(NativeDirectCallDiagnosticEncryptionService(ownUserID: ownUserID,
+                                                                              secret: "diagnostic-shared-secret"))
+        let receiver = try #require(NativeDirectCallDiagnosticEncryptionService(ownUserID: peerUserID,
+                                                                                secret: "diagnostic-shared-secret"))
+        let mismatchedReceiver = try #require(NativeDirectCallDiagnosticEncryptionService(ownUserID: peerUserID,
+                                                                                          secret: "other-diagnostic-secret"))
+
+        let generatedResult = sender.generatePerCallKey(callID: "call-a",
+                                                        roomID: roomID,
+                                                        peerUserID: peerUserID)
+        guard case .success(let generated) = generatedResult else {
+            Issue.record("Expected diagnostic encryption key generation to succeed.")
+            return
+        }
+
+        #expect(generated.payload.encryptedPayload.contains("diagnostic-shared-secret") == false)
+        #expect(generated.payload.encryptedPayload.contains("other-diagnostic-secret") == false)
+        #expect(receiver.consumeRemoteEncryptedKey(generated.payload,
+                                                   expectedCallID: "call-a",
+                                                   expectedRoomID: roomID,
+                                                   expectedSenderUserID: ownUserID) == .success(.init(callID: "call-a", keyID: generated.keyHandle.keyID)))
+        #expect(mismatchedReceiver.consumeRemoteEncryptedKey(generated.payload,
+                                                             expectedCallID: "call-a",
+                                                             expectedRoomID: roomID,
+                                                             expectedSenderUserID: ownUserID) == .failure(.keyMismatch))
+        #expect(receiver.consumeRemoteEncryptedKey(generated.payload,
+                                                   expectedCallID: "wrong-call",
+                                                   expectedRoomID: roomID,
+                                                   expectedSenderUserID: ownUserID) == .failure(.keyMismatch))
+        #expect(receiver.consumeRemoteEncryptedKey(generated.payload,
+                                                   expectedCallID: "call-a",
+                                                   expectedRoomID: "!wrong:example.com",
+                                                   expectedSenderUserID: ownUserID) == .failure(.keyMismatch))
+        #expect(receiver.consumeRemoteEncryptedKey(generated.payload,
+                                                   expectedCallID: "call-a",
+                                                   expectedRoomID: roomID,
+                                                   expectedSenderUserID: peerUserID) == .failure(.keyMismatch))
+        #expect(NativeDirectCallDiagnosticEncryptionService(ownUserID: ownUserID, secret: "") == nil)
+        #expect(NativeDirectCallDiagnosticEncryptionService(ownUserID: "", secret: "diagnostic-shared-secret") == nil)
+    }
+
+    @Test
     func outgoingGenerationFailureEmitsNoInviteAndNoActiveSession() async {
         let encryptionService = EncryptionServiceSpy(senderUserID: ownUserID,
                                                      generateResult: .failure(.keyExchangeFailed))
