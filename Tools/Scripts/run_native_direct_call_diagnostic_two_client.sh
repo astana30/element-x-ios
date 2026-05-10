@@ -47,6 +47,8 @@ Usage:
   DRY_RUN=0 $SCRIPT_NAME launch A|B|both
   DRY_RUN=0 $SCRIPT_NAME send A|B <command>
   DRY_RUN=0 $SCRIPT_NAME status A|B
+  DRY_RUN=0 $SCRIPT_NAME wait-status A|B incomingRinging
+  DRY_RUN=0 $SCRIPT_NAME accept-when-ringing A|B
 
 Supported commands:
   ${COMMANDS[*]}
@@ -88,8 +90,8 @@ Example planned signalling sequence:
   $SCRIPT_NAME send A startListener
   $SCRIPT_NAME send B startListener
   $SCRIPT_NAME send A startOutgoingAudioCall
+  $SCRIPT_NAME accept-when-ringing B
   $SCRIPT_NAME status B
-  $SCRIPT_NAME send B acceptIncomingCall
   $SCRIPT_NAME status A
   $SCRIPT_NAME send A hangup
   $SCRIPT_NAME status A
@@ -491,6 +493,19 @@ wait_for_result() {
     local expected_signal="$2"
     local correlation_id="$3"
     local deadline=$((SECONDS + WAIT_TIMEOUT_SECONDS))
+
+    if wait_for_result_until_deadline "$client" "$expected_signal" "$correlation_id" "$deadline"; then
+        return 0
+    fi
+
+    fail "Timed out waiting for channel=$client correlationID=$correlation_id signal=$expected_signal"
+}
+
+wait_for_result_until_deadline() {
+    local client="$1"
+    local expected_signal="$2"
+    local correlation_id="$3"
+    local deadline="$4"
     local result=""
 
     while (( SECONDS <= deadline )); do
@@ -501,7 +516,7 @@ wait_for_result() {
         pause_for_poll_interval
     done
 
-    fail "Timed out waiting for channel=$client correlationID=$correlation_id signal=$expected_signal"
+    return 1
 }
 
 wait_for_app_ready() {
@@ -536,6 +551,32 @@ validate_command_name() {
         fi
     done
     fail "Unsupported diagnostic command: $command_name"
+}
+
+validate_status_name() {
+    case "$1" in
+        incomingRinging)
+            ;;
+        *)
+            fail "Unsupported status wait target: $1"
+            ;;
+    esac
+}
+
+status_matches_expectation() {
+    local status_result="$1"
+    local expected="$2"
+
+    case "$expected" in
+        incomingRinging)
+            [[ "$status_result" == *"state=ringing"* &&
+                "$status_result" == *"hasActiveSession=true"* &&
+                "$status_result" == *"activeSessionPhase=incomingRinging"* ]]
+            ;;
+        *)
+            return 1
+            ;;
+    esac
 }
 
 for_each_client() {
@@ -657,6 +698,43 @@ query_status() {
     log "channel=$client command=status correlationID=$id $result"
 }
 
+wait_for_status() {
+    local client="$1"
+    local expected="$2"
+    validate_status_name "$expected"
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        log "DRY_RUN: wait channel=$client status=$expected timeout=${WAIT_TIMEOUT_SECONDS}s"
+        return
+    fi
+
+    local deadline=$((SECONDS + WAIT_TIMEOUT_SECONDS))
+    local id
+    local result
+
+    while (( SECONDS <= deadline )); do
+        id="$(correlation_id "$client" "status-$expected")"
+        write_status_request "$client" "$id"
+
+        if result="$(wait_for_result_until_deadline "$client" nativeDirectCallDiagnosticStatusResult "$id" "$deadline")"; then
+            log "channel=$client wait-status=$expected correlationID=$id $result"
+            if status_matches_expectation "$result" "$expected"; then
+                return
+            fi
+        fi
+
+        pause_for_poll_interval
+    done
+
+    fail "Timed out waiting for channel=$client status=$expected"
+}
+
+accept_when_ringing() {
+    local client="$1"
+    wait_for_status "$client" incomingRinging
+    send_command "$client" acceptIncomingCall
+}
+
 print_plan() {
     cat <<PLAN
 Two-simulator diagnostic skeleton plan:
@@ -672,8 +750,7 @@ Two-simulator diagnostic skeleton plan:
      send A startListener
      send B startListener
      send A startOutgoingAudioCall
-     status B
-     send B acceptIncomingCall
+     accept-when-ringing B
      status A
      send A hangup
      status A
@@ -721,6 +798,18 @@ main() {
             require_common_environment
             [[ $# -eq 2 ]] || fail "Usage: $SCRIPT_NAME status A|B"
             query_status "$2"
+            ;;
+        wait-status)
+            require_host_tools
+            require_common_environment
+            [[ $# -eq 3 ]] || fail "Usage: $SCRIPT_NAME wait-status A|B incomingRinging"
+            wait_for_status "$2" "$3"
+            ;;
+        accept-when-ringing)
+            require_host_tools
+            require_common_environment
+            [[ $# -eq 2 ]] || fail "Usage: $SCRIPT_NAME accept-when-ringing A|B"
+            accept_when_ringing "$2"
             ;;
         *)
             usage
