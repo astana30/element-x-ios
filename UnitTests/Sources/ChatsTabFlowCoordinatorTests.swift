@@ -365,6 +365,7 @@ private final class ChatsTabNativeDirectCallRoomFlowOwnerSpy: NativeDirectCallRo
     var isListenerStarted = false
     var activeSession: DirectCallSession?
     var isResetting = false
+    var diagnosticSnapshot: DirectCallDiagnosticSnapshot = .empty
     var outgoingResult: Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> = .failure(.disabled)
 
     func prepare() -> Result<NativeDirectCallComposition, NativeDirectCallRoomFlowOwnerError> {

@@ -983,6 +983,12 @@ final class NativeDirectCallRoomController {
         compositionController.currentComposition?.engine.activeSessionPublisher.value
     }
 
+    #if DEBUG
+    var diagnosticSnapshot: DirectCallDiagnosticSnapshot {
+        compositionController.currentComposition?.diagnosticSnapshot ?? .empty
+    }
+    #endif
+
     init(compositionController: JoinedRoomNativeDirectCallCompositionController) {
         self.compositionController = compositionController
     }
@@ -1090,6 +1096,11 @@ enum NativeDirectCallDeveloperRoomTriggerError: Error, Equatable {
 protocol NativeDirectCallRoomControlling: AnyObject {
     var isListenerStarted: Bool { get }
     var activeSession: DirectCallSession? { get }
+    #if DEBUG
+    var diagnosticSnapshot: DirectCallDiagnosticSnapshot {
+        get
+    }
+    #endif
 
     func prepare() -> Result<NativeDirectCallComposition, NativeDirectCallRoomControlError>
     func start() async -> Result<NativeDirectCallComposition, NativeDirectCallRoomControlError>
@@ -1122,6 +1133,16 @@ final class NativeDirectCallDeveloperRoomTrigger {
 
         return controller.activeSession
     }
+
+    #if DEBUG
+    var diagnosticSnapshot: DirectCallDiagnosticSnapshot {
+        guard configuration.isEnabled else {
+            return .empty
+        }
+
+        return controller.diagnosticSnapshot
+    }
+    #endif
 
     init(configuration: NativeDirectCallDeveloperRoomTriggerConfiguration = .init(),
          controller: NativeDirectCallRoomControlling) {

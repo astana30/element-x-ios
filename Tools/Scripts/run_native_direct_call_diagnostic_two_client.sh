@@ -370,10 +370,16 @@ if expected_signal == "nativeDirectCallDiagnosticResult":
 if expected_signal == "nativeDirectCallDiagnosticStatusResult":
     status = body.get("status", {})
     print(
-        "state={state} listenerStarted={listener} hasActiveSession={session}".format(
+        "state={state} listenerStarted={listener} hasActiveSession={session} activeSessionPhase={phase} lastSignalEventEmitted={event} lastSignalSendAttempted={attempted} lastSignalSendSucceeded={succeeded} lastSignalSendFailureReason={failure} lastTerminalReason={terminal}".format(
             state=status.get("state", "unknown"),
             listener=str(status.get("listenerStarted", "unknown")).lower(),
             session=str(status.get("hasActiveSession", "unknown")).lower(),
+            phase=status.get("activeSessionPhase", "unknown"),
+            event=status.get("lastSignalEventEmitted", "none"),
+            attempted=str(status.get("lastSignalSendAttempted", "unknown")).lower(),
+            succeeded=str(status.get("lastSignalSendSucceeded", "unknown")).lower(),
+            failure=status.get("lastSignalSendFailureReason", "none"),
+            terminal=status.get("lastTerminalReason", "none"),
         )
     )
     sys.exit(0)

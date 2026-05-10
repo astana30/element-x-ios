@@ -161,6 +161,32 @@ enum UITestsSignal: Codable, Equatable {
         let state: NativeDirectCallDiagnosticStatusState
         let listenerStarted: Bool
         let hasActiveSession: Bool
+        let activeSessionPhase: DirectCallDiagnosticSessionPhase
+        let lastSignalEventEmitted: DirectCallDiagnosticSignalEvent?
+        let lastSignalSendAttempted: Bool
+        let lastSignalSendSucceeded: Bool?
+        let lastSignalSendFailureReason: DirectCallDiagnosticSignalSendFailureReason?
+        let lastTerminalReason: DirectCallDiagnosticTerminalReason?
+
+        init(state: NativeDirectCallDiagnosticStatusState,
+             listenerStarted: Bool,
+             hasActiveSession: Bool,
+             activeSessionPhase: DirectCallDiagnosticSessionPhase = .none,
+             lastSignalEventEmitted: DirectCallDiagnosticSignalEvent? = nil,
+             lastSignalSendAttempted: Bool = false,
+             lastSignalSendSucceeded: Bool? = nil,
+             lastSignalSendFailureReason: DirectCallDiagnosticSignalSendFailureReason? = nil,
+             lastTerminalReason: DirectCallDiagnosticTerminalReason? = nil) {
+            self.state = state
+            self.listenerStarted = listenerStarted
+            self.hasActiveSession = hasActiveSession
+            self.activeSessionPhase = activeSessionPhase
+            self.lastSignalEventEmitted = lastSignalEventEmitted
+            self.lastSignalSendAttempted = lastSignalSendAttempted
+            self.lastSignalSendSucceeded = lastSignalSendSucceeded
+            self.lastSignalSendFailureReason = lastSignalSendFailureReason
+            self.lastTerminalReason = lastTerminalReason
+        }
     }
 
     enum NativeDirectCallDiagnosticStatusState: String, Codable, Equatable {
@@ -241,7 +267,13 @@ extension UITestsSignal.NativeDirectCallDiagnosticStatus {
     init(_ status: NativeDirectCallRoomDiagnosticStatus) {
         self.init(state: .init(status.state),
                   listenerStarted: status.listenerStarted,
-                  hasActiveSession: status.hasActiveSession)
+                  hasActiveSession: status.hasActiveSession,
+                  activeSessionPhase: status.activeSessionPhase,
+                  lastSignalEventEmitted: status.lastSignalEventEmitted,
+                  lastSignalSendAttempted: status.lastSignalSendAttempted,
+                  lastSignalSendSucceeded: status.lastSignalSendSucceeded,
+                  lastSignalSendFailureReason: status.lastSignalSendFailureReason,
+                  lastTerminalReason: status.lastTerminalReason)
     }
 }
 

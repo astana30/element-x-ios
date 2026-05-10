@@ -247,6 +247,19 @@ enum DirectCallMatrixSignalTransportError: Error, Equatable {
     case sendFailed
 }
 
+#if DEBUG
+extension DirectCallDiagnosticSignalSendFailureReason {
+    init(_ error: DirectCallMatrixSignalTransportError) {
+        switch error {
+        case .invalidSignal:
+            self = .invalidSignal
+        case .sendFailed:
+            self = .sendFailed
+        }
+    }
+}
+#endif
+
 @MainActor
 protocol DirectCallMatrixRawSignalSending {
     func sendDirectCallSignal(roomID: String, eventType: String, content: String) async -> Result<Void, DirectCallMatrixSignalTransportError>
@@ -615,6 +628,15 @@ final class MatrixDirectCallSignalTransport: DirectCallSignalTransportProtocol {
     }
 }
 
+#if DEBUG
+@MainActor
+protocol DirectCallSignalTransportSendResultsProviding {
+    var sendResultsPublisher: AnyPublisher<Result<Void, DirectCallMatrixSignalTransportError>, Never> { get }
+}
+
+extension MatrixDirectCallSignalTransport: DirectCallSignalTransportSendResultsProviding { }
+#endif
+
 private struct DirectCallMatrixSDKRawRoom: DirectCallMatrixRawRoomSending {
     let room: RoomProtocol
 
@@ -736,6 +758,15 @@ final class DirectCallEngineSignalBridge {
 
     private var cancellables = Set<AnyCancellable>()
 
+    #if DEBUG
+    private var diagnosticState = DirectCallDiagnosticSnapshot()
+    private var previousSessionState: DirectCallState?
+
+    var diagnosticSnapshot: DirectCallDiagnosticSnapshot {
+        diagnosticState
+    }
+    #endif
+
     init(ownUserID: String,
          engine: DirectCallEngineProtocol,
          signalTransport: DirectCallSignalTransportProtocol) {
@@ -745,6 +776,9 @@ final class DirectCallEngineSignalBridge {
 
         subscribeToOutgoingSignals()
         subscribeToIncomingSignals()
+        #if DEBUG
+        subscribeToSignalSendResults()
+        #endif
     }
 
     deinit {
@@ -759,10 +793,18 @@ final class DirectCallEngineSignalBridge {
         engine.actionsPublisher
             .sink { [weak self] action in
                 guard let self else { return }
+                #if DEBUG
+                recordDiagnosticAction(action)
+                #endif
                 guard case .emitSignal(let signal) = action else {
                     return
                 }
 
+                #if DEBUG
+                diagnosticState.lastSignalSendAttempted = true
+                diagnosticState.lastSignalSendSucceeded = nil
+                diagnosticState.lastSignalSendFailureReason = nil
+                #endif
                 signalTransport.send(signal, from: ownUserID)
             }
             .store(in: &cancellables)
@@ -779,6 +821,67 @@ final class DirectCallEngineSignalBridge {
             }
             .store(in: &cancellables)
     }
+
+    #if DEBUG
+    private func subscribeToSignalSendResults() {
+        guard let sendResultsProvider = signalTransport as? DirectCallSignalTransportSendResultsProviding else {
+            return
+        }
+
+        sendResultsProvider.sendResultsPublisher
+            .sink { [weak self] result in
+                guard let self else { return }
+                switch result {
+                case .success:
+                    diagnosticState.lastSignalSendSucceeded = true
+                    diagnosticState.lastSignalSendFailureReason = nil
+                case .failure(let error):
+                    diagnosticState.lastSignalSendSucceeded = false
+                    diagnosticState.lastSignalSendFailureReason = .init(error)
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    private func recordDiagnosticAction(_ action: DirectCallEngineAction) {
+        switch action {
+        case .stateChanged(let session):
+            diagnosticState.activeSessionPhase = .init(session.state)
+            if let terminalReason = Self.terminalReason(previousState: previousSessionState, currentState: session.state) {
+                diagnosticState.lastTerminalReason = terminalReason
+            }
+            previousSessionState = session.state
+        case .emitSignal(let signal):
+            diagnosticState.lastSignalEventEmitted = .init(signal.type)
+        case .sessionCleared:
+            diagnosticState.activeSessionPhase = .none
+            previousSessionState = nil
+        }
+    }
+
+    private static func terminalReason(previousState: DirectCallState?,
+                                       currentState: DirectCallState) -> DirectCallDiagnosticTerminalReason? {
+        switch currentState {
+        case .failed:
+            switch previousState {
+            case .outgoingRinging:
+                .outgoingTimeout
+            case .connecting:
+                .connectingFailed
+            default:
+                .failed
+            }
+        case .missed:
+            .incomingTimeout
+        case .cancelled:
+            .cancelled
+        case .ended:
+            .hangup
+        case .idle, .outgoingRinging, .incomingRinging, .connecting, .activeAudio, .activeVideo, .ending:
+            nil
+        }
+    }
+    #endif
 }
 
 struct NativeDirectCallCompositionConfiguration {
@@ -831,6 +934,12 @@ final class NativeDirectCallComposition {
     private let listenerControl: NativeDirectCallSignalListenerControlProtocol?
 
     private(set) var isStarted = false
+
+    #if DEBUG
+    var diagnosticSnapshot: DirectCallDiagnosticSnapshot {
+        signalBridge.diagnosticSnapshot
+    }
+    #endif
 
     init(roomID: String,
          peerUserID: String,

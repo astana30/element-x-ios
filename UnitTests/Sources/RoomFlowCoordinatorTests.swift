@@ -695,6 +695,10 @@ final class RoomFlowCoordinatorTests {
     func nativeDirectCallDiagnosticCommandEntryDelegatesExplicitCommandsOnly() async throws {
         let owner = NativeDirectCallRoomFlowOwnerSpy()
         let session = directCallSession()
+        owner.diagnosticSnapshot = .init(activeSessionPhase: .outgoingRinging,
+                                         lastSignalEventEmitted: .invite,
+                                         lastSignalSendAttempted: true,
+                                         lastSignalSendSucceeded: true)
         owner.outgoingResult = .success(session)
         owner.acceptResult = .success(session)
         owner.hangupResult = .success(session)
@@ -716,7 +720,12 @@ final class RoomFlowCoordinatorTests {
         #expect(await roomFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.startListener) == .failed(.owner(.disabled)))
         #expect(await roomFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.stop) == .stopped)
         #expect(await roomFlowCoordinator.handleNativeDirectCallDiagnosticCommand(.reset) == .reset)
-        #expect(roomFlowCoordinator.nativeDirectCallDiagnosticStatus().state == .idle)
+        let status = roomFlowCoordinator.nativeDirectCallDiagnosticStatus()
+        #expect(status.state == .idle)
+        #expect(status.activeSessionPhase == .outgoingRinging)
+        #expect(status.lastSignalEventEmitted == .invite)
+        #expect(status.lastSignalSendAttempted)
+        #expect(status.lastSignalSendSucceeded == true)
 
         #expect(owner.startCount == 1)
         #expect(owner.outgoingCount == 1)
@@ -772,7 +781,11 @@ final class RoomFlowCoordinatorTests {
         let statusResult = UITestsSignal.NativeDirectCallDiagnosticStatusResult(correlationID: "call-A-1",
                                                                                 status: .init(state: .active,
                                                                                               listenerStarted: true,
-                                                                                              hasActiveSession: true))
+                                                                                              hasActiveSession: true,
+                                                                                              activeSessionPhase: .outgoingRinging,
+                                                                                              lastSignalEventEmitted: .invite,
+                                                                                              lastSignalSendAttempted: true,
+                                                                                              lastSignalSendSucceeded: true))
         let statusSignal = UITestsSignal.nativeDirectCallDiagnosticStatus(statusRequest)
         let statusResultSignal = UITestsSignal.nativeDirectCallDiagnosticStatusResult(statusResult)
         let encoder = JSONEncoder()
@@ -794,6 +807,10 @@ final class RoomFlowCoordinatorTests {
         #expect(encodedFailureResult.contains("e2eeUnavailable"))
         #expect(encodedStatus.contains("nativeDirectCallDiagnosticStatus"))
         #expect(encodedStatusResult.contains("hasActiveSession"))
+        #expect(encodedStatusResult.contains("lastSignalEventEmitted"))
+        #expect(encodedStatusResult.contains("lastSignalSendAttempted"))
+        #expect(encodedStatusResult.contains("lastSignalSendSucceeded"))
+        #expect(encodedStatusResult.contains("activeSessionPhase"))
         #expect(result.correlationID == command.correlationID)
         #expect(failureResult.correlationID == command.correlationID)
         #expect(statusResult.correlationID == statusRequest.correlationID)
@@ -922,7 +939,11 @@ final class RoomFlowCoordinatorTests {
         #expect(e2eeFailure.reason == .e2eeUnavailable)
         #expect(UITestsSignal.NativeDirectCallDiagnosticStatusResult(.init(state: .active,
                                                                            listenerStarted: true,
-                                                                           hasActiveSession: true)).status.state == .active)
+                                                                           hasActiveSession: true,
+                                                                           diagnosticSnapshot: .init(activeSessionPhase: .outgoingRinging,
+                                                                                                     lastSignalEventEmitted: .invite,
+                                                                                                     lastSignalSendAttempted: true,
+                                                                                                     lastSignalSendSucceeded: true))).status.activeSessionPhase == .outgoingRinging)
     }
 
     // MARK: - Spaces
@@ -1110,6 +1131,7 @@ private final class NativeDirectCallRoomFlowOwnerSpy: NativeDirectCallRoomFlowOw
     var isListenerStarted = false
     var activeSession: DirectCallSession?
     var isResetting = false
+    var diagnosticSnapshot: DirectCallDiagnosticSnapshot = .empty
     var outgoingResult: Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> = .failure(.disabled)
     var acceptResult: Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> = .failure(.disabled)
     var hangupResult: Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> = .failure(.disabled)
@@ -1209,6 +1231,7 @@ private final class NativeDirectCallRoomControllingSpy: NativeDirectCallRoomCont
 
     var isListenerStarted = false
     var activeSession: DirectCallSession?
+    var diagnosticSnapshot: DirectCallDiagnosticSnapshot = .empty
 
     func prepare() -> Result<NativeDirectCallComposition, NativeDirectCallRoomControlError> {
         prepareCount += 1

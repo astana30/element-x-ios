@@ -44,7 +44,7 @@ struct NativeDirectCallRoomDiagnosticSession: Equatable, CustomStringConvertible
     }
 
     var description: String {
-        "NativeDirectCallRoomDiagnosticSession(callID: \(callID), roomID: \(roomID), peerUserID: \(peerUserID), direction: \(direction), intent: \(intent), state: \(state), encryptionState: \(encryptionState))"
+        "NativeDirectCallRoomDiagnosticSession(hasCallID: \(!callID.isEmpty), hasRoomID: \(!roomID.isEmpty), hasPeerUserID: \(!peerUserID.isEmpty), direction: \(direction), intent: \(intent), state: \(state), encryptionState: \(encryptionState))"
     }
 
     var debugDescription: String {
@@ -148,12 +148,43 @@ struct NativeDirectCallRoomDiagnosticStatus: Equatable, CustomStringConvertible,
     let state: NativeDirectCallRoomDiagnosticStatusState
     let listenerStarted: Bool
     let hasActiveSession: Bool
+    let activeSessionPhase: DirectCallDiagnosticSessionPhase
+    let lastSignalEventEmitted: DirectCallDiagnosticSignalEvent?
+    let lastSignalSendAttempted: Bool
+    let lastSignalSendSucceeded: Bool?
+    let lastSignalSendFailureReason: DirectCallDiagnosticSignalSendFailureReason?
+    let lastTerminalReason: DirectCallDiagnosticTerminalReason?
+
+    init(state: NativeDirectCallRoomDiagnosticStatusState,
+         listenerStarted: Bool,
+         hasActiveSession: Bool,
+         diagnosticSnapshot: DirectCallDiagnosticSnapshot = .empty) {
+        self.state = state
+        self.listenerStarted = listenerStarted
+        self.hasActiveSession = hasActiveSession
+        activeSessionPhase = diagnosticSnapshot.activeSessionPhase
+        lastSignalEventEmitted = diagnosticSnapshot.lastSignalEventEmitted
+        lastSignalSendAttempted = diagnosticSnapshot.lastSignalSendAttempted
+        lastSignalSendSucceeded = diagnosticSnapshot.lastSignalSendSucceeded
+        lastSignalSendFailureReason = diagnosticSnapshot.lastSignalSendFailureReason
+        lastTerminalReason = diagnosticSnapshot.lastTerminalReason
+    }
 
     static let unavailable = Self(state: .unavailable, listenerStarted: false, hasActiveSession: false)
     static let disabled = Self(state: .disabled, listenerStarted: false, hasActiveSession: false)
 
     var description: String {
-        "NativeDirectCallRoomDiagnosticStatus(state: \(state), listenerStarted: \(listenerStarted), hasActiveSession: \(hasActiveSession))"
+        "NativeDirectCallRoomDiagnosticStatus(" + [
+            "state: \(state)",
+            "listenerStarted: \(listenerStarted)",
+            "hasActiveSession: \(hasActiveSession)",
+            "activeSessionPhase: \(activeSessionPhase)",
+            "lastSignalEventEmitted: \(String(describing: lastSignalEventEmitted))",
+            "lastSignalSendAttempted: \(lastSignalSendAttempted)",
+            "lastSignalSendSucceeded: \(String(describing: lastSignalSendSucceeded))",
+            "lastSignalSendFailureReason: \(String(describing: lastSignalSendFailureReason))",
+            "lastTerminalReason: \(String(describing: lastTerminalReason))"
+        ].joined(separator: ", ") + ")"
     }
 
     var debugDescription: String {
@@ -172,6 +203,11 @@ enum NativeDirectCallRoomDeveloperCommandError: Error, Equatable {
 protocol NativeDirectCallRoomDeveloperCommanding: AnyObject {
     var isListenerStarted: Bool { get }
     var activeSession: DirectCallSession? { get }
+    #if DEBUG
+    var diagnosticSnapshot: DirectCallDiagnosticSnapshot {
+        get
+    }
+    #endif
 
     func prepare() -> Result<NativeDirectCallComposition, NativeDirectCallRoomDeveloperCommandError>
     func startListener() async -> Result<NativeDirectCallComposition, NativeDirectCallRoomDeveloperCommandError>
@@ -205,6 +241,16 @@ final class NativeDirectCallRoomDeveloperCommandRouter: NativeDirectCallRoomDeve
 
         return owner.activeSession
     }
+
+    #if DEBUG
+    var diagnosticSnapshot: DirectCallDiagnosticSnapshot {
+        guard configuration.isEnabled, let owner = ownerProvider() else {
+            return .empty
+        }
+
+        return owner.diagnosticSnapshot
+    }
+    #endif
 
     init(configuration: NativeDirectCallRoomDeveloperCommandConfiguration = .init(),
          ownerProvider: @escaping () -> NativeDirectCallRoomFlowOwning?) {
@@ -293,21 +339,25 @@ final class NativeDirectCallRoomDeveloperCommandRouter: NativeDirectCallRoomDeve
         }
 
         let activeSession = owner.activeSession
+        let diagnosticSnapshot = owner.diagnosticSnapshot
         if owner.isResetting {
             return .init(state: .resetting,
                          listenerStarted: owner.isListenerStarted,
-                         hasActiveSession: activeSession != nil)
+                         hasActiveSession: activeSession != nil,
+                         diagnosticSnapshot: diagnosticSnapshot)
         }
 
         guard let activeSession else {
             return .init(state: .idle,
                          listenerStarted: owner.isListenerStarted,
-                         hasActiveSession: false)
+                         hasActiveSession: false,
+                         diagnosticSnapshot: diagnosticSnapshot)
         }
 
         return .init(state: .init(activeSession.state),
                      listenerStarted: owner.isListenerStarted,
-                     hasActiveSession: true)
+                     hasActiveSession: true,
+                     diagnosticSnapshot: diagnosticSnapshot)
     }
     #endif
 

@@ -1878,6 +1878,79 @@ final class NativeDirectCallRoomControllerTests {
     }
 
     @Test
+    func outgoingCallStatusRecordsRedactedInviteSendBreadcrumbs() async {
+        let harness = roomControlHarness()
+
+        let result = await harness.controller.startOutgoingAudioCall()
+        guard case .success = result else {
+            Issue.record("Expected native direct-call room controller to start outgoing audio.")
+            return
+        }
+
+        #expect(await waitUntil { harness.controller.diagnosticSnapshot.lastSignalSendSucceeded == true })
+
+        let diagnostics = harness.controller.diagnosticSnapshot
+        #expect(diagnostics.activeSessionPhase == .outgoingRinging)
+        #expect(diagnostics.lastSignalEventEmitted == .invite)
+        #expect(diagnostics.lastSignalSendAttempted)
+        #expect(diagnostics.lastSignalSendSucceeded == true)
+        #expect(diagnostics.lastSignalSendFailureReason == nil)
+        #expect(diagnostics.lastTerminalReason == nil)
+        #expect(String(describing: diagnostics).contains(roomID) == false)
+        #expect(String(describing: diagnostics).contains(userB) == false)
+    }
+
+    @Test
+    func outgoingCallStatusRecordsRedactedSignalSendFailure() async {
+        let harness = roomControlHarness()
+        harness.rawSender.result = .failure(.sendFailed)
+
+        let result = await harness.controller.startOutgoingAudioCall()
+        guard case .success = result else {
+            Issue.record("Expected engine to accept outgoing command before async send result is known.")
+            return
+        }
+
+        #expect(await waitUntil { harness.controller.diagnosticSnapshot.lastSignalSendSucceeded == false })
+
+        let diagnostics = harness.controller.diagnosticSnapshot
+        #expect(diagnostics.activeSessionPhase == .outgoingRinging)
+        #expect(diagnostics.lastSignalEventEmitted == .invite)
+        #expect(diagnostics.lastSignalSendAttempted)
+        #expect(diagnostics.lastSignalSendSucceeded == false)
+        #expect(diagnostics.lastSignalSendFailureReason == .sendFailed)
+        #expect(diagnostics.lastTerminalReason == nil)
+        #expect(String(describing: diagnostics).contains(roomID) == false)
+        #expect(String(describing: diagnostics).contains(userB) == false)
+    }
+
+    @Test
+    func outgoingCallStatusRecordsRedactedTimeoutCleanupReason() async {
+        let harness = roomControlHarness(outgoingRingingTimeout: .milliseconds(20),
+                                         cleanupDelay: .milliseconds(20))
+
+        let result = await harness.controller.startOutgoingAudioCall()
+        guard case .success = result else {
+            Issue.record("Expected native direct-call room controller to start outgoing audio.")
+            return
+        }
+
+        #expect(await waitUntil(timeout: .seconds(1)) {
+            harness.controller.diagnosticSnapshot.lastTerminalReason == .outgoingTimeout &&
+                harness.controller.diagnosticSnapshot.activeSessionPhase == .none
+        })
+        #expect(harness.controller.activeSession == nil)
+
+        let diagnostics = harness.controller.diagnosticSnapshot
+        #expect(diagnostics.lastSignalEventEmitted == .invite)
+        #expect(diagnostics.lastSignalSendAttempted)
+        #expect(diagnostics.lastSignalSendSucceeded == true)
+        #expect(diagnostics.lastTerminalReason == .outgoingTimeout)
+        #expect(String(describing: diagnostics).contains(roomID) == false)
+        #expect(String(describing: diagnostics).contains(userB) == false)
+    }
+
+    @Test
     func roomControllersDriveIncomingAcceptHangupAndTerminalCleanupWithFakes() async throws {
         let harness = roomPairHarness(cleanupDelay: .seconds(120))
 
@@ -2064,6 +2137,7 @@ final class NativeDirectCallRoomControllerTests {
     private func roomControlHarness(ownUserID: String? = nil,
                                     peerUserID: String? = nil,
                                     isEnabled: Bool = true,
+                                    outgoingRingingTimeout: Duration = .seconds(120),
                                     cleanupDelay: Duration = .seconds(120)) -> NativeDirectCallRoomControlHarness {
         let ownUserID = ownUserID ?? userA
         let peerUserID = peerUserID ?? userB
@@ -2080,7 +2154,7 @@ final class NativeDirectCallRoomControllerTests {
         let factory = JoinedRoomNativeDirectCallCompositionFactory(roomBoundary: roomBoundary,
                                                                    configuration: .init(isEnabled: isEnabled,
                                                                                         engineConfiguration: .init(incomingRingingTimeout: .seconds(120),
-                                                                                                                   outgoingRingingTimeout: .seconds(120),
+                                                                                                                   outgoingRingingTimeout: outgoingRingingTimeout,
                                                                                                                    connectingTimeout: .seconds(120),
                                                                                                                    cleanupDelay: cleanupDelay,
                                                                                                                    processedTerminalEventLimit: 64)),

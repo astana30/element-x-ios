@@ -1763,6 +1763,11 @@ protocol NativeDirectCallRoomFlowOwning: AnyObject {
     var isListenerStarted: Bool { get }
     var activeSession: DirectCallSession? { get }
     var isResetting: Bool { get }
+    #if DEBUG
+    var diagnosticSnapshot: DirectCallDiagnosticSnapshot {
+        get
+    }
+    #endif
 
     func prepare() -> Result<NativeDirectCallComposition, NativeDirectCallRoomFlowOwnerError>
     func startListener() async -> Result<NativeDirectCallComposition, NativeDirectCallRoomFlowOwnerError>
@@ -1799,6 +1804,12 @@ final class NativeDirectCallRoomFlowOwner: NativeDirectCallRoomFlowOwning {
     var isResetting: Bool {
         hasStartedReset
     }
+
+    #if DEBUG
+    var diagnosticSnapshot: DirectCallDiagnosticSnapshot {
+        trigger?.diagnosticSnapshot ?? .empty
+    }
+    #endif
 
     init(roomProxy: JoinedRoomProxyProtocol,
          triggerConfiguration: NativeDirectCallDeveloperRoomTriggerConfiguration = .init(),

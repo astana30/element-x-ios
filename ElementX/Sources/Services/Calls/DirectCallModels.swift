@@ -224,3 +224,136 @@ enum DirectCallEngineError: Error, Equatable {
     case invalidEncryptionTransition
     case mediaConnectionFailed
 }
+
+#if DEBUG
+enum DirectCallDiagnosticSignalEvent: String, Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case invite
+    case answer
+    case reject
+    case cancel
+    case hangup
+    case timeout
+
+    init(_ signalType: DirectCallSignalType) {
+        switch signalType {
+        case .invite:
+            self = .invite
+        case .answer:
+            self = .answer
+        case .reject:
+            self = .reject
+        case .cancel:
+            self = .cancel
+        case .hangup:
+            self = .hangup
+        case .timeout:
+            self = .timeout
+        }
+    }
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum DirectCallDiagnosticSessionPhase: String, Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case none
+    case idle
+    case outgoingRinging
+    case incomingRinging
+    case connecting
+    case active
+    case ending
+    case terminal
+    case failed
+
+    init(_ state: DirectCallState) {
+        switch state {
+        case .idle:
+            self = .idle
+        case .outgoingRinging:
+            self = .outgoingRinging
+        case .incomingRinging:
+            self = .incomingRinging
+        case .connecting:
+            self = .connecting
+        case .activeAudio, .activeVideo:
+            self = .active
+        case .ending:
+            self = .ending
+        case .ended, .missed, .cancelled:
+            self = .terminal
+        case .failed:
+            self = .failed
+        }
+    }
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum DirectCallDiagnosticSignalSendFailureReason: String, Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case invalidSignal
+    case sendFailed
+    case unknown
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum DirectCallDiagnosticTerminalReason: String, Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case outgoingTimeout
+    case incomingTimeout
+    case connectingFailed
+    case cancelled
+    case hangup
+    case failed
+    case unknown
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct DirectCallDiagnosticSnapshot: Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    var activeSessionPhase: DirectCallDiagnosticSessionPhase = .none
+    var lastSignalEventEmitted: DirectCallDiagnosticSignalEvent?
+    var lastSignalSendAttempted = false
+    var lastSignalSendSucceeded: Bool?
+    var lastSignalSendFailureReason: DirectCallDiagnosticSignalSendFailureReason?
+    var lastTerminalReason: DirectCallDiagnosticTerminalReason?
+
+    static let empty = Self()
+
+    var description: String {
+        "DirectCallDiagnosticSnapshot(activeSessionPhase: \(activeSessionPhase), " +
+            "lastSignalEventEmitted: \(String(describing: lastSignalEventEmitted)), " +
+            "lastSignalSendAttempted: \(lastSignalSendAttempted), " +
+            "lastSignalSendSucceeded: \(String(describing: lastSignalSendSucceeded)), " +
+            "lastSignalSendFailureReason: \(String(describing: lastSignalSendFailureReason)), " +
+            "lastTerminalReason: \(String(describing: lastTerminalReason)))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+#endif
