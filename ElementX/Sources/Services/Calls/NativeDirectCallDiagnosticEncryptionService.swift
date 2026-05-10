@@ -113,6 +113,17 @@ final class NativeDirectCallDiagnosticEncryptionService: DirectCallEncryptionSer
         keyMaterialByCallID.removeValue(forKey: callID)
     }
 
+    func storeLiveKitSharedKey(for keyHandle: DirectCallMediaKeyHandle,
+                               in keyStore: DirectCallLiveKitMediaKeyStore) -> Result<DirectCallMediaKeyHandle, DirectCallMediaError> {
+        guard !keyHandle.callID.isEmpty,
+              !keyHandle.keyID.isEmpty,
+              let keyMaterial = keyMaterialByCallID[keyHandle.callID] else {
+            return .failure(.e2eeContextUnavailable)
+        }
+
+        return keyStore.storeSharedKey(keyMaterial.base64URLEncodedString(), keyHandle: keyHandle)
+    }
+
     private func seal(keyMaterial: Data,
                       callID: String,
                       roomID: String,

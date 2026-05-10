@@ -118,6 +118,14 @@ extension ProcessInfo {
         #endif
     }
 
+    static var isNativeDirectCallDiagnosticIntegrationLiveKitEnabled: Bool {
+        #if DEBUG
+        isNativeDirectCallDiagnosticIntegrationLiveKitEnabled(environment: processInfo.environment)
+        #else
+        false
+        #endif
+    }
+
     static var isXcodePreview: Bool {
         #if DEBUG
         processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
@@ -144,6 +152,11 @@ extension ProcessInfo {
         return isNativeDirectCallDiagnosticIntegrationCommandsEnabled(environment: environment) &&
             environment[encryptionGateEnvironmentKey] == "1" &&
             environment[secretEnvironmentKey]?.isEmpty == false
+    }
+
+    static func isNativeDirectCallDiagnosticIntegrationLiveKitEnabled(environment: [String: String]) -> Bool {
+        isNativeDirectCallDiagnosticIntegrationEncryptionEnabled(environment: environment) &&
+            environment["NATIVE_DIRECT_CALL_DIAGNOSTIC_LIVEKIT"] == "1"
     }
 }
 #endif

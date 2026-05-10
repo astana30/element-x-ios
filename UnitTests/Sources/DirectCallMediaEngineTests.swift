@@ -1606,6 +1606,98 @@ final class DirectCallMediaProviderSkeletonTests {
         #expect(String(describing: keyHandle).contains(sensitiveSharedKey) == false)
     }
 
+    @Test
+    func liveKitMediaKeyStoreCanStoreExplicitDiagnosticHandle() throws {
+        let keyStore = DirectCallLiveKitMediaKeyStore()
+        let keyHandle = DirectCallMediaKeyHandle(callID: callID, keyID: "diag-key")
+
+        let storedHandle = try keyStore.storeSharedKey("diagnostic-shared-value", keyHandle: keyHandle).get()
+
+        #expect(storedHandle == keyHandle)
+        #expect(keyStore.makeKeyProvider(for: keyHandle) != nil)
+        #expect(keyStore.makeKeyProvider(for: .init(callID: callID, keyID: "other-key")) == nil)
+    }
+
+    @Test
+    func diagnosticLiveKitTokenProviderSelectsTokenBySignallingChannel() async throws {
+        let baseEnvironment = [
+            NativeDirectCallDiagnosticLiveKitMedia.urlEnvironmentKey: "wss://test-livekit.example.com",
+            NativeDirectCallDiagnosticLiveKitMedia.tokenAEnvironmentKey: "opaque-a",
+            NativeDirectCallDiagnosticLiveKitMedia.tokenBEnvironmentKey: "opaque-b",
+            NativeDirectCallDiagnosticLiveKitMedia.roomEnvironmentKey: "diagnostic-room"
+        ]
+        let channelAProvider = try #require(NativeDirectCallDiagnosticLiveKitTokenProvider(environment: baseEnvironment))
+        var channelBEnvironment = baseEnvironment
+        channelBEnvironment[NativeDirectCallDiagnosticLiveKitMedia.signallingChannelEnvironmentKey] = "B"
+        let channelBProvider = try #require(NativeDirectCallDiagnosticLiveKitTokenProvider(environment: channelBEnvironment))
+        let session = makeSession(encryptionState: .ready)
+
+        let channelAConnectionInfo = try await channelAProvider.connectionInfo(for: session).get()
+        let channelBConnectionInfo = try await channelBProvider.connectionInfo(for: session).get()
+
+        #expect(channelAConnectionInfo.token == "opaque-a")
+        #expect(channelBConnectionInfo.token == "opaque-b")
+        #expect(channelAConnectionInfo.roomName == "diagnostic-room")
+        #expect(String(describing: channelAProvider).contains("opaque-a") == false)
+        #expect(String(describing: channelBProvider).contains("opaque-b") == false)
+        #expect(String(describing: channelAProvider).contains("test-livekit.example.com") == false)
+    }
+
+    @Test
+    func diagnosticLiveKitTokenProviderFailsClosedForMissingInputs() {
+        let baseEnvironment = [
+            NativeDirectCallDiagnosticLiveKitMedia.urlEnvironmentKey: "wss://test-livekit.example.com",
+            NativeDirectCallDiagnosticLiveKitMedia.tokenAEnvironmentKey: "opaque-a"
+        ]
+        var channelBEnvironment = baseEnvironment
+        channelBEnvironment[NativeDirectCallDiagnosticLiveKitMedia.signallingChannelEnvironmentKey] = "B"
+
+        #expect(NativeDirectCallDiagnosticLiveKitTokenProvider(environment: [:]) == nil)
+        #expect(NativeDirectCallDiagnosticLiveKitTokenProvider(environment: [
+            NativeDirectCallDiagnosticLiveKitMedia.tokenAEnvironmentKey: "opaque-a"
+        ]) == nil)
+        #expect(NativeDirectCallDiagnosticLiveKitTokenProvider(environment: [
+            NativeDirectCallDiagnosticLiveKitMedia.urlEnvironmentKey: "not-a-url",
+            NativeDirectCallDiagnosticLiveKitMedia.tokenAEnvironmentKey: "opaque-a"
+        ]) == nil)
+        #expect(NativeDirectCallDiagnosticLiveKitTokenProvider(environment: channelBEnvironment) == nil)
+    }
+
+    @Test
+    func diagnosticLiveKitE2EEContextProviderUsesGeneratedDiagnosticKey() throws {
+        let encryptionService = try #require(NativeDirectCallDiagnosticEncryptionService(ownUserID: "@me:example.com",
+                                                                                         secret: "diagnostic-shared-secret"))
+        let generated = try encryptionService.generatePerCallKey(callID: callID,
+                                                                 roomID: roomID,
+                                                                 peerUserID: peerUserID).get()
+        let provider = NativeDirectCallDiagnosticLiveKitE2EEContextProvider(encryptionService: encryptionService)
+        let session = makeSession(encryptionState: .ready)
+
+        let context = try provider.context(for: session, keyHandle: generated.keyHandle).get()
+        let liveKitContext = try #require(context as? DirectCallLiveKitE2EEContextProtocol)
+
+        guard case .success = liveKitContext.makeLiveKitRoomOptions() else {
+            Issue.record("Expected diagnostic key material to build LiveKit E2EE context.")
+            return
+        }
+        #expect(String(describing: generated.payload).contains("diagnostic-shared-secret") == false)
+        #expect(String(reflecting: generated.payload).contains("diagnostic-shared-secret") == false)
+    }
+
+    @Test
+    func diagnosticLiveKitE2EEContextProviderFailsClosedWithoutGeneratedKey() {
+        let encryptionService = NativeDirectCallDiagnosticEncryptionService(ownUserID: "@me:example.com",
+                                                                            secret: "diagnostic-shared-secret")
+        let provider = encryptionService.map { NativeDirectCallDiagnosticLiveKitE2EEContextProvider(encryptionService: $0) }
+        let session = makeSession(encryptionState: .ready)
+
+        guard case .failure(.e2eeContextUnavailable) = provider?.context(for: session,
+                                                                         keyHandle: .init(callID: callID, keyID: "missing-key")) else {
+            Issue.record("Expected missing diagnostic key material to fail before LiveKit context creation.")
+            return
+        }
+    }
+
     private func makeSession(intent: DirectCallIntent = .audio,
                              encryptionState: DirectCallEncryptionState,
                              state: DirectCallState = .connecting) -> DirectCallSession {

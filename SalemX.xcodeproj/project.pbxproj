@@ -186,6 +186,7 @@
 		1C8F5B863AFF7CF65A3B5536 /* ReportRoomScreenCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F41D214A028DCC75D4FC83E0 /* ReportRoomScreenCoordinator.swift */; };
 		1C9E0306E85FF75D390EBD81 /* AppLockFlowCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E723B34982E783159589339D /* AppLockFlowCoordinator.swift */; };
 		1D1AB69F4F69040CC1575378 /* HomeScreenViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A887ADEAEE2AA66760D9CEFD /* HomeScreenViewModelTests.swift */; };
+		1D2BB348A8FCB9BDB8D8607E /* NativeDirectCallDiagnosticLiveKitMedia.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5B2638A606557653CAAA252 /* NativeDirectCallDiagnosticLiveKitMedia.swift */; };
 		1D44F5BDA7ADC053D5F5B567 /* RoomDirectorySearchProxyProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54570940654ED2C883F7E148 /* RoomDirectorySearchProxyProtocol.swift */; };
 		1D4A5573E7E83FDDAE928A15 /* LinkNewDeviceServiceMock.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAED18399F6C12A95E4C3473 /* LinkNewDeviceServiceMock.swift */; };
 		1D4D00E646BB1B7A64009402 /* SpaceServiceProxyProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FE980E752F96F0DC3BE5D1F /* SpaceServiceProxyProtocol.swift */; };
@@ -2590,6 +2591,7 @@
 		B4E5A0953E0149121F74F5AC /* SpaceAddRoomsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceAddRoomsScreen.swift; sourceTree = "<group>"; };
 		B5074364E547C97C09B33ED3 /* ThreadTimelineScreenCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadTimelineScreenCoordinator.swift; sourceTree = "<group>"; };
 		B529CC0049BDF064D196B860 /* DeclineAndBlockScreenModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeclineAndBlockScreenModels.swift; sourceTree = "<group>"; };
+		B5B2638A606557653CAAA252 /* NativeDirectCallDiagnosticLiveKitMedia.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeDirectCallDiagnosticLiveKitMedia.swift; sourceTree = "<group>"; };
 		B5BA5ED23A927FC12CE25AE6 /* NavigationRootCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationRootCoordinatorTests.swift; sourceTree = "<group>"; };
 		B6058ABB6489A6419061330A /* EmojiPickerScreenModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmojiPickerScreenModels.swift; sourceTree = "<group>"; };
 		B632340B39995B47D50C57E1 /* IdentityConfirmationScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdentityConfirmationScreen.swift; sourceTree = "<group>"; };
@@ -3219,6 +3221,7 @@
 				BFE5D88B12B3142D7D30268B /* LiveKitDirectCallClient.swift */,
 				8ED0010AA472E6BF4CF29A0E /* LiveKitDirectCallMediaEngine.swift */,
 				3DFA5CE0F5205254A66E7320 /* NativeDirectCallDiagnosticEncryptionService.swift */,
+				B5B2638A606557653CAAA252 /* NativeDirectCallDiagnosticLiveKitMedia.swift */,
 				457CB85C7313E71588D9CBC1 /* NoOpDirectCallMediaEngine.swift */,
 				8E5E72F3677F7B24929AE258 /* RoomCallEvent.swift */,
 			);
@@ -8352,6 +8355,7 @@
 				015E459305314D880D785A70 /* NSItemProvider.swift in Sources */,
 				C5789EF25257927BAD3CA7B3 /* NSRegularExpresion.swift in Sources */,
 				73F2D30C4F80DD945A755E69 /* NativeDirectCallDiagnosticEncryptionService.swift in Sources */,
+				1D2BB348A8FCB9BDB8D8607E /* NativeDirectCallDiagnosticLiveKitMedia.swift in Sources */,
 				BCD29227031CD7F38EC8430B /* NativeDirectCallRoomDeveloperCommandRouter.swift in Sources */,
 				5876406B86DC223DC1C17B99 /* NavigationCoordinators.swift in Sources */,
 				B0CA7A2408F9D71D98414362 /* NavigationModule.swift in Sources */,

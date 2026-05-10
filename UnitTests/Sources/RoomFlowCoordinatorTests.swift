@@ -922,6 +922,7 @@ final class RoomFlowCoordinatorTests {
             #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationHarnessEnabled(environment: environment) == false)
             #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationCommandsEnabled(environment: environment) == false)
             #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationEncryptionEnabled(environment: environment) == false)
+            #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationLiveKitEnabled(environment: environment) == false)
         }
 
         let harnessOnlyEnvironment = [
@@ -931,6 +932,7 @@ final class RoomFlowCoordinatorTests {
         #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationHarnessEnabled(environment: harnessOnlyEnvironment) == true)
         #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationCommandsEnabled(environment: harnessOnlyEnvironment) == false)
         #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationEncryptionEnabled(environment: harnessOnlyEnvironment) == false)
+        #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationLiveKitEnabled(environment: harnessOnlyEnvironment) == false)
 
         let commandsEnabledEnvironment = [
             "IS_RUNNING_INTEGRATION_TESTS": "1",
@@ -940,6 +942,7 @@ final class RoomFlowCoordinatorTests {
         #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationHarnessEnabled(environment: commandsEnabledEnvironment) == true)
         #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationCommandsEnabled(environment: commandsEnabledEnvironment) == true)
         #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationEncryptionEnabled(environment: commandsEnabledEnvironment) == false)
+        #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationLiveKitEnabled(environment: commandsEnabledEnvironment) == false)
 
         var encryptionEnvironment = commandsEnabledEnvironment
         encryptionEnvironment[NativeDirectCallDiagnosticEncryptionService.encryptionGateEnvironmentKey] = "1"
@@ -952,8 +955,36 @@ final class RoomFlowCoordinatorTests {
 
         encryptionEnvironment[NativeDirectCallDiagnosticEncryptionService.secretEnvironmentKey] = "diagnostic-shared-secret"
         #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationEncryptionEnabled(environment: encryptionEnvironment) == true)
+        #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationLiveKitEnabled(environment: encryptionEnvironment) == false)
         #expect(AppCoordinator.makeNativeDirectCallDiagnosticEncryptionService(ownUserID: "hi@bob",
                                                                                environment: encryptionEnvironment) != nil)
+
+        var liveKitEnvironment = encryptionEnvironment
+        liveKitEnvironment[NativeDirectCallDiagnosticLiveKitMedia.liveKitGateEnvironmentKey] = "1"
+        #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationLiveKitEnabled(environment: liveKitEnvironment) == true)
+        #expect(AppCoordinator.makeNativeDirectCallDiagnosticMediaEngineFactory(encryptionService: nil,
+                                                                                environment: liveKitEnvironment) == nil)
+
+        let encryptionService = AppCoordinator.makeNativeDirectCallDiagnosticEncryptionService(ownUserID: "hi@bob",
+                                                                                               environment: liveKitEnvironment)
+        #expect(AppCoordinator.makeNativeDirectCallDiagnosticMediaEngineFactory(encryptionService: encryptionService,
+                                                                                environment: liveKitEnvironment) == nil)
+
+        liveKitEnvironment[NativeDirectCallDiagnosticLiveKitMedia.urlEnvironmentKey] = "wss://test-livekit.example.com"
+        #expect(AppCoordinator.makeNativeDirectCallDiagnosticMediaEngineFactory(encryptionService: encryptionService,
+                                                                                environment: liveKitEnvironment) == nil)
+
+        liveKitEnvironment[NativeDirectCallDiagnosticLiveKitMedia.tokenAEnvironmentKey] = "opaque-a"
+        #expect(AppCoordinator.makeNativeDirectCallDiagnosticMediaEngineFactory(encryptionService: encryptionService,
+                                                                                environment: liveKitEnvironment) != nil)
+
+        liveKitEnvironment[NativeDirectCallDiagnosticLiveKitMedia.signallingChannelEnvironmentKey] = "B"
+        #expect(AppCoordinator.makeNativeDirectCallDiagnosticMediaEngineFactory(encryptionService: encryptionService,
+                                                                                environment: liveKitEnvironment) == nil)
+
+        liveKitEnvironment[NativeDirectCallDiagnosticLiveKitMedia.tokenBEnvironmentKey] = "opaque-b"
+        #expect(AppCoordinator.makeNativeDirectCallDiagnosticMediaEngineFactory(encryptionService: encryptionService,
+                                                                                environment: liveKitEnvironment) != nil)
     }
 
     @Test

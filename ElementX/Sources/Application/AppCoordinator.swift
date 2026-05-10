@@ -1307,6 +1307,7 @@ extension AppCoordinator {
         #if DEBUG
         let nativeDirectCallDiagnosticCommandsEnabled = ProcessInfo.isNativeDirectCallDiagnosticIntegrationCommandsEnabled
         let nativeDirectCallDiagnosticEncryptionService = Self.makeNativeDirectCallDiagnosticEncryptionService(ownUserID: flowParameters.userSession.clientProxy.userID)
+        let nativeDirectCallDiagnosticMediaEngineFactory = Self.makeNativeDirectCallDiagnosticMediaEngineFactory(encryptionService: nativeDirectCallDiagnosticEncryptionService)
         let nativeDirectCallDiagnosticRuntimeGate: () -> Bool = {
             ProcessInfo.isNativeDirectCallDiagnosticIntegrationHarnessEnabled
         }
@@ -1319,6 +1320,7 @@ extension AppCoordinator {
             NativeDirectCallRoomFlowOwner(roomProxy: roomProxy,
                                           triggerConfiguration: .init(isEnabled: nativeDirectCallDiagnosticCommandsEnabled),
                                           compositionConfiguration: .init(isEnabled: nativeDirectCallDiagnosticCommandsEnabled),
+                                          mediaEngineFactory: nativeDirectCallDiagnosticMediaEngineFactory,
                                           encryptionService: nativeDirectCallDiagnosticEncryptionService)
         }
         #else
@@ -1333,9 +1335,17 @@ extension AppCoordinator {
 #if DEBUG
 extension AppCoordinator {
     static func makeNativeDirectCallDiagnosticEncryptionService(ownUserID: String,
-                                                                environment: [String: String] = ProcessInfo.processInfo.environment) -> DirectCallEncryptionServiceProtocol? {
+                                                                environment: [String: String] = ProcessInfo.processInfo.environment) -> NativeDirectCallDiagnosticEncryptionService? {
         NativeDirectCallDiagnosticEncryptionService.makeIfEnabled(ownUserID: ownUserID,
                                                                   environment: environment)
+    }
+
+    static func makeNativeDirectCallDiagnosticMediaEngineFactory(encryptionService: NativeDirectCallDiagnosticEncryptionService?,
+                                                                 environment: [String: String] = ProcessInfo.processInfo.environment,
+                                                                 liveKitClient: DirectCallLiveKitClientProtocol? = nil) -> DirectCallMediaEngineFactoryProtocol? {
+        NativeDirectCallDiagnosticLiveKitMedia.makeMediaEngineFactoryIfEnabled(encryptionService: encryptionService,
+                                                                               environment: environment,
+                                                                               liveKitClient: liveKitClient)
     }
 
     private func configureNativeDirectCallIntegrationDiagnosticHarnessIfNeeded() {

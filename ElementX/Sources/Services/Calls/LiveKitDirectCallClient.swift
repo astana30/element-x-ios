@@ -42,6 +42,17 @@ final class DirectCallLiveKitMediaKeyStore {
         return .success(.init(callID: callID, keyID: keyID))
     }
 
+    func storeSharedKey(_ sharedKey: String, keyHandle: DirectCallMediaKeyHandle) -> Result<DirectCallMediaKeyHandle, DirectCallMediaError> {
+        guard keyHandle.callID.isEmpty == false,
+              keyHandle.keyID.isEmpty == false,
+              sharedKey.isEmpty == false else {
+            return .failure(.e2eeContextUnavailable)
+        }
+
+        keysByCallID[keyHandle.callID] = StoredKey(keyID: keyHandle.keyID, sharedKey: sharedKey)
+        return .success(keyHandle)
+    }
+
     func makeKeyProvider(for keyHandle: DirectCallMediaKeyHandle) -> BaseKeyProvider? {
         guard let storedKey = keysByCallID[keyHandle.callID],
               storedKey.keyID == keyHandle.keyID else {
