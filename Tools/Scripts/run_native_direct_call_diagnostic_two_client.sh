@@ -370,7 +370,7 @@ if expected_signal == "nativeDirectCallDiagnosticResult":
 if expected_signal == "nativeDirectCallDiagnosticStatusResult":
     status = body.get("status", {})
     print(
-        "state={state} listenerStarted={listener} hasActiveSession={session} activeSessionPhase={phase} lastSignalEventEmitted={event} lastSignalSendAttempted={attempted} lastSignalSendSucceeded={succeeded} lastSignalSendFailureReason={failure} lastTerminalReason={terminal}".format(
+        "state={state} listenerStarted={listener} hasActiveSession={session} activeSessionPhase={phase} lastSignalEventEmitted={event} lastSignalSendAttempted={attempted} lastSignalSendSucceeded={succeeded} lastSignalSendFailureReason={failure} lastTerminalReason={terminal} listenerAttached={attached} listenerStartCount={start_count} timelineDiffReceivedCount={diff_count} timelineEventReceivedCount={event_count} directCallEventTypeSeenCount={type_count} envelopeExtractedCount={extracted_count} envelopeDeliveredToEngineCount={delivered_count} lastReceiveEventKind={receive_kind} lastEnvelopeRejectedReason={rejected_reason} lastReceiveFailureReason={receive_failure}".format(
             state=status.get("state", "unknown"),
             listener=str(status.get("listenerStarted", "unknown")).lower(),
             session=str(status.get("hasActiveSession", "unknown")).lower(),
@@ -380,6 +380,16 @@ if expected_signal == "nativeDirectCallDiagnosticStatusResult":
             succeeded=str(status.get("lastSignalSendSucceeded", "unknown")).lower(),
             failure=status.get("lastSignalSendFailureReason", "none"),
             terminal=status.get("lastTerminalReason", "none"),
+            attached=str(status.get("listenerAttached", "unknown")).lower(),
+            start_count=status.get("listenerStartCount", "unknown"),
+            diff_count=status.get("timelineDiffReceivedCount", "unknown"),
+            event_count=status.get("timelineEventReceivedCount", "unknown"),
+            type_count=status.get("directCallEventTypeSeenCount", "unknown"),
+            extracted_count=status.get("envelopeExtractedCount", "unknown"),
+            delivered_count=status.get("envelopeDeliveredToEngineCount", "unknown"),
+            receive_kind=status.get("lastReceiveEventKind", "none"),
+            rejected_reason=status.get("lastEnvelopeRejectedReason", "none"),
+            receive_failure=status.get("lastReceiveFailureReason", "none"),
         )
     )
     sys.exit(0)

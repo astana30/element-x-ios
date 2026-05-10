@@ -698,7 +698,15 @@ final class RoomFlowCoordinatorTests {
         owner.diagnosticSnapshot = .init(activeSessionPhase: .outgoingRinging,
                                          lastSignalEventEmitted: .invite,
                                          lastSignalSendAttempted: true,
-                                         lastSignalSendSucceeded: true)
+                                         lastSignalSendSucceeded: true,
+                                         listenerAttached: true,
+                                         listenerStartCount: 1,
+                                         timelineDiffReceivedCount: 1,
+                                         timelineEventReceivedCount: 1,
+                                         directCallEventTypeSeenCount: 1,
+                                         envelopeExtractedCount: 1,
+                                         envelopeDeliveredToEngineCount: 1,
+                                         lastReceiveEventKind: .directCallInvite)
         owner.outgoingResult = .success(session)
         owner.acceptResult = .success(session)
         owner.hangupResult = .success(session)
@@ -726,6 +734,11 @@ final class RoomFlowCoordinatorTests {
         #expect(status.lastSignalEventEmitted == .invite)
         #expect(status.lastSignalSendAttempted)
         #expect(status.lastSignalSendSucceeded == true)
+        #expect(status.listenerAttached)
+        #expect(status.listenerStartCount == 1)
+        #expect(status.timelineDiffReceivedCount == 1)
+        #expect(status.envelopeDeliveredToEngineCount == 1)
+        #expect(status.lastReceiveEventKind == .directCallInvite)
 
         #expect(owner.startCount == 1)
         #expect(owner.outgoingCount == 1)
@@ -785,7 +798,15 @@ final class RoomFlowCoordinatorTests {
                                                                                               activeSessionPhase: .outgoingRinging,
                                                                                               lastSignalEventEmitted: .invite,
                                                                                               lastSignalSendAttempted: true,
-                                                                                              lastSignalSendSucceeded: true))
+                                                                                              lastSignalSendSucceeded: true,
+                                                                                              listenerAttached: true,
+                                                                                              listenerStartCount: 1,
+                                                                                              timelineDiffReceivedCount: 1,
+                                                                                              timelineEventReceivedCount: 1,
+                                                                                              directCallEventTypeSeenCount: 1,
+                                                                                              envelopeExtractedCount: 1,
+                                                                                              envelopeDeliveredToEngineCount: 1,
+                                                                                              lastReceiveEventKind: .directCallInvite))
         let statusSignal = UITestsSignal.nativeDirectCallDiagnosticStatus(statusRequest)
         let statusResultSignal = UITestsSignal.nativeDirectCallDiagnosticStatusResult(statusResult)
         let encoder = JSONEncoder()
@@ -811,6 +832,10 @@ final class RoomFlowCoordinatorTests {
         #expect(encodedStatusResult.contains("lastSignalSendAttempted"))
         #expect(encodedStatusResult.contains("lastSignalSendSucceeded"))
         #expect(encodedStatusResult.contains("activeSessionPhase"))
+        #expect(encodedStatusResult.contains("listenerAttached"))
+        #expect(encodedStatusResult.contains("timelineDiffReceivedCount"))
+        #expect(encodedStatusResult.contains("envelopeDeliveredToEngineCount"))
+        #expect(encodedStatusResult.contains("lastReceiveEventKind"))
         #expect(result.correlationID == command.correlationID)
         #expect(failureResult.correlationID == command.correlationID)
         #expect(statusResult.correlationID == statusRequest.correlationID)
@@ -943,7 +968,10 @@ final class RoomFlowCoordinatorTests {
                                                                            diagnosticSnapshot: .init(activeSessionPhase: .outgoingRinging,
                                                                                                      lastSignalEventEmitted: .invite,
                                                                                                      lastSignalSendAttempted: true,
-                                                                                                     lastSignalSendSucceeded: true))).status.activeSessionPhase == .outgoingRinging)
+                                                                                                     lastSignalSendSucceeded: true,
+                                                                                                     listenerAttached: true,
+                                                                                                     listenerStartCount: 1,
+                                                                                                     lastReceiveEventKind: .directCallInvite))).status.activeSessionPhase == .outgoingRinging)
     }
 
     // MARK: - Spaces

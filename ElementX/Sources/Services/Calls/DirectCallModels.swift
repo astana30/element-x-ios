@@ -333,6 +333,83 @@ enum DirectCallDiagnosticTerminalReason: String, Codable, Equatable, CustomStrin
     }
 }
 
+enum DirectCallDiagnosticReceiveEventKind: String, Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case none
+    case nonEventTimelineItem
+    case nonMessageLike
+    case nonDirectCallEvent
+    case directCallInvite
+    case directCallAnswer
+    case directCallReject
+    case directCallCancel
+    case directCallHangup
+    case directCallTimeout
+    case malformed
+    case unknown
+
+    init(_ signalType: DirectCallSignalType) {
+        switch signalType {
+        case .invite:
+            self = .directCallInvite
+        case .answer:
+            self = .directCallAnswer
+        case .reject:
+            self = .directCallReject
+        case .cancel:
+            self = .directCallCancel
+        case .hangup:
+            self = .directCallHangup
+        case .timeout:
+            self = .directCallTimeout
+        }
+    }
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum DirectCallDiagnosticEnvelopeRejectedReason: String, Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case none
+    case ownEvent
+    case wrongEventType
+    case missingEventID
+    case missingSender
+    case peerMismatch
+    case contentUnavailable
+    case decodeFailed
+    case duplicateEventID
+    case metadataUnavailable
+    case unsupportedEvent
+    case unknown
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum DirectCallDiagnosticReceiveFailureReason: String, Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case decodeFailed
+    case engineRejected
+    case unknown
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
 struct DirectCallDiagnosticSnapshot: Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     var activeSessionPhase: DirectCallDiagnosticSessionPhase = .none
     var lastSignalEventEmitted: DirectCallDiagnosticSignalEvent?
@@ -340,8 +417,37 @@ struct DirectCallDiagnosticSnapshot: Codable, Equatable, CustomStringConvertible
     var lastSignalSendSucceeded: Bool?
     var lastSignalSendFailureReason: DirectCallDiagnosticSignalSendFailureReason?
     var lastTerminalReason: DirectCallDiagnosticTerminalReason?
+    var listenerAttached = false
+    var listenerStartCount = 0
+    var timelineDiffReceivedCount = 0
+    var timelineEventReceivedCount = 0
+    var directCallEventTypeSeenCount = 0
+    var envelopeExtractedCount = 0
+    var envelopeDeliveredToEngineCount = 0
+    var lastReceiveEventKind: DirectCallDiagnosticReceiveEventKind = .none
+    var lastEnvelopeRejectedReason: DirectCallDiagnosticEnvelopeRejectedReason = .none
+    var lastReceiveFailureReason: DirectCallDiagnosticReceiveFailureReason?
 
     static let empty = Self()
+
+    mutating func mergeReceiveDiagnostics(from other: Self) {
+        listenerAttached = listenerAttached || other.listenerAttached
+        listenerStartCount = max(listenerStartCount, other.listenerStartCount)
+        timelineDiffReceivedCount = max(timelineDiffReceivedCount, other.timelineDiffReceivedCount)
+        timelineEventReceivedCount = max(timelineEventReceivedCount, other.timelineEventReceivedCount)
+        directCallEventTypeSeenCount = max(directCallEventTypeSeenCount, other.directCallEventTypeSeenCount)
+        envelopeExtractedCount = max(envelopeExtractedCount, other.envelopeExtractedCount)
+        envelopeDeliveredToEngineCount = max(envelopeDeliveredToEngineCount, other.envelopeDeliveredToEngineCount)
+        if other.lastReceiveEventKind != .none {
+            lastReceiveEventKind = other.lastReceiveEventKind
+        }
+        if other.lastEnvelopeRejectedReason != .none {
+            lastEnvelopeRejectedReason = other.lastEnvelopeRejectedReason
+        }
+        if let lastReceiveFailureReason = other.lastReceiveFailureReason {
+            self.lastReceiveFailureReason = lastReceiveFailureReason
+        }
+    }
 
     var description: String {
         "DirectCallDiagnosticSnapshot(activeSessionPhase: \(activeSessionPhase), " +
@@ -349,7 +455,17 @@ struct DirectCallDiagnosticSnapshot: Codable, Equatable, CustomStringConvertible
             "lastSignalSendAttempted: \(lastSignalSendAttempted), " +
             "lastSignalSendSucceeded: \(String(describing: lastSignalSendSucceeded)), " +
             "lastSignalSendFailureReason: \(String(describing: lastSignalSendFailureReason)), " +
-            "lastTerminalReason: \(String(describing: lastTerminalReason)))"
+            "lastTerminalReason: \(String(describing: lastTerminalReason)), " +
+            "listenerAttached: \(listenerAttached), " +
+            "listenerStartCount: \(listenerStartCount), " +
+            "timelineDiffReceivedCount: \(timelineDiffReceivedCount), " +
+            "timelineEventReceivedCount: \(timelineEventReceivedCount), " +
+            "directCallEventTypeSeenCount: \(directCallEventTypeSeenCount), " +
+            "envelopeExtractedCount: \(envelopeExtractedCount), " +
+            "envelopeDeliveredToEngineCount: \(envelopeDeliveredToEngineCount), " +
+            "lastReceiveEventKind: \(lastReceiveEventKind), " +
+            "lastEnvelopeRejectedReason: \(lastEnvelopeRejectedReason), " +
+            "lastReceiveFailureReason: \(String(describing: lastReceiveFailureReason)))"
     }
 
     var debugDescription: String {

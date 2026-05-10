@@ -835,11 +835,66 @@ final class DirectCallEngineSignalTransportTests {
             .store(in: &cancellables)
         await transport.attach()
 
+        #expect(transport.diagnosticSnapshot.listenerAttached)
+        #expect(transport.diagnosticSnapshot.listenerStartCount == 1)
+
         try listener.emit(matrixEnvelope(rawContent: #require(DirectCallMatrixSignalCodec.encode(signal))))
 
         #expect(await waitUntil { events.count == 1 })
         #expect(events.first?.type == .invite)
         #expect(events.first?.keyExchange == payload)
+        #expect(transport.diagnosticSnapshot.envelopeExtractedCount == 1)
+        #expect(transport.diagnosticSnapshot.lastReceiveEventKind == .directCallInvite)
+        #expect(transport.diagnosticSnapshot.lastEnvelopeRejectedReason == .none)
+    }
+
+    @Test
+    func matrixDirectCallSignalTransportRecordsRedactedDecodeFailureDiagnostics() async {
+        let listener = MatrixTimelineSignalListenerSpy()
+        let transport = MatrixDirectCallSignalTransport(ownUserID: userB,
+                                                        sender: DirectCallMatrixSignalTransport(rawSender: MatrixRawSignalSenderSpy()),
+                                                        listener: listener)
+        var events = [DirectCallSignalEvent]()
+        var cancellables = Set<AnyCancellable>()
+        transport.signalsPublisher(for: userB)
+            .sink { events.append($0) }
+            .store(in: &cancellables)
+        await transport.attach()
+
+        listener.emit(matrixEnvelope(rawContent: "{not-json"))
+        await Task.yield()
+
+        #expect(events.isEmpty)
+        #expect(transport.diagnosticSnapshot.envelopeExtractedCount == 1)
+        #expect(transport.diagnosticSnapshot.lastReceiveEventKind == .malformed)
+        #expect(transport.diagnosticSnapshot.lastEnvelopeRejectedReason == .decodeFailed)
+        #expect(transport.diagnosticSnapshot.lastReceiveFailureReason == .decodeFailed)
+    }
+
+    @Test
+    func matrixDirectCallSignalTransportRecordsRedactedPeerMismatchDiagnostics() async throws {
+        let listener = MatrixTimelineSignalListenerSpy()
+        let transport = MatrixDirectCallSignalTransport(ownUserID: userB,
+                                                        sender: DirectCallMatrixSignalTransport(rawSender: MatrixRawSignalSenderSpy()),
+                                                        listener: listener)
+        let content = DirectCallMatrixSignalContent(callID: "call-1",
+                                                    type: DirectCallSignalType.invite.rawValue,
+                                                    intent: DirectCallIntent.audio.rawValue,
+                                                    recipient: "@other:example.com",
+                                                    keyExchange: keyExchange(callID: "call-1", senderUserID: userA))
+        var events = [DirectCallSignalEvent]()
+        var cancellables = Set<AnyCancellable>()
+        transport.signalsPublisher(for: userB)
+            .sink { events.append($0) }
+            .store(in: &cancellables)
+        await transport.attach()
+
+        try listener.emit(matrixEnvelope(rawContent: json(for: content)))
+        await Task.yield()
+
+        #expect(events.isEmpty)
+        #expect(transport.diagnosticSnapshot.lastReceiveEventKind == .directCallInvite)
+        #expect(transport.diagnosticSnapshot.lastEnvelopeRejectedReason == .peerMismatch)
     }
 
     @Test
@@ -1095,7 +1150,9 @@ final class DirectCallEngineSignalTransportTests {
             events.append(event)
         }
 
-        envelopes.forEach(receiver.receive)
+        for envelope in envelopes {
+            _ = receiver.receive(envelope)
+        }
         return events
     }
 
@@ -2323,6 +2380,10 @@ final class MatrixDirectCallEngineIntegrationTests {
                          to: harness.listenerB)
 
         #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .incomingRinging })
+        #expect(harness.bridgeB.diagnosticSnapshot.envelopeExtractedCount == 1)
+        #expect(harness.bridgeB.diagnosticSnapshot.envelopeDeliveredToEngineCount == 1)
+        #expect(harness.bridgeB.diagnosticSnapshot.lastReceiveEventKind == .directCallInvite)
+        #expect(harness.bridgeB.diagnosticSnapshot.lastEnvelopeRejectedReason == .none)
         #expect(harness.engineB.activeSessionPublisher.value?.callID == outgoingSession.callID)
 
         _ = await harness.engineB.acceptCall(callID: outgoingSession.callID)
@@ -2380,6 +2441,7 @@ final class MatrixDirectCallEngineIntegrationTests {
         await Task.yield()
 
         #expect(harness.engineB.activeSessionPublisher.value?.state == .ended)
+        #expect(harness.bridgeB.diagnosticSnapshot.lastEnvelopeRejectedReason == .duplicateEventID)
         #expect(receiverStateChanges == stateChangesAfterFirstTerminal)
         #expect(harness.mediaEngineB.disconnectCallIDs == [outgoingSession.callID])
     }
@@ -3070,6 +3132,11 @@ final class DirectCallMatrixSDKSignalAdapterTests {
 
         await Task.yield()
         #expect(envelopes.isEmpty)
+        #expect(listener.diagnosticSnapshot.timelineDiffReceivedCount == 1)
+        #expect(listener.diagnosticSnapshot.timelineEventReceivedCount == 1)
+        #expect(listener.diagnosticSnapshot.directCallEventTypeSeenCount == 1)
+        #expect(listener.diagnosticSnapshot.envelopeExtractedCount == 0)
+        #expect(listener.diagnosticSnapshot.lastEnvelopeRejectedReason == .contentUnavailable)
     }
 
     @Test
@@ -3114,6 +3181,83 @@ final class DirectCallMatrixSDKSignalAdapterTests {
 
         #expect(DirectCallMatrixSDKTimelineItemEnvelopeExtractor().envelope(from: metadata, eventItem: eventItem) == nil)
         #expect(lazyProvider.messageLikeCustomContentCalled)
+    }
+
+    @Test
+    func matrixSDKTimelineSignalListenerRecordsRedactedReceiveBreadcrumbsForValidInvite() async throws {
+        let timeline = TimelineSDKMock()
+        timeline.addListenerListenerReturnValue = TaskHandleSDKMock()
+        let signal = DirectCallOutgoingSignal(roomID: roomID,
+                                              peerUserID: userB,
+                                              callID: "call-1",
+                                              type: .invite,
+                                              intent: .audio,
+                                              keyExchange: keyExchange(callID: "call-1", senderUserID: userA))
+        let content = try #require(DirectCallMatrixSignalCodec.encode(signal))
+        let lazyProvider = LazyTimelineItemProviderSDKMock()
+        lazyProvider.messageLikeCustomContentReturnValue = .init(eventType: DirectCallMatrixSignalCodec.eventType,
+                                                                 contentJson: content)
+        let listener = makeListener(timeline: timeline)
+        var envelopes = [DirectCallMatrixSignalEnvelope]()
+        let handle = await listener.start { envelope in
+            envelopes.append(envelope)
+        }
+        handle.cancel()
+
+        timeline.addListenerListenerReceivedListener?.onUpdate(diff: [
+            .append(values: [
+                timelineItem(eventID: "$event-1",
+                             content: directCallTimelineContent(),
+                             lazyProvider: lazyProvider)
+            ])
+        ])
+
+        #expect(await waitUntil { envelopes.count == 1 })
+        #expect(listener.diagnosticSnapshot.timelineDiffReceivedCount == 1)
+        #expect(listener.diagnosticSnapshot.timelineEventReceivedCount == 1)
+        #expect(listener.diagnosticSnapshot.directCallEventTypeSeenCount == 1)
+        #expect(listener.diagnosticSnapshot.envelopeExtractedCount == 1)
+        #expect(listener.diagnosticSnapshot.lastReceiveEventKind == .directCallInvite)
+        #expect(listener.diagnosticSnapshot.lastEnvelopeRejectedReason == .none)
+    }
+
+    @Test
+    func matrixSDKTimelineSignalListenerRecordsWrongEventTypeAndOwnEventReasons() async {
+        let timeline = TimelineSDKMock()
+        timeline.addListenerListenerReturnValue = TaskHandleSDKMock()
+        let listener = makeListener(timeline: timeline)
+        var envelopes = [DirectCallMatrixSignalEnvelope]()
+        let handle = await listener.start { envelope in
+            envelopes.append(envelope)
+        }
+        handle.cancel()
+
+        timeline.addListenerListenerReceivedListener?.onUpdate(diff: [
+            .append(values: [
+                timelineItem(eventID: "$message", content: nonDirectCallTimelineContent())
+            ])
+        ])
+        await Task.yield()
+
+        #expect(envelopes.isEmpty)
+        #expect(listener.diagnosticSnapshot.timelineEventReceivedCount == 1)
+        #expect(listener.diagnosticSnapshot.directCallEventTypeSeenCount == 0)
+        #expect(listener.diagnosticSnapshot.lastReceiveEventKind == .nonDirectCallEvent)
+        #expect(listener.diagnosticSnapshot.lastEnvelopeRejectedReason == .wrongEventType)
+
+        timeline.addListenerListenerReceivedListener?.onUpdate(diff: [
+            .append(values: [
+                timelineItem(eventID: "$own",
+                             senderUserID: userB,
+                             isOwn: true,
+                             content: directCallTimelineContent())
+            ])
+        ])
+        await Task.yield()
+
+        #expect(envelopes.isEmpty)
+        #expect(listener.diagnosticSnapshot.directCallEventTypeSeenCount == 1)
+        #expect(listener.diagnosticSnapshot.lastEnvelopeRejectedReason == .ownEvent)
     }
 
     @Test
@@ -3233,12 +3377,14 @@ final class DirectCallMatrixSDKSignalAdapterTests {
     private func timelineItem(eventID: String,
                               senderUserID: String? = nil,
                               isOwn: Bool = false,
-                              content: TimelineItemContent) -> TimelineItem {
+                              content: TimelineItemContent,
+                              lazyProvider: LazyTimelineItemProviderSDKMock? = nil) -> TimelineItem {
         let item = TimelineItemSDKMock()
         item.asEventReturnValue = eventTimelineItem(eventID: eventID,
                                                     senderUserID: senderUserID,
                                                     isOwn: isOwn,
-                                                    content: content)
+                                                    content: content,
+                                                    lazyProvider: lazyProvider)
         return item
     }
 
@@ -3268,6 +3414,17 @@ final class DirectCallMatrixSDKSignalAdapterTests {
                                 inReplyTo: nil,
                                 threadRoot: nil,
                                 threadSummary: nil))
+    }
+
+    private func keyExchange(callID: String,
+                             roomID: String? = nil,
+                             senderUserID: String,
+                             encryptedPayload: String = "encrypted") -> DirectCallEncryptedKeyExchangePayload {
+        .init(callID: callID,
+              roomID: roomID ?? self.roomID,
+              senderUserID: senderUserID,
+              keyID: "key-\(callID)",
+              encryptedPayload: encryptedPayload)
     }
 
     private func waitUntil(timeout: Duration = .seconds(2),

@@ -167,6 +167,16 @@ enum UITestsSignal: Codable, Equatable {
         let lastSignalSendSucceeded: Bool?
         let lastSignalSendFailureReason: DirectCallDiagnosticSignalSendFailureReason?
         let lastTerminalReason: DirectCallDiagnosticTerminalReason?
+        let listenerAttached: Bool
+        let listenerStartCount: Int
+        let timelineDiffReceivedCount: Int
+        let timelineEventReceivedCount: Int
+        let directCallEventTypeSeenCount: Int
+        let envelopeExtractedCount: Int
+        let envelopeDeliveredToEngineCount: Int
+        let lastReceiveEventKind: DirectCallDiagnosticReceiveEventKind
+        let lastEnvelopeRejectedReason: DirectCallDiagnosticEnvelopeRejectedReason
+        let lastReceiveFailureReason: DirectCallDiagnosticReceiveFailureReason?
 
         init(state: NativeDirectCallDiagnosticStatusState,
              listenerStarted: Bool,
@@ -176,7 +186,17 @@ enum UITestsSignal: Codable, Equatable {
              lastSignalSendAttempted: Bool = false,
              lastSignalSendSucceeded: Bool? = nil,
              lastSignalSendFailureReason: DirectCallDiagnosticSignalSendFailureReason? = nil,
-             lastTerminalReason: DirectCallDiagnosticTerminalReason? = nil) {
+             lastTerminalReason: DirectCallDiagnosticTerminalReason? = nil,
+             listenerAttached: Bool = false,
+             listenerStartCount: Int = 0,
+             timelineDiffReceivedCount: Int = 0,
+             timelineEventReceivedCount: Int = 0,
+             directCallEventTypeSeenCount: Int = 0,
+             envelopeExtractedCount: Int = 0,
+             envelopeDeliveredToEngineCount: Int = 0,
+             lastReceiveEventKind: DirectCallDiagnosticReceiveEventKind = .none,
+             lastEnvelopeRejectedReason: DirectCallDiagnosticEnvelopeRejectedReason = .none,
+             lastReceiveFailureReason: DirectCallDiagnosticReceiveFailureReason? = nil) {
             self.state = state
             self.listenerStarted = listenerStarted
             self.hasActiveSession = hasActiveSession
@@ -186,6 +206,16 @@ enum UITestsSignal: Codable, Equatable {
             self.lastSignalSendSucceeded = lastSignalSendSucceeded
             self.lastSignalSendFailureReason = lastSignalSendFailureReason
             self.lastTerminalReason = lastTerminalReason
+            self.listenerAttached = listenerAttached
+            self.listenerStartCount = listenerStartCount
+            self.timelineDiffReceivedCount = timelineDiffReceivedCount
+            self.timelineEventReceivedCount = timelineEventReceivedCount
+            self.directCallEventTypeSeenCount = directCallEventTypeSeenCount
+            self.envelopeExtractedCount = envelopeExtractedCount
+            self.envelopeDeliveredToEngineCount = envelopeDeliveredToEngineCount
+            self.lastReceiveEventKind = lastReceiveEventKind
+            self.lastEnvelopeRejectedReason = lastEnvelopeRejectedReason
+            self.lastReceiveFailureReason = lastReceiveFailureReason
         }
     }
 
@@ -273,7 +303,17 @@ extension UITestsSignal.NativeDirectCallDiagnosticStatus {
                   lastSignalSendAttempted: status.lastSignalSendAttempted,
                   lastSignalSendSucceeded: status.lastSignalSendSucceeded,
                   lastSignalSendFailureReason: status.lastSignalSendFailureReason,
-                  lastTerminalReason: status.lastTerminalReason)
+                  lastTerminalReason: status.lastTerminalReason,
+                  listenerAttached: status.listenerAttached,
+                  listenerStartCount: status.listenerStartCount,
+                  timelineDiffReceivedCount: status.timelineDiffReceivedCount,
+                  timelineEventReceivedCount: status.timelineEventReceivedCount,
+                  directCallEventTypeSeenCount: status.directCallEventTypeSeenCount,
+                  envelopeExtractedCount: status.envelopeExtractedCount,
+                  envelopeDeliveredToEngineCount: status.envelopeDeliveredToEngineCount,
+                  lastReceiveEventKind: status.lastReceiveEventKind,
+                  lastEnvelopeRejectedReason: status.lastEnvelopeRejectedReason,
+                  lastReceiveFailureReason: status.lastReceiveFailureReason)
     }
 }
 

@@ -154,6 +154,16 @@ struct NativeDirectCallRoomDiagnosticStatus: Equatable, CustomStringConvertible,
     let lastSignalSendSucceeded: Bool?
     let lastSignalSendFailureReason: DirectCallDiagnosticSignalSendFailureReason?
     let lastTerminalReason: DirectCallDiagnosticTerminalReason?
+    let listenerAttached: Bool
+    let listenerStartCount: Int
+    let timelineDiffReceivedCount: Int
+    let timelineEventReceivedCount: Int
+    let directCallEventTypeSeenCount: Int
+    let envelopeExtractedCount: Int
+    let envelopeDeliveredToEngineCount: Int
+    let lastReceiveEventKind: DirectCallDiagnosticReceiveEventKind
+    let lastEnvelopeRejectedReason: DirectCallDiagnosticEnvelopeRejectedReason
+    let lastReceiveFailureReason: DirectCallDiagnosticReceiveFailureReason?
 
     init(state: NativeDirectCallRoomDiagnosticStatusState,
          listenerStarted: Bool,
@@ -168,6 +178,16 @@ struct NativeDirectCallRoomDiagnosticStatus: Equatable, CustomStringConvertible,
         lastSignalSendSucceeded = diagnosticSnapshot.lastSignalSendSucceeded
         lastSignalSendFailureReason = diagnosticSnapshot.lastSignalSendFailureReason
         lastTerminalReason = diagnosticSnapshot.lastTerminalReason
+        listenerAttached = diagnosticSnapshot.listenerAttached
+        listenerStartCount = diagnosticSnapshot.listenerStartCount
+        timelineDiffReceivedCount = diagnosticSnapshot.timelineDiffReceivedCount
+        timelineEventReceivedCount = diagnosticSnapshot.timelineEventReceivedCount
+        directCallEventTypeSeenCount = diagnosticSnapshot.directCallEventTypeSeenCount
+        envelopeExtractedCount = diagnosticSnapshot.envelopeExtractedCount
+        envelopeDeliveredToEngineCount = diagnosticSnapshot.envelopeDeliveredToEngineCount
+        lastReceiveEventKind = diagnosticSnapshot.lastReceiveEventKind
+        lastEnvelopeRejectedReason = diagnosticSnapshot.lastEnvelopeRejectedReason
+        lastReceiveFailureReason = diagnosticSnapshot.lastReceiveFailureReason
     }
 
     static let unavailable = Self(state: .unavailable, listenerStarted: false, hasActiveSession: false)
@@ -183,7 +203,17 @@ struct NativeDirectCallRoomDiagnosticStatus: Equatable, CustomStringConvertible,
             "lastSignalSendAttempted: \(lastSignalSendAttempted)",
             "lastSignalSendSucceeded: \(String(describing: lastSignalSendSucceeded))",
             "lastSignalSendFailureReason: \(String(describing: lastSignalSendFailureReason))",
-            "lastTerminalReason: \(String(describing: lastTerminalReason))"
+            "lastTerminalReason: \(String(describing: lastTerminalReason))",
+            "listenerAttached: \(listenerAttached)",
+            "listenerStartCount: \(listenerStartCount)",
+            "timelineDiffReceivedCount: \(timelineDiffReceivedCount)",
+            "timelineEventReceivedCount: \(timelineEventReceivedCount)",
+            "directCallEventTypeSeenCount: \(directCallEventTypeSeenCount)",
+            "envelopeExtractedCount: \(envelopeExtractedCount)",
+            "envelopeDeliveredToEngineCount: \(envelopeDeliveredToEngineCount)",
+            "lastReceiveEventKind: \(lastReceiveEventKind)",
+            "lastEnvelopeRejectedReason: \(lastEnvelopeRejectedReason)",
+            "lastReceiveFailureReason: \(String(describing: lastReceiveFailureReason))"
         ].joined(separator: ", ") + ")"
     }
 
