@@ -1310,18 +1310,26 @@ extension JoinedRoomProxy: JoinedRoomNativeDirectCallCompositionBoundaryProtocol
     }
 
     func makeNativeDirectCallTimelineSignalListener() -> DirectCallMatrixTimelineSignalListening? {
-        guard let timeline = timeline as? TimelineProxy else {
-            return nil
-        }
+        DirectCallMatrixLazySDKTimelineSignalListener(timelineFactory: { [weak self] in
+                                                          guard let self else {
+                                                              throw CancellationError()
+                                                          }
 
-        return timeline.directCallMatrixTimelineSignalListener(roomID: id,
-                                                               ownUserID: ownUserID,
-                                                               isDirectOneToOneRoom: { [weak self] in
-                                                                   self?.isDirectOneToOneRoom
-                                                               },
-                                                               isEncryptedRoom: { [weak self] in
-                                                                   self?.infoPublisher.value.isEncrypted
-                                                               })
+                                                          return try await self.room.timelineWithConfiguration(configuration: .init(focus: .live(hideThreadedEvents: self.appSettings.threadsEnabled),
+                                                                                                                                    filter: .defaultWithAdditionalMessageLikeEventTypes(eventTypes: [.other(DirectCallMatrixSignalCodec.eventType)]),
+                                                                                                                                    internalIdPrefix: nil,
+                                                                                                                                    dateDividerMode: .daily,
+                                                                                                                                    trackReadReceipts: .messageLikeEvents,
+                                                                                                                                    reportUtds: true))
+                                                      },
+                                                      roomID: id,
+                                                      ownUserID: ownUserID,
+                                                      isDirectOneToOneRoom: { [weak self] in
+                                                          self?.isDirectOneToOneRoom
+                                                      },
+                                                      isEncryptedRoom: { [weak self] in
+                                                          self?.infoPublisher.value.isEncrypted
+                                                      })
     }
 
     func makeNativeDirectCallRoomController(configuration: NativeDirectCallCompositionConfiguration,

@@ -3121,6 +3121,54 @@ final class DirectCallMatrixSDKSignalAdapterTests {
     }
 
     @Test
+    func lazyMatrixSDKTimelineSignalListenerCreatesTimelineOnExplicitStart() async throws {
+        let timeline = TimelineSDKMock()
+        timeline.addListenerListenerReturnValue = TaskHandleSDKMock()
+        let signal = DirectCallOutgoingSignal(roomID: roomID,
+                                              peerUserID: userB,
+                                              callID: "call-1",
+                                              type: .invite,
+                                              intent: .audio,
+                                              keyExchange: keyExchange(callID: "call-1", senderUserID: userA))
+        let content = try #require(DirectCallMatrixSignalCodec.encode(signal))
+        let lazyProvider = LazyTimelineItemProviderSDKMock()
+        lazyProvider.messageLikeCustomContentReturnValue = .init(eventType: DirectCallMatrixSignalCodec.eventType,
+                                                                 contentJson: content)
+        var timelineFactoryCallCount = 0
+        let listener = DirectCallMatrixLazySDKTimelineSignalListener(timelineFactory: {
+                                                                         timelineFactoryCallCount += 1
+                                                                         return timeline
+                                                                     },
+                                                                     roomID: roomID,
+                                                                     ownUserID: userB,
+                                                                     isDirectOneToOneRoom: { true },
+                                                                     isEncryptedRoom: { true })
+        var envelopes = [DirectCallMatrixSignalEnvelope]()
+
+        #expect(timelineFactoryCallCount == 0)
+        let handle = await listener.start { envelope in
+            envelopes.append(envelope)
+        }
+        defer { handle.cancel() }
+
+        #expect(timelineFactoryCallCount == 1)
+        #expect(timeline.addListenerListenerCallsCount == 1)
+
+        timeline.addListenerListenerReceivedListener?.onUpdate(diff: [
+            .append(values: [
+                timelineItem(eventID: "$event-1",
+                             content: directCallTimelineContent(),
+                             lazyProvider: lazyProvider)
+            ])
+        ])
+
+        #expect(await waitUntil { envelopes.count == 1 })
+        #expect(listener.diagnosticSnapshot.directCallEventTypeSeenCount == 1)
+        #expect(listener.diagnosticSnapshot.envelopeExtractedCount == 1)
+        #expect(listener.diagnosticSnapshot.receiveRoomFingerprint == DirectCallDiagnosticRedactor.roomFingerprint(roomID))
+    }
+
+    @Test
     func matrixSDKTimelineSignalListenerFailsClosedWhenSafeRawContentIsUnavailable() async throws {
         let timeline = TimelineSDKMock()
         timeline.addListenerListenerReturnValue = TaskHandleSDKMock()

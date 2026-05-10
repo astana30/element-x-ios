@@ -10054,7 +10054,7 @@
 			repositoryURL = "https://github.com/astana30/matrix-rust-components-swift";
 			requirement = {
 				kind = revision;
-				revision = 2bbb27f5600bd7325b1b88fdc5b6bfd9fe36a0db;
+				revision = e4a40bf4f22a13f0e73df3ff60eb59ca3e1716c0;
 			};
 		};
 		8AA79787D76E9DC70AC6512F /* XCRemoteSwiftPackageReference "Version" */ = {

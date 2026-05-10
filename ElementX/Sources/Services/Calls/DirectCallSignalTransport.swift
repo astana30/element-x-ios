@@ -764,6 +764,76 @@ extension DirectCallMatrixSDKTimelineSignalListener: DirectCallMatrixTimelineSig
 #endif
 
 @MainActor
+final class DirectCallMatrixLazySDKTimelineSignalListener: DirectCallMatrixTimelineSignalListening {
+    private let timelineFactory: () async throws -> TimelineProtocol
+    private let roomID: String
+    private let ownUserID: String
+    private let isDirectOneToOneRoom: () -> Bool?
+    private let isEncryptedRoom: () -> Bool?
+    private let envelopeExtractor: DirectCallMatrixTimelineItemEnvelopeExtracting?
+
+    private var listener: DirectCallMatrixSDKTimelineSignalListener?
+    private var handle: DirectCallMatrixSignalListeningHandle?
+
+    #if DEBUG
+    private var diagnosticState = DirectCallDiagnosticSnapshot()
+
+    var diagnosticSnapshot: DirectCallDiagnosticSnapshot {
+        var snapshot = diagnosticState
+        if let listener {
+            snapshot.mergeReceiveDiagnostics(from: listener.diagnosticSnapshot)
+        }
+        return snapshot
+    }
+    #endif
+
+    init(timelineFactory: @escaping () async throws -> TimelineProtocol,
+         roomID: String,
+         ownUserID: String,
+         isDirectOneToOneRoom: @escaping () -> Bool?,
+         isEncryptedRoom: @escaping () -> Bool?,
+         envelopeExtractor: DirectCallMatrixTimelineItemEnvelopeExtracting? = nil) {
+        self.timelineFactory = timelineFactory
+        self.roomID = roomID
+        self.ownUserID = ownUserID
+        self.isDirectOneToOneRoom = isDirectOneToOneRoom
+        self.isEncryptedRoom = isEncryptedRoom
+        self.envelopeExtractor = envelopeExtractor
+    }
+
+    func start(onEnvelope: @escaping @MainActor (DirectCallMatrixSignalEnvelope) -> Void) async -> DirectCallMatrixSignalListeningHandle {
+        #if DEBUG
+        diagnosticState.receiveRoomFingerprint = DirectCallDiagnosticRedactor.roomFingerprint(roomID)
+        #endif
+
+        do {
+            let timeline = try await timelineFactory()
+            let listener = DirectCallMatrixSDKTimelineSignalListener(timeline: timeline,
+                                                                     roomID: roomID,
+                                                                     ownUserID: ownUserID,
+                                                                     isDirectOneToOneRoom: isDirectOneToOneRoom,
+                                                                     isEncryptedRoom: isEncryptedRoom,
+                                                                     envelopeExtractor: envelopeExtractor)
+            let handle = await listener.start(onEnvelope: onEnvelope)
+            self.listener = listener
+            self.handle = handle
+
+            return DirectCallMatrixCancellableSignalListeningHandle { [weak self] in
+                self?.handle?.cancel()
+                self?.handle = nil
+                self?.listener = nil
+            }
+        } catch {
+            return DirectCallMatrixCancellableSignalListeningHandle { }
+        }
+    }
+}
+
+#if DEBUG
+extension DirectCallMatrixLazySDKTimelineSignalListener: DirectCallMatrixTimelineSignalDiagnosticsProviding { }
+#endif
+
+@MainActor
 final class DirectCallMatrixTimelineItemProviderSignalListener: DirectCallMatrixTimelineSignalListening {
     private let timelineItemProvider: TimelineItemProviderProtocol
     private let roomID: String
