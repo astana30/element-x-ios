@@ -71,6 +71,14 @@ Optional environment:
                                   Optional. Set to 1 for diagnostic-only key exchange.
   NATIVE_DIRECT_CALL_DIAGNOSTIC_ENCRYPTION_SECRET
                                   Optional shared diagnostic secret; never printed.
+  NATIVE_DIRECT_CALL_DIAGNOSTIC_LIVEKIT
+                                  Optional. Set to 1 for diagnostic-only LiveKit media DI.
+  NATIVE_DIRECT_CALL_LIVEKIT_URL  Required only when diagnostic LiveKit is enabled; never printed.
+  NATIVE_DIRECT_CALL_LIVEKIT_TOKEN_A
+                                  Required only when diagnostic LiveKit is enabled; never printed.
+  NATIVE_DIRECT_CALL_LIVEKIT_TOKEN_B
+                                  Required only when diagnostic LiveKit is enabled; never printed.
+  NATIVE_DIRECT_CALL_LIVEKIT_ROOM Optional diagnostic LiveKit room name; never printed.
 
 Example planned signalling sequence:
   $SCRIPT_NAME init both
@@ -118,11 +126,47 @@ require_common_environment() {
     require_env INTEGRATION_TESTS_PASSWORD_A
     require_env INTEGRATION_TESTS_USERNAME_B
     require_env INTEGRATION_TESTS_PASSWORD_B
+    require_livekit_environment_if_enabled
 }
 
 require_host_tools() {
     require_command python3
     require_command xcrun
+}
+
+is_livekit_diagnostics_enabled() {
+    [[ "${NATIVE_DIRECT_CALL_DIAGNOSTIC_LIVEKIT:-}" == "1" ]]
+}
+
+require_livekit_environment_if_enabled() {
+    if ! is_livekit_diagnostics_enabled; then
+        return
+    fi
+
+    require_env NATIVE_DIRECT_CALL_LIVEKIT_URL
+    require_env NATIVE_DIRECT_CALL_LIVEKIT_TOKEN_A
+    require_env NATIVE_DIRECT_CALL_LIVEKIT_TOKEN_B
+}
+
+redacted_env_state() {
+    local name="$1"
+    if [[ -n "${!name:-}" ]]; then
+        printf '<set>\n'
+    else
+        printf '<missing>\n'
+    fi
+}
+
+log_livekit_environment_summary() {
+    if is_livekit_diagnostics_enabled; then
+        log "LiveKit diagnostics: enabled"
+        log "LiveKit URL: $(redacted_env_state NATIVE_DIRECT_CALL_LIVEKIT_URL)"
+        log "LiveKit token A: <redacted>"
+        log "LiveKit token B: <redacted>"
+        log "LiveKit room: $(redacted_env_state NATIVE_DIRECT_CALL_LIVEKIT_ROOM)"
+    else
+        log "LiveKit diagnostics: disabled"
+    fi
 }
 
 sanitize_identifier() {
@@ -523,6 +567,7 @@ set_client_environment() {
         local udid
         udid="$(client_udid "$client")"
         log "DRY_RUN: set integration env for channel=$client udid=$udid host=<set> username=<set> credential=<redacted> diagnosticEncryption=${NATIVE_DIRECT_CALL_DIAGNOSTIC_ENCRYPTION:-0}"
+        log_livekit_environment_summary
         return
     fi
 
@@ -546,6 +591,11 @@ launch_client_with_environment() {
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1 \
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_DIAGNOSTIC_ENCRYPTION="${NATIVE_DIRECT_CALL_DIAGNOSTIC_ENCRYPTION:-}" \
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_DIAGNOSTIC_ENCRYPTION_SECRET="${NATIVE_DIRECT_CALL_DIAGNOSTIC_ENCRYPTION_SECRET:-}" \
+        SIMCTL_CHILD_NATIVE_DIRECT_CALL_DIAGNOSTIC_LIVEKIT="${NATIVE_DIRECT_CALL_DIAGNOSTIC_LIVEKIT:-}" \
+        SIMCTL_CHILD_NATIVE_DIRECT_CALL_LIVEKIT_URL="${NATIVE_DIRECT_CALL_LIVEKIT_URL:-}" \
+        SIMCTL_CHILD_NATIVE_DIRECT_CALL_LIVEKIT_TOKEN_A="${NATIVE_DIRECT_CALL_LIVEKIT_TOKEN_A:-}" \
+        SIMCTL_CHILD_NATIVE_DIRECT_CALL_LIVEKIT_TOKEN_B="${NATIVE_DIRECT_CALL_LIVEKIT_TOKEN_B:-}" \
+        SIMCTL_CHILD_NATIVE_DIRECT_CALL_LIVEKIT_ROOM="${NATIVE_DIRECT_CALL_LIVEKIT_ROOM:-}" \
         SIMCTL_CHILD_UI_TESTS_SIGNALLING_CHANNEL="$channel" \
         SIMCTL_CHILD_INTEGRATION_TESTS_HOST="$INTEGRATION_TESTS_HOST" \
         SIMCTL_CHILD_INTEGRATION_TESTS_USERNAME="$username" \
@@ -647,6 +697,7 @@ main() {
         validate)
             require_host_tools
             require_common_environment
+            log_livekit_environment_summary
             log "validated required environment; credential values were not printed"
             ;;
         init)
