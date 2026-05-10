@@ -779,6 +779,8 @@ final class DirectCallEngineSignalTransportTests {
         transport.send(signal, from: userA)
 
         #expect(await waitUntil { rawSender.sentSignals.count == 1 })
+        #expect(transport.diagnosticSnapshot.sendRoomFingerprint == DirectCallDiagnosticRedactor.roomFingerprint(roomID))
+        #expect(transport.diagnosticSnapshot.sendRoomFingerprint != roomID)
         let sentSignal = try #require(rawSender.sentSignals.first)
         #expect(sentSignal.roomID == roomID)
         #expect(sentSignal.eventType == DirectCallMatrixSignalCodec.eventType)
@@ -836,6 +838,7 @@ final class DirectCallEngineSignalTransportTests {
         await transport.attach()
 
         #expect(transport.diagnosticSnapshot.listenerAttached)
+        #expect(transport.diagnosticSnapshot.listenerHandleRetained)
         #expect(transport.diagnosticSnapshot.listenerStartCount == 1)
 
         try listener.emit(matrixEnvelope(rawContent: #require(DirectCallMatrixSignalCodec.encode(signal))))
@@ -846,6 +849,8 @@ final class DirectCallEngineSignalTransportTests {
         #expect(transport.diagnosticSnapshot.envelopeExtractedCount == 1)
         #expect(transport.diagnosticSnapshot.lastReceiveEventKind == .directCallInvite)
         #expect(transport.diagnosticSnapshot.lastEnvelopeRejectedReason == .none)
+        #expect(transport.diagnosticSnapshot.receiveRoomFingerprint == DirectCallDiagnosticRedactor.roomFingerprint(roomID))
+        #expect(transport.diagnosticSnapshot.receiveRoomFingerprint != roomID)
     }
 
     @Test
@@ -3132,11 +3137,15 @@ final class DirectCallMatrixSDKSignalAdapterTests {
 
         await Task.yield()
         #expect(envelopes.isEmpty)
+        #expect(listener.diagnosticSnapshot.timelineUpdateCount == 1)
         #expect(listener.diagnosticSnapshot.timelineDiffReceivedCount == 1)
+        #expect(listener.diagnosticSnapshot.lastTimelineDiffKind == .append)
+        #expect(listener.diagnosticSnapshot.lastTimelineDiffItemCount == 1)
         #expect(listener.diagnosticSnapshot.timelineEventReceivedCount == 1)
         #expect(listener.diagnosticSnapshot.directCallEventTypeSeenCount == 1)
         #expect(listener.diagnosticSnapshot.envelopeExtractedCount == 0)
         #expect(listener.diagnosticSnapshot.lastEnvelopeRejectedReason == .contentUnavailable)
+        #expect(listener.diagnosticSnapshot.receiveRoomFingerprint == DirectCallDiagnosticRedactor.roomFingerprint(roomID))
     }
 
     @Test
@@ -3213,12 +3222,17 @@ final class DirectCallMatrixSDKSignalAdapterTests {
         ])
 
         #expect(await waitUntil { envelopes.count == 1 })
+        #expect(listener.diagnosticSnapshot.timelineUpdateCount == 1)
         #expect(listener.diagnosticSnapshot.timelineDiffReceivedCount == 1)
+        #expect(listener.diagnosticSnapshot.lastTimelineDiffKind == .append)
+        #expect(listener.diagnosticSnapshot.lastTimelineDiffItemCount == 1)
         #expect(listener.diagnosticSnapshot.timelineEventReceivedCount == 1)
         #expect(listener.diagnosticSnapshot.directCallEventTypeSeenCount == 1)
         #expect(listener.diagnosticSnapshot.envelopeExtractedCount == 1)
         #expect(listener.diagnosticSnapshot.lastReceiveEventKind == .directCallInvite)
         #expect(listener.diagnosticSnapshot.lastEnvelopeRejectedReason == .none)
+        #expect(listener.diagnosticSnapshot.receiveRoomFingerprint == DirectCallDiagnosticRedactor.roomFingerprint(roomID))
+        #expect(listener.diagnosticSnapshot.receiveRoomFingerprint != roomID)
     }
 
     @Test
@@ -3240,6 +3254,7 @@ final class DirectCallMatrixSDKSignalAdapterTests {
         await Task.yield()
 
         #expect(envelopes.isEmpty)
+        #expect(listener.diagnosticSnapshot.timelineUpdateCount == 1)
         #expect(listener.diagnosticSnapshot.timelineEventReceivedCount == 1)
         #expect(listener.diagnosticSnapshot.directCallEventTypeSeenCount == 0)
         #expect(listener.diagnosticSnapshot.lastReceiveEventKind == .nonDirectCallEvent)
@@ -3256,6 +3271,7 @@ final class DirectCallMatrixSDKSignalAdapterTests {
         await Task.yield()
 
         #expect(envelopes.isEmpty)
+        #expect(listener.diagnosticSnapshot.timelineUpdateCount == 2)
         #expect(listener.diagnosticSnapshot.directCallEventTypeSeenCount == 1)
         #expect(listener.diagnosticSnapshot.lastEnvelopeRejectedReason == .ownEvent)
     }

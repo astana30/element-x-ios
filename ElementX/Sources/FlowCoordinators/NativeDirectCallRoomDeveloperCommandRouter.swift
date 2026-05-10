@@ -155,8 +155,12 @@ struct NativeDirectCallRoomDiagnosticStatus: Equatable, CustomStringConvertible,
     let lastSignalSendFailureReason: DirectCallDiagnosticSignalSendFailureReason?
     let lastTerminalReason: DirectCallDiagnosticTerminalReason?
     let listenerAttached: Bool
+    let listenerHandleRetained: Bool
     let listenerStartCount: Int
+    let timelineUpdateCount: Int
     let timelineDiffReceivedCount: Int
+    let lastTimelineDiffKind: DirectCallDiagnosticTimelineDiffKind
+    let lastTimelineDiffItemCount: Int
     let timelineEventReceivedCount: Int
     let directCallEventTypeSeenCount: Int
     let envelopeExtractedCount: Int
@@ -164,6 +168,8 @@ struct NativeDirectCallRoomDiagnosticStatus: Equatable, CustomStringConvertible,
     let lastReceiveEventKind: DirectCallDiagnosticReceiveEventKind
     let lastEnvelopeRejectedReason: DirectCallDiagnosticEnvelopeRejectedReason
     let lastReceiveFailureReason: DirectCallDiagnosticReceiveFailureReason?
+    let sendRoomFingerprint: String?
+    let receiveRoomFingerprint: String?
 
     init(state: NativeDirectCallRoomDiagnosticStatusState,
          listenerStarted: Bool,
@@ -179,8 +185,12 @@ struct NativeDirectCallRoomDiagnosticStatus: Equatable, CustomStringConvertible,
         lastSignalSendFailureReason = diagnosticSnapshot.lastSignalSendFailureReason
         lastTerminalReason = diagnosticSnapshot.lastTerminalReason
         listenerAttached = diagnosticSnapshot.listenerAttached
+        listenerHandleRetained = diagnosticSnapshot.listenerHandleRetained
         listenerStartCount = diagnosticSnapshot.listenerStartCount
+        timelineUpdateCount = diagnosticSnapshot.timelineUpdateCount
         timelineDiffReceivedCount = diagnosticSnapshot.timelineDiffReceivedCount
+        lastTimelineDiffKind = diagnosticSnapshot.lastTimelineDiffKind
+        lastTimelineDiffItemCount = diagnosticSnapshot.lastTimelineDiffItemCount
         timelineEventReceivedCount = diagnosticSnapshot.timelineEventReceivedCount
         directCallEventTypeSeenCount = diagnosticSnapshot.directCallEventTypeSeenCount
         envelopeExtractedCount = diagnosticSnapshot.envelopeExtractedCount
@@ -188,6 +198,8 @@ struct NativeDirectCallRoomDiagnosticStatus: Equatable, CustomStringConvertible,
         lastReceiveEventKind = diagnosticSnapshot.lastReceiveEventKind
         lastEnvelopeRejectedReason = diagnosticSnapshot.lastEnvelopeRejectedReason
         lastReceiveFailureReason = diagnosticSnapshot.lastReceiveFailureReason
+        sendRoomFingerprint = diagnosticSnapshot.sendRoomFingerprint
+        receiveRoomFingerprint = diagnosticSnapshot.receiveRoomFingerprint
     }
 
     static let unavailable = Self(state: .unavailable, listenerStarted: false, hasActiveSession: false)
@@ -205,15 +217,21 @@ struct NativeDirectCallRoomDiagnosticStatus: Equatable, CustomStringConvertible,
             "lastSignalSendFailureReason: \(String(describing: lastSignalSendFailureReason))",
             "lastTerminalReason: \(String(describing: lastTerminalReason))",
             "listenerAttached: \(listenerAttached)",
+            "listenerHandleRetained: \(listenerHandleRetained)",
             "listenerStartCount: \(listenerStartCount)",
+            "timelineUpdateCount: \(timelineUpdateCount)",
             "timelineDiffReceivedCount: \(timelineDiffReceivedCount)",
+            "lastTimelineDiffKind: \(lastTimelineDiffKind)",
+            "lastTimelineDiffItemCount: \(lastTimelineDiffItemCount)",
             "timelineEventReceivedCount: \(timelineEventReceivedCount)",
             "directCallEventTypeSeenCount: \(directCallEventTypeSeenCount)",
             "envelopeExtractedCount: \(envelopeExtractedCount)",
             "envelopeDeliveredToEngineCount: \(envelopeDeliveredToEngineCount)",
             "lastReceiveEventKind: \(lastReceiveEventKind)",
             "lastEnvelopeRejectedReason: \(lastEnvelopeRejectedReason)",
-            "lastReceiveFailureReason: \(String(describing: lastReceiveFailureReason))"
+            "lastReceiveFailureReason: \(String(describing: lastReceiveFailureReason))",
+            "sendRoomFingerprint: \(String(describing: sendRoomFingerprint))",
+            "receiveRoomFingerprint: \(String(describing: receiveRoomFingerprint))"
         ].joined(separator: ", ") + ")"
     }
 

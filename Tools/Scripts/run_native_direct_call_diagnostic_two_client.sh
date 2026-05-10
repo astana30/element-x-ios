@@ -370,7 +370,7 @@ if expected_signal == "nativeDirectCallDiagnosticResult":
 if expected_signal == "nativeDirectCallDiagnosticStatusResult":
     status = body.get("status", {})
     print(
-        "state={state} listenerStarted={listener} hasActiveSession={session} activeSessionPhase={phase} lastSignalEventEmitted={event} lastSignalSendAttempted={attempted} lastSignalSendSucceeded={succeeded} lastSignalSendFailureReason={failure} lastTerminalReason={terminal} listenerAttached={attached} listenerStartCount={start_count} timelineDiffReceivedCount={diff_count} timelineEventReceivedCount={event_count} directCallEventTypeSeenCount={type_count} envelopeExtractedCount={extracted_count} envelopeDeliveredToEngineCount={delivered_count} lastReceiveEventKind={receive_kind} lastEnvelopeRejectedReason={rejected_reason} lastReceiveFailureReason={receive_failure}".format(
+        "state={state} listenerStarted={listener} hasActiveSession={session} activeSessionPhase={phase} lastSignalEventEmitted={event} lastSignalSendAttempted={attempted} lastSignalSendSucceeded={succeeded} lastSignalSendFailureReason={failure} lastTerminalReason={terminal} listenerAttached={attached} listenerHandleRetained={handle_retained} listenerStartCount={start_count} timelineUpdateCount={update_count} timelineDiffReceivedCount={diff_count} lastTimelineDiffKind={diff_kind} lastTimelineDiffItemCount={diff_item_count} timelineEventReceivedCount={event_count} directCallEventTypeSeenCount={type_count} envelopeExtractedCount={extracted_count} envelopeDeliveredToEngineCount={delivered_count} lastReceiveEventKind={receive_kind} lastEnvelopeRejectedReason={rejected_reason} lastReceiveFailureReason={receive_failure} sendRoomFingerprint={send_room} receiveRoomFingerprint={receive_room}".format(
             state=status.get("state", "unknown"),
             listener=str(status.get("listenerStarted", "unknown")).lower(),
             session=str(status.get("hasActiveSession", "unknown")).lower(),
@@ -381,8 +381,12 @@ if expected_signal == "nativeDirectCallDiagnosticStatusResult":
             failure=status.get("lastSignalSendFailureReason", "none"),
             terminal=status.get("lastTerminalReason", "none"),
             attached=str(status.get("listenerAttached", "unknown")).lower(),
+            handle_retained=str(status.get("listenerHandleRetained", "unknown")).lower(),
             start_count=status.get("listenerStartCount", "unknown"),
+            update_count=status.get("timelineUpdateCount", "unknown"),
             diff_count=status.get("timelineDiffReceivedCount", "unknown"),
+            diff_kind=status.get("lastTimelineDiffKind", "none"),
+            diff_item_count=status.get("lastTimelineDiffItemCount", "unknown"),
             event_count=status.get("timelineEventReceivedCount", "unknown"),
             type_count=status.get("directCallEventTypeSeenCount", "unknown"),
             extracted_count=status.get("envelopeExtractedCount", "unknown"),
@@ -390,6 +394,8 @@ if expected_signal == "nativeDirectCallDiagnosticStatusResult":
             receive_kind=status.get("lastReceiveEventKind", "none"),
             rejected_reason=status.get("lastEnvelopeRejectedReason", "none"),
             receive_failure=status.get("lastReceiveFailureReason", "none"),
+            send_room=status.get("sendRoomFingerprint", "none"),
+            receive_room=status.get("receiveRoomFingerprint", "none"),
         )
     )
     sys.exit(0)

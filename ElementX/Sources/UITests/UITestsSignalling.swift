@@ -168,8 +168,12 @@ enum UITestsSignal: Codable, Equatable {
         let lastSignalSendFailureReason: DirectCallDiagnosticSignalSendFailureReason?
         let lastTerminalReason: DirectCallDiagnosticTerminalReason?
         let listenerAttached: Bool
+        let listenerHandleRetained: Bool
         let listenerStartCount: Int
+        let timelineUpdateCount: Int
         let timelineDiffReceivedCount: Int
+        let lastTimelineDiffKind: DirectCallDiagnosticTimelineDiffKind
+        let lastTimelineDiffItemCount: Int
         let timelineEventReceivedCount: Int
         let directCallEventTypeSeenCount: Int
         let envelopeExtractedCount: Int
@@ -177,6 +181,8 @@ enum UITestsSignal: Codable, Equatable {
         let lastReceiveEventKind: DirectCallDiagnosticReceiveEventKind
         let lastEnvelopeRejectedReason: DirectCallDiagnosticEnvelopeRejectedReason
         let lastReceiveFailureReason: DirectCallDiagnosticReceiveFailureReason?
+        let sendRoomFingerprint: String?
+        let receiveRoomFingerprint: String?
 
         init(state: NativeDirectCallDiagnosticStatusState,
              listenerStarted: Bool,
@@ -188,15 +194,21 @@ enum UITestsSignal: Codable, Equatable {
              lastSignalSendFailureReason: DirectCallDiagnosticSignalSendFailureReason? = nil,
              lastTerminalReason: DirectCallDiagnosticTerminalReason? = nil,
              listenerAttached: Bool = false,
+             listenerHandleRetained: Bool = false,
              listenerStartCount: Int = 0,
+             timelineUpdateCount: Int = 0,
              timelineDiffReceivedCount: Int = 0,
+             lastTimelineDiffKind: DirectCallDiagnosticTimelineDiffKind = .none,
+             lastTimelineDiffItemCount: Int = 0,
              timelineEventReceivedCount: Int = 0,
              directCallEventTypeSeenCount: Int = 0,
              envelopeExtractedCount: Int = 0,
              envelopeDeliveredToEngineCount: Int = 0,
              lastReceiveEventKind: DirectCallDiagnosticReceiveEventKind = .none,
              lastEnvelopeRejectedReason: DirectCallDiagnosticEnvelopeRejectedReason = .none,
-             lastReceiveFailureReason: DirectCallDiagnosticReceiveFailureReason? = nil) {
+             lastReceiveFailureReason: DirectCallDiagnosticReceiveFailureReason? = nil,
+             sendRoomFingerprint: String? = nil,
+             receiveRoomFingerprint: String? = nil) {
             self.state = state
             self.listenerStarted = listenerStarted
             self.hasActiveSession = hasActiveSession
@@ -207,8 +219,12 @@ enum UITestsSignal: Codable, Equatable {
             self.lastSignalSendFailureReason = lastSignalSendFailureReason
             self.lastTerminalReason = lastTerminalReason
             self.listenerAttached = listenerAttached
+            self.listenerHandleRetained = listenerHandleRetained
             self.listenerStartCount = listenerStartCount
+            self.timelineUpdateCount = timelineUpdateCount
             self.timelineDiffReceivedCount = timelineDiffReceivedCount
+            self.lastTimelineDiffKind = lastTimelineDiffKind
+            self.lastTimelineDiffItemCount = lastTimelineDiffItemCount
             self.timelineEventReceivedCount = timelineEventReceivedCount
             self.directCallEventTypeSeenCount = directCallEventTypeSeenCount
             self.envelopeExtractedCount = envelopeExtractedCount
@@ -216,6 +232,8 @@ enum UITestsSignal: Codable, Equatable {
             self.lastReceiveEventKind = lastReceiveEventKind
             self.lastEnvelopeRejectedReason = lastEnvelopeRejectedReason
             self.lastReceiveFailureReason = lastReceiveFailureReason
+            self.sendRoomFingerprint = sendRoomFingerprint.flatMap { UITestsSignalling.sanitizedIdentifier($0) }
+            self.receiveRoomFingerprint = receiveRoomFingerprint.flatMap { UITestsSignalling.sanitizedIdentifier($0) }
         }
     }
 
@@ -305,15 +323,21 @@ extension UITestsSignal.NativeDirectCallDiagnosticStatus {
                   lastSignalSendFailureReason: status.lastSignalSendFailureReason,
                   lastTerminalReason: status.lastTerminalReason,
                   listenerAttached: status.listenerAttached,
+                  listenerHandleRetained: status.listenerHandleRetained,
                   listenerStartCount: status.listenerStartCount,
+                  timelineUpdateCount: status.timelineUpdateCount,
                   timelineDiffReceivedCount: status.timelineDiffReceivedCount,
+                  lastTimelineDiffKind: status.lastTimelineDiffKind,
+                  lastTimelineDiffItemCount: status.lastTimelineDiffItemCount,
                   timelineEventReceivedCount: status.timelineEventReceivedCount,
                   directCallEventTypeSeenCount: status.directCallEventTypeSeenCount,
                   envelopeExtractedCount: status.envelopeExtractedCount,
                   envelopeDeliveredToEngineCount: status.envelopeDeliveredToEngineCount,
                   lastReceiveEventKind: status.lastReceiveEventKind,
                   lastEnvelopeRejectedReason: status.lastEnvelopeRejectedReason,
-                  lastReceiveFailureReason: status.lastReceiveFailureReason)
+                  lastReceiveFailureReason: status.lastReceiveFailureReason,
+                  sendRoomFingerprint: status.sendRoomFingerprint,
+                  receiveRoomFingerprint: status.receiveRoomFingerprint)
     }
 }
 

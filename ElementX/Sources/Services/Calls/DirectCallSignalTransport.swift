@@ -514,6 +514,10 @@ final class DirectCallMatrixSDKTimelineSignalListener: DirectCallMatrixTimelineS
     }
 
     func start(onEnvelope: @escaping @MainActor (DirectCallMatrixSignalEnvelope) -> Void) async -> DirectCallMatrixSignalListeningHandle {
+        #if DEBUG
+        diagnosticState.receiveRoomFingerprint = DirectCallDiagnosticRedactor.roomFingerprint(roomID)
+        #endif
+
         let handle = await timeline.addListener(listener: SDKListener { [weak self] diffs in
             Task { @MainActor [weak self] in
                 self?.process(diffs, onEnvelope: onEnvelope)
@@ -524,7 +528,10 @@ final class DirectCallMatrixSDKTimelineSignalListener: DirectCallMatrixTimelineS
 
     private func process(_ diffs: [TimelineDiff], onEnvelope: @escaping @MainActor (DirectCallMatrixSignalEnvelope) -> Void) {
         #if DEBUG
+        diagnosticState.timelineUpdateCount += 1
         diagnosticState.timelineDiffReceivedCount += diffs.count
+        diagnosticState.lastTimelineDiffKind = Self.diagnosticTimelineDiffKind(from: diffs)
+        diagnosticState.lastTimelineDiffItemCount = Self.timelineItems(from: diffs).count
         #endif
 
         for item in Self.timelineItems(from: diffs) {
@@ -628,6 +635,43 @@ final class DirectCallMatrixSDKTimelineSignalListener: DirectCallMatrixTimelineS
         }
         return items
     }
+
+    #if DEBUG
+    private static func diagnosticTimelineDiffKind(from diffs: [TimelineDiff]) -> DirectCallDiagnosticTimelineDiffKind {
+        guard let firstDiff = diffs.first else {
+            return .none
+        }
+
+        guard diffs.count == 1 else {
+            return .mixed
+        }
+
+        switch firstDiff {
+        case .append:
+            return .append
+        case .clear:
+            return .clear
+        case .insert:
+            return .insert
+        case .set:
+            return .set
+        case .remove:
+            return .remove
+        case .pushBack:
+            return .pushBack
+        case .pushFront:
+            return .pushFront
+        case .popBack:
+            return .popBack
+        case .popFront:
+            return .popFront
+        case .truncate:
+            return .truncate
+        case .reset:
+            return .reset
+        }
+    }
+    #endif
 
     private static func stableEventID(from eventItem: EventTimelineItem) -> String? {
         guard case .eventID(let eventID) = TimelineItemIdentifier.EventOrTransactionID(rustValue: eventItem.eventOrTransactionId) else {
@@ -835,6 +879,7 @@ final class MatrixDirectCallSignalTransport: DirectCallSignalTransportProtocol {
 
             #if DEBUG
             diagnosticState.envelopeExtractedCount += 1
+            diagnosticState.receiveRoomFingerprint = DirectCallDiagnosticRedactor.roomFingerprint(envelope.roomID)
             #endif
             let event = receiver.receive(envelope)
             #if DEBUG
@@ -849,18 +894,26 @@ final class MatrixDirectCallSignalTransport: DirectCallSignalTransportProtocol {
             }
             #endif
         }
+        #if DEBUG
+        diagnosticState.listenerHandleRetained = listenerHandle != nil
+        #endif
     }
 
     func stop() {
         isListening = false
         #if DEBUG
         diagnosticState.listenerAttached = false
+        diagnosticState.listenerHandleRetained = false
         #endif
         listenerHandle?.cancel()
         listenerHandle = nil
     }
 
     func send(_ signal: DirectCallOutgoingSignal, from senderID: String) {
+        #if DEBUG
+        diagnosticState.sendRoomFingerprint = DirectCallDiagnosticRedactor.roomFingerprint(signal.roomID)
+        #endif
+
         guard senderID == ownUserID else {
             sendResultSubject.send(.failure(.invalidSignal))
             return
@@ -1163,6 +1216,7 @@ final class DirectCallEngineSignalBridge {
             previousSessionState = session.state
         case .emitSignal(let signal):
             diagnosticState.lastSignalEventEmitted = .init(signal.type)
+            diagnosticState.sendRoomFingerprint = DirectCallDiagnosticRedactor.roomFingerprint(signal.roomID)
         case .sessionCleared:
             diagnosticState.activeSessionPhase = .none
             previousSessionState = nil

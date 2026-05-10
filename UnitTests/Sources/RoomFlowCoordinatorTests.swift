@@ -700,13 +700,19 @@ final class RoomFlowCoordinatorTests {
                                          lastSignalSendAttempted: true,
                                          lastSignalSendSucceeded: true,
                                          listenerAttached: true,
+                                         listenerHandleRetained: true,
                                          listenerStartCount: 1,
+                                         timelineUpdateCount: 1,
                                          timelineDiffReceivedCount: 1,
+                                         lastTimelineDiffKind: .append,
+                                         lastTimelineDiffItemCount: 1,
                                          timelineEventReceivedCount: 1,
                                          directCallEventTypeSeenCount: 1,
                                          envelopeExtractedCount: 1,
                                          envelopeDeliveredToEngineCount: 1,
-                                         lastReceiveEventKind: .directCallInvite)
+                                         lastReceiveEventKind: .directCallInvite,
+                                         sendRoomFingerprint: "send-room-redacted",
+                                         receiveRoomFingerprint: "receive-room-redacted")
         owner.outgoingResult = .success(session)
         owner.acceptResult = .success(session)
         owner.hangupResult = .success(session)
@@ -735,10 +741,16 @@ final class RoomFlowCoordinatorTests {
         #expect(status.lastSignalSendAttempted)
         #expect(status.lastSignalSendSucceeded == true)
         #expect(status.listenerAttached)
+        #expect(status.listenerHandleRetained)
         #expect(status.listenerStartCount == 1)
+        #expect(status.timelineUpdateCount == 1)
         #expect(status.timelineDiffReceivedCount == 1)
+        #expect(status.lastTimelineDiffKind == .append)
+        #expect(status.lastTimelineDiffItemCount == 1)
         #expect(status.envelopeDeliveredToEngineCount == 1)
         #expect(status.lastReceiveEventKind == .directCallInvite)
+        #expect(status.sendRoomFingerprint == "send-room-redacted")
+        #expect(status.receiveRoomFingerprint == "receive-room-redacted")
 
         #expect(owner.startCount == 1)
         #expect(owner.outgoingCount == 1)
@@ -800,13 +812,19 @@ final class RoomFlowCoordinatorTests {
                                                                                               lastSignalSendAttempted: true,
                                                                                               lastSignalSendSucceeded: true,
                                                                                               listenerAttached: true,
+                                                                                              listenerHandleRetained: true,
                                                                                               listenerStartCount: 1,
+                                                                                              timelineUpdateCount: 1,
                                                                                               timelineDiffReceivedCount: 1,
+                                                                                              lastTimelineDiffKind: .append,
+                                                                                              lastTimelineDiffItemCount: 1,
                                                                                               timelineEventReceivedCount: 1,
                                                                                               directCallEventTypeSeenCount: 1,
                                                                                               envelopeExtractedCount: 1,
                                                                                               envelopeDeliveredToEngineCount: 1,
-                                                                                              lastReceiveEventKind: .directCallInvite))
+                                                                                              lastReceiveEventKind: .directCallInvite,
+                                                                                              sendRoomFingerprint: "send-room-redacted",
+                                                                                              receiveRoomFingerprint: "receive-room-redacted"))
         let statusSignal = UITestsSignal.nativeDirectCallDiagnosticStatus(statusRequest)
         let statusResultSignal = UITestsSignal.nativeDirectCallDiagnosticStatusResult(statusResult)
         let encoder = JSONEncoder()
@@ -833,9 +851,17 @@ final class RoomFlowCoordinatorTests {
         #expect(encodedStatusResult.contains("lastSignalSendSucceeded"))
         #expect(encodedStatusResult.contains("activeSessionPhase"))
         #expect(encodedStatusResult.contains("listenerAttached"))
+        #expect(encodedStatusResult.contains("listenerHandleRetained"))
+        #expect(encodedStatusResult.contains("timelineUpdateCount"))
         #expect(encodedStatusResult.contains("timelineDiffReceivedCount"))
+        #expect(encodedStatusResult.contains("lastTimelineDiffKind"))
+        #expect(encodedStatusResult.contains("lastTimelineDiffItemCount"))
         #expect(encodedStatusResult.contains("envelopeDeliveredToEngineCount"))
         #expect(encodedStatusResult.contains("lastReceiveEventKind"))
+        #expect(encodedStatusResult.contains("sendRoomFingerprint"))
+        #expect(encodedStatusResult.contains("receiveRoomFingerprint"))
+        #expect(encodedStatusResult.contains("send-room-redacted"))
+        #expect(encodedStatusResult.contains("receive-room-redacted"))
         #expect(result.correlationID == command.correlationID)
         #expect(failureResult.correlationID == command.correlationID)
         #expect(statusResult.correlationID == statusRequest.correlationID)

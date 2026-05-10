@@ -410,6 +410,47 @@ enum DirectCallDiagnosticReceiveFailureReason: String, Codable, Equatable, Custo
     }
 }
 
+enum DirectCallDiagnosticTimelineDiffKind: String, Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case none
+    case append
+    case clear
+    case insert
+    case set
+    case remove
+    case pushBack
+    case pushFront
+    case popBack
+    case popFront
+    case truncate
+    case reset
+    case mixed
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum DirectCallDiagnosticRedactor {
+    static func roomFingerprint(_ roomID: String) -> String? {
+        guard !roomID.isEmpty else {
+            return nil
+        }
+
+        // Stable FNV-1a fingerprint, short enough for diagnostics and never reversible in logs.
+        var hash: UInt64 = 0xCBF2_9CE4_8422_2325
+        for byte in roomID.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x0000_0100_0000_01B3
+        }
+
+        return String(format: "%016llx", hash)
+    }
+}
+
 struct DirectCallDiagnosticSnapshot: Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     var activeSessionPhase: DirectCallDiagnosticSessionPhase = .none
     var lastSignalEventEmitted: DirectCallDiagnosticSignalEvent?
@@ -418,8 +459,12 @@ struct DirectCallDiagnosticSnapshot: Codable, Equatable, CustomStringConvertible
     var lastSignalSendFailureReason: DirectCallDiagnosticSignalSendFailureReason?
     var lastTerminalReason: DirectCallDiagnosticTerminalReason?
     var listenerAttached = false
+    var listenerHandleRetained = false
     var listenerStartCount = 0
+    var timelineUpdateCount = 0
     var timelineDiffReceivedCount = 0
+    var lastTimelineDiffKind: DirectCallDiagnosticTimelineDiffKind = .none
+    var lastTimelineDiffItemCount = 0
     var timelineEventReceivedCount = 0
     var directCallEventTypeSeenCount = 0
     var envelopeExtractedCount = 0
@@ -427,13 +472,21 @@ struct DirectCallDiagnosticSnapshot: Codable, Equatable, CustomStringConvertible
     var lastReceiveEventKind: DirectCallDiagnosticReceiveEventKind = .none
     var lastEnvelopeRejectedReason: DirectCallDiagnosticEnvelopeRejectedReason = .none
     var lastReceiveFailureReason: DirectCallDiagnosticReceiveFailureReason?
+    var sendRoomFingerprint: String?
+    var receiveRoomFingerprint: String?
 
     static let empty = Self()
 
     mutating func mergeReceiveDiagnostics(from other: Self) {
         listenerAttached = listenerAttached || other.listenerAttached
+        listenerHandleRetained = listenerHandleRetained || other.listenerHandleRetained
         listenerStartCount = max(listenerStartCount, other.listenerStartCount)
+        timelineUpdateCount = max(timelineUpdateCount, other.timelineUpdateCount)
         timelineDiffReceivedCount = max(timelineDiffReceivedCount, other.timelineDiffReceivedCount)
+        if other.lastTimelineDiffKind != .none {
+            lastTimelineDiffKind = other.lastTimelineDiffKind
+            lastTimelineDiffItemCount = other.lastTimelineDiffItemCount
+        }
         timelineEventReceivedCount = max(timelineEventReceivedCount, other.timelineEventReceivedCount)
         directCallEventTypeSeenCount = max(directCallEventTypeSeenCount, other.directCallEventTypeSeenCount)
         envelopeExtractedCount = max(envelopeExtractedCount, other.envelopeExtractedCount)
@@ -447,6 +500,12 @@ struct DirectCallDiagnosticSnapshot: Codable, Equatable, CustomStringConvertible
         if let lastReceiveFailureReason = other.lastReceiveFailureReason {
             self.lastReceiveFailureReason = lastReceiveFailureReason
         }
+        if let sendRoomFingerprint = other.sendRoomFingerprint {
+            self.sendRoomFingerprint = sendRoomFingerprint
+        }
+        if let receiveRoomFingerprint = other.receiveRoomFingerprint {
+            self.receiveRoomFingerprint = receiveRoomFingerprint
+        }
     }
 
     var description: String {
@@ -457,15 +516,21 @@ struct DirectCallDiagnosticSnapshot: Codable, Equatable, CustomStringConvertible
             "lastSignalSendFailureReason: \(String(describing: lastSignalSendFailureReason)), " +
             "lastTerminalReason: \(String(describing: lastTerminalReason)), " +
             "listenerAttached: \(listenerAttached), " +
+            "listenerHandleRetained: \(listenerHandleRetained), " +
             "listenerStartCount: \(listenerStartCount), " +
+            "timelineUpdateCount: \(timelineUpdateCount), " +
             "timelineDiffReceivedCount: \(timelineDiffReceivedCount), " +
+            "lastTimelineDiffKind: \(lastTimelineDiffKind), " +
+            "lastTimelineDiffItemCount: \(lastTimelineDiffItemCount), " +
             "timelineEventReceivedCount: \(timelineEventReceivedCount), " +
             "directCallEventTypeSeenCount: \(directCallEventTypeSeenCount), " +
             "envelopeExtractedCount: \(envelopeExtractedCount), " +
             "envelopeDeliveredToEngineCount: \(envelopeDeliveredToEngineCount), " +
             "lastReceiveEventKind: \(lastReceiveEventKind), " +
             "lastEnvelopeRejectedReason: \(lastEnvelopeRejectedReason), " +
-            "lastReceiveFailureReason: \(String(describing: lastReceiveFailureReason)))"
+            "lastReceiveFailureReason: \(String(describing: lastReceiveFailureReason)), " +
+            "sendRoomFingerprint: \(String(describing: sendRoomFingerprint)), " +
+            "receiveRoomFingerprint: \(String(describing: receiveRoomFingerprint)))"
     }
 
     var debugDescription: String {
