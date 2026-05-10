@@ -3284,6 +3284,120 @@ final class DirectCallMatrixSDKSignalAdapterTests {
     }
 
     @Test
+    func matrixSDKTimelineSignalListenerIgnoresInitialResetBacklogInvite() async throws {
+        let timeline = TimelineSDKMock()
+        timeline.addListenerListenerReturnValue = TaskHandleSDKMock()
+        let signal = DirectCallOutgoingSignal(roomID: roomID,
+                                              peerUserID: userB,
+                                              callID: "call-1",
+                                              type: .invite,
+                                              intent: .audio,
+                                              keyExchange: keyExchange(callID: "call-1", senderUserID: userA))
+        let content = try #require(DirectCallMatrixSignalCodec.encode(signal))
+        let lazyProvider = LazyTimelineItemProviderSDKMock()
+        lazyProvider.messageLikeCustomContentReturnValue = .init(eventType: DirectCallMatrixSignalCodec.eventType,
+                                                                 contentJson: content)
+        let listener = makeListener(timeline: timeline)
+        var envelopes = [DirectCallMatrixSignalEnvelope]()
+        let handle = await listener.start { envelope in
+            envelopes.append(envelope)
+        }
+        defer { handle.cancel() }
+
+        timeline.addListenerListenerReceivedListener?.onUpdate(diff: [
+            .reset(values: [
+                timelineItem(eventID: "$historical-direct-call",
+                             content: directCallTimelineContent(),
+                             lazyProvider: lazyProvider)
+            ])
+        ])
+
+        await Task.yield()
+        #expect(envelopes.isEmpty)
+        #expect(listener.diagnosticSnapshot.baselineEstablished)
+        #expect(listener.diagnosticSnapshot.directCallEventTypeSeenCount == 1)
+        #expect(listener.diagnosticSnapshot.historicalEventIgnoredCount == 1)
+        #expect(listener.diagnosticSnapshot.liveEventDeliveredCount == 0)
+        #expect(listener.diagnosticSnapshot.envelopeExtractedCount == 0)
+        #expect(listener.diagnosticSnapshot.lastEnvelopeRejectedReason == .historicalBacklog)
+    }
+
+    @Test
+    func matrixSDKTimelineSignalListenerDeliversLivePushBackAfterBaseline() async throws {
+        let timeline = TimelineSDKMock()
+        timeline.addListenerListenerReturnValue = TaskHandleSDKMock()
+        let signal = DirectCallOutgoingSignal(roomID: roomID,
+                                              peerUserID: userB,
+                                              callID: "call-1",
+                                              type: .invite,
+                                              intent: .audio,
+                                              keyExchange: keyExchange(callID: "call-1", senderUserID: userA))
+        let content = try #require(DirectCallMatrixSignalCodec.encode(signal))
+        let lazyProvider = LazyTimelineItemProviderSDKMock()
+        lazyProvider.messageLikeCustomContentReturnValue = .init(eventType: DirectCallMatrixSignalCodec.eventType,
+                                                                 contentJson: content)
+        let listener = makeListener(timeline: timeline)
+        var envelopes = [DirectCallMatrixSignalEnvelope]()
+        let handle = await listener.start { envelope in
+            envelopes.append(envelope)
+        }
+        defer { handle.cancel() }
+
+        timeline.addListenerListenerReceivedListener?.onUpdate(diff: [
+            .reset(values: [timelineItem(eventID: "$message", content: nonDirectCallTimelineContent())])
+        ])
+        await Task.yield()
+
+        timeline.addListenerListenerReceivedListener?.onUpdate(diff: [
+            .pushBack(value: timelineItem(eventID: "$live-direct-call",
+                                          content: directCallTimelineContent(),
+                                          lazyProvider: lazyProvider))
+        ])
+
+        #expect(await waitUntil { envelopes.count == 1 })
+        #expect(listener.diagnosticSnapshot.baselineEstablished)
+        #expect(listener.diagnosticSnapshot.historicalEventIgnoredCount == 0)
+        #expect(listener.diagnosticSnapshot.liveEventDeliveredCount == 1)
+        #expect(listener.diagnosticSnapshot.lastTimelineDiffKind == .pushBack)
+        #expect(listener.diagnosticSnapshot.lastEnvelopeRejectedReason == .none)
+    }
+
+    @Test
+    func matrixSDKTimelineSignalListenerDeduplicatesHistoricalInviteAfterBaseline() async throws {
+        let timeline = TimelineSDKMock()
+        timeline.addListenerListenerReturnValue = TaskHandleSDKMock()
+        let signal = DirectCallOutgoingSignal(roomID: roomID,
+                                              peerUserID: userB,
+                                              callID: "call-1",
+                                              type: .invite,
+                                              intent: .audio,
+                                              keyExchange: keyExchange(callID: "call-1", senderUserID: userA))
+        let content = try #require(DirectCallMatrixSignalCodec.encode(signal))
+        let lazyProvider = LazyTimelineItemProviderSDKMock()
+        lazyProvider.messageLikeCustomContentReturnValue = .init(eventType: DirectCallMatrixSignalCodec.eventType,
+                                                                 contentJson: content)
+        let listener = makeListener(timeline: timeline)
+        var envelopes = [DirectCallMatrixSignalEnvelope]()
+        let handle = await listener.start { envelope in
+            envelopes.append(envelope)
+        }
+        defer { handle.cancel() }
+
+        let historicalItem = timelineItem(eventID: "$historical-direct-call",
+                                          content: directCallTimelineContent(),
+                                          lazyProvider: lazyProvider)
+        timeline.addListenerListenerReceivedListener?.onUpdate(diff: [.reset(values: [historicalItem])])
+        await Task.yield()
+        timeline.addListenerListenerReceivedListener?.onUpdate(diff: [.append(values: [historicalItem])])
+        await Task.yield()
+
+        #expect(envelopes.isEmpty)
+        #expect(listener.diagnosticSnapshot.historicalEventIgnoredCount == 2)
+        #expect(listener.diagnosticSnapshot.liveEventDeliveredCount == 0)
+        #expect(listener.diagnosticSnapshot.lastEnvelopeRejectedReason == .historicalBacklog)
+    }
+
+    @Test
     func matrixTimelineItemProviderSignalListenerReceivesLiveProviderUpdates() async throws {
         let updates = PassthroughSubject<([TimelineItemProxy], TimelinePaginationState), Never>()
         let timelineItemProvider = TimelineItemProviderMock()
@@ -3324,13 +3438,16 @@ final class DirectCallMatrixSDKSignalAdapterTests {
         updates.send(([existingMessage, directCallInvite], .initial))
 
         #expect(await waitUntil { envelopes.count == 1 })
-        #expect(listener.diagnosticSnapshot.timelineUpdateCount == 2)
+        #expect(listener.diagnosticSnapshot.timelineUpdateCount == 3)
         #expect(listener.diagnosticSnapshot.timelineDiffReceivedCount == 2)
         #expect(listener.diagnosticSnapshot.lastTimelineDiffKind == .providerUpdate)
         #expect(listener.diagnosticSnapshot.lastTimelineDiffItemCount == 2)
         #expect(listener.diagnosticSnapshot.timelineEventReceivedCount == 2)
         #expect(listener.diagnosticSnapshot.directCallEventTypeSeenCount == 1)
         #expect(listener.diagnosticSnapshot.envelopeExtractedCount == 1)
+        #expect(listener.diagnosticSnapshot.historicalEventIgnoredCount == 0)
+        #expect(listener.diagnosticSnapshot.liveEventDeliveredCount == 1)
+        #expect(listener.diagnosticSnapshot.baselineEstablished)
         #expect(listener.diagnosticSnapshot.lastReceiveEventKind == .directCallInvite)
         #expect(listener.diagnosticSnapshot.lastEnvelopeRejectedReason == .none)
         #expect(listener.diagnosticSnapshot.receiveRoomFingerprint == DirectCallDiagnosticRedactor.roomFingerprint(roomID))
@@ -3371,15 +3488,23 @@ final class DirectCallMatrixSDKSignalAdapterTests {
                                                  content: directCallTimelineContent(),
                                                  lazyProvider: lazyProvider)
         updates.send(([directCallInvite], .initial))
-        #expect(await waitUntil { envelopes.count == 1 })
+        await Task.yield()
 
         updates.send(([directCallInvite], .initial))
         await Task.yield()
 
-        #expect(envelopes.count == 1)
+        let liveDirectCallInvite = timelineItemProxy(eventID: "$event-2",
+                                                     content: directCallTimelineContent(),
+                                                     lazyProvider: lazyProvider)
+        updates.send(([directCallInvite, liveDirectCallInvite], .initial))
+
+        #expect(await waitUntil { envelopes.count == 1 })
         #expect(listener.diagnosticSnapshot.timelineUpdateCount == 2)
-        #expect(listener.diagnosticSnapshot.directCallEventTypeSeenCount == 1)
+        #expect(listener.diagnosticSnapshot.directCallEventTypeSeenCount == 4)
         #expect(listener.diagnosticSnapshot.envelopeExtractedCount == 1)
+        #expect(listener.diagnosticSnapshot.historicalEventIgnoredCount == 3)
+        #expect(listener.diagnosticSnapshot.liveEventDeliveredCount == 1)
+        #expect(listener.diagnosticSnapshot.baselineEstablished)
     }
 
     @Test

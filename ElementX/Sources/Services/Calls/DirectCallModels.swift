@@ -383,6 +383,7 @@ enum DirectCallDiagnosticEnvelopeRejectedReason: String, Codable, Equatable, Cus
     case contentUnavailable
     case decodeFailed
     case duplicateEventID
+    case historicalBacklog
     case metadataUnavailable
     case unsupportedEvent
     case unknown
@@ -470,6 +471,9 @@ struct DirectCallDiagnosticSnapshot: Codable, Equatable, CustomStringConvertible
     var directCallEventTypeSeenCount = 0
     var envelopeExtractedCount = 0
     var envelopeDeliveredToEngineCount = 0
+    var historicalEventIgnoredCount = 0
+    var liveEventDeliveredCount = 0
+    var baselineEstablished = false
     var lastReceiveEventKind: DirectCallDiagnosticReceiveEventKind = .none
     var lastEnvelopeRejectedReason: DirectCallDiagnosticEnvelopeRejectedReason = .none
     var lastReceiveFailureReason: DirectCallDiagnosticReceiveFailureReason?
@@ -492,6 +496,9 @@ struct DirectCallDiagnosticSnapshot: Codable, Equatable, CustomStringConvertible
         directCallEventTypeSeenCount = max(directCallEventTypeSeenCount, other.directCallEventTypeSeenCount)
         envelopeExtractedCount = max(envelopeExtractedCount, other.envelopeExtractedCount)
         envelopeDeliveredToEngineCount = max(envelopeDeliveredToEngineCount, other.envelopeDeliveredToEngineCount)
+        historicalEventIgnoredCount = max(historicalEventIgnoredCount, other.historicalEventIgnoredCount)
+        liveEventDeliveredCount = max(liveEventDeliveredCount, other.liveEventDeliveredCount)
+        baselineEstablished = baselineEstablished || other.baselineEstablished
         if other.lastReceiveEventKind != .none {
             lastReceiveEventKind = other.lastReceiveEventKind
         }
@@ -527,6 +534,9 @@ struct DirectCallDiagnosticSnapshot: Codable, Equatable, CustomStringConvertible
             "directCallEventTypeSeenCount: \(directCallEventTypeSeenCount), " +
             "envelopeExtractedCount: \(envelopeExtractedCount), " +
             "envelopeDeliveredToEngineCount: \(envelopeDeliveredToEngineCount), " +
+            "historicalEventIgnoredCount: \(historicalEventIgnoredCount), " +
+            "liveEventDeliveredCount: \(liveEventDeliveredCount), " +
+            "baselineEstablished: \(baselineEstablished), " +
             "lastReceiveEventKind: \(lastReceiveEventKind), " +
             "lastEnvelopeRejectedReason: \(lastEnvelopeRejectedReason), " +
             "lastReceiveFailureReason: \(String(describing: lastReceiveFailureReason)), " +
