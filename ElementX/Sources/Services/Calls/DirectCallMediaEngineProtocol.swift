@@ -33,10 +33,26 @@ protocol DirectCallMediaTokenProviderProtocol {
     func connectionInfo(for session: DirectCallSession) async -> Result<DirectCallMediaConnectionInfo, DirectCallMediaError>
 }
 
-struct DirectCallLiveKitTokenRequest: Equatable {
+struct DirectCallLiveKitTokenRequest: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     let callID: String
     let roomID: String
     let peerUserID: String
+    let intent: DirectCallIntent
+
+    init(callID: String, roomID: String, peerUserID: String, intent: DirectCallIntent = .audio) {
+        self.callID = callID
+        self.roomID = roomID
+        self.peerUserID = peerUserID
+        self.intent = intent
+    }
+
+    var description: String {
+        "DirectCallLiveKitTokenRequest(callID: \(callID), roomID: <redacted>, peerUserID: <redacted>, intent: \(intent.rawValue))"
+    }
+
+    var debugDescription: String {
+        description
+    }
 }
 
 struct DirectCallLiveKitTokenResponse: Equatable, CustomStringConvertible {
@@ -52,6 +68,26 @@ struct DirectCallLiveKitTokenResponse: Equatable, CustomStringConvertible {
 @MainActor
 protocol DirectCallLiveKitTokenClientProtocol {
     func connection(for request: DirectCallLiveKitTokenRequest) async -> Result<DirectCallLiveKitTokenResponse, DirectCallMediaError>
+}
+
+struct DirectCallProductionLiveKitConfiguration: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let tokenEndpointURL: URL?
+
+    init(tokenEndpointURL: URL? = nil) {
+        self.tokenEndpointURL = tokenEndpointURL
+    }
+
+    var isConfigured: Bool {
+        tokenEndpointURL != nil
+    }
+
+    var description: String {
+        "DirectCallProductionLiveKitConfiguration(tokenEndpointURL: <redacted>, isConfigured: \(isConfigured))"
+    }
+
+    var debugDescription: String {
+        description
+    }
 }
 
 @MainActor
@@ -72,6 +108,32 @@ final class NoOpDirectCallMediaTokenProvider: DirectCallMediaTokenProviderProtoc
 final class UnavailableDirectCallLiveKitTokenClient: DirectCallLiveKitTokenClientProtocol {
     func connection(for request: DirectCallLiveKitTokenRequest) async -> Result<DirectCallLiveKitTokenResponse, DirectCallMediaError> {
         .failure(.tokenUnavailable)
+    }
+}
+
+@MainActor
+final class ProductionDirectCallLiveKitTokenClient: DirectCallLiveKitTokenClientProtocol, CustomStringConvertible, CustomDebugStringConvertible {
+    private let configuration: DirectCallProductionLiveKitConfiguration
+
+    init(configuration: DirectCallProductionLiveKitConfiguration = .init()) {
+        self.configuration = configuration
+    }
+
+    func connection(for request: DirectCallLiveKitTokenRequest) async -> Result<DirectCallLiveKitTokenResponse, DirectCallMediaError> {
+        guard configuration.isConfigured else {
+            return .failure(.tokenUnavailable)
+        }
+
+        // The backend token contract is intentionally not implemented yet.
+        return .failure(.tokenUnavailable)
+    }
+
+    nonisolated var description: String {
+        "ProductionDirectCallLiveKitTokenClient(tokenEndpointURL: <redacted>)"
+    }
+
+    nonisolated var debugDescription: String {
+        description
     }
 }
 
@@ -98,7 +160,8 @@ final class DirectCallLiveKitTokenProvider: DirectCallMediaTokenProviderProtocol
 
         let request = DirectCallLiveKitTokenRequest(callID: session.callID,
                                                     roomID: session.roomID,
-                                                    peerUserID: session.peerUserID)
+                                                    peerUserID: session.peerUserID,
+                                                    intent: session.intent)
         switch await tokenClient.connection(for: request) {
         case .success(let response):
             return Self.connectionInfo(from: response)

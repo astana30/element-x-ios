@@ -1521,6 +1521,20 @@ final class DirectCallMediaProviderSkeletonTests {
     }
 
     @Test
+    func liveKitTokenRequestCarriesIntentAndRedactsRoomMetadata() {
+        let request = DirectCallLiveKitTokenRequest(callID: callID,
+                                                    roomID: roomID,
+                                                    peerUserID: peerUserID,
+                                                    intent: .audio)
+
+        #expect(request.intent == .audio)
+        #expect(String(describing: request).contains(roomID) == false)
+        #expect(String(describing: request).contains(peerUserID) == false)
+        #expect(String(reflecting: request).contains(roomID) == false)
+        #expect(String(reflecting: request).contains(peerUserID) == false)
+    }
+
+    @Test
     func liveKitTokenResponseAndConnectionInfoDescriptionsRedactTokenAndURL() throws {
         let response = DirectCallLiveKitTokenResponse(serverURLString: "wss://livekit.example.com",
                                                       roomName: "direct-room",
@@ -1534,6 +1548,93 @@ final class DirectCallMediaProviderSkeletonTests {
         #expect(String(describing: response).contains("wss://livekit.example.com") == false)
         #expect(String(describing: connectionInfo).contains("secret-token") == false)
         #expect(String(describing: connectionInfo).contains("wss://livekit.example.com") == false)
+    }
+
+    @Test
+    func productionLiveKitTokenClientFailsClosedWithoutBackendImplementation() async throws {
+        let endpointURL = try #require(URL(string: "https://call-service.example.com/direct-calls"))
+        let configuration = DirectCallProductionLiveKitConfiguration(tokenEndpointURL: endpointURL)
+        let client = ProductionDirectCallLiveKitTokenClient(configuration: configuration)
+        let request = DirectCallLiveKitTokenRequest(callID: callID,
+                                                    roomID: roomID,
+                                                    peerUserID: peerUserID)
+
+        let result = await client.connection(for: request)
+
+        #expect(result == .failure(.tokenUnavailable))
+        #expect(String(describing: configuration).contains(endpointURL.absoluteString) == false)
+        #expect(String(describing: client).contains(endpointURL.absoluteString) == false)
+    }
+
+    @Test
+    func productionDirectCallEncryptionServiceFailsClosed() {
+        let service = ProductionDirectCallEncryptionService()
+        let payload = DirectCallEncryptedKeyExchangePayload(callID: callID,
+                                                            roomID: roomID,
+                                                            senderUserID: peerUserID,
+                                                            keyID: "key-a",
+                                                            encryptedPayload: "opaque-payload")
+
+        #expect(service.generatePerCallKey(callID: callID,
+                                           roomID: roomID,
+                                           peerUserID: peerUserID) == .failure(.e2eeNotProven))
+        #expect(service.consumeRemoteEncryptedKey(payload,
+                                                  expectedCallID: callID,
+                                                  expectedRoomID: roomID,
+                                                  expectedSenderUserID: peerUserID) == .failure(.e2eeNotProven))
+
+        service.clearPerCallKey(callID: callID)
+
+        #expect(String(describing: service).contains("opaque-payload") == false)
+        #expect(String(describing: service).contains("Diagnostic") == false)
+    }
+
+    @Test
+    func productionDependenciesFactoryIsDisabledByDefault() {
+        let factory = NativeDirectCallProductionDependenciesFactory()
+
+        let dependencies = factory.makeDependencies()
+
+        #expect(dependencies.hasEncryptionService == false)
+        #expect(dependencies.hasMediaEngineFactory == false)
+        #expect(String(describing: dependencies).contains("Diagnostic") == false)
+    }
+
+    @Test
+    func productionDependenciesFactoryRequiresExplicitLiveKitConfiguration() {
+        let configuration = NativeDirectCallProductionConfiguration(isEnabled: true)
+        let factory = NativeDirectCallProductionDependenciesFactory(configuration: configuration)
+
+        let dependencies = factory.makeDependencies()
+
+        #expect(dependencies.hasEncryptionService == false)
+        #expect(dependencies.hasMediaEngineFactory == false)
+    }
+
+    @Test
+    func productionDependenciesFactoryBuildsFailClosedConfiguredDependencies() throws {
+        let endpointURL = try #require(URL(string: "https://call-service.example.com/direct-calls"))
+        let configuration = NativeDirectCallProductionConfiguration(isEnabled: true,
+                                                                    liveKitConfiguration: .init(tokenEndpointURL: endpointURL))
+        let factory = NativeDirectCallProductionDependenciesFactory(configuration: configuration,
+                                                                    liveKitClient: LiveKitClientSpy())
+
+        let dependencies = factory.makeDependencies()
+
+        #expect(dependencies.encryptionService is ProductionDirectCallEncryptionService)
+        #expect(dependencies.hasMediaEngineFactory)
+        #expect(String(describing: configuration).contains(endpointURL.absoluteString) == false)
+        #expect(String(describing: dependencies).contains("Diagnostic") == false)
+
+        guard let mediaEngineFactory = dependencies.mediaEngineFactory else {
+            Issue.record("Expected configured production dependencies to include a fail-closed media factory.")
+            return
+        }
+
+        guard case .success = mediaEngineFactory.makeMediaEngine() else {
+            Issue.record("Expected configured production media factory to build a fail-closed engine.")
+            return
+        }
     }
 
     @Test

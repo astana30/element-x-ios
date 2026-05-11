@@ -73,3 +73,75 @@ final class DirectCallLiveKitMediaEngineFactory: DirectCallMediaEngineFactoryPro
                                                      liveKitClient: liveKitClient))
     }
 }
+
+struct NativeDirectCallProductionDependencies: CustomStringConvertible, CustomDebugStringConvertible {
+    let encryptionService: DirectCallEncryptionServiceProtocol?
+    let mediaEngineFactory: DirectCallMediaEngineFactoryProtocol?
+
+    static let disabled = NativeDirectCallProductionDependencies(encryptionService: nil, mediaEngineFactory: nil)
+
+    var hasEncryptionService: Bool {
+        encryptionService != nil
+    }
+
+    var hasMediaEngineFactory: Bool {
+        mediaEngineFactory != nil
+    }
+
+    var description: String {
+        "NativeDirectCallProductionDependencies(encryptionServiceAvailable: \(hasEncryptionService), mediaEngineFactoryAvailable: \(hasMediaEngineFactory))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct NativeDirectCallProductionConfiguration: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let isEnabled: Bool
+    let liveKitConfiguration: DirectCallProductionLiveKitConfiguration
+
+    init(isEnabled: Bool = false, liveKitConfiguration: DirectCallProductionLiveKitConfiguration = .init()) {
+        self.isEnabled = isEnabled
+        self.liveKitConfiguration = liveKitConfiguration
+    }
+
+    var description: String {
+        "NativeDirectCallProductionConfiguration(isEnabled: \(isEnabled), liveKitConfiguration: \(liveKitConfiguration))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+@MainActor
+struct NativeDirectCallProductionDependenciesFactory {
+    private let configuration: NativeDirectCallProductionConfiguration
+    private let liveKitClient: DirectCallLiveKitClientProtocol?
+
+    init(configuration: NativeDirectCallProductionConfiguration = .init(),
+         liveKitClient: DirectCallLiveKitClientProtocol? = nil) {
+        self.configuration = configuration
+        self.liveKitClient = liveKitClient
+    }
+
+    func makeDependencies() -> NativeDirectCallProductionDependencies {
+        guard configuration.isEnabled,
+              configuration.liveKitConfiguration.isConfigured else {
+            return .disabled
+        }
+
+        let encryptionService = ProductionDirectCallEncryptionService()
+        let tokenClient = ProductionDirectCallLiveKitTokenClient(configuration: configuration.liveKitConfiguration)
+        let tokenProvider = DirectCallLiveKitTokenProvider(tokenClient: tokenClient)
+        let e2eeContextProvider = DirectCallLiveKitE2EEContextProvider()
+        let mediaEngineFactory = DirectCallLiveKitMediaEngineFactory(tokenProvider: tokenProvider,
+                                                                     encryptionService: encryptionService,
+                                                                     e2eeContextProvider: e2eeContextProvider,
+                                                                     liveKitClient: liveKitClient ?? LiveKitDirectCallClient())
+
+        return NativeDirectCallProductionDependencies(encryptionService: encryptionService,
+                                                      mediaEngineFactory: mediaEngineFactory)
+    }
+}

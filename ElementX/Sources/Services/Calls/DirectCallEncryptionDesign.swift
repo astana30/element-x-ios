@@ -70,3 +70,28 @@ final class NoOpDirectCallEncryptionService: DirectCallEncryptionServiceProtocol
         _ = clearedCallIDs.insert(callID)
     }
 }
+
+/// Production-shaped placeholder for the future Matrix-crypto-backed media key exchange.
+/// It must stay fail-closed until the production key wrapping design is implemented.
+final class ProductionDirectCallEncryptionService: DirectCallEncryptionServiceProtocol, CustomStringConvertible, CustomDebugStringConvertible {
+    func generatePerCallKey(callID: String, roomID: String, peerUserID: String) -> Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason> {
+        .failure(.e2eeNotProven)
+    }
+
+    func consumeRemoteEncryptedKey(_ payload: DirectCallEncryptedKeyExchangePayload,
+                                   expectedCallID: String,
+                                   expectedRoomID: String,
+                                   expectedSenderUserID: String) -> Result<DirectCallMediaKeyHandle, DirectCallEncryptionFailureReason> {
+        .failure(.e2eeNotProven)
+    }
+
+    func clearPerCallKey(callID: String) { }
+
+    nonisolated var description: String {
+        "ProductionDirectCallEncryptionService(status: failClosed)"
+    }
+
+    nonisolated var debugDescription: String {
+        description
+    }
+}
