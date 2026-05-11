@@ -587,6 +587,31 @@ status_matches_expectation() {
     esac
 }
 
+status_is_incoming_ringing() {
+    local status_result="$1"
+
+    [[ "$status_result" == *"state=ringing"* &&
+        "$status_result" == *"hasActiveSession=true"* &&
+        "$status_result" == *"activeSessionPhase=incomingRinging"* ]]
+}
+
+status_is_active() {
+    local status_result="$1"
+
+    [[ "$status_result" == *"state=active"* &&
+        "$status_result" == *"hasActiveSession=true"* &&
+        "$status_result" == *"activeSessionPhase=active"* ]]
+}
+
+status_is_terminal_or_failed() {
+    local status_result="$1"
+
+    [[ "$status_result" == *"state=failed"* ||
+        "$status_result" == *"state=terminal"* ||
+        "$status_result" == *"lastTerminalReason="* &&
+        "$status_result" != *"lastTerminalReason=none"* ]]
+}
+
 for_each_client() {
     local selector="$1"
     shift
@@ -739,8 +764,40 @@ wait_for_status() {
 
 accept_when_ringing() {
     local client="$1"
-    wait_for_status "$client" incomingRinging
-    send_command "$client" acceptIncomingCall
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        log "DRY_RUN: wait channel=$client status=incomingRinging-or-active timeout=${WAIT_TIMEOUT_SECONDS}s"
+        log "DRY_RUN: send channel=$client command=acceptIncomingCall only if incomingRinging"
+        return
+    fi
+
+    local deadline=$((SECONDS + WAIT_TIMEOUT_SECONDS))
+    local id
+    local result
+
+    while (( SECONDS <= deadline )); do
+        id="$(correlation_id "$client" accept-status)"
+        write_status_request "$client" "$id"
+
+        if result="$(wait_for_result_until_deadline "$client" nativeDirectCallDiagnosticStatusResult "$id" "$deadline")"; then
+            log "channel=$client accept-when-ringing correlationID=$id $result"
+            if status_is_incoming_ringing "$result"; then
+                send_command "$client" acceptIncomingCall
+                return
+            fi
+            if status_is_active "$result"; then
+                log "channel=$client accept-when-ringing already active; accept was not sent again"
+                return
+            fi
+            if status_is_terminal_or_failed "$result"; then
+                fail "channel=$client accept-when-ringing observed terminal/failed status: $result"
+            fi
+        fi
+
+        pause_for_poll_interval
+    done
+
+    fail "Timed out waiting for channel=$client incomingRinging or active status"
 }
 
 print_plan() {
