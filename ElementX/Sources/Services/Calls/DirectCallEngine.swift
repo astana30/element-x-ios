@@ -18,6 +18,12 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         actionsSubject.eraseToAnyPublisher()
     }
 
+    #if DEBUG
+    var diagnosticSnapshot: DirectCallDiagnosticSnapshot {
+        (mediaEngine as? DirectCallMediaDiagnosticSnapshotProviding)?.diagnosticSnapshot ?? .empty
+    }
+    #endif
+
     private let ownUserID: String
     private let expectedPeerProvider: (String) -> String?
     private let configuration: DirectCallEngineConfiguration
@@ -711,14 +717,36 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         }
 
         guard let mediaEngineFactory else {
-            return NoOpDirectCallMediaEngine()
+            #if DEBUG
+            return makeFallbackMediaEngine(reason: .factoryUnavailable)
+            #else
+            return makeFallbackMediaEngine()
+            #endif
         }
 
         switch mediaEngineFactory.makeMediaEngine() {
         case .success(let mediaEngine):
             return mediaEngine
-        case .failure:
-            return NoOpDirectCallMediaEngine()
+        case .failure(let error):
+            #if DEBUG
+            return makeFallbackMediaEngine(reason: .init(error))
+            #else
+            return makeFallbackMediaEngine()
+            #endif
         }
     }
+
+    private static func makeFallbackMediaEngine() -> DirectCallMediaEngineProtocol {
+        NoOpDirectCallMediaEngine()
+    }
+
+    #if DEBUG
+    private static func makeFallbackMediaEngine(reason: DirectCallDiagnosticMediaFailureReason) -> DirectCallMediaEngineProtocol {
+        NoOpDirectCallMediaEngine(diagnosticFailureReason: reason)
+    }
+    #endif
 }
+
+#if DEBUG
+extension DirectCallEngine: DirectCallMediaDiagnosticSnapshotProviding { }
+#endif

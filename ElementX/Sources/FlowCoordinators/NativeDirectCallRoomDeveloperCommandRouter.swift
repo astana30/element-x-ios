@@ -170,6 +170,14 @@ struct NativeDirectCallRoomDiagnosticStatus: Equatable, CustomStringConvertible,
     let lastReceiveFailureReason: DirectCallDiagnosticReceiveFailureReason?
     let sendRoomFingerprint: String?
     let receiveRoomFingerprint: String?
+    let mediaFactoryInjected: Bool
+    let mediaCredentialProviderAvailable: Bool
+    let mediaE2EEProviderAvailable: Bool
+    let mediaKeyHandleAvailable: Bool
+    let mediaKeyBridgeHit: Bool
+    let mediaConnectAttempted: Bool
+    let liveKitClientConnectAttempted: Bool
+    let mediaFailureReason: DirectCallDiagnosticMediaFailureReason
 
     init(state: NativeDirectCallRoomDiagnosticStatusState,
          listenerStarted: Bool,
@@ -200,6 +208,14 @@ struct NativeDirectCallRoomDiagnosticStatus: Equatable, CustomStringConvertible,
         lastReceiveFailureReason = diagnosticSnapshot.lastReceiveFailureReason
         sendRoomFingerprint = diagnosticSnapshot.sendRoomFingerprint
         receiveRoomFingerprint = diagnosticSnapshot.receiveRoomFingerprint
+        mediaFactoryInjected = diagnosticSnapshot.mediaFactoryInjected
+        mediaCredentialProviderAvailable = diagnosticSnapshot.mediaCredentialProviderAvailable
+        mediaE2EEProviderAvailable = diagnosticSnapshot.mediaE2EEProviderAvailable
+        mediaKeyHandleAvailable = diagnosticSnapshot.mediaKeyHandleAvailable
+        mediaKeyBridgeHit = diagnosticSnapshot.mediaKeyBridgeHit
+        mediaConnectAttempted = diagnosticSnapshot.mediaConnectAttempted
+        liveKitClientConnectAttempted = diagnosticSnapshot.liveKitClientConnectAttempted
+        mediaFailureReason = diagnosticSnapshot.mediaFailureReason
     }
 
     static let unavailable = Self(state: .unavailable, listenerStarted: false, hasActiveSession: false)
@@ -231,7 +247,15 @@ struct NativeDirectCallRoomDiagnosticStatus: Equatable, CustomStringConvertible,
             "lastEnvelopeRejectedReason: \(lastEnvelopeRejectedReason)",
             "lastReceiveFailureReason: \(String(describing: lastReceiveFailureReason))",
             "sendRoomFingerprint: \(String(describing: sendRoomFingerprint))",
-            "receiveRoomFingerprint: \(String(describing: receiveRoomFingerprint))"
+            "receiveRoomFingerprint: \(String(describing: receiveRoomFingerprint))",
+            "mediaFactoryInjected: \(mediaFactoryInjected)",
+            "mediaCredentialProviderAvailable: \(mediaCredentialProviderAvailable)",
+            "mediaE2EEProviderAvailable: \(mediaE2EEProviderAvailable)",
+            "mediaKeyHandleAvailable: \(mediaKeyHandleAvailable)",
+            "mediaKeyBridgeHit: \(mediaKeyBridgeHit)",
+            "mediaConnectAttempted: \(mediaConnectAttempted)",
+            "liveKitClientConnectAttempted: \(liveKitClientConnectAttempted)",
+            "mediaFailureReason: \(mediaFailureReason)"
         ].joined(separator: ", ") + ")"
     }
 

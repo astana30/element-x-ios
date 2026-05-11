@@ -824,7 +824,15 @@ final class RoomFlowCoordinatorTests {
                                                                                               envelopeDeliveredToEngineCount: 1,
                                                                                               lastReceiveEventKind: .directCallInvite,
                                                                                               sendRoomFingerprint: "send-room-redacted",
-                                                                                              receiveRoomFingerprint: "receive-room-redacted"))
+                                                                                              receiveRoomFingerprint: "receive-room-redacted",
+                                                                                              mediaFactoryInjected: true,
+                                                                                              mediaCredentialProviderAvailable: true,
+                                                                                              mediaE2EEProviderAvailable: true,
+                                                                                              mediaKeyHandleAvailable: true,
+                                                                                              mediaKeyBridgeHit: true,
+                                                                                              mediaConnectAttempted: true,
+                                                                                              liveKitClientConnectAttempted: true,
+                                                                                              mediaFailureReason: .liveKitConnectFailed))
         let statusSignal = UITestsSignal.nativeDirectCallDiagnosticStatus(statusRequest)
         let statusResultSignal = UITestsSignal.nativeDirectCallDiagnosticStatusResult(statusResult)
         let encoder = JSONEncoder()
@@ -860,6 +868,11 @@ final class RoomFlowCoordinatorTests {
         #expect(encodedStatusResult.contains("lastReceiveEventKind"))
         #expect(encodedStatusResult.contains("sendRoomFingerprint"))
         #expect(encodedStatusResult.contains("receiveRoomFingerprint"))
+        let mediaDiagnosticFragments = ["mediaFactoryInjected", "mediaCredentialProviderAvailable", "mediaE2EEProviderAvailable", "mediaKeyHandleAvailable",
+                                        "mediaKeyBridgeHit", "mediaConnectAttempted", "liveKitClientConnectAttempted", "liveKitConnectFailed"]
+        for mediaDiagnosticFragment in mediaDiagnosticFragments {
+            #expect(encodedStatusResult.contains(mediaDiagnosticFragment))
+        }
         #expect(encodedStatusResult.contains("send-room-redacted"))
         #expect(encodedStatusResult.contains("receive-room-redacted"))
         #expect(result.correlationID == command.correlationID)

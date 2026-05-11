@@ -411,6 +411,38 @@ enum DirectCallDiagnosticReceiveFailureReason: String, Codable, Equatable, Custo
     }
 }
 
+enum DirectCallDiagnosticMediaFailureReason: String, Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case none
+    case factoryUnavailable
+    case credentialUnavailable
+    case e2eeContextUnavailable
+    case keyBridgeMiss
+    case liveKitConnectFailed
+    case invalidSessionState
+    case unknown
+
+    init(_ error: DirectCallMediaError) {
+        switch error {
+        case .invalidSession, .unsupportedIntent, .e2eeNotReady, .keyMismatch, .audioRouteFailed:
+            self = .invalidSessionState
+        case .e2eeContextUnavailable:
+            self = .e2eeContextUnavailable
+        case .tokenUnavailable:
+            self = .credentialUnavailable
+        case .mediaSetupUnavailable:
+            self = .unknown
+        }
+    }
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
 enum DirectCallDiagnosticTimelineDiffKind: String, Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     case none
     case append
@@ -479,6 +511,14 @@ struct DirectCallDiagnosticSnapshot: Codable, Equatable, CustomStringConvertible
     var lastReceiveFailureReason: DirectCallDiagnosticReceiveFailureReason?
     var sendRoomFingerprint: String?
     var receiveRoomFingerprint: String?
+    var mediaFactoryInjected = false
+    var mediaCredentialProviderAvailable = false
+    var mediaE2EEProviderAvailable = false
+    var mediaKeyHandleAvailable = false
+    var mediaKeyBridgeHit = false
+    var mediaConnectAttempted = false
+    var liveKitClientConnectAttempted = false
+    var mediaFailureReason: DirectCallDiagnosticMediaFailureReason = .none
 
     static let empty = Self()
 
@@ -514,6 +554,16 @@ struct DirectCallDiagnosticSnapshot: Codable, Equatable, CustomStringConvertible
         if let receiveRoomFingerprint = other.receiveRoomFingerprint {
             self.receiveRoomFingerprint = receiveRoomFingerprint
         }
+        mediaFactoryInjected = mediaFactoryInjected || other.mediaFactoryInjected
+        mediaCredentialProviderAvailable = mediaCredentialProviderAvailable || other.mediaCredentialProviderAvailable
+        mediaE2EEProviderAvailable = mediaE2EEProviderAvailable || other.mediaE2EEProviderAvailable
+        mediaKeyHandleAvailable = mediaKeyHandleAvailable || other.mediaKeyHandleAvailable
+        mediaKeyBridgeHit = mediaKeyBridgeHit || other.mediaKeyBridgeHit
+        mediaConnectAttempted = mediaConnectAttempted || other.mediaConnectAttempted
+        liveKitClientConnectAttempted = liveKitClientConnectAttempted || other.liveKitClientConnectAttempted
+        if other.mediaFailureReason != .none {
+            mediaFailureReason = other.mediaFailureReason
+        }
     }
 
     var description: String {
@@ -541,7 +591,15 @@ struct DirectCallDiagnosticSnapshot: Codable, Equatable, CustomStringConvertible
             "lastEnvelopeRejectedReason: \(lastEnvelopeRejectedReason), " +
             "lastReceiveFailureReason: \(String(describing: lastReceiveFailureReason)), " +
             "sendRoomFingerprint: \(String(describing: sendRoomFingerprint)), " +
-            "receiveRoomFingerprint: \(String(describing: receiveRoomFingerprint)))"
+            "receiveRoomFingerprint: \(String(describing: receiveRoomFingerprint)), " +
+            "mediaFactoryInjected: \(mediaFactoryInjected), " +
+            "mediaCredentialProviderAvailable: \(mediaCredentialProviderAvailable), " +
+            "mediaE2EEProviderAvailable: \(mediaE2EEProviderAvailable), " +
+            "mediaKeyHandleAvailable: \(mediaKeyHandleAvailable), " +
+            "mediaKeyBridgeHit: \(mediaKeyBridgeHit), " +
+            "mediaConnectAttempted: \(mediaConnectAttempted), " +
+            "liveKitClientConnectAttempted: \(liveKitClientConnectAttempted), " +
+            "mediaFailureReason: \(mediaFailureReason))"
     }
 
     var debugDescription: String {

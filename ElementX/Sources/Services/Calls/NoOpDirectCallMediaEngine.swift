@@ -17,10 +17,31 @@ final class NoOpDirectCallMediaEngine: DirectCallMediaEngineProtocol {
     private var clearedCallIDs = Set<String>()
     private var disconnectedCallIDs = Set<String>()
 
+    #if DEBUG
+    private var diagnosticState = DirectCallDiagnosticSnapshot()
+
+    var diagnosticSnapshot: DirectCallDiagnosticSnapshot {
+        diagnosticState
+    }
+    #endif
+
     var mediaStatePublisher: CurrentValuePublisher<DirectCallMediaState, Never> {
         mediaStateSubject.asCurrentValuePublisher()
     }
 
+    #if DEBUG
+    init(tokenProvider: DirectCallMediaTokenProviderProtocol? = nil,
+         audioRouteController: DirectCallAudioRouteControllerProtocol? = nil,
+         encryptionService: DirectCallEncryptionServiceProtocol? = nil,
+         diagnosticFailureReason: DirectCallDiagnosticMediaFailureReason = .none) {
+        self.tokenProvider = tokenProvider ?? NoOpDirectCallMediaTokenProvider()
+        self.audioRouteController = audioRouteController ?? NoOpDirectCallAudioRouteController()
+        self.encryptionService = encryptionService ?? NoOpDirectCallEncryptionService()
+        diagnosticState.mediaFactoryInjected = diagnosticFailureReason != .factoryUnavailable
+        diagnosticState.mediaCredentialProviderAvailable = tokenProvider != nil
+        diagnosticState.mediaFailureReason = diagnosticFailureReason
+    }
+    #else
     init(tokenProvider: DirectCallMediaTokenProviderProtocol? = nil,
          audioRouteController: DirectCallAudioRouteControllerProtocol? = nil,
          encryptionService: DirectCallEncryptionServiceProtocol? = nil) {
@@ -28,6 +49,7 @@ final class NoOpDirectCallMediaEngine: DirectCallMediaEngineProtocol {
         self.audioRouteController = audioRouteController ?? NoOpDirectCallAudioRouteController()
         self.encryptionService = encryptionService ?? NoOpDirectCallEncryptionService()
     }
+    #endif
 
     func prepareAudioSession(for session: DirectCallSession) async -> Result<DirectCallMediaState, DirectCallMediaError> {
         guard session.isValidForDirectAudioPreparation else {
@@ -49,6 +71,11 @@ final class NoOpDirectCallMediaEngine: DirectCallMediaEngineProtocol {
     }
 
     func connectAudio(for session: DirectCallSession, keyHandle: DirectCallMediaKeyHandle) async -> Result<DirectCallMediaState, DirectCallMediaError> {
+        #if DEBUG
+        diagnosticState.mediaConnectAttempted = true
+        diagnosticState.mediaKeyHandleAvailable = !keyHandle.keyID.isEmpty && keyHandle.callID == session.callID
+        #endif
+
         if let error = session.directAudioConnectionError(keyHandle: keyHandle) {
             return fail(callID: session.callID, error: error)
         }
@@ -160,6 +187,12 @@ final class NoOpDirectCallMediaEngine: DirectCallMediaEngineProtocol {
     }
 
     private func fail(callID: String, error: DirectCallMediaError) -> Result<DirectCallMediaState, DirectCallMediaError> {
+        #if DEBUG
+        if diagnosticState.mediaFailureReason == .none {
+            diagnosticState.mediaFailureReason = .init(error)
+        }
+        #endif
+
         let state = DirectCallMediaState(callID: callID.isEmpty ? nil : callID,
                                          phase: .failed(error),
                                          isMicrophoneEnabled: false,
@@ -178,3 +211,7 @@ final class NoOpDirectCallMediaEngine: DirectCallMediaEngineProtocol {
         clearedCallIDs.insert(callID)
     }
 }
+
+#if DEBUG
+extension NoOpDirectCallMediaEngine: DirectCallMediaDiagnosticSnapshotProviding { }
+#endif

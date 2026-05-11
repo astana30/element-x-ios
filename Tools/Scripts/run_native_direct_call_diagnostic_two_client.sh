@@ -416,7 +416,7 @@ if expected_signal == "nativeDirectCallDiagnosticResult":
 if expected_signal == "nativeDirectCallDiagnosticStatusResult":
     status = body.get("status", {})
     print(
-        "state={state} listenerStarted={listener} hasActiveSession={session} activeSessionPhase={phase} lastSignalEventEmitted={event} lastSignalSendAttempted={attempted} lastSignalSendSucceeded={succeeded} lastSignalSendFailureReason={failure} lastTerminalReason={terminal} listenerAttached={attached} listenerHandleRetained={handle_retained} listenerStartCount={start_count} timelineUpdateCount={update_count} timelineDiffReceivedCount={diff_count} lastTimelineDiffKind={diff_kind} lastTimelineDiffItemCount={diff_item_count} timelineEventReceivedCount={event_count} directCallEventTypeSeenCount={type_count} envelopeExtractedCount={extracted_count} envelopeDeliveredToEngineCount={delivered_count} lastReceiveEventKind={receive_kind} lastEnvelopeRejectedReason={rejected_reason} lastReceiveFailureReason={receive_failure} sendRoomFingerprint={send_room} receiveRoomFingerprint={receive_room}".format(
+        "state={state} listenerStarted={listener} hasActiveSession={session} activeSessionPhase={phase} lastSignalEventEmitted={event} lastSignalSendAttempted={attempted} lastSignalSendSucceeded={succeeded} lastSignalSendFailureReason={failure} lastTerminalReason={terminal} listenerAttached={attached} listenerHandleRetained={handle_retained} listenerStartCount={start_count} timelineUpdateCount={update_count} timelineDiffReceivedCount={diff_count} lastTimelineDiffKind={diff_kind} lastTimelineDiffItemCount={diff_item_count} timelineEventReceivedCount={event_count} directCallEventTypeSeenCount={type_count} envelopeExtractedCount={extracted_count} envelopeDeliveredToEngineCount={delivered_count} lastReceiveEventKind={receive_kind} lastEnvelopeRejectedReason={rejected_reason} lastReceiveFailureReason={receive_failure} sendRoomFingerprint={send_room} receiveRoomFingerprint={receive_room} mediaFactoryInjected={media_factory} mediaCredentialProviderAvailable={media_credential} mediaE2EEProviderAvailable={media_e2ee} mediaKeyHandleAvailable={media_key_handle} mediaKeyBridgeHit={media_key_bridge} mediaConnectAttempted={media_connect} liveKitClientConnectAttempted={livekit_connect} mediaFailureReason={media_failure}".format(
             state=status.get("state", "unknown"),
             listener=str(status.get("listenerStarted", "unknown")).lower(),
             session=str(status.get("hasActiveSession", "unknown")).lower(),
@@ -442,6 +442,14 @@ if expected_signal == "nativeDirectCallDiagnosticStatusResult":
             receive_failure=status.get("lastReceiveFailureReason", "none"),
             send_room=status.get("sendRoomFingerprint", "none"),
             receive_room=status.get("receiveRoomFingerprint", "none"),
+            media_factory=str(status.get("mediaFactoryInjected", "unknown")).lower(),
+            media_credential=str(status.get("mediaCredentialProviderAvailable", "unknown")).lower(),
+            media_e2ee=str(status.get("mediaE2EEProviderAvailable", "unknown")).lower(),
+            media_key_handle=str(status.get("mediaKeyHandleAvailable", "unknown")).lower(),
+            media_key_bridge=str(status.get("mediaKeyBridgeHit", "unknown")).lower(),
+            media_connect=str(status.get("mediaConnectAttempted", "unknown")).lower(),
+            livekit_connect=str(status.get("liveKitClientConnectAttempted", "unknown")).lower(),
+            media_failure=status.get("mediaFailureReason", "none"),
         )
     )
     sys.exit(0)

@@ -108,6 +108,12 @@ final class NativeDirectCallDiagnosticLiveKitE2EEContextProvider: DirectCallMedi
     private let keyStore: DirectCallLiveKitMediaKeyStore
     private let contextProvider: DirectCallLiveKitE2EEContextProvider
 
+    private var diagnosticState = DirectCallDiagnosticSnapshot()
+
+    var diagnosticSnapshot: DirectCallDiagnosticSnapshot {
+        diagnosticState
+    }
+
     init(encryptionService: NativeDirectCallDiagnosticEncryptionService) {
         self.encryptionService = encryptionService
         keyStore = DirectCallLiveKitMediaKeyStore()
@@ -122,10 +128,20 @@ final class NativeDirectCallDiagnosticLiveKitE2EEContextProvider: DirectCallMedi
     }
 
     func context(for session: DirectCallSession, keyHandle: DirectCallMediaKeyHandle) -> Result<any DirectCallMediaE2EEContextProtocol, DirectCallMediaError> {
+        diagnosticState.mediaE2EEProviderAvailable = true
+        diagnosticState.mediaKeyHandleAvailable = !keyHandle.keyID.isEmpty && keyHandle.callID == session.callID
+
         switch encryptionService.storeLiveKitSharedKey(for: keyHandle, in: keyStore) {
         case .success:
-            return contextProvider.context(for: session, keyHandle: keyHandle)
+            diagnosticState.mediaKeyBridgeHit = true
+            let result = contextProvider.context(for: session, keyHandle: keyHandle)
+            if case .failure = result {
+                diagnosticState.mediaFailureReason = .e2eeContextUnavailable
+            }
+            return result
         case .failure:
+            diagnosticState.mediaKeyBridgeHit = false
+            diagnosticState.mediaFailureReason = .keyBridgeMiss
             return .failure(.e2eeContextUnavailable)
         }
     }
@@ -134,4 +150,6 @@ final class NativeDirectCallDiagnosticLiveKitE2EEContextProvider: DirectCallMedi
         contextProvider.clearContext(callID: callID)
     }
 }
+
+extension NativeDirectCallDiagnosticLiveKitE2EEContextProvider: DirectCallMediaDiagnosticSnapshotProviding { }
 #endif

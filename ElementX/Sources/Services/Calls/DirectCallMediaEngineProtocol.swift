@@ -21,6 +21,13 @@ protocol DirectCallMediaEngineProtocol {
     func cleanup(callID: String) async
 }
 
+#if DEBUG
+@MainActor
+protocol DirectCallMediaDiagnosticSnapshotProviding {
+    var diagnosticSnapshot: DirectCallDiagnosticSnapshot { get }
+}
+#endif
+
 @MainActor
 protocol DirectCallMediaTokenProviderProtocol {
     func connectionInfo(for session: DirectCallSession) async -> Result<DirectCallMediaConnectionInfo, DirectCallMediaError>

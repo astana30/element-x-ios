@@ -183,6 +183,14 @@ enum UITestsSignal: Codable, Equatable {
         let lastReceiveFailureReason: DirectCallDiagnosticReceiveFailureReason?
         let sendRoomFingerprint: String?
         let receiveRoomFingerprint: String?
+        let mediaFactoryInjected: Bool
+        let mediaCredentialProviderAvailable: Bool
+        let mediaE2EEProviderAvailable: Bool
+        let mediaKeyHandleAvailable: Bool
+        let mediaKeyBridgeHit: Bool
+        let mediaConnectAttempted: Bool
+        let liveKitClientConnectAttempted: Bool
+        let mediaFailureReason: DirectCallDiagnosticMediaFailureReason
 
         init(state: NativeDirectCallDiagnosticStatusState,
              listenerStarted: Bool,
@@ -208,7 +216,15 @@ enum UITestsSignal: Codable, Equatable {
              lastEnvelopeRejectedReason: DirectCallDiagnosticEnvelopeRejectedReason = .none,
              lastReceiveFailureReason: DirectCallDiagnosticReceiveFailureReason? = nil,
              sendRoomFingerprint: String? = nil,
-             receiveRoomFingerprint: String? = nil) {
+             receiveRoomFingerprint: String? = nil,
+             mediaFactoryInjected: Bool = false,
+             mediaCredentialProviderAvailable: Bool = false,
+             mediaE2EEProviderAvailable: Bool = false,
+             mediaKeyHandleAvailable: Bool = false,
+             mediaKeyBridgeHit: Bool = false,
+             mediaConnectAttempted: Bool = false,
+             liveKitClientConnectAttempted: Bool = false,
+             mediaFailureReason: DirectCallDiagnosticMediaFailureReason = .none) {
             self.state = state
             self.listenerStarted = listenerStarted
             self.hasActiveSession = hasActiveSession
@@ -234,6 +250,14 @@ enum UITestsSignal: Codable, Equatable {
             self.lastReceiveFailureReason = lastReceiveFailureReason
             self.sendRoomFingerprint = sendRoomFingerprint.flatMap { UITestsSignalling.sanitizedIdentifier($0) }
             self.receiveRoomFingerprint = receiveRoomFingerprint.flatMap { UITestsSignalling.sanitizedIdentifier($0) }
+            self.mediaFactoryInjected = mediaFactoryInjected
+            self.mediaCredentialProviderAvailable = mediaCredentialProviderAvailable
+            self.mediaE2EEProviderAvailable = mediaE2EEProviderAvailable
+            self.mediaKeyHandleAvailable = mediaKeyHandleAvailable
+            self.mediaKeyBridgeHit = mediaKeyBridgeHit
+            self.mediaConnectAttempted = mediaConnectAttempted
+            self.liveKitClientConnectAttempted = liveKitClientConnectAttempted
+            self.mediaFailureReason = mediaFailureReason
         }
     }
 
@@ -337,7 +361,15 @@ extension UITestsSignal.NativeDirectCallDiagnosticStatus {
                   lastEnvelopeRejectedReason: status.lastEnvelopeRejectedReason,
                   lastReceiveFailureReason: status.lastReceiveFailureReason,
                   sendRoomFingerprint: status.sendRoomFingerprint,
-                  receiveRoomFingerprint: status.receiveRoomFingerprint)
+                  receiveRoomFingerprint: status.receiveRoomFingerprint,
+                  mediaFactoryInjected: status.mediaFactoryInjected,
+                  mediaCredentialProviderAvailable: status.mediaCredentialProviderAvailable,
+                  mediaE2EEProviderAvailable: status.mediaE2EEProviderAvailable,
+                  mediaKeyHandleAvailable: status.mediaKeyHandleAvailable,
+                  mediaKeyBridgeHit: status.mediaKeyBridgeHit,
+                  mediaConnectAttempted: status.mediaConnectAttempted,
+                  liveKitClientConnectAttempted: status.liveKitClientConnectAttempted,
+                  mediaFailureReason: status.mediaFailureReason)
     }
 }
 

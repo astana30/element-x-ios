@@ -1685,6 +1685,67 @@ final class DirectCallMediaProviderSkeletonTests {
     }
 
     @Test
+    func diagnosticLiveKitE2EEContextProviderReportsKeyBridgeMissWithoutLeakingKeyMaterial() throws {
+        let encryptionService = try #require(NativeDirectCallDiagnosticEncryptionService(ownUserID: "@me:example.com",
+                                                                                         secret: "diagnostic-shared-secret"))
+        let provider = NativeDirectCallDiagnosticLiveKitE2EEContextProvider(encryptionService: encryptionService)
+        let session = makeSession(encryptionState: .ready)
+
+        let result = provider.context(for: session, keyHandle: .init(callID: callID, keyID: "missing-key"))
+
+        guard case .failure(.e2eeContextUnavailable) = result else {
+            Issue.record("Expected missing diagnostic key material to fail closed.")
+            return
+        }
+        #expect(provider.diagnosticSnapshot.mediaE2EEProviderAvailable)
+        #expect(provider.diagnosticSnapshot.mediaKeyHandleAvailable)
+        #expect(provider.diagnosticSnapshot.mediaKeyBridgeHit == false)
+        #expect(provider.diagnosticSnapshot.mediaFailureReason == .keyBridgeMiss)
+        #expect(String(describing: provider.diagnosticSnapshot).contains("diagnostic-shared-secret") == false)
+        #expect(String(reflecting: provider.diagnosticSnapshot).contains("missing-key") == false)
+    }
+
+    @Test
+    func noOpMediaEngineDiagnosticsReportFactoryUnavailableFallback() async {
+        let engine = NoOpDirectCallMediaEngine(diagnosticFailureReason: .factoryUnavailable)
+        let session = makeSession(encryptionState: .ready)
+
+        let result = await engine.connectAudio(for: session, keyHandle: .init(callID: callID, keyID: "key-a"))
+
+        #expect(result == .failure(.tokenUnavailable))
+        #expect(engine.diagnosticSnapshot.mediaFactoryInjected == false)
+        #expect(engine.diagnosticSnapshot.mediaConnectAttempted)
+        #expect(engine.diagnosticSnapshot.mediaKeyHandleAvailable)
+        #expect(engine.diagnosticSnapshot.liveKitClientConnectAttempted == false)
+        #expect(engine.diagnosticSnapshot.mediaFailureReason == .factoryUnavailable)
+    }
+
+    @Test
+    func liveKitMediaEngineDiagnosticsReportConnectFailureStage() async {
+        let liveKitClient = LiveKitClientSpy(connectResult: .failure(.mediaSetupUnavailable))
+        let engine = LiveKitDirectCallMediaEngine(tokenProvider: MediaTokenProviderSpy(),
+                                                  e2eeContextProvider: MediaE2EEContextProviderSpy(),
+                                                  liveKitClient: liveKitClient)
+        let session = makeSession(encryptionState: .ready)
+
+        let result = await engine.connectAudio(for: session, keyHandle: DirectCallMediaKeyHandle(callID: callID, keyID: "key-a"))
+
+        guard case .failure(.mediaSetupUnavailable) = result else {
+            Issue.record("Expected failing fake LiveKit client to fail media setup.")
+            return
+        }
+        #expect(engine.diagnosticSnapshot.mediaFactoryInjected)
+        #expect(engine.diagnosticSnapshot.mediaCredentialProviderAvailable)
+        #expect(engine.diagnosticSnapshot.mediaE2EEProviderAvailable)
+        #expect(engine.diagnosticSnapshot.mediaKeyHandleAvailable)
+        #expect(engine.diagnosticSnapshot.mediaConnectAttempted)
+        #expect(engine.diagnosticSnapshot.liveKitClientConnectAttempted)
+        #expect(engine.diagnosticSnapshot.mediaFailureReason == DirectCallDiagnosticMediaFailureReason.liveKitConnectFailed)
+        #expect(String(describing: engine.diagnosticSnapshot).contains("test-token") == false)
+        #expect(String(describing: engine.diagnosticSnapshot).contains("livekit.example.com") == false)
+    }
+
+    @Test
     func diagnosticLiveKitE2EEContextProviderFailsClosedWithoutGeneratedKey() {
         let encryptionService = NativeDirectCallDiagnosticEncryptionService(ownUserID: "@me:example.com",
                                                                             secret: "diagnostic-shared-secret")

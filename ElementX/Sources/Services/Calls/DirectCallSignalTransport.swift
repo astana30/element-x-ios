@@ -1540,6 +1540,9 @@ final class DirectCallEngineSignalBridge {
         if let transportDiagnostics = signalTransport as? DirectCallSignalTransportDiagnosticSnapshotProviding {
             snapshot.mergeReceiveDiagnostics(from: transportDiagnostics.diagnosticSnapshot)
         }
+        if let engineDiagnostics = engine as? DirectCallMediaDiagnosticSnapshotProviding {
+            snapshot.mergeReceiveDiagnostics(from: engineDiagnostics.diagnosticSnapshot)
+        }
         return snapshot
     }
     #endif
@@ -1831,7 +1834,6 @@ final class NativeDirectCallCompositionFactory {
             return .failure(.missingSignalTransport)
         }
 
-        let mediaEngineFactory = mediaEngineFactory ?? NoOpDirectCallMediaEngineFactory()
         let engine = DirectCallEngine(ownUserID: ownUserID,
                                       configuration: configuration.engineConfiguration,
                                       now: now,

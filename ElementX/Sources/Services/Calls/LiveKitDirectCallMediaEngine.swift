@@ -68,6 +68,18 @@ final class LiveKitDirectCallMediaEngine: DirectCallMediaEngineProtocol {
     private var disconnectedCallIDs = Set<String>()
     private var cleanedCallIDs = Set<String>()
 
+    #if DEBUG
+    private var diagnosticState = DirectCallDiagnosticSnapshot()
+
+    var diagnosticSnapshot: DirectCallDiagnosticSnapshot {
+        var snapshot = diagnosticState
+        if let e2eeDiagnostics = e2eeContextProvider as? DirectCallMediaDiagnosticSnapshotProviding {
+            snapshot.mergeReceiveDiagnostics(from: e2eeDiagnostics.diagnosticSnapshot)
+        }
+        return snapshot
+    }
+    #endif
+
     var mediaStatePublisher: CurrentValuePublisher<DirectCallMediaState, Never> {
         mediaStateSubject.asCurrentValuePublisher()
     }
@@ -82,6 +94,11 @@ final class LiveKitDirectCallMediaEngine: DirectCallMediaEngineProtocol {
         self.encryptionService = encryptionService ?? NoOpDirectCallEncryptionService()
         self.e2eeContextProvider = e2eeContextProvider ?? UnavailableDirectCallMediaE2EEContextProvider()
         self.liveKitClient = liveKitClient ?? UnavailableDirectCallLiveKitClient()
+        #if DEBUG
+        diagnosticState.mediaFactoryInjected = true
+        diagnosticState.mediaCredentialProviderAvailable = tokenProvider != nil
+        diagnosticState.mediaE2EEProviderAvailable = e2eeContextProvider != nil
+        #endif
     }
 
     func prepareAudioSession(for session: DirectCallSession) async -> Result<DirectCallMediaState, DirectCallMediaError> {
@@ -103,6 +120,11 @@ final class LiveKitDirectCallMediaEngine: DirectCallMediaEngineProtocol {
     }
 
     func connectAudio(for session: DirectCallSession, keyHandle: DirectCallMediaKeyHandle) async -> Result<DirectCallMediaState, DirectCallMediaError> {
+        #if DEBUG
+        diagnosticState.mediaConnectAttempted = true
+        diagnosticState.mediaKeyHandleAvailable = !keyHandle.keyID.isEmpty && keyHandle.callID == session.callID
+        #endif
+
         let preparingState = DirectCallMediaState(callID: session.callID,
                                                   phase: .preparingAudio,
                                                   isMicrophoneEnabled: false,
@@ -135,6 +157,10 @@ final class LiveKitDirectCallMediaEngine: DirectCallMediaEngineProtocol {
                                                        isE2EEReady: true)
             mediaStateSubject.send(connectingState)
 
+            #if DEBUG
+            diagnosticState.liveKitClientConnectAttempted = true
+            #endif
+
             switch await liveKitClient.connect(connectionInfo: connectionInfo, e2eeContext: e2eeContext) {
             case .success:
                 let activeState = DirectCallMediaState(callID: session.callID,
@@ -146,6 +172,9 @@ final class LiveKitDirectCallMediaEngine: DirectCallMediaEngineProtocol {
                 mediaStateSubject.send(activeState)
                 return .success(activeState)
             case .failure(let error):
+                #if DEBUG
+                diagnosticState.mediaFailureReason = error == .mediaSetupUnavailable ? .liveKitConnectFailed : .init(error)
+                #endif
                 return fail(callID: session.callID, error: error)
             }
         case .failure(let error):
@@ -258,6 +287,12 @@ final class LiveKitDirectCallMediaEngine: DirectCallMediaEngineProtocol {
     }
 
     private func fail(callID: String, error: DirectCallMediaError) -> Result<DirectCallMediaState, DirectCallMediaError> {
+        #if DEBUG
+        if diagnosticState.mediaFailureReason == .none {
+            diagnosticState.mediaFailureReason = .init(error)
+        }
+        #endif
+
         let state = DirectCallMediaState(callID: callID.isEmpty ? nil : callID,
                                          phase: .failed(error),
                                          isMicrophoneEnabled: false,
@@ -277,3 +312,7 @@ final class LiveKitDirectCallMediaEngine: DirectCallMediaEngineProtocol {
         clearedCallIDs.insert(callID)
     }
 }
+
+#if DEBUG
+extension LiveKitDirectCallMediaEngine: DirectCallMediaDiagnosticSnapshotProviding { }
+#endif
