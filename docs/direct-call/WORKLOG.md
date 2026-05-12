@@ -16,6 +16,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added local backend fake smoke mode for the call service.
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
+- Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
 
 ## 2026-05-12 — 2.10M Production E2EE Key Wrapping Seam Inspection
 
@@ -41,3 +42,15 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Confirmed diagnostic encryption remains isolated and the production factory does not reference diagnostic-only types.
 - Regenerated `SalemX.xcodeproj` so the new test file is part of the UnitTests target.
 - Recommended next phase: prototype the narrow Matrix SDK/wrapper key wrapping seam that can replace the fail-closed wrapper without exposing raw Matrix JSON or media keys.
+
+## 2026-05-12 — 2.10O Matrix SDK Narrow Key Wrapping Seam Inspection
+
+- Inspected Rust SDK crypto, device, to-device, room send, widget, FFI, and generated Swift binding surfaces in the local SDK and wrapper workspaces.
+- Confirmed the Rust crypto layer can encrypt arbitrary custom to-device content for a device using Olm via `Device::encrypt_event_raw`.
+- Confirmed the Rust crypto layer has multi-device support via `OlmMachine::encrypt_content_for_devices`, including trust-aware filtering through `CollectStrategy`.
+- Confirmed the high-level SDK exposes an `encrypt_and_send_raw_to_device` helper behind the experimental custom to-device feature, and widget support already uses this path for encrypted custom to-device traffic.
+- Confirmed the current Swift FFI bindings expose identity and trust state, but not a direct-call-specific wrapper that returns or consumes an opaque media-key envelope.
+- Confirmed a separate production to-device key message is possible, but the safer next design keeps the existing room direct-call signal as the deterministic carrier and places only an SDK-produced opaque per-device envelope in that signal.
+- Recommended a narrow SDK/FFI API that wraps the per-call media key into a redacted direct-call envelope and unwraps it on the recipient device without exposing Matrix event JSON or broad raw APIs.
+- Identified that a real implementation will need async app integration because device lookup, session setup, and envelope generation/decryption are asynchronous.
+- Recommended next phase: implement a local SDK prototype for `wrapDirectCallMediaKey` and `unwrapDirectCallMediaKeyEnvelope`, with focused Rust/FFI tests before publishing a wrapper artifact.

@@ -2,15 +2,15 @@
 
 ## Current Phase
 
-After 2.10N — production E2EE app key-wrapping seam skeleton.
+After 2.10O — Matrix SDK narrow direct-call key wrapping seam inspection.
 
 ## Latest Commit
 
-2.10N implementation commit: `Add production direct-call key wrapping seams`
+2.10O docs-only tracking update: `Record Matrix SDK key wrapping seam inspection`
 
 ## Latest Code Checkpoint
 
-2.10N local checkpoint: production direct-call key wrapping seams added and validated.
+407adede3 `Add production direct-call key wrapping seams`
 
 ## Proven Checkpoints
 
@@ -32,12 +32,18 @@ After 2.10N — production E2EE app key-wrapping seam skeleton.
   - `FailClosedDirectCallMediaKeyWrapper` is the default wrapper and cannot wrap or unwrap.
   - `ProductionDirectCallEncryptionService` can use an injected wrapper plus a shared `DirectCallLiveKitMediaKeyStore`, but defaults to fail-closed with no production activation.
   - `NativeDirectCallProductionDependenciesFactory` can accept a future production key wrapper and shared media key store, while remaining disabled by default.
+- Matrix SDK key wrapping seam inspection is complete:
+  - Rust crypto can encrypt arbitrary custom to-device content for devices using Olm, with trust-aware device filtering.
+  - The higher-level SDK has an `encrypt_and_send_raw_to_device` path used by widget support, but it sends immediately and is not currently exposed through Swift FFI.
+  - The lower-level SDK can produce encrypted to-device requests, but current public/FFI APIs do not return an app-consumable opaque direct-call envelope for room signalling.
+  - Current Swift bindings expose identity/trust status, but not device enumeration plus custom encrypted payload wrap/unwrap.
+  - The recommended production transport remains a room direct-call signal carrying an SDK-produced opaque per-device envelope, not a separate production to-device command path.
 
 ## Current Blocker
 
 - Production backend is still skeleton/fake mode.
 - Production E2EE Matrix crypto key wrapping is not implemented; the app seam is only a fail-closed skeleton.
-- A narrow Matrix SDK/wrapper seam is still missing for wrapping/unwrapping per-call media keys without exposing event JSON or broad raw APIs.
+- A narrow Matrix SDK/wrapper seam is still missing for wrapping/unwrapping per-call media keys without exposing event JSON or broad APIs.
 - `DirectCallEncryptionServiceProtocol` is synchronous today; production Matrix crypto wrapping is likely async because it may need SDK crypto/device lookup.
 - Production key exchange can be bridged to `DirectCallLiveKitMediaKeyStore` via injection, but only with fake/test wrappers today.
 - Production trust policy for peer devices is not finalized; the safest initial policy should fail closed on unknown or unverifiable device trust.
@@ -45,7 +51,7 @@ After 2.10N — production E2EE app key-wrapping seam skeleton.
 
 ## Next Recommended Phase
 
-`2.10O — Matrix SDK narrow direct-call key wrapping seam prototype`
+`2.10P — SDK direct-call media key envelope prototype`
 
 ## Do-Not-Touch Constraints
 
