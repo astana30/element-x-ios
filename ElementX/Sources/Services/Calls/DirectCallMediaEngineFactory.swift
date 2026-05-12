@@ -106,6 +106,11 @@ struct NativeDirectCallProductionConfiguration: Equatable, CustomStringConvertib
         self.liveKitConfiguration = liveKitConfiguration
     }
 
+    init(productionConfiguration: DirectCallProductionConfiguration) {
+        isEnabled = productionConfiguration.isEnabled
+        liveKitConfiguration = productionConfiguration.liveKitConfiguration
+    }
+
     var description: String {
         "NativeDirectCallProductionConfiguration(isEnabled: \(isEnabled), liveKitConfiguration: \(liveKitConfiguration))"
     }
@@ -123,6 +128,12 @@ struct NativeDirectCallProductionDependenciesFactory {
     init(configuration: NativeDirectCallProductionConfiguration = .init(),
          liveKitClient: DirectCallLiveKitClientProtocol? = nil) {
         self.configuration = configuration
+        self.liveKitClient = liveKitClient
+    }
+
+    init(productionConfiguration: DirectCallProductionConfiguration,
+         liveKitClient: DirectCallLiveKitClientProtocol? = nil) {
+        configuration = .init(productionConfiguration: productionConfiguration)
         self.liveKitClient = liveKitClient
     }
 

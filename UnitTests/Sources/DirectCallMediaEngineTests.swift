@@ -1631,6 +1631,52 @@ final class DirectCallMediaProviderSkeletonTests {
     }
 
     @Test
+    func productionDirectCallConfigurationIsDisabledByDefault() {
+        let configuration = DirectCallProductionConfiguration()
+
+        #expect(configuration.isEnabled == false)
+        #expect(configuration.tokenEndpointBaseURL == nil)
+        #expect(configuration.tokenEndpointURL == nil)
+        #expect(configuration.liveKitConfiguration.isConfigured == false)
+        #expect(configuration.isConfigured == false)
+        #expect(String(describing: configuration).contains("https://") == false)
+    }
+
+    @Test
+    func productionDirectCallConfigurationRequiresEnabledEndpointBaseURL() throws {
+        let baseURL = try #require(URL(string: "https://call-service.example.com"))
+        let missingEndpointConfiguration = DirectCallProductionConfiguration(isEnabled: true)
+        let disabledConfiguration = DirectCallProductionConfiguration(isEnabled: false, tokenEndpointBaseURL: baseURL)
+
+        #expect(missingEndpointConfiguration.isConfigured == false)
+        #expect(missingEndpointConfiguration.tokenEndpointURL == nil)
+        #expect(disabledConfiguration.isConfigured == false)
+        #expect(disabledConfiguration.tokenEndpointURL == nil)
+    }
+
+    @Test
+    func productionDirectCallConfigurationBuildsPreferredEndpointURLAndRedactsBaseURL() throws {
+        let baseURL = try #require(URL(string: "https://call-service.example.com/base?ignored=true#fragment"))
+        let configuration = DirectCallProductionConfiguration(isEnabled: true, tokenEndpointBaseURL: baseURL)
+        let endpointURL = try #require(configuration.tokenEndpointURL)
+
+        #expect(endpointURL.absoluteString == "https://call-service.example.com/base/_matrix/client/unstable/kz.salemx.direct_call/livekit/token")
+        #expect(configuration.liveKitConfiguration.tokenEndpointURL == endpointURL)
+        #expect(configuration.isConfigured)
+        #expect(String(describing: configuration).contains(baseURL.absoluteString) == false)
+        #expect(String(reflecting: configuration).contains(baseURL.absoluteString) == false)
+    }
+
+    @Test
+    func productionDirectCallConfigurationRejectsInvalidEndpointBaseURL() throws {
+        let fileURL = URL(fileURLWithPath: "/tmp/call-service")
+        let relativeURL = try #require(URL(string: "/relative"))
+
+        #expect(DirectCallProductionConfiguration(isEnabled: true, tokenEndpointBaseURL: fileURL).isConfigured == false)
+        #expect(DirectCallProductionConfiguration(isEnabled: true, tokenEndpointBaseURL: relativeURL).isConfigured == false)
+    }
+
+    @Test
     func productionLiveKitTokenClientFailsClosedWhenConfigurationAuthOrHTTPIsMissing() async throws {
         let endpointURL = try #require(URL(string: "https://call-service.example.com/direct-calls"))
         let configuration = DirectCallProductionLiveKitConfiguration(tokenEndpointURL: endpointURL)
@@ -1860,6 +1906,21 @@ final class DirectCallMediaProviderSkeletonTests {
     }
 
     @Test
+    func productionDependenciesFactoryRequiresExplicitEnabledEndpointConfiguration() throws {
+        let baseURL = try #require(URL(string: "https://call-service.example.com"))
+        let disabledEndpointConfiguration = DirectCallProductionConfiguration(isEnabled: false, tokenEndpointBaseURL: baseURL)
+        let missingEndpointConfiguration = DirectCallProductionConfiguration(isEnabled: true)
+
+        let disabledDependencies = NativeDirectCallProductionDependenciesFactory(productionConfiguration: disabledEndpointConfiguration).makeDependencies()
+        let missingEndpointDependencies = NativeDirectCallProductionDependenciesFactory(productionConfiguration: missingEndpointConfiguration).makeDependencies()
+
+        #expect(disabledDependencies.hasEncryptionService == false)
+        #expect(disabledDependencies.hasMediaEngineFactory == false)
+        #expect(missingEndpointDependencies.hasEncryptionService == false)
+        #expect(missingEndpointDependencies.hasMediaEngineFactory == false)
+    }
+
+    @Test
     func productionDependenciesFactoryBuildsFailClosedConfiguredDependencies() throws {
         let endpointURL = try #require(URL(string: "https://call-service.example.com/direct-calls"))
         let configuration = NativeDirectCallProductionConfiguration(isEnabled: true,
@@ -1883,6 +1944,21 @@ final class DirectCallMediaProviderSkeletonTests {
             Issue.record("Expected configured production media factory to build a fail-closed engine.")
             return
         }
+    }
+
+    @Test
+    func productionDependenciesFactoryBuildsFromExplicitEndpointConfiguration() throws {
+        let baseURL = try #require(URL(string: "https://call-service.example.com"))
+        let configuration = DirectCallProductionConfiguration(isEnabled: true, tokenEndpointBaseURL: baseURL)
+        let factory = NativeDirectCallProductionDependenciesFactory(productionConfiguration: configuration,
+                                                                    liveKitClient: LiveKitClientSpy())
+
+        let dependencies = factory.makeDependencies()
+
+        #expect(dependencies.encryptionService is ProductionDirectCallEncryptionService)
+        #expect(dependencies.hasMediaEngineFactory)
+        #expect(String(describing: configuration).contains(baseURL.absoluteString) == false)
+        #expect(String(describing: dependencies).contains("Diagnostic") == false)
     }
 
     @Test

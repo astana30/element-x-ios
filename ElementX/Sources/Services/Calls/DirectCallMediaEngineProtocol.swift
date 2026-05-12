@@ -260,6 +260,60 @@ protocol DirectCallMatrixAccessTokenProviding {
     func matrixAccessToken() async -> String?
 }
 
+struct DirectCallProductionConfiguration: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    static let tokenEndpointPath = "/_matrix/client/unstable/kz.salemx.direct_call/livekit/token"
+
+    let isEnabled: Bool
+    let tokenEndpointBaseURL: URL?
+
+    init(isEnabled: Bool = false, tokenEndpointBaseURL: URL? = nil) {
+        self.isEnabled = isEnabled
+        self.tokenEndpointBaseURL = tokenEndpointBaseURL
+    }
+
+    var tokenEndpointURL: URL? {
+        guard isEnabled,
+              let tokenEndpointBaseURL else {
+            return nil
+        }
+
+        return Self.makeTokenEndpointURL(from: tokenEndpointBaseURL)
+    }
+
+    var liveKitConfiguration: DirectCallProductionLiveKitConfiguration {
+        .init(tokenEndpointURL: tokenEndpointURL)
+    }
+
+    var isConfigured: Bool {
+        tokenEndpointURL != nil
+    }
+
+    var description: String {
+        "DirectCallProductionConfiguration(isEnabled: \(isEnabled), tokenEndpointBaseURL: <redacted>, tokenEndpointPath: \(Self.tokenEndpointPath), isConfigured: \(isConfigured))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+
+    private static func makeTokenEndpointURL(from baseURL: URL) -> URL? {
+        guard let scheme = baseURL.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              baseURL.host?.isEmpty == false,
+              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
+            return nil
+        }
+
+        let basePath = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        components.path = "/" + ([basePath, tokenEndpointPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))]
+            .filter { !$0.isEmpty }
+            .joined(separator: "/"))
+        components.query = nil
+        components.fragment = nil
+        return components.url
+    }
+}
+
 struct DirectCallProductionLiveKitConfiguration: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     let tokenEndpointURL: URL?
 
