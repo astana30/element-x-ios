@@ -54,3 +54,17 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Recommended a narrow SDK/FFI API that wraps the per-call media key into a redacted direct-call envelope and unwraps it on the recipient device without exposing Matrix event JSON or broad raw APIs.
 - Identified that a real implementation will need async app integration because device lookup, session setup, and envelope generation/decryption are asynchronous.
 - Recommended next phase: implement a local SDK prototype for `wrapDirectCallMediaKey` and `unwrapDirectCallMediaKeyEnvelope`, with focused Rust/FFI tests before publishing a wrapper artifact.
+
+## 2026-05-12 — 2.10P SDK Direct-Call Media Key Envelope Prototype
+
+- Prototyped a narrow Matrix Rust SDK direct-call media-key envelope seam in the local SDK workspace.
+- Added a direct-call-specific SDK module that models wrap info, unwrap info, an opaque envelope, unwrap result, trust policy, and redacted error cases.
+- Added prototype SDK methods on `Encryption` for wrapping a per-call media key into an opaque envelope and unwrapping that envelope on an intended recipient device.
+- Added FFI records and async methods that mirror the SDK API shape without exposing Matrix event JSON, device maps, or Olm internals to the app.
+- Kept the existing direct-call room signal as the deterministic carrier; the prototype places only an SDK-produced opaque per-device envelope into that signal.
+- Validated envelope metadata, expiry, intended recipient, event type, and SDK decryption sender metadata on unwrap before returning media key material to the app encryption boundary.
+- Added focused SDK tests for redacted debug output, malformed envelope handling, metadata mismatch, and expiry fail-closed behavior.
+- Confirmed `cargo check -p matrix-sdk-ffi` passes for the prototype.
+- Confirmed `cargo test -p matrix-sdk --features experimental-send-custom-to-device direct_call --lib` passes.
+- Did not publish wrapper artifacts, update the app dependency pin, modify app production code, or activate production direct calls.
+- Identified the next blocker: add full cryptographic SDK round-trip tests using real test devices before generating Swift bindings or publishing an artifact.
