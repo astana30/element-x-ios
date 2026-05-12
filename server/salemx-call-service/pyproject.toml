@@ -2,7 +2,7 @@
 name = "salemx-call-service"
 version = "0.1.0"
 description = "SalemX native direct-call LiveKit token service skeleton"
-requires-python = ">=3.11"
+requires-python = ">=3.9"
 dependencies = [
     "fastapi==0.115.12",
     "uvicorn[standard]==0.34.2",

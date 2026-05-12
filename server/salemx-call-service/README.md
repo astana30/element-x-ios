@@ -108,6 +108,29 @@ uvicorn salemx_call_service.app:app --host 127.0.0.1 --port 8088
 
 The default app entrypoint requires production-like environment variables. Unit tests use fakes and do not connect to real Synapse or LiveKit.
 
+## Local Fake Smoke Mode
+
+For a local endpoint smoke without real Synapse or LiveKit credentials, enable the explicit fake mode:
+
+```bash
+cd server/salemx-call-service
+SALEMX_CALL_SERVICE_FAKE_MODE=1 uvicorn salemx_call_service.app:app --host 127.0.0.1 --port 8088
+```
+
+Fake mode is off by default and must never be enabled in production. It accepts a local dummy bearer token only; override it with `SALEMX_CALL_SERVICE_FAKE_ACCESS_TOKEN` if needed. The fake response is app-shaped but not usable for real LiveKit media.
+
+Smoke request shape:
+
+```bash
+curl -sS \
+  -H 'Authorization: Bearer local-smoke-token' \
+  -H 'Content-Type: application/json' \
+  -d '{"version":1,"call_id":"call-smoke","room_id":"!local-smoke:example.test","peer_user_id":"@bob:local.test","intent":"audio","direction":"outgoing","device_id":"DEVICEA","client_transaction_id":"txn-smoke"}' \
+  http://127.0.0.1:8088/_matrix/client/unstable/kz.salemx.direct_call/livekit/token
+```
+
+Do not paste real Matrix access tokens, LiveKit tokens, or admin tokens into local smoke logs.
+
 ## Tests
 
 The unit tests use only the Python standard library:

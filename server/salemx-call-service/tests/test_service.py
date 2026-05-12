@@ -3,8 +3,10 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import os
 import unittest
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
 from salemx_call_service.allocation import Allocation, InMemoryAllocationStore
 from salemx_call_service.auth import AuthenticatedUser
@@ -341,6 +343,40 @@ class SynapseRoomValidatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("!room:example.test", log_output)
         self.assertNotIn("@alice:example.test", log_output)
         self.assertNotIn("admin-token-sensitive", str(context.exception))
+
+
+class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_fake_mode_is_off_by_default(self) -> None:
+        from salemx_call_service import local_fake
+
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertFalse(local_fake.fake_mode_enabled())
+
+    async def test_fake_mode_can_issue_app_shaped_response(self) -> None:
+        from salemx_call_service import local_fake
+
+        with patch.dict(os.environ, {
+            local_fake.FAKE_MODE_ENV: "1",
+            local_fake.FAKE_ACCESS_TOKEN_ENV: "local-token-sensitive",
+        }, clear=True):
+            service = local_fake.make_fake_local_service()
+            response = await service.issue_token("Bearer local-token-sensitive", {
+                "version": 1,
+                "call_id": "call-a",
+                "room_id": "!local-smoke:example.test",
+                "peer_user_id": "@bob:local.test",
+                "intent": "audio",
+                "direction": "outgoing",
+                "device_id": "DEVICEA",
+            })
+
+        body = response.as_dict()
+        self.assertEqual(body["version"], 1)
+        self.assertEqual(body["allocation"]["call_id"], "call-a")
+        self.assertEqual(body["allocation"]["intent"], "audio")
+        self.assertTrue(body["livekit"]["room_name"].startswith("salemx-dc-"))
+        self.assertEqual(body["livekit"]["server_url"], "wss://local-smoke.livekit.invalid")
+        self.assertTrue(body["livekit"]["participant_token"])
 
 
 if __name__ == "__main__":
