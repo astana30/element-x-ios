@@ -13,10 +13,10 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.10T — production SDK key wrapper injection seam added.
+After 2.10U — production runtime SDK key wrapper provider seam added.
 
 Current app code checkpoint:
-000d1f12d `Add production key wrapper injection seam`
+2f8bc409a `Add production key envelope provider seam`
 
 Current SDK checkpoint:
 f7c2cfe5c `Add direct-call media key envelope crypto tests`
@@ -31,11 +31,11 @@ Artifact checksum:
 654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e
 
 Phase:
-2.10U — production runtime SDK key wrapper provider seam inspection/skeleton.
+2.10V — production direct-call dependency assembly inspection/skeleton.
 
 Task:
-Inspect and, if low-risk, add the narrow runtime provider seam needed to create a direct-call media key envelope wrapper from the Matrix SDK encryption object.
-Keep production direct calls disabled and fail-closed by default.
+Inspect and, if low-risk, add a disabled-by-default production dependency assembly seam for native direct calls.
+Do not activate production direct calls.
 Do not add visible UI.
 Do not modify Element Call route.
 Do not wire CallKit/push.
@@ -49,39 +49,44 @@ Context:
 - Swift wrapper commit `1e58d0a` exposes async direct-call key envelope APIs.
 - App dependency is pinned to that wrapper commit.
 - App key wrapping and encryption service protocols are async.
-- `MatrixSDKDirectCallMediaKeyWrapper` exists and maps app models to SDK FFI models.
-- `NativeDirectCallProductionDependenciesFactory` can now accept `MatrixSDKDirectCallMediaKeyEnvelopeWrappingProtocol` and construct the SDK-backed wrapper.
-- The production factory still defaults to disabled/fail-closed behavior.
-- No runtime session/client path currently supplies a Matrix SDK envelope wrapper to production dependency construction.
-- `FailClosedDirectCallMediaKeyWrapper` remains the default production wrapper.
+- `MatrixSDKDirectCallMediaKeyWrapper` maps app models to SDK FFI models.
+- `NativeDirectCallProductionDependenciesFactory` can accept explicit key wrappers or a runtime provider.
+- `DirectCallMediaKeyEnvelopeWrappingProviding` exists.
+- Concrete `ClientProxy` can provide a narrow SDK envelope wrapper backed by `client.encryption()`.
+- `ClientProxyProtocol`, `RoomProxyProtocol`, and `TimelineProxyProtocol` remain unchanged.
+- Production direct calls remain disabled/fail-closed by default.
 
 Inspect:
-1. `MatrixSDKDirectCallMediaKeyWrapper`
-2. `MatrixSDKDirectCallMediaKeyEnvelopeWrappingProtocol`
-3. `NativeDirectCallProductionDependenciesFactory`
-4. `ClientProxy` / `ClientProxyProtocol`
-5. `UserSession` / `UserSessionProtocol`
-6. `JoinedRoomProxy` / native direct-call room controller construction
-7. `RoomFlowCoordinator` and `NativeDirectCallRoomFlowOwner`
-8. AppCoordinator production vs DEBUG/integration diagnostic dependency construction
-9. MatrixRustSDK `Client.encryption()` and generated `EncryptionProtocol`
-10. Existing SDK proxy naming and dependency injection conventions
+1. `NativeDirectCallProductionDependenciesFactory`
+2. `DirectCallProductionConfiguration`
+3. `ProductionDirectCallLiveKitTokenClient`
+4. `DirectCallHTTPTransportProtocol`
+5. `DirectCallMatrixAccessTokenProviding`
+6. `URLSessionDirectCallHTTPTransport`
+7. `DirectCallLiveKitMediaEngineFactory`
+8. `LiveKitDirectCallClient`
+9. `DirectCallLiveKitMediaKeyStore`
+10. `DirectCallMediaKeyEnvelopeWrappingProviding`
+11. `ClientProxy` provider conformance
+12. `UserSession` / `UserSessionFlowCoordinator`
+13. `RoomFlowCoordinator` and `NativeDirectCallRoomFlowOwner`
+14. `AppCoordinator` production vs DEBUG/integration diagnostic dependency construction
 
 Questions:
-A. Where is the SDK encryption object available today without broadening app protocols?
-B. Can a narrow provider be added that returns only `MatrixSDKDirectCallMediaKeyEnvelopeWrappingProtocol`, not raw Matrix SDK client or raw crypto APIs?
-C. Should the provider be session-scoped, client-scoped, or room-flow-scoped?
-D. Can production dependencies remain disabled unless explicit production direct-call configuration is enabled?
-E. How should missing SDK encryption dependency fail closed?
-F. Should the initial trust policy remain `onlyTrustedDevices` with no UI override?
-G. What tests prove the provider seam does not activate production calls by default?
-H. What runtime path should eventually pass the provider into `NativeDirectCallRoomFlowOwner` without visible UI activation?
+A. Where should production native direct-call dependency assembly live without activating UI?
+B. Should assembly be session-scoped, room-flow-scoped, or app-coordinator-scoped?
+C. How should it receive production token endpoint configuration, HTTP transport, Matrix access-token provider, LiveKit client, shared media key store, and key envelope provider?
+D. Can the assembly remain nil/fail-closed unless explicit production config is enabled?
+E. Can the seam be added without reading diagnostic env, using `directOneToOneCallsEnabled`, or changing visible routes?
+F. How should missing backend config, access token provider, HTTP transport, LiveKit client, or key envelope provider fail closed?
+G. What tests prove production runtime remains disabled by default?
+H. What future phase should actually thread production dependencies into a guarded native direct-call room-flow path?
 
 Allowed implementation if contained:
-- Add a narrow protocol/adapter such as `DirectCallMediaKeyEnvelopeWrappingProviding` if needed.
-- Add a method/property that returns only a direct-call media key envelope wrapper, not raw SDK crypto APIs.
-- Wire the production dependencies factory or owner parameters to accept the provider dependency, but keep everything disabled by default.
-- Add tests with fake providers/adapters proving default fail-closed behavior and explicit injection behavior.
+- Add a small production dependency assembler/factory wrapper if it only returns nil/fail-closed by default.
+- Add initializer parameters or closure seams for production token transport/auth/key-envelope provider dependencies.
+- Add tests with fakes proving disabled defaults and explicit config assembly behavior.
+- Keep actual runtime UI/room-flow activation disabled.
 - Update docs when done.
 
 Hard constraints:
@@ -103,15 +108,15 @@ Validation:
 - SwiftFormat/SwiftLint on changed files
 - Targeted tests:
   - `UnitTests/DirectCallProductionKeyWrappingTests`
-  - `UnitTests/DirectCallEngineTests`
   - `UnitTests/DirectCallMediaEngineTests`
-  - `UnitTests/RoomFlowCoordinatorTests` if room-flow/session injection changes
+  - `UnitTests/DirectCallEngineTests`
+  - `UnitTests/RoomFlowCoordinatorTests` if room-flow/session seams change
 - Release build if production app files change
 - Forbidden scan for raw/debug/secret terms
 
 Expected output:
 1. Files inspected.
-2. Recommended runtime provider seam.
+2. Recommended production dependency assembly seam.
 3. Whether code changed.
 4. If changed: files/tests/build results.
 5. Fail-closed/default-disabled behavior.

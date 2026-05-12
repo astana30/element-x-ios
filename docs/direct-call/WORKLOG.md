@@ -133,3 +133,21 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Ran focused direct-call and RoomFlow unit tests, Release build, SwiftFormat/SwiftLint on changed files, `git diff --check`, and the direct-call forbidden scan.
 - Committed app changes as `000d1f12d Add production key wrapper injection seam`.
 - Recommended next phase: inspect/add a runtime provider seam that can obtain the SDK encryption object from the session/client layer and expose only a direct-call envelope wrapper to production dependency construction.
+
+## 2026-05-12 — 2.10U Production Runtime SDK Key Wrapper Provider Seam
+
+- Inspected the SDK-backed key wrapper, production dependency factory, `ClientProxy`, room-flow construction path, and existing SDK encryption usage.
+- Added `DirectCallMediaKeyEnvelopeWrappingProviding`, a narrow provider protocol that exposes only a direct-call media key envelope wrapper.
+- Kept broad app protocols unchanged: `ClientProxyProtocol`, `RoomProxyProtocol`, and `TimelineProxyProtocol` do not expose raw MatrixRustSDK client, room, timeline, event JSON, or crypto APIs.
+- Made concrete `ClientProxy` provide `MatrixSDKDirectCallMediaKeyEnvelopeWrapperAdapter` from its private `client.encryption()` dependency.
+- Updated `NativeDirectCallProductionDependenciesFactory` to use dependencies in safe precedence order:
+  - explicit `DirectCallMediaKeyWrappingProtocol`
+  - explicit `MatrixSDKDirectCallMediaKeyEnvelopeWrappingProtocol`
+  - runtime `DirectCallMediaKeyEnvelopeWrappingProviding`
+  - `FailClosedDirectCallMediaKeyWrapper`
+- Ensured the factory does not ask the runtime provider while production configuration is disabled.
+- Added tests proving provider-absent fail-closed behavior, provider-backed SDK wrapper construction, and explicit wrapper precedence.
+- Confirmed diagnostic direct-call encryption and LiveKit paths remain unaffected.
+- Ran `git diff --check`, SwiftFormat/SwiftLint on changed Swift files, focused direct-call and RoomFlow unit tests, Release build, and the direct-call forbidden scan.
+- Committed app changes as `2f8bc409a Add production key envelope provider seam`.
+- Recommended next phase: inspect/add a disabled production dependency assembly seam that can combine production config, token transport/auth, LiveKit client, shared media key store, and the key envelope provider without activating UI or production direct calls.

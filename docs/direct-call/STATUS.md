@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-After 2.10T — production SDK key wrapper injection seam added.
+After 2.10U — production runtime SDK key wrapper provider seam added.
 
 ## Latest App Code Checkpoint
 
-000d1f12d `Add production key wrapper injection seam`
+2f8bc409a `Add production key envelope provider seam`
 
 ## Latest Code Checkpoint
 
@@ -82,21 +82,30 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - No broad MatrixRustSDK client, room, timeline, or raw crypto API was exposed through app protocols.
   - Production direct calls remain disabled by default.
   - Focused app unit tests and Release build pass after the injection seam.
+- Production runtime SDK key wrapper provider seam is complete:
+  - `DirectCallMediaKeyEnvelopeWrappingProviding` exposes only a direct-call envelope wrapper provider, not a raw SDK client, raw SDK room, raw timeline, or raw crypto object.
+  - Concrete `ClientProxy` can create `MatrixSDKDirectCallMediaKeyEnvelopeWrapperAdapter` from `client.encryption()` through that narrow provider seam.
+  - `ClientProxyProtocol`, `RoomProxyProtocol`, and `TimelineProxyProtocol` remain unchanged.
+  - `NativeDirectCallProductionDependenciesFactory` can use an explicit wrapper first, then an explicit SDK envelope wrapper, then the runtime provider, and finally the fail-closed wrapper.
+  - The production factory does not ask the runtime provider while production direct-call configuration is disabled.
+  - Missing provider/wrapper dependencies remain fail-closed.
+  - Diagnostic direct-call encryption and LiveKit paths remain isolated behind DEBUG/integration gates.
+  - Focused app unit tests, Release build, and forbidden scan pass after the provider seam.
 
 ## Current Blocker
 
 - Production backend is still skeleton/fake mode.
-- Production E2EE Matrix crypto key wrapping is not integrated in the app runtime; the default app seam is still fail-closed unless an explicit wrapper is supplied.
-- Production dependency construction can now accept a narrow SDK direct-call envelope wrapper, but no session/client runtime path supplies one yet.
-- A production runtime provider seam must bridge the SDK encryption object into the production key-store path without exposing unencrypted key material in logs, diagnostics, or Matrix signal content.
+- Production E2EE Matrix crypto key wrapping now has a narrow runtime provider seam, but production direct-call dependency assembly is still not wired into the real runtime.
+- No production runtime path yet constructs `NativeDirectCallProductionDependenciesFactory` from production config, token transport/auth, LiveKit client, shared media key store, and the key envelope provider.
+- The default app path remains fail-closed unless future production configuration and dependency assembly explicitly enable native direct-call dependencies.
 - The production trust policy for peer devices is not finalized; the safest initial policy should fail closed on unknown or unverifiable device trust.
 - No production activation, visible UI, CallKit, or push integration exists yet.
 
 ## Next Recommended Phase
 
-`2.10U — production runtime SDK key wrapper provider seam inspection/skeleton`
+`2.10V — production direct-call dependency assembly inspection/skeleton`
 
-Goal: identify and, if safe, add the narrow session/client provider seam that can create a direct-call media key envelope wrapper from the SDK encryption object without exposing broad MatrixRustSDK APIs or activating production direct calls.
+Goal: inspect and, if safe, add a disabled-by-default assembly seam that can build production native direct-call dependencies from production configuration, token transport/auth, LiveKit client, shared media key store, and the narrow SDK key envelope provider without activating UI or production direct calls.
 
 ## Do-Not-Touch Constraints
 
