@@ -1,0 +1,51 @@
+"""FastAPI entrypoint for the SalemX native direct-call token service."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from fastapi import FastAPI, Header, Request
+from fastapi.responses import JSONResponse
+
+from .allocation import InMemoryAllocationStore
+from .auth import SynapseMatrixAuthValidator
+from .config import ServiceConfig
+from .errors import CallServiceError, bad_request
+from .livekit_tokens import LiveKitJWTTokenIssuer
+from .logging_utils import configure_logging
+from .room_validation import SynapseRoomValidator
+from .service import DirectCallTokenService, error_response
+
+ENDPOINT_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/livekit/token"
+
+
+def create_app(config: ServiceConfig | None = None, token_service: DirectCallTokenService | None = None) -> FastAPI:
+    config = config or ServiceConfig.from_env()
+    configure_logging(config.log_level)
+
+    service = token_service or DirectCallTokenService(
+        auth_validator=SynapseMatrixAuthValidator(config.synapse_base_url),
+        room_validator=SynapseRoomValidator(config.synapse_base_url, config.synapse_admin_token),
+        allocation_store=InMemoryAllocationStore(config.allocation_ttl_seconds),
+        token_issuer=LiveKitJWTTokenIssuer(config.livekit_api_key, config.livekit_api_secret, config.token_ttl_seconds),
+        livekit_server_url=config.livekit_url,
+    )
+
+    app = FastAPI(title="SalemX Direct Call Service", version="0.1.0")
+
+    @app.post(ENDPOINT_PATH)
+    async def livekit_token(request: Request, authorization: str | None = Header(default=None)) -> JSONResponse:
+        try:
+            payload: Any = await request.json()
+            if not isinstance(payload, dict):
+                raise bad_request(error="Request body must be a JSON object.")
+            response = await service.issue_token(authorization, payload)
+            return JSONResponse(status_code=200, content=response.as_dict())
+        except CallServiceError as error:
+            status_code, body = error_response(error)
+            return JSONResponse(status_code=status_code, content=body)
+
+    return app
+
+
+app = create_app()
