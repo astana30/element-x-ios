@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-After 2.10R — Matrix SDK direct-call media key envelope wrapper artifact published and app dependency pinned.
+After 2.10S — async app-side Matrix SDK direct-call key wrapper skeleton added.
 
 ## Latest App Code Checkpoint
 
-06fdf5f28 `Pin Matrix SDK direct-call key envelope bindings`
+9882b6ffa `Add async Matrix SDK direct-call key wrapper`
 
 ## Latest Code Checkpoint
 
@@ -65,21 +65,30 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Wrapper `swift package resolve` and `swift package describe` pass using the published URL and checksum.
   - App `project.yml`, generated Xcode project, and `compound-ios/Package.resolved` are pinned to wrapper commit `1e58d0a4317e3ff74c2d565cf532bc8d035bcc8f`.
   - Focused app unit tests and Release build pass after the pin.
+- App-side async Matrix SDK key wrapper skeleton is complete:
+  - Generated MatrixRustSDK bindings expose async `wrapDirectCallMediaKey(...)` and `unwrapDirectCallMediaKeyEnvelope(...)` methods on `EncryptionProtocol`.
+  - `DirectCallMediaKeyWrappingProtocol` and `DirectCallEncryptionServiceProtocol` are now async at the key wrap/unwrap boundary.
+  - `DirectCallEngine` awaits key generation and remote key consume in already-async call paths.
+  - `MatrixSDKDirectCallMediaKeyWrapper` maps app wrap/unwrap request models to the generated SDK FFI models and maps SDK envelope results back to redacted app models.
+  - Missing SDK encryption dependency still fails closed.
+  - `FailClosedDirectCallMediaKeyWrapper` remains the default production wrapper.
+  - The SDK-backed wrapper is not injected into production runtime.
+  - Focused app unit tests and Release build pass after the async skeleton.
 
 ## Current Blocker
 
 - Production backend is still skeleton/fake mode.
-- Production E2EE Matrix crypto key wrapping is not integrated in the app runtime; the app seam is still fail-closed by default.
-- The app-side `DirectCallMediaKeyWrappingProtocol` and `DirectCallEncryptionServiceProtocol` are synchronous today, while the published SDK wrapping seam is async.
-- A production SDK-backed app wrapper must bridge the new MatrixRustSDK API into the existing production key-store path without exposing unencrypted key material in logs, diagnostics, or Matrix signal content.
+- Production E2EE Matrix crypto key wrapping is not integrated in the app runtime; the default app seam is still fail-closed.
+- The app now has an async SDK-backed wrapper skeleton, but production dependency construction does not yet provide a MatrixRustSDK `EncryptionProtocol` or a narrow direct-call key envelope adapter to `NativeDirectCallProductionDependenciesFactory`.
+- A production runtime injection seam must bridge the SDK encryption object into the production key-store path without exposing unencrypted key material in logs, diagnostics, or Matrix signal content.
 - The production trust policy for peer devices is not finalized; the safest initial policy should fail closed on unknown or unverifiable device trust.
 - No production activation, visible UI, CallKit, or push integration exists yet.
 
 ## Next Recommended Phase
 
-`2.10S — app async production key wrapper integration inspection/skeleton`
+`2.10T — production SDK key wrapper injection seam inspection/skeleton`
 
-Goal: adapt the app-side production key wrapping seam for the async Matrix SDK envelope API and add a fail-closed SDK-backed wrapper skeleton without activating production direct calls.
+Goal: identify and, if safe, add the narrow app dependency injection seam that lets the production dependencies factory receive a Matrix SDK direct-call key envelope wrapper while keeping production direct calls disabled by default.
 
 ## Do-Not-Touch Constraints
 

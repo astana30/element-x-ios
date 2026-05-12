@@ -100,3 +100,22 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Ran the app Release build after the pin.
 - Kept production direct calls disabled; no visible UI, Element Call route, CallKit, push, or production feature activation was changed.
 - Recommended next phase: adapt the app production key-wrapping seam to the async SDK envelope API while preserving fail-closed default behavior.
+
+## 2026-05-12 — 2.10S App Async Matrix SDK Key Wrapper Skeleton
+
+- Inspected the generated MatrixRustSDK Swift API from the pinned wrapper artifact.
+- Confirmed the direct-call media key envelope SDK methods are async on `EncryptionProtocol`:
+  - `wrapDirectCallMediaKey(info:)`
+  - `unwrapDirectCallMediaKeyEnvelope(info:envelope:)`
+- Confirmed the generated SDK models carry call, room, sender, recipient, intent, key ID, expiry, and opaque ciphertext metadata without exposing raw Matrix event JSON.
+- Migrated the app key wrapping boundary to async in `DirectCallMediaKeyWrappingProtocol`.
+- Migrated `DirectCallEncryptionServiceProtocol` key generation and remote key consume methods to async, with `DirectCallEngine` awaiting them in already-async call paths.
+- Added `MatrixSDKDirectCallMediaKeyWrapper`, a production-shaped adapter that maps app wrap/unwrap request models to the generated SDK FFI models and maps SDK envelopes/results back to app models.
+- Kept the SDK-backed wrapper fail-closed when no SDK encryption dependency is injected.
+- Kept `FailClosedDirectCallMediaKeyWrapper` as the default production wrapper and did not inject the SDK-backed wrapper into runtime production dependencies.
+- Added tests with a fake SDK adapter proving request mapping, envelope/result mapping, SDK failure mapping, redacted descriptions, and fail-closed missing dependency behavior.
+- Confirmed diagnostic encryption remains compatible with the async protocol and still isolated behind DEBUG/integration gates.
+- Ran focused app unit tests for production key wrapping, direct-call engine, and media engine coverage.
+- Ran the app Release build.
+- Committed app changes as `9882b6ffa Add async Matrix SDK direct-call key wrapper`.
+- Recommended next phase: inspect or add the narrow production dependency injection seam that supplies a Matrix SDK direct-call key envelope wrapper to the production factory while keeping runtime activation disabled.
