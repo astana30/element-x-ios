@@ -1525,13 +1525,93 @@ final class DirectCallMediaProviderSkeletonTests {
         let request = DirectCallLiveKitTokenRequest(callID: callID,
                                                     roomID: roomID,
                                                     peerUserID: peerUserID,
-                                                    intent: .audio)
+                                                    intent: .audio,
+                                                    direction: .incoming,
+                                                    deviceID: "DEVICEID",
+                                                    clientTransactionID: "txn-a")
 
         #expect(request.intent == .audio)
+        #expect(request.direction == .incoming)
         #expect(String(describing: request).contains(roomID) == false)
         #expect(String(describing: request).contains(peerUserID) == false)
+        #expect(String(describing: request).contains("DEVICEID") == false)
+        #expect(String(describing: request).contains("txn-a") == false)
         #expect(String(reflecting: request).contains(roomID) == false)
         #expect(String(reflecting: request).contains(peerUserID) == false)
+    }
+
+    @Test
+    func productionLiveKitTokenRequestDTOEncodesContractJSON() throws {
+        let request = DirectCallLiveKitTokenRequest(callID: callID,
+                                                    roomID: roomID,
+                                                    peerUserID: peerUserID,
+                                                    intent: .audio,
+                                                    direction: .incoming,
+                                                    deviceID: "DEVICEID",
+                                                    clientTransactionID: "txn-a")
+        let dto = DirectCallProductionLiveKitTokenRequestDTO(request: request)
+
+        let data = try JSONEncoder().encode(dto)
+        let payload = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        #expect(payload["version"] as? Int == 1)
+        #expect(payload["call_id"] as? String == callID)
+        #expect(payload["room_id"] as? String == roomID)
+        #expect(payload["peer_user_id"] as? String == peerUserID)
+        #expect(payload["intent"] as? String == "audio")
+        #expect(payload["direction"] as? String == "incoming")
+        #expect(payload["device_id"] as? String == "DEVICEID")
+        #expect(payload["client_transaction_id"] as? String == "txn-a")
+        #expect(String(describing: dto).contains(roomID) == false)
+        #expect(String(describing: dto).contains(peerUserID) == false)
+    }
+
+    @Test
+    func productionLiveKitTokenResponseDTODecodesContractJSONAndRedactsCredentials() throws {
+        let data = Data("""
+        {
+          "version": 1,
+          "livekit": {
+            "server_url": "wss://livekit.example.com",
+            "room_name": "opaque-room",
+            "participant_token": "participant-credential",
+            "expires_at": "2026-05-11T12:00:00Z"
+          },
+          "allocation": {
+            "id": "allocation-a",
+            "call_id": "call-a",
+            "intent": "audio"
+          }
+        }
+        """.utf8)
+
+        let dto = try JSONDecoder().decode(DirectCallProductionLiveKitTokenResponseDTO.self, from: data)
+
+        #expect(dto.version == 1)
+        #expect(dto.liveKit.serverURL == "wss://livekit.example.com")
+        #expect(dto.liveKit.roomName == "opaque-room")
+        #expect(dto.liveKit.participantToken == "participant-credential")
+        #expect(dto.allocation.callID == "call-a")
+        #expect(String(describing: dto).contains("wss://livekit.example.com") == false)
+        #expect(String(describing: dto).contains("participant-credential") == false)
+        #expect(String(reflecting: dto).contains("participant-credential") == false)
+    }
+
+    @Test
+    func productionLiveKitTokenErrorDTODecodesContractJSONAndRedactsBody() throws {
+        let data = Data("""
+        {
+          "errcode": "M_DIRECT_CALL_RATE_LIMITED",
+          "error": "Detailed backend text should not be logged",
+          "retry_after_ms": 30000
+        }
+        """.utf8)
+
+        let dto = try JSONDecoder().decode(DirectCallProductionLiveKitTokenErrorDTO.self, from: data)
+
+        #expect(dto.errcode == "M_DIRECT_CALL_RATE_LIMITED")
+        #expect(dto.retryAfterMS == 30000)
+        #expect(String(describing: dto).contains("Detailed backend text") == false)
     }
 
     @Test
@@ -1551,10 +1631,147 @@ final class DirectCallMediaProviderSkeletonTests {
     }
 
     @Test
-    func productionLiveKitTokenClientFailsClosedWithoutBackendImplementation() async throws {
+    func productionLiveKitTokenClientFailsClosedWhenConfigurationAuthOrHTTPIsMissing() async throws {
         let endpointURL = try #require(URL(string: "https://call-service.example.com/direct-calls"))
         let configuration = DirectCallProductionLiveKitConfiguration(tokenEndpointURL: endpointURL)
-        let client = ProductionDirectCallLiveKitTokenClient(configuration: configuration)
+        let request = DirectCallLiveKitTokenRequest(callID: callID,
+                                                    roomID: roomID,
+                                                    peerUserID: peerUserID)
+        let httpClient = DirectCallHTTPClientSpy()
+
+        let missingConfigClient = ProductionDirectCallLiveKitTokenClient(httpClient: httpClient,
+                                                                         accessTokenProvider: MatrixAccessTokenProviderStub(accessToken: "matrix-credential"))
+        let missingHTTPClient = ProductionDirectCallLiveKitTokenClient(configuration: configuration,
+                                                                       accessTokenProvider: MatrixAccessTokenProviderStub(accessToken: "matrix-credential"))
+        let missingAuthClient = ProductionDirectCallLiveKitTokenClient(configuration: configuration,
+                                                                       httpClient: httpClient)
+
+        #expect(await missingConfigClient.connection(for: request) == .failure(.tokenUnavailable))
+        #expect(await missingHTTPClient.connection(for: request) == .failure(.tokenUnavailable))
+        #expect(await missingAuthClient.connection(for: request) == .failure(.tokenUnavailable))
+        #expect(httpClient.requests.isEmpty)
+        #expect(String(describing: configuration).contains(endpointURL.absoluteString) == false)
+        #expect(String(describing: missingConfigClient).contains(endpointURL.absoluteString) == false)
+    }
+
+    @Test
+    func productionLiveKitTokenClientBuildsRedactedHTTPTokenRequest() async throws {
+        let endpointURL = try #require(URL(string: "https://call-service.example.com/_matrix/client/unstable/kz.salemx.direct_call/livekit/token"))
+        let responseData = Data("""
+        {
+          "version": 1,
+          "livekit": {
+            "server_url": "wss://livekit.example.com",
+            "room_name": "opaque-room",
+            "participant_token": "participant-credential",
+            "expires_at": "2026-05-11T12:00:00Z"
+          },
+          "allocation": {
+            "id": "allocation-a",
+            "call_id": "call-a",
+            "intent": "audio"
+          }
+        }
+        """.utf8)
+        let httpClient = DirectCallHTTPClientSpy(result: .success(.init(statusCode: 200, data: responseData)))
+        let client = ProductionDirectCallLiveKitTokenClient(configuration: .init(tokenEndpointURL: endpointURL),
+                                                            httpClient: httpClient,
+                                                            accessTokenProvider: MatrixAccessTokenProviderStub(accessToken: "matrix-credential"))
+        let request = DirectCallLiveKitTokenRequest(callID: callID,
+                                                    roomID: roomID,
+                                                    peerUserID: peerUserID,
+                                                    intent: .audio,
+                                                    direction: .incoming,
+                                                    deviceID: "DEVICEID",
+                                                    clientTransactionID: "txn-a")
+
+        let response = try await client.connection(for: request).get()
+
+        #expect(response.serverURLString == "wss://livekit.example.com")
+        #expect(response.roomName == "opaque-room")
+        #expect(response.token == "participant-credential")
+        let urlRequest = try #require(httpClient.requests.first)
+        #expect(httpClient.requests.count == 1)
+        #expect(urlRequest.url == endpointURL)
+        #expect(urlRequest.httpMethod == "POST")
+        #expect(urlRequest.value(forHTTPHeaderField: "Accept") == "application/json")
+        #expect(urlRequest.value(forHTTPHeaderField: "Content-Type") == "application/json")
+        #expect(urlRequest.value(forHTTPHeaderField: "Authorization") == "Bearer matrix-credential")
+        let body = try #require(urlRequest.httpBody)
+        let bodyDTO = try JSONDecoder().decode(DirectCallProductionLiveKitTokenRequestDTO.self, from: body)
+        #expect(bodyDTO.callID == callID)
+        #expect(bodyDTO.roomID == roomID)
+        #expect(bodyDTO.peerUserID == peerUserID)
+        #expect(bodyDTO.direction == .incoming)
+        #expect(bodyDTO.deviceID == "DEVICEID")
+        #expect(bodyDTO.clientTransactionID == "txn-a")
+        #expect(String(describing: client).contains(endpointURL.absoluteString) == false)
+        #expect(String(describing: response).contains("participant-credential") == false)
+    }
+
+    @Test
+    func productionLiveKitTokenClientFailsClosedForUnsupportedIntentBeforeHTTP() async throws {
+        let endpointURL = try #require(URL(string: "https://call-service.example.com/direct-calls"))
+        let httpClient = DirectCallHTTPClientSpy()
+        let client = ProductionDirectCallLiveKitTokenClient(configuration: .init(tokenEndpointURL: endpointURL),
+                                                            httpClient: httpClient,
+                                                            accessTokenProvider: MatrixAccessTokenProviderStub(accessToken: "matrix-credential"))
+        let request = DirectCallLiveKitTokenRequest(callID: callID,
+                                                    roomID: roomID,
+                                                    peerUserID: peerUserID,
+                                                    intent: .video)
+
+        let result = await client.connection(for: request)
+
+        #expect(result == .failure(.unsupportedIntent))
+        #expect(httpClient.requests.isEmpty)
+    }
+
+    @Test
+    func productionLiveKitTokenClientMapsBackendErrorsFailClosed() async throws {
+        let endpointURL = try #require(URL(string: "https://call-service.example.com/direct-calls"))
+        let ineligibleRoomBody = Data("""
+        {
+          "errcode": "M_ROOM_NOT_ENCRYPTED",
+          "error": "Room is not eligible.",
+          "retry_after_ms": 30000
+        }
+        """.utf8)
+        let httpClient = DirectCallHTTPClientSpy(result: .success(.init(statusCode: 403, data: ineligibleRoomBody)))
+        let client = ProductionDirectCallLiveKitTokenClient(configuration: .init(tokenEndpointURL: endpointURL),
+                                                            httpClient: httpClient,
+                                                            accessTokenProvider: MatrixAccessTokenProviderStub(accessToken: "matrix-credential"))
+        let request = DirectCallLiveKitTokenRequest(callID: callID,
+                                                    roomID: roomID,
+                                                    peerUserID: peerUserID)
+
+        let result = await client.connection(for: request)
+
+        #expect(result == .failure(.invalidSession))
+    }
+
+    @Test
+    func productionLiveKitTokenClientRejectsMismatchedAllocation() async throws {
+        let endpointURL = try #require(URL(string: "https://call-service.example.com/direct-calls"))
+        let responseData = Data("""
+        {
+          "version": 1,
+          "livekit": {
+            "server_url": "wss://livekit.example.com",
+            "room_name": "opaque-room",
+            "participant_token": "participant-credential"
+          },
+          "allocation": {
+            "id": "allocation-a",
+            "call_id": "other-call",
+            "intent": "audio"
+          }
+        }
+        """.utf8)
+        let httpClient = DirectCallHTTPClientSpy(result: .success(.init(statusCode: 200, data: responseData)))
+        let client = ProductionDirectCallLiveKitTokenClient(configuration: .init(tokenEndpointURL: endpointURL),
+                                                            httpClient: httpClient,
+                                                            accessTokenProvider: MatrixAccessTokenProviderStub(accessToken: "matrix-credential"))
         let request = DirectCallLiveKitTokenRequest(callID: callID,
                                                     roomID: roomID,
                                                     peerUserID: peerUserID)
@@ -1562,8 +1779,6 @@ final class DirectCallMediaProviderSkeletonTests {
         let result = await client.connection(for: request)
 
         #expect(result == .failure(.tokenUnavailable))
-        #expect(String(describing: configuration).contains(endpointURL.absoluteString) == false)
-        #expect(String(describing: client).contains(endpointURL.absoluteString) == false)
     }
 
     @Test
@@ -2077,6 +2292,30 @@ private final class DirectCallLiveKitTokenClientSpy: DirectCallLiveKitTokenClien
     func connection(for request: DirectCallLiveKitTokenRequest) async -> Result<DirectCallLiveKitTokenResponse, DirectCallMediaError> {
         requests.append(request)
         return result
+    }
+}
+
+@MainActor
+private final class DirectCallHTTPClientSpy: DirectCallHTTPClientProtocol {
+    private(set) var requests = [URLRequest]()
+    var result: Result<DirectCallHTTPResponse, DirectCallMediaError>
+
+    init(result: Result<DirectCallHTTPResponse, DirectCallMediaError> = .failure(.tokenUnavailable)) {
+        self.result = result
+    }
+
+    func data(for request: URLRequest) async -> Result<DirectCallHTTPResponse, DirectCallMediaError> {
+        requests.append(request)
+        return result
+    }
+}
+
+@MainActor
+private struct MatrixAccessTokenProviderStub: DirectCallMatrixAccessTokenProviding {
+    let accessToken: String?
+
+    func matrixAccessToken() async -> String? {
+        accessToken
     }
 }
 

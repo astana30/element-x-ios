@@ -33,21 +33,47 @@ protocol DirectCallMediaTokenProviderProtocol {
     func connectionInfo(for session: DirectCallSession) async -> Result<DirectCallMediaConnectionInfo, DirectCallMediaError>
 }
 
+enum DirectCallLiveKitTokenDirection: String, Codable, Equatable {
+    case incoming
+    case outgoing
+
+    init(_ direction: DirectCallDirection) {
+        switch direction {
+        case .incoming:
+            self = .incoming
+        case .outgoing:
+            self = .outgoing
+        }
+    }
+}
+
 struct DirectCallLiveKitTokenRequest: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     let callID: String
     let roomID: String
     let peerUserID: String
     let intent: DirectCallIntent
+    let direction: DirectCallLiveKitTokenDirection
+    let deviceID: String?
+    let clientTransactionID: String?
 
-    init(callID: String, roomID: String, peerUserID: String, intent: DirectCallIntent = .audio) {
+    init(callID: String,
+         roomID: String,
+         peerUserID: String,
+         intent: DirectCallIntent = .audio,
+         direction: DirectCallLiveKitTokenDirection = .outgoing,
+         deviceID: String? = nil,
+         clientTransactionID: String? = nil) {
         self.callID = callID
         self.roomID = roomID
         self.peerUserID = peerUserID
         self.intent = intent
+        self.direction = direction
+        self.deviceID = deviceID
+        self.clientTransactionID = clientTransactionID
     }
 
     var description: String {
-        "DirectCallLiveKitTokenRequest(callID: \(callID), roomID: <redacted>, peerUserID: <redacted>, intent: \(intent.rawValue))"
+        "DirectCallLiveKitTokenRequest(callID: \(callID), roomID: <redacted>, peerUserID: <redacted>, intent: \(intent.rawValue), direction: \(direction.rawValue), deviceID: <redacted>, clientTransactionID: <redacted>)"
     }
 
     var debugDescription: String {
@@ -68,6 +94,144 @@ struct DirectCallLiveKitTokenResponse: Equatable, CustomStringConvertible {
 @MainActor
 protocol DirectCallLiveKitTokenClientProtocol {
     func connection(for request: DirectCallLiveKitTokenRequest) async -> Result<DirectCallLiveKitTokenResponse, DirectCallMediaError>
+}
+
+struct DirectCallProductionLiveKitTokenRequestDTO: Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let version: Int
+    let callID: String
+    let roomID: String
+    let peerUserID: String
+    let intent: String
+    let direction: DirectCallLiveKitTokenDirection
+    let deviceID: String?
+    let clientTransactionID: String?
+
+    init(version: Int = 1, request: DirectCallLiveKitTokenRequest) {
+        self.version = version
+        callID = request.callID
+        roomID = request.roomID
+        peerUserID = request.peerUserID
+        intent = request.intent.rawValue
+        direction = request.direction
+        deviceID = request.deviceID
+        clientTransactionID = request.clientTransactionID
+    }
+
+    var description: String {
+        "DirectCallProductionLiveKitTokenRequestDTO(version: \(version), callID: \(callID), roomID: <redacted>, peerUserID: <redacted>, intent: \(intent), direction: \(direction.rawValue), deviceID: <redacted>, clientTransactionID: <redacted>)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case version
+        case callID = "call_id"
+        case roomID = "room_id"
+        case peerUserID = "peer_user_id"
+        case intent
+        case direction
+        case deviceID = "device_id"
+        case clientTransactionID = "client_transaction_id"
+    }
+}
+
+struct DirectCallProductionLiveKitTokenResponseDTO: Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    struct LiveKit: Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+        let serverURL: String
+        let roomName: String
+        let participantToken: String
+        let expiresAt: String?
+
+        var description: String {
+            "LiveKit(serverURL: <redacted>, roomName: \(roomName), participantToken: <redacted>, expiresAt: \(expiresAt ?? "<nil>"))"
+        }
+
+        var debugDescription: String {
+            description
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case serverURL = "server_url"
+            case roomName = "room_name"
+            case participantToken = "participant_token"
+            case expiresAt = "expires_at"
+        }
+    }
+
+    struct Allocation: Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+        let id: String
+        let callID: String
+        let intent: String
+
+        var description: String {
+            "Allocation(id: <redacted>, callID: \(callID), intent: \(intent))"
+        }
+
+        var debugDescription: String {
+            description
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case id
+            case callID = "call_id"
+            case intent
+        }
+    }
+
+    let version: Int
+    let liveKit: LiveKit
+    let allocation: Allocation
+
+    var description: String {
+        "DirectCallProductionLiveKitTokenResponseDTO(version: \(version), liveKit: \(liveKit), allocation: \(allocation))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case version
+        case liveKit = "livekit"
+        case allocation
+    }
+}
+
+struct DirectCallProductionLiveKitTokenErrorDTO: Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let errcode: String
+    let error: String
+    let retryAfterMS: Int?
+
+    var description: String {
+        "DirectCallProductionLiveKitTokenErrorDTO(errcode: \(errcode), error: <redacted>, retryAfterMS: \(String(describing: retryAfterMS)))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case errcode
+        case error
+        case retryAfterMS = "retry_after_ms"
+    }
+}
+
+struct DirectCallHTTPResponse: Equatable {
+    let statusCode: Int
+    let data: Data
+}
+
+@MainActor
+protocol DirectCallHTTPClientProtocol {
+    func data(for request: URLRequest) async -> Result<DirectCallHTTPResponse, DirectCallMediaError>
+}
+
+@MainActor
+protocol DirectCallMatrixAccessTokenProviding {
+    func matrixAccessToken() async -> String?
 }
 
 struct DirectCallProductionLiveKitConfiguration: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
@@ -114,18 +278,60 @@ final class UnavailableDirectCallLiveKitTokenClient: DirectCallLiveKitTokenClien
 @MainActor
 final class ProductionDirectCallLiveKitTokenClient: DirectCallLiveKitTokenClientProtocol, CustomStringConvertible, CustomDebugStringConvertible {
     private let configuration: DirectCallProductionLiveKitConfiguration
+    private let httpClient: DirectCallHTTPClientProtocol?
+    private let accessTokenProvider: DirectCallMatrixAccessTokenProviding?
+    private let jsonEncoder: JSONEncoder
+    private let jsonDecoder: JSONDecoder
 
-    init(configuration: DirectCallProductionLiveKitConfiguration = .init()) {
+    init(configuration: DirectCallProductionLiveKitConfiguration = .init(),
+         httpClient: DirectCallHTTPClientProtocol? = nil,
+         accessTokenProvider: DirectCallMatrixAccessTokenProviding? = nil,
+         jsonEncoder: JSONEncoder = JSONEncoder(),
+         jsonDecoder: JSONDecoder = JSONDecoder()) {
         self.configuration = configuration
+        self.httpClient = httpClient
+        self.accessTokenProvider = accessTokenProvider
+        self.jsonEncoder = jsonEncoder
+        self.jsonDecoder = jsonDecoder
     }
 
     func connection(for request: DirectCallLiveKitTokenRequest) async -> Result<DirectCallLiveKitTokenResponse, DirectCallMediaError> {
-        guard configuration.isConfigured else {
+        guard request.intent == .audio else {
+            return .failure(.unsupportedIntent)
+        }
+
+        guard let endpointURL = configuration.tokenEndpointURL else {
             return .failure(.tokenUnavailable)
         }
 
-        // The backend token contract is intentionally not implemented yet.
-        return .failure(.tokenUnavailable)
+        guard let httpClient else {
+            return .failure(.tokenUnavailable)
+        }
+
+        guard let accessTokenProvider,
+              let accessToken = await accessTokenProvider.matrixAccessToken(),
+              !accessToken.isEmpty else {
+            return .failure(.tokenUnavailable)
+        }
+
+        var urlRequest = URLRequest(url: endpointURL)
+        urlRequest.httpMethod = "POST"
+        urlRequest.addValue("application/json", forHTTPHeaderField: "Accept")
+        urlRequest.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.addValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+
+        do {
+            urlRequest.httpBody = try jsonEncoder.encode(DirectCallProductionLiveKitTokenRequestDTO(request: request))
+        } catch {
+            return .failure(.tokenUnavailable)
+        }
+
+        switch await httpClient.data(for: urlRequest) {
+        case .success(let response):
+            return decodeConnectionResponse(response, for: request)
+        case .failure(let error):
+            return .failure(error)
+        }
     }
 
     nonisolated var description: String {
@@ -134,6 +340,51 @@ final class ProductionDirectCallLiveKitTokenClient: DirectCallLiveKitTokenClient
 
     nonisolated var debugDescription: String {
         description
+    }
+
+    private func decodeConnectionResponse(_ response: DirectCallHTTPResponse,
+                                          for request: DirectCallLiveKitTokenRequest) -> Result<DirectCallLiveKitTokenResponse, DirectCallMediaError> {
+        guard (200..<300).contains(response.statusCode) else {
+            return .failure(decodeError(response.data))
+        }
+
+        do {
+            let dto = try jsonDecoder.decode(DirectCallProductionLiveKitTokenResponseDTO.self, from: response.data)
+            return tokenResponse(from: dto, for: request)
+        } catch {
+            return .failure(.tokenUnavailable)
+        }
+    }
+
+    private func decodeError(_ data: Data) -> DirectCallMediaError {
+        guard let errorDTO = try? jsonDecoder.decode(DirectCallProductionLiveKitTokenErrorDTO.self, from: data) else {
+            return .tokenUnavailable
+        }
+
+        switch errorDTO.errcode {
+        case "M_DIRECT_CALL_UNSUPPORTED_INTENT":
+            return .unsupportedIntent
+        case "M_NOT_JOINED", "M_ROOM_NOT_ENCRYPTED", "M_DIRECT_CALL_NOT_1_TO_1", "M_DIRECT_CALL_PEER_MISMATCH":
+            return .invalidSession
+        default:
+            return .tokenUnavailable
+        }
+    }
+
+    private func tokenResponse(from dto: DirectCallProductionLiveKitTokenResponseDTO,
+                               for request: DirectCallLiveKitTokenRequest) -> Result<DirectCallLiveKitTokenResponse, DirectCallMediaError> {
+        guard dto.version == 1,
+              dto.allocation.callID == request.callID,
+              DirectCallIntent.parse(dto.allocation.intent) == request.intent,
+              !dto.liveKit.serverURL.isEmpty,
+              !dto.liveKit.roomName.isEmpty,
+              !dto.liveKit.participantToken.isEmpty else {
+            return .failure(.tokenUnavailable)
+        }
+
+        return .success(.init(serverURLString: dto.liveKit.serverURL,
+                              roomName: dto.liveKit.roomName,
+                              token: dto.liveKit.participantToken))
     }
 }
 
@@ -161,7 +412,8 @@ final class DirectCallLiveKitTokenProvider: DirectCallMediaTokenProviderProtocol
         let request = DirectCallLiveKitTokenRequest(callID: session.callID,
                                                     roomID: session.roomID,
                                                     peerUserID: session.peerUserID,
-                                                    intent: session.intent)
+                                                    intent: session.intent,
+                                                    direction: .init(session.direction))
         switch await tokenClient.connection(for: request) {
         case .success(let response):
             return Self.connectionInfo(from: response)
