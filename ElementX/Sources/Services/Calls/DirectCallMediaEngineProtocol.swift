@@ -219,14 +219,40 @@ struct DirectCallProductionLiveKitTokenErrorDTO: Codable, Equatable, CustomStrin
     }
 }
 
-struct DirectCallHTTPResponse: Equatable {
+struct DirectCallHTTPTransportRequest: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let url: URL
+    let method: String
+    let headers: [String: String]
+    let body: Data
+
+    static func postJSON(to url: URL, bearerAccessToken: String, body: Data) -> Self {
+        .init(url: url,
+              method: "POST",
+              headers: [
+                  "Accept": "application/json",
+                  "Authorization": "Bearer \(bearerAccessToken)",
+                  "Content-Type": "application/json"
+              ],
+              body: body)
+    }
+
+    var description: String {
+        "DirectCallHTTPTransportRequest(url: <redacted>, method: \(method), headers: <redacted>, bodyByteCount: \(body.count))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct DirectCallHTTPTransportResponse: Equatable {
     let statusCode: Int
     let data: Data
 }
 
 @MainActor
-protocol DirectCallHTTPClientProtocol {
-    func data(for request: URLRequest) async -> Result<DirectCallHTTPResponse, DirectCallMediaError>
+protocol DirectCallHTTPTransportProtocol {
+    func send(_ request: DirectCallHTTPTransportRequest) async -> Result<DirectCallHTTPTransportResponse, DirectCallMediaError>
 }
 
 @MainActor
@@ -278,18 +304,18 @@ final class UnavailableDirectCallLiveKitTokenClient: DirectCallLiveKitTokenClien
 @MainActor
 final class ProductionDirectCallLiveKitTokenClient: DirectCallLiveKitTokenClientProtocol, CustomStringConvertible, CustomDebugStringConvertible {
     private let configuration: DirectCallProductionLiveKitConfiguration
-    private let httpClient: DirectCallHTTPClientProtocol?
+    private let httpTransport: DirectCallHTTPTransportProtocol?
     private let accessTokenProvider: DirectCallMatrixAccessTokenProviding?
     private let jsonEncoder: JSONEncoder
     private let jsonDecoder: JSONDecoder
 
     init(configuration: DirectCallProductionLiveKitConfiguration = .init(),
-         httpClient: DirectCallHTTPClientProtocol? = nil,
+         httpTransport: DirectCallHTTPTransportProtocol? = nil,
          accessTokenProvider: DirectCallMatrixAccessTokenProviding? = nil,
          jsonEncoder: JSONEncoder = JSONEncoder(),
          jsonDecoder: JSONDecoder = JSONDecoder()) {
         self.configuration = configuration
-        self.httpClient = httpClient
+        self.httpTransport = httpTransport
         self.accessTokenProvider = accessTokenProvider
         self.jsonEncoder = jsonEncoder
         self.jsonDecoder = jsonDecoder
@@ -304,7 +330,7 @@ final class ProductionDirectCallLiveKitTokenClient: DirectCallLiveKitTokenClient
             return .failure(.tokenUnavailable)
         }
 
-        guard let httpClient else {
+        guard let httpTransport else {
             return .failure(.tokenUnavailable)
         }
 
@@ -314,19 +340,17 @@ final class ProductionDirectCallLiveKitTokenClient: DirectCallLiveKitTokenClient
             return .failure(.tokenUnavailable)
         }
 
-        var urlRequest = URLRequest(url: endpointURL)
-        urlRequest.httpMethod = "POST"
-        urlRequest.addValue("application/json", forHTTPHeaderField: "Accept")
-        urlRequest.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        urlRequest.addValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-
+        let requestData: Data
         do {
-            urlRequest.httpBody = try jsonEncoder.encode(DirectCallProductionLiveKitTokenRequestDTO(request: request))
+            requestData = try jsonEncoder.encode(DirectCallProductionLiveKitTokenRequestDTO(request: request))
         } catch {
             return .failure(.tokenUnavailable)
         }
 
-        switch await httpClient.data(for: urlRequest) {
+        let transportRequest = DirectCallHTTPTransportRequest.postJSON(to: endpointURL,
+                                                                       bearerAccessToken: accessToken,
+                                                                       body: requestData)
+        switch await httpTransport.send(transportRequest) {
         case .success(let response):
             return decodeConnectionResponse(response, for: request)
         case .failure(let error):
@@ -342,7 +366,7 @@ final class ProductionDirectCallLiveKitTokenClient: DirectCallLiveKitTokenClient
         description
     }
 
-    private func decodeConnectionResponse(_ response: DirectCallHTTPResponse,
+    private func decodeConnectionResponse(_ response: DirectCallHTTPTransportResponse,
                                           for request: DirectCallLiveKitTokenRequest) -> Result<DirectCallLiveKitTokenResponse, DirectCallMediaError> {
         guard (200..<300).contains(response.statusCode) else {
             return .failure(decodeError(response.data))

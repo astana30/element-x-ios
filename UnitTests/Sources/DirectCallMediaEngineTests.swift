@@ -1637,19 +1637,19 @@ final class DirectCallMediaProviderSkeletonTests {
         let request = DirectCallLiveKitTokenRequest(callID: callID,
                                                     roomID: roomID,
                                                     peerUserID: peerUserID)
-        let httpClient = DirectCallHTTPClientSpy()
+        let httpTransport = DirectCallHTTPTransportSpy()
 
-        let missingConfigClient = ProductionDirectCallLiveKitTokenClient(httpClient: httpClient,
+        let missingConfigClient = ProductionDirectCallLiveKitTokenClient(httpTransport: httpTransport,
                                                                          accessTokenProvider: MatrixAccessTokenProviderStub(accessToken: "matrix-credential"))
-        let missingHTTPClient = ProductionDirectCallLiveKitTokenClient(configuration: configuration,
-                                                                       accessTokenProvider: MatrixAccessTokenProviderStub(accessToken: "matrix-credential"))
+        let missingHTTPTransportClient = ProductionDirectCallLiveKitTokenClient(configuration: configuration,
+                                                                                accessTokenProvider: MatrixAccessTokenProviderStub(accessToken: "matrix-credential"))
         let missingAuthClient = ProductionDirectCallLiveKitTokenClient(configuration: configuration,
-                                                                       httpClient: httpClient)
+                                                                       httpTransport: httpTransport)
 
         #expect(await missingConfigClient.connection(for: request) == .failure(.tokenUnavailable))
-        #expect(await missingHTTPClient.connection(for: request) == .failure(.tokenUnavailable))
+        #expect(await missingHTTPTransportClient.connection(for: request) == .failure(.tokenUnavailable))
         #expect(await missingAuthClient.connection(for: request) == .failure(.tokenUnavailable))
-        #expect(httpClient.requests.isEmpty)
+        #expect(httpTransport.requests.isEmpty)
         #expect(String(describing: configuration).contains(endpointURL.absoluteString) == false)
         #expect(String(describing: missingConfigClient).contains(endpointURL.absoluteString) == false)
     }
@@ -1673,9 +1673,9 @@ final class DirectCallMediaProviderSkeletonTests {
           }
         }
         """.utf8)
-        let httpClient = DirectCallHTTPClientSpy(result: .success(.init(statusCode: 200, data: responseData)))
+        let httpTransport = DirectCallHTTPTransportSpy(result: .success(.init(statusCode: 200, data: responseData)))
         let client = ProductionDirectCallLiveKitTokenClient(configuration: .init(tokenEndpointURL: endpointURL),
-                                                            httpClient: httpClient,
+                                                            httpTransport: httpTransport,
                                                             accessTokenProvider: MatrixAccessTokenProviderStub(accessToken: "matrix-credential"))
         let request = DirectCallLiveKitTokenRequest(callID: callID,
                                                     roomID: roomID,
@@ -1690,15 +1690,14 @@ final class DirectCallMediaProviderSkeletonTests {
         #expect(response.serverURLString == "wss://livekit.example.com")
         #expect(response.roomName == "opaque-room")
         #expect(response.token == "participant-credential")
-        let urlRequest = try #require(httpClient.requests.first)
-        #expect(httpClient.requests.count == 1)
-        #expect(urlRequest.url == endpointURL)
-        #expect(urlRequest.httpMethod == "POST")
-        #expect(urlRequest.value(forHTTPHeaderField: "Accept") == "application/json")
-        #expect(urlRequest.value(forHTTPHeaderField: "Content-Type") == "application/json")
-        #expect(urlRequest.value(forHTTPHeaderField: "Authorization") == "Bearer matrix-credential")
-        let body = try #require(urlRequest.httpBody)
-        let bodyDTO = try JSONDecoder().decode(DirectCallProductionLiveKitTokenRequestDTO.self, from: body)
+        let transportRequest = try #require(httpTransport.requests.first)
+        #expect(httpTransport.requests.count == 1)
+        #expect(transportRequest.url == endpointURL)
+        #expect(transportRequest.method == "POST")
+        #expect(transportRequest.headers["Accept"] == "application/json")
+        #expect(transportRequest.headers["Content-Type"] == "application/json")
+        #expect(transportRequest.headers["Authorization"] == "Bearer matrix-credential")
+        let bodyDTO = try JSONDecoder().decode(DirectCallProductionLiveKitTokenRequestDTO.self, from: transportRequest.body)
         #expect(bodyDTO.callID == callID)
         #expect(bodyDTO.roomID == roomID)
         #expect(bodyDTO.peerUserID == peerUserID)
@@ -1707,14 +1706,16 @@ final class DirectCallMediaProviderSkeletonTests {
         #expect(bodyDTO.clientTransactionID == "txn-a")
         #expect(String(describing: client).contains(endpointURL.absoluteString) == false)
         #expect(String(describing: response).contains("participant-credential") == false)
+        #expect(String(describing: transportRequest).contains(endpointURL.absoluteString) == false)
+        #expect(String(describing: transportRequest).contains("matrix-credential") == false)
     }
 
     @Test
     func productionLiveKitTokenClientFailsClosedForUnsupportedIntentBeforeHTTP() async throws {
         let endpointURL = try #require(URL(string: "https://call-service.example.com/direct-calls"))
-        let httpClient = DirectCallHTTPClientSpy()
+        let httpTransport = DirectCallHTTPTransportSpy()
         let client = ProductionDirectCallLiveKitTokenClient(configuration: .init(tokenEndpointURL: endpointURL),
-                                                            httpClient: httpClient,
+                                                            httpTransport: httpTransport,
                                                             accessTokenProvider: MatrixAccessTokenProviderStub(accessToken: "matrix-credential"))
         let request = DirectCallLiveKitTokenRequest(callID: callID,
                                                     roomID: roomID,
@@ -1724,22 +1725,54 @@ final class DirectCallMediaProviderSkeletonTests {
         let result = await client.connection(for: request)
 
         #expect(result == .failure(.unsupportedIntent))
-        #expect(httpClient.requests.isEmpty)
+        #expect(httpTransport.requests.isEmpty)
     }
 
     @Test
     func productionLiveKitTokenClientMapsBackendErrorsFailClosed() async throws {
         let endpointURL = try #require(URL(string: "https://call-service.example.com/direct-calls"))
-        let ineligibleRoomBody = Data("""
-        {
-          "errcode": "M_ROOM_NOT_ENCRYPTED",
-          "error": "Room is not eligible.",
-          "retry_after_ms": 30000
+        let request = DirectCallLiveKitTokenRequest(callID: callID,
+                                                    roomID: roomID,
+                                                    peerUserID: peerUserID)
+        struct BackendErrorCase {
+            let statusCode: Int
+            let errcode: String
+            let expectedError: DirectCallMediaError
         }
-        """.utf8)
-        let httpClient = DirectCallHTTPClientSpy(result: .success(.init(statusCode: 403, data: ineligibleRoomBody)))
+        let cases = [
+            BackendErrorCase(statusCode: 401, errcode: "M_UNKNOWN_TOKEN", expectedError: .tokenUnavailable),
+            BackendErrorCase(statusCode: 403, errcode: "M_ROOM_NOT_ENCRYPTED", expectedError: .invalidSession),
+            BackendErrorCase(statusCode: 404, errcode: "M_NOT_FOUND", expectedError: .tokenUnavailable),
+            BackendErrorCase(statusCode: 429, errcode: "M_DIRECT_CALL_RATE_LIMITED", expectedError: .tokenUnavailable),
+            BackendErrorCase(statusCode: 500, errcode: "M_UNKNOWN", expectedError: .tokenUnavailable)
+        ]
+
+        for testCase in cases {
+            let errorBody = Data("""
+            {
+              "errcode": "\(testCase.errcode)",
+              "error": "Detailed backend text should not be logged",
+              "retry_after_ms": 30000
+            }
+            """.utf8)
+            let httpTransport = DirectCallHTTPTransportSpy(result: .success(.init(statusCode: testCase.statusCode, data: errorBody)))
+            let client = ProductionDirectCallLiveKitTokenClient(configuration: .init(tokenEndpointURL: endpointURL),
+                                                                httpTransport: httpTransport,
+                                                                accessTokenProvider: MatrixAccessTokenProviderStub(accessToken: "matrix-credential"))
+
+            let result = await client.connection(for: request)
+
+            #expect(result == .failure(testCase.expectedError))
+            #expect(httpTransport.requests.count == 1)
+        }
+    }
+
+    @Test
+    func productionLiveKitTokenClientFailsClosedForMalformedJSON() async throws {
+        let endpointURL = try #require(URL(string: "https://call-service.example.com/direct-calls"))
+        let httpTransport = DirectCallHTTPTransportSpy(result: .success(.init(statusCode: 200, data: Data("not-json".utf8))))
         let client = ProductionDirectCallLiveKitTokenClient(configuration: .init(tokenEndpointURL: endpointURL),
-                                                            httpClient: httpClient,
+                                                            httpTransport: httpTransport,
                                                             accessTokenProvider: MatrixAccessTokenProviderStub(accessToken: "matrix-credential"))
         let request = DirectCallLiveKitTokenRequest(callID: callID,
                                                     roomID: roomID,
@@ -1747,7 +1780,7 @@ final class DirectCallMediaProviderSkeletonTests {
 
         let result = await client.connection(for: request)
 
-        #expect(result == .failure(.invalidSession))
+        #expect(result == .failure(.tokenUnavailable))
     }
 
     @Test
@@ -1768,9 +1801,9 @@ final class DirectCallMediaProviderSkeletonTests {
           }
         }
         """.utf8)
-        let httpClient = DirectCallHTTPClientSpy(result: .success(.init(statusCode: 200, data: responseData)))
+        let httpTransport = DirectCallHTTPTransportSpy(result: .success(.init(statusCode: 200, data: responseData)))
         let client = ProductionDirectCallLiveKitTokenClient(configuration: .init(tokenEndpointURL: endpointURL),
-                                                            httpClient: httpClient,
+                                                            httpTransport: httpTransport,
                                                             accessTokenProvider: MatrixAccessTokenProviderStub(accessToken: "matrix-credential"))
         let request = DirectCallLiveKitTokenRequest(callID: callID,
                                                     roomID: roomID,
@@ -2296,15 +2329,15 @@ private final class DirectCallLiveKitTokenClientSpy: DirectCallLiveKitTokenClien
 }
 
 @MainActor
-private final class DirectCallHTTPClientSpy: DirectCallHTTPClientProtocol {
-    private(set) var requests = [URLRequest]()
-    var result: Result<DirectCallHTTPResponse, DirectCallMediaError>
+private final class DirectCallHTTPTransportSpy: DirectCallHTTPTransportProtocol {
+    private(set) var requests = [DirectCallHTTPTransportRequest]()
+    var result: Result<DirectCallHTTPTransportResponse, DirectCallMediaError>
 
-    init(result: Result<DirectCallHTTPResponse, DirectCallMediaError> = .failure(.tokenUnavailable)) {
+    init(result: Result<DirectCallHTTPTransportResponse, DirectCallMediaError> = .failure(.tokenUnavailable)) {
         self.result = result
     }
 
-    func data(for request: URLRequest) async -> Result<DirectCallHTTPResponse, DirectCallMediaError> {
+    func send(_ request: DirectCallHTTPTransportRequest) async -> Result<DirectCallHTTPTransportResponse, DirectCallMediaError> {
         requests.append(request)
         return result
     }
