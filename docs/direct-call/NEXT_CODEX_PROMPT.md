@@ -13,10 +13,10 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.10S — async app-side Matrix SDK direct-call key wrapper skeleton added.
+After 2.10T — production SDK key wrapper injection seam added.
 
 Current app code checkpoint:
-9882b6ffa `Add async Matrix SDK direct-call key wrapper`
+000d1f12d `Add production key wrapper injection seam`
 
 Current SDK checkpoint:
 f7c2cfe5c `Add direct-call media key envelope crypto tests`
@@ -31,10 +31,10 @@ Artifact checksum:
 654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e
 
 Phase:
-2.10T — production SDK key wrapper injection seam inspection/skeleton.
+2.10U — production runtime SDK key wrapper provider seam inspection/skeleton.
 
 Task:
-Inspect and, if low-risk, add the narrow app dependency injection seam needed to provide `MatrixSDKDirectCallMediaKeyWrapper` to production direct-call dependencies.
+Inspect and, if low-risk, add the narrow runtime provider seam needed to create a direct-call media key envelope wrapper from the Matrix SDK encryption object.
 Keep production direct calls disabled and fail-closed by default.
 Do not add visible UI.
 Do not modify Element Call route.
@@ -48,39 +48,41 @@ Context:
 - SDK high-level crypto tests proved direct-call media key envelope wrap/unwrap.
 - Swift wrapper commit `1e58d0a` exposes async direct-call key envelope APIs.
 - App dependency is pinned to that wrapper commit.
-- App key wrapping and encryption service protocols are now async.
+- App key wrapping and encryption service protocols are async.
 - `MatrixSDKDirectCallMediaKeyWrapper` exists and maps app models to SDK FFI models.
-- `MatrixSDKDirectCallMediaKeyWrapper` is not injected into production runtime.
+- `NativeDirectCallProductionDependenciesFactory` can now accept `MatrixSDKDirectCallMediaKeyEnvelopeWrappingProtocol` and construct the SDK-backed wrapper.
+- The production factory still defaults to disabled/fail-closed behavior.
+- No runtime session/client path currently supplies a Matrix SDK envelope wrapper to production dependency construction.
 - `FailClosedDirectCallMediaKeyWrapper` remains the default production wrapper.
 
 Inspect:
 1. `MatrixSDKDirectCallMediaKeyWrapper`
-2. `DirectCallMediaKeyWrappingProtocol`
-3. `ProductionDirectCallEncryptionService`
-4. `NativeDirectCallProductionDependenciesFactory`
-5. `DirectCallProductionConfiguration`
-6. `ClientProxyProtocol` / `ClientProxy`
-7. `UserSession` / `UserSessionProtocol`
-8. `JoinedRoomProxy` / room-flow direct-call construction
+2. `MatrixSDKDirectCallMediaKeyEnvelopeWrappingProtocol`
+3. `NativeDirectCallProductionDependenciesFactory`
+4. `ClientProxy` / `ClientProxyProtocol`
+5. `UserSession` / `UserSessionProtocol`
+6. `JoinedRoomProxy` / native direct-call room controller construction
+7. `RoomFlowCoordinator` and `NativeDirectCallRoomFlowOwner`
+8. AppCoordinator production vs DEBUG/integration diagnostic dependency construction
 9. MatrixRustSDK `Client.encryption()` and generated `EncryptionProtocol`
 10. Existing SDK proxy naming and dependency injection conventions
 
 Questions:
-A. What is the narrowest safe app seam for obtaining MatrixRustSDK `EncryptionProtocol` or a direct-call envelope wrapper adapter?
-B. Should the seam live on `ClientProxyProtocol`, `UserSessionProtocol`, or the production direct-call dependency factory parameters?
-C. Can this be done without exposing broad Matrix crypto/raw APIs?
+A. Where is the SDK encryption object available today without broadening app protocols?
+B. Can a narrow provider be added that returns only `MatrixSDKDirectCallMediaKeyEnvelopeWrappingProtocol`, not raw Matrix SDK client or raw crypto APIs?
+C. Should the provider be session-scoped, client-scoped, or room-flow-scoped?
 D. Can production dependencies remain disabled unless explicit production direct-call configuration is enabled?
 E. How should missing SDK encryption dependency fail closed?
-F. How should trust policy be configured initially: `onlyTrustedDevices` by default, with no UI override yet?
-G. What tests prove the production factory can receive an SDK-backed wrapper but does not activate by default?
-H. What runtime path should eventually pass the wrapper into `NativeDirectCallRoomFlowOwner` without visible UI activation?
+F. Should the initial trust policy remain `onlyTrustedDevices` with no UI override?
+G. What tests prove the provider seam does not activate production calls by default?
+H. What runtime path should eventually pass the provider into `NativeDirectCallRoomFlowOwner` without visible UI activation?
 
 Allowed implementation if contained:
-- Add a narrow protocol/adapter such as `DirectCallMediaKeyEnvelopeWrappingProvider` if needed.
-- Add a method/property that returns only the direct-call media key envelope wrapper, not raw crypto APIs.
-- Wire the production dependencies factory to accept the wrapper dependency, but keep it disabled by default.
+- Add a narrow protocol/adapter such as `DirectCallMediaKeyEnvelopeWrappingProviding` if needed.
+- Add a method/property that returns only a direct-call media key envelope wrapper, not raw SDK crypto APIs.
+- Wire the production dependencies factory or owner parameters to accept the provider dependency, but keep everything disabled by default.
 - Add tests with fake providers/adapters proving default fail-closed behavior and explicit injection behavior.
-- Do not wire the production dependency factory into visible UI or runtime feature flags.
+- Update docs when done.
 
 Hard constraints:
 - Do not expose raw Matrix event JSON.
@@ -103,13 +105,13 @@ Validation:
   - `UnitTests/DirectCallProductionKeyWrappingTests`
   - `UnitTests/DirectCallEngineTests`
   - `UnitTests/DirectCallMediaEngineTests`
-  - `UnitTests/RoomFlowCoordinatorTests` if room-flow injection changes
+  - `UnitTests/RoomFlowCoordinatorTests` if room-flow/session injection changes
 - Release build if production app files change
 - Forbidden scan for raw/debug/secret terms
 
 Expected output:
 1. Files inspected.
-2. Recommended injection seam.
+2. Recommended runtime provider seam.
 3. Whether code changed.
 4. If changed: files/tests/build results.
 5. Fail-closed/default-disabled behavior.
