@@ -185,6 +185,61 @@ final class DirectCallProductionKeyWrappingTests {
     }
 
     @Test
+    func productionDependenciesFactoryCanConstructMatrixSDKKeyWrapperFromNarrowEnvelopeWrapper() async throws {
+        let endpointURL = try #require(URL(string: "https://call-service.example.com/direct-calls"))
+        let keyStore = DirectCallLiveKitMediaKeyStore()
+        let sdk = MatrixSDKDirectCallMediaKeyEnvelopeWrapperSpy()
+        let configuration = NativeDirectCallProductionConfiguration(isEnabled: true,
+                                                                    liveKitConfiguration: .init(tokenEndpointURL: endpointURL))
+        let factory = NativeDirectCallProductionDependenciesFactory(configuration: configuration,
+                                                                    liveKitClient: ProductionKeyWrappingLiveKitClientSpy(),
+                                                                    matrixSDKKeyEnvelopeWrapper: sdk,
+                                                                    mediaKeyStore: keyStore,
+                                                                    ownUserID: ownUserID,
+                                                                    senderDeviceID: "DEVICE")
+        let dependencies = factory.makeDependencies()
+        let service = try #require(dependencies.encryptionService)
+
+        let generated = try await service.generatePerCallKey(callID: callID, roomID: roomID, peerUserID: peerUserID).get()
+
+        let sdkInfo = try #require(sdk.wrapInfos.first)
+        #expect(sdkInfo.roomId == roomID)
+        #expect(sdkInfo.callId == callID)
+        #expect(sdkInfo.recipientUserId == peerUserID)
+        #expect(sdkInfo.trustRequirement == .onlyTrustedDevices)
+        #expect(generated.payload.encryptedPayload == "sdk-opaque-envelope")
+        #expect(keyStore.makeKeyProvider(for: generated.keyHandle) != nil)
+        #expect(dependencies.hasMediaEngineFactory)
+    }
+
+    @Test
+    func productionDependenciesFactoryPrefersExplicitKeyWrapperOverMatrixSDKEnvelopeWrapper() async throws {
+        let endpointURL = try #require(URL(string: "https://call-service.example.com/direct-calls"))
+        let keyStore = DirectCallLiveKitMediaKeyStore()
+        let explicitWrapper = MediaKeyWrapperSpy()
+        let sdk = MatrixSDKDirectCallMediaKeyEnvelopeWrapperSpy(wrapError: DirectCallMediaKeyEnvelopeError.TrustViolation)
+        let configuration = NativeDirectCallProductionConfiguration(isEnabled: true,
+                                                                    liveKitConfiguration: .init(tokenEndpointURL: endpointURL))
+        let factory = NativeDirectCallProductionDependenciesFactory(configuration: configuration,
+                                                                    liveKitClient: ProductionKeyWrappingLiveKitClientSpy(),
+                                                                    keyWrapper: explicitWrapper,
+                                                                    matrixSDKKeyEnvelopeWrapper: sdk,
+                                                                    mediaKeyStore: keyStore,
+                                                                    ownUserID: ownUserID,
+                                                                    senderDeviceID: "DEVICE")
+        let dependencies = factory.makeDependencies()
+        let service = try #require(dependencies.encryptionService)
+
+        let generated = try await service.generatePerCallKey(callID: callID, roomID: roomID, peerUserID: peerUserID).get()
+
+        #expect(explicitWrapper.wrappedRequests.count == 1)
+        #expect(sdk.wrapInfos.isEmpty)
+        #expect(generated.payload.encryptedPayload == "opaque-\(generated.keyHandle.keyID)")
+        #expect(explicitWrapper.wrappedRequests.first?.keyID == generated.keyHandle.keyID)
+        #expect(keyStore.makeKeyProvider(for: generated.keyHandle) != nil)
+    }
+
+    @Test
     func matrixSDKWrapperFailsClosedWithoutSDKDependency() async {
         let wrapper = MatrixSDKDirectCallMediaKeyWrapper()
         let wrapRequest = makeWrapRequest()
@@ -317,7 +372,7 @@ final class DirectCallProductionKeyWrappingTests {
 }
 
 private final class MatrixSDKDirectCallMediaKeyEnvelopeWrapperSpy: MatrixSDKDirectCallMediaKeyEnvelopeWrappingProtocol {
-    private let wrapEnvelope: MatrixRustSDK.DirectCallMediaKeyEnvelope
+    private let wrapEnvelope: MatrixRustSDK.DirectCallMediaKeyEnvelope?
     private let unwrapResult: MatrixRustSDK.DirectCallMediaKeyUnwrapResult
     private let wrapError: Error?
     private let unwrapError: Error?
@@ -330,16 +385,7 @@ private final class MatrixSDKDirectCallMediaKeyEnvelopeWrapperSpy: MatrixSDKDire
          unwrapResult: MatrixRustSDK.DirectCallMediaKeyUnwrapResult? = nil,
          wrapError: Error? = nil,
          unwrapError: Error? = nil) {
-        self.wrapEnvelope = wrapEnvelope ?? .init(version: 1,
-                                                  algorithm: "salemx.native_direct_call.media_key.v1",
-                                                  roomId: "!room:example.com",
-                                                  callId: "call-a",
-                                                  senderUserId: "@me:example.com",
-                                                  recipientUserId: "@peer:example.com",
-                                                  intent: DirectCallIntent.audio.rawValue,
-                                                  keyId: "key-a",
-                                                  expiresAtMs: 1000,
-                                                  opaqueCiphertext: "sdk-opaque-envelope")
+        self.wrapEnvelope = wrapEnvelope
         self.unwrapResult = unwrapResult ?? .init(keyId: "key-a",
                                                   mediaKey: "sensitive-media-material",
                                                   senderUserId: "@peer:example.com",
@@ -355,7 +401,16 @@ private final class MatrixSDKDirectCallMediaKeyEnvelopeWrapperSpy: MatrixSDKDire
             throw wrapError
         }
 
-        return wrapEnvelope
+        return wrapEnvelope ?? .init(version: 1,
+                                     algorithm: "salemx.native_direct_call.media_key.v1",
+                                     roomId: info.roomId,
+                                     callId: info.callId,
+                                     senderUserId: "@me:example.com",
+                                     recipientUserId: info.recipientUserId,
+                                     intent: info.intent,
+                                     keyId: info.keyId,
+                                     expiresAtMs: info.expiresAtMs,
+                                     opaqueCiphertext: "sdk-opaque-envelope")
     }
 
     func unwrapDirectCallMediaKeyEnvelope(info: MatrixRustSDK.DirectCallMediaKeyUnwrapInfo,

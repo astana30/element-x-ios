@@ -125,6 +125,7 @@ struct NativeDirectCallProductionDependenciesFactory {
     private let configuration: NativeDirectCallProductionConfiguration
     private let liveKitClient: DirectCallLiveKitClientProtocol?
     private let keyWrapper: DirectCallMediaKeyWrappingProtocol?
+    private let matrixSDKKeyEnvelopeWrapper: MatrixSDKDirectCallMediaKeyEnvelopeWrappingProtocol?
     private let mediaKeyStore: DirectCallLiveKitMediaKeyStore?
     private let ownUserID: String?
     private let senderDeviceID: String?
@@ -132,12 +133,14 @@ struct NativeDirectCallProductionDependenciesFactory {
     init(configuration: NativeDirectCallProductionConfiguration = .init(),
          liveKitClient: DirectCallLiveKitClientProtocol? = nil,
          keyWrapper: DirectCallMediaKeyWrappingProtocol? = nil,
+         matrixSDKKeyEnvelopeWrapper: MatrixSDKDirectCallMediaKeyEnvelopeWrappingProtocol? = nil,
          mediaKeyStore: DirectCallLiveKitMediaKeyStore? = nil,
          ownUserID: String? = nil,
          senderDeviceID: String? = nil) {
         self.configuration = configuration
         self.liveKitClient = liveKitClient
         self.keyWrapper = keyWrapper
+        self.matrixSDKKeyEnvelopeWrapper = matrixSDKKeyEnvelopeWrapper
         self.mediaKeyStore = mediaKeyStore
         self.ownUserID = ownUserID
         self.senderDeviceID = senderDeviceID
@@ -146,12 +149,14 @@ struct NativeDirectCallProductionDependenciesFactory {
     init(productionConfiguration: DirectCallProductionConfiguration,
          liveKitClient: DirectCallLiveKitClientProtocol? = nil,
          keyWrapper: DirectCallMediaKeyWrappingProtocol? = nil,
+         matrixSDKKeyEnvelopeWrapper: MatrixSDKDirectCallMediaKeyEnvelopeWrappingProtocol? = nil,
          mediaKeyStore: DirectCallLiveKitMediaKeyStore? = nil,
          ownUserID: String? = nil,
          senderDeviceID: String? = nil) {
         configuration = .init(productionConfiguration: productionConfiguration)
         self.liveKitClient = liveKitClient
         self.keyWrapper = keyWrapper
+        self.matrixSDKKeyEnvelopeWrapper = matrixSDKKeyEnvelopeWrapper
         self.mediaKeyStore = mediaKeyStore
         self.ownUserID = ownUserID
         self.senderDeviceID = senderDeviceID
@@ -164,7 +169,10 @@ struct NativeDirectCallProductionDependenciesFactory {
         }
 
         let sharedKeyStore = mediaKeyStore ?? DirectCallLiveKitMediaKeyStore()
-        let encryptionService = ProductionDirectCallEncryptionService(keyWrapper: keyWrapper ?? FailClosedDirectCallMediaKeyWrapper(),
+        let mediaKeyWrapper = keyWrapper
+            ?? matrixSDKKeyEnvelopeWrapper.map { MatrixSDKDirectCallMediaKeyWrapper(envelopeWrapper: $0) }
+            ?? FailClosedDirectCallMediaKeyWrapper()
+        let encryptionService = ProductionDirectCallEncryptionService(keyWrapper: mediaKeyWrapper,
                                                                       keyStore: sharedKeyStore,
                                                                       ownUserID: ownUserID,
                                                                       senderDeviceID: senderDeviceID)
