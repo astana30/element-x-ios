@@ -36,6 +36,9 @@ enum DirectCallEncryptionFailureReason: Error, Equatable {
     case keyMismatch
     case keyExchangeFailed
     case e2eeNotProven
+    case e2eeUnavailable
+    case cannotWrap
+    case cannotUnwrap
 }
 
 enum DirectCallEncryptionState: Equatable {

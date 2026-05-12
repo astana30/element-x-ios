@@ -1380,6 +1380,7 @@
 		E9D14ACF1E30D29807EB40B6 /* StartChatScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58CA153078851DA2BA007D6B /* StartChatScreen.swift */; };
 		EA12357433C310C354671EC6 /* NotificationSettingsEditScreenViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5130A9AF2F5B82BBBBC1F53D /* NotificationSettingsEditScreenViewModelTests.swift */; };
 		EA1A89DB31487035317A7198 /* JoinedMembersBadgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1264CEB4C52A8F8B53B4B076 /* JoinedMembersBadgeView.swift */; };
+		EA1D87C3AC5A0C1564F8CFB2 /* DirectCallProductionKeyWrappingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5A1BC32328A4C0F8B1BD1BB /* DirectCallProductionKeyWrappingTests.swift */; };
 		EAD054A86195DFE231553A9A /* AnalyticsSettingsScreenModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48CA11A126068001021D0B8C /* AnalyticsSettingsScreenModels.swift */; };
 		EADF7BA04F54CC4E18DFFD72 /* VerificationBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51C3DCD4C0F9AC352F2D7CE1 /* VerificationBadge.swift */; };
 		EADFA54BE98D80B62DA9E069 /* MatrixEntityRegex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 668DE09EE78065DC6BB5CCD9 /* MatrixEntityRegex.swift */; };
@@ -2780,6 +2781,7 @@
 		D50530BCA0B83CF3FCE20A1E /* Assets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Assets.swift; sourceTree = "<group>"; };
 		D5215220288844C966D5BF43 /* TimelineControllerFactoryProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineControllerFactoryProtocol.swift; sourceTree = "<group>"; };
 		D5732CD37F8F933ECD29092B /* HomeScreenRoomList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeScreenRoomList.swift; sourceTree = "<group>"; };
+		D5A1BC32328A4C0F8B1BD1BB /* DirectCallProductionKeyWrappingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectCallProductionKeyWrappingTests.swift; sourceTree = "<group>"; };
 		D5B8D145F92E0219091B8B1F /* target.yml */ = {isa = PBXFileReference; lastKnownFileType = text.yaml; path = target.yml; sourceTree = "<group>"; };
 		D620EEA530EA44333C14DE84 /* TextBasedRoomTimelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextBasedRoomTimelineTests.swift; sourceTree = "<group>"; };
 		D756ACC8F37F3E1925F8CA70 /* FormButtonStyles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FormButtonStyles.swift; sourceTree = "<group>"; };
@@ -6471,6 +6473,7 @@
 				DDAA016499DB917439FF2C7D /* DirectCallEngineSignalTransportTests.swift */,
 				177C6D65F84C84ABBC77B5DC /* DirectCallEngineTests.swift */,
 				C6C1911CE06945DCE677BDDE /* DirectCallMediaEngineTests.swift */,
+				D5A1BC32328A4C0F8B1BD1BB /* DirectCallProductionKeyWrappingTests.swift */,
 				4C32CAF0343C7330058CF646 /* EditRoomAddressScreenViewModelTests.swift */,
 				5120B4BA5662E97750E2C6B4 /* ElementCallServiceTests.swift */,
 				AC688FC7F7B01C139C0B2037 /* EmojiPickerScreenViewModelTests.swift */,
@@ -8957,6 +8960,7 @@
 				E76EF5C6D5DE7230075C3D83 /* DirectCallEngineSignalTransportTests.swift in Sources */,
 				AC70DBDDE6D23D21918F1D32 /* DirectCallEngineTests.swift in Sources */,
 				7DC737A3E0C88D1289821C43 /* DirectCallMediaEngineTests.swift in Sources */,
+				EA1D87C3AC5A0C1564F8CFB2 /* DirectCallProductionKeyWrappingTests.swift in Sources */,
 				DFDA41373014B1B9FDC84BE2 /* EditRoomAddressScreenViewModelTests.swift in Sources */,
 				A8D5DB14590F9A7306C49E51 /* ElementCallServiceTests.swift in Sources */,
 				6B84FE0F7678F4AE646A226E /* EmojiPickerScreenViewModelTests.swift in Sources */,

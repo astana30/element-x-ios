@@ -124,17 +124,37 @@ struct NativeDirectCallProductionConfiguration: Equatable, CustomStringConvertib
 struct NativeDirectCallProductionDependenciesFactory {
     private let configuration: NativeDirectCallProductionConfiguration
     private let liveKitClient: DirectCallLiveKitClientProtocol?
+    private let keyWrapper: DirectCallMediaKeyWrappingProtocol?
+    private let mediaKeyStore: DirectCallLiveKitMediaKeyStore?
+    private let ownUserID: String?
+    private let senderDeviceID: String?
 
     init(configuration: NativeDirectCallProductionConfiguration = .init(),
-         liveKitClient: DirectCallLiveKitClientProtocol? = nil) {
+         liveKitClient: DirectCallLiveKitClientProtocol? = nil,
+         keyWrapper: DirectCallMediaKeyWrappingProtocol? = nil,
+         mediaKeyStore: DirectCallLiveKitMediaKeyStore? = nil,
+         ownUserID: String? = nil,
+         senderDeviceID: String? = nil) {
         self.configuration = configuration
         self.liveKitClient = liveKitClient
+        self.keyWrapper = keyWrapper
+        self.mediaKeyStore = mediaKeyStore
+        self.ownUserID = ownUserID
+        self.senderDeviceID = senderDeviceID
     }
 
     init(productionConfiguration: DirectCallProductionConfiguration,
-         liveKitClient: DirectCallLiveKitClientProtocol? = nil) {
+         liveKitClient: DirectCallLiveKitClientProtocol? = nil,
+         keyWrapper: DirectCallMediaKeyWrappingProtocol? = nil,
+         mediaKeyStore: DirectCallLiveKitMediaKeyStore? = nil,
+         ownUserID: String? = nil,
+         senderDeviceID: String? = nil) {
         configuration = .init(productionConfiguration: productionConfiguration)
         self.liveKitClient = liveKitClient
+        self.keyWrapper = keyWrapper
+        self.mediaKeyStore = mediaKeyStore
+        self.ownUserID = ownUserID
+        self.senderDeviceID = senderDeviceID
     }
 
     func makeDependencies() -> NativeDirectCallProductionDependencies {
@@ -143,10 +163,14 @@ struct NativeDirectCallProductionDependenciesFactory {
             return .disabled
         }
 
-        let encryptionService = ProductionDirectCallEncryptionService()
+        let sharedKeyStore = mediaKeyStore ?? DirectCallLiveKitMediaKeyStore()
+        let encryptionService = ProductionDirectCallEncryptionService(keyWrapper: keyWrapper ?? FailClosedDirectCallMediaKeyWrapper(),
+                                                                      keyStore: sharedKeyStore,
+                                                                      ownUserID: ownUserID,
+                                                                      senderDeviceID: senderDeviceID)
         let tokenClient = ProductionDirectCallLiveKitTokenClient(configuration: configuration.liveKitConfiguration)
         let tokenProvider = DirectCallLiveKitTokenProvider(tokenClient: tokenClient)
-        let e2eeContextProvider = DirectCallLiveKitE2EEContextProvider()
+        let e2eeContextProvider = DirectCallLiveKitE2EEContextProvider(keyStore: sharedKeyStore)
         let mediaEngineFactory = DirectCallLiveKitMediaEngineFactory(tokenProvider: tokenProvider,
                                                                      encryptionService: encryptionService,
                                                                      e2eeContextProvider: e2eeContextProvider,

@@ -2002,11 +2002,11 @@ final class DirectCallMediaProviderSkeletonTests {
 
         #expect(service.generatePerCallKey(callID: callID,
                                            roomID: roomID,
-                                           peerUserID: peerUserID) == .failure(.e2eeNotProven))
+                                           peerUserID: peerUserID) == .failure(.e2eeUnavailable))
         #expect(service.consumeRemoteEncryptedKey(payload,
                                                   expectedCallID: callID,
                                                   expectedRoomID: roomID,
-                                                  expectedSenderUserID: peerUserID) == .failure(.e2eeNotProven))
+                                                  expectedSenderUserID: peerUserID) == .failure(.e2eeUnavailable))
 
         service.clearPerCallKey(callID: callID)
 

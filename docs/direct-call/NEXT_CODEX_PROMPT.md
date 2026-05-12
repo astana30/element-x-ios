@@ -3,76 +3,118 @@
 Repo:
 /Users/aibattt/Movies/element-x-ios
 
+SDK workspace:
+/Users/aibattt/salemx-sdk-work/matrix-rust-sdk
+
+Wrapper workspace:
+/Users/aibattt/salemx-sdk-work/matrix-rust-components-swift
+
 Branch:
 salemx-native-direct-calls
 
-Current checkpoint:
-e92c60c6a Add env-gated production token backend smoke test
+Current phase:
+After 2.10N — production E2EE app key-wrapping seam skeleton.
 
 Phase:
-2.10M — production E2EE key wrapping seam inspection.
+2.10O — Matrix SDK narrow direct-call key wrapping seam prototype.
 
 Task:
-Inspection only. Do not modify code. Do not commit.
-
-Goal:
-Identify how to replace the fail-closed `ProductionDirectCallEncryptionService` skeleton with Matrix-crypto-backed key wrapping for native direct calls without exposing unencrypted key material.
+Prototype or design the narrow Matrix SDK/wrapper seam needed to replace the app-side fail-closed `DirectCallMediaKeyWrappingProtocol` with Matrix-crypto-backed production key wrapping.
+Do not activate production direct calls.
+Do not modify visible UI.
+Do not modify the Element Call route.
+Do not wire CallKit or push.
 
 Context:
-Completed:
 - Two-client Matrix signalling proof passed.
 - Diagnostic LiveKit media proof reached active.
-- Production token DTOs/client/transport exist.
-- Backend token service skeleton exists.
-- Synapse room validation skeleton exists.
-- Local backend fake smoke exists.
-- App production token client smoke test exists and is disabled by default.
+- Production backend token DTO/client/transport/config seams exist.
+- Backend token service skeleton and Synapse room validation skeleton exist.
+- App-side production key-wrapping seams now exist:
+  - `DirectCallMediaKeyWrappingProtocol`
+  - `DirectCallMediaKeyWrapRequest`
+  - `DirectCallMediaKeyUnwrapRequest`
+  - `DirectCallWrappedMediaKeyEnvelope`
+  - `FailClosedDirectCallMediaKeyWrapper`
+  - `ProductionDirectCallEncryptionService` with injectable wrapper and shared `DirectCallLiveKitMediaKeyStore`
+  - `NativeDirectCallProductionDependenciesFactory` injection hooks for future wrapper/store/user/device metadata
+- The app seam remains fail-closed by default.
+- Diagnostic encryption remains DEBUG/integration-only and must not become production.
+- Backend issues LiveKit transport credentials only and must never know raw media keys.
 
-Current blockers:
-- Production E2EE Matrix crypto key wrapping is not implemented.
-- Production backend is still skeleton/fake mode.
-- No production activation, visible UI, CallKit, or push integration exists yet.
+Goal:
+Find the smallest SDK/wrapper seam that can wrap and unwrap per-call media key material for a peer in an encrypted 1:1 room, returning only an opaque envelope suitable for the existing direct-call Matrix signalling payload.
 
 Inspect:
-1. `ProductionDirectCallEncryptionService`.
-2. `DirectCallEncryptionServiceProtocol`.
-3. `DirectCallEncryptedKeyExchangePayload`.
-4. `DirectCallMediaKeyHandle` and media key store flow.
-5. Matrix Rust SDK crypto APIs exposed through the Swift wrapper.
-6. Existing room/session/device identity and encrypted event capabilities.
-7. Existing direct-call diagnostic encryption service only for comparison, not production reuse.
-8. Direct-call signal models and receive/send path.
-9. Cleanup paths on hangup, timeout, room leave, and reset.
+1. `/Users/aibattt/salemx-sdk-work/matrix-rust-sdk`
+   - room crypto APIs
+   - device/user identity APIs
+   - to-device encryption APIs
+   - custom encrypted event or secret-send helpers
+   - existing FFI patterns for crypto-bound operations
+2. `/Users/aibattt/salemx-sdk-work/matrix-rust-components-swift`
+   - generated Swift binding patterns
+   - binary artifact workflow
+3. App-side seams:
+   - `DirectCallEncryptionDesign.swift`
+   - `DirectCallModels.swift`
+   - `DirectCallMediaEngineFactory.swift`
+   - `DirectCallLiveKitMediaKeyStore`
+   - `ProductionDirectCallEncryptionService`
 
 Questions:
-A. Which Matrix crypto API should wrap per-call media keys for a peer/device?
-B. Does the app have enough peer device identity context at room-flow scope?
-C. What production payload fields are needed for opaque encrypted key exchange?
-D. How should generated media keys map to `DirectCallMediaKeyHandle` without exposing unencrypted key material?
-E. How should remote key consume/decrypt validate call ID, room, sender, and device metadata?
-F. What SDK/wrapper seams are missing, if any?
-G. What tests are needed before implementing production E2EE?
-H. What is the smallest safe next implementation phase?
+A. Is there an existing Matrix Rust SDK primitive that can encrypt opaque payloads to all eligible devices for a room peer?
+B. Is there an existing primitive that can decrypt/verify such an opaque direct-call media-key envelope?
+C. Should the SDK seam operate through room encryption, to-device encryption, Megolm/Olm helpers, or a purpose-built direct-call secret envelope?
+D. Can the seam avoid exposing raw Matrix event JSON and avoid broad raw room/timeline APIs?
+E. What metadata should the SDK verify before unwrap:
+   - room ID
+   - call ID
+   - sender user ID
+   - recipient user ID
+   - sender device ID
+   - key ID
+   - expiry
+   - intent/audio
+F. How should multi-device peers be handled in the opaque envelope?
+G. What trust policy should the prototype enforce initially?
+H. Does the app-side `DirectCallEncryptionServiceProtocol` need to become async for a real SDK-backed wrapper?
+I. What Rust tests and Swift wrapper tests are needed?
+J. What app tests should change once the real wrapper is available?
+
+Preferred seam shape:
+- A narrow Rust/FFI API with direct-call-specific naming, for example:
+  - `wrapDirectCallMediaKey(...) -> DirectCallMediaKeyEnvelope`
+  - `unwrapDirectCallMediaKeyEnvelope(...) -> DirectCallMediaKey`
+- Inputs include room/call/sender/recipient/device/intent/expiry/key metadata.
+- Outputs include only opaque envelope bytes/string and safe metadata.
+- No raw Matrix event JSON.
+- No broad raw send/receive APIs.
+- No LiveKit tokens or URLs.
+- No raw media key in logs/descriptions.
 
 Hard constraints:
-- Do not modify code.
-- Do not commit.
+- Do not use diagnostic encryption secret/env as production.
+- Do not put raw media key material in Matrix event content.
+- Do not log unencrypted media key material.
+- Do not expose raw Matrix event JSON.
+- Do not use `debugInfo`, `originalJSON`, or `originalJson`.
+- Do not put LiveKit token, URL, or API secret in Matrix signalling.
 - Do not add visible UI.
 - Do not change Element Call route.
+- Do not activate production feature flags.
 - Do not wire CallKit or push.
-- Do not activate production direct calls.
-- Do not use diagnostic secret/env/token as production.
-- Do not place unencrypted key material in Matrix events.
-- Do not log credentials, key material, raw Matrix content, or raw encrypted payload values.
-- Do not expose broad raw APIs on RoomProxyProtocol or TimelineProxyProtocol.
+- Do not broaden `RoomProxyProtocol` or `TimelineProxyProtocol` raw APIs.
+- Do not run shutdown/reboot/sleep/logout/killall/osascript power-management commands.
 
-Report:
+Expected output:
 1. Files inspected.
-2. Existing crypto/key capabilities.
-3. Missing SDK/wrapper seams.
-4. Recommended production key wrapping design.
-5. Required app service/protocol changes.
-6. Cleanup/lifecycle design.
-7. Tests needed.
+2. Existing SDK crypto capability summary.
+3. Recommended SDK/FFI seam shape.
+4. Whether a prototype implementation is feasible now.
+5. Required Rust tests.
+6. Required Swift wrapper tests.
+7. Required app integration changes for the follow-up phase.
 8. Risks/blockers.
 9. Recommended next implementation phase.
+10. Update `docs/direct-call/STATUS.md`, `WORKLOG.md`, and `NEXT_CODEX_PROMPT.md` when done.
