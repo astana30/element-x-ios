@@ -442,8 +442,6 @@ final class ProductionDirectCallLiveKitTokenClient: DirectCallLiveKitTokenClient
         switch errorDTO.errcode {
         case "M_DIRECT_CALL_UNSUPPORTED_INTENT":
             return .unsupportedIntent
-        case "M_NOT_JOINED", "M_ROOM_NOT_ENCRYPTED", "M_DIRECT_CALL_NOT_1_TO_1", "M_DIRECT_CALL_PEER_MISMATCH":
-            return .invalidSession
         default:
             return .tokenUnavailable
         }
