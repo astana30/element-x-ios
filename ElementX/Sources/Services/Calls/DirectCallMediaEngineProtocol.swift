@@ -256,6 +256,44 @@ protocol DirectCallHTTPTransportProtocol {
 }
 
 @MainActor
+final class URLSessionDirectCallHTTPTransport: DirectCallHTTPTransportProtocol, CustomStringConvertible, CustomDebugStringConvertible {
+    private let urlSession: URLSession
+
+    init(urlSession: URLSession = .shared) {
+        self.urlSession = urlSession
+    }
+
+    func send(_ request: DirectCallHTTPTransportRequest) async -> Result<DirectCallHTTPTransportResponse, DirectCallMediaError> {
+        var urlRequest = URLRequest(url: request.url)
+        urlRequest.httpMethod = request.method
+        urlRequest.httpBody = request.body
+
+        for (header, value) in request.headers {
+            urlRequest.setValue(value, forHTTPHeaderField: header)
+        }
+
+        do {
+            let (data, response) = try await urlSession.data(for: urlRequest)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                return .failure(.tokenUnavailable)
+            }
+
+            return .success(.init(statusCode: httpResponse.statusCode, data: data))
+        } catch {
+            return .failure(.tokenUnavailable)
+        }
+    }
+
+    nonisolated var description: String {
+        "URLSessionDirectCallHTTPTransport(urlSession: <redacted>)"
+    }
+
+    nonisolated var debugDescription: String {
+        description
+    }
+}
+
+@MainActor
 protocol DirectCallMatrixAccessTokenProviding {
     func matrixAccessToken() async -> String?
 }
