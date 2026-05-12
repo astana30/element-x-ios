@@ -13,92 +13,87 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.10P — SDK direct-call media key envelope prototype.
+After 2.10Q — SDK direct-call media key envelope cryptographic round-trip tests.
 
 Current app checkpoint:
-cc1460f85 `Record Matrix SDK key wrapping seam inspection`
+344395f1d `Record SDK direct-call key envelope prototype`
+
+Current SDK checkpoint:
+f7c2cfe5c `Add direct-call media key envelope crypto tests`
 
 Phase:
-2.10Q — SDK direct-call media key envelope cryptographic round-trip tests.
+2.10R — publish Matrix SDK direct-call key envelope wrapper artifact.
 
 Task:
-Harden the local Matrix Rust SDK direct-call media key envelope prototype with real cryptographic round-trip tests.
-Do not publish wrapper artifacts yet.
-Do not update the app dependency pin.
+Turn the proven local SDK direct-call media key envelope seam into a reproducible Swift wrapper dependency.
 Do not activate production direct calls.
-Do not modify visible UI, Element Call route, CallKit, push, or production feature flags.
+Do not add visible UI.
+Do not modify Element Call route.
+Do not wire CallKit/push.
+Do not publish fake or simulator-only artifacts.
 
 Context:
-- 2.10P added a local SDK prototype in `/Users/aibattt/salemx-sdk-work/matrix-rust-sdk`.
-- The prototype adds direct-call-specific records:
-  - `DirectCallMediaKeyWrapInfo`
-  - `DirectCallMediaKeyUnwrapInfo`
-  - `DirectCallMediaKeyEnvelope`
-  - `DirectCallMediaKeyUnwrapResult`
-  - `DirectCallMediaKeyEnvelopeError`
-- The prototype adds `Encryption.wrap_direct_call_media_key(...)` and `Encryption.unwrap_direct_call_media_key_envelope(...)`.
-- The prototype adds matching FFI records and async methods.
-- The prototype compiles through `cargo check -p matrix-sdk-ffi`.
-- Focused tests pass with `cargo test -p matrix-sdk --features experimental-send-custom-to-device direct_call --lib`.
-- Existing tests only prove redaction and fail-closed metadata handling; they do not yet prove a full cryptographic wrap/unwrap through the new high-level API.
+- 2.10Q proved the high-level SDK direct-call envelope seam cryptographically:
+  - Alice/Bob high-level SDK crypto clients were created with mocked Matrix crypto endpoints and encrypted room state.
+  - Alice wrapped a per-call media key for Bob.
+  - Bob unwrapped the envelope and recovered the original key material at the SDK consumer boundary.
+  - The opaque envelope did not contain the test media key in plaintext.
+  - Wrong metadata and non-recipient devices fail closed.
+  - `OnlyTrustedDevices` rejects unverified peer devices.
+  - Multi-device Bob envelopes include all eligible devices.
+- SDK commit is local only:
+  - `f7c2cfe5c Add direct-call media key envelope crypto tests`
+- The app production key wrapping seam remains fail-closed.
+- The app sync protocols still need future async adaptation; do not solve that unless explicitly scoped.
 
-Goal:
-Prove the prototype can wrap a media key for an eligible peer device, carry only an opaque envelope, and unwrap only on the intended recipient device using SDK crypto test machines/devices.
+SDK validation to repeat first:
+- `git status --short`
+- `cargo check -p matrix-sdk-ffi`
+- `cargo test -p matrix-sdk --features experimental-send-custom-to-device direct_call --lib`
+- changed-file formatting check for the SDK direct-call/FFI files
+- forbidden scan over changed SDK files for raw/debug/secret terms
 
-Inspect before editing:
-1. `crates/matrix-sdk/src/encryption/direct_call.rs`
-2. `crates/matrix-sdk/src/encryption/mod.rs`
-3. `bindings/matrix-sdk-ffi/src/encryption.rs`
-4. `crates/matrix-sdk-crypto/src/machine/tests/send_encrypted_to_device.rs`
-5. `crates/matrix-sdk-crypto/src/machine/test_helpers.rs`
-6. `crates/matrix-sdk/src/test_utils` or existing high-level SDK encryption tests, if available
-7. Any existing mock room/encrypted-room setup helpers in `matrix-sdk` tests
-
-Test goals:
-- Wrap succeeds for an encrypted one-to-one room with an eligible peer device.
-- Envelope does not contain plaintext media key material.
-- Unwrap succeeds on the intended recipient device.
-- Unwrap fails on a non-recipient device.
-- Metadata mismatch fails closed: room ID, call ID, sender, recipient, intent, key ID, and expiry.
-- Sender identity from SDK decryption metadata is validated, not only sender fields inside decrypted plaintext.
-- Conservative trust policy rejects untrusted or unsigned devices.
-- Multi-device peer envelope includes all eligible devices and excludes ineligible devices.
-- No raw Matrix event JSON is exposed through the FFI API.
-- No unencrypted key material appears in debug output, logs, or test failure messages.
-
-Design questions to resolve:
-A. Should `wrap_direct_call_media_key` require a live SDK room and encrypted room state, or should room eligibility be validated by the app/backend before calling the SDK key wrapper?
-B. Should the opaque envelope include recipient device IDs inside the opaque payload, or should the SDK hide device selection even more strongly before FFI generation?
-C. Should unwrap return raw media key material to the app service boundary, or should the SDK/wrapper eventually write directly into a key-store handle?
-D. What minimal async adaptation is needed in app `DirectCallEncryptionServiceProtocol` after the SDK seam is proven?
+Wrapper/publishing goals:
+1. Build a full reproducible `MatrixSDKFFI.xcframework` from SDK commit `f7c2cfe5c`.
+2. Do not use a simulator-only artifact.
+3. Regenerate Swift bindings so the wrapper exposes:
+   - `DirectCallMediaKeyWrapInfo`
+   - `DirectCallMediaKeyUnwrapInfo`
+   - `DirectCallMediaKeyEnvelope`
+   - `DirectCallMediaKeyUnwrapResult`
+   - `DirectCallMediaKeyEnvelopeError`
+   - `Encryption.wrapDirectCallMediaKey(...)`
+   - `Encryption.unwrapDirectCallMediaKeyEnvelope(...)`
+4. Update `/Users/aibattt/salemx-sdk-work/matrix-rust-components-swift` with the generated Swift and full binary artifact.
+5. Publish the artifact to a real stable release URL; do not fake the URL.
+6. Update wrapper `Package.swift` checksum and URL.
+7. Validate wrapper package resolution/description.
+8. Commit and tag the wrapper if production-resolvable.
+9. Do not update the app dependency pin unless the wrapper artifact is real and tests pass; if app pin update is included, keep production direct calls disabled and do not wire runtime usage.
 
 Hard constraints:
-- Do not put unencrypted media key material in Matrix event content.
-- Do not log media key material.
-- Do not expose Matrix event JSON to the app.
+- Do not expose raw Matrix event JSON.
 - Do not use `debugInfo`, `originalJSON`, or `originalJson`.
-- Do not put LiveKit token, URL, or API secret in Matrix signalling.
-- Do not expose broad raw APIs on app room or timeline protocols.
+- Do not log media key material.
+- Do not place unencrypted media key material in Matrix event content.
+- Do not expose broad raw APIs on app room/timeline protocols.
+- Do not put LiveKit URL, participant token, JWT, or API secret in Matrix signalling.
+- Do not use diagnostic encryption secrets or diagnostic LiveKit tokens in production paths.
 - Do not modify visible UI.
 - Do not change Element Call route.
 - Do not activate production feature flags.
 - Do not wire CallKit or push.
 - Do not run shutdown/reboot/sleep/logout/killall/osascript power-management commands.
 
-Validation:
-- `cargo fmt`
-- `cargo check -p matrix-sdk-ffi`
-- Focused Rust tests for the new direct-call envelope seam.
-- FFI compile check.
-- No Swift wrapper artifact publishing in this phase.
-- Forbidden scan over changed files for the direct-call forbidden debug/secret terms.
-
 Expected output:
-1. SDK files changed.
-2. Cryptographic round-trip tests added and results.
-3. Whether the high-level SDK seam is fully proven or still blocked.
-4. Exact blockers, if any.
-5. Whether FFI still compiles.
-6. Whether Swift bindings were generated; do not publish unless explicitly requested.
-7. Whether app async protocol adaptation is required next.
-8. Update `docs/direct-call/STATUS.md`, `WORKLOG.md`, and `NEXT_CODEX_PROMPT.md` when done.
+1. SDK commit/tag used.
+2. Full xcframework build result.
+3. Wrapper files changed.
+4. Generated Swift API shape.
+5. Artifact URL/checksum/tag, if published.
+6. Wrapper validation results.
+7. App dependency pin result, if updated.
+8. Tests/build results.
+9. Forbidden scan result.
+10. Commit hashes.
+11. Update `docs/direct-call/STATUS.md`, `WORKLOG.md`, and `NEXT_CODEX_PROMPT.md` when done.

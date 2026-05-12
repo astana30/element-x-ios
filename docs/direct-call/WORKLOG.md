@@ -68,3 +68,19 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Confirmed `cargo test -p matrix-sdk --features experimental-send-custom-to-device direct_call --lib` passes.
 - Did not publish wrapper artifacts, update the app dependency pin, modify app production code, or activate production direct calls.
 - Identified the next blocker: add full cryptographic SDK round-trip tests using real test devices before generating Swift bindings or publishing an artifact.
+
+## 2026-05-12 — 2.10Q SDK Direct-Call Media Key Envelope Crypto Tests
+
+- Added high-level Matrix SDK tests that prove the direct-call media key envelope can be wrapped and unwrapped cryptographically through the prototype SDK API.
+- Used `MatrixMockServer` crypto helpers to create Alice and Bob clients with mocked Matrix crypto endpoints, device keys, one-time-key claiming, and encrypted room state.
+- Proved Alice can wrap a per-call media key into an opaque envelope for Bob and Bob can unwrap it back to the original key material.
+- Proved the opaque envelope serialization and debug output do not contain the test media key material.
+- Added fail-closed coverage for wrong call ID, room ID, sender, recipient, intent, and key ID.
+- Added non-recipient coverage showing a third client cannot unwrap an Alice-to-Bob envelope.
+- Added conservative trust-policy coverage showing `OnlyTrustedDevices` rejects the current unverified test peer device set with `TrustViolation`.
+- Added multi-device coverage showing envelopes include all eligible Bob devices and Bob's second device can unwrap the envelope.
+- Confirmed `cargo test -p matrix-sdk --features experimental-send-custom-to-device direct_call --lib` passes.
+- Confirmed `cargo check -p matrix-sdk-ffi` passes.
+- Committed the SDK prototype and crypto tests as `f7c2cfe5c Add direct-call media key envelope crypto tests`.
+- Did not publish wrapper artifacts, update the app dependency pin, modify app production code, or activate production direct calls.
+- Recommended next phase: build/publish the Swift wrapper artifact from the proven SDK commit, then adapt the app key-wrapping seam to async SDK-backed wrapping in a later phase.
