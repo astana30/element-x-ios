@@ -11,8 +11,9 @@ from salemx_call_service.auth import AuthenticatedUser
 from salemx_call_service.dto import TokenRequest
 from salemx_call_service.errors import CallServiceError
 from salemx_call_service.livekit_tokens import IssuedLiveKitToken, LiveKitGrant, LiveKitJWTTokenIssuer
-from salemx_call_service.room_validation import InMemoryRoomValidator, RoomEligibility
+from salemx_call_service.room_validation import InMemoryRoomValidator, RoomEligibility, SynapseRoomValidator
 from salemx_call_service.service import DirectCallTokenService
+from salemx_call_service.synapse_http import SynapseHTTPResponse
 
 
 class FakeAuthValidator:
@@ -211,6 +212,135 @@ class LiveKitJWTTokenIssuerTests(unittest.IsolatedAsyncioTestCase):
         payload = token.split(".")[1]
         padded = payload + "=" * (-len(payload) % 4)
         return json.loads(base64.urlsafe_b64decode(padded.encode("ascii")))
+
+
+class FakeSynapseHTTPClient:
+    def __init__(self, responses: dict[str, SynapseHTTPResponse]) -> None:
+        self.responses = responses
+        self.paths: list[str] = []
+
+    async def get_json(self, path: str) -> SynapseHTTPResponse:
+        self.paths.append(path)
+        return self.responses.get(path, SynapseHTTPResponse(status_code=404, json_body=None))
+
+
+class SynapseRoomValidatorTests(unittest.IsolatedAsyncioTestCase):
+    room_id = "!room:example.test"
+    encoded_room_id = "%21room%3Aexample.test"
+    members_path = f"/_synapse/admin/v1/rooms/{encoded_room_id}/members"
+    state_path = f"/_synapse/admin/v1/rooms/{encoded_room_id}/state"
+
+    def make_validator(self, members_response: SynapseHTTPResponse, state_response: SynapseHTTPResponse) -> tuple[SynapseRoomValidator, FakeSynapseHTTPClient]:
+        http_client = FakeSynapseHTTPClient({
+            self.members_path: members_response,
+            self.state_path: state_response,
+        })
+        return SynapseRoomValidator("https://synapse.example.test", "admin-token-sensitive", http_client), http_client
+
+    def token_request(self, peer_user_id: str = "@bob:example.test") -> TokenRequest:
+        return TokenRequest.from_mapping({
+            "version": 1,
+            "call_id": "call-a",
+            "room_id": self.room_id,
+            "peer_user_id": peer_user_id,
+            "intent": "audio",
+            "direction": "outgoing",
+        })
+
+    async def validate(self, members_body: object, state_body: object, peer_user_id: str = "@bob:example.test") -> RoomEligibility:
+        validator, _ = self.make_validator(
+            SynapseHTTPResponse(status_code=200, json_body=members_body),
+            SynapseHTTPResponse(status_code=200, json_body=state_body),
+        )
+        return await validator.validate_direct_call_room(AuthenticatedUser("@alice:example.test"), self.token_request(peer_user_id))
+
+    async def expect_error(self,
+                           members_response: SynapseHTTPResponse,
+                           state_response: SynapseHTTPResponse,
+                           errcode: str,
+                           peer_user_id: str = "@bob:example.test") -> None:
+        validator, _ = self.make_validator(members_response, state_response)
+        with self.assertRaises(CallServiceError) as context:
+            await validator.validate_direct_call_room(AuthenticatedUser("@alice:example.test"), self.token_request(peer_user_id))
+        self.assertEqual(context.exception.errcode, errcode)
+
+    async def test_valid_encrypted_one_to_one_room_passes(self) -> None:
+        validator, http_client = self.make_validator(
+            SynapseHTTPResponse(status_code=200, json_body={"members": ["@alice:example.test", "@bob:example.test"]}),
+            SynapseHTTPResponse(status_code=200, json_body={"state": [{"type": "m.room.encryption", "content": {"algorithm": "m.megolm.v1.aes-sha2"}}]}),
+        )
+
+        eligibility = await validator.validate_direct_call_room(AuthenticatedUser("@alice:example.test"), self.token_request())
+
+        self.assertEqual(eligibility.joined_user_ids, ("@alice:example.test", "@bob:example.test"))
+        self.assertTrue(eligibility.is_encrypted)
+        self.assertEqual(http_client.paths, [self.members_path, self.state_path])
+
+    async def test_requester_not_joined_rejected(self) -> None:
+        await self.expect_error(
+            SynapseHTTPResponse(status_code=200, json_body={"members": ["@charlie:example.test", "@bob:example.test"]}),
+            SynapseHTTPResponse(status_code=200, json_body={"state": [{"type": "m.room.encryption"}]}),
+            "M_NOT_JOINED",
+        )
+
+    async def test_peer_not_joined_rejected(self) -> None:
+        await self.expect_error(
+            SynapseHTTPResponse(status_code=200, json_body={"members": ["@alice:example.test", "@charlie:example.test"]}),
+            SynapseHTTPResponse(status_code=200, json_body={"state": [{"type": "m.room.encryption"}]}),
+            "M_DIRECT_CALL_PEER_MISMATCH",
+        )
+
+    async def test_more_than_two_joined_members_rejected(self) -> None:
+        await self.expect_error(
+            SynapseHTTPResponse(status_code=200, json_body={"members": ["@alice:example.test", "@bob:example.test", "@charlie:example.test"]}),
+            SynapseHTTPResponse(status_code=200, json_body={"state": [{"type": "m.room.encryption"}]}),
+            "M_DIRECT_CALL_NOT_1_TO_1",
+        )
+
+    async def test_room_without_encryption_rejected(self) -> None:
+        await self.expect_error(
+            SynapseHTTPResponse(status_code=200, json_body={"members": ["@alice:example.test", "@bob:example.test"]}),
+            SynapseHTTPResponse(status_code=200, json_body={"state": [{"type": "m.room.name"}]}),
+            "M_ROOM_NOT_ENCRYPTED",
+        )
+
+    async def test_synapse_forbidden_fails_closed(self) -> None:
+        await self.expect_error(
+            SynapseHTTPResponse(status_code=403, json_body={"errcode": "M_FORBIDDEN"}),
+            SynapseHTTPResponse(status_code=200, json_body={"state": [{"type": "m.room.encryption"}]}),
+            "M_FORBIDDEN",
+        )
+
+    async def test_synapse_not_found_fails_closed(self) -> None:
+        await self.expect_error(
+            SynapseHTTPResponse(status_code=404, json_body={"errcode": "M_NOT_FOUND"}),
+            SynapseHTTPResponse(status_code=200, json_body={"state": [{"type": "m.room.encryption"}]}),
+            "M_UNKNOWN",
+        )
+
+    async def test_malformed_synapse_response_fails_closed(self) -> None:
+        await self.expect_error(
+            SynapseHTTPResponse(status_code=200, json_body={"members": "not-a-list"}),
+            SynapseHTTPResponse(status_code=200, json_body={"state": [{"type": "m.room.encryption"}]}),
+            "M_UNKNOWN",
+        )
+
+    async def test_admin_token_not_in_logs_or_errors(self) -> None:
+        validator, _ = self.make_validator(
+            SynapseHTTPResponse(status_code=200, json_body={"members": ["@alice:example.test", "@bob:example.test"]}),
+            SynapseHTTPResponse(status_code=200, json_body={"state": [{"type": "m.room.name"}]}),
+        )
+
+        with self.assertLogs("salemx_call_service.room_validation", level="INFO") as logs:
+            with self.assertRaises(CallServiceError) as context:
+                await validator.validate_direct_call_room(AuthenticatedUser("@alice:example.test"), self.token_request())
+
+        self.assertEqual(context.exception.errcode, "M_ROOM_NOT_ENCRYPTED")
+        log_output = "\n".join(logs.output)
+        self.assertNotIn("admin-token-sensitive", log_output)
+        self.assertNotIn("!room:example.test", log_output)
+        self.assertNotIn("@alice:example.test", log_output)
+        self.assertNotIn("admin-token-sensitive", str(context.exception))
 
 
 if __name__ == "__main__":

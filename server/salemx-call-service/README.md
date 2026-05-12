@@ -132,7 +132,10 @@ location = /_matrix/client/unstable/kz.salemx.direct_call/livekit/token {
 
 ## Current Limitations
 
-- `SynapseRoomValidator` is an explicit production integration boundary and still needs deployment-specific membership/state lookup implementation.
+- `SynapseRoomValidator` uses Synapse admin-style room member/state endpoints:
+  - `GET /_synapse/admin/v1/rooms/{room_id}/members`
+  - `GET /_synapse/admin/v1/rooms/{room_id}/state`
+  Verify these response shapes against the deployed Synapse version before production use.
 - `InMemoryAllocationStore` is suitable only for the skeleton and tests. Production should use a shared transactional store.
 - Rate limiting is represented in config but not implemented yet.
 - The service issues media transport credentials only. It does not know or transport media E2EE keys.
