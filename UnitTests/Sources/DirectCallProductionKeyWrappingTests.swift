@@ -240,6 +240,76 @@ final class DirectCallProductionKeyWrappingTests {
     }
 
     @Test
+    func productionDependenciesFactoryDoesNotAskRuntimeProviderWhenDisabled() {
+        let provider = DirectCallMediaKeyEnvelopeWrappingProviderSpy(wrapper: MatrixSDKDirectCallMediaKeyEnvelopeWrapperSpy())
+        let factory = NativeDirectCallProductionDependenciesFactory(matrixSDKKeyEnvelopeWrapperProvider: provider,
+                                                                    ownUserID: ownUserID,
+                                                                    senderDeviceID: "DEVICE")
+
+        let dependencies = factory.makeDependencies()
+
+        #expect(dependencies.hasEncryptionService == false)
+        #expect(dependencies.hasMediaEngineFactory == false)
+        #expect(provider.makeWrapperCallCount == 0)
+    }
+
+    @Test
+    func productionDependenciesFactoryCanConstructMatrixSDKKeyWrapperFromRuntimeProvider() async throws {
+        let endpointURL = try #require(URL(string: "https://call-service.example.com/direct-calls"))
+        let keyStore = DirectCallLiveKitMediaKeyStore()
+        let sdk = MatrixSDKDirectCallMediaKeyEnvelopeWrapperSpy()
+        let provider = DirectCallMediaKeyEnvelopeWrappingProviderSpy(wrapper: sdk)
+        let configuration = NativeDirectCallProductionConfiguration(isEnabled: true,
+                                                                    liveKitConfiguration: .init(tokenEndpointURL: endpointURL))
+        let factory = NativeDirectCallProductionDependenciesFactory(configuration: configuration,
+                                                                    liveKitClient: ProductionKeyWrappingLiveKitClientSpy(),
+                                                                    matrixSDKKeyEnvelopeWrapperProvider: provider,
+                                                                    mediaKeyStore: keyStore,
+                                                                    ownUserID: ownUserID,
+                                                                    senderDeviceID: "DEVICE")
+        let dependencies = factory.makeDependencies()
+        let service = try #require(dependencies.encryptionService)
+
+        let generated = try await service.generatePerCallKey(callID: callID, roomID: roomID, peerUserID: peerUserID).get()
+
+        let sdkInfo = try #require(sdk.wrapInfos.first)
+        #expect(provider.makeWrapperCallCount == 1)
+        #expect(sdkInfo.roomId == roomID)
+        #expect(sdkInfo.callId == callID)
+        #expect(sdkInfo.recipientUserId == peerUserID)
+        #expect(sdkInfo.trustRequirement == .onlyTrustedDevices)
+        #expect(generated.payload.encryptedPayload == "sdk-opaque-envelope")
+        #expect(keyStore.makeKeyProvider(for: generated.keyHandle) != nil)
+        #expect(dependencies.hasMediaEngineFactory)
+    }
+
+    @Test
+    func productionDependenciesFactoryPrefersExplicitKeyWrapperOverRuntimeProvider() async throws {
+        let endpointURL = try #require(URL(string: "https://call-service.example.com/direct-calls"))
+        let keyStore = DirectCallLiveKitMediaKeyStore()
+        let explicitWrapper = MediaKeyWrapperSpy()
+        let provider = DirectCallMediaKeyEnvelopeWrappingProviderSpy(wrapper: MatrixSDKDirectCallMediaKeyEnvelopeWrapperSpy(wrapError: DirectCallMediaKeyEnvelopeError.TrustViolation))
+        let configuration = NativeDirectCallProductionConfiguration(isEnabled: true,
+                                                                    liveKitConfiguration: .init(tokenEndpointURL: endpointURL))
+        let factory = NativeDirectCallProductionDependenciesFactory(configuration: configuration,
+                                                                    liveKitClient: ProductionKeyWrappingLiveKitClientSpy(),
+                                                                    keyWrapper: explicitWrapper,
+                                                                    matrixSDKKeyEnvelopeWrapperProvider: provider,
+                                                                    mediaKeyStore: keyStore,
+                                                                    ownUserID: ownUserID,
+                                                                    senderDeviceID: "DEVICE")
+        let dependencies = factory.makeDependencies()
+        let service = try #require(dependencies.encryptionService)
+
+        let generated = try await service.generatePerCallKey(callID: callID, roomID: roomID, peerUserID: peerUserID).get()
+
+        #expect(explicitWrapper.wrappedRequests.count == 1)
+        #expect(provider.makeWrapperCallCount == 0)
+        #expect(generated.payload.encryptedPayload == "opaque-\(generated.keyHandle.keyID)")
+        #expect(keyStore.makeKeyProvider(for: generated.keyHandle) != nil)
+    }
+
+    @Test
     func matrixSDKWrapperFailsClosedWithoutSDKDependency() async {
         let wrapper = MatrixSDKDirectCallMediaKeyWrapper()
         let wrapRequest = makeWrapRequest()
@@ -423,6 +493,21 @@ private final class MatrixSDKDirectCallMediaKeyEnvelopeWrapperSpy: MatrixSDKDire
         }
 
         return unwrapResult
+    }
+}
+
+@MainActor
+private final class DirectCallMediaKeyEnvelopeWrappingProviderSpy: DirectCallMediaKeyEnvelopeWrappingProviding {
+    private let wrapper: MatrixSDKDirectCallMediaKeyEnvelopeWrappingProtocol?
+    private(set) var makeWrapperCallCount = 0
+
+    init(wrapper: MatrixSDKDirectCallMediaKeyEnvelopeWrappingProtocol?) {
+        self.wrapper = wrapper
+    }
+
+    func makeDirectCallMediaKeyEnvelopeWrapper() -> MatrixSDKDirectCallMediaKeyEnvelopeWrappingProtocol? {
+        makeWrapperCallCount += 1
+        return wrapper
     }
 }
 

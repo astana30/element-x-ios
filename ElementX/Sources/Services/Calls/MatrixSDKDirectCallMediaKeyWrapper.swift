@@ -14,6 +14,11 @@ protocol MatrixSDKDirectCallMediaKeyEnvelopeWrappingProtocol: AnyObject {
                                           envelope: MatrixRustSDK.DirectCallMediaKeyEnvelope) async throws -> MatrixRustSDK.DirectCallMediaKeyUnwrapResult
 }
 
+@MainActor
+protocol DirectCallMediaKeyEnvelopeWrappingProviding: AnyObject {
+    func makeDirectCallMediaKeyEnvelopeWrapper() -> MatrixSDKDirectCallMediaKeyEnvelopeWrappingProtocol?
+}
+
 final class MatrixSDKDirectCallMediaKeyEnvelopeWrapperAdapter: MatrixSDKDirectCallMediaKeyEnvelopeWrappingProtocol {
     private let encryption: MatrixRustSDK.EncryptionProtocol
 

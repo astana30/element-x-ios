@@ -1425,6 +1425,13 @@ private extension TimelineMediaVisibility {
     }
 }
 
+@MainActor
+extension ClientProxy: DirectCallMediaKeyEnvelopeWrappingProviding {
+    func makeDirectCallMediaKeyEnvelopeWrapper() -> MatrixSDKDirectCallMediaKeyEnvelopeWrappingProtocol? {
+        MatrixSDKDirectCallMediaKeyEnvelopeWrapperAdapter(encryption: client.encryption())
+    }
+}
+
 private extension CreateRoomAccessType {
     var isEncrypted: Bool {
         switch self {
