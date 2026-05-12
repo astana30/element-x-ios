@@ -43,7 +43,7 @@ final class NativeDirectCallDiagnosticEncryptionService: DirectCallEncryptionSer
 
     func generatePerCallKey(callID: String,
                             roomID: String,
-                            peerUserID: String) -> Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason> {
+                            peerUserID: String) async -> Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason> {
         guard !callID.isEmpty,
               !roomID.isEmpty,
               !peerUserID.isEmpty,
@@ -78,7 +78,7 @@ final class NativeDirectCallDiagnosticEncryptionService: DirectCallEncryptionSer
     func consumeRemoteEncryptedKey(_ payload: DirectCallEncryptedKeyExchangePayload,
                                    expectedCallID: String,
                                    expectedRoomID: String,
-                                   expectedSenderUserID: String) -> Result<DirectCallMediaKeyHandle, DirectCallEncryptionFailureReason> {
+                                   expectedSenderUserID: String) async -> Result<DirectCallMediaKeyHandle, DirectCallEncryptionFailureReason> {
         guard payload.callID == expectedCallID,
               payload.roomID == expectedRoomID,
               payload.senderUserID == expectedSenderUserID,

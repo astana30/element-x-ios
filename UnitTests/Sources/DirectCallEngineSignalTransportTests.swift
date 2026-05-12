@@ -2874,7 +2874,7 @@ private final class SignalEncryptionServiceSpy: DirectCallEncryptionServiceProto
         self.senderUserID = senderUserID
     }
 
-    func generatePerCallKey(callID: String, roomID: String, peerUserID: String) -> Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason> {
+    func generatePerCallKey(callID: String, roomID: String, peerUserID: String) async -> Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason> {
         let keyID = "key-\(callID)"
         return .success(.init(payload: .init(callID: callID,
                                              roomID: roomID,
@@ -2884,7 +2884,7 @@ private final class SignalEncryptionServiceSpy: DirectCallEncryptionServiceProto
                               keyHandle: .init(callID: callID, keyID: keyID)))
     }
 
-    func consumeRemoteEncryptedKey(_ payload: DirectCallEncryptedKeyExchangePayload, expectedCallID: String, expectedRoomID: String, expectedSenderUserID: String) -> Result<DirectCallMediaKeyHandle, DirectCallEncryptionFailureReason> {
+    func consumeRemoteEncryptedKey(_ payload: DirectCallEncryptedKeyExchangePayload, expectedCallID: String, expectedRoomID: String, expectedSenderUserID: String) async -> Result<DirectCallMediaKeyHandle, DirectCallEncryptionFailureReason> {
         guard payload.callID == expectedCallID,
               payload.roomID == expectedRoomID,
               payload.senderUserID == expectedSenderUserID,

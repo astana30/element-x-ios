@@ -283,7 +283,7 @@ final class DirectCallEngineTests {
     }
 
     @Test
-    func diagnosticEncryptionServiceConsumesOnlyMatchingSecretAndMetadata() throws {
+    func diagnosticEncryptionServiceConsumesOnlyMatchingSecretAndMetadata() async throws {
         let sender = try #require(NativeDirectCallDiagnosticEncryptionService(ownUserID: ownUserID,
                                                                               secret: "diagnostic-shared-secret"))
         let receiver = try #require(NativeDirectCallDiagnosticEncryptionService(ownUserID: peerUserID,
@@ -291,9 +291,9 @@ final class DirectCallEngineTests {
         let mismatchedReceiver = try #require(NativeDirectCallDiagnosticEncryptionService(ownUserID: peerUserID,
                                                                                           secret: "other-diagnostic-secret"))
 
-        let generatedResult = sender.generatePerCallKey(callID: "call-a",
-                                                        roomID: roomID,
-                                                        peerUserID: peerUserID)
+        let generatedResult = await sender.generatePerCallKey(callID: "call-a",
+                                                              roomID: roomID,
+                                                              peerUserID: peerUserID)
         guard case .success(let generated) = generatedResult else {
             Issue.record("Expected diagnostic encryption key generation to succeed.")
             return
@@ -301,26 +301,26 @@ final class DirectCallEngineTests {
 
         #expect(generated.payload.encryptedPayload.contains("diagnostic-shared-secret") == false)
         #expect(generated.payload.encryptedPayload.contains("other-diagnostic-secret") == false)
-        #expect(receiver.consumeRemoteEncryptedKey(generated.payload,
-                                                   expectedCallID: "call-a",
-                                                   expectedRoomID: roomID,
-                                                   expectedSenderUserID: ownUserID) == .success(.init(callID: "call-a", keyID: generated.keyHandle.keyID)))
-        #expect(mismatchedReceiver.consumeRemoteEncryptedKey(generated.payload,
-                                                             expectedCallID: "call-a",
-                                                             expectedRoomID: roomID,
-                                                             expectedSenderUserID: ownUserID) == .failure(.keyMismatch))
-        #expect(receiver.consumeRemoteEncryptedKey(generated.payload,
-                                                   expectedCallID: "wrong-call",
-                                                   expectedRoomID: roomID,
-                                                   expectedSenderUserID: ownUserID) == .failure(.keyMismatch))
-        #expect(receiver.consumeRemoteEncryptedKey(generated.payload,
-                                                   expectedCallID: "call-a",
-                                                   expectedRoomID: "!wrong:example.com",
-                                                   expectedSenderUserID: ownUserID) == .failure(.keyMismatch))
-        #expect(receiver.consumeRemoteEncryptedKey(generated.payload,
-                                                   expectedCallID: "call-a",
-                                                   expectedRoomID: roomID,
-                                                   expectedSenderUserID: peerUserID) == .failure(.keyMismatch))
+        #expect(await receiver.consumeRemoteEncryptedKey(generated.payload,
+                                                         expectedCallID: "call-a",
+                                                         expectedRoomID: roomID,
+                                                         expectedSenderUserID: ownUserID) == .success(.init(callID: "call-a", keyID: generated.keyHandle.keyID)))
+        #expect(await mismatchedReceiver.consumeRemoteEncryptedKey(generated.payload,
+                                                                   expectedCallID: "call-a",
+                                                                   expectedRoomID: roomID,
+                                                                   expectedSenderUserID: ownUserID) == .failure(.keyMismatch))
+        #expect(await receiver.consumeRemoteEncryptedKey(generated.payload,
+                                                         expectedCallID: "wrong-call",
+                                                         expectedRoomID: roomID,
+                                                         expectedSenderUserID: ownUserID) == .failure(.keyMismatch))
+        #expect(await receiver.consumeRemoteEncryptedKey(generated.payload,
+                                                         expectedCallID: "call-a",
+                                                         expectedRoomID: "!wrong:example.com",
+                                                         expectedSenderUserID: ownUserID) == .failure(.keyMismatch))
+        #expect(await receiver.consumeRemoteEncryptedKey(generated.payload,
+                                                         expectedCallID: "call-a",
+                                                         expectedRoomID: roomID,
+                                                         expectedSenderUserID: peerUserID) == .failure(.keyMismatch))
         #expect(NativeDirectCallDiagnosticEncryptionService(ownUserID: ownUserID, secret: "") == nil)
         #expect(NativeDirectCallDiagnosticEncryptionService(ownUserID: "", secret: "diagnostic-shared-secret") == nil)
     }
@@ -784,7 +784,7 @@ private final class EncryptionServiceSpy: DirectCallEncryptionServiceProtocol {
         self.consumeResult = consumeResult
     }
 
-    func generatePerCallKey(callID: String, roomID: String, peerUserID: String) -> Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason> {
+    func generatePerCallKey(callID: String, roomID: String, peerUserID: String) async -> Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason> {
         generatedRequests.append(.init(callID: callID, roomID: roomID, peerUserID: peerUserID))
 
         if let generateResult {
@@ -800,7 +800,7 @@ private final class EncryptionServiceSpy: DirectCallEncryptionServiceProtocol {
                               keyHandle: .init(callID: callID, keyID: keyID)))
     }
 
-    func consumeRemoteEncryptedKey(_ payload: DirectCallEncryptedKeyExchangePayload, expectedCallID: String, expectedRoomID: String, expectedSenderUserID: String) -> Result<DirectCallMediaKeyHandle, DirectCallEncryptionFailureReason> {
+    func consumeRemoteEncryptedKey(_ payload: DirectCallEncryptedKeyExchangePayload, expectedCallID: String, expectedRoomID: String, expectedSenderUserID: String) async -> Result<DirectCallMediaKeyHandle, DirectCallEncryptionFailureReason> {
         consumedPayloads.append(payload)
 
         if let consumeResult {

@@ -1096,6 +1096,7 @@
 		B7A28888FDCB2750AEE68846 /* AttributedStringBuilderProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = C98126A51A5E8EC1AC9AC909 /* AttributedStringBuilderProtocol.swift */; };
 		B7BBF054D2073E27BD3356AF /* SecureBackupScreenCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0962CA4C693EE3D6B91A5A4 /* SecureBackupScreenCoordinator.swift */; };
 		B7EA3E4405976675CEA246AE /* AVMetadataMachineReadableCodeObjectExtensionsTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF95DB5A44D531F6107B0071 /* AVMetadataMachineReadableCodeObjectExtensionsTest.swift */; };
+		B8666042EE08F5D6FFFC4D68 /* MatrixSDKDirectCallMediaKeyWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50B9017E255A4916F4D76B07 /* MatrixSDKDirectCallMediaKeyWrapper.swift */; };
 		B89997F5456CF04A1A2022DA /* AppCoordinatorProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 865E1CB993C2D13D50C744D5 /* AppCoordinatorProtocol.swift */; };
 		B8D7C9377C772DA73C61F7E2 /* CoordinatorProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0104E55F0FADAA14BCFD07D2 /* CoordinatorProtocol.swift */; };
 		B8DC345A0397E4DCCB09EEBD /* ChatsTabFlowCoordinatorStateMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69FF7A54084255BC6A227C8C /* ChatsTabFlowCoordinatorStateMachine.swift */; };
@@ -2022,6 +2023,7 @@
 		509D6D72BBFDDBBAB3443A86 /* MediaSourceProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaSourceProxy.swift; sourceTree = "<group>"; };
 		50ADF67C12D4B49540E564D1 /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		50AED6BF7492E0E311A17569 /* id */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = id; path = id.lproj/Localizable.strings; sourceTree = "<group>"; };
+		50B9017E255A4916F4D76B07 /* MatrixSDKDirectCallMediaKeyWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixSDKDirectCallMediaKeyWrapper.swift; sourceTree = "<group>"; };
 		50E3EF02D0D23ABEDC46285A /* UNTextInputNotificationResponse+Creator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UNTextInputNotificationResponse+Creator.swift"; sourceTree = "<group>"; };
 		50F160201870FFADE5501A08 /* OrderedSet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrderedSet.swift; sourceTree = "<group>"; };
 		5102FA05C3D369F8EE44277F /* EmojiProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmojiProvider.swift; sourceTree = "<group>"; };
@@ -3222,6 +3224,7 @@
 				00E3AEF46A0ECB55A388804E /* DirectCallSignalTransport.swift */,
 				BFE5D88B12B3142D7D30268B /* LiveKitDirectCallClient.swift */,
 				8ED0010AA472E6BF4CF29A0E /* LiveKitDirectCallMediaEngine.swift */,
+				50B9017E255A4916F4D76B07 /* MatrixSDKDirectCallMediaKeyWrapper.swift */,
 				3DFA5CE0F5205254A66E7320 /* NativeDirectCallDiagnosticEncryptionService.swift */,
 				B5B2638A606557653CAAA252 /* NativeDirectCallDiagnosticLiveKitMedia.swift */,
 				457CB85C7313E71588D9CBC1 /* NoOpDirectCallMediaEngine.swift */,
@@ -8317,6 +8320,7 @@
 				6B78C7796FDFAF1CE08218E1 /* MapTilerURLBuilderProtocol.swift in Sources */,
 				7DCD683857258787B94FC6D4 /* MapURLs.swift in Sources */,
 				882A1F6899F8D119A5FB3861 /* MatrixEntityRegex.swift in Sources */,
+				B8666042EE08F5D6FFFC4D68 /* MatrixSDKDirectCallMediaKeyWrapper.swift in Sources */,
 				4C15854B8AA02205B0F54473 /* MatrixUserShareLink.swift in Sources */,
 				65A082A45BF6423258C74D0C /* MediaEventsTimelineFlowCoordinator.swift in Sources */,
 				961BEE8A9C566AC9E0133B59 /* MediaEventsTimelineScreen.swift in Sources */,

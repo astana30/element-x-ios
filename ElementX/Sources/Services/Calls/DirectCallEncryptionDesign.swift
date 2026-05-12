@@ -177,24 +177,21 @@ enum DirectCallMediaKeyWrappingFailureReason: Error, Equatable {
 
 @MainActor
 protocol DirectCallMediaKeyWrappingProtocol {
-    /// Future Matrix SDK-backed implementations are expected to become async when
-    /// the SDK seam performs device and trust lookup. The app-side skeleton stays
-    /// synchronous until `DirectCallEncryptionServiceProtocol` is widened.
     func wrapMediaKey(_ mediaKey: String,
-                      request: DirectCallMediaKeyWrapRequest) -> Result<DirectCallWrappedMediaKeyEnvelope, DirectCallMediaKeyWrappingFailureReason>
+                      request: DirectCallMediaKeyWrapRequest) async -> Result<DirectCallWrappedMediaKeyEnvelope, DirectCallMediaKeyWrappingFailureReason>
 
     func unwrapMediaKeyEnvelope(_ envelope: DirectCallWrappedMediaKeyEnvelope,
-                                request: DirectCallMediaKeyUnwrapRequest) -> Result<DirectCallUnwrappedMediaKey, DirectCallMediaKeyWrappingFailureReason>
+                                request: DirectCallMediaKeyUnwrapRequest) async -> Result<DirectCallUnwrappedMediaKey, DirectCallMediaKeyWrappingFailureReason>
 }
 
 final class FailClosedDirectCallMediaKeyWrapper: DirectCallMediaKeyWrappingProtocol, CustomStringConvertible, CustomDebugStringConvertible {
     func wrapMediaKey(_ mediaKey: String,
-                      request: DirectCallMediaKeyWrapRequest) -> Result<DirectCallWrappedMediaKeyEnvelope, DirectCallMediaKeyWrappingFailureReason> {
+                      request: DirectCallMediaKeyWrapRequest) async -> Result<DirectCallWrappedMediaKeyEnvelope, DirectCallMediaKeyWrappingFailureReason> {
         .failure(.e2eeUnavailable)
     }
 
     func unwrapMediaKeyEnvelope(_ envelope: DirectCallWrappedMediaKeyEnvelope,
-                                request: DirectCallMediaKeyUnwrapRequest) -> Result<DirectCallUnwrappedMediaKey, DirectCallMediaKeyWrappingFailureReason> {
+                                request: DirectCallMediaKeyUnwrapRequest) async -> Result<DirectCallUnwrappedMediaKey, DirectCallMediaKeyWrappingFailureReason> {
         .failure(.e2eeUnavailable)
     }
 
@@ -210,10 +207,10 @@ final class FailClosedDirectCallMediaKeyWrapper: DirectCallMediaKeyWrappingProto
 @MainActor
 protocol DirectCallEncryptionServiceProtocol {
     /// Generates a new per-call key. Keys must never be reused across calls.
-    func generatePerCallKey(callID: String, roomID: String, peerUserID: String) -> Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason>
+    func generatePerCallKey(callID: String, roomID: String, peerUserID: String) async -> Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason>
 
     /// Consumes remote encrypted key material and verifies compatibility for this call.
-    func consumeRemoteEncryptedKey(_ payload: DirectCallEncryptedKeyExchangePayload, expectedCallID: String, expectedRoomID: String, expectedSenderUserID: String) -> Result<DirectCallMediaKeyHandle, DirectCallEncryptionFailureReason>
+    func consumeRemoteEncryptedKey(_ payload: DirectCallEncryptedKeyExchangePayload, expectedCallID: String, expectedRoomID: String, expectedSenderUserID: String) async -> Result<DirectCallMediaKeyHandle, DirectCallEncryptionFailureReason>
 
     /// Removes all key material for the call from memory.
     func clearPerCallKey(callID: String)
@@ -222,11 +219,11 @@ protocol DirectCallEncryptionServiceProtocol {
 final class NoOpDirectCallEncryptionService: DirectCallEncryptionServiceProtocol {
     private var clearedCallIDs = Set<String>()
 
-    func generatePerCallKey(callID: String, roomID: String, peerUserID: String) -> Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason> {
+    func generatePerCallKey(callID: String, roomID: String, peerUserID: String) async -> Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason> {
         .failure(.keyExchangeFailed)
     }
 
-    func consumeRemoteEncryptedKey(_ payload: DirectCallEncryptedKeyExchangePayload, expectedCallID: String, expectedRoomID: String, expectedSenderUserID: String) -> Result<DirectCallMediaKeyHandle, DirectCallEncryptionFailureReason> {
+    func consumeRemoteEncryptedKey(_ payload: DirectCallEncryptedKeyExchangePayload, expectedCallID: String, expectedRoomID: String, expectedSenderUserID: String) async -> Result<DirectCallMediaKeyHandle, DirectCallEncryptionFailureReason> {
         .failure(.keyExchangeFailed)
     }
 
@@ -268,7 +265,7 @@ final class ProductionDirectCallEncryptionService: DirectCallEncryptionServicePr
         self.mediaKeyProvider = mediaKeyProvider ?? Self.makeMediaKey
     }
 
-    func generatePerCallKey(callID: String, roomID: String, peerUserID: String) -> Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason> {
+    func generatePerCallKey(callID: String, roomID: String, peerUserID: String) async -> Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason> {
         guard let keyStore,
               let ownUserID,
               !callID.isEmpty,
@@ -293,7 +290,7 @@ final class ProductionDirectCallEncryptionService: DirectCallEncryptionServicePr
                                                         intent: .audio,
                                                         expiresAt: now().addingTimeInterval(60),
                                                         keyID: keyID)
-        switch keyWrapper.wrapMediaKey(mediaKey, request: wrapRequest) {
+        switch await keyWrapper.wrapMediaKey(mediaKey, request: wrapRequest) {
         case .success(let envelope):
             guard envelope.callID == callID,
                   envelope.roomID == roomID,
@@ -325,7 +322,7 @@ final class ProductionDirectCallEncryptionService: DirectCallEncryptionServicePr
     func consumeRemoteEncryptedKey(_ payload: DirectCallEncryptedKeyExchangePayload,
                                    expectedCallID: String,
                                    expectedRoomID: String,
-                                   expectedSenderUserID: String) -> Result<DirectCallMediaKeyHandle, DirectCallEncryptionFailureReason> {
+                                   expectedSenderUserID: String) async -> Result<DirectCallMediaKeyHandle, DirectCallEncryptionFailureReason> {
         guard let keyStore,
               let ownUserID,
               payload.callID == expectedCallID,
@@ -354,7 +351,7 @@ final class ProductionDirectCallEncryptionService: DirectCallEncryptionServicePr
                                                             recipientDeviceID: senderDeviceID,
                                                             intent: .audio,
                                                             receivedAt: now())
-        switch keyWrapper.unwrapMediaKeyEnvelope(envelope, request: unwrapRequest) {
+        switch await keyWrapper.unwrapMediaKeyEnvelope(envelope, request: unwrapRequest) {
         case .success(let unwrappedKey):
             guard unwrappedKey.keyID == payload.keyID,
                   !unwrappedKey.mediaKey.isEmpty else {

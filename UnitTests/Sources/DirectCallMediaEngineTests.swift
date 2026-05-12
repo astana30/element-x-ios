@@ -1992,7 +1992,7 @@ final class DirectCallMediaProviderSkeletonTests {
     }
 
     @Test
-    func productionDirectCallEncryptionServiceFailsClosed() {
+    func productionDirectCallEncryptionServiceFailsClosed() async {
         let service = ProductionDirectCallEncryptionService()
         let payload = DirectCallEncryptedKeyExchangePayload(callID: callID,
                                                             roomID: roomID,
@@ -2000,13 +2000,13 @@ final class DirectCallMediaProviderSkeletonTests {
                                                             keyID: "key-a",
                                                             encryptedPayload: "opaque-payload")
 
-        #expect(service.generatePerCallKey(callID: callID,
-                                           roomID: roomID,
-                                           peerUserID: peerUserID) == .failure(.e2eeUnavailable))
-        #expect(service.consumeRemoteEncryptedKey(payload,
-                                                  expectedCallID: callID,
-                                                  expectedRoomID: roomID,
-                                                  expectedSenderUserID: peerUserID) == .failure(.e2eeUnavailable))
+        #expect(await service.generatePerCallKey(callID: callID,
+                                                 roomID: roomID,
+                                                 peerUserID: peerUserID) == .failure(.e2eeUnavailable))
+        #expect(await service.consumeRemoteEncryptedKey(payload,
+                                                        expectedCallID: callID,
+                                                        expectedRoomID: roomID,
+                                                        expectedSenderUserID: peerUserID) == .failure(.e2eeUnavailable))
 
         service.clearPerCallKey(callID: callID)
 
@@ -2220,12 +2220,12 @@ final class DirectCallMediaProviderSkeletonTests {
     }
 
     @Test
-    func diagnosticLiveKitE2EEContextProviderUsesGeneratedDiagnosticKey() throws {
+    func diagnosticLiveKitE2EEContextProviderUsesGeneratedDiagnosticKey() async throws {
         let encryptionService = try #require(NativeDirectCallDiagnosticEncryptionService(ownUserID: "@me:example.com",
                                                                                          secret: "diagnostic-shared-secret"))
-        let generated = try encryptionService.generatePerCallKey(callID: callID,
-                                                                 roomID: roomID,
-                                                                 peerUserID: peerUserID).get()
+        let generated = try await encryptionService.generatePerCallKey(callID: callID,
+                                                                       roomID: roomID,
+                                                                       peerUserID: peerUserID).get()
         let provider = NativeDirectCallDiagnosticLiveKitE2EEContextProvider(encryptionService: encryptionService)
         let session = makeSession(encryptionState: .ready)
 
@@ -2603,11 +2603,11 @@ private final class AudioRouteControllerSpy: DirectCallAudioRouteControllerProto
 private final class MediaEncryptionServiceSpy: DirectCallEncryptionServiceProtocol {
     private(set) var clearedCallIDs = [String]()
 
-    func generatePerCallKey(callID: String, roomID: String, peerUserID: String) -> Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason> {
+    func generatePerCallKey(callID: String, roomID: String, peerUserID: String) async -> Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason> {
         .failure(.keyExchangeFailed)
     }
 
-    func consumeRemoteEncryptedKey(_ payload: DirectCallEncryptedKeyExchangePayload, expectedCallID: String, expectedRoomID: String, expectedSenderUserID: String) -> Result<DirectCallMediaKeyHandle, DirectCallEncryptionFailureReason> {
+    func consumeRemoteEncryptedKey(_ payload: DirectCallEncryptedKeyExchangePayload, expectedCallID: String, expectedRoomID: String, expectedSenderUserID: String) async -> Result<DirectCallMediaKeyHandle, DirectCallEncryptionFailureReason> {
         .failure(.keyExchangeFailed)
     }
 
@@ -2629,7 +2629,7 @@ private final class DirectCallEngineMediaEncryptionServiceSpy: DirectCallEncrypt
         self.senderUserID = senderUserID
     }
 
-    func generatePerCallKey(callID: String, roomID: String, peerUserID: String) -> Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason> {
+    func generatePerCallKey(callID: String, roomID: String, peerUserID: String) async -> Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason> {
         let keyID = "key-\(callID)"
         return .success(.init(payload: .init(callID: callID,
                                              roomID: roomID,
@@ -2639,7 +2639,7 @@ private final class DirectCallEngineMediaEncryptionServiceSpy: DirectCallEncrypt
                               keyHandle: .init(callID: callID, keyID: keyID)))
     }
 
-    func consumeRemoteEncryptedKey(_ payload: DirectCallEncryptedKeyExchangePayload, expectedCallID: String, expectedRoomID: String, expectedSenderUserID: String) -> Result<DirectCallMediaKeyHandle, DirectCallEncryptionFailureReason> {
+    func consumeRemoteEncryptedKey(_ payload: DirectCallEncryptedKeyExchangePayload, expectedCallID: String, expectedRoomID: String, expectedSenderUserID: String) async -> Result<DirectCallMediaKeyHandle, DirectCallEncryptionFailureReason> {
         .failure(.keyExchangeFailed)
     }
 

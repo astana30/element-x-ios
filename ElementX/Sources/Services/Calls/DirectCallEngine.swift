@@ -346,7 +346,7 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         let timestamp = now()
         let callID = UUID().uuidString
         let generatedKeyExchange: DirectCallGeneratedKeyExchange
-        switch encryptionService.generatePerCallKey(callID: callID, roomID: roomID, peerUserID: peer) {
+        switch await encryptionService.generatePerCallKey(callID: callID, roomID: roomID, peerUserID: peer) {
         case .success(let keyExchange):
             guard isGeneratedKeyExchangeValid(keyExchange, callID: callID, roomID: roomID) else {
                 return .failure(.invalidEncryptionTransition)
@@ -419,10 +419,10 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         }
 
         let keyHandle: DirectCallMediaKeyHandle
-        switch encryptionService.consumeRemoteEncryptedKey(keyExchange,
-                                                           expectedCallID: event.callID,
-                                                           expectedRoomID: event.roomID,
-                                                           expectedSenderUserID: event.senderID) {
+        switch await encryptionService.consumeRemoteEncryptedKey(keyExchange,
+                                                                 expectedCallID: event.callID,
+                                                                 expectedRoomID: event.roomID,
+                                                                 expectedSenderUserID: event.senderID) {
         case .success(let consumedKeyHandle):
             guard consumedKeyHandle.callID == event.callID, !consumedKeyHandle.keyID.isEmpty else {
                 return .failure(.invalidEncryptionTransition)
