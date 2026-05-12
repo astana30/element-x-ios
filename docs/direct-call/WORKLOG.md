@@ -84,3 +84,19 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Committed the SDK prototype and crypto tests as `f7c2cfe5c Add direct-call media key envelope crypto tests`.
 - Did not publish wrapper artifacts, update the app dependency pin, modify app production code, or activate production direct calls.
 - Recommended next phase: build/publish the Swift wrapper artifact from the proven SDK commit, then adapt the app key-wrapping seam to async SDK-backed wrapping in a later phase.
+
+## 2026-05-12 — 2.10R Matrix SDK Direct-Call Key Envelope Wrapper Publication
+
+- Revalidated the SDK commit `f7c2cfe5c Add direct-call media key envelope crypto tests` with `cargo check -p matrix-sdk-ffi` and focused `direct_call` SDK tests.
+- Created and pushed SDK tag `salemx-direct-call-key-envelope-f7c2cfe5c`.
+- Built a full Release `MatrixSDKFFI.xcframework` for iOS device and simulator targets from the proven SDK commit.
+- Published the reproducible artifact at the Matrix SDK release URL and verified the downloaded checksum: `654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e`.
+- Regenerated the Swift wrapper bindings so MatrixRustSDK exposes the direct-call media key envelope records and async wrap/unwrap methods.
+- Updated wrapper `Package.swift` to use the real release asset URL and checksum, with no local binary target path.
+- Validated wrapper `swift package resolve`, `swift package describe`, API presence, path scan, and `git diff --check`.
+- Committed wrapper changes as `1e58d0a Add direct-call media key envelope bindings` and tagged `salemx-matrix-rust-components-swift-26.03.10-salemx.3`.
+- Pinned the app to wrapper commit `1e58d0a4317e3ff74c2d565cf532bc8d035bcc8f` in `project.yml`, the generated Xcode project, and `compound-ios/Package.resolved`.
+- Ran focused app unit tests for production key wrapping and media engine coverage after the pin.
+- Ran the app Release build after the pin.
+- Kept production direct calls disabled; no visible UI, Element Call route, CallKit, push, or production feature activation was changed.
+- Recommended next phase: adapt the app production key-wrapping seam to the async SDK envelope API while preserving fail-closed default behavior.
