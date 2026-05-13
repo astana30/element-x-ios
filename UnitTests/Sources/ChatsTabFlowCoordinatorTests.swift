@@ -324,6 +324,39 @@ struct ChatsTabFlowCoordinatorTests {
         #expect(owner.startCount == 0)
     }
 
+    @Test
+    mutating func nativeDirectCallProductionActivationDryRunFailsClosedWithoutActiveRoom() async {
+        chatsTabFlowCoordinator = makeChatsTabFlowCoordinator(nativeDirectCallDiagnosticRuntimeGate: Self.enabledDiagnosticRuntimeGate)
+        chatsTabFlowCoordinator.start()
+
+        let diagnostic = await chatsTabFlowCoordinator.nativeDirectCallProductionActivationDryRunDiagnostic()
+        #expect(diagnostic.isEnabled == false)
+        #expect(diagnostic.disabledReason == .roomUnavailable)
+    }
+
+    @Test
+    mutating func nativeDirectCallProductionActivationDryRunDelegatesWithoutStartingCalls() async throws {
+        let owner = ChatsTabNativeDirectCallRoomFlowOwnerSpy()
+        let provider = ChatsTabProductionActivationDryRunProviderSpy(result: .init(isEnabled: true,
+                                                                                   disabledReason: nil,
+                                                                                   isCapabilityPresent: true,
+                                                                                   areDependenciesReady: true,
+                                                                                   isRoomEligible: true,
+                                                                                   isEndpointAccepted: true))
+        chatsTabFlowCoordinator = makeChatsTabFlowCoordinator(nativeDirectCallDiagnosticRuntimeGate: Self.enabledDiagnosticRuntimeGate,
+                                                              nativeDirectCallRoomFlowOwnerFactory: { _ in owner },
+                                                              nativeDirectCallProductionActivationDryRunProviderFactory: { _ in provider })
+        chatsTabFlowCoordinator.start()
+
+        try await process(route: .room(roomID: "1", via: []), expectedState: .roomList(detailState: .room(roomID: "1")))
+
+        let diagnostic = await chatsTabFlowCoordinator.nativeDirectCallProductionActivationDryRunDiagnostic()
+        #expect(diagnostic.isEnabled)
+        #expect(provider.callCount == 1)
+        #expect(owner.outgoingCount == 0)
+        #expect(owner.startCount == 0)
+    }
+
     // MARK: - Private
     
     private static func disabledDiagnosticRuntimeGate() -> Bool {
@@ -338,13 +371,17 @@ struct ChatsTabFlowCoordinatorTests {
                                              nativeDirectCallDiagnosticCommandConfiguration: NativeDirectCallRoomDeveloperCommandConfiguration = .init(),
                                              nativeDirectCallRoomFlowOwnerFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning = { roomProxy in
                                                  NativeDirectCallRoomFlowOwner(roomProxy: roomProxy)
+                                             },
+                                             nativeDirectCallProductionActivationDryRunProviderFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionActivationDryRunProviding = { _ in
+                                                 FailClosedNativeDirectCallProductionActivationDryRunProvider()
                                              }) -> ChatsTabFlowCoordinator {
         ChatsTabFlowCoordinator(isNewLogin: false,
                                 navigationSplitCoordinator: splitCoordinator,
                                 flowParameters: flowParameters,
                                 nativeDirectCallDiagnosticRuntimeGate: nativeDirectCallDiagnosticRuntimeGate,
                                 nativeDirectCallDiagnosticCommandConfiguration: nativeDirectCallDiagnosticCommandConfiguration,
-                                nativeDirectCallRoomFlowOwnerFactory: nativeDirectCallRoomFlowOwnerFactory)
+                                nativeDirectCallRoomFlowOwnerFactory: nativeDirectCallRoomFlowOwnerFactory,
+                                nativeDirectCallProductionActivationDryRunProviderFactory: nativeDirectCallProductionActivationDryRunProviderFactory)
     }
 
     private mutating func process(route: AppRoute, expectedState: ChatsTabFlowCoordinatorStateMachine.State) async throws {
@@ -395,6 +432,21 @@ private final class ChatsTabNativeDirectCallRoomFlowOwnerSpy: NativeDirectCallRo
     func beginReset() { }
 
     func reset() async { }
+}
+
+@MainActor
+private final class ChatsTabProductionActivationDryRunProviderSpy: NativeDirectCallProductionActivationDryRunProviding {
+    private(set) var callCount = 0
+    private let result: DirectCallProductionActivationDryRunDiagnostic
+
+    init(result: DirectCallProductionActivationDryRunDiagnostic) {
+        self.result = result
+    }
+
+    func nativeDirectCallProductionActivationDryRunDiagnostic() async -> DirectCallProductionActivationDryRunDiagnostic {
+        callCount += 1
+        return result
+    }
 }
 
 private func directCallSession() -> DirectCallSession {

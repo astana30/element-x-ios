@@ -634,6 +634,10 @@ class MockScreen: Identifiable {
                 NativeDirectCallRoomFlowOwner(roomProxy: roomProxy,
                                               triggerConfiguration: .init(isEnabled: commandsEnabled),
                                               compositionConfiguration: .init(isEnabled: commandsEnabled))
+            } nativeDirectCallProductionActivationDryRunProviderFactory: { roomProxy in
+                NativeDirectCallProductionActivationDryRunProvider(activationDryRunDiagnostics: DirectCallProductionActivationDecisionService(),
+                                                                   homeserverBaseURL: URL(string: flowParameters.userSession.clientProxy.homeserver),
+                                                                   roomEligibility: DirectCallProductionRoomEligibility(roomProxy: roomProxy))
             }
             #else
             let flowCoordinator = UserSessionFlowCoordinator(isNewLogin: false,
@@ -881,6 +885,16 @@ class MockScreen: Identifiable {
 
                             let result = UITestsSignal.NativeDirectCallDiagnosticStatusResult(correlationID: request.correlationID, statusResult)
                             try? client?.send(.nativeDirectCallDiagnosticStatusResult(result))
+                        case .nativeDirectCallProductionActivationDryRun(let request):
+                            let diagnostic: DirectCallProductionActivationDryRunDiagnostic
+                            if let flowCoordinator {
+                                diagnostic = await flowCoordinator.nativeDirectCallProductionActivationDryRunDiagnostic()
+                            } else {
+                                diagnostic = .disabled(.roomUnavailable)
+                            }
+
+                            let result = UITestsSignal.NativeDirectCallProductionActivationDryRunResult(correlationID: request.correlationID, diagnostic)
+                            try? client?.send(.nativeDirectCallProductionActivationDryRunResult(result))
                         default:
                             return
                         }

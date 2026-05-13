@@ -603,6 +603,15 @@ struct DirectCallProductionRoomEligibility: Equatable, CustomStringConvertible, 
         self.hasPeerUserID = hasPeerUserID
     }
 
+    init(roomProxy: JoinedRoomProxyProtocol) {
+        let roomInfo = roomProxy.infoPublisher.value
+        let members = roomProxy.membersPublisher.value
+        self.init(isDirect: roomInfo.isDirect,
+                  isEncrypted: roomInfo.isEncrypted,
+                  joinedMemberCount: roomInfo.joinedMembersCount,
+                  hasPeerUserID: members.contains { !$0.userID.isEmpty && $0.userID != roomProxy.ownUserID })
+    }
+
     var hasExactlyTwoJoinedMembers: Bool {
         joinedMemberCount == 2
     }

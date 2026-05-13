@@ -87,6 +87,9 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
          nativeDirectCallDiagnosticCommandConfiguration: NativeDirectCallRoomDeveloperCommandConfiguration = .init(),
          nativeDirectCallRoomFlowOwnerFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning = { roomProxy in
              NativeDirectCallRoomFlowOwner(roomProxy: roomProxy)
+         },
+         nativeDirectCallProductionActivationDryRunProviderFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionActivationDryRunProviding = { _ in
+             FailClosedNativeDirectCallProductionActivationDryRunProvider()
          }) {
         self.navigationRootCoordinator = navigationRootCoordinator
         self.appLockService = appLockService
@@ -102,7 +105,8 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
                                                           flowParameters: flowParameters,
                                                           nativeDirectCallDiagnosticRuntimeGate: nativeDirectCallDiagnosticRuntimeGate,
                                                           nativeDirectCallDiagnosticCommandConfiguration: nativeDirectCallDiagnosticCommandConfiguration,
-                                                          nativeDirectCallRoomFlowOwnerFactory: nativeDirectCallRoomFlowOwnerFactory)
+                                                          nativeDirectCallRoomFlowOwnerFactory: nativeDirectCallRoomFlowOwnerFactory,
+                                                          nativeDirectCallProductionActivationDryRunProviderFactory: nativeDirectCallProductionActivationDryRunProviderFactory)
         chatsTabDetails = .init(tag: HomeTab.chats, title: L10n.screenHomeTabChats, icon: \.chat, selectedIcon: \.chatSolid)
         chatsTabDetails.navigationSplitCoordinator = chatsSplitCoordinator
 
@@ -230,6 +234,15 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
         }
 
         return chatsTabFlowCoordinator.nativeDirectCallDiagnosticStatus()
+    }
+
+    func nativeDirectCallProductionActivationDryRunDiagnostic() async -> DirectCallProductionActivationDryRunDiagnostic {
+        guard nativeDirectCallDiagnosticRuntimeGate(),
+              navigationTabCoordinator.selectedTab == .chats else {
+            return .disabled(.roomUnavailable)
+        }
+
+        return await chatsTabFlowCoordinator.nativeDirectCallProductionActivationDryRunDiagnostic()
     }
     #endif
 

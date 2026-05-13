@@ -50,6 +50,10 @@ enum UITestsSignal: Codable, Equatable {
     case nativeDirectCallDiagnosticStatus(NativeDirectCallDiagnosticStatusRequest)
     /// Reports redacted native direct-call diagnostic state.
     case nativeDirectCallDiagnosticStatusResult(NativeDirectCallDiagnosticStatusResult)
+    /// Requests a redacted production native direct-call activation dry-run for the active room.
+    case nativeDirectCallProductionActivationDryRun(NativeDirectCallProductionActivationDryRunRequest)
+    /// Reports a redacted production native direct-call activation dry-run for the active room.
+    case nativeDirectCallProductionActivationDryRunResult(NativeDirectCallProductionActivationDryRunResult)
 
     struct NativeDirectCallDiagnosticCommandRequest: Codable, Equatable {
         let command: NativeDirectCallDiagnosticCommand
@@ -154,6 +158,47 @@ enum UITestsSignal: Codable, Equatable {
         init(correlationID: String? = nil, status: NativeDirectCallDiagnosticStatus) {
             self.correlationID = UITestsSignalling.sanitizedIdentifier(correlationID)
             self.status = status
+        }
+    }
+
+    struct NativeDirectCallProductionActivationDryRunRequest: Codable, Equatable {
+        let correlationID: String?
+
+        init(correlationID: String? = nil) {
+            self.correlationID = UITestsSignalling.sanitizedIdentifier(correlationID)
+        }
+    }
+
+    struct NativeDirectCallProductionActivationDryRunResult: Codable, Equatable {
+        let correlationID: String?
+        let diagnostic: NativeDirectCallProductionActivationDryRunDiagnostic
+
+        init(correlationID: String? = nil, diagnostic: NativeDirectCallProductionActivationDryRunDiagnostic) {
+            self.correlationID = UITestsSignalling.sanitizedIdentifier(correlationID)
+            self.diagnostic = diagnostic
+        }
+    }
+
+    struct NativeDirectCallProductionActivationDryRunDiagnostic: Codable, Equatable {
+        let enabled: Bool
+        let reason: String?
+        let capabilityPresent: Bool
+        let dependenciesReady: Bool
+        let roomEligible: Bool
+        let endpointAccepted: Bool
+
+        init(enabled: Bool,
+             reason: String?,
+             capabilityPresent: Bool,
+             dependenciesReady: Bool,
+             roomEligible: Bool,
+             endpointAccepted: Bool) {
+            self.enabled = enabled
+            self.reason = reason.flatMap { UITestsSignalling.sanitizedIdentifier($0) }
+            self.capabilityPresent = capabilityPresent
+            self.dependenciesReady = dependenciesReady
+            self.roomEligible = roomEligible
+            self.endpointAccepted = endpointAccepted
         }
     }
 
@@ -332,6 +377,24 @@ extension UITestsSignal.NativeDirectCallDiagnosticStatusResult {
     init(correlationID: String? = nil, _ status: NativeDirectCallRoomDiagnosticStatus) {
         self.init(correlationID: correlationID,
                   status: .init(status))
+    }
+}
+
+extension UITestsSignal.NativeDirectCallProductionActivationDryRunResult {
+    init(correlationID: String? = nil, _ diagnostic: DirectCallProductionActivationDryRunDiagnostic) {
+        self.init(correlationID: correlationID,
+                  diagnostic: .init(diagnostic))
+    }
+}
+
+extension UITestsSignal.NativeDirectCallProductionActivationDryRunDiagnostic {
+    init(_ diagnostic: DirectCallProductionActivationDryRunDiagnostic) {
+        self.init(enabled: diagnostic.isEnabled,
+                  reason: diagnostic.disabledReason?.description,
+                  capabilityPresent: diagnostic.isCapabilityPresent,
+                  dependenciesReady: diagnostic.areDependenciesReady,
+                  roomEligible: diagnostic.isRoomEligible,
+                  endpointAccepted: diagnostic.isEndpointAccepted)
     }
 }
 

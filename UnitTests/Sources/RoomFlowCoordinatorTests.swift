@@ -930,21 +930,13 @@ final class RoomFlowCoordinatorTests {
         #expect(encodedResult.contains("outgoingStarted"))
         #expect(encodedFailureResult.contains("e2eeUnavailable"))
         #expect(encodedStatus.contains("nativeDirectCallDiagnosticStatus"))
-        #expect(encodedStatusResult.contains("hasActiveSession"))
-        #expect(encodedStatusResult.contains("lastSignalEventEmitted"))
-        #expect(encodedStatusResult.contains("lastSignalSendAttempted"))
-        #expect(encodedStatusResult.contains("lastSignalSendSucceeded"))
-        #expect(encodedStatusResult.contains("activeSessionPhase"))
-        #expect(encodedStatusResult.contains("listenerAttached"))
-        #expect(encodedStatusResult.contains("listenerHandleRetained"))
-        #expect(encodedStatusResult.contains("timelineUpdateCount"))
-        #expect(encodedStatusResult.contains("timelineDiffReceivedCount"))
-        #expect(encodedStatusResult.contains("lastTimelineDiffKind"))
-        #expect(encodedStatusResult.contains("lastTimelineDiffItemCount"))
-        #expect(encodedStatusResult.contains("envelopeDeliveredToEngineCount"))
-        #expect(encodedStatusResult.contains("lastReceiveEventKind"))
-        #expect(encodedStatusResult.contains("sendRoomFingerprint"))
-        #expect(encodedStatusResult.contains("receiveRoomFingerprint"))
+        let statusDiagnosticFragments = ["hasActiveSession", "lastSignalEventEmitted", "lastSignalSendAttempted", "lastSignalSendSucceeded",
+                                         "activeSessionPhase", "listenerAttached", "listenerHandleRetained", "timelineUpdateCount",
+                                         "timelineDiffReceivedCount", "lastTimelineDiffKind", "lastTimelineDiffItemCount",
+                                         "envelopeDeliveredToEngineCount", "lastReceiveEventKind", "sendRoomFingerprint", "receiveRoomFingerprint"]
+        for statusDiagnosticFragment in statusDiagnosticFragments {
+            #expect(encodedStatusResult.contains(statusDiagnosticFragment))
+        }
         let mediaDiagnosticFragments = ["mediaFactoryInjected", "mediaCredentialProviderAvailable", "mediaE2EEProviderAvailable", "mediaKeyHandleAvailable",
                                         "mediaKeyBridgeHit", "mediaConnectAttempted", "liveKitClientConnectAttempted", "liveKitConnectFailed"]
         for mediaDiagnosticFragment in mediaDiagnosticFragments {
@@ -967,9 +959,49 @@ final class RoomFlowCoordinatorTests {
             "raw " + "key",
             "livekit.example.com"
         ]
-        let combinedSignals = encodedCommand + encodedResult + encodedFailureResult + encodedStatus + encodedStatusResult
+        let combinedSignals = encodedCommand
+            + encodedResult
+            + encodedFailureResult
+            + encodedStatus
+            + encodedStatusResult
         for fragment in forbiddenFragments {
             #expect(combinedSignals.localizedCaseInsensitiveContains(fragment) == false)
+        }
+    }
+
+    @Test
+    func nativeDirectCallProductionActivationDryRunSignalEncodesRedactedResult() throws {
+        let request = UITestsSignal.NativeDirectCallProductionActivationDryRunRequest(correlationID: "call-A-1")
+        let result = UITestsSignal.NativeDirectCallProductionActivationDryRunResult(correlationID: "call-A-1",
+                                                                                    diagnostic: .init(enabled: false,
+                                                                                                      reason: "appRolloutDisabled",
+                                                                                                      capabilityPresent: false,
+                                                                                                      dependenciesReady: false,
+                                                                                                      roomEligible: true,
+                                                                                                      endpointAccepted: false))
+        let requestSignal = UITestsSignal.nativeDirectCallProductionActivationDryRun(request)
+        let resultSignal = UITestsSignal.nativeDirectCallProductionActivationDryRunResult(result)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+
+        let encodedRequest = try #require(String(data: encoder.encode(requestSignal), encoding: .utf8))
+        let encodedResult = try #require(String(data: encoder.encode(resultSignal), encoding: .utf8))
+
+        #expect(try JSONDecoder().decode(UITestsSignal.self, from: Data(encodedRequest.utf8)) == requestSignal)
+        #expect(try JSONDecoder().decode(UITestsSignal.self, from: Data(encodedResult.utf8)) == resultSignal)
+        #expect(encodedRequest.contains("nativeDirectCallProductionActivationDryRun"))
+        #expect(encodedResult.contains("nativeDirectCallProductionActivationDryRunResult"))
+        #expect(encodedResult.contains("enabled"))
+        #expect(encodedResult.contains("appRolloutDisabled"))
+        #expect(encodedResult.contains("capabilityPresent"))
+        #expect(encodedResult.contains("dependenciesReady"))
+        #expect(encodedResult.contains("roomEligible"))
+        #expect(encodedResult.contains("endpointAccepted"))
+        #expect(result.correlationID == request.correlationID)
+
+        let forbiddenFragments = ["debug" + "Info", "original" + "JSON", "raw " + "JSON", "encrypted_" + "payload", "j" + "wt", "raw " + "key"]
+        for fragment in forbiddenFragments {
+            #expect((encodedRequest + encodedResult).localizedCaseInsensitiveContains(fragment) == false)
         }
     }
 

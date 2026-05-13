@@ -54,6 +54,7 @@ class ChatsTabFlowCoordinator: FlowCoordinatorProtocol {
     private let nativeDirectCallDiagnosticRuntimeGate: () -> Bool
     private let nativeDirectCallDiagnosticCommandConfiguration: NativeDirectCallRoomDeveloperCommandConfiguration
     private let nativeDirectCallRoomFlowOwnerFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning
+    private let nativeDirectCallProductionActivationDryRunProviderFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionActivationDryRunProviding
     
     private let actionsSubject: PassthroughSubject<ChatsTabFlowCoordinatorAction, Never> = .init()
     var actionsPublisher: AnyPublisher<ChatsTabFlowCoordinatorAction, Never> {
@@ -67,6 +68,9 @@ class ChatsTabFlowCoordinator: FlowCoordinatorProtocol {
          nativeDirectCallDiagnosticCommandConfiguration: NativeDirectCallRoomDeveloperCommandConfiguration = .init(),
          nativeDirectCallRoomFlowOwnerFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning = { roomProxy in
              NativeDirectCallRoomFlowOwner(roomProxy: roomProxy)
+         },
+         nativeDirectCallProductionActivationDryRunProviderFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionActivationDryRunProviding = { _ in
+             FailClosedNativeDirectCallProductionActivationDryRunProvider()
          }) {
         stateMachine = flowParameters.stateMachineFactory.makeChatsTabFlowStateMachine()
         self.navigationSplitCoordinator = navigationSplitCoordinator
@@ -74,6 +78,7 @@ class ChatsTabFlowCoordinator: FlowCoordinatorProtocol {
         self.nativeDirectCallDiagnosticRuntimeGate = nativeDirectCallDiagnosticRuntimeGate
         self.nativeDirectCallDiagnosticCommandConfiguration = nativeDirectCallDiagnosticCommandConfiguration
         self.nativeDirectCallRoomFlowOwnerFactory = nativeDirectCallRoomFlowOwnerFactory
+        self.nativeDirectCallProductionActivationDryRunProviderFactory = nativeDirectCallProductionActivationDryRunProviderFactory
         
         sidebarNavigationStackCoordinator = NavigationStackCoordinator(navigationSplitCoordinator: navigationSplitCoordinator)
         navigationSplitCoordinator.setSidebarCoordinator(sidebarNavigationStackCoordinator)
@@ -117,6 +122,15 @@ class ChatsTabFlowCoordinator: FlowCoordinatorProtocol {
         }
 
         return roomFlowCoordinator.nativeDirectCallDiagnosticStatus()
+    }
+
+    func nativeDirectCallProductionActivationDryRunDiagnostic() async -> DirectCallProductionActivationDryRunDiagnostic {
+        guard nativeDirectCallDiagnosticRuntimeGate(),
+              let roomFlowCoordinator else {
+            return .disabled(.roomUnavailable)
+        }
+
+        return await roomFlowCoordinator.nativeDirectCallProductionActivationDryRunDiagnostic()
     }
     #endif
 
@@ -561,7 +575,8 @@ class ChatsTabFlowCoordinator: FlowCoordinatorProtocol {
                                               isChildFlow: false,
                                               navigationStackCoordinator: navigationStackCoordinator,
                                               flowParameters: flowParameters,
-                                              nativeDirectCallRoomFlowOwnerFactory: nativeDirectCallRoomFlowOwnerFactory)
+                                              nativeDirectCallRoomFlowOwnerFactory: nativeDirectCallRoomFlowOwnerFactory,
+                                              nativeDirectCallProductionActivationDryRunProviderFactory: nativeDirectCallProductionActivationDryRunProviderFactory)
         #if DEBUG
         coordinator.nativeDirectCallDiagnosticCommandConfiguration = nativeDirectCallDiagnosticCommandConfiguration
         #endif

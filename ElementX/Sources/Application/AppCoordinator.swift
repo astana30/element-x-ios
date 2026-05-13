@@ -1322,6 +1322,10 @@ extension AppCoordinator {
                                           compositionConfiguration: .init(isEnabled: nativeDirectCallDiagnosticCommandsEnabled),
                                           mediaEngineFactory: nativeDirectCallDiagnosticMediaEngineFactory,
                                           encryptionService: nativeDirectCallDiagnosticEncryptionService)
+        } nativeDirectCallProductionActivationDryRunProviderFactory: { roomProxy in
+            NativeDirectCallProductionActivationDryRunProvider(activationDryRunDiagnostics: DirectCallProductionActivationDecisionService(),
+                                                               homeserverBaseURL: URL(string: flowParameters.userSession.clientProxy.homeserver),
+                                                               roomEligibility: DirectCallProductionRoomEligibility(roomProxy: roomProxy))
         }
         #else
         return UserSessionFlowCoordinator(isNewLogin: isNewLogin,
@@ -1384,6 +1388,16 @@ extension AppCoordinator {
 
                             let result = UITestsSignal.NativeDirectCallDiagnosticStatusResult(correlationID: request.correlationID, statusResult)
                             try? client?.send(.nativeDirectCallDiagnosticStatusResult(result))
+                        case .nativeDirectCallProductionActivationDryRun(let request):
+                            let diagnostic: DirectCallProductionActivationDryRunDiagnostic
+                            if let flowCoordinator = self?.userSessionFlowCoordinator {
+                                diagnostic = await flowCoordinator.nativeDirectCallProductionActivationDryRunDiagnostic()
+                            } else {
+                                diagnostic = .disabled(.roomUnavailable)
+                            }
+
+                            let result = UITestsSignal.NativeDirectCallProductionActivationDryRunResult(correlationID: request.correlationID, diagnostic)
+                            try? client?.send(.nativeDirectCallProductionActivationDryRunResult(result))
                         default:
                             return
                         }

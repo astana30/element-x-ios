@@ -47,6 +47,7 @@ Usage:
   DRY_RUN=0 $SCRIPT_NAME launch A|B|both
   DRY_RUN=0 $SCRIPT_NAME send A|B <command>
   DRY_RUN=0 $SCRIPT_NAME status A|B
+  DRY_RUN=0 $SCRIPT_NAME production-activation-dry-run A|B
   DRY_RUN=0 $SCRIPT_NAME wait-status A|B incomingRinging
   DRY_RUN=0 $SCRIPT_NAME accept-when-ringing A|B
 
@@ -360,6 +361,39 @@ with open(file_path, "w", encoding="utf-8") as handle:
 PY
 }
 
+write_production_activation_dry_run_request() {
+    local client="$1"
+    local correlation_id="$2"
+    local file
+    file="$(signal_file "$client")"
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        log "DRY_RUN: query-production-activation-dry-run channel=$client correlationID=$correlation_id"
+        return
+    fi
+
+    python3 - "$file" "$correlation_id" <<'PY'
+import json
+import sys
+
+file_path, correlation_id = sys.argv[1:3]
+message = {
+    "mode": {
+        "tests": {}
+    },
+    "signal": {
+        "nativeDirectCallProductionActivationDryRun": {
+            "_0": {
+                "correlationID": correlation_id,
+            }
+        }
+    }
+}
+with open(file_path, "w", encoding="utf-8") as handle:
+    json.dump(message, handle, sort_keys=True, separators=(",", ":"))
+PY
+}
+
 extract_result() {
     local client="$1"
     local expected_signal="$2"
@@ -450,6 +484,20 @@ if expected_signal == "nativeDirectCallDiagnosticStatusResult":
             media_connect=str(status.get("mediaConnectAttempted", "unknown")).lower(),
             livekit_connect=str(status.get("liveKitClientConnectAttempted", "unknown")).lower(),
             media_failure=status.get("mediaFailureReason", "none"),
+        )
+    )
+    sys.exit(0)
+
+if expected_signal == "nativeDirectCallProductionActivationDryRunResult":
+    diagnostic = body.get("diagnostic", {})
+    print(
+        "enabled={enabled} reason={reason} capabilityPresent={capability} dependenciesReady={dependencies} roomEligible={room} endpointAccepted={endpoint}".format(
+            enabled=str(diagnostic.get("enabled", "unknown")).lower(),
+            reason=diagnostic.get("reason", "none"),
+            capability=str(diagnostic.get("capabilityPresent", "unknown")).lower(),
+            dependencies=str(diagnostic.get("dependenciesReady", "unknown")).lower(),
+            room=str(diagnostic.get("roomEligible", "unknown")).lower(),
+            endpoint=str(diagnostic.get("endpointAccepted", "unknown")).lower(),
         )
     )
     sys.exit(0)
@@ -731,6 +779,21 @@ query_status() {
     log "channel=$client command=status correlationID=$id $result"
 }
 
+query_production_activation_dry_run() {
+    local client="$1"
+    local id
+    id="$(correlation_id "$client" productionActivationDryRun)"
+    write_production_activation_dry_run_request "$client" "$id"
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        return
+    fi
+
+    local result
+    result="$(wait_for_result "$client" nativeDirectCallProductionActivationDryRunResult "$id")"
+    log "channel=$client command=productionActivationDryRun correlationID=$id $result"
+}
+
 wait_for_status() {
     local client="$1"
     local expected="$2"
@@ -820,6 +883,7 @@ Two-simulator diagnostic skeleton plan:
      send A hangup
      status A
      status B
+     production-activation-dry-run A
 
 Dry-run mode is currently: DRY_RUN=$DRY_RUN
 Full two-client proof is intentionally not run by this skeleton.
@@ -863,6 +927,12 @@ main() {
             require_common_environment
             [[ $# -eq 2 ]] || fail "Usage: $SCRIPT_NAME status A|B"
             query_status "$2"
+            ;;
+        production-activation-dry-run|productionActivationDryRun)
+            require_host_tools
+            require_common_environment
+            [[ $# -eq 2 ]] || fail "Usage: $SCRIPT_NAME production-activation-dry-run A|B"
+            query_production_activation_dry_run "$2"
             ;;
         wait-status)
             require_host_tools
