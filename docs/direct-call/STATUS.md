@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.10V — disabled production direct-call dependency wiring added.
+After 2.10W — production activation gate design inspection complete.
 
 ## Latest App Code Checkpoint
 
@@ -99,11 +99,20 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Concrete `ClientProxy` now conforms to the narrow `DirectCallMatrixAccessTokenProviding` protocol without changing `ClientProxyProtocol`.
   - No runtime UI path, Element Call route, CallKit, push, diagnostic env, or production feature flag was activated.
   - Focused app unit tests, Release build, and forbidden scan pass after the disabled wiring seam.
+- Production activation gate design inspection is complete:
+  - `directOneToOneCallsEnabled` should not be reused as the native production activation switch because it currently belongs to the existing direct-call/Element Call placeholder path and logs that production signal transport is disabled.
+  - The safest production gate is multi-factor: app rollout configuration, authenticated server capability, token endpoint discovery, runtime dependency readiness, room eligibility, and future UI/CallKit readiness.
+  - The authoritative server signal should be a SalemX-specific Matrix client capability, not a developer option or diagnostic env.
+  - Endpoint discovery should prefer an authenticated Matrix capability that advertises the native direct-call token endpoint as a same-origin relative path, with the current unstable path as the default contract.
+  - `.well-known` can remain useful for pre-auth hints, but should not be sufficient to activate production direct calls.
+  - Diagnostics remain separate and must not influence production activation.
 
 ## Current Blocker
 
 - Production backend is still skeleton/fake mode.
 - Production E2EE Matrix crypto key wrapping now has narrow provider and disabled assembly seams, but the assembly is not yet threaded into the real session/room-flow runtime.
+- No production activation gate/configuration model exists yet.
+- No server capability DTO/discovery path exists yet for native direct calls.
 - No production runtime path yet passes assembled dependencies into `NativeDirectCallRoomFlowOwner`.
 - The default app path remains fail-closed unless future production configuration and dependency assembly explicitly enable native direct-call dependencies.
 - The production trust policy for peer devices is not finalized; the safest initial policy should fail closed on unknown or unverifiable device trust.
@@ -111,9 +120,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.10W — guarded production room-flow dependency injection inspection/skeleton`
+`2.10X — production direct-call activation gate skeleton`
 
-Goal: inspect and, if safe, add a disabled-by-default runtime injection seam that can thread `NativeDirectCallProductionDependencyAssembly` into session/room-flow construction and provide dependencies to `NativeDirectCallRoomFlowOwner` only when explicit production config and runtime providers are present, without activating visible UI or production direct calls.
+Goal: add a fail-closed production activation gate/configuration skeleton that models app rollout config, authenticated server capability, token endpoint discovery, dependency readiness, and room eligibility without activating visible UI or production direct calls.
 
 ## Do-Not-Touch Constraints
 
