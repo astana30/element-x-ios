@@ -225,6 +225,16 @@ struct DirectCallHTTPTransportRequest: Equatable, CustomStringConvertible, Custo
     let headers: [String: String]
     let body: Data
 
+    static func getJSON(from url: URL, bearerAccessToken: String) -> Self {
+        .init(url: url,
+              method: "GET",
+              headers: [
+                  "Accept": "application/json",
+                  "Authorization": "Bearer \(bearerAccessToken)"
+              ],
+              body: Data())
+    }
+
     static func postJSON(to url: URL, bearerAccessToken: String, body: Data) -> Self {
         .init(url: url,
               method: "POST",
@@ -349,6 +359,26 @@ struct DirectCallProductionConfiguration: Equatable, CustomStringConvertible, Cu
         components.query = nil
         components.fragment = nil
         return components.url
+    }
+}
+
+@MainActor
+protocol DirectCallProductionRolloutProviding {
+    func directCallProductionConfiguration() -> DirectCallProductionConfiguration
+}
+
+@MainActor
+final class FailClosedDirectCallProductionRolloutProvider: DirectCallProductionRolloutProviding, CustomStringConvertible, CustomDebugStringConvertible {
+    func directCallProductionConfiguration() -> DirectCallProductionConfiguration {
+        .init()
+    }
+
+    nonisolated var description: String {
+        "FailClosedDirectCallProductionRolloutProvider(isEnabled: false)"
+    }
+
+    nonisolated var debugDescription: String {
+        description
     }
 }
 
@@ -508,6 +538,72 @@ final class FailClosedDirectCallProductionCapabilityProvider: DirectCallProducti
 
     nonisolated var debugDescription: String {
         description
+    }
+}
+
+@MainActor
+final class HTTPDirectCallProductionCapabilityProvider: DirectCallProductionCapabilityProviding, CustomStringConvertible, CustomDebugStringConvertible {
+    static let capabilitiesPath = "/_matrix/client/v3/capabilities"
+
+    private let homeserverBaseURL: URL?
+    private let httpTransport: DirectCallHTTPTransportProtocol?
+    private let accessTokenProvider: DirectCallMatrixAccessTokenProviding?
+    private let payloadDecoder: DirectCallProductionCapabilityPayloadDecoder
+
+    init(homeserverBaseURL: URL? = nil,
+         httpTransport: DirectCallHTTPTransportProtocol? = nil,
+         accessTokenProvider: DirectCallMatrixAccessTokenProviding? = nil,
+         payloadDecoder: DirectCallProductionCapabilityPayloadDecoder = .init()) {
+        self.homeserverBaseURL = homeserverBaseURL
+        self.httpTransport = httpTransport
+        self.accessTokenProvider = accessTokenProvider
+        self.payloadDecoder = payloadDecoder
+    }
+
+    func directCallProductionServerCapability() async -> DirectCallProductionCapabilityDiscoveryResult {
+        guard let capabilitiesURL = Self.capabilitiesURL(from: homeserverBaseURL),
+              let httpTransport,
+              let accessTokenProvider,
+              let accessToken = await accessTokenProvider.matrixAccessToken(),
+              !accessToken.isEmpty else {
+            return .unavailable(.providerUnavailable)
+        }
+
+        let request = DirectCallHTTPTransportRequest.getJSON(from: capabilitiesURL,
+                                                             bearerAccessToken: accessToken)
+        switch await httpTransport.send(request) {
+        case .success(let response):
+            guard (200..<300).contains(response.statusCode) else {
+                return .unavailable(.providerUnavailable)
+            }
+
+            return payloadDecoder.decodeCapability(from: response.data)
+        case .failure:
+            return .unavailable(.providerUnavailable)
+        }
+    }
+
+    nonisolated var description: String {
+        "HTTPDirectCallProductionCapabilityProvider(redacted: true)"
+    }
+
+    nonisolated var debugDescription: String {
+        description
+    }
+
+    private static func capabilitiesURL(from baseURL: URL?) -> URL? {
+        guard let baseURL,
+              let scheme = baseURL.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              baseURL.host?.isEmpty == false,
+              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
+            return nil
+        }
+
+        components.path = capabilitiesPath
+        components.query = nil
+        components.fragment = nil
+        return components.url
     }
 }
 
@@ -910,6 +1006,16 @@ final class DirectCallProductionActivationDecisionService: DirectCallProductionA
         self.capabilityProvider = capabilityProvider ?? FailClosedDirectCallProductionCapabilityProvider()
         self.dependencyProvider = dependencyProvider ?? NativeDirectCallProductionDependencyAssembly(configuration: configuration)
         self.activationGate = activationGate
+    }
+
+    convenience init(rolloutProvider: DirectCallProductionRolloutProviding,
+                     capabilityProvider: DirectCallProductionCapabilityProviding? = nil,
+                     dependencyProvider: NativeDirectCallProductionDependencyProviding? = nil,
+                     activationGate: DirectCallProductionActivationGate = .init()) {
+        self.init(configuration: rolloutProvider.directCallProductionConfiguration(),
+                  capabilityProvider: capabilityProvider,
+                  dependencyProvider: dependencyProvider,
+                  activationGate: activationGate)
     }
 
     func directCallProductionActivationDecision(homeserverBaseURL: URL?,

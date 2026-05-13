@@ -2,15 +2,15 @@
 
 ## Current Phase
 
-After 2.11E — app rollout/capability config source inspection complete.
+After 2.11F — fail-closed rollout and capability source skeleton complete.
 
 ## Latest App Code Checkpoint
 
-83c967478 `Expose production direct-call dry-run diagnostic command`
+This commit: `Add production direct-call rollout and capability sources`
 
 ## Latest Code Checkpoint
 
-83c967478 `Expose production direct-call dry-run diagnostic command`
+This commit: `Add production direct-call rollout and capability sources`
 
 ## Latest SDK Checkpoint
 
@@ -178,14 +178,25 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Token endpoint discovery should continue to accept only same-origin relative paths from capability, with same-origin explicit overrides reserved for app configuration/tests.
   - Dependency readiness should be computed after an accepted token endpoint exists, or split into side-effect-free runtime-prerequisite readiness plus endpoint-specific dependency assembly.
   - Production remains disabled by default and no app code changed during this inspection.
+- Fail-closed rollout and capability source skeleton is complete:
+  - `DirectCallProductionRolloutProviding` models the app-owned rollout configuration source.
+  - `FailClosedDirectCallProductionRolloutProvider` returns the default disabled `DirectCallProductionConfiguration`.
+  - `HTTPDirectCallProductionCapabilityProvider` fetches authenticated Matrix `/_matrix/client/v3/capabilities` through injected `DirectCallHTTPTransportProtocol` and `DirectCallMatrixAccessTokenProviding`.
+  - The provider decodes only the `kz.salemx.direct_call.native` capability through `DirectCallProductionCapabilityPayloadDecoder`.
+  - Missing homeserver URL, invalid URL scheme, missing transport, missing access token, non-2xx HTTP responses, missing capability, or malformed capability all fail closed with redacted reasons.
+  - The authenticated request uses `GET` with an Authorization bearer header, while request/provider descriptions redact the URL and bearer value.
+  - `.well-known` is not used for production activation.
+  - `directOneToOneCallsEnabled` remains unused for native production activation.
+  - Capability-sourced absolute/external token endpoints are still rejected by the activation gate.
+  - No runtime production path, visible UI, Element Call routing, CallKit, push, listener start, media engine construction, or Matrix send was added.
+  - Focused app unit tests, Release build, and forbidden scan pass after the source skeleton.
 
 ## Current Blocker
 
 - Production backend is still skeleton/fake mode.
 - Production E2EE Matrix crypto key wrapping now has narrow provider, disabled assembly, activation gate, capability discovery, decision assembly, and room-scoped dry-run seams, but the assembly is not yet threaded into the real session/room-flow runtime for activation.
-- The production activation decision can consume decoded capability payloads, but it is not yet fed by a real authenticated server capability fetch transport.
-- No real server capability fetch path exists yet for native direct calls.
-- The current production dependency readiness path is still coupled to `DirectCallProductionConfiguration.tokenEndpointBaseURL`, so capability-sourced endpoints need a two-stage readiness/assembly path before dry-run can report dependencies ready from server capability alone.
+- The production activation decision can consume decoded capability payloads and now has an injectable authenticated `/capabilities` fetch provider, but this provider is not yet wired into real session/room-flow runtime construction by default.
+- The current production dependency readiness path is still coupled to explicit `DirectCallProductionConfiguration.tokenEndpointBaseURL`, so capability-sourced endpoints need a two-stage readiness/assembly path before dry-run can report dependencies ready from server capability alone.
 - The room-flow dry-run seam can now be queried by the DEBUG/integration runner command and has a runtime proof for A/B; there is still no visible UI or production runtime activation.
 - No production runtime path yet passes activation-approved assembled dependencies into `NativeDirectCallRoomFlowOwner`.
 - The default app path remains fail-closed unless future production configuration and dependency assembly explicitly enable native direct-call dependencies.
@@ -194,9 +205,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.11F — fail-closed rollout and capability source skeleton`
+`2.11G — endpoint-aware production dependency readiness inspection/skeleton`
 
-Goal: add a default-disabled rollout configuration provider and a fail-closed authenticated Matrix `/capabilities` provider skeleton, then thread them toward dry-run decision construction without activating visible UI or production direct calls.
+Goal: split side-effect-free runtime prerequisite readiness from endpoint-specific dependency assembly, or make dependency readiness receive an activation-accepted token endpoint, without activating visible UI or production direct calls.
 
 ## Do-Not-Touch Constraints
 

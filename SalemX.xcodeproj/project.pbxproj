@@ -1321,6 +1321,7 @@
 		E0686D14708361B54352F8AB /* AppHooks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0289E58E9B2CFC641DB6687C /* AppHooks.swift */; };
 		E0852E7184D8E1283818BBF7 /* PostHogAnalyticsClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1922F1F199277C6B6BA6E97 /* PostHogAnalyticsClient.swift */; };
 		E0885CC1E2662C672148BFE6 /* VoiceMessageCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A708CBDFECEB60C59CA58CF /* VoiceMessageCache.swift */; };
+		E0A23D8082D11886888A1FC4 /* DirectCallProductionCapabilitySourceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8700F80F74EA4EFE3F3E9DB /* DirectCallProductionCapabilitySourceTests.swift */; };
 		E0CD2D4B39CC8526BB054C53 /* TemplateScreenCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DD2B43F09C105C577AF8597 /* TemplateScreenCoordinator.swift */; };
 		E0E941A03A625FE3A80A5A47 /* Search.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C0C51E06DE4A201EA114F51 /* Search.swift */; };
 		E0FC895F37F1DBB2BBA02157 /* PHGPostHogProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9334C0EBCDFFA7954B6C696 /* PHGPostHogProtocol.swift */; };
@@ -2792,6 +2793,7 @@
 		D81DC472E8336288C53A2A90 /* Snapshotting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Snapshotting.swift; sourceTree = "<group>"; };
 		D82F5E7ED72D9AF2523ED3F4 /* ClientSDKMock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientSDKMock.swift; sourceTree = "<group>"; };
 		D851D4E866D81EA702426C7F /* UserProfileScreenCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfileScreenCoordinator.swift; sourceTree = "<group>"; };
+		D8700F80F74EA4EFE3F3E9DB /* DirectCallProductionCapabilitySourceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectCallProductionCapabilitySourceTests.swift; sourceTree = "<group>"; };
 		D89049A15DE657CBE87167BC /* SecureBackupLogoutConfirmationScreenCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureBackupLogoutConfirmationScreenCoordinator.swift; sourceTree = "<group>"; };
 		D92B9F5816E4C749CE005490 /* StringTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringTests.swift; sourceTree = "<group>"; };
 		D9334C0EBCDFFA7954B6C696 /* PHGPostHogProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PHGPostHogProtocol.swift; sourceTree = "<group>"; };
@@ -6476,6 +6478,7 @@
 				DDAA016499DB917439FF2C7D /* DirectCallEngineSignalTransportTests.swift */,
 				177C6D65F84C84ABBC77B5DC /* DirectCallEngineTests.swift */,
 				C6C1911CE06945DCE677BDDE /* DirectCallMediaEngineTests.swift */,
+				D8700F80F74EA4EFE3F3E9DB /* DirectCallProductionCapabilitySourceTests.swift */,
 				D5A1BC32328A4C0F8B1BD1BB /* DirectCallProductionKeyWrappingTests.swift */,
 				4C32CAF0343C7330058CF646 /* EditRoomAddressScreenViewModelTests.swift */,
 				5120B4BA5662E97750E2C6B4 /* ElementCallServiceTests.swift */,
@@ -8964,6 +8967,7 @@
 				E76EF5C6D5DE7230075C3D83 /* DirectCallEngineSignalTransportTests.swift in Sources */,
 				AC70DBDDE6D23D21918F1D32 /* DirectCallEngineTests.swift in Sources */,
 				7DC737A3E0C88D1289821C43 /* DirectCallMediaEngineTests.swift in Sources */,
+				E0A23D8082D11886888A1FC4 /* DirectCallProductionCapabilitySourceTests.swift in Sources */,
 				EA1D87C3AC5A0C1564F8CFB2 /* DirectCallProductionKeyWrappingTests.swift in Sources */,
 				DFDA41373014B1B9FDC84BE2 /* EditRoomAddressScreenViewModelTests.swift in Sources */,
 				A8D5DB14590F9A7306C49E51 /* ElementCallServiceTests.swift in Sources */,
