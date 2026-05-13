@@ -352,6 +352,333 @@ struct DirectCallProductionConfiguration: Equatable, CustomStringConvertible, Cu
     }
 }
 
+struct DirectCallProductionServerCapability: Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    static let capabilityName = "kz.salemx.direct_call.native"
+    static let supportedVersion = 1
+    static let liveKitMediaTransport = "livekit"
+    static let matrixSDKKeyEnvelope = "matrix_sdk_direct_call_media_key_envelope_v1"
+
+    let isEnabled: Bool
+    let version: Int
+    let tokenEndpointPath: String?
+    let intents: Set<String>
+    let mediaTransport: String
+    let isE2EERequired: Bool
+    let keyEnvelope: String
+
+    init(isEnabled: Bool = false,
+         version: Int = Self.supportedVersion,
+         tokenEndpointPath: String? = DirectCallProductionConfiguration.tokenEndpointPath,
+         intents: Set<String> = [],
+         mediaTransport: String = Self.liveKitMediaTransport,
+         isE2EERequired: Bool = true,
+         keyEnvelope: String = Self.matrixSDKKeyEnvelope) {
+        self.isEnabled = isEnabled
+        self.version = version
+        self.tokenEndpointPath = tokenEndpointPath
+        self.intents = intents
+        self.mediaTransport = mediaTransport
+        self.isE2EERequired = isE2EERequired
+        self.keyEnvelope = keyEnvelope
+    }
+
+    func supportsIntent(_ intent: DirectCallIntent) -> Bool {
+        intents.contains(intent.rawValue)
+    }
+
+    func tokenEndpointURL(homeserverBaseURL: URL?) -> URL? {
+        guard let homeserverBaseURL,
+              let endpointPath = normalizedTokenEndpointPath else {
+            return nil
+        }
+
+        return Self.sameOriginURL(baseURL: homeserverBaseURL, path: endpointPath)
+    }
+
+    var description: String {
+        "DirectCallProductionServerCapability(" + [
+            "isEnabled: \(isEnabled)",
+            "version: \(version)",
+            "tokenEndpointPath: <redacted>",
+            "intents: \(intents.sorted())",
+            "mediaTransport: \(mediaTransport)",
+            "isE2EERequired: \(isE2EERequired)",
+            "keyEnvelope: \(keyEnvelope)"
+        ].joined(separator: ", ") + ")"
+    }
+
+    var debugDescription: String {
+        description
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case isEnabled = "enabled"
+        case version
+        case tokenEndpointPath = "token_endpoint"
+        case intents
+        case mediaTransport = "media_transport"
+        case isE2EERequired = "e2ee_required"
+        case keyEnvelope = "key_envelope"
+    }
+
+    private var normalizedTokenEndpointPath: String? {
+        let endpointPath = tokenEndpointPath ?? DirectCallProductionConfiguration.tokenEndpointPath
+        guard endpointPath.hasPrefix("/"),
+              !endpointPath.hasPrefix("//"),
+              let components = URLComponents(string: endpointPath),
+              components.scheme == nil,
+              components.host == nil,
+              components.query == nil,
+              components.fragment == nil,
+              !components.path.isEmpty else {
+            return nil
+        }
+
+        return components.path
+    }
+
+    private static func sameOriginURL(baseURL: URL, path: String) -> URL? {
+        guard let scheme = baseURL.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              baseURL.host?.isEmpty == false,
+              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
+            return nil
+        }
+
+        components.path = path
+        components.query = nil
+        components.fragment = nil
+        return components.url
+    }
+}
+
+struct DirectCallProductionRoomEligibility: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let isDirect: Bool
+    let isEncrypted: Bool
+    let joinedMemberCount: Int?
+    let hasPeerUserID: Bool
+
+    init(isDirect: Bool = false,
+         isEncrypted: Bool = false,
+         joinedMemberCount: Int? = nil,
+         hasPeerUserID: Bool = false) {
+        self.isDirect = isDirect
+        self.isEncrypted = isEncrypted
+        self.joinedMemberCount = joinedMemberCount
+        self.hasPeerUserID = hasPeerUserID
+    }
+
+    var hasExactlyTwoJoinedMembers: Bool {
+        joinedMemberCount == 2
+    }
+
+    var description: String {
+        "DirectCallProductionRoomEligibility(isDirect: \(isDirect), isEncrypted: \(isEncrypted), hasJoinedMemberCount: \(joinedMemberCount != nil), hasExactlyTwoJoinedMembers: \(hasExactlyTwoJoinedMembers), hasPeerUserID: \(hasPeerUserID))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum DirectCallProductionActivationDisabledReason: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case appRolloutDisabled
+    case serverCapabilityUnavailable
+    case serverCapabilityDisabled
+    case unsupportedCapabilityVersion
+    case unsupportedIntent
+    case unsupportedMediaTransport
+    case e2eeNotRequiredByCapability
+    case unsupportedKeyEnvelope
+    case tokenEndpointUnavailable
+    case tokenEndpointNotSameOrigin
+    case dependenciesUnavailable
+    case roomNotEncrypted
+    case roomNotDirect
+    case roomNotOneToOne
+    case peerUnavailable
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct DirectCallProductionActivationContext {
+    let appRolloutEnabled: Bool
+    let homeserverBaseURL: URL?
+    let serverCapability: DirectCallProductionServerCapability?
+    let configuredTokenEndpointURL: URL?
+    let dependencies: NativeDirectCallProductionDependencies
+    let roomEligibility: DirectCallProductionRoomEligibility
+
+    init(appRolloutEnabled: Bool = false,
+         homeserverBaseURL: URL? = nil,
+         serverCapability: DirectCallProductionServerCapability? = nil,
+         configuredTokenEndpointURL: URL? = nil,
+         dependencies: NativeDirectCallProductionDependencies = .disabled,
+         roomEligibility: DirectCallProductionRoomEligibility = .init()) {
+        self.appRolloutEnabled = appRolloutEnabled
+        self.homeserverBaseURL = homeserverBaseURL
+        self.serverCapability = serverCapability
+        self.configuredTokenEndpointURL = configuredTokenEndpointURL
+        self.dependencies = dependencies
+        self.roomEligibility = roomEligibility
+    }
+}
+
+struct DirectCallProductionActivationDecision: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let isEnabled: Bool
+    let disabledReason: DirectCallProductionActivationDisabledReason?
+    let tokenEndpointURL: URL?
+
+    static func enabled(tokenEndpointURL: URL) -> Self {
+        .init(isEnabled: true, disabledReason: nil, tokenEndpointURL: tokenEndpointURL)
+    }
+
+    static func disabled(_ reason: DirectCallProductionActivationDisabledReason) -> Self {
+        .init(isEnabled: false, disabledReason: reason, tokenEndpointURL: nil)
+    }
+
+    var description: String {
+        "DirectCallProductionActivationDecision(isEnabled: \(isEnabled), disabledReason: \(disabledReason?.description ?? "none"), tokenEndpointURL: <redacted>)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct DirectCallProductionActivationGate {
+    let intent: DirectCallIntent
+
+    init(intent: DirectCallIntent = .audio) {
+        self.intent = intent
+    }
+
+    func evaluate(_ context: DirectCallProductionActivationContext) -> DirectCallProductionActivationDecision {
+        guard context.appRolloutEnabled else {
+            return .disabled(.appRolloutDisabled)
+        }
+
+        if let disabledReason = serverCapabilityDisabledReason(context.serverCapability) {
+            return .disabled(disabledReason)
+        }
+
+        if let configuredTokenEndpointURL = context.configuredTokenEndpointURL,
+           !isSameOrigin(configuredTokenEndpointURL, as: context.homeserverBaseURL) {
+            return .disabled(.tokenEndpointNotSameOrigin)
+        }
+
+        guard let serverCapability = context.serverCapability,
+              let tokenEndpointURL = tokenEndpointURL(for: context, serverCapability: serverCapability) else {
+            return .disabled(.tokenEndpointUnavailable)
+        }
+
+        guard context.dependencies.hasEncryptionService,
+              context.dependencies.hasMediaEngineFactory else {
+            return .disabled(.dependenciesUnavailable)
+        }
+
+        if let disabledReason = roomEligibilityDisabledReason(context.roomEligibility) {
+            return .disabled(disabledReason)
+        }
+
+        return .enabled(tokenEndpointURL: tokenEndpointURL)
+    }
+
+    private func serverCapabilityDisabledReason(_ serverCapability: DirectCallProductionServerCapability?) -> DirectCallProductionActivationDisabledReason? {
+        guard let serverCapability else {
+            return .serverCapabilityUnavailable
+        }
+
+        guard serverCapability.isEnabled else {
+            return .serverCapabilityDisabled
+        }
+
+        guard serverCapability.version == DirectCallProductionServerCapability.supportedVersion else {
+            return .unsupportedCapabilityVersion
+        }
+
+        guard serverCapability.supportsIntent(intent) else {
+            return .unsupportedIntent
+        }
+
+        guard serverCapability.mediaTransport == DirectCallProductionServerCapability.liveKitMediaTransport else {
+            return .unsupportedMediaTransport
+        }
+
+        guard serverCapability.isE2EERequired else {
+            return .e2eeNotRequiredByCapability
+        }
+
+        guard serverCapability.keyEnvelope == DirectCallProductionServerCapability.matrixSDKKeyEnvelope else {
+            return .unsupportedKeyEnvelope
+        }
+
+        return nil
+    }
+
+    private func tokenEndpointURL(for context: DirectCallProductionActivationContext,
+                                  serverCapability: DirectCallProductionServerCapability) -> URL? {
+        if let configuredTokenEndpointURL = context.configuredTokenEndpointURL {
+            return isSameOrigin(configuredTokenEndpointURL, as: context.homeserverBaseURL) ? configuredTokenEndpointURL : nil
+        }
+
+        return serverCapability.tokenEndpointURL(homeserverBaseURL: context.homeserverBaseURL)
+    }
+
+    private func roomEligibilityDisabledReason(_ roomEligibility: DirectCallProductionRoomEligibility) -> DirectCallProductionActivationDisabledReason? {
+        guard roomEligibility.isEncrypted else {
+            return .roomNotEncrypted
+        }
+
+        guard roomEligibility.isDirect else {
+            return .roomNotDirect
+        }
+
+        guard roomEligibility.hasExactlyTwoJoinedMembers else {
+            return .roomNotOneToOne
+        }
+
+        guard roomEligibility.hasPeerUserID else {
+            return .peerUnavailable
+        }
+
+        return nil
+    }
+
+    private func isSameOrigin(_ lhs: URL, as rhs: URL?) -> Bool {
+        guard let rhs,
+              let lhsScheme = lhs.scheme?.lowercased(),
+              let rhsScheme = rhs.scheme?.lowercased(),
+              let lhsHost = lhs.host?.lowercased(),
+              let rhsHost = rhs.host?.lowercased() else {
+            return false
+        }
+
+        return lhsScheme == rhsScheme && lhsHost == rhsHost && normalizedPort(lhs) == normalizedPort(rhs)
+    }
+
+    private func normalizedPort(_ url: URL) -> Int? {
+        if let port = url.port {
+            return port
+        }
+
+        switch url.scheme?.lowercased() {
+        case "http":
+            return 80
+        case "https":
+            return 443
+        default:
+            return nil
+        }
+    }
+}
+
 struct DirectCallProductionLiveKitConfiguration: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     let tokenEndpointURL: URL?
 

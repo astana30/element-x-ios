@@ -395,6 +395,93 @@ final class DirectCallProductionKeyWrappingTests {
     }
 
     @Test
+    func productionActivationGateIsDisabledByDefault() {
+        let decision = DirectCallProductionActivationGate().evaluate(.init())
+
+        #expect(decision == .disabled(.appRolloutDisabled))
+        #expect(decision.isEnabled == false)
+        #expect(String(describing: decision).contains("https://") == false)
+        #expect(String(describing: DirectCallProductionServerCapability()).contains(DirectCallProductionConfiguration.tokenEndpointPath) == false)
+    }
+
+    @Test
+    func productionServerCapabilityDecodesContractJSONAndRedactsEndpoint() throws {
+        let data = Data("""
+        {
+          "enabled": true,
+          "version": 1,
+          "token_endpoint": "/_matrix/client/unstable/kz.salemx.direct_call/livekit/token",
+          "intents": ["audio"],
+          "media_transport": "livekit",
+          "e2ee_required": true,
+          "key_envelope": "matrix_sdk_direct_call_media_key_envelope_v1"
+        }
+        """.utf8)
+
+        let capability = try JSONDecoder().decode(DirectCallProductionServerCapability.self, from: data)
+
+        #expect(capability.isEnabled)
+        #expect(capability.supportsIntent(.audio))
+        #expect(capability.mediaTransport == DirectCallProductionServerCapability.liveKitMediaTransport)
+        #expect(capability.keyEnvelope == DirectCallProductionServerCapability.matrixSDKKeyEnvelope)
+        #expect(String(describing: capability).contains(DirectCallProductionConfiguration.tokenEndpointPath) == false)
+    }
+
+    @Test
+    func productionActivationGateFailsClosedForMissingPrerequisites() throws {
+        let homeserverBaseURL = try #require(URL(string: "https://matrix.example.com"))
+        let externalEndpointURL = try #require(URL(string: "https://calls.example.net/_matrix/client/unstable/kz.salemx.direct_call/livekit/token"))
+        let gate = DirectCallProductionActivationGate()
+        let failureCases: [(DirectCallProductionActivationContext, DirectCallProductionActivationDisabledReason)] = [
+            (makeActivationContext(appRolloutEnabled: false, homeserverBaseURL: homeserverBaseURL), .appRolloutDisabled),
+            (makeActivationContext(homeserverBaseURL: homeserverBaseURL, serverCapability: nil), .serverCapabilityUnavailable),
+            (makeActivationContext(homeserverBaseURL: homeserverBaseURL, serverCapability: makeServerCapability(isEnabled: false)), .serverCapabilityDisabled),
+            (makeActivationContext(homeserverBaseURL: homeserverBaseURL, serverCapability: makeServerCapability(version: 2)), .unsupportedCapabilityVersion),
+            (makeActivationContext(homeserverBaseURL: homeserverBaseURL, serverCapability: makeServerCapability(intents: ["video"])), .unsupportedIntent),
+            (makeActivationContext(homeserverBaseURL: homeserverBaseURL, serverCapability: makeServerCapability(mediaTransport: "unknown")), .unsupportedMediaTransport),
+            (makeActivationContext(homeserverBaseURL: homeserverBaseURL, serverCapability: makeServerCapability(isE2EERequired: false)), .e2eeNotRequiredByCapability),
+            (makeActivationContext(homeserverBaseURL: homeserverBaseURL, serverCapability: makeServerCapability(keyEnvelope: "unknown")), .unsupportedKeyEnvelope),
+            (makeActivationContext(homeserverBaseURL: homeserverBaseURL, serverCapability: makeServerCapability(tokenEndpointPath: "https://calls.example.net/token")), .tokenEndpointUnavailable),
+            (makeActivationContext(homeserverBaseURL: homeserverBaseURL, configuredTokenEndpointURL: externalEndpointURL), .tokenEndpointNotSameOrigin),
+            (makeActivationContext(homeserverBaseURL: homeserverBaseURL, dependencies: .disabled), .dependenciesUnavailable),
+            (makeActivationContext(homeserverBaseURL: homeserverBaseURL, roomEligibility: makeRoomEligibility(isEncrypted: false)), .roomNotEncrypted),
+            (makeActivationContext(homeserverBaseURL: homeserverBaseURL, roomEligibility: makeRoomEligibility(isDirect: false)), .roomNotDirect),
+            (makeActivationContext(homeserverBaseURL: homeserverBaseURL, roomEligibility: makeRoomEligibility(joinedMemberCount: 3)), .roomNotOneToOne),
+            (makeActivationContext(homeserverBaseURL: homeserverBaseURL, roomEligibility: makeRoomEligibility(hasPeerUserID: false)), .peerUnavailable)
+        ]
+
+        for (context, reason) in failureCases {
+            let decision = gate.evaluate(context)
+
+            #expect(decision == .disabled(reason))
+        }
+    }
+
+    @Test
+    func productionActivationGateEnablesOnlyWhenAllModeledConditionsPass() throws {
+        let homeserverBaseURL = try #require(URL(string: "https://matrix.example.com"))
+        let decision = DirectCallProductionActivationGate().evaluate(makeActivationContext(homeserverBaseURL: homeserverBaseURL))
+
+        #expect(decision.isEnabled)
+        #expect(decision.disabledReason == nil)
+        #expect(decision.tokenEndpointURL?.scheme == "https")
+        #expect(decision.tokenEndpointURL?.host == "matrix.example.com")
+        #expect(decision.tokenEndpointURL?.path == DirectCallProductionConfiguration.tokenEndpointPath)
+        #expect(String(describing: decision).contains("matrix.example.com") == false)
+    }
+
+    @Test
+    func productionActivationGateAllowsSameOriginConfiguredEndpoint() throws {
+        let homeserverBaseURL = try #require(URL(string: "https://matrix.example.com"))
+        let configuredEndpointURL = try #require(URL(string: "https://matrix.example.com/_salemx/direct-call/v1/livekit/token"))
+        let decision = DirectCallProductionActivationGate().evaluate(makeActivationContext(homeserverBaseURL: homeserverBaseURL,
+                                                                                           configuredTokenEndpointURL: configuredEndpointURL))
+
+        #expect(decision.isEnabled)
+        #expect(decision.tokenEndpointURL?.path == "/_salemx/direct-call/v1/livekit/token")
+    }
+
+    @Test
     func productionDependenciesFactoryPrefersExplicitKeyWrapperOverRuntimeProvider() async throws {
         let endpointURL = try #require(URL(string: "https://call-service.example.com/direct-calls"))
         let keyStore = DirectCallLiveKitMediaKeyStore()
@@ -562,6 +649,55 @@ final class DirectCallProductionKeyWrappingTests {
                           updatedAt: .now,
                           state: .connecting,
                           encryptionState: .ready)
+    }
+
+    private func makeActivationContext(appRolloutEnabled: Bool = true,
+                                       homeserverBaseURL: URL,
+                                       serverCapability: DirectCallProductionServerCapability? = DirectCallProductionServerCapability(isEnabled: true,
+                                                                                                                                      intents: [DirectCallIntent.audio.rawValue]),
+                                       configuredTokenEndpointURL: URL? = nil,
+                                       dependencies: NativeDirectCallProductionDependencies? = nil,
+                                       roomEligibility: DirectCallProductionRoomEligibility = DirectCallProductionRoomEligibility(isDirect: true,
+                                                                                                                                  isEncrypted: true,
+                                                                                                                                  joinedMemberCount: 2,
+                                                                                                                                  hasPeerUserID: true)) -> DirectCallProductionActivationContext {
+        DirectCallProductionActivationContext(appRolloutEnabled: appRolloutEnabled,
+                                              homeserverBaseURL: homeserverBaseURL,
+                                              serverCapability: serverCapability,
+                                              configuredTokenEndpointURL: configuredTokenEndpointURL,
+                                              dependencies: dependencies ?? makeActivationReadyDependencies(),
+                                              roomEligibility: roomEligibility)
+    }
+
+    private func makeServerCapability(isEnabled: Bool = true,
+                                      version: Int = DirectCallProductionServerCapability.supportedVersion,
+                                      tokenEndpointPath: String? = DirectCallProductionConfiguration.tokenEndpointPath,
+                                      intents: Set<String> = [DirectCallIntent.audio.rawValue],
+                                      mediaTransport: String = DirectCallProductionServerCapability.liveKitMediaTransport,
+                                      isE2EERequired: Bool = true,
+                                      keyEnvelope: String = DirectCallProductionServerCapability.matrixSDKKeyEnvelope) -> DirectCallProductionServerCapability {
+        DirectCallProductionServerCapability(isEnabled: isEnabled,
+                                             version: version,
+                                             tokenEndpointPath: tokenEndpointPath,
+                                             intents: intents,
+                                             mediaTransport: mediaTransport,
+                                             isE2EERequired: isE2EERequired,
+                                             keyEnvelope: keyEnvelope)
+    }
+
+    private func makeRoomEligibility(isDirect: Bool = true,
+                                     isEncrypted: Bool = true,
+                                     joinedMemberCount: Int? = 2,
+                                     hasPeerUserID: Bool = true) -> DirectCallProductionRoomEligibility {
+        DirectCallProductionRoomEligibility(isDirect: isDirect,
+                                            isEncrypted: isEncrypted,
+                                            joinedMemberCount: joinedMemberCount,
+                                            hasPeerUserID: hasPeerUserID)
+    }
+
+    private func makeActivationReadyDependencies() -> NativeDirectCallProductionDependencies {
+        NativeDirectCallProductionDependencies(encryptionService: ProductionDirectCallEncryptionService(),
+                                               mediaEngineFactory: NoOpDirectCallMediaEngineFactory())
     }
 }
 
