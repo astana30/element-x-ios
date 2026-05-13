@@ -2,15 +2,15 @@
 
 ## Current Phase
 
-After 2.10X — production direct-call activation gate skeleton complete.
+After 2.10Y — production direct-call server capability discovery seam skeleton complete.
 
 ## Latest App Code Checkpoint
 
-dfdd74d62 `Add production direct-call activation gate`
+e18c9ff9f `Add production direct-call capability discovery seam`
 
 ## Latest Code Checkpoint
 
-dfdd74d62 `Add production direct-call activation gate`
+e18c9ff9f `Add production direct-call capability discovery seam`
 
 ## Latest SDK Checkpoint
 
@@ -115,13 +115,22 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - `directOneToOneCallsEnabled` remains unused for native production activation.
   - The gate is not wired into visible UI, Element Call routing, CallKit, push, or runtime production activation.
   - Focused app unit tests, Release build, and forbidden scan pass after the activation gate skeleton.
+- Production direct-call server capability discovery seam skeleton is complete:
+  - `DirectCallProductionCapabilityProviding` models an async, fail-closed source for the SalemX native direct-call server capability.
+  - `FailClosedDirectCallProductionCapabilityProvider` is the default provider and returns `providerUnavailable`.
+  - `DirectCallProductionCapabilityPayloadDecoder` decodes the authenticated Matrix capabilities envelope for `kz.salemx.direct_call.native`.
+  - Missing or malformed capability payloads return redacted fail-closed discovery reasons.
+  - The decoded capability feeds the existing `DirectCallProductionActivationGate`, which still owns same-origin endpoint validation and all activation decisions.
+  - The current app/wrapper inspection found no existing narrow authenticated custom capability API beyond the separate `ClientProxy.isLiveKitRTCSupported` helper and pre-auth `.well-known` patterns.
+  - No real network fetch, UI path, Element Call routing, CallKit, push, diagnostic env, or production runtime activation was added.
+  - Focused app unit tests, Release build, and forbidden scan pass after the discovery seam skeleton.
 
 ## Current Blocker
 
 - Production backend is still skeleton/fake mode.
 - Production E2EE Matrix crypto key wrapping now has narrow provider, disabled assembly, and activation gate seams, but the assembly is not yet threaded into the real session/room-flow runtime.
-- The production activation gate is modeled but not yet fed by real authenticated server capability discovery.
-- No server capability fetch/discovery path exists yet for native direct calls.
+- The production activation gate is modeled and can consume decoded capability payloads, but it is not yet fed by a real authenticated server capability fetch transport.
+- No real server capability fetch path exists yet for native direct calls.
 - No production runtime path yet passes activation-approved assembled dependencies into `NativeDirectCallRoomFlowOwner`.
 - The default app path remains fail-closed unless future production configuration and dependency assembly explicitly enable native direct-call dependencies.
 - The production trust policy for peer devices is not finalized; the safest initial policy should fail closed on unknown or unverifiable device trust.
@@ -129,9 +138,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.10Y — production direct-call server capability discovery seam skeleton`
+`2.10Z — production direct-call capability fetch transport inspection/skeleton`
 
-Goal: add or design a fail-closed app-side seam for authenticated native direct-call server capability discovery, so the activation gate can eventually consume a real capability without activating visible UI or production direct calls.
+Goal: inspect and, if safe, add a fail-closed authenticated capability fetch provider that can obtain the Matrix capabilities response through a narrow client/session transport seam and feed `DirectCallProductionCapabilityPayloadDecoder`, without activating visible UI or production direct calls.
 
 ## Do-Not-Touch Constraints
 
