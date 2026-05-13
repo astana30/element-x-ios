@@ -284,6 +284,117 @@ final class DirectCallProductionKeyWrappingTests {
     }
 
     @Test
+    func productionDependencyAssemblyIsDisabledByDefault() {
+        let assembly = NativeDirectCallProductionDependencyAssembly()
+
+        let dependencies = assembly.makeDependencies()
+
+        #expect(dependencies.hasEncryptionService == false)
+        #expect(dependencies.hasMediaEngineFactory == false)
+        #expect(String(describing: assembly).contains("http://") == false)
+        #expect(String(describing: dependencies).contains("Diagnostic") == false)
+    }
+
+    @Test
+    func productionDependencyAssemblyRequiresRuntimeProviders() throws {
+        let baseURL = try #require(URL(string: "https://call-service.example.com"))
+        let configuration = DirectCallProductionConfiguration(isEnabled: true, tokenEndpointBaseURL: baseURL)
+        let httpTransport = DirectCallHTTPTransportSpy()
+        let accessTokenProvider = MatrixAccessTokenProviderStub(accessToken: "matrix-credential")
+        let liveKitClient = ProductionKeyWrappingLiveKitClientSpy()
+        let keyEnvelopeWrapperProvider = DirectCallMediaKeyEnvelopeWrappingProviderSpy(wrapper: MatrixSDKDirectCallMediaKeyEnvelopeWrapperSpy())
+
+        let missingHTTPTransport = NativeDirectCallProductionDependencyAssembly(configuration: configuration,
+                                                                                accessTokenProvider: accessTokenProvider,
+                                                                                liveKitClient: liveKitClient,
+                                                                                keyEnvelopeWrapperProvider: keyEnvelopeWrapperProvider,
+                                                                                ownUserID: ownUserID).makeDependencies()
+        let missingAccessTokenProvider = NativeDirectCallProductionDependencyAssembly(configuration: configuration,
+                                                                                      httpTransport: httpTransport,
+                                                                                      liveKitClient: liveKitClient,
+                                                                                      keyEnvelopeWrapperProvider: keyEnvelopeWrapperProvider,
+                                                                                      ownUserID: ownUserID).makeDependencies()
+        let missingLiveKitClient = NativeDirectCallProductionDependencyAssembly(configuration: configuration,
+                                                                                httpTransport: httpTransport,
+                                                                                accessTokenProvider: accessTokenProvider,
+                                                                                keyEnvelopeWrapperProvider: keyEnvelopeWrapperProvider,
+                                                                                ownUserID: ownUserID).makeDependencies()
+        let missingKeyEnvelopeProvider = NativeDirectCallProductionDependencyAssembly(configuration: configuration,
+                                                                                      httpTransport: httpTransport,
+                                                                                      accessTokenProvider: accessTokenProvider,
+                                                                                      liveKitClient: liveKitClient,
+                                                                                      ownUserID: ownUserID).makeDependencies()
+        let missingOwnUserID = NativeDirectCallProductionDependencyAssembly(configuration: configuration,
+                                                                            httpTransport: httpTransport,
+                                                                            accessTokenProvider: accessTokenProvider,
+                                                                            liveKitClient: liveKitClient,
+                                                                            keyEnvelopeWrapperProvider: keyEnvelopeWrapperProvider).makeDependencies()
+
+        for dependencies in [missingHTTPTransport, missingAccessTokenProvider, missingLiveKitClient, missingKeyEnvelopeProvider, missingOwnUserID] {
+            #expect(dependencies.hasEncryptionService == false)
+            #expect(dependencies.hasMediaEngineFactory == false)
+        }
+    }
+
+    @Test
+    func productionDependencyAssemblyBuildsConfiguredDependenciesFromRuntimeProviders() async throws {
+        let baseURL = try #require(URL(string: "https://call-service.example.com"))
+        let configuration = DirectCallProductionConfiguration(isEnabled: true, tokenEndpointBaseURL: baseURL)
+        let responseData = Data("""
+        {
+          "version": 1,
+          "livekit": {
+            "server_url": "wss://livekit.example.test",
+            "room_name": "assembled-room",
+            "participant_token": "participant-credential",
+            "expires_at": "2026-05-11T12:00:00Z"
+          },
+          "allocation": {
+            "id": "allocation-a",
+            "call_id": "call-a",
+            "intent": "audio"
+          }
+        }
+        """.utf8)
+        let httpTransport = DirectCallHTTPTransportSpy(result: .success(.init(statusCode: 200, data: responseData)))
+        let accessTokenProvider = MatrixAccessTokenProviderStub(accessToken: "matrix-credential")
+        let liveKitClient = ProductionKeyWrappingLiveKitClientSpy()
+        let sdk = MatrixSDKDirectCallMediaKeyEnvelopeWrapperSpy()
+        let keyEnvelopeWrapperProvider = DirectCallMediaKeyEnvelopeWrappingProviderSpy(wrapper: sdk)
+        let assembly = NativeDirectCallProductionDependencyAssembly(configuration: configuration,
+                                                                    httpTransport: httpTransport,
+                                                                    accessTokenProvider: accessTokenProvider,
+                                                                    liveKitClient: liveKitClient,
+                                                                    keyEnvelopeWrapperProvider: keyEnvelopeWrapperProvider,
+                                                                    ownUserID: ownUserID,
+                                                                    senderDeviceID: "DEVICE")
+        let dependencies = assembly.makeDependencies()
+        let encryptionService = try #require(dependencies.encryptionService)
+        let mediaEngineFactory = try #require(dependencies.mediaEngineFactory)
+        let generated = try await encryptionService.generatePerCallKey(callID: callID,
+                                                                       roomID: roomID,
+                                                                       peerUserID: peerUserID).get()
+        let mediaEngine = try mediaEngineFactory.makeMediaEngine().get()
+        let session = makeMediaReadySession()
+
+        let connectResult = await mediaEngine.connectAudio(for: session, keyHandle: generated.keyHandle)
+
+        guard case .success = connectResult else {
+            Issue.record("Expected fully injected production assembly to connect through fake runtime dependencies.")
+            return
+        }
+        #expect(dependencies.hasEncryptionService)
+        #expect(dependencies.hasMediaEngineFactory)
+        #expect(keyEnvelopeWrapperProvider.makeWrapperCallCount == 1)
+        #expect(sdk.wrapInfos.count == 1)
+        #expect(httpTransport.requests.count == 1)
+        #expect(httpTransport.requests.first?.headers["Authorization"] == "Bearer matrix-credential")
+        #expect(liveKitClient.connectionInfos.map(\.roomName) == ["assembled-room"])
+        #expect(String(describing: assembly).contains(baseURL.absoluteString) == false)
+        #expect(String(describing: mediaEngineFactory).contains("participant-credential") == false)
+    }
+
+    @Test
     func productionDependenciesFactoryPrefersExplicitKeyWrapperOverRuntimeProvider() async throws {
         let endpointURL = try #require(URL(string: "https://call-service.example.com/direct-calls"))
         let keyStore = DirectCallLiveKitMediaKeyStore()
@@ -439,6 +550,19 @@ final class DirectCallProductionKeyWrappingTests {
               expiresAtMs: 1000,
               opaqueCiphertext: "sdk-opaque-envelope")
     }
+
+    private func makeMediaReadySession() -> DirectCallSession {
+        DirectCallSession(callID: callID,
+                          roomID: roomID,
+                          peerUserID: peerUserID,
+                          direction: .outgoing,
+                          intent: .audio,
+                          encryptionMode: .e2eeRequired,
+                          startedAt: .now,
+                          updatedAt: .now,
+                          state: .connecting,
+                          encryptionState: .ready)
+    }
 }
 
 private final class MatrixSDKDirectCallMediaKeyEnvelopeWrapperSpy: MatrixSDKDirectCallMediaKeyEnvelopeWrappingProtocol {
@@ -512,6 +636,30 @@ private final class DirectCallMediaKeyEnvelopeWrappingProviderSpy: DirectCallMed
 }
 
 @MainActor
+private final class DirectCallHTTPTransportSpy: DirectCallHTTPTransportProtocol {
+    private(set) var requests = [DirectCallHTTPTransportRequest]()
+    var result: Result<DirectCallHTTPTransportResponse, DirectCallMediaError>
+
+    init(result: Result<DirectCallHTTPTransportResponse, DirectCallMediaError> = .failure(.tokenUnavailable)) {
+        self.result = result
+    }
+
+    func send(_ request: DirectCallHTTPTransportRequest) async -> Result<DirectCallHTTPTransportResponse, DirectCallMediaError> {
+        requests.append(request)
+        return result
+    }
+}
+
+@MainActor
+private struct MatrixAccessTokenProviderStub: DirectCallMatrixAccessTokenProviding {
+    let accessToken: String?
+
+    func matrixAccessToken() async -> String? {
+        accessToken
+    }
+}
+
+@MainActor
 private final class MediaKeyWrapperSpy: DirectCallMediaKeyWrappingProtocol {
     private let envelopeOverride: DirectCallWrappedMediaKeyEnvelope?
     private let wrapFailure: DirectCallMediaKeyWrappingFailureReason?
@@ -573,8 +721,11 @@ private final class MediaKeyWrapperSpy: DirectCallMediaKeyWrappingProtocol {
 
 @MainActor
 private final class ProductionKeyWrappingLiveKitClientSpy: DirectCallLiveKitClientProtocol {
+    private(set) var connectionInfos = [DirectCallMediaConnectionInfo]()
+
     func connect(connectionInfo: DirectCallMediaConnectionInfo, e2eeContext: any DirectCallMediaE2EEContextProtocol) async -> Result<Void, DirectCallMediaError> {
-        .success(())
+        connectionInfos.append(connectionInfo)
+        return .success(())
     }
 
     func setMicrophoneEnabled(_ isEnabled: Bool) async -> Result<Void, DirectCallMediaError> {

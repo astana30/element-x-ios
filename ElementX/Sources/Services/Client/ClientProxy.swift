@@ -1432,6 +1432,13 @@ extension ClientProxy: DirectCallMediaKeyEnvelopeWrappingProviding {
     }
 }
 
+@MainActor
+extension ClientProxy: DirectCallMatrixAccessTokenProviding {
+    func matrixAccessToken() async -> String? {
+        accessToken
+    }
+}
+
 private extension CreateRoomAccessType {
     var isEncrypted: Bool {
         switch self {

@@ -124,6 +124,7 @@ struct NativeDirectCallProductionConfiguration: Equatable, CustomStringConvertib
 struct NativeDirectCallProductionDependenciesFactory {
     private let configuration: NativeDirectCallProductionConfiguration
     private let liveKitClient: DirectCallLiveKitClientProtocol?
+    private let tokenClient: DirectCallLiveKitTokenClientProtocol?
     private let keyWrapper: DirectCallMediaKeyWrappingProtocol?
     private let matrixSDKKeyEnvelopeWrapper: MatrixSDKDirectCallMediaKeyEnvelopeWrappingProtocol?
     private let matrixSDKKeyEnvelopeWrapperProvider: DirectCallMediaKeyEnvelopeWrappingProviding?
@@ -133,6 +134,7 @@ struct NativeDirectCallProductionDependenciesFactory {
 
     init(configuration: NativeDirectCallProductionConfiguration = .init(),
          liveKitClient: DirectCallLiveKitClientProtocol? = nil,
+         tokenClient: DirectCallLiveKitTokenClientProtocol? = nil,
          keyWrapper: DirectCallMediaKeyWrappingProtocol? = nil,
          matrixSDKKeyEnvelopeWrapper: MatrixSDKDirectCallMediaKeyEnvelopeWrappingProtocol? = nil,
          matrixSDKKeyEnvelopeWrapperProvider: DirectCallMediaKeyEnvelopeWrappingProviding? = nil,
@@ -141,6 +143,7 @@ struct NativeDirectCallProductionDependenciesFactory {
          senderDeviceID: String? = nil) {
         self.configuration = configuration
         self.liveKitClient = liveKitClient
+        self.tokenClient = tokenClient
         self.keyWrapper = keyWrapper
         self.matrixSDKKeyEnvelopeWrapper = matrixSDKKeyEnvelopeWrapper
         self.matrixSDKKeyEnvelopeWrapperProvider = matrixSDKKeyEnvelopeWrapperProvider
@@ -151,6 +154,7 @@ struct NativeDirectCallProductionDependenciesFactory {
 
     init(productionConfiguration: DirectCallProductionConfiguration,
          liveKitClient: DirectCallLiveKitClientProtocol? = nil,
+         tokenClient: DirectCallLiveKitTokenClientProtocol? = nil,
          keyWrapper: DirectCallMediaKeyWrappingProtocol? = nil,
          matrixSDKKeyEnvelopeWrapper: MatrixSDKDirectCallMediaKeyEnvelopeWrappingProtocol? = nil,
          matrixSDKKeyEnvelopeWrapperProvider: DirectCallMediaKeyEnvelopeWrappingProviding? = nil,
@@ -159,6 +163,7 @@ struct NativeDirectCallProductionDependenciesFactory {
          senderDeviceID: String? = nil) {
         configuration = .init(productionConfiguration: productionConfiguration)
         self.liveKitClient = liveKitClient
+        self.tokenClient = tokenClient
         self.keyWrapper = keyWrapper
         self.matrixSDKKeyEnvelopeWrapper = matrixSDKKeyEnvelopeWrapper
         self.matrixSDKKeyEnvelopeWrapperProvider = matrixSDKKeyEnvelopeWrapperProvider
@@ -188,8 +193,7 @@ struct NativeDirectCallProductionDependenciesFactory {
                                                                       keyStore: sharedKeyStore,
                                                                       ownUserID: ownUserID,
                                                                       senderDeviceID: senderDeviceID)
-        let tokenClient = ProductionDirectCallLiveKitTokenClient(configuration: configuration.liveKitConfiguration)
-        let tokenProvider = DirectCallLiveKitTokenProvider(tokenClient: tokenClient)
+        let tokenProvider = DirectCallLiveKitTokenProvider(tokenClient: tokenClient ?? ProductionDirectCallLiveKitTokenClient(configuration: configuration.liveKitConfiguration))
         let e2eeContextProvider = DirectCallLiveKitE2EEContextProvider(keyStore: sharedKeyStore)
         let mediaEngineFactory = DirectCallLiveKitMediaEngineFactory(tokenProvider: tokenProvider,
                                                                      encryptionService: encryptionService,
@@ -198,5 +202,74 @@ struct NativeDirectCallProductionDependenciesFactory {
 
         return NativeDirectCallProductionDependencies(encryptionService: encryptionService,
                                                       mediaEngineFactory: mediaEngineFactory)
+    }
+}
+
+struct NativeDirectCallProductionDependencyAssembly: CustomStringConvertible, CustomDebugStringConvertible {
+    private let configuration: DirectCallProductionConfiguration
+    private let httpTransport: DirectCallHTTPTransportProtocol?
+    private let accessTokenProvider: DirectCallMatrixAccessTokenProviding?
+    private let liveKitClient: DirectCallLiveKitClientProtocol?
+    private let keyEnvelopeWrapperProvider: DirectCallMediaKeyEnvelopeWrappingProviding?
+    private let mediaKeyStore: DirectCallLiveKitMediaKeyStore?
+    private let ownUserID: String?
+    private let senderDeviceID: String?
+
+    init(configuration: DirectCallProductionConfiguration = .init(),
+         httpTransport: DirectCallHTTPTransportProtocol? = nil,
+         accessTokenProvider: DirectCallMatrixAccessTokenProviding? = nil,
+         liveKitClient: DirectCallLiveKitClientProtocol? = nil,
+         keyEnvelopeWrapperProvider: DirectCallMediaKeyEnvelopeWrappingProviding? = nil,
+         mediaKeyStore: DirectCallLiveKitMediaKeyStore? = nil,
+         ownUserID: String? = nil,
+         senderDeviceID: String? = nil) {
+        self.configuration = configuration
+        self.httpTransport = httpTransport
+        self.accessTokenProvider = accessTokenProvider
+        self.liveKitClient = liveKitClient
+        self.keyEnvelopeWrapperProvider = keyEnvelopeWrapperProvider
+        self.mediaKeyStore = mediaKeyStore
+        self.ownUserID = ownUserID
+        self.senderDeviceID = senderDeviceID
+    }
+
+    @MainActor
+    func makeDependencies() -> NativeDirectCallProductionDependencies {
+        guard configuration.isConfigured,
+              let httpTransport,
+              let accessTokenProvider,
+              let liveKitClient,
+              let keyEnvelopeWrapperProvider,
+              let ownUserID,
+              !ownUserID.isEmpty else {
+            return .disabled
+        }
+
+        let tokenClient = ProductionDirectCallLiveKitTokenClient(configuration: configuration.liveKitConfiguration,
+                                                                 httpTransport: httpTransport,
+                                                                 accessTokenProvider: accessTokenProvider)
+        return NativeDirectCallProductionDependenciesFactory(productionConfiguration: configuration,
+                                                             liveKitClient: liveKitClient,
+                                                             tokenClient: tokenClient,
+                                                             matrixSDKKeyEnvelopeWrapperProvider: keyEnvelopeWrapperProvider,
+                                                             mediaKeyStore: mediaKeyStore,
+                                                             ownUserID: ownUserID,
+                                                             senderDeviceID: senderDeviceID).makeDependencies()
+    }
+
+    var description: String {
+        let fields = [
+            "isConfigured: \(configuration.isConfigured)",
+            "httpTransportAvailable: \(httpTransport != nil)",
+            "accessTokenProviderAvailable: \(accessTokenProvider != nil)",
+            "liveKitClientAvailable: \(liveKitClient != nil)",
+            "keyEnvelopeWrapperProviderAvailable: \(keyEnvelopeWrapperProvider != nil)",
+            "ownUserIDAvailable: \(ownUserID?.isEmpty == false)"
+        ]
+        return "NativeDirectCallProductionDependencyAssembly(\(fields.joined(separator: ", ")))"
+    }
+
+    var debugDescription: String {
+        description
     }
 }
