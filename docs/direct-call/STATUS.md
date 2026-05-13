@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.11D — production activation dry-run runtime proof recorded.
+After 2.11E — app rollout/capability config source inspection complete.
 
 ## Latest App Code Checkpoint
 
@@ -168,6 +168,16 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - No production call started.
   - No listener, media, or Matrix send side effects were triggered by the dry-run command.
   - The disabled production state is expected.
+- App rollout/capability config source inspection is complete:
+  - `DirectCallProductionConfiguration` should stay default-disabled and should not read diagnostic env, developer options, or `directOneToOneCallsEnabled`.
+  - App rollout should come from an app-owned production config source, preferably an `AppSettings`/hook-backed non-user-facing value that defaults false and can later be remotely configured.
+  - Server authority should come from authenticated Matrix `/capabilities` containing `kz.salemx.direct_call.native`, not `.well-known` alone.
+  - `.well-known` may remain a pre-auth hint or remote settings input, but must never be sufficient to activate production native direct calls.
+  - The current Swift Matrix SDK wrapper exposes specialized `isLiveKitRTCSupported`/versions helpers, but no narrow generic authenticated `/capabilities` fetch for the SalemX native direct-call capability.
+  - A narrow `DirectCallHTTPTransportProtocol` + `DirectCallMatrixAccessTokenProviding` capability provider is the safest app-side source for now; it can fetch `/_matrix/client/v3/capabilities` and pass only response data into `DirectCallProductionCapabilityPayloadDecoder`.
+  - Token endpoint discovery should continue to accept only same-origin relative paths from capability, with same-origin explicit overrides reserved for app configuration/tests.
+  - Dependency readiness should be computed after an accepted token endpoint exists, or split into side-effect-free runtime-prerequisite readiness plus endpoint-specific dependency assembly.
+  - Production remains disabled by default and no app code changed during this inspection.
 
 ## Current Blocker
 
@@ -175,6 +185,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Production E2EE Matrix crypto key wrapping now has narrow provider, disabled assembly, activation gate, capability discovery, decision assembly, and room-scoped dry-run seams, but the assembly is not yet threaded into the real session/room-flow runtime for activation.
 - The production activation decision can consume decoded capability payloads, but it is not yet fed by a real authenticated server capability fetch transport.
 - No real server capability fetch path exists yet for native direct calls.
+- The current production dependency readiness path is still coupled to `DirectCallProductionConfiguration.tokenEndpointBaseURL`, so capability-sourced endpoints need a two-stage readiness/assembly path before dry-run can report dependencies ready from server capability alone.
 - The room-flow dry-run seam can now be queried by the DEBUG/integration runner command and has a runtime proof for A/B; there is still no visible UI or production runtime activation.
 - No production runtime path yet passes activation-approved assembled dependencies into `NativeDirectCallRoomFlowOwner`.
 - The default app path remains fail-closed unless future production configuration and dependency assembly explicitly enable native direct-call dependencies.
@@ -183,9 +194,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.11E — app rollout/capability config source inspection`
+`2.11F — fail-closed rollout and capability source skeleton`
 
-Goal: inspect where app rollout configuration and authenticated server capability discovery should be sourced and threaded so future dry-run checks can move beyond `appRolloutDisabled`, without activating visible UI or production direct calls.
+Goal: add a default-disabled rollout configuration provider and a fail-closed authenticated Matrix `/capabilities` provider skeleton, then thread them toward dry-run decision construction without activating visible UI or production direct calls.
 
 ## Do-Not-Touch Constraints
 
