@@ -13,13 +13,13 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.11A — production activation dry-run diagnostics complete.
+After 2.11B — room-scoped production activation dry-run seam complete.
 
 Current app code checkpoint:
-5d58718ac `Add production direct-call activation dry-run diagnostics`
+8535cfb0d `Add room-scoped production direct-call dry-run seam`
 
 Current docs checkpoint:
-Latest commit that updates `docs/direct-call` after 2.11A.
+Latest commit that updates `docs/direct-call` after 2.11B.
 
 Current SDK checkpoint:
 f7c2cfe5c `Add direct-call media key envelope crypto tests`
@@ -34,7 +34,7 @@ Artifact checksum:
 654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e
 
 Phase:
-2.11B — production direct-call capability fetch transport inspection/skeleton.
+2.11C — production direct-call capability fetch transport inspection/skeleton.
 
 Task:
 Inspect and, if safe, add a fail-closed authenticated capability fetch provider that can obtain the Matrix capabilities response and feed `DirectCallProductionCapabilityPayloadDecoder`.
@@ -56,7 +56,9 @@ Context:
 - `DirectCallProductionCapabilityProviding`, `FailClosedDirectCallProductionCapabilityProvider`, and `DirectCallProductionCapabilityPayloadDecoder` exist.
 - `DirectCallProductionActivationDecisionService` assembles rollout config, capability discovery, dependency readiness, homeserver URL, and room eligibility into the activation gate.
 - `DirectCallProductionActivationDryRunDiagnostic` exposes a redacted dry-run model over that same gate without starting listeners, media, signalling, controllers, or UI.
-- The activation decision service is not wired into visible UI or runtime production activation.
+- `NativeDirectCallProductionActivationDryRunProviding` provides a room-scoped dry-run seam.
+- `RoomFlowCoordinator.nativeDirectCallProductionActivationDryRunDiagnostic()` can report a redacted disabled result before room activation or delegate to an injected room-scoped provider after room setup.
+- The room-scoped dry-run seam does not prepare native direct-call controllers, start listeners, construct media engines, send Matrix events, or touch visible UI.
 - `directOneToOneCallsEnabled` remains separate and must not be reused for native production activation.
 - Diagnostics remain separate and must not influence production activation.
 
@@ -74,13 +76,15 @@ Inspect:
 2. `DirectCallProductionCapabilityPayloadDecoder`
 3. `DirectCallProductionActivationDecisionService`
 4. `DirectCallProductionActivationGate`
-5. `DirectCallProductionConfiguration`
-6. `NativeDirectCallProductionDependencyAssembly`
-7. `ClientProxy` and `ClientProxyProtocol`
-8. Existing Matrix SDK Swift bindings for client capabilities or `/capabilities`
-9. Existing HTTP transport seams such as `DirectCallHTTPTransportProtocol`
-10. Matrix auth provider seam `DirectCallMatrixAccessTokenProviding`
-11. App settings, session construction, and existing remote settings patterns
+5. `NativeDirectCallProductionActivationDryRunProviding`
+6. `RoomFlowCoordinator.nativeDirectCallProductionActivationDryRunDiagnostic()`
+7. `DirectCallProductionConfiguration`
+8. `NativeDirectCallProductionDependencyAssembly`
+9. `ClientProxy` and `ClientProxyProtocol`
+10. Existing Matrix SDK Swift bindings for client capabilities or `/capabilities`
+11. Existing HTTP transport seams such as `DirectCallHTTPTransportProtocol`
+12. Matrix auth provider seam `DirectCallMatrixAccessTokenProviding`
+13. App settings, session construction, and existing remote settings patterns
 
 Questions:
 A. Is there an existing SDK-backed authenticated `/capabilities` fetch that can be wrapped narrowly?
@@ -89,8 +93,9 @@ C. Should the provider be session-scoped, client-scoped, or homeserver-scoped?
 D. Should it fetch only when production rollout config is enabled, or stay independent and fail closed by default?
 E. How should request URL construction preserve same-origin behavior without duplicating activation-gate endpoint validation?
 F. How should failures map to redacted discovery reasons?
-G. What tests prove no production activation, no diagnostic-env influence, and no secret logging?
-H. What minimal code skeleton is safe now?
+G. How should the provider feed the room-scoped dry-run seam in a later phase without activating UI or runtime calls?
+H. What tests prove no production activation, no diagnostic-env influence, and no secret logging?
+I. What minimal code skeleton is safe now?
 
 Allowed:
 - Add a concrete fail-closed provider skeleton, for example `HTTPDirectCallProductionCapabilityProvider`, only if it stays unconstructed by default.
@@ -121,6 +126,7 @@ Validation:
   - `UnitTests/DirectCallProductionKeyWrappingTests`
   - `UnitTests/DirectCallMediaEngineTests`
   - `UnitTests/DirectCallEngineTests` if protocol boundaries change
+  - `UnitTests/RoomFlowCoordinatorTests` if room-flow dry-run wiring changes
 - Release build if production app files change
 - Direct-call forbidden scan
 
@@ -129,7 +135,8 @@ Expected output:
 2. Capability fetch provider shape, or exact blocker if inspection-only.
 3. Whether SDK-backed `/capabilities` fetch exists.
 4. Fail-closed/default-disabled behavior.
-5. Whether `directOneToOneCallsEnabled` remains unused for native production activation.
-6. Tests/build results.
-7. Whether production direct calls remain disabled.
-8. Update `docs/direct-call/STATUS.md`, `WORKLOG.md`, and `NEXT_CODEX_PROMPT.md` when done.
+5. Whether room-scoped dry-run remains side-effect-free.
+6. Whether `directOneToOneCallsEnabled` remains unused for native production activation.
+7. Tests/build results.
+8. Whether production direct calls remain disabled.
+9. Update `docs/direct-call/STATUS.md`, `WORKLOG.md`, and `NEXT_CODEX_PROMPT.md` when done.

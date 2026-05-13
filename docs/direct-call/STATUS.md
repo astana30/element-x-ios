@@ -2,15 +2,15 @@
 
 ## Current Phase
 
-After 2.11A — production activation dry-run diagnostics complete.
+After 2.11B — room-scoped production activation dry-run seam complete.
 
 ## Latest App Code Checkpoint
 
-5d58718ac `Add production direct-call activation dry-run diagnostics`
+8535cfb0d `Add room-scoped production direct-call dry-run seam`
 
 ## Latest Code Checkpoint
 
-5d58718ac `Add production direct-call activation dry-run diagnostics`
+8535cfb0d `Add room-scoped production direct-call dry-run seam`
 
 ## Latest SDK Checkpoint
 
@@ -143,15 +143,23 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - All-valid dry-run returns an enabled diagnostic model without generating keys, consuming keys, clearing keys, constructing a media engine, starting listeners, creating controllers, or sending Matrix events.
   - The dry-run surface is not wired into visible UI, Element Call routing, CallKit, push, diagnostics env, or production runtime activation.
   - Focused app unit tests, Release build, and forbidden scan pass after the dry-run diagnostics.
+- Room-scoped production activation dry-run seam is complete:
+  - `NativeDirectCallProductionActivationDryRunProviding` models a room-scoped provider for redacted production activation readiness.
+  - `FailClosedNativeDirectCallProductionActivationDryRunProvider` is the default provider and returns disabled with `roomUnavailable`.
+  - `NativeDirectCallProductionActivationDryRunProvider` delegates to `DirectCallProductionActivationDryRunDiagnosing` with an injected homeserver URL and room eligibility.
+  - `RoomFlowCoordinator.nativeDirectCallProductionActivationDryRunDiagnostic()` returns a redacted disabled diagnostic when no active room is available.
+  - Once a room proxy is stored, `RoomFlowCoordinator` can delegate to an injected dry-run provider without preparing the native direct-call room owner.
+  - Tests prove the room-scoped dry-run does not call prepare, start listener, outgoing call, accept, hangup, stop, reset, media, signalling, or Matrix send paths.
+  - The seam is not wired into visible UI, Element Call routing, CallKit, push, diagnostic env, or production runtime activation.
+  - Focused app unit tests, Release build, and forbidden scan pass after the room-scoped dry-run seam.
 
 ## Current Blocker
 
 - Production backend is still skeleton/fake mode.
-- Production E2EE Matrix crypto key wrapping now has narrow provider, disabled assembly, activation gate, capability discovery, and decision assembly seams, but the assembly is not yet threaded into the real session/room-flow runtime.
+- Production E2EE Matrix crypto key wrapping now has narrow provider, disabled assembly, activation gate, capability discovery, decision assembly, and room-scoped dry-run seams, but the assembly is not yet threaded into the real session/room-flow runtime for activation.
 - The production activation decision can consume decoded capability payloads, but it is not yet fed by a real authenticated server capability fetch transport.
 - No real server capability fetch path exists yet for native direct calls.
-- No production runtime path calls `DirectCallProductionActivationDecisionService` yet.
-- No production runtime path calls the activation dry-run diagnostic surface yet.
+- The room-flow dry-run seam can call `DirectCallProductionActivationDecisionService` through an injected provider, but no visible or external diagnostic surface calls it yet.
 - No production runtime path yet passes activation-approved assembled dependencies into `NativeDirectCallRoomFlowOwner`.
 - The default app path remains fail-closed unless future production configuration and dependency assembly explicitly enable native direct-call dependencies.
 - The production trust policy for peer devices is not finalized; the safest initial policy should fail closed on unknown or unverifiable device trust.
@@ -159,7 +167,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.11B — production direct-call capability fetch transport inspection/skeleton`
+`2.11C — production direct-call capability fetch transport inspection/skeleton`
 
 Goal: inspect and, if safe, add a fail-closed authenticated capability fetch provider that can obtain the Matrix capabilities response through a narrow client/session transport seam and feed `DirectCallProductionCapabilityPayloadDecoder`, without activating visible UI or production direct calls.
 
