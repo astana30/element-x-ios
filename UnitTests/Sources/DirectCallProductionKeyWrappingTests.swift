@@ -428,6 +428,105 @@ final class DirectCallProductionKeyWrappingTests {
     }
 
     @Test
+    func productionCapabilityProviderFailsClosedByDefault() async {
+        let provider = FailClosedDirectCallProductionCapabilityProvider()
+
+        let result = await provider.directCallProductionServerCapability()
+
+        #expect(result == .unavailable(.providerUnavailable))
+        #expect(result.isAvailable == false)
+        #expect(String(describing: provider).contains(DirectCallProductionConfiguration.tokenEndpointPath) == false)
+        #expect(String(describing: result).contains(DirectCallProductionConfiguration.tokenEndpointPath) == false)
+    }
+
+    @Test
+    func productionCapabilityDiscoveryDecodesEnvelopeAndEnablesActivationModel() throws {
+        let homeserverBaseURL = try #require(URL(string: "https://matrix.example.com"))
+        let result = DirectCallProductionCapabilityPayloadDecoder().decodeCapability(from: makeCapabilitiesPayload())
+        let capability = try #require(result.capability)
+
+        let decision = DirectCallProductionActivationGate().evaluate(makeActivationContext(homeserverBaseURL: homeserverBaseURL,
+                                                                                           serverCapability: capability))
+
+        #expect(result.failureReason == nil)
+        #expect(result.isAvailable)
+        #expect(decision.isEnabled)
+        #expect(decision.tokenEndpointURL?.host == "matrix.example.com")
+        #expect(decision.tokenEndpointURL?.path == DirectCallProductionConfiguration.tokenEndpointPath)
+        #expect(String(describing: result).contains(DirectCallProductionConfiguration.tokenEndpointPath) == false)
+        #expect(String(describing: decision).contains("matrix.example.com") == false)
+    }
+
+    @Test
+    func productionCapabilityDiscoveryMissingCapabilityFailsClosed() throws {
+        let homeserverBaseURL = try #require(URL(string: "https://matrix.example.com"))
+        let data = Data("""
+        {
+          "capabilities": {
+            "m.room_versions": {
+              "default": "1"
+            }
+          }
+        }
+        """.utf8)
+
+        let result = DirectCallProductionCapabilityPayloadDecoder().decodeCapability(from: data)
+        let decision = DirectCallProductionActivationGate().evaluate(makeActivationContext(homeserverBaseURL: homeserverBaseURL,
+                                                                                           serverCapability: result.capability))
+
+        #expect(result == .unavailable(.missingCapability))
+        #expect(decision == .disabled(.serverCapabilityUnavailable))
+    }
+
+    @Test
+    func productionCapabilityDiscoveryMalformedCapabilityFailsClosed() {
+        let data = Data("""
+        {
+          "capabilities": {
+            "\(DirectCallProductionServerCapability.capabilityName)": {
+              "enabled": true,
+              "version": "1"
+            }
+          }
+        }
+        """.utf8)
+
+        let result = DirectCallProductionCapabilityPayloadDecoder().decodeCapability(from: data)
+
+        #expect(result == .unavailable(.malformedCapability))
+    }
+
+    @Test
+    func productionCapabilityDiscoveryFeedsUnsupportedCapabilitiesToActivationGate() throws {
+        let homeserverBaseURL = try #require(URL(string: "https://matrix.example.com"))
+        let decoder = DirectCallProductionCapabilityPayloadDecoder()
+        let cases: [(Data, DirectCallProductionActivationDisabledReason)] = [
+            (makeCapabilitiesPayload(tokenEndpointPath: "https://calls.example.net/token"), .tokenEndpointUnavailable),
+            (makeCapabilitiesPayload(mediaTransport: "unknown"), .unsupportedMediaTransport),
+            (makeCapabilitiesPayload(isE2EERequired: false), .e2eeNotRequiredByCapability),
+            (makeCapabilitiesPayload(keyEnvelope: "unknown"), .unsupportedKeyEnvelope)
+        ]
+
+        for (data, reason) in cases {
+            let result = decoder.decodeCapability(from: data)
+            let decision = DirectCallProductionActivationGate().evaluate(makeActivationContext(homeserverBaseURL: homeserverBaseURL,
+                                                                                               serverCapability: result.capability))
+
+            #expect(result.isAvailable)
+            #expect(decision == .disabled(reason))
+        }
+    }
+
+    @Test
+    func productionCapabilityDiscoveryAcceptsDirectCapabilityPayloadForTestsOnly() throws {
+        let capability = DirectCallProductionCapabilityPayloadDecoder().decodeCapability(from: makeCapabilityPayload())
+        let discovered = try #require(capability.capability)
+
+        #expect(discovered.isEnabled)
+        #expect(discovered.supportsIntent(.audio))
+    }
+
+    @Test
     func productionActivationGateFailsClosedForMissingPrerequisites() throws {
         let homeserverBaseURL = try #require(URL(string: "https://matrix.example.com"))
         let externalEndpointURL = try #require(URL(string: "https://calls.example.net/_matrix/client/unstable/kz.salemx.direct_call/livekit/token"))
@@ -698,6 +797,46 @@ final class DirectCallProductionKeyWrappingTests {
     private func makeActivationReadyDependencies() -> NativeDirectCallProductionDependencies {
         NativeDirectCallProductionDependencies(encryptionService: ProductionDirectCallEncryptionService(),
                                                mediaEngineFactory: NoOpDirectCallMediaEngineFactory())
+    }
+
+    private func makeCapabilitiesPayload(tokenEndpointPath: String = DirectCallProductionConfiguration.tokenEndpointPath,
+                                         mediaTransport: String = DirectCallProductionServerCapability.liveKitMediaTransport,
+                                         isE2EERequired: Bool = true,
+                                         keyEnvelope: String = DirectCallProductionServerCapability.matrixSDKKeyEnvelope) -> Data {
+        Data("""
+        {
+          "capabilities": {
+            "\(DirectCallProductionServerCapability.capabilityName)": \(makeCapabilityJSONString(tokenEndpointPath: tokenEndpointPath,
+                                                                                                 mediaTransport: mediaTransport,
+                                                                                                 isE2EERequired: isE2EERequired,
+                                                                                                 keyEnvelope: keyEnvelope)),
+            "m.room_versions": {
+              "default": "1"
+            }
+          }
+        }
+        """.utf8)
+    }
+
+    private func makeCapabilityPayload() -> Data {
+        Data(makeCapabilityJSONString().utf8)
+    }
+
+    private func makeCapabilityJSONString(tokenEndpointPath: String = DirectCallProductionConfiguration.tokenEndpointPath,
+                                          mediaTransport: String = DirectCallProductionServerCapability.liveKitMediaTransport,
+                                          isE2EERequired: Bool = true,
+                                          keyEnvelope: String = DirectCallProductionServerCapability.matrixSDKKeyEnvelope) -> String {
+        """
+        {
+          "enabled": true,
+          "version": 1,
+          "token_endpoint": "\(tokenEndpointPath)",
+          "intents": ["audio"],
+          "media_transport": "\(mediaTransport)",
+          "e2ee_required": \(isE2EERequired),
+          "key_envelope": "\(keyEnvelope)"
+        }
+        """
     }
 }
 

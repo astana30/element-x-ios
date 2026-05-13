@@ -452,6 +452,141 @@ struct DirectCallProductionServerCapability: Codable, Equatable, CustomStringCon
     }
 }
 
+enum DirectCallProductionCapabilityDiscoveryFailureReason: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case providerUnavailable
+    case missingCapability
+    case malformedCapability
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct DirectCallProductionCapabilityDiscoveryResult: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let capability: DirectCallProductionServerCapability?
+    let failureReason: DirectCallProductionCapabilityDiscoveryFailureReason?
+
+    static func available(_ capability: DirectCallProductionServerCapability) -> Self {
+        .init(capability: capability, failureReason: nil)
+    }
+
+    static func unavailable(_ reason: DirectCallProductionCapabilityDiscoveryFailureReason) -> Self {
+        .init(capability: nil, failureReason: reason)
+    }
+
+    var isAvailable: Bool {
+        capability != nil
+    }
+
+    var description: String {
+        "DirectCallProductionCapabilityDiscoveryResult(isAvailable: \(isAvailable), failureReason: \(failureReason?.description ?? "none"), capability: \(capability.map { String(describing: $0) } ?? "none"))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+@MainActor
+protocol DirectCallProductionCapabilityProviding {
+    func directCallProductionServerCapability() async -> DirectCallProductionCapabilityDiscoveryResult
+}
+
+@MainActor
+final class FailClosedDirectCallProductionCapabilityProvider: DirectCallProductionCapabilityProviding, CustomStringConvertible, CustomDebugStringConvertible {
+    func directCallProductionServerCapability() async -> DirectCallProductionCapabilityDiscoveryResult {
+        .unavailable(.providerUnavailable)
+    }
+
+    nonisolated var description: String {
+        "FailClosedDirectCallProductionCapabilityProvider(isAvailable: false)"
+    }
+
+    nonisolated var debugDescription: String {
+        description
+    }
+}
+
+struct DirectCallProductionCapabilityPayloadDecoder: CustomStringConvertible, CustomDebugStringConvertible {
+    private let decoder: JSONDecoder
+
+    init(decoder: JSONDecoder = JSONDecoder()) {
+        self.decoder = decoder
+    }
+
+    func decodeCapability(from data: Data) -> DirectCallProductionCapabilityDiscoveryResult {
+        if let response = try? decoder.decode(DirectCallProductionCapabilitiesResponse.self, from: data),
+           response.hasCapabilitiesContainer {
+            guard let capability = response.nativeDirectCallCapability else {
+                return .unavailable(.missingCapability)
+            }
+
+            return .available(capability)
+        }
+
+        if let capability = try? decoder.decode(DirectCallProductionServerCapability.self, from: data) {
+            return .available(capability)
+        }
+
+        return .unavailable(.malformedCapability)
+    }
+
+    var description: String {
+        "DirectCallProductionCapabilityPayloadDecoder()"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+private struct DirectCallProductionCapabilitiesResponse: Decodable {
+    let nativeDirectCallCapability: DirectCallProductionServerCapability?
+    let hasCapabilitiesContainer: Bool
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        hasCapabilitiesContainer = container.contains(.capabilities)
+
+        guard hasCapabilitiesContainer else {
+            nativeDirectCallCapability = nil
+            return
+        }
+
+        let capabilities = try container.nestedContainer(keyedBy: DynamicCodingKey.self, forKey: .capabilities)
+        guard let nativeCapabilityKey = DynamicCodingKey(stringValue: DirectCallProductionServerCapability.capabilityName),
+              capabilities.contains(nativeCapabilityKey) else {
+            nativeDirectCallCapability = nil
+            return
+        }
+
+        nativeDirectCallCapability = try capabilities.decode(DirectCallProductionServerCapability.self, forKey: nativeCapabilityKey)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case capabilities
+    }
+}
+
+private struct DynamicCodingKey: CodingKey {
+    let stringValue: String
+    let intValue: Int?
+
+    init?(stringValue: String) {
+        self.stringValue = stringValue
+        intValue = nil
+    }
+
+    init?(intValue: Int) {
+        stringValue = "\(intValue)"
+        self.intValue = intValue
+    }
+}
+
 struct DirectCallProductionRoomEligibility: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     let isDirect: Bool
     let isEncrypted: Bool
