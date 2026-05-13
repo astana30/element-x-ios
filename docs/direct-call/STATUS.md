@@ -2,15 +2,15 @@
 
 ## Current Phase
 
-After 2.10W — production activation gate design inspection complete.
+After 2.10X — production direct-call activation gate skeleton complete.
 
 ## Latest App Code Checkpoint
 
-e9a1c8d1f `Add disabled production direct-call dependency wiring`
+dfdd74d62 `Add production direct-call activation gate`
 
 ## Latest Code Checkpoint
 
-e9a1c8d1f `Add disabled production direct-call dependency wiring`
+dfdd74d62 `Add production direct-call activation gate`
 
 ## Latest SDK Checkpoint
 
@@ -106,23 +106,32 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Endpoint discovery should prefer an authenticated Matrix capability that advertises the native direct-call token endpoint as a same-origin relative path, with the current unstable path as the default contract.
   - `.well-known` can remain useful for pre-auth hints, but should not be sufficient to activate production direct calls.
   - Diagnostics remain separate and must not influence production activation.
+- Production direct-call activation gate skeleton is complete:
+  - `DirectCallProductionServerCapability` models the SalemX native direct-call capability `kz.salemx.direct_call.native`.
+  - The capability requires version `1`, audio intent support, LiveKit media transport, E2EE required, and the Matrix SDK direct-call media key envelope scheme.
+  - Token endpoint discovery is modeled as a same-origin relative endpoint path, with same-origin configured endpoint override support.
+  - `DirectCallProductionRoomEligibility` models only redacted room eligibility booleans/count state: direct room, encrypted room, exactly two joined members, and peer availability.
+  - `DirectCallProductionActivationGate` is disabled by default and returns redacted fail-closed reasons for missing rollout, capability, endpoint, dependencies, or room eligibility.
+  - `directOneToOneCallsEnabled` remains unused for native production activation.
+  - The gate is not wired into visible UI, Element Call routing, CallKit, push, or runtime production activation.
+  - Focused app unit tests, Release build, and forbidden scan pass after the activation gate skeleton.
 
 ## Current Blocker
 
 - Production backend is still skeleton/fake mode.
-- Production E2EE Matrix crypto key wrapping now has narrow provider and disabled assembly seams, but the assembly is not yet threaded into the real session/room-flow runtime.
-- No production activation gate/configuration model exists yet.
-- No server capability DTO/discovery path exists yet for native direct calls.
-- No production runtime path yet passes assembled dependencies into `NativeDirectCallRoomFlowOwner`.
+- Production E2EE Matrix crypto key wrapping now has narrow provider, disabled assembly, and activation gate seams, but the assembly is not yet threaded into the real session/room-flow runtime.
+- The production activation gate is modeled but not yet fed by real authenticated server capability discovery.
+- No server capability fetch/discovery path exists yet for native direct calls.
+- No production runtime path yet passes activation-approved assembled dependencies into `NativeDirectCallRoomFlowOwner`.
 - The default app path remains fail-closed unless future production configuration and dependency assembly explicitly enable native direct-call dependencies.
 - The production trust policy for peer devices is not finalized; the safest initial policy should fail closed on unknown or unverifiable device trust.
 - No production activation, visible UI, CallKit, or push integration exists yet.
 
 ## Next Recommended Phase
 
-`2.10X — production direct-call activation gate skeleton`
+`2.10Y — production direct-call server capability discovery seam skeleton`
 
-Goal: add a fail-closed production activation gate/configuration skeleton that models app rollout config, authenticated server capability, token endpoint discovery, dependency readiness, and room eligibility without activating visible UI or production direct calls.
+Goal: add or design a fail-closed app-side seam for authenticated native direct-call server capability discovery, so the activation gate can eventually consume a real capability without activating visible UI or production direct calls.
 
 ## Do-Not-Touch Constraints
 
