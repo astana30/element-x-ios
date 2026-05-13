@@ -2,15 +2,15 @@
 
 ## Current Phase
 
-After 2.11B — room-scoped production activation dry-run seam complete.
+After 2.11C — debug/internal production activation dry-run command exposure complete.
 
 ## Latest App Code Checkpoint
 
-8535cfb0d `Add room-scoped production direct-call dry-run seam`
+83c967478 `Expose production direct-call dry-run diagnostic command`
 
 ## Latest Code Checkpoint
 
-8535cfb0d `Add room-scoped production direct-call dry-run seam`
+83c967478 `Expose production direct-call dry-run diagnostic command`
 
 ## Latest SDK Checkpoint
 
@@ -152,6 +152,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Tests prove the room-scoped dry-run does not call prepare, start listener, outgoing call, accept, hangup, stop, reset, media, signalling, or Matrix send paths.
   - The seam is not wired into visible UI, Element Call routing, CallKit, push, diagnostic env, or production runtime activation.
   - Focused app unit tests, Release build, and forbidden scan pass after the room-scoped dry-run seam.
+- Debug/internal production activation dry-run command exposure is complete:
+  - `UITestsSignalling` now supports a DEBUG/integration-only `nativeDirectCallProductionActivationDryRun` request and redacted result.
+  - The existing diagnostic harness routes the command through AppCoordinator, UserSessionFlowCoordinator, ChatsTabFlowCoordinator, and the active RoomFlowCoordinator dry-run seam.
+  - The runner exposes `production-activation-dry-run A|B` / `productionActivationDryRun A|B`.
+  - Output is limited to redacted fields: enabled state, disabled reason, capability presence, dependency readiness, room eligibility, and endpoint acceptance.
+  - The command does not prepare controllers, start listeners, start outgoing calls, accept calls, construct media engines, or send Matrix events.
+  - The DEBUG/integration runtime provider uses the production dry-run decision service with default rollout disabled, so production remains fail-closed by default.
+  - Focused app unit tests, Release build, runner syntax/dry-run checks, and forbidden scan pass after the command exposure.
 
 ## Current Blocker
 
@@ -159,7 +167,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Production E2EE Matrix crypto key wrapping now has narrow provider, disabled assembly, activation gate, capability discovery, decision assembly, and room-scoped dry-run seams, but the assembly is not yet threaded into the real session/room-flow runtime for activation.
 - The production activation decision can consume decoded capability payloads, but it is not yet fed by a real authenticated server capability fetch transport.
 - No real server capability fetch path exists yet for native direct calls.
-- The room-flow dry-run seam can call `DirectCallProductionActivationDecisionService` through an injected provider, but no visible or external diagnostic surface calls it yet.
+- The room-flow dry-run seam can now be queried by the DEBUG/integration runner command, but there is still no visible UI or production runtime activation.
 - No production runtime path yet passes activation-approved assembled dependencies into `NativeDirectCallRoomFlowOwner`.
 - The default app path remains fail-closed unless future production configuration and dependency assembly explicitly enable native direct-call dependencies.
 - The production trust policy for peer devices is not finalized; the safest initial policy should fail closed on unknown or unverifiable device trust.
@@ -167,7 +175,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.11C — production direct-call capability fetch transport inspection/skeleton`
+`2.11D — production direct-call capability fetch transport inspection/skeleton`
 
 Goal: inspect and, if safe, add a fail-closed authenticated capability fetch provider that can obtain the Matrix capabilities response through a narrow client/session transport seam and feed `DirectCallProductionCapabilityPayloadDecoder`, without activating visible UI or production direct calls.
 

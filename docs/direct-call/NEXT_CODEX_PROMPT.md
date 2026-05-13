@@ -13,13 +13,13 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.11B — room-scoped production activation dry-run seam complete.
+After 2.11C — debug/internal production activation dry-run command exposure complete.
 
 Current app code checkpoint:
-8535cfb0d `Add room-scoped production direct-call dry-run seam`
+83c967478 `Expose production direct-call dry-run diagnostic command`
 
 Current docs checkpoint:
-Latest commit that updates `docs/direct-call` after 2.11B.
+Latest commit that updates `docs/direct-call` after 2.11C.
 
 Current SDK checkpoint:
 f7c2cfe5c `Add direct-call media key envelope crypto tests`
@@ -34,7 +34,7 @@ Artifact checksum:
 654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e
 
 Phase:
-2.11C — production direct-call capability fetch transport inspection/skeleton.
+2.11D — production direct-call capability fetch transport inspection/skeleton.
 
 Task:
 Inspect and, if safe, add a fail-closed authenticated capability fetch provider that can obtain the Matrix capabilities response and feed `DirectCallProductionCapabilityPayloadDecoder`.
@@ -58,7 +58,8 @@ Context:
 - `DirectCallProductionActivationDryRunDiagnostic` exposes a redacted dry-run model over that same gate without starting listeners, media, signalling, controllers, or UI.
 - `NativeDirectCallProductionActivationDryRunProviding` provides a room-scoped dry-run seam.
 - `RoomFlowCoordinator.nativeDirectCallProductionActivationDryRunDiagnostic()` can report a redacted disabled result before room activation or delegate to an injected room-scoped provider after room setup.
-- The room-scoped dry-run seam does not prepare native direct-call controllers, start listeners, construct media engines, send Matrix events, or touch visible UI.
+- DEBUG/integration diagnostics now expose `production-activation-dry-run A|B` through the runner and `nativeDirectCallProductionActivationDryRun` through `UITestsSignalling`.
+- The dry-run command returns only redacted activation readiness fields and does not prepare native direct-call controllers, start listeners, start outgoing calls, accept calls, construct media engines, or send Matrix events.
 - `directOneToOneCallsEnabled` remains separate and must not be reused for native production activation.
 - Diagnostics remain separate and must not influence production activation.
 
@@ -78,13 +79,15 @@ Inspect:
 4. `DirectCallProductionActivationGate`
 5. `NativeDirectCallProductionActivationDryRunProviding`
 6. `RoomFlowCoordinator.nativeDirectCallProductionActivationDryRunDiagnostic()`
-7. `DirectCallProductionConfiguration`
-8. `NativeDirectCallProductionDependencyAssembly`
-9. `ClientProxy` and `ClientProxyProtocol`
-10. Existing Matrix SDK Swift bindings for client capabilities or `/capabilities`
-11. Existing HTTP transport seams such as `DirectCallHTTPTransportProtocol`
-12. Matrix auth provider seam `DirectCallMatrixAccessTokenProviding`
-13. App settings, session construction, and existing remote settings patterns
+7. `UITestsSignalling` dry-run command exposure
+8. `Tools/Scripts/run_native_direct_call_diagnostic_two_client.sh`
+9. `DirectCallProductionConfiguration`
+10. `NativeDirectCallProductionDependencyAssembly`
+11. `ClientProxy` and `ClientProxyProtocol`
+12. Existing Matrix SDK Swift bindings for client capabilities or `/capabilities`
+13. Existing HTTP transport seams such as `DirectCallHTTPTransportProtocol`
+14. Matrix auth provider seam `DirectCallMatrixAccessTokenProviding`
+15. App settings, session construction, and existing remote settings patterns
 
 Questions:
 A. Is there an existing SDK-backed authenticated `/capabilities` fetch that can be wrapped narrowly?
