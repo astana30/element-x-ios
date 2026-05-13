@@ -13,13 +13,13 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.10Z — production activation decision assembly skeleton complete.
+After 2.11A — production activation dry-run diagnostics complete.
 
 Current app code checkpoint:
-39c5b5dc4 `Add production direct-call activation decision assembly`
+5d58718ac `Add production direct-call activation dry-run diagnostics`
 
 Current docs checkpoint:
-Latest commit that updates `docs/direct-call` after 2.10Z.
+Latest commit that updates `docs/direct-call` after 2.11A.
 
 Current SDK checkpoint:
 f7c2cfe5c `Add direct-call media key envelope crypto tests`
@@ -34,7 +34,7 @@ Artifact checksum:
 654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e
 
 Phase:
-2.11A — production direct-call capability fetch transport inspection/skeleton.
+2.11B — production direct-call capability fetch transport inspection/skeleton.
 
 Task:
 Inspect and, if safe, add a fail-closed authenticated capability fetch provider that can obtain the Matrix capabilities response and feed `DirectCallProductionCapabilityPayloadDecoder`.
@@ -55,6 +55,7 @@ Context:
 - `DirectCallProductionActivationGate` models app rollout, server capability, same-origin token endpoint, dependency readiness, and encrypted direct 1:1 room eligibility.
 - `DirectCallProductionCapabilityProviding`, `FailClosedDirectCallProductionCapabilityProvider`, and `DirectCallProductionCapabilityPayloadDecoder` exist.
 - `DirectCallProductionActivationDecisionService` assembles rollout config, capability discovery, dependency readiness, homeserver URL, and room eligibility into the activation gate.
+- `DirectCallProductionActivationDryRunDiagnostic` exposes a redacted dry-run model over that same gate without starting listeners, media, signalling, controllers, or UI.
 - The activation decision service is not wired into visible UI or runtime production activation.
 - `directOneToOneCallsEnabled` remains separate and must not be reused for native production activation.
 - Diagnostics remain separate and must not influence production activation.

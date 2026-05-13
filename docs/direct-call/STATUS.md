@@ -2,15 +2,15 @@
 
 ## Current Phase
 
-After 2.10Z — production activation decision assembly skeleton complete.
+After 2.11A — production activation dry-run diagnostics complete.
 
 ## Latest App Code Checkpoint
 
-39c5b5dc4 `Add production direct-call activation decision assembly`
+5d58718ac `Add production direct-call activation dry-run diagnostics`
 
 ## Latest Code Checkpoint
 
-39c5b5dc4 `Add production direct-call activation decision assembly`
+5d58718ac `Add production direct-call activation dry-run diagnostics`
 
 ## Latest SDK Checkpoint
 
@@ -134,6 +134,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - The service is not wired into visible UI, Element Call routing, CallKit, push, diagnostics, or production runtime activation.
   - `directOneToOneCallsEnabled` remains unused for native production activation.
   - Focused app unit tests, Release build, and forbidden scan pass after the decision assembly skeleton.
+- Production activation dry-run diagnostics are complete:
+  - `DirectCallProductionActivationDryRunDiagnostic` reports only redacted activation booleans and disabled reason: enabled state, capability presence, dependency readiness, room eligibility, and endpoint acceptance.
+  - `DirectCallProductionActivationDryRunDiagnosing` exposes an internal async dry-run boundary on the existing decision service.
+  - Dry-run uses the same `DirectCallProductionActivationGate` as the real decision path, avoiding a parallel activation model.
+  - Default configuration remains disabled and does not query capability or dependency providers.
+  - Missing or malformed capability discovery skips dependency readiness checks.
+  - All-valid dry-run returns an enabled diagnostic model without generating keys, consuming keys, clearing keys, constructing a media engine, starting listeners, creating controllers, or sending Matrix events.
+  - The dry-run surface is not wired into visible UI, Element Call routing, CallKit, push, diagnostics env, or production runtime activation.
+  - Focused app unit tests, Release build, and forbidden scan pass after the dry-run diagnostics.
 
 ## Current Blocker
 
@@ -142,6 +151,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - The production activation decision can consume decoded capability payloads, but it is not yet fed by a real authenticated server capability fetch transport.
 - No real server capability fetch path exists yet for native direct calls.
 - No production runtime path calls `DirectCallProductionActivationDecisionService` yet.
+- No production runtime path calls the activation dry-run diagnostic surface yet.
 - No production runtime path yet passes activation-approved assembled dependencies into `NativeDirectCallRoomFlowOwner`.
 - The default app path remains fail-closed unless future production configuration and dependency assembly explicitly enable native direct-call dependencies.
 - The production trust policy for peer devices is not finalized; the safest initial policy should fail closed on unknown or unverifiable device trust.
@@ -149,7 +159,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.11A — production direct-call capability fetch transport inspection/skeleton`
+`2.11B — production direct-call capability fetch transport inspection/skeleton`
 
 Goal: inspect and, if safe, add a fail-closed authenticated capability fetch provider that can obtain the Matrix capabilities response through a narrow client/session transport seam and feed `DirectCallProductionCapabilityPayloadDecoder`, without activating visible UI or production direct calls.
 
