@@ -97,6 +97,11 @@ struct NativeDirectCallProductionDependencies: CustomStringConvertible, CustomDe
     }
 }
 
+@MainActor
+protocol NativeDirectCallProductionDependencyProviding {
+    func nativeDirectCallProductionDependencies() -> NativeDirectCallProductionDependencies
+}
+
 struct NativeDirectCallProductionConfiguration: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     let isEnabled: Bool
     let liveKitConfiguration: DirectCallProductionLiveKitConfiguration
@@ -271,5 +276,12 @@ struct NativeDirectCallProductionDependencyAssembly: CustomStringConvertible, Cu
 
     var debugDescription: String {
         description
+    }
+}
+
+extension NativeDirectCallProductionDependencyAssembly: NativeDirectCallProductionDependencyProviding {
+    @MainActor
+    func nativeDirectCallProductionDependencies() -> NativeDirectCallProductionDependencies {
+        makeDependencies()
     }
 }

@@ -814,6 +814,64 @@ struct DirectCallProductionActivationGate {
     }
 }
 
+@MainActor
+protocol DirectCallProductionActivationDeciding {
+    func directCallProductionActivationDecision(homeserverBaseURL: URL?,
+                                                roomEligibility: DirectCallProductionRoomEligibility) async -> DirectCallProductionActivationDecision
+}
+
+@MainActor
+final class DirectCallProductionActivationDecisionService: DirectCallProductionActivationDeciding, CustomStringConvertible, CustomDebugStringConvertible {
+    private let configuration: DirectCallProductionConfiguration
+    private let capabilityProvider: DirectCallProductionCapabilityProviding
+    private let dependencyProvider: NativeDirectCallProductionDependencyProviding
+    private let activationGate: DirectCallProductionActivationGate
+
+    init(configuration: DirectCallProductionConfiguration = .init(),
+         capabilityProvider: DirectCallProductionCapabilityProviding? = nil,
+         dependencyProvider: NativeDirectCallProductionDependencyProviding? = nil,
+         activationGate: DirectCallProductionActivationGate = .init()) {
+        self.configuration = configuration
+        self.capabilityProvider = capabilityProvider ?? FailClosedDirectCallProductionCapabilityProvider()
+        self.dependencyProvider = dependencyProvider ?? NativeDirectCallProductionDependencyAssembly(configuration: configuration)
+        self.activationGate = activationGate
+    }
+
+    func directCallProductionActivationDecision(homeserverBaseURL: URL?,
+                                                roomEligibility: DirectCallProductionRoomEligibility) async -> DirectCallProductionActivationDecision {
+        guard configuration.isEnabled else {
+            return activationGate.evaluate(.init(appRolloutEnabled: false,
+                                                 homeserverBaseURL: homeserverBaseURL,
+                                                 configuredTokenEndpointURL: configuration.tokenEndpointURL,
+                                                 roomEligibility: roomEligibility))
+        }
+
+        let capabilityResult = await capabilityProvider.directCallProductionServerCapability()
+        guard let serverCapability = capabilityResult.capability else {
+            return activationGate.evaluate(.init(appRolloutEnabled: true,
+                                                 homeserverBaseURL: homeserverBaseURL,
+                                                 serverCapability: nil,
+                                                 configuredTokenEndpointURL: configuration.tokenEndpointURL,
+                                                 roomEligibility: roomEligibility))
+        }
+
+        return activationGate.evaluate(.init(appRolloutEnabled: true,
+                                             homeserverBaseURL: homeserverBaseURL,
+                                             serverCapability: serverCapability,
+                                             configuredTokenEndpointURL: configuration.tokenEndpointURL,
+                                             dependencies: dependencyProvider.nativeDirectCallProductionDependencies(),
+                                             roomEligibility: roomEligibility))
+    }
+
+    nonisolated var description: String {
+        "DirectCallProductionActivationDecisionService(redacted: true)"
+    }
+
+    nonisolated var debugDescription: String {
+        description
+    }
+}
+
 struct DirectCallProductionLiveKitConfiguration: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     let tokenEndpointURL: URL?
 

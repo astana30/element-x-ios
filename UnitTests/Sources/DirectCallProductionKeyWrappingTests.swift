@@ -527,6 +527,146 @@ final class DirectCallProductionKeyWrappingTests {
     }
 
     @Test
+    func productionActivationDecisionServiceDisabledConfigFailsClosedWithoutQueryingProviders() async throws {
+        let homeserverBaseURL = try #require(URL(string: "https://matrix.example.com"))
+        let capabilityProvider = DirectCallProductionCapabilityProviderSpy(result: .available(makeServerCapability()))
+        let dependencyProvider = NativeDirectCallProductionDependencyProviderSpy(dependencies: makeActivationReadyDependencies())
+        let service = DirectCallProductionActivationDecisionService(capabilityProvider: capabilityProvider,
+                                                                    dependencyProvider: dependencyProvider)
+
+        let decision = await service.directCallProductionActivationDecision(homeserverBaseURL: homeserverBaseURL,
+                                                                            roomEligibility: makeRoomEligibility())
+
+        #expect(decision == .disabled(.appRolloutDisabled))
+        #expect(capabilityProvider.callCount == 0)
+        #expect(dependencyProvider.callCount == 0)
+        #expect(String(describing: service).contains("matrix.example.com") == false)
+        #expect(String(describing: service).contains(DirectCallProductionConfiguration.tokenEndpointPath) == false)
+    }
+
+    @Test
+    func productionActivationDecisionServiceMissingCapabilityFailsClosed() async throws {
+        let homeserverBaseURL = try #require(URL(string: "https://matrix.example.com"))
+        let configuration = DirectCallProductionConfiguration(isEnabled: true)
+        let capabilityProvider = DirectCallProductionCapabilityProviderSpy(result: .unavailable(.missingCapability))
+        let dependencyProvider = NativeDirectCallProductionDependencyProviderSpy(dependencies: makeActivationReadyDependencies())
+        let service = DirectCallProductionActivationDecisionService(configuration: configuration,
+                                                                    capabilityProvider: capabilityProvider,
+                                                                    dependencyProvider: dependencyProvider)
+
+        let decision = await service.directCallProductionActivationDecision(homeserverBaseURL: homeserverBaseURL,
+                                                                            roomEligibility: makeRoomEligibility())
+
+        #expect(decision == .disabled(.serverCapabilityUnavailable))
+        #expect(capabilityProvider.callCount == 1)
+        #expect(dependencyProvider.callCount == 0)
+    }
+
+    @Test
+    func productionActivationDecisionServiceMalformedCapabilityFailsClosed() async throws {
+        let homeserverBaseURL = try #require(URL(string: "https://matrix.example.com"))
+        let configuration = DirectCallProductionConfiguration(isEnabled: true)
+        let capabilityProvider = DirectCallProductionCapabilityProviderSpy(result: .unavailable(.malformedCapability))
+        let dependencyProvider = NativeDirectCallProductionDependencyProviderSpy(dependencies: makeActivationReadyDependencies())
+        let service = DirectCallProductionActivationDecisionService(configuration: configuration,
+                                                                    capabilityProvider: capabilityProvider,
+                                                                    dependencyProvider: dependencyProvider)
+
+        let decision = await service.directCallProductionActivationDecision(homeserverBaseURL: homeserverBaseURL,
+                                                                            roomEligibility: makeRoomEligibility())
+
+        #expect(decision == .disabled(.serverCapabilityUnavailable))
+        #expect(capabilityProvider.callCount == 1)
+        #expect(dependencyProvider.callCount == 0)
+    }
+
+    @Test
+    func productionActivationDecisionServiceUnsupportedCapabilityFailsClosed() async throws {
+        let homeserverBaseURL = try #require(URL(string: "https://matrix.example.com"))
+        let configuration = DirectCallProductionConfiguration(isEnabled: true)
+        let capabilityProvider = DirectCallProductionCapabilityProviderSpy(result: .available(makeServerCapability(mediaTransport: "unknown")))
+        let dependencyProvider = NativeDirectCallProductionDependencyProviderSpy(dependencies: makeActivationReadyDependencies())
+        let service = DirectCallProductionActivationDecisionService(configuration: configuration,
+                                                                    capabilityProvider: capabilityProvider,
+                                                                    dependencyProvider: dependencyProvider)
+
+        let decision = await service.directCallProductionActivationDecision(homeserverBaseURL: homeserverBaseURL,
+                                                                            roomEligibility: makeRoomEligibility())
+
+        #expect(decision == .disabled(.unsupportedMediaTransport))
+        #expect(capabilityProvider.callCount == 1)
+        #expect(dependencyProvider.callCount == 1)
+    }
+
+    @Test
+    func productionActivationDecisionServiceExternalEndpointFailsClosed() async throws {
+        let homeserverBaseURL = try #require(URL(string: "https://matrix.example.com"))
+        let configuration = DirectCallProductionConfiguration(isEnabled: true)
+        let capabilityProvider = DirectCallProductionCapabilityProviderSpy(result: .available(makeServerCapability(tokenEndpointPath: "https://calls.example.net/token")))
+        let dependencyProvider = NativeDirectCallProductionDependencyProviderSpy(dependencies: makeActivationReadyDependencies())
+        let service = DirectCallProductionActivationDecisionService(configuration: configuration,
+                                                                    capabilityProvider: capabilityProvider,
+                                                                    dependencyProvider: dependencyProvider)
+
+        let decision = await service.directCallProductionActivationDecision(homeserverBaseURL: homeserverBaseURL,
+                                                                            roomEligibility: makeRoomEligibility())
+
+        #expect(decision == .disabled(.tokenEndpointUnavailable))
+    }
+
+    @Test
+    func productionActivationDecisionServiceDependenciesUnavailableFailsClosed() async throws {
+        let homeserverBaseURL = try #require(URL(string: "https://matrix.example.com"))
+        let configuration = DirectCallProductionConfiguration(isEnabled: true)
+        let capabilityProvider = DirectCallProductionCapabilityProviderSpy(result: .available(makeServerCapability()))
+        let dependencyProvider = NativeDirectCallProductionDependencyProviderSpy(dependencies: .disabled)
+        let service = DirectCallProductionActivationDecisionService(configuration: configuration,
+                                                                    capabilityProvider: capabilityProvider,
+                                                                    dependencyProvider: dependencyProvider)
+
+        let decision = await service.directCallProductionActivationDecision(homeserverBaseURL: homeserverBaseURL,
+                                                                            roomEligibility: makeRoomEligibility())
+
+        #expect(decision == .disabled(.dependenciesUnavailable))
+    }
+
+    @Test
+    func productionActivationDecisionServiceRoomIneligibleFailsClosed() async throws {
+        let homeserverBaseURL = try #require(URL(string: "https://matrix.example.com"))
+        let configuration = DirectCallProductionConfiguration(isEnabled: true)
+        let capabilityProvider = DirectCallProductionCapabilityProviderSpy(result: .available(makeServerCapability()))
+        let dependencyProvider = NativeDirectCallProductionDependencyProviderSpy(dependencies: makeActivationReadyDependencies())
+        let service = DirectCallProductionActivationDecisionService(configuration: configuration,
+                                                                    capabilityProvider: capabilityProvider,
+                                                                    dependencyProvider: dependencyProvider)
+
+        let decision = await service.directCallProductionActivationDecision(homeserverBaseURL: homeserverBaseURL,
+                                                                            roomEligibility: makeRoomEligibility(isEncrypted: false))
+
+        #expect(decision == .disabled(.roomNotEncrypted))
+    }
+
+    @Test
+    func productionActivationDecisionServiceEnablesOnlyWhenAllInputsAreValid() async throws {
+        let homeserverBaseURL = try #require(URL(string: "https://matrix.example.com"))
+        let configuration = DirectCallProductionConfiguration(isEnabled: true)
+        let capabilityProvider = DirectCallProductionCapabilityProviderSpy(result: .available(makeServerCapability()))
+        let dependencyProvider = NativeDirectCallProductionDependencyProviderSpy(dependencies: makeActivationReadyDependencies())
+        let service = DirectCallProductionActivationDecisionService(configuration: configuration,
+                                                                    capabilityProvider: capabilityProvider,
+                                                                    dependencyProvider: dependencyProvider)
+
+        let decision = await service.directCallProductionActivationDecision(homeserverBaseURL: homeserverBaseURL,
+                                                                            roomEligibility: makeRoomEligibility())
+
+        #expect(decision.isEnabled)
+        #expect(decision.disabledReason == nil)
+        #expect(decision.tokenEndpointURL?.host == "matrix.example.com")
+        #expect(decision.tokenEndpointURL?.path == DirectCallProductionConfiguration.tokenEndpointPath)
+        #expect(String(describing: decision).contains("matrix.example.com") == false)
+    }
+
+    @Test
     func productionActivationGateFailsClosedForMissingPrerequisites() throws {
         let homeserverBaseURL = try #require(URL(string: "https://matrix.example.com"))
         let externalEndpointURL = try #require(URL(string: "https://calls.example.net/_matrix/client/unstable/kz.salemx.direct_call/livekit/token"))
@@ -892,6 +1032,36 @@ private final class MatrixSDKDirectCallMediaKeyEnvelopeWrapperSpy: MatrixSDKDire
         }
 
         return unwrapResult
+    }
+}
+
+@MainActor
+private final class DirectCallProductionCapabilityProviderSpy: DirectCallProductionCapabilityProviding {
+    private let result: DirectCallProductionCapabilityDiscoveryResult
+    private(set) var callCount = 0
+
+    init(result: DirectCallProductionCapabilityDiscoveryResult) {
+        self.result = result
+    }
+
+    func directCallProductionServerCapability() async -> DirectCallProductionCapabilityDiscoveryResult {
+        callCount += 1
+        return result
+    }
+}
+
+@MainActor
+private final class NativeDirectCallProductionDependencyProviderSpy: NativeDirectCallProductionDependencyProviding {
+    private let dependencies: NativeDirectCallProductionDependencies
+    private(set) var callCount = 0
+
+    init(dependencies: NativeDirectCallProductionDependencies) {
+        self.dependencies = dependencies
+    }
+
+    func nativeDirectCallProductionDependencies() -> NativeDirectCallProductionDependencies {
+        callCount += 1
+        return dependencies
     }
 }
 
