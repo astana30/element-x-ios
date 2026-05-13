@@ -13,6 +13,7 @@ import MatrixRustSDKMocks
 import Testing
 
 @MainActor
+// swiftlint:disable:next type_body_length
 final class RoomFlowCoordinatorTests {
     var clientProxy: ClientProxyMock!
     var timelineControllerFactory: TimelineControllerFactoryMock!
@@ -547,6 +548,82 @@ final class RoomFlowCoordinatorTests {
         owner.resumeReset()
         await Task.yield()
         #expect(owner.resetCompletionCount == 1)
+    }
+
+    @Test
+    func nativeDirectCallProductionActivationDryRunFailsClosedWithoutActiveRoom() async {
+        setupRoomFlowCoordinator { _ in
+            Issue.record("Native direct-call room-flow owner should not be created without an active room.")
+            return NativeDirectCallRoomFlowOwnerSpy()
+        } nativeDirectCallProductionActivationDryRunProviderFactory: { _ in
+            Issue.record("Production activation dry-run provider should not be created without an active room.")
+            return FailClosedNativeDirectCallProductionActivationDryRunProvider()
+        }
+
+        let diagnostic = await roomFlowCoordinator.nativeDirectCallProductionActivationDryRunDiagnostic()
+
+        #expect(diagnostic == .disabled(.roomUnavailable))
+    }
+
+    @Test
+    func nativeDirectCallProductionActivationDryRunDelegatesForActiveRoomWithoutStartingCalls() async throws {
+        let owner = NativeDirectCallRoomFlowOwnerSpy()
+        let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: .init(isEnabled: true,
+                                                                                           disabledReason: nil,
+                                                                                           isCapabilityPresent: true,
+                                                                                           areDependenciesReady: true,
+                                                                                           isRoomEligible: true,
+                                                                                           isEndpointAccepted: true))
+        setupRoomFlowCoordinator { roomProxy in
+            #expect(roomProxy.id == "1")
+            owner.makeCount += 1
+            return owner
+        } nativeDirectCallProductionActivationDryRunProviderFactory: { roomProxy in
+            #expect(roomProxy.id == "1")
+            provider.makeCount += 1
+            return provider
+        }
+
+        try await process(route: .room(roomID: "1", via: []))
+        let diagnostic = await roomFlowCoordinator.nativeDirectCallProductionActivationDryRunDiagnostic()
+
+        #expect(diagnostic.isEnabled)
+        #expect(provider.makeCount == 1)
+        #expect(provider.callCount == 1)
+        #expect(owner.makeCount == 1)
+        #expect(owner.prepareCount == 0)
+        #expect(owner.startCount == 0)
+        #expect(owner.outgoingCount == 0)
+        #expect(owner.acceptCount == 0)
+        #expect(owner.hangupCount == 0)
+        #expect(owner.stopCount == 0)
+        #expect(owner.resetCount == 0)
+    }
+
+    @Test
+    func nativeDirectCallProductionActivationDryRunCanUseDecisionServiceForRoom() async throws {
+        let decisionService = DirectCallProductionActivationDecisionService(configuration: DirectCallProductionConfiguration(isEnabled: true),
+                                                                            capabilityProvider: StaticDirectCallProductionCapabilityProvider(capability: nil),
+                                                                            dependencyProvider: NativeDirectCallProductionDependencyProviderSpy(dependencies: .disabled))
+        let roomEligibility = DirectCallProductionRoomEligibility(isDirect: true,
+                                                                  isEncrypted: true,
+                                                                  joinedMemberCount: 2,
+                                                                  hasPeerUserID: true)
+        let provider = NativeDirectCallProductionActivationDryRunProvider(activationDryRunDiagnostics: decisionService,
+                                                                          homeserverBaseURL: URL(string: "https://matrix.example.test"),
+                                                                          roomEligibility: roomEligibility)
+        let providerFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionActivationDryRunProviding = { _ in provider }
+        setupRoomFlowCoordinator(nativeDirectCallProductionActivationDryRunProviderFactory: providerFactory)
+
+        try await process(route: .room(roomID: "1", via: []))
+        let diagnostic = await roomFlowCoordinator.nativeDirectCallProductionActivationDryRunDiagnostic()
+
+        #expect(diagnostic.isEnabled == false)
+        #expect(diagnostic.disabledReason == .serverCapabilityUnavailable)
+        #expect(diagnostic.isCapabilityPresent == false)
+        #expect(diagnostic.areDependenciesReady == false)
+        #expect(diagnostic.isRoomEligible)
+        #expect(diagnostic.isEndpointAccepted == false)
     }
 
     @Test
@@ -1103,6 +1180,9 @@ final class RoomFlowCoordinatorTests {
                                           nativeDirectCallDiagnosticCommandConfiguration: NativeDirectCallRoomDeveloperCommandConfiguration = .init(),
                                           nativeDirectCallRoomFlowOwnerFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning = { roomProxy in
                                               NativeDirectCallRoomFlowOwner(roomProxy: roomProxy)
+                                          },
+                                          nativeDirectCallProductionActivationDryRunProviderFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionActivationDryRunProviding = { _ in
+                                              FailClosedNativeDirectCallProductionActivationDryRunProvider()
                                           }) {
         cancellables.removeAll()
         clientProxy = ClientProxyMock(.init(userID: "hi@bob",
@@ -1149,7 +1229,8 @@ final class RoomFlowCoordinatorTests {
                                                   isChildFlow: asChildFlow,
                                                   navigationStackCoordinator: navigationStackCoordinator,
                                                   flowParameters: flowParameters,
-                                                  nativeDirectCallRoomFlowOwnerFactory: nativeDirectCallRoomFlowOwnerFactory)
+                                                  nativeDirectCallRoomFlowOwnerFactory: nativeDirectCallRoomFlowOwnerFactory,
+                                                  nativeDirectCallProductionActivationDryRunProviderFactory: nativeDirectCallProductionActivationDryRunProviderFactory)
         roomFlowCoordinator.nativeDirectCallDiagnosticCommandConfiguration = nativeDirectCallDiagnosticCommandConfiguration
     }
 
@@ -1209,6 +1290,48 @@ private extension NativeDirectCallRoomDiagnosticCommand {
         .stop,
         .reset
     ]
+}
+
+@MainActor
+private final class NativeDirectCallProductionActivationDryRunProviderSpy: NativeDirectCallProductionActivationDryRunProviding {
+    var makeCount = 0
+    private(set) var callCount = 0
+    private let result: DirectCallProductionActivationDryRunDiagnostic
+
+    init(result: DirectCallProductionActivationDryRunDiagnostic) {
+        self.result = result
+    }
+
+    func nativeDirectCallProductionActivationDryRunDiagnostic() async -> DirectCallProductionActivationDryRunDiagnostic {
+        callCount += 1
+        return result
+    }
+}
+
+@MainActor
+private final class StaticDirectCallProductionCapabilityProvider: DirectCallProductionCapabilityProviding {
+    private let result: DirectCallProductionCapabilityDiscoveryResult
+
+    init(capability: DirectCallProductionServerCapability?) {
+        result = capability.map { .available($0) } ?? .unavailable(.missingCapability)
+    }
+
+    func directCallProductionServerCapability() async -> DirectCallProductionCapabilityDiscoveryResult {
+        result
+    }
+}
+
+@MainActor
+private final class NativeDirectCallProductionDependencyProviderSpy: NativeDirectCallProductionDependencyProviding {
+    private let dependencies: NativeDirectCallProductionDependencies
+
+    init(dependencies: NativeDirectCallProductionDependencies) {
+        self.dependencies = dependencies
+    }
+
+    func nativeDirectCallProductionDependencies() -> NativeDirectCallProductionDependencies {
+        dependencies
+    }
 }
 
 @MainActor

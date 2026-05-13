@@ -93,6 +93,8 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
     
     private let stateMachine: StateMachine<State, Event> = .init(state: .initial)
     private let nativeDirectCallRoomFlowOwnerFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning
+    private let nativeDirectCallProductionActivationDryRunProviderFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionActivationDryRunProviding
+    private var nativeDirectCallProductionActivationDryRunProvider: NativeDirectCallProductionActivationDryRunProviding?
     #if DEBUG
     private var nativeDirectCallDiagnosticCommandRouter: NativeDirectCallRoomDeveloperCommanding?
     var nativeDirectCallDiagnosticCommandConfiguration: NativeDirectCallRoomDeveloperCommandConfiguration = .init() {
@@ -117,12 +119,16 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
          flowParameters: CommonFlowParameters,
          nativeDirectCallRoomFlowOwnerFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning = { roomProxy in
              NativeDirectCallRoomFlowOwner(roomProxy: roomProxy)
+         },
+         nativeDirectCallProductionActivationDryRunProviderFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionActivationDryRunProviding = { _ in
+             FailClosedNativeDirectCallProductionActivationDryRunProvider()
          }) {
         self.roomID = roomID
         self.isChildFlow = isChildFlow
         self.navigationStackCoordinator = navigationStackCoordinator
         self.flowParameters = flowParameters
         self.nativeDirectCallRoomFlowOwnerFactory = nativeDirectCallRoomFlowOwnerFactory
+        self.nativeDirectCallProductionActivationDryRunProviderFactory = nativeDirectCallProductionActivationDryRunProviderFactory
         
         setupStateMachine()
     }
@@ -412,6 +418,14 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
         makeNativeDirectCallDiagnosticCommandRouter().status()
     }
     #endif
+
+    func nativeDirectCallProductionActivationDryRunDiagnostic() async -> DirectCallProductionActivationDryRunDiagnostic {
+        guard let nativeDirectCallProductionActivationDryRunProvider else {
+            return .disabled(.roomUnavailable)
+        }
+
+        return await nativeDirectCallProductionActivationDryRunProvider.nativeDirectCallProductionActivationDryRunDiagnostic()
+    }
     
     // MARK: - Private
     
@@ -432,6 +446,7 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
         // before it has been set which triggers a fatal error.
         self.roomProxy = roomProxy
         nativeDirectCallRoomFlowOwner = nativeDirectCallRoomFlowOwnerFactory(roomProxy)
+        nativeDirectCallProductionActivationDryRunProvider = nativeDirectCallProductionActivationDryRunProviderFactory(roomProxy)
         
         // Subscribe to room info updates in order to detect rooms being left on other devices
         // and react accordingly by dismissing this flow coordinator.
@@ -984,6 +999,7 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
 
         nativeDirectCallRoomFlowOwner.beginReset()
         self.nativeDirectCallRoomFlowOwner = nil
+        nativeDirectCallProductionActivationDryRunProvider = nil
     }
 
     #if DEBUG
@@ -1574,7 +1590,8 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
         let coordinator = RoomFlowCoordinator(roomID: roomID,
                                               isChildFlow: true,
                                               navigationStackCoordinator: navigationStackCoordinator,
-                                              flowParameters: flowParameters)
+                                              flowParameters: flowParameters,
+                                              nativeDirectCallProductionActivationDryRunProviderFactory: nativeDirectCallProductionActivationDryRunProviderFactory)
         coordinator.actions.sink { [weak self] action in
             guard let self else { return }
             
@@ -1756,6 +1773,38 @@ enum NativeDirectCallRoomFlowOwnerError: Error, Equatable {
     case missingRoomControllerProvider
     case resetting
     case trigger(NativeDirectCallDeveloperRoomTriggerError)
+}
+
+@MainActor
+protocol NativeDirectCallProductionActivationDryRunProviding {
+    func nativeDirectCallProductionActivationDryRunDiagnostic() async -> DirectCallProductionActivationDryRunDiagnostic
+}
+
+@MainActor
+struct FailClosedNativeDirectCallProductionActivationDryRunProvider: NativeDirectCallProductionActivationDryRunProviding {
+    func nativeDirectCallProductionActivationDryRunDiagnostic() async -> DirectCallProductionActivationDryRunDiagnostic {
+        .disabled(.roomUnavailable)
+    }
+}
+
+@MainActor
+struct NativeDirectCallProductionActivationDryRunProvider: NativeDirectCallProductionActivationDryRunProviding {
+    private let activationDryRunDiagnostics: DirectCallProductionActivationDryRunDiagnosing
+    private let homeserverBaseURL: URL?
+    private let roomEligibility: DirectCallProductionRoomEligibility
+
+    init(activationDryRunDiagnostics: DirectCallProductionActivationDryRunDiagnosing,
+         homeserverBaseURL: URL?,
+         roomEligibility: DirectCallProductionRoomEligibility) {
+        self.activationDryRunDiagnostics = activationDryRunDiagnostics
+        self.homeserverBaseURL = homeserverBaseURL
+        self.roomEligibility = roomEligibility
+    }
+
+    func nativeDirectCallProductionActivationDryRunDiagnostic() async -> DirectCallProductionActivationDryRunDiagnostic {
+        await activationDryRunDiagnostics.directCallProductionActivationDryRunDiagnostic(homeserverBaseURL: homeserverBaseURL,
+                                                                                         roomEligibility: roomEligibility)
+    }
 }
 
 @MainActor

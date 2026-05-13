@@ -618,6 +618,7 @@ struct DirectCallProductionRoomEligibility: Equatable, CustomStringConvertible, 
 
 enum DirectCallProductionActivationDisabledReason: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     case appRolloutDisabled
+    case roomUnavailable
     case serverCapabilityUnavailable
     case serverCapabilityDisabled
     case unsupportedCapabilityVersion
@@ -694,6 +695,15 @@ struct DirectCallProductionActivationDryRunDiagnostic: Equatable, CustomStringCo
     let areDependenciesReady: Bool
     let isRoomEligible: Bool
     let isEndpointAccepted: Bool
+
+    static func disabled(_ reason: DirectCallProductionActivationDisabledReason) -> Self {
+        .init(isEnabled: false,
+              disabledReason: reason,
+              isCapabilityPresent: false,
+              areDependenciesReady: false,
+              isRoomEligible: false,
+              isEndpointAccepted: false)
+    }
 
     var description: String {
         let fields = [
