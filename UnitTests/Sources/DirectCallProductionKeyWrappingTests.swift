@@ -667,6 +667,103 @@ final class DirectCallProductionKeyWrappingTests {
     }
 
     @Test
+    func productionActivationDryRunDisabledByDefaultIsRedactedAndHasNoProviderSideEffects() async throws {
+        let homeserverBaseURL = try #require(URL(string: "https://matrix.example.com"))
+        let capabilityProvider = DirectCallProductionCapabilityProviderSpy(result: .available(makeServerCapability()))
+        let dependencyProvider = NativeDirectCallProductionDependencyProviderSpy(dependencies: makeActivationReadyDependencies())
+        let service = DirectCallProductionActivationDecisionService(capabilityProvider: capabilityProvider,
+                                                                    dependencyProvider: dependencyProvider)
+
+        let diagnostic = await service.directCallProductionActivationDryRunDiagnostic(homeserverBaseURL: homeserverBaseURL,
+                                                                                      roomEligibility: makeRoomEligibility())
+
+        #expect(diagnostic.isEnabled == false)
+        #expect(diagnostic.disabledReason == .appRolloutDisabled)
+        #expect(diagnostic.isCapabilityPresent == false)
+        #expect(diagnostic.areDependenciesReady == false)
+        #expect(diagnostic.isRoomEligible)
+        #expect(diagnostic.isEndpointAccepted == false)
+        #expect(capabilityProvider.callCount == 0)
+        #expect(dependencyProvider.callCount == 0)
+        #expect(String(describing: diagnostic).contains("matrix.example.com") == false)
+        #expect(String(describing: diagnostic).contains(DirectCallProductionConfiguration.tokenEndpointPath) == false)
+    }
+
+    @Test
+    func productionActivationDryRunMissingCapabilityReturnsRedactedReason() async throws {
+        let homeserverBaseURL = try #require(URL(string: "https://matrix.example.com"))
+        let configuration = DirectCallProductionConfiguration(isEnabled: true)
+        let capabilityProvider = DirectCallProductionCapabilityProviderSpy(result: .unavailable(.missingCapability))
+        let dependencyProvider = NativeDirectCallProductionDependencyProviderSpy(dependencies: makeActivationReadyDependencies())
+        let service = DirectCallProductionActivationDecisionService(configuration: configuration,
+                                                                    capabilityProvider: capabilityProvider,
+                                                                    dependencyProvider: dependencyProvider)
+
+        let diagnostic = await service.directCallProductionActivationDryRunDiagnostic(homeserverBaseURL: homeserverBaseURL,
+                                                                                      roomEligibility: makeRoomEligibility())
+
+        #expect(diagnostic.isEnabled == false)
+        #expect(diagnostic.disabledReason == .serverCapabilityUnavailable)
+        #expect(diagnostic.isCapabilityPresent == false)
+        #expect(diagnostic.areDependenciesReady == false)
+        #expect(diagnostic.isRoomEligible)
+        #expect(diagnostic.isEndpointAccepted == false)
+        #expect(capabilityProvider.callCount == 1)
+        #expect(dependencyProvider.callCount == 0)
+    }
+
+    @Test
+    func productionActivationDryRunBadRoomEligibilityReturnsRedactedReason() async throws {
+        let homeserverBaseURL = try #require(URL(string: "https://matrix.example.com"))
+        let configuration = DirectCallProductionConfiguration(isEnabled: true)
+        let capabilityProvider = DirectCallProductionCapabilityProviderSpy(result: .available(makeServerCapability()))
+        let dependencyProvider = NativeDirectCallProductionDependencyProviderSpy(dependencies: makeActivationReadyDependencies())
+        let service = DirectCallProductionActivationDecisionService(configuration: configuration,
+                                                                    capabilityProvider: capabilityProvider,
+                                                                    dependencyProvider: dependencyProvider)
+
+        let diagnostic = await service.directCallProductionActivationDryRunDiagnostic(homeserverBaseURL: homeserverBaseURL,
+                                                                                      roomEligibility: makeRoomEligibility(isEncrypted: false))
+
+        #expect(diagnostic.isEnabled == false)
+        #expect(diagnostic.disabledReason == .roomNotEncrypted)
+        #expect(diagnostic.isCapabilityPresent)
+        #expect(diagnostic.areDependenciesReady)
+        #expect(diagnostic.isRoomEligible == false)
+        #expect(diagnostic.isEndpointAccepted)
+    }
+
+    @Test
+    func productionActivationDryRunAllValidReturnsEnabledModelWithoutStartingRuntimeWork() async throws {
+        let homeserverBaseURL = try #require(URL(string: "https://matrix.example.com"))
+        let configuration = DirectCallProductionConfiguration(isEnabled: true)
+        let capabilityProvider = DirectCallProductionCapabilityProviderSpy(result: .available(makeServerCapability()))
+        let encryptionService = ProductionActivationEncryptionServiceSpy()
+        let mediaEngineFactory = ProductionActivationMediaEngineFactorySpy()
+        let dependencyProvider = NativeDirectCallProductionDependencyProviderSpy(dependencies: NativeDirectCallProductionDependencies(encryptionService: encryptionService,
+                                                                                                                                      mediaEngineFactory: mediaEngineFactory))
+        let service = DirectCallProductionActivationDecisionService(configuration: configuration,
+                                                                    capabilityProvider: capabilityProvider,
+                                                                    dependencyProvider: dependencyProvider)
+
+        let diagnostic = await service.directCallProductionActivationDryRunDiagnostic(homeserverBaseURL: homeserverBaseURL,
+                                                                                      roomEligibility: makeRoomEligibility())
+
+        #expect(diagnostic.isEnabled)
+        #expect(diagnostic.disabledReason == nil)
+        #expect(diagnostic.isCapabilityPresent)
+        #expect(diagnostic.areDependenciesReady)
+        #expect(diagnostic.isRoomEligible)
+        #expect(diagnostic.isEndpointAccepted)
+        #expect(capabilityProvider.callCount == 1)
+        #expect(dependencyProvider.callCount == 1)
+        #expect(encryptionService.generateKeyCallCount == 0)
+        #expect(encryptionService.consumeKeyCallCount == 0)
+        #expect(encryptionService.clearKeyCallCount == 0)
+        #expect(mediaEngineFactory.makeMediaEngineCallCount == 0)
+    }
+
+    @Test
     func productionActivationGateFailsClosedForMissingPrerequisites() throws {
         let homeserverBaseURL = try #require(URL(string: "https://matrix.example.com"))
         let externalEndpointURL = try #require(URL(string: "https://calls.example.net/_matrix/client/unstable/kz.salemx.direct_call/livekit/token"))
@@ -1062,6 +1159,42 @@ private final class NativeDirectCallProductionDependencyProviderSpy: NativeDirec
     func nativeDirectCallProductionDependencies() -> NativeDirectCallProductionDependencies {
         callCount += 1
         return dependencies
+    }
+}
+
+@MainActor
+private final class ProductionActivationEncryptionServiceSpy: DirectCallEncryptionServiceProtocol {
+    private(set) var generateKeyCallCount = 0
+    private(set) var consumeKeyCallCount = 0
+    private(set) var clearKeyCallCount = 0
+
+    func generatePerCallKey(callID: String,
+                            roomID: String,
+                            peerUserID: String) async -> Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason> {
+        generateKeyCallCount += 1
+        return .failure(.keyExchangeFailed)
+    }
+
+    func consumeRemoteEncryptedKey(_ payload: DirectCallEncryptedKeyExchangePayload,
+                                   expectedCallID: String,
+                                   expectedRoomID: String,
+                                   expectedSenderUserID: String) async -> Result<DirectCallMediaKeyHandle, DirectCallEncryptionFailureReason> {
+        consumeKeyCallCount += 1
+        return .failure(.keyExchangeFailed)
+    }
+
+    func clearPerCallKey(callID: String) {
+        clearKeyCallCount += 1
+    }
+}
+
+@MainActor
+private final class ProductionActivationMediaEngineFactorySpy: DirectCallMediaEngineFactoryProtocol {
+    private(set) var makeMediaEngineCallCount = 0
+
+    func makeMediaEngine() -> Result<any DirectCallMediaEngineProtocol, DirectCallMediaError> {
+        makeMediaEngineCallCount += 1
+        return .failure(.mediaSetupUnavailable)
     }
 }
 

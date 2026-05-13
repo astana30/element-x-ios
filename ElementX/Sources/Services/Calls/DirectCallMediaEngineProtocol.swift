@@ -687,6 +687,31 @@ struct DirectCallProductionActivationDecision: Equatable, CustomStringConvertibl
     }
 }
 
+struct DirectCallProductionActivationDryRunDiagnostic: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let isEnabled: Bool
+    let disabledReason: DirectCallProductionActivationDisabledReason?
+    let isCapabilityPresent: Bool
+    let areDependenciesReady: Bool
+    let isRoomEligible: Bool
+    let isEndpointAccepted: Bool
+
+    var description: String {
+        let fields = [
+            "isEnabled: \(isEnabled)",
+            "disabledReason: \(disabledReason?.description ?? "none")",
+            "isCapabilityPresent: \(isCapabilityPresent)",
+            "areDependenciesReady: \(areDependenciesReady)",
+            "isRoomEligible: \(isRoomEligible)",
+            "isEndpointAccepted: \(isEndpointAccepted)"
+        ]
+        return "DirectCallProductionActivationDryRunDiagnostic(\(fields.joined(separator: ", ")))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
 struct DirectCallProductionActivationGate {
     let intent: DirectCallIntent
 
@@ -723,6 +748,16 @@ struct DirectCallProductionActivationGate {
         }
 
         return .enabled(tokenEndpointURL: tokenEndpointURL)
+    }
+
+    func dryRunDiagnostic(_ context: DirectCallProductionActivationContext) -> DirectCallProductionActivationDryRunDiagnostic {
+        let decision = evaluate(context)
+        return DirectCallProductionActivationDryRunDiagnostic(isEnabled: decision.isEnabled,
+                                                              disabledReason: decision.disabledReason,
+                                                              isCapabilityPresent: context.serverCapability != nil,
+                                                              areDependenciesReady: context.dependencies.hasEncryptionService && context.dependencies.hasMediaEngineFactory,
+                                                              isRoomEligible: roomEligibilityDisabledReason(context.roomEligibility) == nil,
+                                                              isEndpointAccepted: isTokenEndpointAccepted(for: context))
     }
 
     private func serverCapabilityDisabledReason(_ serverCapability: DirectCallProductionServerCapability?) -> DirectCallProductionActivationDisabledReason? {
@@ -764,6 +799,21 @@ struct DirectCallProductionActivationGate {
         }
 
         return serverCapability.tokenEndpointURL(homeserverBaseURL: context.homeserverBaseURL)
+    }
+
+    private func isTokenEndpointAccepted(for context: DirectCallProductionActivationContext) -> Bool {
+        guard context.appRolloutEnabled,
+              serverCapabilityDisabledReason(context.serverCapability) == nil,
+              let serverCapability = context.serverCapability else {
+            return false
+        }
+
+        if let configuredTokenEndpointURL = context.configuredTokenEndpointURL,
+           !isSameOrigin(configuredTokenEndpointURL, as: context.homeserverBaseURL) {
+            return false
+        }
+
+        return tokenEndpointURL(for: context, serverCapability: serverCapability) != nil
     }
 
     private func roomEligibilityDisabledReason(_ roomEligibility: DirectCallProductionRoomEligibility) -> DirectCallProductionActivationDisabledReason? {
@@ -821,7 +871,13 @@ protocol DirectCallProductionActivationDeciding {
 }
 
 @MainActor
-final class DirectCallProductionActivationDecisionService: DirectCallProductionActivationDeciding, CustomStringConvertible, CustomDebugStringConvertible {
+protocol DirectCallProductionActivationDryRunDiagnosing {
+    func directCallProductionActivationDryRunDiagnostic(homeserverBaseURL: URL?,
+                                                        roomEligibility: DirectCallProductionRoomEligibility) async -> DirectCallProductionActivationDryRunDiagnostic
+}
+
+@MainActor
+final class DirectCallProductionActivationDecisionService: DirectCallProductionActivationDeciding, DirectCallProductionActivationDryRunDiagnosing, CustomStringConvertible, CustomDebugStringConvertible {
     private let configuration: DirectCallProductionConfiguration
     private let capabilityProvider: DirectCallProductionCapabilityProviding
     private let dependencyProvider: NativeDirectCallProductionDependencyProviding
@@ -839,28 +895,42 @@ final class DirectCallProductionActivationDecisionService: DirectCallProductionA
 
     func directCallProductionActivationDecision(homeserverBaseURL: URL?,
                                                 roomEligibility: DirectCallProductionRoomEligibility) async -> DirectCallProductionActivationDecision {
+        let context = await activationContext(homeserverBaseURL: homeserverBaseURL,
+                                              roomEligibility: roomEligibility)
+        return activationGate.evaluate(context)
+    }
+
+    func directCallProductionActivationDryRunDiagnostic(homeserverBaseURL: URL?,
+                                                        roomEligibility: DirectCallProductionRoomEligibility) async -> DirectCallProductionActivationDryRunDiagnostic {
+        let context = await activationContext(homeserverBaseURL: homeserverBaseURL,
+                                              roomEligibility: roomEligibility)
+        return activationGate.dryRunDiagnostic(context)
+    }
+
+    private func activationContext(homeserverBaseURL: URL?,
+                                   roomEligibility: DirectCallProductionRoomEligibility) async -> DirectCallProductionActivationContext {
         guard configuration.isEnabled else {
-            return activationGate.evaluate(.init(appRolloutEnabled: false,
-                                                 homeserverBaseURL: homeserverBaseURL,
-                                                 configuredTokenEndpointURL: configuration.tokenEndpointURL,
-                                                 roomEligibility: roomEligibility))
+            return .init(appRolloutEnabled: false,
+                         homeserverBaseURL: homeserverBaseURL,
+                         configuredTokenEndpointURL: configuration.tokenEndpointURL,
+                         roomEligibility: roomEligibility)
         }
 
         let capabilityResult = await capabilityProvider.directCallProductionServerCapability()
         guard let serverCapability = capabilityResult.capability else {
-            return activationGate.evaluate(.init(appRolloutEnabled: true,
-                                                 homeserverBaseURL: homeserverBaseURL,
-                                                 serverCapability: nil,
-                                                 configuredTokenEndpointURL: configuration.tokenEndpointURL,
-                                                 roomEligibility: roomEligibility))
+            return .init(appRolloutEnabled: true,
+                         homeserverBaseURL: homeserverBaseURL,
+                         serverCapability: nil,
+                         configuredTokenEndpointURL: configuration.tokenEndpointURL,
+                         roomEligibility: roomEligibility)
         }
 
-        return activationGate.evaluate(.init(appRolloutEnabled: true,
-                                             homeserverBaseURL: homeserverBaseURL,
-                                             serverCapability: serverCapability,
-                                             configuredTokenEndpointURL: configuration.tokenEndpointURL,
-                                             dependencies: dependencyProvider.nativeDirectCallProductionDependencies(),
-                                             roomEligibility: roomEligibility))
+        return .init(appRolloutEnabled: true,
+                     homeserverBaseURL: homeserverBaseURL,
+                     serverCapability: serverCapability,
+                     configuredTokenEndpointURL: configuration.tokenEndpointURL,
+                     dependencies: dependencyProvider.nativeDirectCallProductionDependencies(),
+                     roomEligibility: roomEligibility)
     }
 
     nonisolated var description: String {
