@@ -263,3 +263,14 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Ran `git diff --check`, SwiftFormat/SwiftLint on changed Swift files, runner syntax/dry-run checks, focused direct-call and room-flow unit tests, Release build, and the direct-call forbidden scan.
 - Committed app changes as `83c967478 Expose production direct-call dry-run diagnostic command`.
 - Recommended next phase: add or inspect a fail-closed authenticated capability fetch transport/provider seam that can feed the decoder and room-scoped dry-run decision from session/client networking without activating production direct calls.
+
+## 2026-05-13 — 2.11D Production Activation Dry-Run Runtime Proof
+
+- Ran the DEBUG/integration diagnostic harness against both clients after app diagnostic signalling readiness.
+- Confirmed A and B both responded to the normal status command before the production activation dry-run query.
+- `production-activation-dry-run A` returned the redacted disabled result: `enabled=false`, `reason=appRolloutDisabled`, `capabilityPresent=false`, `dependenciesReady=false`, `roomEligible=true`, and `endpointAccepted=false`.
+- `production-activation-dry-run B` returned the same redacted disabled result.
+- Confirmed no production call started and the dry-run did not trigger listener, media, or Matrix send side effects.
+- Confirmed the disabled state is expected because production rollout remains off by default.
+- No app code changed for this phase.
+- Recommended next phase: inspect where app rollout configuration and authenticated server capability discovery should be sourced and threaded so dry-run checks can move beyond `appRolloutDisabled` without activating production direct calls.

@@ -13,13 +13,13 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.11C — debug/internal production activation dry-run command exposure complete.
+After 2.11D — production activation dry-run runtime proof recorded.
 
 Current app code checkpoint:
 83c967478 `Expose production direct-call dry-run diagnostic command`
 
 Current docs checkpoint:
-Latest commit that updates `docs/direct-call` after 2.11C.
+Latest commit that updates `docs/direct-call` after 2.11D.
 
 Current SDK checkpoint:
 f7c2cfe5c `Add direct-call media key envelope crypto tests`
@@ -34,11 +34,11 @@ Artifact checksum:
 654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e
 
 Phase:
-2.11D — production direct-call capability fetch transport inspection/skeleton.
+2.11E — app rollout/capability config source inspection.
 
 Task:
-Inspect and, if safe, add a fail-closed authenticated capability fetch provider that can obtain the Matrix capabilities response and feed `DirectCallProductionCapabilityPayloadDecoder`.
-Keep production direct calls disabled by default.
+Inspect where app rollout configuration and authenticated server capability discovery should be sourced and threaded for production native direct-call activation dry-run.
+Inspection/design first. Do not activate production direct calls.
 Do not add visible UI.
 Do not modify Element Call route.
 Do not wire CallKit/push.
@@ -55,11 +55,13 @@ Context:
 - `DirectCallProductionActivationGate` models app rollout, server capability, same-origin token endpoint, dependency readiness, and encrypted direct 1:1 room eligibility.
 - `DirectCallProductionCapabilityProviding`, `FailClosedDirectCallProductionCapabilityProvider`, and `DirectCallProductionCapabilityPayloadDecoder` exist.
 - `DirectCallProductionActivationDecisionService` assembles rollout config, capability discovery, dependency readiness, homeserver URL, and room eligibility into the activation gate.
-- `DirectCallProductionActivationDryRunDiagnostic` exposes a redacted dry-run model over that same gate without starting listeners, media, signalling, controllers, or UI.
 - `NativeDirectCallProductionActivationDryRunProviding` provides a room-scoped dry-run seam.
-- `RoomFlowCoordinator.nativeDirectCallProductionActivationDryRunDiagnostic()` can report a redacted disabled result before room activation or delegate to an injected room-scoped provider after room setup.
-- DEBUG/integration diagnostics now expose `production-activation-dry-run A|B` through the runner and `nativeDirectCallProductionActivationDryRun` through `UITestsSignalling`.
-- The dry-run command returns only redacted activation readiness fields and does not prepare native direct-call controllers, start listeners, start outgoing calls, accept calls, construct media engines, or send Matrix events.
+- DEBUG/integration diagnostics expose `production-activation-dry-run A|B` through the runner and `nativeDirectCallProductionActivationDryRun` through `UITestsSignalling`.
+- Runtime proof for A and B shows app diagnostics ready, status commands respond, and production activation dry-run returns the expected disabled result:
+  `enabled=false`, `reason=appRolloutDisabled`, `capabilityPresent=false`, `dependenciesReady=false`, `roomEligible=true`, `endpointAccepted=false`.
+- No production call started.
+- The dry-run did not trigger listener, media, or Matrix send side effects.
+- The disabled production state is expected.
 - `directOneToOneCallsEnabled` remains separate and must not be reused for native production activation.
 - Diagnostics remain separate and must not influence production activation.
 
@@ -73,38 +75,38 @@ Current activation capability model:
 - Token endpoint: same-origin relative path, defaulting to `/_matrix/client/unstable/kz.salemx.direct_call/livekit/token`
 
 Inspect:
-1. `DirectCallProductionCapabilityProviding`
-2. `DirectCallProductionCapabilityPayloadDecoder`
-3. `DirectCallProductionActivationDecisionService`
-4. `DirectCallProductionActivationGate`
-5. `NativeDirectCallProductionActivationDryRunProviding`
-6. `RoomFlowCoordinator.nativeDirectCallProductionActivationDryRunDiagnostic()`
-7. `UITestsSignalling` dry-run command exposure
-8. `Tools/Scripts/run_native_direct_call_diagnostic_two_client.sh`
-9. `DirectCallProductionConfiguration`
-10. `NativeDirectCallProductionDependencyAssembly`
-11. `ClientProxy` and `ClientProxyProtocol`
-12. Existing Matrix SDK Swift bindings for client capabilities or `/capabilities`
-13. Existing HTTP transport seams such as `DirectCallHTTPTransportProtocol`
-14. Matrix auth provider seam `DirectCallMatrixAccessTokenProviding`
-15. App settings, session construction, and existing remote settings patterns
+1. `DirectCallProductionConfiguration`
+2. `DirectCallProductionActivationDecisionService`
+3. `DirectCallProductionActivationGate`
+4. `DirectCallProductionCapabilityProviding`
+5. `DirectCallProductionCapabilityPayloadDecoder`
+6. `NativeDirectCallProductionDependencyAssembly`
+7. `NativeDirectCallProductionActivationDryRunProviding`
+8. `RoomFlowCoordinator.nativeDirectCallProductionActivationDryRunDiagnostic()`
+9. `AppSettings.swift`
+10. Existing app rollout, feature flag, server capability, and remote settings patterns
+11. `ClientProxy` and any existing Matrix capabilities or versions APIs
+12. `DirectCallHTTPTransportProtocol`
+13. `DirectCallMatrixAccessTokenProviding`
+14. Existing homeserver URL/session construction paths
 
 Questions:
-A. Is there an existing SDK-backed authenticated `/capabilities` fetch that can be wrapped narrowly?
-B. If not, can `DirectCallHTTPTransportProtocol` plus `DirectCallMatrixAccessTokenProviding` safely support a direct Matrix capabilities fetch without broadening app APIs?
-C. Should the provider be session-scoped, client-scoped, or homeserver-scoped?
-D. Should it fetch only when production rollout config is enabled, or stay independent and fail closed by default?
-E. How should request URL construction preserve same-origin behavior without duplicating activation-gate endpoint validation?
-F. How should failures map to redacted discovery reasons?
-G. How should the provider feed the room-scoped dry-run seam in a later phase without activating UI or runtime calls?
-H. What tests prove no production activation, no diagnostic-env influence, and no secret logging?
-I. What minimal code skeleton is safe now?
+A. Where should `DirectCallProductionConfiguration` be sourced from for app rollout without using diagnostic env?
+B. Should rollout be local build config, remote app config, server capability, or a combination?
+C. Where should authenticated server capability discovery be fetched from?
+D. Is there an existing Matrix capabilities API in the SDK wrapper or app proxies that can be reused narrowly?
+E. If not, should a `DirectCallHTTPTransportProtocol` provider fetch `/_matrix/client/v3/capabilities` with Matrix auth?
+F. How should the provider be threaded into the room-scoped dry-run path without constructing listeners, media engines, or production room owners?
+G. What conditions should move the dry-run result past `appRolloutDisabled` while still keeping production disabled by default?
+H. How should missing rollout config, missing capability, invalid endpoint, missing dependencies, and ineligible room remain redacted?
+I. What tests prove no production activation, no diagnostic-env influence, and no secret logging?
+J. What minimal code skeleton is safe after inspection?
 
 Allowed:
-- Add a concrete fail-closed provider skeleton, for example `HTTPDirectCallProductionCapabilityProvider`, only if it stays unconstructed by default.
-- Reuse `DirectCallHTTPTransportProtocol` and `DirectCallMatrixAccessTokenProviding` if safe.
-- Add provider tests with fake transport/auth.
-- Add tests proving default fail-closed behavior and no runtime activation.
+- Inspection/design only.
+- Add a small fail-closed config/capability source skeleton only if it is obviously safe and remains unused by default.
+- Reuse existing HTTP/auth seams if safe.
+- Add tests with fake providers if code changes.
 - Keep `.well-known` as a future pre-auth hint only, not activation authority.
 - Update docs.
 
@@ -124,8 +126,8 @@ Do not:
 
 Validation:
 - `git diff --check`
-- SwiftFormat/SwiftLint on changed files
-- Targeted tests:
+- SwiftFormat/SwiftLint on changed files if code changes
+- Targeted tests if code changes:
   - `UnitTests/DirectCallProductionKeyWrappingTests`
   - `UnitTests/DirectCallMediaEngineTests`
   - `UnitTests/DirectCallEngineTests` if protocol boundaries change
@@ -134,12 +136,14 @@ Validation:
 - Direct-call forbidden scan
 
 Expected output:
-1. Files changed.
-2. Capability fetch provider shape, or exact blocker if inspection-only.
-3. Whether SDK-backed `/capabilities` fetch exists.
-4. Fail-closed/default-disabled behavior.
-5. Whether room-scoped dry-run remains side-effect-free.
-6. Whether `directOneToOneCallsEnabled` remains unused for native production activation.
-7. Tests/build results.
-8. Whether production direct calls remain disabled.
-9. Update `docs/direct-call/STATUS.md`, `WORKLOG.md`, and `NEXT_CODEX_PROMPT.md` when done.
+1. Files inspected.
+2. Recommended rollout config source.
+3. Recommended authenticated capability discovery source.
+4. Whether an SDK-backed capabilities fetch exists.
+5. Whether a code skeleton was added or inspection-only.
+6. Fail-closed/default-disabled behavior.
+7. Whether room-scoped dry-run remains side-effect-free.
+8. Whether `directOneToOneCallsEnabled` remains unused for native production activation.
+9. Tests/build results if code changes.
+10. Whether production direct calls remain disabled.
+11. Update `docs/direct-call/STATUS.md`, `WORKLOG.md`, and `NEXT_CODEX_PROMPT.md` when done.
