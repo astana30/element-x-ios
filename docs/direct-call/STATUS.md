@@ -2,15 +2,15 @@
 
 ## Current Phase
 
-After 2.10Y — production direct-call server capability discovery seam skeleton complete.
+After 2.10Z — production activation decision assembly skeleton complete.
 
 ## Latest App Code Checkpoint
 
-e18c9ff9f `Add production direct-call capability discovery seam`
+39c5b5dc4 `Add production direct-call activation decision assembly`
 
 ## Latest Code Checkpoint
 
-e18c9ff9f `Add production direct-call capability discovery seam`
+39c5b5dc4 `Add production direct-call activation decision assembly`
 
 ## Latest SDK Checkpoint
 
@@ -124,13 +124,24 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - The current app/wrapper inspection found no existing narrow authenticated custom capability API beyond the separate `ClientProxy.isLiveKitRTCSupported` helper and pre-auth `.well-known` patterns.
   - No real network fetch, UI path, Element Call routing, CallKit, push, diagnostic env, or production runtime activation was added.
   - Focused app unit tests, Release build, and forbidden scan pass after the discovery seam skeleton.
+- Production activation decision assembly skeleton is complete:
+  - `DirectCallProductionActivationDeciding` models the narrow async activation decision boundary.
+  - `DirectCallProductionActivationDecisionService` assembles app rollout configuration, server capability discovery, production dependency readiness, homeserver URL, and room eligibility into the existing `DirectCallProductionActivationGate`.
+  - `NativeDirectCallProductionDependencyProviding` lets the decision service consume dependency readiness without constructing listeners, media engines, or room owners.
+  - Default configuration remains disabled and does not query capability or dependency providers.
+  - Missing or malformed capability discovery fails closed before dependency readiness is queried.
+  - Unsupported capability fields, external endpoints, unavailable dependencies, and ineligible rooms all map to existing redacted disabled reasons.
+  - The service is not wired into visible UI, Element Call routing, CallKit, push, diagnostics, or production runtime activation.
+  - `directOneToOneCallsEnabled` remains unused for native production activation.
+  - Focused app unit tests, Release build, and forbidden scan pass after the decision assembly skeleton.
 
 ## Current Blocker
 
 - Production backend is still skeleton/fake mode.
-- Production E2EE Matrix crypto key wrapping now has narrow provider, disabled assembly, and activation gate seams, but the assembly is not yet threaded into the real session/room-flow runtime.
-- The production activation gate is modeled and can consume decoded capability payloads, but it is not yet fed by a real authenticated server capability fetch transport.
+- Production E2EE Matrix crypto key wrapping now has narrow provider, disabled assembly, activation gate, capability discovery, and decision assembly seams, but the assembly is not yet threaded into the real session/room-flow runtime.
+- The production activation decision can consume decoded capability payloads, but it is not yet fed by a real authenticated server capability fetch transport.
 - No real server capability fetch path exists yet for native direct calls.
+- No production runtime path calls `DirectCallProductionActivationDecisionService` yet.
 - No production runtime path yet passes activation-approved assembled dependencies into `NativeDirectCallRoomFlowOwner`.
 - The default app path remains fail-closed unless future production configuration and dependency assembly explicitly enable native direct-call dependencies.
 - The production trust policy for peer devices is not finalized; the safest initial policy should fail closed on unknown or unverifiable device trust.
@@ -138,7 +149,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.10Z — production direct-call capability fetch transport inspection/skeleton`
+`2.11A — production direct-call capability fetch transport inspection/skeleton`
 
 Goal: inspect and, if safe, add a fail-closed authenticated capability fetch provider that can obtain the Matrix capabilities response through a narrow client/session transport seam and feed `DirectCallProductionCapabilityPayloadDecoder`, without activating visible UI or production direct calls.
 

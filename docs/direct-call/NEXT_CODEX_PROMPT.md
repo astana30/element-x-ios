@@ -13,13 +13,13 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.10Y — production direct-call server capability discovery seam skeleton complete.
+After 2.10Z — production activation decision assembly skeleton complete.
 
 Current app code checkpoint:
-e18c9ff9f `Add production direct-call capability discovery seam`
+39c5b5dc4 `Add production direct-call activation decision assembly`
 
 Current docs checkpoint:
-Latest commit that updates `docs/direct-call` after 2.10Y.
+Latest commit that updates `docs/direct-call` after 2.10Z.
 
 Current SDK checkpoint:
 f7c2cfe5c `Add direct-call media key envelope crypto tests`
@@ -34,7 +34,7 @@ Artifact checksum:
 654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e
 
 Phase:
-2.10Z — production direct-call capability fetch transport inspection/skeleton.
+2.11A — production direct-call capability fetch transport inspection/skeleton.
 
 Task:
 Inspect and, if safe, add a fail-closed authenticated capability fetch provider that can obtain the Matrix capabilities response and feed `DirectCallProductionCapabilityPayloadDecoder`.
@@ -51,11 +51,11 @@ Context:
 - SDK high-level crypto tests proved direct-call media key envelope wrap/unwrap.
 - Swift wrapper commit `1e58d0a` exposes async direct-call key envelope APIs.
 - App dependency is pinned to that wrapper commit.
-- `NativeDirectCallProductionDependencyAssembly` can assemble dependencies from explicit production config, HTTP transport, Matrix access-token provider, LiveKit client, shared media key store, and key-envelope provider.
+- `NativeDirectCallProductionDependencyAssembly` can assemble dependencies from explicit production config, HTTP transport, Matrix auth provider, LiveKit client, shared media key store, and key-envelope provider.
 - `DirectCallProductionActivationGate` models app rollout, server capability, same-origin token endpoint, dependency readiness, and encrypted direct 1:1 room eligibility.
-- 2.10Y added `DirectCallProductionCapabilityProviding`, `FailClosedDirectCallProductionCapabilityProvider`, and `DirectCallProductionCapabilityPayloadDecoder`.
-- 2.10Y found no existing narrow authenticated custom capability API; `ClientProxy.isLiveKitRTCSupported` and `.well-known` handling are separate and not sufficient for native production activation.
-- The activation gate is disabled by default and is not wired into visible UI or runtime production activation.
+- `DirectCallProductionCapabilityProviding`, `FailClosedDirectCallProductionCapabilityProvider`, and `DirectCallProductionCapabilityPayloadDecoder` exist.
+- `DirectCallProductionActivationDecisionService` assembles rollout config, capability discovery, dependency readiness, homeserver URL, and room eligibility into the activation gate.
+- The activation decision service is not wired into visible UI or runtime production activation.
 - `directOneToOneCallsEnabled` remains separate and must not be reused for native production activation.
 - Diagnostics remain separate and must not influence production activation.
 
@@ -71,14 +71,15 @@ Current activation capability model:
 Inspect:
 1. `DirectCallProductionCapabilityProviding`
 2. `DirectCallProductionCapabilityPayloadDecoder`
-3. `DirectCallProductionActivationGate`
-4. `DirectCallProductionConfiguration`
-5. `NativeDirectCallProductionDependencyAssembly`
-6. `ClientProxy` and `ClientProxyProtocol`
-7. Existing Matrix SDK Swift bindings for client capabilities or `/capabilities`
-8. Existing HTTP transport seams such as `DirectCallHTTPTransportProtocol`
-9. Matrix access-token provider seam `DirectCallMatrixAccessTokenProviding`
-10. App settings, session construction, and existing remote settings patterns
+3. `DirectCallProductionActivationDecisionService`
+4. `DirectCallProductionActivationGate`
+5. `DirectCallProductionConfiguration`
+6. `NativeDirectCallProductionDependencyAssembly`
+7. `ClientProxy` and `ClientProxyProtocol`
+8. Existing Matrix SDK Swift bindings for client capabilities or `/capabilities`
+9. Existing HTTP transport seams such as `DirectCallHTTPTransportProtocol`
+10. Matrix auth provider seam `DirectCallMatrixAccessTokenProviding`
+11. App settings, session construction, and existing remote settings patterns
 
 Questions:
 A. Is there an existing SDK-backed authenticated `/capabilities` fetch that can be wrapped narrowly?
@@ -109,7 +110,7 @@ Do not:
 - Use diagnostic env/secret/token in production.
 - Expose broad Matrix SDK raw APIs.
 - Expose raw Matrix event JSON, `debugInfo`, `originalJSON`, or `originalJson`.
-- Log unwrapped media-key material, tokens, JWTs, encrypted payload values, or raw Matrix content.
+- Log unwrapped media-key material, credentials, bearer values, JWTs, encrypted payload values, or Matrix event content.
 - Run shutdown/reboot/sleep/logout/killall/osascript power-management commands.
 
 Validation:

@@ -207,3 +207,17 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Ran `git diff --check`, SwiftFormat/SwiftLint on changed Swift files, focused direct-call unit tests, Release build, and the direct-call forbidden scan.
 - Committed app changes as `e18c9ff9f Add production direct-call capability discovery seam`.
 - Recommended next phase: inspect or add a fail-closed authenticated capability fetch transport/provider seam that can feed the decoder from session/client networking without activating production direct calls.
+
+## 2026-05-13 — 2.10Z Production Activation Decision Assembly Skeleton
+
+- Added `DirectCallProductionActivationDeciding` as the narrow async production activation decision boundary.
+- Added `DirectCallProductionActivationDecisionService` to assemble app rollout configuration, server capability discovery, production dependency readiness, homeserver URL, and room eligibility through `DirectCallProductionActivationGate`.
+- Added `NativeDirectCallProductionDependencyProviding` so dependency readiness can be supplied or faked without constructing listeners, media engines, room owners, or visible runtime behavior.
+- Kept default behavior disabled: default configuration returns `appRolloutDisabled` and does not query capability or dependency providers.
+- Kept capability failures fail-closed: missing or malformed capability discovery returns `serverCapabilityUnavailable` and skips dependency readiness checks.
+- Added tests for disabled config, missing/malformed capability, unsupported capability, external endpoint, unavailable dependencies, ineligible room, fully valid enabled decision, provider call counts, and redaction.
+- Confirmed `directOneToOneCallsEnabled` remains unused for native production activation.
+- Confirmed no visible UI, Element Call route, CallKit, push, diagnostic env, real network fetch, or production runtime activation changed.
+- Ran `git diff --check`, SwiftFormat/SwiftLint on changed Swift files, focused direct-call unit tests, Release build, and the direct-call forbidden scan.
+- Committed app changes as `39c5b5dc4 Add production direct-call activation decision assembly`.
+- Recommended next phase: add or inspect a fail-closed authenticated capability fetch transport/provider seam that can feed the decoder from session/client networking without activating production direct calls.
