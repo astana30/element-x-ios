@@ -13,10 +13,10 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.10U — production runtime SDK key wrapper provider seam added.
+After 2.10V — disabled production direct-call dependency wiring added.
 
 Current app code checkpoint:
-2f8bc409a `Add production key envelope provider seam`
+e9a1c8d1f `Add disabled production direct-call dependency wiring`
 
 Current SDK checkpoint:
 f7c2cfe5c `Add direct-call media key envelope crypto tests`
@@ -31,10 +31,10 @@ Artifact checksum:
 654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e
 
 Phase:
-2.10V — production direct-call dependency assembly inspection/skeleton.
+2.10W — guarded production room-flow dependency injection inspection/skeleton.
 
 Task:
-Inspect and, if low-risk, add a disabled-by-default production dependency assembly seam for native direct calls.
+Inspect and, if low-risk, add a guarded runtime injection seam that can pass disabled-by-default production direct-call dependencies into room-flow/native direct-call ownership.
 Do not activate production direct calls.
 Do not add visible UI.
 Do not modify Element Call route.
@@ -50,43 +50,45 @@ Context:
 - App dependency is pinned to that wrapper commit.
 - App key wrapping and encryption service protocols are async.
 - `MatrixSDKDirectCallMediaKeyWrapper` maps app models to SDK FFI models.
-- `NativeDirectCallProductionDependenciesFactory` can accept explicit key wrappers or a runtime provider.
 - `DirectCallMediaKeyEnvelopeWrappingProviding` exists.
 - Concrete `ClientProxy` can provide a narrow SDK envelope wrapper backed by `client.encryption()`.
-- `ClientProxyProtocol`, `RoomProxyProtocol`, and `TimelineProxyProtocol` remain unchanged.
+- Concrete `ClientProxy` can provide a narrow Matrix access-token provider through `DirectCallMatrixAccessTokenProviding`.
+- `NativeDirectCallProductionDependencyAssembly` can assemble dependencies from explicit production config, HTTP transport, Matrix access-token provider, LiveKit client, shared media key store, and key-envelope provider.
+- Missing config/provider returns disabled/fail-closed dependencies.
 - Production direct calls remain disabled/fail-closed by default.
 
 Inspect:
-1. `NativeDirectCallProductionDependenciesFactory`
-2. `DirectCallProductionConfiguration`
-3. `ProductionDirectCallLiveKitTokenClient`
-4. `DirectCallHTTPTransportProtocol`
-5. `DirectCallMatrixAccessTokenProviding`
-6. `URLSessionDirectCallHTTPTransport`
-7. `DirectCallLiveKitMediaEngineFactory`
-8. `LiveKitDirectCallClient`
-9. `DirectCallLiveKitMediaKeyStore`
-10. `DirectCallMediaKeyEnvelopeWrappingProviding`
-11. `ClientProxy` provider conformance
-12. `UserSession` / `UserSessionFlowCoordinator`
-13. `RoomFlowCoordinator` and `NativeDirectCallRoomFlowOwner`
-14. `AppCoordinator` production vs DEBUG/integration diagnostic dependency construction
+1. `NativeDirectCallProductionDependencyAssembly`
+2. `NativeDirectCallProductionDependenciesFactory`
+3. `DirectCallProductionConfiguration`
+4. `URLSessionDirectCallHTTPTransport`
+5. `LiveKitDirectCallClient`
+6. `DirectCallLiveKitMediaKeyStore`
+7. `ClientProxy` access-token and key-envelope provider conformances
+8. `UserSession` / `UserSessionFlowCoordinator`
+9. `ChatsTabFlowCoordinator`
+10. `RoomFlowCoordinator`
+11. `JoinedRoomProxy` and native direct-call room-controller creation
+12. `NativeDirectCallRoomFlowOwner`
+13. DEBUG/integration diagnostic owner path in `AppCoordinator`
+14. Existing AppSettings/server configuration patterns
 
 Questions:
-A. Where should production native direct-call dependency assembly live without activating UI?
-B. Should assembly be session-scoped, room-flow-scoped, or app-coordinator-scoped?
-C. How should it receive production token endpoint configuration, HTTP transport, Matrix access-token provider, LiveKit client, shared media key store, and key envelope provider?
-D. Can the assembly remain nil/fail-closed unless explicit production config is enabled?
-E. Can the seam be added without reading diagnostic env, using `directOneToOneCallsEnabled`, or changing visible routes?
-F. How should missing backend config, access token provider, HTTP transport, LiveKit client, or key envelope provider fail closed?
-G. What tests prove production runtime remains disabled by default?
-H. What future phase should actually thread production dependencies into a guarded native direct-call room-flow path?
+A. Where should `NativeDirectCallProductionDependencyAssembly` be created in runtime without activating UI?
+B. Should the assembly be session-scoped, room-flow-scoped, or created by a higher-level app/session factory?
+C. How can explicit production config stay disabled/nil by default?
+D. Where can future real `URLSessionDirectCallHTTPTransport`, `LiveKitDirectCallClient`, shared media key store, and `ClientProxy` providers be supplied without broadening app protocols?
+E. Can assembled dependencies be passed to `NativeDirectCallRoomFlowOwner` while still disabled unless config is explicitly enabled?
+F. How should the diagnostic DEBUG/integration path remain separate and take precedence only in diagnostics?
+G. What tests prove the production injection path remains disabled by default and does not start listeners or media globally?
+H. What future phase should introduce the actual guarded production config source?
 
 Allowed implementation if contained:
-- Add a small production dependency assembler/factory wrapper if it only returns nil/fail-closed by default.
-- Add initializer parameters or closure seams for production token transport/auth/key-envelope provider dependencies.
-- Add tests with fakes proving disabled defaults and explicit config assembly behavior.
-- Keep actual runtime UI/room-flow activation disabled.
+- Add optional production dependency assembly parameters or closures to session/room-flow construction if they default to disabled.
+- Add a test-only or fake-provider seam proving assembled dependencies can be threaded to `NativeDirectCallRoomFlowOwner` without visible UI activation.
+- Add tests proving default app/session/room construction remains disabled/fail-closed.
+- Keep actual production config unset by default.
+- Keep diagnostic path isolated behind DEBUG/integration gates.
 - Update docs when done.
 
 Hard constraints:
@@ -99,7 +101,7 @@ Hard constraints:
 - Do not use diagnostic encryption secrets or diagnostic LiveKit tokens in production paths.
 - Do not modify visible UI.
 - Do not change Element Call route.
-- Do not activate production feature flags.
+- Do not activate production feature flags or `directOneToOneCallsEnabled`.
 - Do not wire CallKit or push.
 - Do not run shutdown/reboot/sleep/logout/killall/osascript power-management commands.
 
@@ -109,14 +111,14 @@ Validation:
 - Targeted tests:
   - `UnitTests/DirectCallProductionKeyWrappingTests`
   - `UnitTests/DirectCallMediaEngineTests`
-  - `UnitTests/DirectCallEngineTests`
-  - `UnitTests/RoomFlowCoordinatorTests` if room-flow/session seams change
+  - `UnitTests/RoomFlowCoordinatorTests`
+  - `UnitTests/ChatsTabFlowCoordinatorTests` if session/chat seams change
 - Release build if production app files change
 - Forbidden scan for raw/debug/secret terms
 
 Expected output:
 1. Files inspected.
-2. Recommended production dependency assembly seam.
+2. Recommended guarded production injection seam.
 3. Whether code changed.
 4. If changed: files/tests/build results.
 5. Fail-closed/default-disabled behavior.

@@ -2,15 +2,15 @@
 
 ## Current Phase
 
-After 2.10U — production runtime SDK key wrapper provider seam added.
+After 2.10V — disabled production direct-call dependency wiring added.
 
 ## Latest App Code Checkpoint
 
-2f8bc409a `Add production key envelope provider seam`
+e9a1c8d1f `Add disabled production direct-call dependency wiring`
 
 ## Latest Code Checkpoint
 
-407adede3 `Add production direct-call key wrapping seams`
+e9a1c8d1f `Add disabled production direct-call dependency wiring`
 
 ## Latest SDK Checkpoint
 
@@ -91,21 +91,29 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Missing provider/wrapper dependencies remain fail-closed.
   - Diagnostic direct-call encryption and LiveKit paths remain isolated behind DEBUG/integration gates.
   - Focused app unit tests, Release build, and forbidden scan pass after the provider seam.
+- Disabled production direct-call dependency wiring is complete:
+  - `NativeDirectCallProductionDependencyAssembly` can assemble production dependencies only from explicit production configuration and injected runtime providers.
+  - Required providers are the production HTTP transport, Matrix access-token provider, LiveKit client, narrow SDK key envelope provider, own user ID, and optional shared media key store/sender device ID.
+  - Missing production config or any required runtime provider returns disabled/fail-closed dependencies.
+  - The assembly builds `ProductionDirectCallLiveKitTokenClient` from injected transport/auth only when explicitly configured.
+  - Concrete `ClientProxy` now conforms to the narrow `DirectCallMatrixAccessTokenProviding` protocol without changing `ClientProxyProtocol`.
+  - No runtime UI path, Element Call route, CallKit, push, diagnostic env, or production feature flag was activated.
+  - Focused app unit tests, Release build, and forbidden scan pass after the disabled wiring seam.
 
 ## Current Blocker
 
 - Production backend is still skeleton/fake mode.
-- Production E2EE Matrix crypto key wrapping now has a narrow runtime provider seam, but production direct-call dependency assembly is still not wired into the real runtime.
-- No production runtime path yet constructs `NativeDirectCallProductionDependenciesFactory` from production config, token transport/auth, LiveKit client, shared media key store, and the key envelope provider.
+- Production E2EE Matrix crypto key wrapping now has narrow provider and disabled assembly seams, but the assembly is not yet threaded into the real session/room-flow runtime.
+- No production runtime path yet passes assembled dependencies into `NativeDirectCallRoomFlowOwner`.
 - The default app path remains fail-closed unless future production configuration and dependency assembly explicitly enable native direct-call dependencies.
 - The production trust policy for peer devices is not finalized; the safest initial policy should fail closed on unknown or unverifiable device trust.
 - No production activation, visible UI, CallKit, or push integration exists yet.
 
 ## Next Recommended Phase
 
-`2.10V — production direct-call dependency assembly inspection/skeleton`
+`2.10W — guarded production room-flow dependency injection inspection/skeleton`
 
-Goal: inspect and, if safe, add a disabled-by-default assembly seam that can build production native direct-call dependencies from production configuration, token transport/auth, LiveKit client, shared media key store, and the narrow SDK key envelope provider without activating UI or production direct calls.
+Goal: inspect and, if safe, add a disabled-by-default runtime injection seam that can thread `NativeDirectCallProductionDependencyAssembly` into session/room-flow construction and provide dependencies to `NativeDirectCallRoomFlowOwner` only when explicit production config and runtime providers are present, without activating visible UI or production direct calls.
 
 ## Do-Not-Touch Constraints
 
