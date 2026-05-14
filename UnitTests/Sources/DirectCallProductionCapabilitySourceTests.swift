@@ -751,42 +751,64 @@ final class DirectCallBackendSmokeTests {
     @Test(.enabled(if: DirectCallBackendSmokeEnvironment.isRunnableInCurrentProcess))
     func productionHTTPCapabilityProviderMapsLocalBackendSmokeCapabilityToDryRunDecision() async throws {
         let environment = try #require(DirectCallBackendSmokeEnvironment.current)
+        let transport = DirectCallBackendSmokeCountingHTTPTransport(upstream: URLSessionDirectCallHTTPTransport())
         let provider = HTTPDirectCallProductionCapabilityProvider(homeserverBaseURL: environment.backendBaseURL,
-                                                                  httpTransport: URLSessionDirectCallHTTPTransport(),
+                                                                  httpTransport: transport,
                                                                   accessTokenProvider: DirectCallBackendSmokeAccessTokenProvider(accessToken: environment.fakeAccessToken))
 
         let result = await provider.directCallProductionServerCapability()
         let capability = try #require(result.capability)
+        let request = try #require(transport.requests.first)
 
         #expect(result.isAvailable)
         #expect(capability.isEnabled)
         #expect(capability.tokenEndpointPath == DirectCallProductionConfiguration.tokenEndpointPath)
         #expect(capability.supportsIntent(.audio))
+        #expect(transport.requests.count == 1)
+        #expect(request.method == "GET")
+        #expect(request.url.path == HTTPDirectCallProductionCapabilityProvider.capabilitiesPath)
+        #expect(transport.requests.contains { $0.url.path == DirectCallProductionConfiguration.tokenEndpointPath } == false)
+        #expect(DirectCallProductionConfiguration().isEnabled == false)
         #expect(String(describing: environment).contains(environment.fakeAccessToken) == false)
         #expect(String(describing: provider).contains(environment.backendBaseURL.absoluteString) == false)
+        #expect(String(describing: transport).contains(environment.fakeAccessToken) == false)
+        #expect(String(describing: request).contains(environment.fakeAccessToken) == false)
 
+        let disabledDependencyProvider = DirectCallBackendSmokeDependencyProvider(dependencies: makeActivationReadyDependencies())
         let disabledService = DirectCallProductionActivationDecisionService(rolloutProvider: FailClosedDirectCallProductionRolloutProvider(),
                                                                             capabilityProvider: provider,
-                                                                            dependencyProvider: DirectCallBackendSmokeDependencyProvider(dependencies: makeActivationReadyDependencies()))
+                                                                            dependencyProvider: disabledDependencyProvider)
         let disabledDiagnostic = await disabledService.directCallProductionActivationDryRunDiagnostic(homeserverBaseURL: environment.backendBaseURL,
                                                                                                       roomEligibility: makeRoomEligibility())
 
         #expect(disabledDiagnostic.disabledReason == .appRolloutDisabled)
         #expect(disabledDiagnostic.isCapabilityPresent == false)
         #expect(disabledDiagnostic.areDependenciesReady == false)
+        #expect(disabledDependencyProvider.callCount == 0)
         assertActivationDiagnosticIsRedacted(disabledDiagnostic)
 
+        let encryptionService = CapabilitySourceEncryptionServiceSpy()
+        let mediaEngineFactory = CapabilitySourceMediaEngineFactorySpy()
+        let enabledDependencyProvider = DirectCallBackendSmokeDependencyProvider(dependencies: NativeDirectCallProductionDependencies(encryptionService: encryptionService,
+                                                                                                                                      mediaEngineFactory: mediaEngineFactory))
         let enabledService = DirectCallProductionActivationDecisionService(rolloutProvider: DirectCallBackendSmokeRolloutProvider(configuration: .init(isEnabled: true)),
                                                                            capabilityProvider: DirectCallBackendSmokeCapabilityProvider(result: result),
-                                                                           dependencyProvider: DirectCallBackendSmokeDependencyProvider(dependencies: makeActivationReadyDependencies()))
+                                                                           dependencyProvider: enabledDependencyProvider)
         let enabledDiagnostic = await enabledService.directCallProductionActivationDryRunDiagnostic(homeserverBaseURL: environment.backendBaseURL,
                                                                                                     roomEligibility: makeRoomEligibility())
 
         #expect(enabledDiagnostic.isEnabled)
+        #expect(enabledDiagnostic.disabledReason == nil)
         #expect(enabledDiagnostic.isCapabilityPresent)
         #expect(enabledDiagnostic.areDependenciesReady)
         #expect(enabledDiagnostic.isRoomEligible)
         #expect(enabledDiagnostic.isEndpointAccepted)
+        #expect(enabledDependencyProvider.callCount == 1)
+        #expect(encryptionService.generateKeyCallCount == 0)
+        #expect(encryptionService.consumeKeyCallCount == 0)
+        #expect(encryptionService.clearKeyCallCount == 0)
+        #expect(mediaEngineFactory.makeMediaEngineCallCount == 0)
+        #expect(transport.requests.count == 1)
         assertActivationDiagnosticIsRedacted(enabledDiagnostic)
     }
 
@@ -951,12 +973,37 @@ private final class DirectCallBackendSmokeCapabilityProvider: DirectCallProducti
 @MainActor
 private final class DirectCallBackendSmokeDependencyProvider: NativeDirectCallProductionDependencyProviding {
     private let dependencies: NativeDirectCallProductionDependencies
+    private(set) var callCount = 0
 
     init(dependencies: NativeDirectCallProductionDependencies) {
         self.dependencies = dependencies
     }
 
     func nativeDirectCallProductionDependencies() -> NativeDirectCallProductionDependencies {
-        dependencies
+        callCount += 1
+        return dependencies
+    }
+}
+
+@MainActor
+private final class DirectCallBackendSmokeCountingHTTPTransport: DirectCallHTTPTransportProtocol, CustomStringConvertible, CustomDebugStringConvertible {
+    private let upstream: DirectCallHTTPTransportProtocol
+    private(set) var requests = [DirectCallHTTPTransportRequest]()
+
+    init(upstream: DirectCallHTTPTransportProtocol) {
+        self.upstream = upstream
+    }
+
+    func send(_ request: DirectCallHTTPTransportRequest) async -> Result<DirectCallHTTPTransportResponse, DirectCallMediaError> {
+        requests.append(request)
+        return await upstream.send(request)
+    }
+
+    nonisolated var description: String {
+        "DirectCallBackendSmokeCountingHTTPTransport(requestCount: <redacted>)"
+    }
+
+    nonisolated var debugDescription: String {
+        description
     }
 }

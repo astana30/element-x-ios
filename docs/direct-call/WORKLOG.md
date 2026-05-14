@@ -344,3 +344,12 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added a short-lived `/tmp/salemx-direct-call-backend-smoke.env` handoff because hosted simulator tests do not reliably inherit plain shell env.
 - Proved default no-env behavior skips both HTTP smokes, and proved env-gated local smoke passes against the FastAPI fake backend.
 - Confirmed no visible UI, Element Call route, CallKit, push, listener start, media connect, Matrix send, or production activation changed.
+
+## 2026-05-14 — 2.12D Production Dry-Run Enabled True Local Fake Pack
+
+- Strengthened the env-gated local backend capability smoke so it proves the authenticated fake `/capabilities` response can feed a production activation dry-run diagnostic with `enabled=true` when all model gates are valid.
+- Confirmed the enabled proof requires fake rollout enabled, valid fake server capability, same-origin token endpoint acceptance, fake dependency readiness, and encrypted direct 1:1 room eligibility.
+- Added request counting around `URLSessionDirectCallHTTPTransport` for the capability smoke so the dry-run path proves it performs only the capability GET and does not request a LiveKit token.
+- Added side-effect assertions proving the enabled dry-run does not generate keys, consume keys, clear keys, or construct a media engine.
+- Reconfirmed default production configuration remains disabled and the fail-closed rollout provider still prevents capability/dependency queries.
+- Confirmed no visible UI, Element Call route, CallKit, push, listener start, media connect, Matrix send, or production activation changed.

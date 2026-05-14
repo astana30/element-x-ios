@@ -2,15 +2,15 @@
 
 ## Current Phase
 
-After 2.12C — local backend HTTP smoke harness fixed and proven.
+After 2.12D — production dry-run enabled=true local fake pack.
 
 ## Latest App Code Checkpoint
 
-This commit: `Fix local direct-call backend smoke test`
+This commit: `Prove production direct-call activation dry-run enabled with fake inputs`
 
 ## Latest Code Checkpoint
 
-This commit: `Fix local direct-call backend smoke test`
+This commit: `Prove production direct-call activation dry-run enabled with fake inputs`
 
 ## Latest SDK Checkpoint
 
@@ -88,6 +88,13 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Default runs skip the HTTP smoke tests when the smoke file/env is absent or stale.
   - Env-gated local smoke run proved both production token client and capability provider can call the local FastAPI fake backend over HTTP.
   - Output remains redacted and production direct calls remain disabled.
+- Production activation dry-run enabled=true local fake pack is complete:
+  - The env-gated local backend capability smoke fetches `kz.salemx.direct_call.native` from the FastAPI fake backend through `URLSessionDirectCallHTTPTransport`.
+  - The smoke proves the capability provider performs only the authenticated `/capabilities` GET for the dry-run path and does not request a LiveKit token.
+  - With fake rollout enabled, fake dependency readiness, and an encrypted direct 1:1 room eligibility model, the dry-run diagnostic returns `enabled=true`.
+  - Default `DirectCallProductionConfiguration` remains disabled.
+  - The dry-run proof verifies no key generation, key consume, key cleanup, or media engine construction occurs.
+  - Production direct calls remain disabled by default; no visible UI, Element Call route, CallKit, push, listener start, media connect, or Matrix send behavior changed.
   - Focused app unit tests and Release build pass after the injection seam.
 - Production runtime SDK key wrapper provider seam is complete:
   - `DirectCallMediaKeyEnvelopeWrappingProviding` exposes only a direct-call envelope wrapper provider, not a raw SDK client, raw SDK room, raw timeline, or raw crypto object.
@@ -245,7 +252,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.12D — endpoint-aware production dependency readiness inspection/skeleton`
+`2.12E — endpoint-aware production dependency readiness inspection/skeleton`
 
 Goal: split side-effect-free runtime prerequisite readiness from endpoint-specific dependency assembly, or make dependency readiness receive an activation-accepted token endpoint, without activating visible UI or production direct calls.
 
