@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.12E — runtime fake-enabled production activation dry-run.
+After 2.12E — runtime fake-enabled production activation dry-run proof.
 
 ## Latest App Code Checkpoint
 
@@ -103,6 +103,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Unit tests prove default runtime dry-run remains disabled and fake-enabled dry-run can return `enabled=true` for an eligible encrypted direct 1:1 room.
   - No real production call activation, listener start, media engine construction, Matrix send, visible UI, Element Call route, CallKit, or push behavior changed.
   - Focused app unit tests and Release build pass after the injection seam.
+- Runtime fake-enabled production activation dry-run proof is recorded:
+  - A and B both reached app diagnostic signalling readiness with an active encrypted 1:1 room open.
+  - `production-activation-dry-run A` returned `enabled=true`, `reason=none`, `capabilityPresent=true`, `dependenciesReady=true`, `roomEligible=true`, and `endpointAccepted=true`.
+  - `production-activation-dry-run B` returned the same redacted enabled fields.
+  - This was DEBUG/integration fake-enabled dry-run only.
+  - No production call started.
+  - No visible UI was activated.
+  - No Element Call route, CallKit, push, listener start, Matrix send, or media connect was triggered.
 - Production runtime SDK key wrapper provider seam is complete:
   - `DirectCallMediaKeyEnvelopeWrappingProviding` exposes only a direct-call envelope wrapper provider, not a raw SDK client, raw SDK room, raw timeline, or raw crypto object.
   - Concrete `ClientProxy` can create `MatrixSDKDirectCallMediaKeyEnvelopeWrapperAdapter` from `client.encryption()` through that narrow provider seam.
@@ -251,7 +259,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Production E2EE Matrix crypto key wrapping now has narrow provider, disabled assembly, activation gate, capability discovery, decision assembly, provider-backed rollout/capability inputs, room-scoped dry-run seams, and a consolidated readiness test pack, but the assembly is not yet threaded into the real session/room-flow runtime for activation.
 - The production activation decision can consume an app rollout provider and an injectable authenticated `/capabilities` fetch provider, but these providers are not yet wired into real session/room-flow runtime construction by default.
 - The current production dependency readiness path is still coupled to explicit `DirectCallProductionConfiguration.tokenEndpointBaseURL`, so capability-sourced endpoints need a two-stage readiness/assembly path before dry-run can report dependencies ready from server capability alone.
-- The room-flow dry-run seam can now be queried by the DEBUG/integration runner command and has a runtime proof for A/B; there is still no visible UI or production runtime activation.
+- The room-flow dry-run seam can now be queried by the DEBUG/integration runner command and has both fail-closed and fake-enabled runtime proofs for A/B; there is still no visible UI or production runtime activation.
 - No production runtime path yet passes activation-approved assembled dependencies into `NativeDirectCallRoomFlowOwner`.
 - The default app path remains fail-closed unless future production configuration and dependency assembly explicitly enable native direct-call dependencies.
 - The production trust policy for peer devices is not finalized; the safest initial policy should fail closed on unknown or unverifiable device trust.
@@ -259,9 +267,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.12F — endpoint-aware production dependency readiness inspection/skeleton`
+`2.13A — internal iOS native direct-call trigger design inspection`
 
-Goal: split side-effect-free runtime prerequisite readiness from endpoint-specific dependency assembly, or make dependency readiness receive an activation-accepted token endpoint, without activating visible UI or production direct calls.
+Goal: design the first safe internal iOS trigger path for native direct calls, keeping it behind internal/diagnostic boundaries and without adding visible UI, Element Call route changes, CallKit, push, listener start, media connect, Matrix send, or production activation.
 
 ## Do-Not-Touch Constraints
 

@@ -7,10 +7,10 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.12E — runtime fake-enabled production activation dry-run.
+After 2.12E — runtime fake-enabled production activation dry-run proof.
 
 Current app code checkpoint:
-This commit: `Add fake-enabled production dry-run runtime harness`
+8b329dbc4 `Add fake-enabled production dry-run runtime harness`
 
 Current SDK checkpoint:
 f7c2cfe5c `Add direct-call media key envelope crypto tests`
@@ -25,91 +25,62 @@ Artifact checksum:
 654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e
 
 Phase:
-2.12F — endpoint-aware production dependency readiness inspection/skeleton.
+2.13A — internal iOS native direct-call trigger design inspection.
 
 Task:
-Inspect and, if safe, add a fail-closed endpoint-aware production dependency readiness seam for native direct calls.
-Keep production direct calls disabled by default.
-Do not add visible UI.
-Do not modify Element Call route.
-Do not wire CallKit/push.
+Inspection/design only. Do not modify app code. Do not commit unless docs-only tracking update is explicitly needed.
+
+Goal:
+Design the first safe internal iOS trigger path for native direct calls after the fake-enabled production activation dry-run can prove `enabled=true` at runtime, without adding visible UI or activating production behavior.
 
 Context:
 - Two-client Matrix signalling proof passed.
 - Diagnostic LiveKit active proof passed.
-- Backend token service skeleton exists and local fake mode can serve both token and capability smoke responses.
+- Backend token service skeleton exists and local fake mode can serve token and capability smoke responses.
 - Production token DTO/client/transport/config seams exist and remain inactive by default.
 - SDK and Swift wrapper expose async direct-call media key envelope APIs.
 - Production key wrapper/provider seams exist but are not activated.
 - `DirectCallProductionRolloutProviding` exists with `FailClosedDirectCallProductionRolloutProvider`, defaulting rollout off.
 - `HTTPDirectCallProductionCapabilityProvider` exists and fetches authenticated Matrix `/_matrix/client/v3/capabilities` through injected `DirectCallHTTPTransportProtocol` and `DirectCallMatrixAccessTokenProviding`.
-- The local backend smoke pack proves the token client and capability provider can talk to local fake mode through `URLSessionDirectCallHTTPTransport` when env-gated.
-- `Tools/Scripts/run_direct_call_backend_smoke.sh` is the reliable command for local HTTP smoke: it validates fake backend reachability, writes a short-lived local smoke config file for hosted simulator tests, runs `DirectCallBackendSmokeTests`, and fails if either smoke is skipped.
-- The env-gated local fake capability smoke now proves the full activation dry-run model can return `enabled=true` with fake/local inputs only: rollout enabled, valid fake server capability, same-origin endpoint accepted, fake dependencies ready, and encrypted direct 1:1 room eligibility.
-- The enabled local fake dry-run proof performs only the capability GET, does not request a LiveKit token, and does not generate keys, consume keys, clear keys, construct media engines, start listeners, or send Matrix events.
-- The runtime dry-run command can now be fake-enabled only under DEBUG + integration diagnostics with `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED=1`.
-- The fake-enabled runtime path affects only the production activation dry-run diagnostic decision. It does not activate calls, start listeners, construct media engines, send Matrix events, or touch UI.
-- The two-client diagnostic runner passes the fake dry-run flag through `SIMCTL_CHILD_NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED`.
 - `DirectCallProductionActivationDecisionService` uses rollout and capability providers in a side-effect-free sequence.
 - `DirectCallProductionActivationGate` models app rollout, authenticated server capability, same-origin token endpoint, dependency readiness, and encrypted direct 1:1 room eligibility.
-- The readiness pack proves an enabled model only when rollout, capability, endpoint, dependencies, and room eligibility are all valid.
-- Fail-closed tests cover disabled rollout, missing capability, malformed capability, external endpoint rejection, unavailable dependencies, unavailable room, unencrypted room, and non-1:1 room cases.
-- Dry-run signal output is redacted and excludes room IDs, peer IDs, endpoint values, credential-like fields, unwrapped key material, Matrix content, and encrypted payload values.
-- No-side-effect checks prove the readiness path does not generate keys, consume keys, clear keys, construct media engines, start listeners, or send Matrix events.
-- `.well-known` is not used for activation.
+- Room-scoped `production-activation-dry-run` exists through the DEBUG/integration diagnostic command path.
+- Runtime fake-enabled dry-run proof passed for A and B in an active encrypted 1:1 room:
+  - `enabled=true`
+  - `reason=none`
+  - `capabilityPresent=true`
+  - `dependenciesReady=true`
+  - `roomEligible=true`
+  - `endpointAccepted=true`
+- The fake-enabled dry-run path is DEBUG/integration-only and gated by `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED=1` plus the existing integration diagnostic command gates.
+- The runtime proof did not start a production call, show visible UI, use Element Call routing, touch CallKit/push, start a listener, send Matrix events, connect media, request a LiveKit token, or wrap media keys.
+- Production remains disabled by default.
 - `directOneToOneCallsEnabled` remains unused for native production activation.
-- Production remains disabled by default and no runtime wiring starts listeners, media, or Matrix sends.
 
-Known sequencing issue:
-- Production dependency readiness currently depends on `DirectCallProductionConfiguration.tokenEndpointBaseURL` / explicit configuration.
-- Production should normally derive the token endpoint from authenticated server capability after the activation gate accepts a same-origin relative endpoint.
-- Dry-run can now fetch/decode capability and consume provider-backed rollout config, but dependencies cannot become ready from a capability-sourced endpoint without either:
-  - splitting side-effect-free runtime prerequisite readiness from endpoint-specific dependency assembly, or
-  - making dependency readiness/assembly receive the accepted token endpoint from the activation decision path.
+Design questions:
+A. What should be the first internal trigger surface for native direct-call start/accept experiments?
+B. Should the trigger remain inside the DEBUG/integration diagnostic command path, or should there be a separate internal-only service seam?
+C. What activation decision must be checked immediately before any internal trigger is allowed to prepare/start native direct-call runtime?
+D. How should the trigger avoid visible UI and Element Call route changes?
+E. How should it avoid CallKit, push, and production feature activation?
+F. What are the minimum side effects that an internal trigger phase may allow, and what must remain forbidden?
+G. Should the next implementation target an internal outgoing trigger, incoming accept trigger, or endpoint-aware dependency readiness first?
+H. What additional redacted diagnostics are needed before allowing any internal trigger to start listeners or media?
+I. What tests are required to prove the trigger remains internal-only and fail-closed by default?
+J. What blockers remain before user-visible UI can be considered?
 
-Goals:
-1. Inspect current dependency assembly/readiness:
-   - `NativeDirectCallProductionDependencyAssembly`
-   - `NativeDirectCallProductionDependencyProviding`
-   - `DirectCallProductionActivationDecisionService`
-   - `DirectCallProductionActivationGate`
-   - `DirectCallProductionConfiguration`
-   - `ProductionDirectCallLiveKitTokenClient`
-   - `DirectCallHTTPTransportProtocol`
-   - `DirectCallMatrixAccessTokenProviding`
-   - `DirectCallMediaKeyEnvelopeWrappingProviding`
-
-2. Decide the safest model:
-   - side-effect-free runtime prerequisite readiness separate from endpoint-specific dependency construction, or
-   - endpoint-aware dependency provider called only after activation gate accepts the capability endpoint.
-
-3. If safe, add a small fail-closed skeleton:
-   - no production activation;
-   - no listener/controller/media engine construction during dry-run;
-   - no Matrix sends;
-   - no visible UI path;
-   - dependencies stay unavailable by default;
-   - explicit fake tests can prove all-valid readiness when an accepted endpoint is supplied.
-
-4. Keep token endpoint validation same-origin:
-   - server capability token endpoint must be relative/same-origin under homeserver;
-   - absolute/external endpoints fail closed;
-   - configured overrides, if any, must be same-origin.
-
-5. Update docs:
-   - `docs/direct-call/STATUS.md`
-   - `docs/direct-call/WORKLOG.md`
-   - `docs/direct-call/NEXT_CODEX_PROMPT.md`
-
-Tests:
-- Default dependency readiness remains disabled/fail-closed.
-- Runtime prerequisite readiness can be true only when required runtime providers are injected.
-- Endpoint-specific dependency assembly receives an accepted same-origin endpoint, not a raw capability string.
-- External endpoint remains rejected before dependency assembly.
-- Dry-run remains side-effect-free and does not construct listeners, controllers, media engines, or send Matrix events.
-- `directOneToOneCallsEnabled` remains unused.
-- No diagnostic env/secret/token is read by production dependency readiness.
-- Redacted descriptions do not include bearer values, tokens, endpoint values, room IDs, peer IDs, or key material.
+Inspect:
+1. `NativeDirectCallRoomFlowOwner`
+2. `NativeDirectCallRoomController`
+3. `NativeDirectCallRoomDeveloperCommandRouter`
+4. `RoomFlowCoordinator.nativeDirectCallProductionActivationDryRunDiagnostic()`
+5. `DirectCallProductionActivationDecisionService`
+6. `NativeDirectCallProductionDependencyAssembly`
+7. `DirectCallProductionConfiguration`
+8. `AppCoordinator` DEBUG/integration diagnostic construction
+9. `UITestsSignalling` command routing
+10. `Tools/Scripts/run_native_direct_call_diagnostic_two_client.sh`
+11. Existing tests around dry-run, signalling, and diagnostic commands
 
 Hard constraints:
 - No visible UI.
@@ -118,33 +89,23 @@ Hard constraints:
 - No Element Call route changes.
 - No `directOneToOneCallsEnabled` activation or reuse.
 - No CallKit/push.
-- No native direct-call listener start.
+- No production runtime activation.
+- No native direct-call listener start unless a future phase explicitly scopes it as DEBUG/integration-only and side-effect audited.
 - No production Matrix send.
-- No media engine construction during dry-run.
-- No diagnostic env/secret/token use in production.
+- No media engine construction during design inspection.
+- No diagnostic env/secret/token use in production activation.
 - No broad Matrix SDK raw APIs.
 - No raw Matrix event JSON, `debugInfo`, `originalJSON`, or `originalJson`.
-- No logging unwrapped media-key material, credentials, bearer values, JWTs, encrypted payload values, or Matrix event content.
+- No logging unwrapped media-key material, credentials, bearer values, JWTs, encrypted-payload values, or Matrix event content.
 - Do not run shutdown/reboot/sleep/logout/killall/osascript power-management commands.
 
-Validation:
-- `git diff --check`
-- SwiftFormat/SwiftLint on changed Swift files
-- Targeted tests:
-  - `UnitTests/DirectCallProductionCapabilitySourceTests`
-  - `UnitTests/DirectCallProductionKeyWrappingTests`
-  - `UnitTests/DirectCallMediaEngineTests`
-  - `UnitTests/RoomFlowCoordinatorTests` if room-flow dry-run wiring changes
-- Release build if production app files change
-- Direct-call forbidden scan
-
 Expected output:
-1. Files changed.
-2. Dependency readiness model chosen.
-3. Endpoint-aware assembly/readiness behavior.
-4. Fail-closed/default-disabled behavior.
-5. Whether room-scoped dry-run remains side-effect-free.
-6. Whether `directOneToOneCallsEnabled` remains unused for native production activation.
-7. Tests/build results.
-8. Whether production direct calls remain disabled.
-9. Commit hash if committed.
+1. Files inspected.
+2. Recommended first internal trigger model.
+3. Required activation checks before trigger execution.
+4. Allowed and forbidden side effects for the next phase.
+5. Whether endpoint-aware dependency readiness should happen before trigger implementation.
+6. Test plan.
+7. Risks/blockers.
+8. Recommended next implementation phase.
+9. Docs update if useful.

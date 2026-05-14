@@ -363,3 +363,13 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Updated the two-client diagnostic runner to pass the fake dry-run flag through `SIMCTL_CHILD_NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` without printing secrets.
 - Added unit tests proving default runtime dry-run remains disabled, fake-enabled dry-run can return `enabled=true` for an eligible room, and the env gate requires integration diagnostics.
 - Confirmed no visible UI, Element Call route, CallKit, push, listener start, media connect, Matrix send, or production activation changed.
+
+## 2026-05-14 — 2.12E Runtime Fake-Enabled Production Activation Dry-Run Proof
+
+- Ran the DEBUG/integration diagnostic harness with the fake-enabled production activation dry-run gate.
+- Confirmed A and B app diagnostic signalling were ready with an active encrypted 1:1 room open.
+- `production-activation-dry-run A` returned `enabled=true`, `reason=none`, `capabilityPresent=true`, `dependenciesReady=true`, `roomEligible=true`, and `endpointAccepted=true`.
+- `production-activation-dry-run B` returned the same redacted enabled fields.
+- Confirmed this was DEBUG/integration fake-enabled dry-run only and did not start a production call.
+- Confirmed no visible UI, Element Call route, CallKit, push, listener start, Matrix send, or media connect was triggered.
+- Recommended next phase: inspect the first safe internal iOS native direct-call trigger model without activating production calls or adding visible UI.
