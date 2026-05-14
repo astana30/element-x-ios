@@ -2,15 +2,15 @@
 
 ## Current Phase
 
-After 2.13E — internal production start command skeleton.
+After 2.13G — production owner wiring inspection/skeleton.
 
 ## Latest App Code Checkpoint
 
-2.13E `Add internal production direct-call start command skeleton`
+2.13G `Wire production direct-call owner for internal start command`
 
 ## Latest Code Checkpoint
 
-2.13E `Add internal production direct-call start command skeleton`
+2.13G `Wire production direct-call owner for internal start command`
 
 ## Latest SDK Checkpoint
 
@@ -139,6 +139,21 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Output is limited to redacted fields: outcome, blocked reason, trigger dry-run readiness fields, and non-identifying session summary booleans/enums.
   - No visible UI, Element Call route, `RoomScreenViewModel.displayCall`, `RoomScreenCoordinator.presentCallScreen`, `ElementCallService`, CallKit, push, global production feature activation, broad SDK raw API, credential logging, or key logging changed.
   - Focused app unit tests, Release build, runner syntax check, and the direct-call forbidden scan pass after the command skeleton.
+- Internal production start command runtime proof is recorded:
+  - Without `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`, `production-start-outgoing A` blocked with `productionStartDisabled`.
+  - With the dedicated start gate enabled and fake-enabled activation inputs, `production-start-outgoing A` blocked with `productionOwnerUnavailable`.
+  - Status remained idle with listener not started, no active session, no Matrix signal send, and no media connect.
+  - No visible UI, Element Call route, CallKit, push, listener start, Matrix send, or media connect side effects occurred.
+- Production owner wiring skeleton is complete:
+  - `RoomFlowCoordinator` now creates and retains the production owner lazily only after the DEBUG/integration production start command gate and activation decision pass.
+  - The production owner remains separate from the diagnostic owner; diagnostic owner state is checked only to block overlapping sessions.
+  - `storeAndSubscribeToRoomProxy` no longer creates the production owner when a room opens, so normal room display and dry-run checks do not start listeners or build call runtime.
+  - The internal production start command starts the production listener before outgoing start only after all command gates pass.
+  - `AppCoordinator` can build a production-shaped owner from session runtime providers: `URLSessionDirectCallHTTPTransport`, Matrix access-token provider, narrow Matrix SDK key envelope provider, `LiveKitDirectCallClient`, and `ClientProxy` user/device metadata.
+  - If production-shaped runtime dependencies are unavailable, the command now blocks with `dependenciesUnavailable` instead of the less precise `productionOwnerUnavailable`.
+  - The production owner is reset with the room flow owner on room dismiss/reset.
+  - No visible UI, Element Call route, `RoomScreenViewModel.displayCall`, `RoomScreenCoordinator.presentCallScreen`, `ElementCallService`, CallKit, push, global production activation, diagnostic secret/token use, broad SDK raw API, credential logging, or key logging changed.
+  - Focused app unit tests, Release build, and the direct-call forbidden scan pass after the production owner wiring skeleton.
 - Production runtime SDK key wrapper provider seam is complete:
   - `DirectCallMediaKeyEnvelopeWrappingProviding` exposes only a direct-call envelope wrapper provider, not a raw SDK client, raw SDK room, raw timeline, or raw crypto object.
   - Concrete `ClientProxy` can create `MatrixSDKDirectCallMediaKeyEnvelopeWrapperAdapter` from `client.encryption()` through that narrow provider seam.
@@ -288,18 +303,18 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - The production activation decision can consume an app rollout provider and an injectable authenticated `/capabilities` fetch provider, but these providers are not yet wired into real session/room-flow runtime construction by default.
 - The current production dependency readiness path is still coupled to explicit `DirectCallProductionConfiguration.tokenEndpointBaseURL`, so capability-sourced endpoints need a two-stage readiness/assembly path before dry-run can report dependencies ready from server capability alone.
 - The room-flow dry-run seam and production trigger dry-run command can now be queried by the DEBUG/integration runner and have both fail-closed and fake-enabled runtime proofs for A/B; there is still no visible UI or public production runtime activation.
-- The production start command skeleton exists, but it is DEBUG/integration-only, behind `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`, and defaults to blocked because no real production owner is assembled by default.
-- No runtime proof has yet shown `production-start-outgoing` blocking or starting in a two-client app session.
-- No production runtime path yet passes activation-approved real backend/token/key-wrapper dependencies into `NativeDirectCallRoomFlowOwner`.
+- The production start command is DEBUG/integration-only, behind `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`, and now lazily assembles a production-shaped owner only after activation passes.
+- The first runtime proof showed fail-closed command behavior: `productionStartDisabled` without the start gate, then `productionOwnerUnavailable` before owner wiring, with no side effects.
+- The production owner wiring skeleton can now pass activation-approved runtime providers into `NativeDirectCallRoomFlowOwner`, but real production backend/capability/token/E2EE readiness is still not available by default.
 - The default app path remains fail-closed unless future production configuration and dependency assembly explicitly enable native direct-call dependencies.
 - The production trust policy for peer devices is not finalized; the safest initial policy should fail closed on unknown or unverifiable device trust.
 - No production activation, visible UI, CallKit, or push integration exists yet.
 
 ## Next Recommended Phase
 
-`2.13F — internal production start command runtime proof`
+`2.13H — production start command runtime proof with owner wiring`
 
-Goal: run the new DEBUG/integration-only `production-start-outgoing` command in controlled fail-closed and fake-enabled contexts, verify redacted output, and prove that no visible UI, Element Call route, CallKit, push, or public production activation is touched.
+Goal: rerun the DEBUG/integration-only `production-start-outgoing` command after production owner wiring, verify the command no longer stops at `productionOwnerUnavailable` when runtime providers are present, and confirm any remaining block/failure is redacted and caused by real production dependency readiness rather than missing owner construction.
 
 ## Do-Not-Touch Constraints
 

@@ -410,3 +410,24 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Confirmed no visible UI, Element Call route, RoomScreen call presentation, ElementCallService, CallKit, push, global production activation, Matrix content logging, credential logging, or key logging changed.
 - Ran `git diff --check`, SwiftFormat/SwiftLint on changed Swift files, runner syntax check, focused direct-call and room-flow unit tests, Release build, and the direct-call forbidden scan.
 - Recommended next phase: runtime proof for `production-start-outgoing` in fail-closed and controlled fake-enabled contexts, without adding visible UI or public production activation.
+
+## 2026-05-14 — 2.13F Internal Production Start Command Runtime Proof
+
+- Ran the DEBUG/integration production start command path in controlled runtime.
+- Confirmed `production-trigger-dry-run A` could report `wouldStart=true` with fake-enabled activation inputs in an active encrypted 1:1 room.
+- Confirmed `production-start-outgoing A` blocks with `productionStartDisabled` when `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1` is absent.
+- Confirmed `production-start-outgoing A` then blocked with `productionOwnerUnavailable` when the start gate was enabled but no production owner was assembled.
+- Confirmed status remained idle: listener not started, no active session, no Matrix signal send, and no media connect.
+- Confirmed no visible UI, Element Call route, CallKit, push, listener start, Matrix send, or media connect side effects occurred.
+
+## 2026-05-14 — 2.13G Production Owner Wiring Inspection/Skeleton
+
+- Replaced the always-unavailable production owner path with a lazy room-scoped production owner creation path in `RoomFlowCoordinator`.
+- Kept the production owner separate from the diagnostic owner and retained it only after the DEBUG/integration start command gate and activation decision pass.
+- Kept room open and dry-run behavior side-effect-free: opening a room no longer creates a production owner, starts a listener, sends Matrix events, or constructs media.
+- Added production-shaped owner assembly from AppCoordinator using session runtime providers: URLSession HTTP transport, Matrix access-token provider, narrow Matrix SDK key envelope provider, LiveKit client, and client user/device metadata.
+- Added precise fail-closed blocking with `dependenciesUnavailable` when production-shaped runtime dependencies cannot be assembled.
+- Updated room-flow tests to cover dependency-unavailable blocking, production-owner started path, and listener-before-outgoing sequencing.
+- Confirmed no visible UI, Element Call route, RoomScreen call presentation, ElementCallService, CallKit, push, global production activation, diagnostic secret/token use, broad SDK raw API, credential logging, or key logging changed.
+- Ran `git diff --check`, SwiftFormat/SwiftLint on changed Swift files, focused direct-call and room-flow unit tests, Release build, and the direct-call forbidden scan.
+- Recommended next phase: runtime proof for `production-start-outgoing` after production owner wiring, expecting either a redacted start attempt or a more precise production dependency/media/key/token failure than `productionOwnerUnavailable`.

@@ -7,10 +7,10 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.13E — internal production start command skeleton.
+After 2.13G — production owner wiring inspection/skeleton.
 
 Current app code checkpoint:
-2.13E `Add internal production direct-call start command skeleton`
+2.13G `Wire production direct-call owner for internal start command`
 
 Current SDK checkpoint:
 f7c2cfe5c `Add direct-call media key envelope crypto tests`
@@ -25,10 +25,10 @@ Artifact checksum:
 654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e
 
 Phase:
-2.13F — internal production start command runtime proof.
+2.13H — production start command runtime proof with owner wiring.
 
 Task:
-Run the DEBUG/integration-only internal production native direct-call start command in controlled runtime scenarios.
+Run the DEBUG/integration-only internal production native direct-call start command after production owner wiring.
 Do not add visible UI.
 Do not modify Element Call route.
 Do not wire CallKit/push.
@@ -36,7 +36,7 @@ Do not activate production direct calls globally.
 Do not print or store secrets.
 
 Goal:
-Prove the new `production-start-outgoing` runner command is reachable, redacted, fail-closed by default, and gated by `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`, without accidentally touching visible UI or public production behavior.
+Verify that `production-start-outgoing` no longer blocks at `productionOwnerUnavailable` when the room-scoped production owner can be assembled from runtime providers. Any remaining block/failure should be a precise redacted production dependency, key wrapping, token, listener, signalling, or media setup reason.
 
 Context:
 - Two-client Matrix signalling proof passed.
@@ -45,38 +45,46 @@ Context:
 - Production token DTO/client/transport/config seams exist and remain inactive by default.
 - SDK and Swift wrapper expose async direct-call media key envelope APIs.
 - Production key wrapper/provider seams exist but are not publicly activated.
-- Production dependency assembly exists and remains disabled by default.
+- Production dependency assembly exists and remains disabled by default unless explicitly configured.
 - Room-scoped `production-activation-dry-run` exists through the DEBUG/integration diagnostic command path.
 - Room-scoped `production-trigger-dry-run` exists through the DEBUG/integration diagnostic command path.
 - Runtime fake-enabled `production-trigger-dry-run` proof passed for A and B in an active encrypted 1:1 room.
 - 2.13E added `nativeDirectCallProductionStartOutgoingAudioCall` and runner command `production-start-outgoing A|B`.
-- The start command requires the existing integration diagnostic command gates plus `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`.
-- The start command rechecks production trigger dry-run readiness immediately before any start attempt.
-- The start command uses a separate production owner factory seam and does not route through the diagnostic developer command router.
-- Default production owner construction remains nil/fail-closed, so runtime should block unless a future explicit production owner is assembled.
+- 2.13F runtime proof showed `productionStartDisabled` without `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`, then `productionOwnerUnavailable` with the start gate enabled before owner wiring.
+- 2.13G added lazy room-scoped production owner creation and retention in `RoomFlowCoordinator`.
+- Production owner construction remains separate from the diagnostic owner and uses production-shaped dependencies from AppCoordinator.
+- The start command starts the production listener before outgoing start only after DEBUG/integration command gates, the dedicated start gate, and activation readiness all pass.
+- If production dependencies cannot be assembled, the command should now block with `dependenciesUnavailable`, not `productionOwnerUnavailable`.
 - Production remains disabled by default.
 - `directOneToOneCallsEnabled` remains unused for native production activation.
 
 Suggested runtime checks:
-1. Validate the two-client runner.
+1. Validate the two-client runner:
+   `bash -n Tools/Scripts/run_native_direct_call_diagnostic_two_client.sh`
 2. Launch A/B with normal DEBUG/integration diagnostic gates but without `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED`.
 3. Open the same encrypted 1:1 room if needed.
 4. Run:
    `DRY_RUN=0 Tools/Scripts/run_native_direct_call_diagnostic_two_client.sh production-start-outgoing A`
-   `DRY_RUN=0 Tools/Scripts/run_native_direct_call_diagnostic_two_client.sh production-start-outgoing B`
 5. Expected without the dedicated start gate:
    - `outcome=blocked`
    - `reason=productionStartDisabled`
    - redacted activation fields only
-6. Relaunch A/B with `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1` and, if appropriate, the fake-enabled dry-run gate:
-   `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED=1`
+6. Relaunch A/B with:
+   - `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`
+   - `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED=1` if fake-enabled activation is still needed
 7. Run `production-trigger-dry-run A|B` first to confirm `wouldStart=true` if using fake-enabled activation inputs.
-8. Run `production-start-outgoing A|B` again.
-9. Expected with start gate and fake-enabled activation but no real production owner assembly:
-   - `outcome=blocked`
-   - likely `reason=productionOwnerUnavailable`
-   - redacted activation fields only
-10. Confirm no visible UI, Element Call route, CallKit, push, listener start, Matrix send, or media connect side effects are observed.
+8. Run:
+   `DRY_RUN=0 Tools/Scripts/run_native_direct_call_diagnostic_two_client.sh production-start-outgoing A`
+9. Expected after owner wiring:
+   - not `productionOwnerUnavailable` if runtime providers are available
+   - likely `dependenciesUnavailable`, `engineFailure`, or a precise redacted media/token/key/listener/signalling reason if production-shaped dependencies are still incomplete
+   - if it starts, immediately inspect A/B status for only intended direct-call side effects
+10. Check status A/B for:
+   - listenerStarted
+   - hasActiveSession
+   - lastSignalSendAttempted
+   - mediaConnectAttempted
+11. Confirm no visible UI, Element Call route, CallKit, push, or public production activation side effects are observed.
 
 Hard constraints:
 - No visible UI.
@@ -93,15 +101,16 @@ Hard constraints:
 - Do not run shutdown/reboot/sleep/logout/killall/osascript power-management commands.
 
 Validation:
-- `bash -n Tools/Scripts/run_native_direct_call_diagnostic_two_client.sh`
 - Runtime command outputs are redacted.
-- No app code changes unless a runner-only bug is found.
+- No app code changes unless a runner-only or production-owner wiring bug is found.
+- If code changes are required, rerun focused room-flow/direct-call tests, Release build, and the direct-call forbidden scan.
 - If docs are updated, run `git diff --check` and the docs secret scan.
 
 Expected output:
-1. A/B command output without the dedicated start gate.
-2. A/B command output with the dedicated start gate and fake-enabled activation, if run.
+1. Command output without the dedicated start gate.
+2. Command output with the dedicated start gate and fake-enabled activation, if run.
 3. Whether output is redacted.
-4. Whether any side effects occurred.
-5. Whether code changes were needed.
-6. Docs update if useful.
+4. Whether `productionOwnerUnavailable` is gone after owner wiring.
+5. Whether any listener, Matrix send, active session, token request, key wrapping, media connect, UI, Element Call, CallKit, or push side effects occurred.
+6. Whether code changes were needed.
+7. Docs update if useful.

@@ -1325,6 +1325,9 @@ extension AppCoordinator {
         } nativeDirectCallProductionActivationDryRunProviderFactory: { roomProxy in
             Self.makeNativeDirectCallProductionActivationDryRunProvider(roomProxy: roomProxy,
                                                                         homeserver: flowParameters.userSession.clientProxy.homeserver)
+        } nativeDirectCallProductionRoomFlowOwnerFactory: { roomProxy in
+            Self.makeNativeDirectCallProductionRoomFlowOwner(roomProxy: roomProxy,
+                                                             clientProxy: flowParameters.userSession.clientProxy)
         }
         #else
         return UserSessionFlowCoordinator(isNewLogin: isNewLogin,
@@ -1368,6 +1371,34 @@ extension AppCoordinator {
         return NativeDirectCallProductionActivationDryRunProvider(activationDryRunDiagnostics: decisionService,
                                                                   homeserverBaseURL: homeserverBaseURL,
                                                                   roomEligibility: roomEligibility)
+    }
+
+    @MainActor
+    static func makeNativeDirectCallProductionRoomFlowOwner(roomProxy: JoinedRoomProxyProtocol,
+                                                            clientProxy: ClientProxyProtocol) -> NativeDirectCallProductionRoomFlowOwnerFactoryResult {
+        guard let tokenEndpointBaseURL = URL(string: clientProxy.homeserver) else {
+            return .blocked(.tokenEndpointUnavailable)
+        }
+
+        let configuration = DirectCallProductionConfiguration(isEnabled: true,
+                                                              tokenEndpointBaseURL: tokenEndpointBaseURL)
+        let dependencyAssembly = NativeDirectCallProductionDependencyAssembly(configuration: configuration,
+                                                                              httpTransport: URLSessionDirectCallHTTPTransport(),
+                                                                              accessTokenProvider: clientProxy as? DirectCallMatrixAccessTokenProviding,
+                                                                              liveKitClient: LiveKitDirectCallClient(),
+                                                                              keyEnvelopeWrapperProvider: clientProxy as? DirectCallMediaKeyEnvelopeWrappingProviding,
+                                                                              ownUserID: clientProxy.userID,
+                                                                              senderDeviceID: clientProxy.deviceID)
+        let dependencies = dependencyAssembly.makeDependencies()
+        guard dependencies.hasEncryptionService, dependencies.hasMediaEngineFactory else {
+            return .blocked(.dependenciesUnavailable)
+        }
+
+        return .owner(NativeDirectCallRoomFlowOwner(roomProxy: roomProxy,
+                                                    triggerConfiguration: .init(isEnabled: true),
+                                                    compositionConfiguration: .init(isEnabled: true),
+                                                    mediaEngineFactory: dependencies.mediaEngineFactory,
+                                                    encryptionService: dependencies.encryptionService))
     }
 
     private func configureNativeDirectCallIntegrationDiagnosticHarnessIfNeeded() {

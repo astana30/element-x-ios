@@ -765,7 +765,7 @@ final class RoomFlowCoordinatorTests {
         productionOwner.outgoingResult = .success(directCallSession(direction: .outgoing, state: .outgoingRinging))
         let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: enabledProductionActivationDiagnostic())
         setupRoomFlowCoordinator(nativeDirectCallProductionActivationDryRunProviderFactory: { _ in provider },
-                                 nativeDirectCallProductionRoomFlowOwnerFactory: { _ in productionOwner })
+                                 nativeDirectCallProductionRoomFlowOwnerFactory: { _ in .owner(productionOwner) })
 
         try await process(route: .room(roomID: "1", via: []))
         let result = await roomFlowCoordinator.nativeDirectCallProductionStartOutgoingAudioCall(isProductionStartEnabled: false)
@@ -783,7 +783,7 @@ final class RoomFlowCoordinatorTests {
         let productionOwner = NativeDirectCallRoomFlowOwnerSpy()
         let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: .disabled(.appRolloutDisabled))
         setupRoomFlowCoordinator(nativeDirectCallProductionActivationDryRunProviderFactory: { _ in provider },
-                                 nativeDirectCallProductionRoomFlowOwnerFactory: { _ in productionOwner })
+                                 nativeDirectCallProductionRoomFlowOwnerFactory: { _ in .owner(productionOwner) })
 
         try await process(route: .room(roomID: "1", via: []))
         let result = await roomFlowCoordinator.nativeDirectCallProductionStartOutgoingAudioCall(isProductionStartEnabled: true)
@@ -817,12 +817,27 @@ final class RoomFlowCoordinatorTests {
     }
 
     @Test
+    func nativeDirectCallProductionStartBlocksWhenProductionDependenciesUnavailable() async throws {
+        let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: enabledProductionActivationDiagnostic())
+        setupRoomFlowCoordinator(nativeDirectCallProductionActivationDryRunProviderFactory: { _ in provider },
+                                 nativeDirectCallProductionRoomFlowOwnerFactory: { _ in .blocked(.dependenciesUnavailable) })
+
+        try await process(route: .room(roomID: "1", via: []))
+        let result = await roomFlowCoordinator.nativeDirectCallProductionStartOutgoingAudioCall(isProductionStartEnabled: true)
+
+        #expect(result.didStart == false)
+        #expect(result.outcome == .blocked)
+        #expect(result.reason == .dependenciesUnavailable)
+        #expect(provider.callCount == 1)
+    }
+
+    @Test
     func nativeDirectCallProductionStartBlocksWhenActiveSessionExists() async throws {
         let productionOwner = NativeDirectCallRoomFlowOwnerSpy()
         productionOwner.activeSession = directCallSession(direction: .outgoing, state: .outgoingRinging)
         let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: enabledProductionActivationDiagnostic())
         setupRoomFlowCoordinator(nativeDirectCallProductionActivationDryRunProviderFactory: { _ in provider },
-                                 nativeDirectCallProductionRoomFlowOwnerFactory: { _ in productionOwner })
+                                 nativeDirectCallProductionRoomFlowOwnerFactory: { _ in .owner(productionOwner) })
 
         try await process(route: .room(roomID: "1", via: []))
         let result = await roomFlowCoordinator.nativeDirectCallProductionStartOutgoingAudioCall(isProductionStartEnabled: true)
@@ -838,6 +853,7 @@ final class RoomFlowCoordinatorTests {
     func nativeDirectCallProductionStartUsesProductionOwnerWhenGatesPass() async throws {
         let diagnosticOwner = NativeDirectCallRoomFlowOwnerSpy()
         let productionOwner = NativeDirectCallRoomFlowOwnerSpy()
+        productionOwner.isListenerStarted = true
         productionOwner.outgoingResult = .success(directCallSession(direction: .outgoing, state: .outgoingRinging))
         let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: enabledProductionActivationDiagnostic())
         setupRoomFlowCoordinator { _ in
@@ -845,7 +861,7 @@ final class RoomFlowCoordinatorTests {
         } nativeDirectCallProductionActivationDryRunProviderFactory: { _ in
             provider
         } nativeDirectCallProductionRoomFlowOwnerFactory: { _ in
-            productionOwner
+            .owner(productionOwner)
         }
 
         try await process(route: .room(roomID: "1", via: []))
@@ -858,8 +874,26 @@ final class RoomFlowCoordinatorTests {
         #expect(result.sessionSummary?.direction == "outgoing")
         #expect(result.sessionSummary?.intent == "audio")
         #expect(productionOwner.outgoingCount == 1)
+        #expect(productionOwner.startCount == 0)
         #expect(diagnosticOwner.outgoingCount == 0)
         #expect(provider.callCount == 1)
+    }
+
+    @Test
+    func nativeDirectCallProductionStartStartsListenerBeforeOutgoing() async throws {
+        let productionOwner = NativeDirectCallRoomFlowOwnerSpy()
+        let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: enabledProductionActivationDiagnostic())
+        setupRoomFlowCoordinator(nativeDirectCallProductionActivationDryRunProviderFactory: { _ in provider },
+                                 nativeDirectCallProductionRoomFlowOwnerFactory: { _ in .owner(productionOwner) })
+
+        try await process(route: .room(roomID: "1", via: []))
+        let result = await roomFlowCoordinator.nativeDirectCallProductionStartOutgoingAudioCall(isProductionStartEnabled: true)
+
+        #expect(result.didStart == false)
+        #expect(result.outcome == .blocked)
+        #expect(result.reason == .productionOwnerDisabled)
+        #expect(productionOwner.startCount == 1)
+        #expect(productionOwner.outgoingCount == 0)
     }
 
     @Test
@@ -1621,8 +1655,8 @@ final class RoomFlowCoordinatorTests {
                                           nativeDirectCallProductionActivationDryRunProviderFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionActivationDryRunProviding = { _ in
                                               FailClosedNativeDirectCallProductionActivationDryRunProvider()
                                           },
-                                          nativeDirectCallProductionRoomFlowOwnerFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning? = { _ in
-                                              nil
+                                          nativeDirectCallProductionRoomFlowOwnerFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionRoomFlowOwnerFactoryResult = { _ in
+                                              .blocked(.productionOwnerUnavailable)
                                           }) {
         cancellables.removeAll()
         clientProxy = ClientProxyMock(.init(userID: "hi@bob",

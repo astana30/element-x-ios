@@ -55,7 +55,7 @@ class ChatsTabFlowCoordinator: FlowCoordinatorProtocol {
     private let nativeDirectCallDiagnosticCommandConfiguration: NativeDirectCallRoomDeveloperCommandConfiguration
     private let nativeDirectCallRoomFlowOwnerFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning
     private let nativeDirectCallProductionActivationDryRunProviderFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionActivationDryRunProviding
-    private let nativeDirectCallProductionRoomFlowOwnerFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning?
+    private let nativeDirectCallProductionRoomFlowOwnerFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionRoomFlowOwnerFactoryResult
     
     private let actionsSubject: PassthroughSubject<ChatsTabFlowCoordinatorAction, Never> = .init()
     var actionsPublisher: AnyPublisher<ChatsTabFlowCoordinatorAction, Never> {
@@ -73,8 +73,8 @@ class ChatsTabFlowCoordinator: FlowCoordinatorProtocol {
          nativeDirectCallProductionActivationDryRunProviderFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionActivationDryRunProviding = { _ in
              FailClosedNativeDirectCallProductionActivationDryRunProvider()
          },
-         nativeDirectCallProductionRoomFlowOwnerFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning? = { _ in
-             nil
+         nativeDirectCallProductionRoomFlowOwnerFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionRoomFlowOwnerFactoryResult = { _ in
+             .blocked(.productionOwnerUnavailable)
          }) {
         stateMachine = flowParameters.stateMachineFactory.makeChatsTabFlowStateMachine()
         self.navigationSplitCoordinator = navigationSplitCoordinator

@@ -91,8 +91,8 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
          nativeDirectCallProductionActivationDryRunProviderFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionActivationDryRunProviding = { _ in
              FailClosedNativeDirectCallProductionActivationDryRunProvider()
          },
-         nativeDirectCallProductionRoomFlowOwnerFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning? = { _ in
-             nil
+         nativeDirectCallProductionRoomFlowOwnerFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionRoomFlowOwnerFactoryResult = { _ in
+             .blocked(.productionOwnerUnavailable)
          }) {
         self.navigationRootCoordinator = navigationRootCoordinator
         self.appLockService = appLockService

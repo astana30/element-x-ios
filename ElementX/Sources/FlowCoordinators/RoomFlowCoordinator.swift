@@ -94,7 +94,7 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
     private let stateMachine: StateMachine<State, Event> = .init(state: .initial)
     private let nativeDirectCallRoomFlowOwnerFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning
     private let nativeDirectCallProductionActivationDryRunProviderFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionActivationDryRunProviding
-    private let nativeDirectCallProductionRoomFlowOwnerFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning?
+    private let nativeDirectCallProductionRoomFlowOwnerFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionRoomFlowOwnerFactoryResult
     private var nativeDirectCallProductionActivationDryRunProvider: NativeDirectCallProductionActivationDryRunProviding?
     private var nativeDirectCallProductionRoomFlowOwner: NativeDirectCallRoomFlowOwning?
     #if DEBUG
@@ -125,8 +125,8 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
          nativeDirectCallProductionActivationDryRunProviderFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionActivationDryRunProviding = { _ in
              FailClosedNativeDirectCallProductionActivationDryRunProvider()
          },
-         nativeDirectCallProductionRoomFlowOwnerFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning? = { _ in
-             nil
+         nativeDirectCallProductionRoomFlowOwnerFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionRoomFlowOwnerFactoryResult = { _ in
+             .blocked(.productionOwnerUnavailable)
          }) {
         self.roomID = roomID
         self.isChildFlow = isChildFlow
@@ -453,12 +453,25 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
             return .blocked(.activeSessionExists, triggerDiagnostic: triggerDiagnostic)
         }
 
-        guard let nativeDirectCallProductionRoomFlowOwner else {
-            return .blocked(.productionOwnerUnavailable, triggerDiagnostic: triggerDiagnostic)
+        let nativeDirectCallProductionRoomFlowOwner: NativeDirectCallRoomFlowOwning
+        switch makeNativeDirectCallProductionRoomFlowOwner() {
+        case .owner(let owner):
+            nativeDirectCallProductionRoomFlowOwner = owner
+        case .blocked(let reason):
+            return .blocked(reason, triggerDiagnostic: triggerDiagnostic)
         }
 
         if let activeSession = nativeDirectCallProductionRoomFlowOwner.activeSession, !activeSession.state.isTerminal {
             return .blocked(.activeSessionExists, triggerDiagnostic: triggerDiagnostic)
+        }
+
+        if !nativeDirectCallProductionRoomFlowOwner.isListenerStarted {
+            switch await nativeDirectCallProductionRoomFlowOwner.startListener() {
+            case .success:
+                break
+            case .failure(let error):
+                return .failed(error, triggerDiagnostic: triggerDiagnostic)
+            }
         }
 
         switch await nativeDirectCallProductionRoomFlowOwner.startOutgoingAudioCall() {
@@ -489,7 +502,7 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
         self.roomProxy = roomProxy
         nativeDirectCallRoomFlowOwner = nativeDirectCallRoomFlowOwnerFactory(roomProxy)
         nativeDirectCallProductionActivationDryRunProvider = nativeDirectCallProductionActivationDryRunProviderFactory(roomProxy)
-        nativeDirectCallProductionRoomFlowOwner = nativeDirectCallProductionRoomFlowOwnerFactory(roomProxy)
+        nativeDirectCallProductionRoomFlowOwner = nil
         
         // Subscribe to room info updates in order to detect rooms being left on other devices
         // and react accordingly by dismissing this flow coordinator.
@@ -1041,6 +1054,24 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
         nativeDirectCallRoomFlowOwner = nil
         nativeDirectCallProductionRoomFlowOwner = nil
         nativeDirectCallProductionActivationDryRunProvider = nil
+    }
+
+    private func makeNativeDirectCallProductionRoomFlowOwner() -> NativeDirectCallProductionRoomFlowOwnerFactoryResult {
+        if let nativeDirectCallProductionRoomFlowOwner {
+            return .owner(nativeDirectCallProductionRoomFlowOwner)
+        }
+
+        guard let roomProxy else {
+            return .blocked(.roomUnavailable)
+        }
+
+        switch nativeDirectCallProductionRoomFlowOwnerFactory(roomProxy) {
+        case .owner(let owner):
+            nativeDirectCallProductionRoomFlowOwner = owner
+            return .owner(owner)
+        case .blocked(let reason):
+            return .blocked(reason)
+        }
     }
 
     #if DEBUG
@@ -2064,6 +2095,11 @@ struct NativeDirectCallProductionStartOutgoingAudioCallResult: Equatable, Custom
     var debugDescription: String {
         description
     }
+}
+
+enum NativeDirectCallProductionRoomFlowOwnerFactoryResult {
+    case owner(NativeDirectCallRoomFlowOwning)
+    case blocked(NativeDirectCallProductionStartBlockedReason)
 }
 
 @MainActor
