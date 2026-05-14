@@ -395,3 +395,18 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Confirmed this was DEBUG/integration fake-enabled dry-run only and did not start a production call.
 - Confirmed no visible UI, Element Call route, CallKit, push, listener start, Matrix send, or media connect was intended by the dry-run.
 - Recommended next phase: inspect the first internal production start command shape before allowing any DEBUG/integration command to start native direct-call runtime work.
+
+## 2026-05-14 — 2.13E Internal Production Start Command Skeleton
+
+- Added a DEBUG/integration-only `nativeDirectCallProductionStartOutgoingAudioCall` signal and redacted result to `UITestsSignalling`.
+- Added `production-start-outgoing A|B` / `productionStartOutgoing A|B` to the two-client diagnostic runner.
+- Added the dedicated `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1` gate; the command remains unavailable unless the existing integration diagnostic command gates are also enabled.
+- Routed the command through AppCoordinator, UserSessionFlowCoordinator, ChatsTabFlowCoordinator, and the current RoomFlowCoordinator, terminating at the room-scoped production start seam.
+- Kept the production start lane separate from `NativeDirectCallRoomDeveloperCommandRouter` so diagnostic dependencies are not accidentally used for production-shaped starts.
+- Added a production owner factory seam that defaults nil/fail-closed and must be explicitly injected before any production-shaped owner can be used.
+- The command rechecks the current production trigger dry-run decision immediately before starting and blocks with redacted reasons when the start gate is missing, activation is disabled, the room is unavailable, a non-terminal native direct-call session already exists, or the production owner is unavailable.
+- Added a fake started path in tests that proves the command calls only the injected production owner and not the diagnostic owner.
+- Kept output redacted: outcome, blocked reason, activation readiness booleans, and non-identifying session summary fields only.
+- Confirmed no visible UI, Element Call route, RoomScreen call presentation, ElementCallService, CallKit, push, global production activation, Matrix content logging, credential logging, or key logging changed.
+- Ran `git diff --check`, SwiftFormat/SwiftLint on changed Swift files, runner syntax check, focused direct-call and room-flow unit tests, Release build, and the direct-call forbidden scan.
+- Recommended next phase: runtime proof for `production-start-outgoing` in fail-closed and controlled fake-enabled contexts, without adding visible UI or public production activation.

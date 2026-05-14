@@ -2,15 +2,15 @@
 
 ## Current Phase
 
-After 2.13C — runtime fake-enabled production trigger dry-run proof.
+After 2.13E — internal production start command skeleton.
 
 ## Latest App Code Checkpoint
 
-94b31aec8 `Add internal production direct-call trigger dry-run command`
+2.13E `Add internal production direct-call start command skeleton`
 
 ## Latest Code Checkpoint
 
-94b31aec8 `Add internal production direct-call trigger dry-run command`
+2.13E `Add internal production direct-call start command skeleton`
 
 ## Latest SDK Checkpoint
 
@@ -127,6 +127,18 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - No production call started.
   - No visible UI was activated.
   - No Element Call route, CallKit, push, listener start, Matrix send, or media connect was intended.
+- Internal production start command skeleton is complete:
+  - `UITestsSignalling` supports a DEBUG/integration-only `nativeDirectCallProductionStartOutgoingAudioCall` request and redacted result.
+  - The runner exposes `production-start-outgoing A|B` / `productionStartOutgoing A|B`.
+  - The command is additionally gated by `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`, on top of the existing DEBUG/integration diagnostic command gates.
+  - The command terminates at `RoomFlowCoordinator`, rechecks the current room-scoped production trigger dry-run decision, and only proceeds when activation is enabled.
+  - The command uses a separate production owner factory seam and does not route through the diagnostic developer command router.
+  - Default production owner construction remains nil/fail-closed, so the command blocks with a redacted reason unless a production-shaped owner is explicitly provided.
+  - The command blocks when the dedicated start gate is missing, activation is disabled, no active room exists, a native direct-call session is already active, or the production owner is unavailable.
+  - The fake started path in tests calls only an injected production owner spy and proves the diagnostic owner is not used.
+  - Output is limited to redacted fields: outcome, blocked reason, trigger dry-run readiness fields, and non-identifying session summary booleans/enums.
+  - No visible UI, Element Call route, `RoomScreenViewModel.displayCall`, `RoomScreenCoordinator.presentCallScreen`, `ElementCallService`, CallKit, push, global production feature activation, broad SDK raw API, credential logging, or key logging changed.
+  - Focused app unit tests, Release build, runner syntax check, and the direct-call forbidden scan pass after the command skeleton.
 - Production runtime SDK key wrapper provider seam is complete:
   - `DirectCallMediaKeyEnvelopeWrappingProviding` exposes only a direct-call envelope wrapper provider, not a raw SDK client, raw SDK room, raw timeline, or raw crypto object.
   - Concrete `ClientProxy` can create `MatrixSDKDirectCallMediaKeyEnvelopeWrapperAdapter` from `client.encryption()` through that narrow provider seam.
@@ -275,18 +287,19 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Production E2EE Matrix crypto key wrapping now has narrow provider, disabled assembly, activation gate, capability discovery, decision assembly, provider-backed rollout/capability inputs, room-scoped dry-run seams, and a consolidated readiness test pack, but the assembly is not yet threaded into the real session/room-flow runtime for activation.
 - The production activation decision can consume an app rollout provider and an injectable authenticated `/capabilities` fetch provider, but these providers are not yet wired into real session/room-flow runtime construction by default.
 - The current production dependency readiness path is still coupled to explicit `DirectCallProductionConfiguration.tokenEndpointBaseURL`, so capability-sourced endpoints need a two-stage readiness/assembly path before dry-run can report dependencies ready from server capability alone.
-- The room-flow dry-run seam and production trigger dry-run command can now be queried by the DEBUG/integration runner and have both fail-closed and fake-enabled runtime proofs for A/B; there is still no visible UI or production runtime activation.
-- The trigger command is intentionally a dry-run only: it can report `wouldStart=true`, but it does not start a native direct call.
-- No production runtime path yet passes activation-approved assembled dependencies into `NativeDirectCallRoomFlowOwner`.
+- The room-flow dry-run seam and production trigger dry-run command can now be queried by the DEBUG/integration runner and have both fail-closed and fake-enabled runtime proofs for A/B; there is still no visible UI or public production runtime activation.
+- The production start command skeleton exists, but it is DEBUG/integration-only, behind `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`, and defaults to blocked because no real production owner is assembled by default.
+- No runtime proof has yet shown `production-start-outgoing` blocking or starting in a two-client app session.
+- No production runtime path yet passes activation-approved real backend/token/key-wrapper dependencies into `NativeDirectCallRoomFlowOwner`.
 - The default app path remains fail-closed unless future production configuration and dependency assembly explicitly enable native direct-call dependencies.
 - The production trust policy for peer devices is not finalized; the safest initial policy should fail closed on unknown or unverifiable device trust.
 - No production activation, visible UI, CallKit, or push integration exists yet.
 
 ## Next Recommended Phase
 
-`2.13D — internal production start command inspection`
+`2.13F — internal production start command runtime proof`
 
-Goal: inspect the first safe DEBUG/integration-only command that could start the production-shaped native direct-call path after `production-trigger-dry-run` reports `wouldStart=true`, while still keeping visible UI, Element Call route, CallKit, push, and production activation untouched.
+Goal: run the new DEBUG/integration-only `production-start-outgoing` command in controlled fail-closed and fake-enabled contexts, verify redacted output, and prove that no visible UI, Element Call route, CallKit, push, or public production activation is touched.
 
 ## Do-Not-Touch Constraints
 

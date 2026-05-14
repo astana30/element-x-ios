@@ -55,6 +55,7 @@ class ChatsTabFlowCoordinator: FlowCoordinatorProtocol {
     private let nativeDirectCallDiagnosticCommandConfiguration: NativeDirectCallRoomDeveloperCommandConfiguration
     private let nativeDirectCallRoomFlowOwnerFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning
     private let nativeDirectCallProductionActivationDryRunProviderFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionActivationDryRunProviding
+    private let nativeDirectCallProductionRoomFlowOwnerFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning?
     
     private let actionsSubject: PassthroughSubject<ChatsTabFlowCoordinatorAction, Never> = .init()
     var actionsPublisher: AnyPublisher<ChatsTabFlowCoordinatorAction, Never> {
@@ -71,6 +72,9 @@ class ChatsTabFlowCoordinator: FlowCoordinatorProtocol {
          },
          nativeDirectCallProductionActivationDryRunProviderFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionActivationDryRunProviding = { _ in
              FailClosedNativeDirectCallProductionActivationDryRunProvider()
+         },
+         nativeDirectCallProductionRoomFlowOwnerFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning? = { _ in
+             nil
          }) {
         stateMachine = flowParameters.stateMachineFactory.makeChatsTabFlowStateMachine()
         self.navigationSplitCoordinator = navigationSplitCoordinator
@@ -79,6 +83,7 @@ class ChatsTabFlowCoordinator: FlowCoordinatorProtocol {
         self.nativeDirectCallDiagnosticCommandConfiguration = nativeDirectCallDiagnosticCommandConfiguration
         self.nativeDirectCallRoomFlowOwnerFactory = nativeDirectCallRoomFlowOwnerFactory
         self.nativeDirectCallProductionActivationDryRunProviderFactory = nativeDirectCallProductionActivationDryRunProviderFactory
+        self.nativeDirectCallProductionRoomFlowOwnerFactory = nativeDirectCallProductionRoomFlowOwnerFactory
         
         sidebarNavigationStackCoordinator = NavigationStackCoordinator(navigationSplitCoordinator: navigationSplitCoordinator)
         navigationSplitCoordinator.setSidebarCoordinator(sidebarNavigationStackCoordinator)
@@ -140,6 +145,20 @@ class ChatsTabFlowCoordinator: FlowCoordinatorProtocol {
         }
 
         return await roomFlowCoordinator.nativeDirectCallProductionTriggerDryRunDiagnostic()
+    }
+
+    func nativeDirectCallProductionStartOutgoingAudioCall(isProductionStartEnabled: Bool) async -> NativeDirectCallProductionStartOutgoingAudioCallResult {
+        guard nativeDirectCallDiagnosticRuntimeGate() else {
+            return .blocked(NativeDirectCallProductionStartBlockedReason.diagnosticsUnavailable,
+                            triggerDiagnostic: .blocked(.roomUnavailable))
+        }
+
+        guard let roomFlowCoordinator else {
+            return .blocked(NativeDirectCallProductionStartBlockedReason.roomUnavailable,
+                            triggerDiagnostic: .blocked(.roomUnavailable))
+        }
+
+        return await roomFlowCoordinator.nativeDirectCallProductionStartOutgoingAudioCall(isProductionStartEnabled: isProductionStartEnabled)
     }
     #endif
 
@@ -585,7 +604,8 @@ class ChatsTabFlowCoordinator: FlowCoordinatorProtocol {
                                               navigationStackCoordinator: navigationStackCoordinator,
                                               flowParameters: flowParameters,
                                               nativeDirectCallRoomFlowOwnerFactory: nativeDirectCallRoomFlowOwnerFactory,
-                                              nativeDirectCallProductionActivationDryRunProviderFactory: nativeDirectCallProductionActivationDryRunProviderFactory)
+                                              nativeDirectCallProductionActivationDryRunProviderFactory: nativeDirectCallProductionActivationDryRunProviderFactory,
+                                              nativeDirectCallProductionRoomFlowOwnerFactory: nativeDirectCallProductionRoomFlowOwnerFactory)
         #if DEBUG
         coordinator.nativeDirectCallDiagnosticCommandConfiguration = nativeDirectCallDiagnosticCommandConfiguration
         #endif

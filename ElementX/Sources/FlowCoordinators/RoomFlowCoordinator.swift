@@ -94,7 +94,9 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
     private let stateMachine: StateMachine<State, Event> = .init(state: .initial)
     private let nativeDirectCallRoomFlowOwnerFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning
     private let nativeDirectCallProductionActivationDryRunProviderFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionActivationDryRunProviding
+    private let nativeDirectCallProductionRoomFlowOwnerFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning?
     private var nativeDirectCallProductionActivationDryRunProvider: NativeDirectCallProductionActivationDryRunProviding?
+    private var nativeDirectCallProductionRoomFlowOwner: NativeDirectCallRoomFlowOwning?
     #if DEBUG
     private var nativeDirectCallDiagnosticCommandRouter: NativeDirectCallRoomDeveloperCommanding?
     var nativeDirectCallDiagnosticCommandConfiguration: NativeDirectCallRoomDeveloperCommandConfiguration = .init() {
@@ -122,6 +124,9 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
          },
          nativeDirectCallProductionActivationDryRunProviderFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionActivationDryRunProviding = { _ in
              FailClosedNativeDirectCallProductionActivationDryRunProvider()
+         },
+         nativeDirectCallProductionRoomFlowOwnerFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning? = { _ in
+             nil
          }) {
         self.roomID = roomID
         self.isChildFlow = isChildFlow
@@ -129,6 +134,7 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
         self.flowParameters = flowParameters
         self.nativeDirectCallRoomFlowOwnerFactory = nativeDirectCallRoomFlowOwnerFactory
         self.nativeDirectCallProductionActivationDryRunProviderFactory = nativeDirectCallProductionActivationDryRunProviderFactory
+        self.nativeDirectCallProductionRoomFlowOwnerFactory = nativeDirectCallProductionRoomFlowOwnerFactory
         
         setupStateMachine()
     }
@@ -431,6 +437,37 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
         let activationDiagnostic = await nativeDirectCallProductionActivationDryRunDiagnostic()
         return .init(activationDiagnostic: activationDiagnostic)
     }
+
+    func nativeDirectCallProductionStartOutgoingAudioCall(isProductionStartEnabled: Bool) async -> NativeDirectCallProductionStartOutgoingAudioCallResult {
+        let triggerDiagnostic = await nativeDirectCallProductionTriggerDryRunDiagnostic()
+
+        guard isProductionStartEnabled else {
+            return .blocked(.productionStartDisabled, triggerDiagnostic: triggerDiagnostic)
+        }
+
+        guard triggerDiagnostic.isEnabled else {
+            return .blocked(triggerDiagnostic.blockedReason, triggerDiagnostic: triggerDiagnostic)
+        }
+
+        if let activeSession = nativeDirectCallRoomFlowOwner?.activeSession, !activeSession.state.isTerminal {
+            return .blocked(.activeSessionExists, triggerDiagnostic: triggerDiagnostic)
+        }
+
+        guard let nativeDirectCallProductionRoomFlowOwner else {
+            return .blocked(.productionOwnerUnavailable, triggerDiagnostic: triggerDiagnostic)
+        }
+
+        if let activeSession = nativeDirectCallProductionRoomFlowOwner.activeSession, !activeSession.state.isTerminal {
+            return .blocked(.activeSessionExists, triggerDiagnostic: triggerDiagnostic)
+        }
+
+        switch await nativeDirectCallProductionRoomFlowOwner.startOutgoingAudioCall() {
+        case .success(let session):
+            return .started(session, triggerDiagnostic: triggerDiagnostic)
+        case .failure(let error):
+            return .failed(error, triggerDiagnostic: triggerDiagnostic)
+        }
+    }
     
     // MARK: - Private
     
@@ -452,6 +489,7 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
         self.roomProxy = roomProxy
         nativeDirectCallRoomFlowOwner = nativeDirectCallRoomFlowOwnerFactory(roomProxy)
         nativeDirectCallProductionActivationDryRunProvider = nativeDirectCallProductionActivationDryRunProviderFactory(roomProxy)
+        nativeDirectCallProductionRoomFlowOwner = nativeDirectCallProductionRoomFlowOwnerFactory(roomProxy)
         
         // Subscribe to room info updates in order to detect rooms being left on other devices
         // and react accordingly by dismissing this flow coordinator.
@@ -998,12 +1036,10 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
     }
 
     private func resetNativeDirectCallRoomFlowOwner() {
-        guard let nativeDirectCallRoomFlowOwner else {
-            return
-        }
-
-        nativeDirectCallRoomFlowOwner.beginReset()
-        self.nativeDirectCallRoomFlowOwner = nil
+        nativeDirectCallRoomFlowOwner?.beginReset()
+        nativeDirectCallProductionRoomFlowOwner?.beginReset()
+        nativeDirectCallRoomFlowOwner = nil
+        nativeDirectCallProductionRoomFlowOwner = nil
         nativeDirectCallProductionActivationDryRunProvider = nil
     }
 
@@ -1596,7 +1632,8 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
                                               isChildFlow: true,
                                               navigationStackCoordinator: navigationStackCoordinator,
                                               flowParameters: flowParameters,
-                                              nativeDirectCallProductionActivationDryRunProviderFactory: nativeDirectCallProductionActivationDryRunProviderFactory)
+                                              nativeDirectCallProductionActivationDryRunProviderFactory: nativeDirectCallProductionActivationDryRunProviderFactory,
+                                              nativeDirectCallProductionRoomFlowOwnerFactory: nativeDirectCallProductionRoomFlowOwnerFactory)
         coordinator.actions.sink { [weak self] action in
             guard let self else { return }
             
@@ -1846,6 +1883,182 @@ struct NativeDirectCallProductionTriggerDryRunDiagnostic: Equatable, CustomStrin
             "isEndpointAccepted: \(isEndpointAccepted)"
         ]
         return "NativeDirectCallProductionTriggerDryRunDiagnostic(\(fields.joined(separator: ", ")))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum NativeDirectCallProductionStartOutcome: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case started
+    case blocked
+    case engineFailure
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum NativeDirectCallProductionStartBlockedReason: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case appRolloutDisabled
+    case roomUnavailable
+    case serverCapabilityUnavailable
+    case serverCapabilityDisabled
+    case unsupportedCapabilityVersion
+    case unsupportedIntent
+    case unsupportedMediaTransport
+    case e2eeNotRequiredByCapability
+    case unsupportedKeyEnvelope
+    case tokenEndpointUnavailable
+    case tokenEndpointNotSameOrigin
+    case dependenciesUnavailable
+    case roomNotEncrypted
+    case roomNotDirect
+    case roomNotOneToOne
+    case peerUnavailable
+    case diagnosticsUnavailable
+    case productionStartDisabled
+    case productionOwnerUnavailable
+    case productionOwnerDisabled
+    case controllerUnavailable
+    case activeSessionExists
+    case resetting
+    case compositionUnavailable
+    case noIncomingCall
+    case noActiveCall
+    case engineFailure
+    case unknown
+
+    init(_ activationReason: DirectCallProductionActivationDisabledReason?) {
+        if let activationReason {
+            self = .init(rawValue: activationReason.rawValue) ?? .unknown
+        } else {
+            self = .unknown
+        }
+    }
+
+    init(_ ownerError: NativeDirectCallRoomFlowOwnerError) {
+        switch ownerError {
+        case .disabled:
+            self = .productionOwnerDisabled
+        case .missingRoomControllerProvider:
+            self = .controllerUnavailable
+        case .resetting:
+            self = .resetting
+        case .trigger(let triggerError):
+            self.init(triggerError)
+        }
+    }
+
+    init(_ triggerError: NativeDirectCallDeveloperRoomTriggerError) {
+        switch triggerError {
+        case .disabled:
+            self = .productionOwnerDisabled
+        case .control(let controlError):
+            self.init(controlError)
+        }
+    }
+
+    init(_ controlError: NativeDirectCallRoomControlError) {
+        switch controlError {
+        case .composition:
+            self = .compositionUnavailable
+        case .noIncomingCall:
+            self = .noIncomingCall
+        case .noActiveCall:
+            self = .noActiveCall
+        case .engine:
+            self = .engineFailure
+        }
+    }
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct NativeDirectCallProductionStartedSessionSummary: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let hasCallID: Bool
+    let direction: String
+    let intent: String
+    let state: String
+    let encryptionState: String
+
+    init(session: DirectCallSession) {
+        hasCallID = !session.callID.isEmpty
+        direction = String(describing: session.direction)
+        intent = session.intent.rawValue
+        state = String(describing: session.state)
+        encryptionState = String(describing: session.encryptionState)
+    }
+
+    var description: String {
+        "NativeDirectCallProductionStartedSessionSummary(hasCallID: \(hasCallID), direction: \(direction), intent: \(intent), state: \(state), encryptionState: \(encryptionState))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct NativeDirectCallProductionStartOutgoingAudioCallResult: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let outcome: NativeDirectCallProductionStartOutcome
+    let reason: NativeDirectCallProductionStartBlockedReason?
+    let triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic
+    let sessionSummary: NativeDirectCallProductionStartedSessionSummary?
+
+    var didStart: Bool {
+        outcome == .started
+    }
+
+    static func blocked(_ reason: NativeDirectCallProductionStartBlockedReason,
+                        triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic) -> Self {
+        .init(outcome: .blocked,
+              reason: reason,
+              triggerDiagnostic: triggerDiagnostic,
+              sessionSummary: nil)
+    }
+
+    static func blocked(_ activationReason: DirectCallProductionActivationDisabledReason?,
+                        triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic) -> Self {
+        .blocked(.init(activationReason), triggerDiagnostic: triggerDiagnostic)
+    }
+
+    static func started(_ session: DirectCallSession,
+                        triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic) -> Self {
+        .init(outcome: .started,
+              reason: nil,
+              triggerDiagnostic: triggerDiagnostic,
+              sessionSummary: .init(session: session))
+    }
+
+    static func failed(_ error: NativeDirectCallRoomFlowOwnerError,
+                       triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic) -> Self {
+        let reason = NativeDirectCallProductionStartBlockedReason(error)
+        let outcome: NativeDirectCallProductionStartOutcome = reason == .engineFailure ? .engineFailure : .blocked
+        return .init(outcome: outcome,
+                     reason: reason,
+                     triggerDiagnostic: triggerDiagnostic,
+                     sessionSummary: nil)
+    }
+
+    var description: String {
+        let fields = [
+            "outcome: \(outcome)",
+            "reason: \(reason?.description ?? "none")",
+            "triggerDiagnostic: \(triggerDiagnostic)",
+            "sessionSummary: \(sessionSummary?.description ?? "none")"
+        ]
+        return "NativeDirectCallProductionStartOutgoingAudioCallResult(\(fields.joined(separator: ", ")))"
     }
 
     var debugDescription: String {

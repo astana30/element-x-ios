@@ -49,6 +49,7 @@ Usage:
   DRY_RUN=0 $SCRIPT_NAME status A|B
   DRY_RUN=0 $SCRIPT_NAME production-activation-dry-run A|B
   DRY_RUN=0 $SCRIPT_NAME production-trigger-dry-run A|B
+  DRY_RUN=0 $SCRIPT_NAME production-start-outgoing A|B
   DRY_RUN=0 $SCRIPT_NAME wait-status A|B incomingRinging
   DRY_RUN=0 $SCRIPT_NAME accept-when-ringing A|B
 
@@ -85,6 +86,8 @@ Optional environment:
   NATIVE_DIRECT_CALL_LIVEKIT_ROOM Optional diagnostic LiveKit room name; never printed.
   NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED
                                   Optional. Set to 1 to make production-activation-dry-run use fake DEBUG-only enabled inputs.
+  NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED
+                                  Optional. Set to 1 to allow the DEBUG-only production-start-outgoing command.
 
 Example planned signalling sequence:
   $SCRIPT_NAME init both
@@ -177,6 +180,11 @@ log_livekit_environment_summary() {
         log "Production activation dry-run fake inputs: enabled"
     else
         log "Production activation dry-run fake inputs: disabled"
+    fi
+    if [[ "${NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED:-}" == "1" ]]; then
+        log "Production start command: enabled"
+    else
+        log "Production start command: disabled"
     fi
 }
 
@@ -435,6 +443,39 @@ with open(file_path, "w", encoding="utf-8") as handle:
 PY
 }
 
+write_production_start_outgoing_request() {
+    local client="$1"
+    local correlation_id="$2"
+    local file
+    file="$(signal_file "$client")"
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        log "DRY_RUN: query-production-start-outgoing channel=$client correlationID=$correlation_id"
+        return
+    fi
+
+    python3 - "$file" "$correlation_id" <<'PY'
+import json
+import sys
+
+file_path, correlation_id = sys.argv[1:3]
+message = {
+    "mode": {
+        "tests": {}
+    },
+    "signal": {
+        "nativeDirectCallProductionStartOutgoingAudioCall": {
+            "_0": {
+                "correlationID": correlation_id,
+            }
+        }
+    }
+}
+with open(file_path, "w", encoding="utf-8") as handle:
+    json.dump(message, handle, sort_keys=True, separators=(",", ":"))
+PY
+}
+
 extract_result() {
     local client="$1"
     local expected_signal="$2"
@@ -534,7 +575,7 @@ if expected_signal == "nativeDirectCallProductionActivationDryRunResult":
     print(
         "enabled={enabled} reason={reason} capabilityPresent={capability} dependenciesReady={dependencies} roomEligible={room} endpointAccepted={endpoint}".format(
             enabled=str(diagnostic.get("enabled", "unknown")).lower(),
-            reason=diagnostic.get("reason", "none"),
+            reason=diagnostic.get("reason") or "none",
             capability=str(diagnostic.get("capabilityPresent", "unknown")).lower(),
             dependencies=str(diagnostic.get("dependenciesReady", "unknown")).lower(),
             room=str(diagnostic.get("roomEligible", "unknown")).lower(),
@@ -549,11 +590,38 @@ if expected_signal == "nativeDirectCallProductionTriggerDryRunResult":
         "wouldStart={would_start} enabled={enabled} reason={reason} capabilityPresent={capability} dependenciesReady={dependencies} roomEligible={room} endpointAccepted={endpoint}".format(
             would_start=str(diagnostic.get("wouldStart", "unknown")).lower(),
             enabled=str(diagnostic.get("enabled", "unknown")).lower(),
-            reason=diagnostic.get("reason", "none"),
+            reason=diagnostic.get("reason") or "none",
             capability=str(diagnostic.get("capabilityPresent", "unknown")).lower(),
             dependencies=str(diagnostic.get("dependenciesReady", "unknown")).lower(),
             room=str(diagnostic.get("roomEligible", "unknown")).lower(),
             endpoint=str(diagnostic.get("endpointAccepted", "unknown")).lower(),
+        )
+    )
+    sys.exit(0)
+
+if expected_signal == "nativeDirectCallProductionStartOutgoingAudioCallResult":
+    diagnostic = body.get("triggerDiagnostic", {})
+    session = body.get("sessionSummary") or {}
+    session_fields = ""
+    if session:
+        session_fields = " sessionHasCallID={has_call_id} sessionDirection={direction} sessionIntent={intent} sessionState={state} sessionEncryptionState={encryption_state}".format(
+            has_call_id=str(session.get("hasCallID", "unknown")).lower(),
+            direction=session.get("direction", "unknown"),
+            intent=session.get("intent", "unknown"),
+            state=session.get("state", "unknown"),
+            encryption_state=session.get("encryptionState", "unknown"),
+        )
+    print(
+        "outcome={outcome} reason={reason} wouldStart={would_start} enabled={enabled} capabilityPresent={capability} dependenciesReady={dependencies} roomEligible={room} endpointAccepted={endpoint}{session_fields}".format(
+            outcome=body.get("outcome", "unknown"),
+            reason=body.get("reason") or "none",
+            would_start=str(diagnostic.get("wouldStart", "unknown")).lower(),
+            enabled=str(diagnostic.get("enabled", "unknown")).lower(),
+            capability=str(diagnostic.get("capabilityPresent", "unknown")).lower(),
+            dependencies=str(diagnostic.get("dependenciesReady", "unknown")).lower(),
+            room=str(diagnostic.get("roomEligible", "unknown")).lower(),
+            endpoint=str(diagnostic.get("endpointAccepted", "unknown")).lower(),
+            session_fields=session_fields,
         )
     )
     sys.exit(0)
@@ -775,6 +843,7 @@ launch_client_with_environment() {
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_LIVEKIT_TOKEN_B="${NATIVE_DIRECT_CALL_LIVEKIT_TOKEN_B:-}" \
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_LIVEKIT_ROOM="${NATIVE_DIRECT_CALL_LIVEKIT_ROOM:-}" \
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED="${NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED:-}" \
+        SIMCTL_CHILD_NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED="${NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED:-}" \
         SIMCTL_CHILD_UI_TESTS_SIGNALLING_CHANNEL="$channel" \
         SIMCTL_CHILD_INTEGRATION_TESTS_HOST="$INTEGRATION_TESTS_HOST" \
         SIMCTL_CHILD_INTEGRATION_TESTS_USERNAME="$username" \
@@ -864,6 +933,21 @@ query_production_trigger_dry_run() {
     local result
     result="$(wait_for_result "$client" nativeDirectCallProductionTriggerDryRunResult "$id")"
     log "channel=$client command=productionTriggerDryRun correlationID=$id $result"
+}
+
+query_production_start_outgoing() {
+    local client="$1"
+    local id
+    id="$(correlation_id "$client" productionStartOutgoing)"
+    write_production_start_outgoing_request "$client" "$id"
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        return
+    fi
+
+    local result
+    result="$(wait_for_result "$client" nativeDirectCallProductionStartOutgoingAudioCallResult "$id")"
+    log "channel=$client command=productionStartOutgoing correlationID=$id $result"
 }
 
 wait_for_status() {
@@ -1011,6 +1095,12 @@ main() {
             require_common_environment
             [[ $# -eq 2 ]] || fail "Usage: $SCRIPT_NAME production-trigger-dry-run A|B"
             query_production_trigger_dry_run "$2"
+            ;;
+        production-start-outgoing|productionStartOutgoing)
+            require_host_tools
+            require_common_environment
+            [[ $# -eq 2 ]] || fail "Usage: $SCRIPT_NAME production-start-outgoing A|B"
+            query_production_start_outgoing "$2"
             ;;
         wait-status)
             require_host_tools

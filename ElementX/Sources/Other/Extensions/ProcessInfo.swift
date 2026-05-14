@@ -134,6 +134,14 @@ extension ProcessInfo {
         #endif
     }
 
+    static var isNativeDirectCallProductionStartEnabled: Bool {
+        #if DEBUG
+        isNativeDirectCallProductionStartEnabled(environment: processInfo.environment)
+        #else
+        false
+        #endif
+    }
+
     static var isXcodePreview: Bool {
         #if DEBUG
         processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
@@ -170,6 +178,11 @@ extension ProcessInfo {
     static func isNativeDirectCallProductionDryRunFakeEnabled(environment: [String: String]) -> Bool {
         isNativeDirectCallDiagnosticIntegrationCommandsEnabled(environment: environment) &&
             environment["NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED"] == "1"
+    }
+
+    static func isNativeDirectCallProductionStartEnabled(environment: [String: String]) -> Bool {
+        isNativeDirectCallDiagnosticIntegrationCommandsEnabled(environment: environment) &&
+            environment["NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED"] == "1"
     }
 }
 #endif
