@@ -373,3 +373,25 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Confirmed this was DEBUG/integration fake-enabled dry-run only and did not start a production call.
 - Confirmed no visible UI, Element Call route, CallKit, push, listener start, Matrix send, or media connect was triggered.
 - Recommended next phase: inspect the first safe internal iOS native direct-call trigger model without activating production calls or adding visible UI.
+
+## 2026-05-14 — 2.13B Internal Production Trigger Dry-Run Command
+
+- Added a DEBUG/integration-only `nativeDirectCallProductionTriggerDryRun` signal and redacted result to `UITestsSignalling`.
+- Routed the trigger dry-run command through AppCoordinator, UserSessionFlowCoordinator, ChatsTabFlowCoordinator, and the current RoomFlowCoordinator room-scoped activation dry-run seam.
+- Added `production-trigger-dry-run A|B` / `productionTriggerDryRun A|B` to the two-client diagnostic runner.
+- Kept the command read-only: it checks the current production activation dry-run decision and returns `wouldStart=true` only when activation is already enabled.
+- Limited output to redacted fields: `wouldStart`, enabled state, disabled reason, capability presence, dependency readiness, room eligibility, and endpoint acceptance.
+- Confirmed the command does not prepare controllers, start listeners, start outgoing calls, accept calls, request LiveKit tokens, wrap keys, construct media engines, or send Matrix events.
+- Confirmed no visible UI, Element Call route, CallKit, push, diagnostic env influence on production decisions, raw Matrix payloads, credentials, or key material were added.
+- Ran `git diff --check`, SwiftFormat/SwiftLint on changed Swift files, runner syntax/dry-run checks, focused direct-call and room-flow unit tests, Release build, and the direct-call forbidden scan.
+- Committed app changes as `94b31aec8 Add internal production direct-call trigger dry-run command`.
+
+## 2026-05-14 — 2.13C Production Trigger Dry-Run Runtime Proof
+
+- Ran the DEBUG/integration diagnostic harness with the fake-enabled production dry-run gate.
+- Confirmed A and B app diagnostic signalling were ready with an active encrypted 1:1 room open.
+- `production-trigger-dry-run A` returned `wouldStart=true`, `enabled=true`, `reason=none`, `capabilityPresent=true`, `dependenciesReady=true`, `roomEligible=true`, and `endpointAccepted=true`.
+- `production-trigger-dry-run B` returned the same redacted enabled fields.
+- Confirmed this was DEBUG/integration fake-enabled dry-run only and did not start a production call.
+- Confirmed no visible UI, Element Call route, CallKit, push, listener start, Matrix send, or media connect was intended by the dry-run.
+- Recommended next phase: inspect the first internal production start command shape before allowing any DEBUG/integration command to start native direct-call runtime work.

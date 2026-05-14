@@ -2,15 +2,15 @@
 
 ## Current Phase
 
-After 2.12E — runtime fake-enabled production activation dry-run proof.
+After 2.13C — runtime fake-enabled production trigger dry-run proof.
 
 ## Latest App Code Checkpoint
 
-This commit: `Add fake-enabled production dry-run runtime harness`
+94b31aec8 `Add internal production direct-call trigger dry-run command`
 
 ## Latest Code Checkpoint
 
-This commit: `Add fake-enabled production dry-run runtime harness`
+94b31aec8 `Add internal production direct-call trigger dry-run command`
 
 ## Latest SDK Checkpoint
 
@@ -111,6 +111,22 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - No production call started.
   - No visible UI was activated.
   - No Element Call route, CallKit, push, listener start, Matrix send, or media connect was triggered.
+- Internal production trigger dry-run command is complete:
+  - `UITestsSignalling` supports a DEBUG/integration-only `nativeDirectCallProductionTriggerDryRun` request and redacted result.
+  - The command routes through AppCoordinator, UserSessionFlowCoordinator, ChatsTabFlowCoordinator, and the active RoomFlowCoordinator.
+  - The runner exposes `production-trigger-dry-run A|B` / `productionTriggerDryRun A|B`.
+  - The trigger dry-run reads the current room-scoped production activation dry-run decision and returns `wouldStart=true` only when activation is already enabled.
+  - Output is limited to redacted fields: `wouldStart`, enabled state, disabled reason, capability presence, dependency readiness, room eligibility, and endpoint acceptance.
+  - The command does not prepare controllers, start listeners, start outgoing calls, accept calls, request LiveKit tokens, wrap keys, construct media engines, or send Matrix events.
+  - Focused app unit tests, Release build, runner syntax/dry-run checks, and forbidden scan pass after the command exposure.
+- Runtime fake-enabled production trigger dry-run proof is recorded:
+  - A and B both reached app diagnostic signalling readiness with an active encrypted 1:1 room open.
+  - `production-trigger-dry-run A` returned `wouldStart=true`, `enabled=true`, `reason=none`, `capabilityPresent=true`, `dependenciesReady=true`, `roomEligible=true`, and `endpointAccepted=true`.
+  - `production-trigger-dry-run B` returned the same redacted enabled fields.
+  - This was DEBUG/integration fake-enabled dry-run only.
+  - No production call started.
+  - No visible UI was activated.
+  - No Element Call route, CallKit, push, listener start, Matrix send, or media connect was intended.
 - Production runtime SDK key wrapper provider seam is complete:
   - `DirectCallMediaKeyEnvelopeWrappingProviding` exposes only a direct-call envelope wrapper provider, not a raw SDK client, raw SDK room, raw timeline, or raw crypto object.
   - Concrete `ClientProxy` can create `MatrixSDKDirectCallMediaKeyEnvelopeWrapperAdapter` from `client.encryption()` through that narrow provider seam.
@@ -259,7 +275,8 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Production E2EE Matrix crypto key wrapping now has narrow provider, disabled assembly, activation gate, capability discovery, decision assembly, provider-backed rollout/capability inputs, room-scoped dry-run seams, and a consolidated readiness test pack, but the assembly is not yet threaded into the real session/room-flow runtime for activation.
 - The production activation decision can consume an app rollout provider and an injectable authenticated `/capabilities` fetch provider, but these providers are not yet wired into real session/room-flow runtime construction by default.
 - The current production dependency readiness path is still coupled to explicit `DirectCallProductionConfiguration.tokenEndpointBaseURL`, so capability-sourced endpoints need a two-stage readiness/assembly path before dry-run can report dependencies ready from server capability alone.
-- The room-flow dry-run seam can now be queried by the DEBUG/integration runner command and has both fail-closed and fake-enabled runtime proofs for A/B; there is still no visible UI or production runtime activation.
+- The room-flow dry-run seam and production trigger dry-run command can now be queried by the DEBUG/integration runner and have both fail-closed and fake-enabled runtime proofs for A/B; there is still no visible UI or production runtime activation.
+- The trigger command is intentionally a dry-run only: it can report `wouldStart=true`, but it does not start a native direct call.
 - No production runtime path yet passes activation-approved assembled dependencies into `NativeDirectCallRoomFlowOwner`.
 - The default app path remains fail-closed unless future production configuration and dependency assembly explicitly enable native direct-call dependencies.
 - The production trust policy for peer devices is not finalized; the safest initial policy should fail closed on unknown or unverifiable device trust.
@@ -267,9 +284,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.13A — internal iOS native direct-call trigger design inspection`
+`2.13D — internal production start command inspection`
 
-Goal: design the first safe internal iOS trigger path for native direct calls, keeping it behind internal/diagnostic boundaries and without adding visible UI, Element Call route changes, CallKit, push, listener start, media connect, Matrix send, or production activation.
+Goal: inspect the first safe DEBUG/integration-only command that could start the production-shaped native direct-call path after `production-trigger-dry-run` reports `wouldStart=true`, while still keeping visible UI, Element Call route, CallKit, push, and production activation untouched.
 
 ## Do-Not-Touch Constraints
 
