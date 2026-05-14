@@ -7,10 +7,10 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.11F — fail-closed rollout and capability source skeleton complete.
+After 2.11G — activation decision uses rollout/capability providers complete.
 
 Current app code checkpoint:
-This commit: `Add production direct-call rollout and capability sources`
+This commit: `Wire production direct-call activation providers`
 
 Current SDK checkpoint:
 f7c2cfe5c `Add direct-call media key envelope crypto tests`
@@ -25,7 +25,7 @@ Artifact checksum:
 654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e
 
 Phase:
-2.11G — endpoint-aware production dependency readiness inspection/skeleton.
+2.11H — endpoint-aware production dependency readiness inspection/skeleton.
 
 Task:
 Inspect and, if safe, add a fail-closed endpoint-aware production dependency readiness seam for native direct calls.
@@ -42,10 +42,13 @@ Context:
 - SDK and Swift wrapper expose async direct-call media key envelope APIs.
 - Production key wrapper/provider seams exist but are not activated.
 - `DirectCallProductionActivationGate` models app rollout, authenticated server capability, same-origin token endpoint, dependency readiness, and encrypted direct 1:1 room eligibility.
-- `DirectCallProductionActivationDecisionService` assembles the activation decision and dry-run diagnostics.
 - `DirectCallProductionRolloutProviding` exists with `FailClosedDirectCallProductionRolloutProvider`, defaulting rollout off.
 - `HTTPDirectCallProductionCapabilityProvider` exists and fetches authenticated Matrix `/_matrix/client/v3/capabilities` through injected `DirectCallHTTPTransportProtocol` and `DirectCallMatrixAccessTokenProviding`.
-- Missing config, auth, transport, malformed payload, and non-2xx capability responses fail closed and remain redacted.
+- `DirectCallProductionActivationDecisionService` now stores a rollout provider and asks it for configuration at decision time.
+- Disabled rollout short-circuits before querying capability or dependency providers.
+- Rollout-enabled decisions query capability, then dependency readiness, then room eligibility.
+- Capability provider failures remain redacted and map to `serverCapabilityUnavailable`.
+- All-valid fake inputs can produce an enabled dry-run diagnostic without listener, controller, media engine, or Matrix send side effects.
 - `.well-known` is not used for activation.
 - `directOneToOneCallsEnabled` remains unused for native production activation.
 - Production remains disabled by default and no runtime wiring starts listeners, media, or Matrix sends.
@@ -53,7 +56,7 @@ Context:
 Known sequencing issue:
 - Production dependency readiness currently depends on `DirectCallProductionConfiguration.tokenEndpointBaseURL` / explicit configuration.
 - Production should normally derive the token endpoint from authenticated server capability after the activation gate accepts a same-origin relative endpoint.
-- Dry-run can now fetch/decode capability, but dependencies cannot become ready from a capability-sourced endpoint without either:
+- Dry-run can now fetch/decode capability and consume provider-backed rollout config, but dependencies cannot become ready from a capability-sourced endpoint without either:
   - splitting side-effect-free runtime prerequisite readiness from endpoint-specific dependency assembly, or
   - making dependency readiness/assembly receive the accepted token endpoint from the activation decision path.
 

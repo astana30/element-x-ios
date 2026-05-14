@@ -382,6 +382,27 @@ final class FailClosedDirectCallProductionRolloutProvider: DirectCallProductionR
     }
 }
 
+@MainActor
+final class StaticDirectCallProductionRolloutProvider: DirectCallProductionRolloutProviding, CustomStringConvertible, CustomDebugStringConvertible {
+    private let configuration: DirectCallProductionConfiguration
+
+    init(configuration: DirectCallProductionConfiguration) {
+        self.configuration = configuration
+    }
+
+    func directCallProductionConfiguration() -> DirectCallProductionConfiguration {
+        configuration
+    }
+
+    nonisolated var description: String {
+        "StaticDirectCallProductionRolloutProvider(redacted: true)"
+    }
+
+    nonisolated var debugDescription: String {
+        description
+    }
+}
+
 struct DirectCallProductionServerCapability: Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     static let capabilityName = "kz.salemx.direct_call.native"
     static let supportedVersion = 1
@@ -993,28 +1014,28 @@ protocol DirectCallProductionActivationDryRunDiagnosing {
 
 @MainActor
 final class DirectCallProductionActivationDecisionService: DirectCallProductionActivationDeciding, DirectCallProductionActivationDryRunDiagnosing, CustomStringConvertible, CustomDebugStringConvertible {
-    private let configuration: DirectCallProductionConfiguration
+    private let rolloutProvider: DirectCallProductionRolloutProviding
     private let capabilityProvider: DirectCallProductionCapabilityProviding
     private let dependencyProvider: NativeDirectCallProductionDependencyProviding
     private let activationGate: DirectCallProductionActivationGate
 
-    init(configuration: DirectCallProductionConfiguration = .init(),
+    init(rolloutProvider: DirectCallProductionRolloutProviding,
          capabilityProvider: DirectCallProductionCapabilityProviding? = nil,
          dependencyProvider: NativeDirectCallProductionDependencyProviding? = nil,
          activationGate: DirectCallProductionActivationGate = .init()) {
-        self.configuration = configuration
+        self.rolloutProvider = rolloutProvider
         self.capabilityProvider = capabilityProvider ?? FailClosedDirectCallProductionCapabilityProvider()
-        self.dependencyProvider = dependencyProvider ?? NativeDirectCallProductionDependencyAssembly(configuration: configuration)
+        self.dependencyProvider = dependencyProvider ?? NativeDirectCallProductionDependencyAssembly(configuration: rolloutProvider.directCallProductionConfiguration())
         self.activationGate = activationGate
     }
 
-    convenience init(rolloutProvider: DirectCallProductionRolloutProviding,
+    convenience init(configuration: DirectCallProductionConfiguration = .init(),
                      capabilityProvider: DirectCallProductionCapabilityProviding? = nil,
                      dependencyProvider: NativeDirectCallProductionDependencyProviding? = nil,
                      activationGate: DirectCallProductionActivationGate = .init()) {
-        self.init(configuration: rolloutProvider.directCallProductionConfiguration(),
+        self.init(rolloutProvider: StaticDirectCallProductionRolloutProvider(configuration: configuration),
                   capabilityProvider: capabilityProvider,
-                  dependencyProvider: dependencyProvider,
+                  dependencyProvider: dependencyProvider ?? NativeDirectCallProductionDependencyAssembly(configuration: configuration),
                   activationGate: activationGate)
     }
 
@@ -1034,6 +1055,7 @@ final class DirectCallProductionActivationDecisionService: DirectCallProductionA
 
     private func activationContext(homeserverBaseURL: URL?,
                                    roomEligibility: DirectCallProductionRoomEligibility) async -> DirectCallProductionActivationContext {
+        let configuration = rolloutProvider.directCallProductionConfiguration()
         guard configuration.isEnabled else {
             return .init(appRolloutEnabled: false,
                          homeserverBaseURL: homeserverBaseURL,

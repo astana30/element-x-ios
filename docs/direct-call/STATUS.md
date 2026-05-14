@@ -2,15 +2,15 @@
 
 ## Current Phase
 
-After 2.11F — fail-closed rollout and capability source skeleton complete.
+After 2.11G — activation decision uses rollout/capability providers complete.
 
 ## Latest App Code Checkpoint
 
-This commit: `Add production direct-call rollout and capability sources`
+This commit: `Wire production direct-call activation providers`
 
 ## Latest Code Checkpoint
 
-This commit: `Add production direct-call rollout and capability sources`
+This commit: `Wire production direct-call activation providers`
 
 ## Latest SDK Checkpoint
 
@@ -190,12 +190,23 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Capability-sourced absolute/external token endpoints are still rejected by the activation gate.
   - No runtime production path, visible UI, Element Call routing, CallKit, push, listener start, media engine construction, or Matrix send was added.
   - Focused app unit tests, Release build, and forbidden scan pass after the source skeleton.
+- Production activation decision now uses rollout/capability providers:
+  - `DirectCallProductionActivationDecisionService` stores a `DirectCallProductionRolloutProviding` and asks it for configuration at decision time.
+  - Static configuration remains supported through a redacted static rollout provider wrapper.
+  - Default providers remain fail-closed: rollout disabled, capability absent, and dependencies unavailable.
+  - Disabled rollout short-circuits before querying capability or dependency providers.
+  - Rollout-enabled decisions query the capability provider, then dependency readiness, then room eligibility in a side-effect-free sequence.
+  - Capability provider failures remain redacted and map to `serverCapabilityUnavailable`.
+  - All-valid fake inputs can produce an enabled dry-run decision without constructing listeners, controllers, media engines, or sending Matrix events.
+  - Existing runner dry-run output remains redacted and unchanged.
+  - No runtime production path, visible UI, Element Call routing, CallKit, push, listener start, media engine construction, or Matrix send was added.
+  - Focused app unit tests, Release build, and forbidden scan pass after the provider-backed decision wiring.
 
 ## Current Blocker
 
 - Production backend is still skeleton/fake mode.
-- Production E2EE Matrix crypto key wrapping now has narrow provider, disabled assembly, activation gate, capability discovery, decision assembly, and room-scoped dry-run seams, but the assembly is not yet threaded into the real session/room-flow runtime for activation.
-- The production activation decision can consume decoded capability payloads and now has an injectable authenticated `/capabilities` fetch provider, but this provider is not yet wired into real session/room-flow runtime construction by default.
+- Production E2EE Matrix crypto key wrapping now has narrow provider, disabled assembly, activation gate, capability discovery, decision assembly, provider-backed rollout/capability inputs, and room-scoped dry-run seams, but the assembly is not yet threaded into the real session/room-flow runtime for activation.
+- The production activation decision can consume an app rollout provider and an injectable authenticated `/capabilities` fetch provider, but these providers are not yet wired into real session/room-flow runtime construction by default.
 - The current production dependency readiness path is still coupled to explicit `DirectCallProductionConfiguration.tokenEndpointBaseURL`, so capability-sourced endpoints need a two-stage readiness/assembly path before dry-run can report dependencies ready from server capability alone.
 - The room-flow dry-run seam can now be queried by the DEBUG/integration runner command and has a runtime proof for A/B; there is still no visible UI or production runtime activation.
 - No production runtime path yet passes activation-approved assembled dependencies into `NativeDirectCallRoomFlowOwner`.
@@ -205,7 +216,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.11G — endpoint-aware production dependency readiness inspection/skeleton`
+`2.11H — endpoint-aware production dependency readiness inspection/skeleton`
 
 Goal: split side-effect-free runtime prerequisite readiness from endpoint-specific dependency assembly, or make dependency readiness receive an activation-accepted token endpoint, without activating visible UI or production direct calls.
 
