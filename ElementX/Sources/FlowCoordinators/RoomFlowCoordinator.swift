@@ -426,6 +426,11 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
 
         return await nativeDirectCallProductionActivationDryRunProvider.nativeDirectCallProductionActivationDryRunDiagnostic()
     }
+
+    func nativeDirectCallProductionTriggerDryRunDiagnostic() async -> NativeDirectCallProductionTriggerDryRunDiagnostic {
+        let activationDiagnostic = await nativeDirectCallProductionActivationDryRunDiagnostic()
+        return .init(activationDiagnostic: activationDiagnostic)
+    }
     
     // MARK: - Private
     
@@ -1804,6 +1809,47 @@ struct NativeDirectCallProductionActivationDryRunProvider: NativeDirectCallProdu
     func nativeDirectCallProductionActivationDryRunDiagnostic() async -> DirectCallProductionActivationDryRunDiagnostic {
         await activationDryRunDiagnostics.directCallProductionActivationDryRunDiagnostic(homeserverBaseURL: homeserverBaseURL,
                                                                                          roomEligibility: roomEligibility)
+    }
+}
+
+struct NativeDirectCallProductionTriggerDryRunDiagnostic: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let wouldStart: Bool
+    let isEnabled: Bool
+    let blockedReason: DirectCallProductionActivationDisabledReason?
+    let isCapabilityPresent: Bool
+    let areDependenciesReady: Bool
+    let isRoomEligible: Bool
+    let isEndpointAccepted: Bool
+
+    init(activationDiagnostic: DirectCallProductionActivationDryRunDiagnostic) {
+        wouldStart = activationDiagnostic.isEnabled
+        isEnabled = activationDiagnostic.isEnabled
+        blockedReason = activationDiagnostic.disabledReason
+        isCapabilityPresent = activationDiagnostic.isCapabilityPresent
+        areDependenciesReady = activationDiagnostic.areDependenciesReady
+        isRoomEligible = activationDiagnostic.isRoomEligible
+        isEndpointAccepted = activationDiagnostic.isEndpointAccepted
+    }
+
+    static func blocked(_ reason: DirectCallProductionActivationDisabledReason) -> Self {
+        .init(activationDiagnostic: .disabled(reason))
+    }
+
+    var description: String {
+        let fields = [
+            "wouldStart: \(wouldStart)",
+            "isEnabled: \(isEnabled)",
+            "blockedReason: \(blockedReason?.description ?? "none")",
+            "isCapabilityPresent: \(isCapabilityPresent)",
+            "areDependenciesReady: \(areDependenciesReady)",
+            "isRoomEligible: \(isRoomEligible)",
+            "isEndpointAccepted: \(isEndpointAccepted)"
+        ]
+        return "NativeDirectCallProductionTriggerDryRunDiagnostic(\(fields.joined(separator: ", ")))"
+    }
+
+    var debugDescription: String {
+        description
     }
 }
 

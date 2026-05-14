@@ -663,6 +663,102 @@ final class RoomFlowCoordinatorTests {
     }
 
     @Test
+    func nativeDirectCallProductionTriggerDryRunFailsClosedWithoutActiveRoom() async {
+        setupRoomFlowCoordinator { _ in
+            Issue.record("Native direct-call room-flow owner should not be created without an active room.")
+            return NativeDirectCallRoomFlowOwnerSpy()
+        } nativeDirectCallProductionActivationDryRunProviderFactory: { _ in
+            Issue.record("Production trigger dry-run provider should not be created without an active room.")
+            return FailClosedNativeDirectCallProductionActivationDryRunProvider()
+        }
+
+        let diagnostic = await roomFlowCoordinator.nativeDirectCallProductionTriggerDryRunDiagnostic()
+
+        #expect(diagnostic.wouldStart == false)
+        #expect(diagnostic.isEnabled == false)
+        #expect(diagnostic.blockedReason == .roomUnavailable)
+        #expect(diagnostic.isCapabilityPresent == false)
+        #expect(diagnostic.areDependenciesReady == false)
+        #expect(diagnostic.isRoomEligible == false)
+        #expect(diagnostic.isEndpointAccepted == false)
+    }
+
+    @Test
+    func nativeDirectCallProductionTriggerDryRunBlocksWhenActivationDisabledWithoutStartingCalls() async throws {
+        let owner = NativeDirectCallRoomFlowOwnerSpy()
+        let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: .disabled(.appRolloutDisabled))
+        setupRoomFlowCoordinator { roomProxy in
+            #expect(roomProxy.id == "1")
+            owner.makeCount += 1
+            return owner
+        } nativeDirectCallProductionActivationDryRunProviderFactory: { roomProxy in
+            #expect(roomProxy.id == "1")
+            provider.makeCount += 1
+            return provider
+        }
+
+        try await process(route: .room(roomID: "1", via: []))
+        let diagnostic = await roomFlowCoordinator.nativeDirectCallProductionTriggerDryRunDiagnostic()
+
+        #expect(diagnostic.wouldStart == false)
+        #expect(diagnostic.isEnabled == false)
+        #expect(diagnostic.blockedReason == .appRolloutDisabled)
+        #expect(provider.makeCount == 1)
+        #expect(provider.callCount == 1)
+        #expect(owner.makeCount == 1)
+        #expect(owner.prepareCount == 0)
+        #expect(owner.startCount == 0)
+        #expect(owner.outgoingCount == 0)
+        #expect(owner.acceptCount == 0)
+        #expect(owner.hangupCount == 0)
+        #expect(owner.stopCount == 0)
+        #expect(owner.resetCount == 0)
+    }
+
+    @Test
+    func nativeDirectCallProductionTriggerDryRunWouldStartWhenActivationEnabledWithoutStartingCalls() async throws {
+        let owner = NativeDirectCallRoomFlowOwnerSpy()
+        let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: .init(isEnabled: true,
+                                                                                           disabledReason: nil,
+                                                                                           isCapabilityPresent: true,
+                                                                                           areDependenciesReady: true,
+                                                                                           isRoomEligible: true,
+                                                                                           isEndpointAccepted: true))
+        setupRoomFlowCoordinator { roomProxy in
+            #expect(roomProxy.id == "1")
+            owner.makeCount += 1
+            return owner
+        } nativeDirectCallProductionActivationDryRunProviderFactory: { roomProxy in
+            #expect(roomProxy.id == "1")
+            provider.makeCount += 1
+            return provider
+        }
+
+        try await process(route: .room(roomID: "1", via: []))
+        let diagnostic = await roomFlowCoordinator.nativeDirectCallProductionTriggerDryRunDiagnostic()
+
+        #expect(diagnostic.wouldStart)
+        #expect(diagnostic.isEnabled)
+        #expect(diagnostic.blockedReason == nil)
+        #expect(diagnostic.isCapabilityPresent)
+        #expect(diagnostic.areDependenciesReady)
+        #expect(diagnostic.isRoomEligible)
+        #expect(diagnostic.isEndpointAccepted)
+        #expect(String(describing: diagnostic).contains("matrix.example.test") == false)
+        #expect(String(describing: diagnostic).contains(DirectCallProductionConfiguration.tokenEndpointPath) == false)
+        #expect(provider.makeCount == 1)
+        #expect(provider.callCount == 1)
+        #expect(owner.makeCount == 1)
+        #expect(owner.prepareCount == 0)
+        #expect(owner.startCount == 0)
+        #expect(owner.outgoingCount == 0)
+        #expect(owner.acceptCount == 0)
+        #expect(owner.hangupCount == 0)
+        #expect(owner.stopCount == 0)
+        #expect(owner.resetCount == 0)
+    }
+
+    @Test
     func nativeDirectCallDeveloperCommandRouterIsDisabledByDefault() async {
         let owner = NativeDirectCallRoomFlowOwnerSpy()
         owner.isListenerStarted = true
@@ -1027,6 +1123,59 @@ final class RoomFlowCoordinatorTests {
         #expect(try JSONDecoder().decode(UITestsSignal.self, from: Data(encodedResult.utf8)) == resultSignal)
         #expect(encodedRequest.contains("nativeDirectCallProductionActivationDryRun"))
         #expect(encodedResult.contains("nativeDirectCallProductionActivationDryRunResult"))
+        #expect(encodedResult.contains("enabled"))
+        #expect(encodedResult.contains("appRolloutDisabled"))
+        #expect(encodedResult.contains("capabilityPresent"))
+        #expect(encodedResult.contains("dependenciesReady"))
+        #expect(encodedResult.contains("roomEligible"))
+        #expect(encodedResult.contains("endpointAccepted"))
+        #expect(result.correlationID == request.correlationID)
+
+        let forbiddenFragments = [
+            "debug" + "Info",
+            "original" + "JSON",
+            "original" + "Json",
+            "raw " + "JSON",
+            "encrypted_" + "payload",
+            "j" + "wt",
+            "raw " + "key",
+            "!room",
+            "@alice",
+            "peer-user",
+            "participant_" + "token",
+            "access_" + "token",
+            "matrix.example.com",
+            DirectCallProductionConfiguration.tokenEndpointPath
+        ]
+        for fragment in forbiddenFragments {
+            #expect((encodedRequest + encodedResult).localizedCaseInsensitiveContains(fragment) == false)
+        }
+    }
+
+    @Test
+    func nativeDirectCallProductionTriggerDryRunSignalEncodesRedactedResult() throws {
+        let request = UITestsSignal.NativeDirectCallProductionTriggerDryRunRequest(correlationID: "call-A-1")
+        let result = UITestsSignal.NativeDirectCallProductionTriggerDryRunResult(correlationID: "call-A-1",
+                                                                                 diagnostic: .init(wouldStart: false,
+                                                                                                   enabled: false,
+                                                                                                   reason: "appRolloutDisabled",
+                                                                                                   capabilityPresent: false,
+                                                                                                   dependenciesReady: false,
+                                                                                                   roomEligible: true,
+                                                                                                   endpointAccepted: false))
+        let requestSignal = UITestsSignal.nativeDirectCallProductionTriggerDryRun(request)
+        let resultSignal = UITestsSignal.nativeDirectCallProductionTriggerDryRunResult(result)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+
+        let encodedRequest = try #require(String(data: encoder.encode(requestSignal), encoding: .utf8))
+        let encodedResult = try #require(String(data: encoder.encode(resultSignal), encoding: .utf8))
+
+        #expect(try JSONDecoder().decode(UITestsSignal.self, from: Data(encodedRequest.utf8)) == requestSignal)
+        #expect(try JSONDecoder().decode(UITestsSignal.self, from: Data(encodedResult.utf8)) == resultSignal)
+        #expect(encodedRequest.contains("nativeDirectCallProductionTriggerDryRun"))
+        #expect(encodedResult.contains("nativeDirectCallProductionTriggerDryRunResult"))
+        #expect(encodedResult.contains("wouldStart"))
         #expect(encodedResult.contains("enabled"))
         #expect(encodedResult.contains("appRolloutDisabled"))
         #expect(encodedResult.contains("capabilityPresent"))

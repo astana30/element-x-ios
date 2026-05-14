@@ -1416,6 +1416,16 @@ extension AppCoordinator {
 
                             let result = UITestsSignal.NativeDirectCallProductionActivationDryRunResult(correlationID: request.correlationID, diagnostic)
                             try? client?.send(.nativeDirectCallProductionActivationDryRunResult(result))
+                        case .nativeDirectCallProductionTriggerDryRun(let request):
+                            let diagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic
+                            if let flowCoordinator = self?.userSessionFlowCoordinator {
+                                diagnostic = await flowCoordinator.nativeDirectCallProductionTriggerDryRunDiagnostic()
+                            } else {
+                                diagnostic = .blocked(.roomUnavailable)
+                            }
+
+                            let result = UITestsSignal.NativeDirectCallProductionTriggerDryRunResult(correlationID: request.correlationID, diagnostic)
+                            try? client?.send(.nativeDirectCallProductionTriggerDryRunResult(result))
                         default:
                             return
                         }

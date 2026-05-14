@@ -48,6 +48,7 @@ Usage:
   DRY_RUN=0 $SCRIPT_NAME send A|B <command>
   DRY_RUN=0 $SCRIPT_NAME status A|B
   DRY_RUN=0 $SCRIPT_NAME production-activation-dry-run A|B
+  DRY_RUN=0 $SCRIPT_NAME production-trigger-dry-run A|B
   DRY_RUN=0 $SCRIPT_NAME wait-status A|B incomingRinging
   DRY_RUN=0 $SCRIPT_NAME accept-when-ringing A|B
 
@@ -401,6 +402,39 @@ with open(file_path, "w", encoding="utf-8") as handle:
 PY
 }
 
+write_production_trigger_dry_run_request() {
+    local client="$1"
+    local correlation_id="$2"
+    local file
+    file="$(signal_file "$client")"
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        log "DRY_RUN: query-production-trigger-dry-run channel=$client correlationID=$correlation_id"
+        return
+    fi
+
+    python3 - "$file" "$correlation_id" <<'PY'
+import json
+import sys
+
+file_path, correlation_id = sys.argv[1:3]
+message = {
+    "mode": {
+        "tests": {}
+    },
+    "signal": {
+        "nativeDirectCallProductionTriggerDryRun": {
+            "_0": {
+                "correlationID": correlation_id,
+            }
+        }
+    }
+}
+with open(file_path, "w", encoding="utf-8") as handle:
+    json.dump(message, handle, sort_keys=True, separators=(",", ":"))
+PY
+}
+
 extract_result() {
     local client="$1"
     local expected_signal="$2"
@@ -499,6 +533,21 @@ if expected_signal == "nativeDirectCallProductionActivationDryRunResult":
     diagnostic = body.get("diagnostic", {})
     print(
         "enabled={enabled} reason={reason} capabilityPresent={capability} dependenciesReady={dependencies} roomEligible={room} endpointAccepted={endpoint}".format(
+            enabled=str(diagnostic.get("enabled", "unknown")).lower(),
+            reason=diagnostic.get("reason", "none"),
+            capability=str(diagnostic.get("capabilityPresent", "unknown")).lower(),
+            dependencies=str(diagnostic.get("dependenciesReady", "unknown")).lower(),
+            room=str(diagnostic.get("roomEligible", "unknown")).lower(),
+            endpoint=str(diagnostic.get("endpointAccepted", "unknown")).lower(),
+        )
+    )
+    sys.exit(0)
+
+if expected_signal == "nativeDirectCallProductionTriggerDryRunResult":
+    diagnostic = body.get("diagnostic", {})
+    print(
+        "wouldStart={would_start} enabled={enabled} reason={reason} capabilityPresent={capability} dependenciesReady={dependencies} roomEligible={room} endpointAccepted={endpoint}".format(
+            would_start=str(diagnostic.get("wouldStart", "unknown")).lower(),
             enabled=str(diagnostic.get("enabled", "unknown")).lower(),
             reason=diagnostic.get("reason", "none"),
             capability=str(diagnostic.get("capabilityPresent", "unknown")).lower(),
@@ -802,6 +851,21 @@ query_production_activation_dry_run() {
     log "channel=$client command=productionActivationDryRun correlationID=$id $result"
 }
 
+query_production_trigger_dry_run() {
+    local client="$1"
+    local id
+    id="$(correlation_id "$client" productionTriggerDryRun)"
+    write_production_trigger_dry_run_request "$client" "$id"
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        return
+    fi
+
+    local result
+    result="$(wait_for_result "$client" nativeDirectCallProductionTriggerDryRunResult "$id")"
+    log "channel=$client command=productionTriggerDryRun correlationID=$id $result"
+}
+
 wait_for_status() {
     local client="$1"
     local expected="$2"
@@ -941,6 +1005,12 @@ main() {
             require_common_environment
             [[ $# -eq 2 ]] || fail "Usage: $SCRIPT_NAME production-activation-dry-run A|B"
             query_production_activation_dry_run "$2"
+            ;;
+        production-trigger-dry-run|productionTriggerDryRun)
+            require_host_tools
+            require_common_environment
+            [[ $# -eq 2 ]] || fail "Usage: $SCRIPT_NAME production-trigger-dry-run A|B"
+            query_production_trigger_dry_run "$2"
             ;;
         wait-status)
             require_host_tools

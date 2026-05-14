@@ -244,6 +244,15 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
 
         return await chatsTabFlowCoordinator.nativeDirectCallProductionActivationDryRunDiagnostic()
     }
+
+    func nativeDirectCallProductionTriggerDryRunDiagnostic() async -> NativeDirectCallProductionTriggerDryRunDiagnostic {
+        guard nativeDirectCallDiagnosticRuntimeGate(),
+              navigationTabCoordinator.selectedTab == .chats else {
+            return .blocked(.roomUnavailable)
+        }
+
+        return await chatsTabFlowCoordinator.nativeDirectCallProductionTriggerDryRunDiagnostic()
+    }
     #endif
 
     // MARK: - Private

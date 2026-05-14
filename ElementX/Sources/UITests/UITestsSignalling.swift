@@ -54,6 +54,10 @@ enum UITestsSignal: Codable, Equatable {
     case nativeDirectCallProductionActivationDryRun(NativeDirectCallProductionActivationDryRunRequest)
     /// Reports a redacted production native direct-call activation dry-run for the active room.
     case nativeDirectCallProductionActivationDryRunResult(NativeDirectCallProductionActivationDryRunResult)
+    /// Requests a redacted production native direct-call trigger dry-run for the active room.
+    case nativeDirectCallProductionTriggerDryRun(NativeDirectCallProductionTriggerDryRunRequest)
+    /// Reports a redacted production native direct-call trigger dry-run for the active room.
+    case nativeDirectCallProductionTriggerDryRunResult(NativeDirectCallProductionTriggerDryRunResult)
 
     struct NativeDirectCallDiagnosticCommandRequest: Codable, Equatable {
         let command: NativeDirectCallDiagnosticCommand
@@ -179,6 +183,24 @@ enum UITestsSignal: Codable, Equatable {
         }
     }
 
+    struct NativeDirectCallProductionTriggerDryRunRequest: Codable, Equatable {
+        let correlationID: String?
+
+        init(correlationID: String? = nil) {
+            self.correlationID = UITestsSignalling.sanitizedIdentifier(correlationID)
+        }
+    }
+
+    struct NativeDirectCallProductionTriggerDryRunResult: Codable, Equatable {
+        let correlationID: String?
+        let diagnostic: NativeDirectCallProductionTriggerDryRunDiagnosticPayload
+
+        init(correlationID: String? = nil, diagnostic: NativeDirectCallProductionTriggerDryRunDiagnosticPayload) {
+            self.correlationID = UITestsSignalling.sanitizedIdentifier(correlationID)
+            self.diagnostic = diagnostic
+        }
+    }
+
     struct NativeDirectCallProductionActivationDryRunDiagnostic: Codable, Equatable {
         let enabled: Bool
         let reason: String?
@@ -195,6 +217,32 @@ enum UITestsSignal: Codable, Equatable {
              endpointAccepted: Bool) {
             self.enabled = enabled
             self.reason = reason.flatMap { UITestsSignalling.sanitizedIdentifier($0) }
+            self.capabilityPresent = capabilityPresent
+            self.dependenciesReady = dependenciesReady
+            self.roomEligible = roomEligible
+            self.endpointAccepted = endpointAccepted
+        }
+    }
+
+    struct NativeDirectCallProductionTriggerDryRunDiagnosticPayload: Codable, Equatable {
+        let wouldStart: Bool
+        let enabled: Bool
+        let reason: String?
+        let capabilityPresent: Bool
+        let dependenciesReady: Bool
+        let roomEligible: Bool
+        let endpointAccepted: Bool
+
+        init(wouldStart: Bool,
+             enabled: Bool,
+             reason: String?,
+             capabilityPresent: Bool,
+             dependenciesReady: Bool,
+             roomEligible: Bool,
+             endpointAccepted: Bool) {
+            self.wouldStart = wouldStart
+            self.enabled = enabled
+            self.reason = reason
             self.capabilityPresent = capabilityPresent
             self.dependenciesReady = dependenciesReady
             self.roomEligible = roomEligible
@@ -387,10 +435,29 @@ extension UITestsSignal.NativeDirectCallProductionActivationDryRunResult {
     }
 }
 
+extension UITestsSignal.NativeDirectCallProductionTriggerDryRunResult {
+    init(correlationID: String? = nil, _ diagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic) {
+        self.init(correlationID: correlationID,
+                  diagnostic: .init(diagnostic))
+    }
+}
+
 extension UITestsSignal.NativeDirectCallProductionActivationDryRunDiagnostic {
     init(_ diagnostic: DirectCallProductionActivationDryRunDiagnostic) {
         self.init(enabled: diagnostic.isEnabled,
                   reason: diagnostic.disabledReason?.description,
+                  capabilityPresent: diagnostic.isCapabilityPresent,
+                  dependenciesReady: diagnostic.areDependenciesReady,
+                  roomEligible: diagnostic.isRoomEligible,
+                  endpointAccepted: diagnostic.isEndpointAccepted)
+    }
+}
+
+extension UITestsSignal.NativeDirectCallProductionTriggerDryRunDiagnosticPayload {
+    init(_ diagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic) {
+        self.init(wouldStart: diagnostic.wouldStart,
+                  enabled: diagnostic.isEnabled,
+                  reason: diagnostic.blockedReason?.description,
                   capabilityPresent: diagnostic.isCapabilityPresent,
                   dependenciesReady: diagnostic.areDependenciesReady,
                   roomEligible: diagnostic.isRoomEligible,
