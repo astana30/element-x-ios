@@ -2022,6 +2022,8 @@ final class DirectCallMediaProviderSkeletonTests {
 
         #expect(dependencies.encryptionService is ProductionDirectCallEncryptionService)
         #expect(dependencies.hasMediaEngineFactory)
+        #expect(dependencies.keyWrapperSource == .failClosedWrapper)
+        #expect(dependencies.isReadyForProductionStart == false)
         #expect(String(describing: configuration).contains(endpointURL.absoluteString) == false)
         #expect(String(describing: dependencies).contains("Diagnostic") == false)
 
@@ -2047,6 +2049,8 @@ final class DirectCallMediaProviderSkeletonTests {
 
         #expect(dependencies.encryptionService is ProductionDirectCallEncryptionService)
         #expect(dependencies.hasMediaEngineFactory)
+        #expect(dependencies.keyWrapperSource == .failClosedWrapper)
+        #expect(dependencies.isReadyForProductionStart == false)
         #expect(String(describing: configuration).contains(baseURL.absoluteString) == false)
         #expect(String(describing: dependencies).contains("Diagnostic") == false)
     }

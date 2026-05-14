@@ -154,7 +154,8 @@ final class DirectCallProductionCapabilitySourceTests {
         let encryptionService = CapabilitySourceEncryptionServiceSpy()
         let mediaEngineFactory = CapabilitySourceMediaEngineFactorySpy()
         let dependencyProvider = CapabilitySourceDependencyProviderSpy(dependencies: NativeDirectCallProductionDependencies(encryptionService: encryptionService,
-                                                                                                                            mediaEngineFactory: mediaEngineFactory))
+                                                                                                                            mediaEngineFactory: mediaEngineFactory,
+                                                                                                                            keyWrapperSource: .explicitWrapper))
         let service = DirectCallProductionActivationDecisionService(rolloutProvider: rolloutProvider,
                                                                     capabilityProvider: capabilityProvider,
                                                                     dependencyProvider: dependencyProvider)
@@ -469,7 +470,8 @@ final class DirectCallProductionCapabilitySourceTests {
 
     private func makeActivationReadyDependencies() -> NativeDirectCallProductionDependencies {
         NativeDirectCallProductionDependencies(encryptionService: ProductionDirectCallEncryptionService(),
-                                               mediaEngineFactory: NoOpDirectCallMediaEngineFactory())
+                                               mediaEngineFactory: NoOpDirectCallMediaEngineFactory(),
+                                               keyWrapperSource: .explicitWrapper)
     }
 
     private func makeActivationReadinessPack(configuration: DirectCallProductionConfiguration = .init(isEnabled: true),
@@ -480,7 +482,8 @@ final class DirectCallProductionCapabilitySourceTests {
         let encryptionService = CapabilitySourceEncryptionServiceSpy()
         let mediaEngineFactory = CapabilitySourceMediaEngineFactorySpy()
         let dependencyProvider = CapabilitySourceDependencyProviderSpy(dependencies: dependencies ?? NativeDirectCallProductionDependencies(encryptionService: encryptionService,
-                                                                                                                                            mediaEngineFactory: mediaEngineFactory))
+                                                                                                                                            mediaEngineFactory: mediaEngineFactory,
+                                                                                                                                            keyWrapperSource: .explicitWrapper))
         let rolloutProvider = CapabilitySourceRolloutProviderSpy(configuration: configuration)
         let capabilityProvider = CapabilitySourceProviderSpy(result: capabilityResult ?? .available(makeServerCapability()))
         let service = DirectCallProductionActivationDecisionService(rolloutProvider: rolloutProvider,
@@ -790,7 +793,8 @@ final class DirectCallBackendSmokeTests {
         let encryptionService = CapabilitySourceEncryptionServiceSpy()
         let mediaEngineFactory = CapabilitySourceMediaEngineFactorySpy()
         let enabledDependencyProvider = DirectCallBackendSmokeDependencyProvider(dependencies: NativeDirectCallProductionDependencies(encryptionService: encryptionService,
-                                                                                                                                      mediaEngineFactory: mediaEngineFactory))
+                                                                                                                                      mediaEngineFactory: mediaEngineFactory,
+                                                                                                                                      keyWrapperSource: .explicitWrapper))
         let enabledService = DirectCallProductionActivationDecisionService(rolloutProvider: DirectCallBackendSmokeRolloutProvider(configuration: .init(isEnabled: true)),
                                                                            capabilityProvider: DirectCallBackendSmokeCapabilityProvider(result: result),
                                                                            dependencyProvider: enabledDependencyProvider)
@@ -814,7 +818,8 @@ final class DirectCallBackendSmokeTests {
 
     private func makeActivationReadyDependencies() -> NativeDirectCallProductionDependencies {
         NativeDirectCallProductionDependencies(encryptionService: ProductionDirectCallEncryptionService(),
-                                               mediaEngineFactory: NoOpDirectCallMediaEngineFactory())
+                                               mediaEngineFactory: NoOpDirectCallMediaEngineFactory(),
+                                               keyWrapperSource: .explicitWrapper)
     }
 
     private func makeRoomEligibility() -> DirectCallProductionRoomEligibility {

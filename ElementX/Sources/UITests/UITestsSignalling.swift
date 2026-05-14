@@ -266,19 +266,22 @@ enum UITestsSignal: Codable, Equatable {
         let dependenciesReady: Bool
         let roomEligible: Bool
         let endpointAccepted: Bool
+        let keyWrapperSource: String?
 
         init(enabled: Bool,
              reason: String?,
              capabilityPresent: Bool,
              dependenciesReady: Bool,
              roomEligible: Bool,
-             endpointAccepted: Bool) {
+             endpointAccepted: Bool,
+             keyWrapperSource: String? = nil) {
             self.enabled = enabled
             self.reason = reason.flatMap { UITestsSignalling.sanitizedIdentifier($0) }
             self.capabilityPresent = capabilityPresent
             self.dependenciesReady = dependenciesReady
             self.roomEligible = roomEligible
             self.endpointAccepted = endpointAccepted
+            self.keyWrapperSource = keyWrapperSource.flatMap { UITestsSignalling.sanitizedIdentifier($0) }
         }
     }
 
@@ -290,6 +293,7 @@ enum UITestsSignal: Codable, Equatable {
         let dependenciesReady: Bool
         let roomEligible: Bool
         let endpointAccepted: Bool
+        let keyWrapperSource: String?
 
         init(wouldStart: Bool,
              enabled: Bool,
@@ -297,7 +301,8 @@ enum UITestsSignal: Codable, Equatable {
              capabilityPresent: Bool,
              dependenciesReady: Bool,
              roomEligible: Bool,
-             endpointAccepted: Bool) {
+             endpointAccepted: Bool,
+             keyWrapperSource: String? = nil) {
             self.wouldStart = wouldStart
             self.enabled = enabled
             self.reason = reason
@@ -305,6 +310,7 @@ enum UITestsSignal: Codable, Equatable {
             self.dependenciesReady = dependenciesReady
             self.roomEligible = roomEligible
             self.endpointAccepted = endpointAccepted
+            self.keyWrapperSource = keyWrapperSource.flatMap { UITestsSignalling.sanitizedIdentifier($0) }
         }
     }
 
@@ -540,7 +546,8 @@ extension UITestsSignal.NativeDirectCallProductionActivationDryRunDiagnostic {
                   capabilityPresent: diagnostic.isCapabilityPresent,
                   dependenciesReady: diagnostic.areDependenciesReady,
                   roomEligible: diagnostic.isRoomEligible,
-                  endpointAccepted: diagnostic.isEndpointAccepted)
+                  endpointAccepted: diagnostic.isEndpointAccepted,
+                  keyWrapperSource: diagnostic.keyWrapperSource?.description)
     }
 }
 
@@ -552,7 +559,8 @@ extension UITestsSignal.NativeDirectCallProductionTriggerDryRunDiagnosticPayload
                   capabilityPresent: diagnostic.isCapabilityPresent,
                   dependenciesReady: diagnostic.areDependenciesReady,
                   roomEligible: diagnostic.isRoomEligible,
-                  endpointAccepted: diagnostic.isEndpointAccepted)
+                  endpointAccepted: diagnostic.isEndpointAccepted,
+                  keyWrapperSource: diagnostic.keyWrapperSource?.description)
     }
 }
 

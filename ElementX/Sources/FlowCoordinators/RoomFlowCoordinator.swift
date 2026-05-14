@@ -1888,6 +1888,7 @@ struct NativeDirectCallProductionTriggerDryRunDiagnostic: Equatable, CustomStrin
     let areDependenciesReady: Bool
     let isRoomEligible: Bool
     let isEndpointAccepted: Bool
+    let keyWrapperSource: NativeDirectCallProductionKeyWrapperSource?
 
     init(activationDiagnostic: DirectCallProductionActivationDryRunDiagnostic) {
         wouldStart = activationDiagnostic.isEnabled
@@ -1897,6 +1898,7 @@ struct NativeDirectCallProductionTriggerDryRunDiagnostic: Equatable, CustomStrin
         areDependenciesReady = activationDiagnostic.areDependenciesReady
         isRoomEligible = activationDiagnostic.isRoomEligible
         isEndpointAccepted = activationDiagnostic.isEndpointAccepted
+        keyWrapperSource = activationDiagnostic.keyWrapperSource
     }
 
     static func blocked(_ reason: DirectCallProductionActivationDisabledReason) -> Self {
@@ -1911,7 +1913,8 @@ struct NativeDirectCallProductionTriggerDryRunDiagnostic: Equatable, CustomStrin
             "isCapabilityPresent: \(isCapabilityPresent)",
             "areDependenciesReady: \(areDependenciesReady)",
             "isRoomEligible: \(isRoomEligible)",
-            "isEndpointAccepted: \(isEndpointAccepted)"
+            "isEndpointAccepted: \(isEndpointAccepted)",
+            "keyWrapperSource: \(keyWrapperSource?.description ?? "none")"
         ]
         return "NativeDirectCallProductionTriggerDryRunDiagnostic(\(fields.joined(separator: ", ")))"
     }

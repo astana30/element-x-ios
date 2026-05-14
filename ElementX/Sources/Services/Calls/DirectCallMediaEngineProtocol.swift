@@ -821,6 +821,23 @@ struct DirectCallProductionActivationDryRunDiagnostic: Equatable, CustomStringCo
     let areDependenciesReady: Bool
     let isRoomEligible: Bool
     let isEndpointAccepted: Bool
+    let keyWrapperSource: NativeDirectCallProductionKeyWrapperSource?
+
+    init(isEnabled: Bool,
+         disabledReason: DirectCallProductionActivationDisabledReason?,
+         isCapabilityPresent: Bool,
+         areDependenciesReady: Bool,
+         isRoomEligible: Bool,
+         isEndpointAccepted: Bool,
+         keyWrapperSource: NativeDirectCallProductionKeyWrapperSource? = nil) {
+        self.isEnabled = isEnabled
+        self.disabledReason = disabledReason
+        self.isCapabilityPresent = isCapabilityPresent
+        self.areDependenciesReady = areDependenciesReady
+        self.isRoomEligible = isRoomEligible
+        self.isEndpointAccepted = isEndpointAccepted
+        self.keyWrapperSource = keyWrapperSource
+    }
 
     static func disabled(_ reason: DirectCallProductionActivationDisabledReason) -> Self {
         .init(isEnabled: false,
@@ -828,7 +845,8 @@ struct DirectCallProductionActivationDryRunDiagnostic: Equatable, CustomStringCo
               isCapabilityPresent: false,
               areDependenciesReady: false,
               isRoomEligible: false,
-              isEndpointAccepted: false)
+              isEndpointAccepted: false,
+              keyWrapperSource: nil)
     }
 
     var description: String {
@@ -838,7 +856,8 @@ struct DirectCallProductionActivationDryRunDiagnostic: Equatable, CustomStringCo
             "isCapabilityPresent: \(isCapabilityPresent)",
             "areDependenciesReady: \(areDependenciesReady)",
             "isRoomEligible: \(isRoomEligible)",
-            "isEndpointAccepted: \(isEndpointAccepted)"
+            "isEndpointAccepted: \(isEndpointAccepted)",
+            "keyWrapperSource: \(keyWrapperSource?.description ?? "none")"
         ]
         return "DirectCallProductionActivationDryRunDiagnostic(\(fields.joined(separator: ", ")))"
     }
@@ -874,8 +893,7 @@ struct DirectCallProductionActivationGate {
             return .disabled(.tokenEndpointUnavailable)
         }
 
-        guard context.dependencies.hasEncryptionService,
-              context.dependencies.hasMediaEngineFactory else {
+        guard context.dependencies.isReadyForProductionStart else {
             return .disabled(.dependenciesUnavailable)
         }
 
@@ -891,9 +909,10 @@ struct DirectCallProductionActivationGate {
         return DirectCallProductionActivationDryRunDiagnostic(isEnabled: decision.isEnabled,
                                                               disabledReason: decision.disabledReason,
                                                               isCapabilityPresent: context.serverCapability != nil,
-                                                              areDependenciesReady: context.dependencies.hasEncryptionService && context.dependencies.hasMediaEngineFactory,
+                                                              areDependenciesReady: context.dependencies.isReadyForProductionStart,
                                                               isRoomEligible: roomEligibilityDisabledReason(context.roomEligibility) == nil,
-                                                              isEndpointAccepted: isTokenEndpointAccepted(for: context))
+                                                              isEndpointAccepted: isTokenEndpointAccepted(for: context),
+                                                              keyWrapperSource: context.dependencies.keyWrapperSource)
     }
 
     private func serverCapabilityDisabledReason(_ serverCapability: DirectCallProductionServerCapability?) -> DirectCallProductionActivationDisabledReason? {

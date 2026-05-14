@@ -182,6 +182,8 @@ final class DirectCallProductionKeyWrappingTests {
 
         #expect(keyStore.makeKeyProvider(for: generated.keyHandle) != nil)
         #expect(dependencies.hasMediaEngineFactory)
+        #expect(dependencies.keyWrapperSource == .explicitWrapper)
+        #expect(dependencies.isReadyForProductionStart)
     }
 
     @Test
@@ -210,6 +212,8 @@ final class DirectCallProductionKeyWrappingTests {
         #expect(generated.payload.encryptedPayload == "sdk-opaque-envelope")
         #expect(keyStore.makeKeyProvider(for: generated.keyHandle) != nil)
         #expect(dependencies.hasMediaEngineFactory)
+        #expect(dependencies.keyWrapperSource == .explicitSDKWrapper)
+        #expect(dependencies.isReadyForProductionStart)
     }
 
     @Test
@@ -281,6 +285,31 @@ final class DirectCallProductionKeyWrappingTests {
         #expect(generated.payload.encryptedPayload == "sdk-opaque-envelope")
         #expect(keyStore.makeKeyProvider(for: generated.keyHandle) != nil)
         #expect(dependencies.hasMediaEngineFactory)
+        #expect(dependencies.keyWrapperSource == .providerWrapper)
+        #expect(dependencies.isReadyForProductionStart)
+    }
+
+    @Test
+    func productionDependenciesFactoryReportsMissingRuntimeProviderWrapperAsNotReady() throws {
+        let endpointURL = try #require(URL(string: "https://call-service.example.com/direct-calls"))
+        let provider = DirectCallMediaKeyEnvelopeWrappingProviderSpy(wrapper: nil)
+        let configuration = NativeDirectCallProductionConfiguration(isEnabled: true,
+                                                                    liveKitConfiguration: .init(tokenEndpointURL: endpointURL))
+        let factory = NativeDirectCallProductionDependenciesFactory(configuration: configuration,
+                                                                    liveKitClient: ProductionKeyWrappingLiveKitClientSpy(),
+                                                                    matrixSDKKeyEnvelopeWrapperProvider: provider,
+                                                                    ownUserID: ownUserID,
+                                                                    senderDeviceID: "DEVICE")
+
+        let dependencies = factory.makeDependencies()
+
+        #expect(dependencies.hasEncryptionService)
+        #expect(dependencies.hasMediaEngineFactory)
+        #expect(dependencies.keyWrapperSource == .missingProvider)
+        #expect(dependencies.isReadyForProductionStart == false)
+        #expect(provider.makeWrapperCallCount == 1)
+        #expect(String(describing: dependencies).contains("missingProvider"))
+        #expect(String(describing: dependencies).contains("call-service.example.com") == false)
     }
 
     @Test
@@ -333,7 +362,32 @@ final class DirectCallProductionKeyWrappingTests {
         for dependencies in [missingHTTPTransport, missingAccessTokenProvider, missingLiveKitClient, missingKeyEnvelopeProvider, missingOwnUserID] {
             #expect(dependencies.hasEncryptionService == false)
             #expect(dependencies.hasMediaEngineFactory == false)
+            #expect(dependencies.isReadyForProductionStart == false)
         }
+    }
+
+    @Test
+    func productionDependencyAssemblyReportsUnavailableWrapperFromRuntimeProviderAsNotReady() throws {
+        let baseURL = try #require(URL(string: "https://call-service.example.com"))
+        let configuration = DirectCallProductionConfiguration(isEnabled: true, tokenEndpointBaseURL: baseURL)
+        let provider = DirectCallMediaKeyEnvelopeWrappingProviderSpy(wrapper: nil)
+        let assembly = NativeDirectCallProductionDependencyAssembly(configuration: configuration,
+                                                                    httpTransport: DirectCallHTTPTransportSpy(),
+                                                                    accessTokenProvider: MatrixAccessTokenProviderStub(accessToken: "matrix-credential"),
+                                                                    liveKitClient: ProductionKeyWrappingLiveKitClientSpy(),
+                                                                    keyEnvelopeWrapperProvider: provider,
+                                                                    ownUserID: ownUserID,
+                                                                    senderDeviceID: "DEVICE")
+
+        let dependencies = assembly.makeDependencies()
+
+        #expect(dependencies.hasEncryptionService)
+        #expect(dependencies.hasMediaEngineFactory)
+        #expect(dependencies.keyWrapperSource == .missingProvider)
+        #expect(dependencies.isReadyForProductionStart == false)
+        #expect(provider.makeWrapperCallCount == 1)
+        #expect(String(describing: dependencies).contains("missingProvider"))
+        #expect(String(describing: assembly).contains(baseURL.absoluteString) == false)
     }
 
     @Test
@@ -385,6 +439,8 @@ final class DirectCallProductionKeyWrappingTests {
         }
         #expect(dependencies.hasEncryptionService)
         #expect(dependencies.hasMediaEngineFactory)
+        #expect(dependencies.keyWrapperSource == .providerWrapper)
+        #expect(dependencies.isReadyForProductionStart)
         #expect(keyEnvelopeWrapperProvider.makeWrapperCallCount == 1)
         #expect(sdk.wrapInfos.count == 1)
         #expect(httpTransport.requests.count == 1)
@@ -741,7 +797,8 @@ final class DirectCallProductionKeyWrappingTests {
         let encryptionService = ProductionActivationEncryptionServiceSpy()
         let mediaEngineFactory = ProductionActivationMediaEngineFactorySpy()
         let dependencyProvider = NativeDirectCallProductionDependencyProviderSpy(dependencies: NativeDirectCallProductionDependencies(encryptionService: encryptionService,
-                                                                                                                                      mediaEngineFactory: mediaEngineFactory))
+                                                                                                                                      mediaEngineFactory: mediaEngineFactory,
+                                                                                                                                      keyWrapperSource: .explicitWrapper))
         let service = DirectCallProductionActivationDecisionService(configuration: configuration,
                                                                     capabilityProvider: capabilityProvider,
                                                                     dependencyProvider: dependencyProvider)
@@ -768,6 +825,9 @@ final class DirectCallProductionKeyWrappingTests {
         let homeserverBaseURL = try #require(URL(string: "https://matrix.example.com"))
         let externalEndpointURL = try #require(URL(string: "https://calls.example.net/_matrix/client/unstable/kz.salemx.direct_call/livekit/token"))
         let gate = DirectCallProductionActivationGate()
+        let failClosedDependencies = NativeDirectCallProductionDependencies(encryptionService: ProductionDirectCallEncryptionService(),
+                                                                            mediaEngineFactory: NoOpDirectCallMediaEngineFactory(),
+                                                                            keyWrapperSource: .failClosedWrapper)
         let failureCases: [(DirectCallProductionActivationContext, DirectCallProductionActivationDisabledReason)] = [
             (makeActivationContext(appRolloutEnabled: false, homeserverBaseURL: homeserverBaseURL), .appRolloutDisabled),
             (makeActivationContext(homeserverBaseURL: homeserverBaseURL, serverCapability: nil), .serverCapabilityUnavailable),
@@ -780,6 +840,7 @@ final class DirectCallProductionKeyWrappingTests {
             (makeActivationContext(homeserverBaseURL: homeserverBaseURL, serverCapability: makeServerCapability(tokenEndpointPath: "https://calls.example.net/token")), .tokenEndpointUnavailable),
             (makeActivationContext(homeserverBaseURL: homeserverBaseURL, configuredTokenEndpointURL: externalEndpointURL), .tokenEndpointNotSameOrigin),
             (makeActivationContext(homeserverBaseURL: homeserverBaseURL, dependencies: .disabled), .dependenciesUnavailable),
+            (makeActivationContext(homeserverBaseURL: homeserverBaseURL, dependencies: failClosedDependencies), .dependenciesUnavailable),
             (makeActivationContext(homeserverBaseURL: homeserverBaseURL, roomEligibility: makeRoomEligibility(isEncrypted: false)), .roomNotEncrypted),
             (makeActivationContext(homeserverBaseURL: homeserverBaseURL, roomEligibility: makeRoomEligibility(isDirect: false)), .roomNotDirect),
             (makeActivationContext(homeserverBaseURL: homeserverBaseURL, roomEligibility: makeRoomEligibility(joinedMemberCount: 3)), .roomNotOneToOne),
@@ -1033,7 +1094,8 @@ final class DirectCallProductionKeyWrappingTests {
 
     private func makeActivationReadyDependencies() -> NativeDirectCallProductionDependencies {
         NativeDirectCallProductionDependencies(encryptionService: ProductionDirectCallEncryptionService(),
-                                               mediaEngineFactory: NoOpDirectCallMediaEngineFactory())
+                                               mediaEngineFactory: NoOpDirectCallMediaEngineFactory(),
+                                               keyWrapperSource: .explicitWrapper)
     }
 
     private func makeCapabilitiesPayload(tokenEndpointPath: String = DirectCallProductionConfiguration.tokenEndpointPath,

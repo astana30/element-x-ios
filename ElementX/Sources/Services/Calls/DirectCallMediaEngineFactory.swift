@@ -74,11 +74,45 @@ final class DirectCallLiveKitMediaEngineFactory: DirectCallMediaEngineFactoryPro
     }
 }
 
+enum NativeDirectCallProductionKeyWrapperSource: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case explicitWrapper
+    case explicitSDKWrapper
+    case providerWrapper
+    case failClosedWrapper
+    case missingProvider
+
+    var isProductionReady: Bool {
+        switch self {
+        case .explicitWrapper, .explicitSDKWrapper, .providerWrapper:
+            true
+        case .failClosedWrapper, .missingProvider:
+            false
+        }
+    }
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
 struct NativeDirectCallProductionDependencies: CustomStringConvertible, CustomDebugStringConvertible {
     let encryptionService: DirectCallEncryptionServiceProtocol?
     let mediaEngineFactory: DirectCallMediaEngineFactoryProtocol?
+    let keyWrapperSource: NativeDirectCallProductionKeyWrapperSource?
 
-    static let disabled = NativeDirectCallProductionDependencies(encryptionService: nil, mediaEngineFactory: nil)
+    init(encryptionService: DirectCallEncryptionServiceProtocol?,
+         mediaEngineFactory: DirectCallMediaEngineFactoryProtocol?,
+         keyWrapperSource: NativeDirectCallProductionKeyWrapperSource? = nil) {
+        self.encryptionService = encryptionService
+        self.mediaEngineFactory = mediaEngineFactory
+        self.keyWrapperSource = keyWrapperSource
+    }
+
+    static let disabled = NativeDirectCallProductionDependencies(encryptionService: nil, mediaEngineFactory: nil, keyWrapperSource: nil)
 
     var hasEncryptionService: Bool {
         encryptionService != nil
@@ -88,8 +122,22 @@ struct NativeDirectCallProductionDependencies: CustomStringConvertible, CustomDe
         mediaEngineFactory != nil
     }
 
+    var hasProductionReadyKeyWrapper: Bool {
+        keyWrapperSource?.isProductionReady == true
+    }
+
+    var isReadyForProductionStart: Bool {
+        hasEncryptionService && hasMediaEngineFactory && hasProductionReadyKeyWrapper
+    }
+
     var description: String {
-        "NativeDirectCallProductionDependencies(encryptionServiceAvailable: \(hasEncryptionService), mediaEngineFactoryAvailable: \(hasMediaEngineFactory))"
+        let fields = [
+            "encryptionServiceAvailable: \(hasEncryptionService)",
+            "mediaEngineFactoryAvailable: \(hasMediaEngineFactory)",
+            "keyWrapperSource: \(keyWrapperSource?.description ?? "none")",
+            "readyForProductionStart: \(isReadyForProductionStart)"
+        ]
+        return "NativeDirectCallProductionDependencies(\(fields.joined(separator: ", ")))"
     }
 
     var debugDescription: String {
@@ -185,14 +233,22 @@ struct NativeDirectCallProductionDependenciesFactory {
 
         let sharedKeyStore = mediaKeyStore ?? DirectCallLiveKitMediaKeyStore()
         let mediaKeyWrapper: DirectCallMediaKeyWrappingProtocol
+        let keyWrapperSource: NativeDirectCallProductionKeyWrapperSource
         if let keyWrapper {
             mediaKeyWrapper = keyWrapper
+            keyWrapperSource = .explicitWrapper
         } else if let matrixSDKKeyEnvelopeWrapper {
             mediaKeyWrapper = MatrixSDKDirectCallMediaKeyWrapper(envelopeWrapper: matrixSDKKeyEnvelopeWrapper)
+            keyWrapperSource = .explicitSDKWrapper
         } else if let matrixSDKKeyEnvelopeWrapper = matrixSDKKeyEnvelopeWrapperProvider?.makeDirectCallMediaKeyEnvelopeWrapper() {
             mediaKeyWrapper = MatrixSDKDirectCallMediaKeyWrapper(envelopeWrapper: matrixSDKKeyEnvelopeWrapper)
+            keyWrapperSource = .providerWrapper
+        } else if matrixSDKKeyEnvelopeWrapperProvider != nil {
+            mediaKeyWrapper = FailClosedDirectCallMediaKeyWrapper()
+            keyWrapperSource = .missingProvider
         } else {
             mediaKeyWrapper = FailClosedDirectCallMediaKeyWrapper()
+            keyWrapperSource = .failClosedWrapper
         }
         let encryptionService = ProductionDirectCallEncryptionService(keyWrapper: mediaKeyWrapper,
                                                                       keyStore: sharedKeyStore,
@@ -206,7 +262,8 @@ struct NativeDirectCallProductionDependenciesFactory {
                                                                      liveKitClient: liveKitClient ?? LiveKitDirectCallClient())
 
         return NativeDirectCallProductionDependencies(encryptionService: encryptionService,
-                                                      mediaEngineFactory: mediaEngineFactory)
+                                                      mediaEngineFactory: mediaEngineFactory,
+                                                      keyWrapperSource: keyWrapperSource)
     }
 }
 

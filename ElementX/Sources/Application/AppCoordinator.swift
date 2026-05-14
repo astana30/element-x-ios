@@ -1324,7 +1324,8 @@ extension AppCoordinator {
                                           encryptionService: nativeDirectCallDiagnosticEncryptionService)
         } nativeDirectCallProductionActivationDryRunProviderFactory: { roomProxy in
             Self.makeNativeDirectCallProductionActivationDryRunProvider(roomProxy: roomProxy,
-                                                                        homeserver: flowParameters.userSession.clientProxy.homeserver)
+                                                                        homeserver: flowParameters.userSession.clientProxy.homeserver,
+                                                                        clientProxy: flowParameters.userSession.clientProxy)
         } nativeDirectCallProductionRoomFlowOwnerFactory: { roomProxy in
             Self.makeNativeDirectCallProductionRoomFlowOwner(roomProxy: roomProxy,
                                                              clientProxy: flowParameters.userSession.clientProxy)
@@ -1356,6 +1357,7 @@ extension AppCoordinator {
 
     static func makeNativeDirectCallProductionActivationDryRunProvider(roomProxy: JoinedRoomProxyProtocol,
                                                                        homeserver: String,
+                                                                       clientProxy: ClientProxyProtocol? = nil,
                                                                        environment: [String: String] = ProcessInfo.processInfo.environment) -> NativeDirectCallProductionActivationDryRunProviding {
         let roomEligibility = DirectCallProductionRoomEligibility(roomProxy: roomProxy)
         let homeserverBaseURL = URL(string: homeserver)
@@ -1367,7 +1369,8 @@ extension AppCoordinator {
 
         let decisionService = DirectCallProductionActivationDecisionService(rolloutProvider: NativeDirectCallProductionDryRunFakeRolloutProvider(),
                                                                             capabilityProvider: NativeDirectCallProductionDryRunFakeCapabilityProvider(),
-                                                                            dependencyProvider: NativeDirectCallProductionDryRunFakeDependencyProvider())
+                                                                            dependencyProvider: makeNativeDirectCallProductionDependencyProvider(clientProxy: clientProxy,
+                                                                                                                                                 tokenEndpointBaseURL: homeserverBaseURL))
         return NativeDirectCallProductionActivationDryRunProvider(activationDryRunDiagnostics: decisionService,
                                                                   homeserverBaseURL: homeserverBaseURL,
                                                                   roomEligibility: roomEligibility)
@@ -1390,7 +1393,7 @@ extension AppCoordinator {
                                                                               ownUserID: clientProxy.userID,
                                                                               senderDeviceID: clientProxy.deviceID)
         let dependencies = dependencyAssembly.makeDependencies()
-        guard dependencies.hasEncryptionService, dependencies.hasMediaEngineFactory else {
+        guard dependencies.isReadyForProductionStart else {
             return .blocked(.dependenciesUnavailable)
         }
 
@@ -1399,6 +1402,25 @@ extension AppCoordinator {
                                                     compositionConfiguration: .init(isEnabled: true),
                                                     mediaEngineFactory: dependencies.mediaEngineFactory,
                                                     encryptionService: dependencies.encryptionService))
+    }
+
+    @MainActor
+    private static func makeNativeDirectCallProductionDependencyProvider(clientProxy: ClientProxyProtocol?,
+                                                                         tokenEndpointBaseURL: URL?) -> NativeDirectCallProductionDependencyProviding {
+        guard let clientProxy,
+              let tokenEndpointBaseURL else {
+            return NativeDirectCallProductionDryRunFakeDependencyProvider()
+        }
+
+        let configuration = DirectCallProductionConfiguration(isEnabled: true,
+                                                              tokenEndpointBaseURL: tokenEndpointBaseURL)
+        return NativeDirectCallProductionDependencyAssembly(configuration: configuration,
+                                                            httpTransport: URLSessionDirectCallHTTPTransport(),
+                                                            accessTokenProvider: clientProxy as? DirectCallMatrixAccessTokenProviding,
+                                                            liveKitClient: LiveKitDirectCallClient(),
+                                                            keyEnvelopeWrapperProvider: clientProxy as? DirectCallMediaKeyEnvelopeWrappingProviding,
+                                                            ownUserID: clientProxy.userID,
+                                                            senderDeviceID: clientProxy.deviceID)
     }
 
     private func configureNativeDirectCallIntegrationDiagnosticHarnessIfNeeded() {
@@ -1503,7 +1525,8 @@ private final class NativeDirectCallProductionDryRunFakeCapabilityProvider: Dire
 private final class NativeDirectCallProductionDryRunFakeDependencyProvider: NativeDirectCallProductionDependencyProviding {
     func nativeDirectCallProductionDependencies() -> NativeDirectCallProductionDependencies {
         .init(encryptionService: NativeDirectCallProductionDryRunFakeEncryptionService(),
-              mediaEngineFactory: NativeDirectCallProductionDryRunFakeMediaEngineFactory())
+              mediaEngineFactory: NativeDirectCallProductionDryRunFakeMediaEngineFactory(),
+              keyWrapperSource: .explicitWrapper)
     }
 }
 

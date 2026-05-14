@@ -573,13 +573,14 @@ if expected_signal == "nativeDirectCallDiagnosticStatusResult":
 if expected_signal == "nativeDirectCallProductionActivationDryRunResult":
     diagnostic = body.get("diagnostic", {})
     print(
-        "enabled={enabled} reason={reason} capabilityPresent={capability} dependenciesReady={dependencies} roomEligible={room} endpointAccepted={endpoint}".format(
+        "enabled={enabled} reason={reason} capabilityPresent={capability} dependenciesReady={dependencies} roomEligible={room} endpointAccepted={endpoint} keyWrapperSource={key_wrapper_source}".format(
             enabled=str(diagnostic.get("enabled", "unknown")).lower(),
             reason=diagnostic.get("reason") or "none",
             capability=str(diagnostic.get("capabilityPresent", "unknown")).lower(),
             dependencies=str(diagnostic.get("dependenciesReady", "unknown")).lower(),
             room=str(diagnostic.get("roomEligible", "unknown")).lower(),
             endpoint=str(diagnostic.get("endpointAccepted", "unknown")).lower(),
+            key_wrapper_source=diagnostic.get("keyWrapperSource") or "none",
         )
     )
     sys.exit(0)
@@ -587,7 +588,7 @@ if expected_signal == "nativeDirectCallProductionActivationDryRunResult":
 if expected_signal == "nativeDirectCallProductionTriggerDryRunResult":
     diagnostic = body.get("diagnostic", {})
     print(
-        "wouldStart={would_start} enabled={enabled} reason={reason} capabilityPresent={capability} dependenciesReady={dependencies} roomEligible={room} endpointAccepted={endpoint}".format(
+        "wouldStart={would_start} enabled={enabled} reason={reason} capabilityPresent={capability} dependenciesReady={dependencies} roomEligible={room} endpointAccepted={endpoint} keyWrapperSource={key_wrapper_source}".format(
             would_start=str(diagnostic.get("wouldStart", "unknown")).lower(),
             enabled=str(diagnostic.get("enabled", "unknown")).lower(),
             reason=diagnostic.get("reason") or "none",
@@ -595,6 +596,7 @@ if expected_signal == "nativeDirectCallProductionTriggerDryRunResult":
             dependencies=str(diagnostic.get("dependenciesReady", "unknown")).lower(),
             room=str(diagnostic.get("roomEligible", "unknown")).lower(),
             endpoint=str(diagnostic.get("endpointAccepted", "unknown")).lower(),
+            key_wrapper_source=diagnostic.get("keyWrapperSource") or "none",
         )
     )
     sys.exit(0)
@@ -612,7 +614,7 @@ if expected_signal == "nativeDirectCallProductionStartOutgoingAudioCallResult":
             encryption_state=session.get("encryptionState", "unknown"),
         )
     print(
-        "outcome={outcome} reason={reason} wouldStart={would_start} enabled={enabled} capabilityPresent={capability} dependenciesReady={dependencies} roomEligible={room} endpointAccepted={endpoint}{session_fields}".format(
+        "outcome={outcome} reason={reason} wouldStart={would_start} enabled={enabled} capabilityPresent={capability} dependenciesReady={dependencies} roomEligible={room} endpointAccepted={endpoint} keyWrapperSource={key_wrapper_source}{session_fields}".format(
             outcome=body.get("outcome", "unknown"),
             reason=body.get("reason") or "none",
             would_start=str(diagnostic.get("wouldStart", "unknown")).lower(),
@@ -621,6 +623,7 @@ if expected_signal == "nativeDirectCallProductionStartOutgoingAudioCallResult":
             dependencies=str(diagnostic.get("dependenciesReady", "unknown")).lower(),
             room=str(diagnostic.get("roomEligible", "unknown")).lower(),
             endpoint=str(diagnostic.get("endpointAccepted", "unknown")).lower(),
+            key_wrapper_source=diagnostic.get("keyWrapperSource") or "none",
             session_fields=session_fields,
         )
     )
