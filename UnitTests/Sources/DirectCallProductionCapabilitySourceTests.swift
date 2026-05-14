@@ -362,48 +362,6 @@ final class DirectCallProductionCapabilitySourceTests {
         #expect(String(describing: result).contains("matrix-access-credential") == false)
     }
 
-    @Test(.enabled(if: DirectCallLocalBackendSmokeEnvironment.isRunnableInCurrentProcess))
-    func productionHTTPCapabilityProviderMapsLocalBackendSmokeCapabilityToDryRunDecision() async throws {
-        let environment = try #require(DirectCallLocalBackendSmokeEnvironment.current)
-        let provider = HTTPDirectCallProductionCapabilityProvider(homeserverBaseURL: environment.backendBaseURL,
-                                                                  httpTransport: URLSessionDirectCallHTTPTransport(),
-                                                                  accessTokenProvider: CapabilitySourceAccessTokenProviderStub(accessToken: environment.fakeAccessToken))
-
-        let result = await provider.directCallProductionServerCapability()
-        let capability = try #require(result.capability)
-
-        #expect(result.isAvailable)
-        #expect(capability.isEnabled)
-        #expect(capability.tokenEndpointPath == DirectCallProductionConfiguration.tokenEndpointPath)
-        #expect(capability.supportsIntent(.audio))
-        #expect(String(describing: environment).contains(environment.fakeAccessToken) == false)
-        #expect(String(describing: provider).contains(environment.backendBaseURL.absoluteString) == false)
-
-        let disabledService = DirectCallProductionActivationDecisionService(rolloutProvider: FailClosedDirectCallProductionRolloutProvider(),
-                                                                            capabilityProvider: provider,
-                                                                            dependencyProvider: CapabilitySourceDependencyProviderSpy(dependencies: makeActivationReadyDependencies()))
-        let disabledDiagnostic = await disabledService.directCallProductionActivationDryRunDiagnostic(homeserverBaseURL: environment.backendBaseURL,
-                                                                                                      roomEligibility: makeRoomEligibility())
-
-        #expect(disabledDiagnostic.disabledReason == .appRolloutDisabled)
-        #expect(disabledDiagnostic.isCapabilityPresent == false)
-        #expect(disabledDiagnostic.areDependenciesReady == false)
-        assertActivationDiagnosticIsRedacted(disabledDiagnostic)
-
-        let enabledService = DirectCallProductionActivationDecisionService(rolloutProvider: CapabilitySourceRolloutProviderSpy(configuration: .init(isEnabled: true)),
-                                                                           capabilityProvider: CapabilitySourceProviderSpy(result: result),
-                                                                           dependencyProvider: CapabilitySourceDependencyProviderSpy(dependencies: makeActivationReadyDependencies()))
-        let enabledDiagnostic = await enabledService.directCallProductionActivationDryRunDiagnostic(homeserverBaseURL: environment.backendBaseURL,
-                                                                                                    roomEligibility: makeRoomEligibility())
-
-        #expect(enabledDiagnostic.isEnabled)
-        #expect(enabledDiagnostic.isCapabilityPresent)
-        #expect(enabledDiagnostic.areDependenciesReady)
-        #expect(enabledDiagnostic.isRoomEligible)
-        #expect(enabledDiagnostic.isEndpointAccepted)
-        assertActivationDiagnosticIsRedacted(enabledDiagnostic)
-    }
-
     @Test
     func productionHTTPCapabilityProviderMapsMissingAndMalformedCapabilitiesFailClosed() async throws {
         let homeserverBaseURL = try #require(URL(string: "https://matrix.example.com"))
@@ -642,62 +600,6 @@ private struct CapabilitySourceActivationReadinessFailureCase {
     let expectedEndpoint: Bool
 }
 
-private struct DirectCallLocalBackendSmokeEnvironment: CustomStringConvertible, CustomDebugStringConvertible {
-    static let smokeEnabledKey = "SALEMX_DIRECTCALL_BACKEND_SMOKE"
-    static let backendBaseURLKey = "SALEMX_DIRECTCALL_BACKEND_BASE_URL"
-    static let fakeAccessTokenKey = "SALEMX_DIRECTCALL_BACKEND_FAKE_ACCESS_TOKEN"
-
-    static var current: DirectCallLocalBackendSmokeEnvironment? {
-        DirectCallLocalBackendSmokeEnvironment(environment: ProcessInfo.processInfo.environment)
-    }
-
-    static var isRunnableInCurrentProcess: Bool {
-        current != nil
-    }
-
-    let backendBaseURL: URL
-    let fakeAccessToken: String
-
-    init?(environment: [String: String]) {
-        guard environment[Self.smokeEnabledKey] == "1",
-              let backendBaseURLString = Self.nonEmptyString(environment[Self.backendBaseURLKey]),
-              let backendBaseURL = URL(string: backendBaseURLString),
-              Self.isLocalBackendURL(backendBaseURL),
-              let fakeAccessToken = Self.nonEmptyString(environment[Self.fakeAccessTokenKey]) else {
-            return nil
-        }
-
-        self.backendBaseURL = backendBaseURL
-        self.fakeAccessToken = fakeAccessToken
-    }
-
-    var description: String {
-        "DirectCallLocalBackendSmokeEnvironment(backendBaseURL: <redacted>, fakeAccessToken: <redacted>)"
-    }
-
-    var debugDescription: String {
-        description
-    }
-
-    private static func isLocalBackendURL(_ url: URL) -> Bool {
-        guard let scheme = url.scheme?.lowercased(),
-              ["http", "https"].contains(scheme),
-              let host = url.host?.lowercased() else {
-            return false
-        }
-
-        return ["127.0.0.1", "localhost", "::1"].contains(host)
-    }
-
-    private static func nonEmptyString(_ value: String?) -> String? {
-        guard let value, value.isEmpty == false else {
-            return nil
-        }
-
-        return value
-    }
-}
-
 @MainActor
 private final class CapabilitySourceRolloutProviderSpy: DirectCallProductionRolloutProviding {
     private let configuration: DirectCallProductionConfiguration
@@ -795,5 +697,266 @@ private final class CapabilitySourceMediaEngineFactorySpy: DirectCallMediaEngine
     func makeMediaEngine() -> Result<any DirectCallMediaEngineProtocol, DirectCallMediaError> {
         makeMediaEngineCallCount += 1
         return .failure(.mediaSetupUnavailable)
+    }
+}
+
+@MainActor
+final class DirectCallBackendSmokeTests {
+    @Test
+    func smokeEnvironmentIsDisabledByDefaultAndLocalOnly() {
+        #expect(DirectCallBackendSmokeEnvironment(environment: [:]) == nil)
+        #expect(DirectCallBackendSmokeEnvironment(environment: [
+            DirectCallBackendSmokeEnvironment.smokeEnabledKey: "1",
+            DirectCallBackendSmokeEnvironment.backendBaseURLKey: "https://call-service.example.com",
+            DirectCallBackendSmokeEnvironment.fakeAccessTokenKey: "matrix-access-credential"
+        ]) == nil)
+        #expect(DirectCallBackendSmokeEnvironment(environment: [
+            DirectCallBackendSmokeEnvironment.smokeEnabledKey: "1",
+            DirectCallBackendSmokeEnvironment.backendBaseURLKey: "http://127.0.0.1:8088",
+            DirectCallBackendSmokeEnvironment.fakeAccessTokenKey: "matrix-access-credential"
+        ]) != nil)
+    }
+
+    @Test(.enabled(if: DirectCallBackendSmokeEnvironment.isRunnableInCurrentProcess))
+    func productionLiveKitTokenProviderMapsLocalBackendSmokeResponseToConnectionInfo() async throws {
+        let environment = try #require(DirectCallBackendSmokeEnvironment.current)
+        let productionConfiguration = DirectCallProductionConfiguration(isEnabled: true,
+                                                                        tokenEndpointBaseURL: environment.backendBaseURL)
+        let tokenClient = ProductionDirectCallLiveKitTokenClient(configuration: productionConfiguration.liveKitConfiguration,
+                                                                 httpTransport: URLSessionDirectCallHTTPTransport(),
+                                                                 accessTokenProvider: DirectCallBackendSmokeAccessTokenProvider(accessToken: environment.fakeAccessToken))
+        let provider = DirectCallLiveKitTokenProvider(tokenClient: tokenClient)
+        let session = DirectCallSession(callID: "local-smoke-call",
+                                        roomID: "!local-smoke:example.test",
+                                        peerUserID: "@bob:local.test",
+                                        direction: .outgoing,
+                                        intent: .audio,
+                                        encryptionMode: .e2eeRequired,
+                                        startedAt: .now,
+                                        updatedAt: .now,
+                                        state: .connecting,
+                                        encryptionState: .ready)
+
+        let connectionInfo = try await provider.connectionInfo(for: session).get()
+
+        #expect(productionConfiguration.isConfigured)
+        #expect(connectionInfo.serverURL.scheme?.isEmpty == false)
+        #expect(connectionInfo.roomName.isEmpty == false)
+        #expect(connectionInfo.token.isEmpty == false)
+        #expect(String(describing: environment).contains(environment.fakeAccessToken) == false)
+        #expect(String(describing: tokenClient).contains(environment.backendBaseURL.absoluteString) == false)
+        #expect(String(describing: connectionInfo).contains(connectionInfo.token) == false)
+    }
+
+    @Test(.enabled(if: DirectCallBackendSmokeEnvironment.isRunnableInCurrentProcess))
+    func productionHTTPCapabilityProviderMapsLocalBackendSmokeCapabilityToDryRunDecision() async throws {
+        let environment = try #require(DirectCallBackendSmokeEnvironment.current)
+        let provider = HTTPDirectCallProductionCapabilityProvider(homeserverBaseURL: environment.backendBaseURL,
+                                                                  httpTransport: URLSessionDirectCallHTTPTransport(),
+                                                                  accessTokenProvider: DirectCallBackendSmokeAccessTokenProvider(accessToken: environment.fakeAccessToken))
+
+        let result = await provider.directCallProductionServerCapability()
+        let capability = try #require(result.capability)
+
+        #expect(result.isAvailable)
+        #expect(capability.isEnabled)
+        #expect(capability.tokenEndpointPath == DirectCallProductionConfiguration.tokenEndpointPath)
+        #expect(capability.supportsIntent(.audio))
+        #expect(String(describing: environment).contains(environment.fakeAccessToken) == false)
+        #expect(String(describing: provider).contains(environment.backendBaseURL.absoluteString) == false)
+
+        let disabledService = DirectCallProductionActivationDecisionService(rolloutProvider: FailClosedDirectCallProductionRolloutProvider(),
+                                                                            capabilityProvider: provider,
+                                                                            dependencyProvider: DirectCallBackendSmokeDependencyProvider(dependencies: makeActivationReadyDependencies()))
+        let disabledDiagnostic = await disabledService.directCallProductionActivationDryRunDiagnostic(homeserverBaseURL: environment.backendBaseURL,
+                                                                                                      roomEligibility: makeRoomEligibility())
+
+        #expect(disabledDiagnostic.disabledReason == .appRolloutDisabled)
+        #expect(disabledDiagnostic.isCapabilityPresent == false)
+        #expect(disabledDiagnostic.areDependenciesReady == false)
+        assertActivationDiagnosticIsRedacted(disabledDiagnostic)
+
+        let enabledService = DirectCallProductionActivationDecisionService(rolloutProvider: DirectCallBackendSmokeRolloutProvider(configuration: .init(isEnabled: true)),
+                                                                           capabilityProvider: DirectCallBackendSmokeCapabilityProvider(result: result),
+                                                                           dependencyProvider: DirectCallBackendSmokeDependencyProvider(dependencies: makeActivationReadyDependencies()))
+        let enabledDiagnostic = await enabledService.directCallProductionActivationDryRunDiagnostic(homeserverBaseURL: environment.backendBaseURL,
+                                                                                                    roomEligibility: makeRoomEligibility())
+
+        #expect(enabledDiagnostic.isEnabled)
+        #expect(enabledDiagnostic.isCapabilityPresent)
+        #expect(enabledDiagnostic.areDependenciesReady)
+        #expect(enabledDiagnostic.isRoomEligible)
+        #expect(enabledDiagnostic.isEndpointAccepted)
+        assertActivationDiagnosticIsRedacted(enabledDiagnostic)
+    }
+
+    private func makeActivationReadyDependencies() -> NativeDirectCallProductionDependencies {
+        NativeDirectCallProductionDependencies(encryptionService: ProductionDirectCallEncryptionService(),
+                                               mediaEngineFactory: NoOpDirectCallMediaEngineFactory())
+    }
+
+    private func makeRoomEligibility() -> DirectCallProductionRoomEligibility {
+        DirectCallProductionRoomEligibility(isDirect: true,
+                                            isEncrypted: true,
+                                            joinedMemberCount: 2,
+                                            hasPeerUserID: true)
+    }
+
+    private func assertActivationDiagnosticIsRedacted(_ diagnostic: DirectCallProductionActivationDryRunDiagnostic) {
+        let description = String(describing: diagnostic)
+        let forbiddenFragments = [
+            "local-smoke",
+            "127.0.0.1",
+            DirectCallProductionConfiguration.tokenEndpointPath,
+            "!local",
+            "@bob",
+            "participant_" + "token",
+            "access_" + "token",
+            "bearer",
+            "j" + "wt",
+            "raw " + "key",
+            "encrypted_" + "payload",
+            "debug" + "Info",
+            "original" + "JSON",
+            "raw " + "JSON"
+        ]
+
+        for fragment in forbiddenFragments {
+            #expect(description.localizedCaseInsensitiveContains(fragment) == false)
+        }
+    }
+}
+
+private struct DirectCallBackendSmokeEnvironment: CustomStringConvertible, CustomDebugStringConvertible {
+    static let smokeEnabledKey = "SALEMX_DIRECTCALL_BACKEND_SMOKE"
+    static let backendBaseURLKey = "SALEMX_DIRECTCALL_BACKEND_BASE_URL"
+    static let fakeAccessTokenKey = "SALEMX_DIRECTCALL_BACKEND_FAKE_ACCESS_TOKEN"
+    static let smokeCreatedAtKey = "SALEMX_DIRECTCALL_BACKEND_SMOKE_CREATED_AT"
+    static let smokeFileURL = URL(fileURLWithPath: "/tmp/salemx-direct-call-backend-smoke.env")
+    static let smokeFileTTL: TimeInterval = 600
+
+    static var current: DirectCallBackendSmokeEnvironment? {
+        DirectCallBackendSmokeEnvironment(environment: ProcessInfo.processInfo.environment)
+            ?? DirectCallBackendSmokeEnvironment(smokeFileURL: smokeFileURL)
+    }
+
+    static var isRunnableInCurrentProcess: Bool {
+        current != nil
+    }
+
+    let backendBaseURL: URL
+    let fakeAccessToken: String
+
+    init?(environment: [String: String]) {
+        guard environment[Self.smokeEnabledKey] == "1",
+              let backendBaseURLString = Self.nonEmptyString(environment[Self.backendBaseURLKey]),
+              let backendBaseURL = URL(string: backendBaseURLString),
+              Self.isLocalBackendURL(backendBaseURL),
+              let fakeAccessToken = Self.nonEmptyString(environment[Self.fakeAccessTokenKey]) else {
+            return nil
+        }
+
+        self.backendBaseURL = backendBaseURL
+        self.fakeAccessToken = fakeAccessToken
+    }
+
+    init?(smokeFileURL: URL) {
+        guard let contents = try? String(contentsOf: smokeFileURL, encoding: .utf8) else {
+            return nil
+        }
+
+        let environment = Self.environment(from: contents)
+        guard let createdAtValue = environment[Self.smokeCreatedAtKey],
+              let createdAt = TimeInterval(createdAtValue),
+              Date().timeIntervalSince1970 - createdAt <= Self.smokeFileTTL else {
+            return nil
+        }
+
+        self.init(environment: environment)
+    }
+
+    var description: String {
+        "DirectCallBackendSmokeEnvironment(backendBaseURL: <redacted>, fakeAccessToken: <redacted>)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+
+    private static func isLocalBackendURL(_ url: URL) -> Bool {
+        guard let scheme = url.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              let host = url.host?.lowercased() else {
+            return false
+        }
+
+        return ["127.0.0.1", "localhost", "::1"].contains(host)
+    }
+
+    private static func nonEmptyString(_ value: String?) -> String? {
+        guard let value, value.isEmpty == false else {
+            return nil
+        }
+
+        return value
+    }
+
+    private static func environment(from contents: String) -> [String: String] {
+        contents.split(whereSeparator: \.isNewline).reduce(into: [String: String]()) { result, line in
+            let parts = line.split(separator: "=", maxSplits: 1).map(String.init)
+            guard parts.count == 2 else {
+                return
+            }
+
+            result[parts[0]] = parts[1]
+        }
+    }
+}
+
+@MainActor
+private struct DirectCallBackendSmokeAccessTokenProvider: DirectCallMatrixAccessTokenProviding {
+    let accessToken: String?
+
+    func matrixAccessToken() async -> String? {
+        accessToken
+    }
+}
+
+@MainActor
+private final class DirectCallBackendSmokeRolloutProvider: DirectCallProductionRolloutProviding {
+    private let configuration: DirectCallProductionConfiguration
+
+    init(configuration: DirectCallProductionConfiguration) {
+        self.configuration = configuration
+    }
+
+    func directCallProductionConfiguration() -> DirectCallProductionConfiguration {
+        configuration
+    }
+}
+
+@MainActor
+private final class DirectCallBackendSmokeCapabilityProvider: DirectCallProductionCapabilityProviding {
+    private let result: DirectCallProductionCapabilityDiscoveryResult
+
+    init(result: DirectCallProductionCapabilityDiscoveryResult) {
+        self.result = result
+    }
+
+    func directCallProductionServerCapability() async -> DirectCallProductionCapabilityDiscoveryResult {
+        result
+    }
+}
+
+@MainActor
+private final class DirectCallBackendSmokeDependencyProvider: NativeDirectCallProductionDependencyProviding {
+    private let dependencies: NativeDirectCallProductionDependencies
+
+    init(dependencies: NativeDirectCallProductionDependencies) {
+        self.dependencies = dependencies
+    }
+
+    func nativeDirectCallProductionDependencies() -> NativeDirectCallProductionDependencies {
+        dependencies
     }
 }

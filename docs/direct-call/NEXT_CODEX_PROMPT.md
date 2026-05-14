@@ -7,10 +7,10 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.12B — local backend + app production token/capability integration pack complete.
+After 2.12C — local backend HTTP smoke harness fixed and proven.
 
 Current app code checkpoint:
-This commit: `Add local production token integration smoke harness`
+This commit: `Fix local direct-call backend smoke test`
 
 Current SDK checkpoint:
 f7c2cfe5c `Add direct-call media key envelope crypto tests`
@@ -25,7 +25,7 @@ Artifact checksum:
 654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e
 
 Phase:
-2.12C — endpoint-aware production dependency readiness inspection/skeleton.
+2.12D — endpoint-aware production dependency readiness inspection/skeleton.
 
 Task:
 Inspect and, if safe, add a fail-closed endpoint-aware production dependency readiness seam for native direct calls.
@@ -44,6 +44,7 @@ Context:
 - `DirectCallProductionRolloutProviding` exists with `FailClosedDirectCallProductionRolloutProvider`, defaulting rollout off.
 - `HTTPDirectCallProductionCapabilityProvider` exists and fetches authenticated Matrix `/_matrix/client/v3/capabilities` through injected `DirectCallHTTPTransportProtocol` and `DirectCallMatrixAccessTokenProviding`.
 - The local backend smoke pack proves the token client and capability provider can talk to local fake mode through `URLSessionDirectCallHTTPTransport` when env-gated.
+- `Tools/Scripts/run_direct_call_backend_smoke.sh` is the reliable command for local HTTP smoke: it validates fake backend reachability, writes a short-lived local smoke config file for hosted simulator tests, runs `DirectCallBackendSmokeTests`, and fails if either smoke is skipped.
 - `DirectCallProductionActivationDecisionService` uses rollout and capability providers in a side-effect-free sequence.
 - `DirectCallProductionActivationGate` models app rollout, authenticated server capability, same-origin token endpoint, dependency readiness, and encrypted direct 1:1 room eligibility.
 - The readiness pack proves an enabled model only when rollout, capability, endpoint, dependencies, and room eligibility are all valid.

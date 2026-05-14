@@ -42,7 +42,20 @@ Both are local-only smoke endpoints. Fake mode is off by default.
 
 ## Run App Smoke Tests
 
-In another shell, run the env-gated tests against the local fake service:
+In another shell, run the env-gated smoke wrapper against the local fake service:
+
+```bash
+SALEMX_DIRECTCALL_BACKEND_SMOKE=1 \
+SALEMX_DIRECTCALL_BACKEND_BASE_URL=http://127.0.0.1:8088 \
+SALEMX_DIRECTCALL_BACKEND_FAKE_ACCESS_TOKEN=<same-fake-local-access-credential> \
+Tools/Scripts/run_direct_call_backend_smoke.sh
+```
+
+The script verifies both fake backend endpoints are reachable, runs the Swift Testing suites that contain the token and capability smoke tests, and fails unless both smoke tests are reported as passed. It intentionally does not print the fake access credential or response bodies.
+
+The script writes a short-lived local smoke config file to `/tmp/salemx-direct-call-backend-smoke.env` so hosted simulator tests can read the fake backend settings reliably. The file is removed when the script exits and is ignored by default test runs when absent or stale.
+
+If you need to run the underlying Xcode command manually, use suite-level selectors rather than method-level selectors. Swift Testing method selection through `xcodebuild -only-testing` can report zero selected tests in some setups.
 
 ```bash
 SALEMX_DIRECTCALL_BACKEND_SMOKE=1 \
@@ -52,11 +65,10 @@ xcodebuild test \
   -project SalemX.xcodeproj \
   -scheme UnitTests \
   -destination 'platform=iOS Simulator,id=183D9DAD-0CB6-49DE-ABFD-53BFA7B724CB' \
-  -only-testing:UnitTests/DirectCallMediaEngineTests \
-  -only-testing:UnitTests/DirectCallProductionCapabilitySourceTests
+  -only-testing:UnitTests/DirectCallBackendSmokeTests
 ```
 
-Without `SALEMX_DIRECTCALL_BACKEND_SMOKE=1`, the local HTTP smoke tests are skipped.
+Without `SALEMX_DIRECTCALL_BACKEND_SMOKE=1`, the local HTTP smoke tests are skipped. The wrapper script treats that as a configuration error because its purpose is to prove the smoke actually ran.
 
 ## Redaction Rules
 

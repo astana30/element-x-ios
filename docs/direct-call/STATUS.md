@@ -2,15 +2,15 @@
 
 ## Current Phase
 
-After 2.12B — local backend + app production token/capability integration pack complete.
+After 2.12C — local backend HTTP smoke harness fixed and proven.
 
 ## Latest App Code Checkpoint
 
-This commit: `Add local production token integration smoke harness`
+This commit: `Fix local direct-call backend smoke test`
 
 ## Latest Code Checkpoint
 
-This commit: `Add local production token integration smoke harness`
+This commit: `Fix local direct-call backend smoke test`
 
 ## Latest SDK Checkpoint
 
@@ -81,6 +81,13 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Missing wrapper dependencies still fall back to `FailClosedDirectCallMediaKeyWrapper`.
   - No broad MatrixRustSDK client, room, timeline, or raw crypto API was exposed through app protocols.
   - Production direct calls remain disabled by default.
+- Local backend HTTP smoke harness is fixed and proven:
+  - `Tools/Scripts/run_direct_call_backend_smoke.sh` validates local fake backend reachability before running Xcode tests.
+  - The script selects the dedicated `DirectCallBackendSmokeTests` Swift Testing suite instead of brittle method-level selectors.
+  - Hosted simulator tests receive smoke configuration through a short-lived `/tmp/salemx-direct-call-backend-smoke.env` file that the script removes on exit.
+  - Default runs skip the HTTP smoke tests when the smoke file/env is absent or stale.
+  - Env-gated local smoke run proved both production token client and capability provider can call the local FastAPI fake backend over HTTP.
+  - Output remains redacted and production direct calls remain disabled.
   - Focused app unit tests and Release build pass after the injection seam.
 - Production runtime SDK key wrapper provider seam is complete:
   - `DirectCallMediaKeyEnvelopeWrappingProviding` exposes only a direct-call envelope wrapper provider, not a raw SDK client, raw SDK room, raw timeline, or raw crypto object.
@@ -216,6 +223,13 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - The smoke also proves default rollout still returns `appRolloutDisabled`, while an all-valid test-only model can produce an enabled dry-run decision without runtime activation.
   - Local smoke instructions are documented in `docs/direct-call/LOCAL_BACKEND_SMOKE.md`.
   - Production direct calls remain disabled by default.
+- Local backend HTTP smoke harness is fixed and proven:
+  - `Tools/Scripts/run_direct_call_backend_smoke.sh` validates local fake backend reachability before running Xcode tests.
+  - The script selects the dedicated `DirectCallBackendSmokeTests` Swift Testing suite instead of brittle method-level selectors.
+  - Hosted simulator tests receive smoke configuration through a short-lived `/tmp/salemx-direct-call-backend-smoke.env` file that the script removes on exit.
+  - Default runs skip the HTTP smoke tests when the smoke file/env is absent or stale.
+  - Env-gated local smoke run proved both production token client and capability provider can call the local FastAPI fake backend over HTTP.
+  - Output remains redacted and production direct calls remain disabled.
 
 ## Current Blocker
 
@@ -231,7 +245,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.12C — endpoint-aware production dependency readiness inspection/skeleton`
+`2.12D — endpoint-aware production dependency readiness inspection/skeleton`
 
 Goal: split side-effect-free runtime prerequisite readiness from endpoint-specific dependency assembly, or make dependency readiness receive an activation-accepted token endpoint, without activating visible UI or production direct calls.
 

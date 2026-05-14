@@ -1808,52 +1808,11 @@ final class DirectCallMediaProviderSkeletonTests {
     }
 
     @Test
-    func productionBackendSmokeEnvironmentIsDisabledByDefaultAndLocalOnly() {
-        #expect(DirectCallBackendSmokeEnvironment(environment: [:]) == nil)
-        #expect(DirectCallBackendSmokeEnvironment(environment: [
-            DirectCallBackendSmokeEnvironment.smokeEnabledKey: "1",
-            DirectCallBackendSmokeEnvironment.backendBaseURLKey: "https://call-service.example.com",
-            DirectCallBackendSmokeEnvironment.fakeAccessTokenKey: "matrix-access-credential"
-        ]) == nil)
-        #expect(DirectCallBackendSmokeEnvironment(environment: [
-            DirectCallBackendSmokeEnvironment.smokeEnabledKey: "1",
-            DirectCallBackendSmokeEnvironment.backendBaseURLKey: "http://127.0.0.1:8088",
-            DirectCallBackendSmokeEnvironment.fakeAccessTokenKey: "matrix-access-credential"
-        ]) != nil)
-    }
-
-    @Test
     func urlSessionDirectCallHTTPTransportDescriptionsAreRedacted() {
         let transport = URLSessionDirectCallHTTPTransport()
 
         #expect(String(describing: transport).contains("http://") == false)
         #expect(String(reflecting: transport).contains("URLSession") == true)
-    }
-
-    @Test(.enabled(if: DirectCallBackendSmokeEnvironment.isRunnableInCurrentProcess))
-    func productionLiveKitTokenProviderMapsLocalBackendSmokeResponseToConnectionInfo() async throws {
-        let environment = try #require(DirectCallBackendSmokeEnvironment.current)
-        let productionConfiguration = DirectCallProductionConfiguration(isEnabled: true,
-                                                                        tokenEndpointBaseURL: environment.backendBaseURL)
-        let tokenClient = ProductionDirectCallLiveKitTokenClient(configuration: productionConfiguration.liveKitConfiguration,
-                                                                 httpTransport: URLSessionDirectCallHTTPTransport(),
-                                                                 accessTokenProvider: MatrixAccessTokenProviderStub(accessToken: environment.fakeAccessToken))
-        let provider = DirectCallLiveKitTokenProvider(tokenClient: tokenClient)
-        let session = makeSession(encryptionState: .ready)
-
-        let connectionInfo = try await provider.connectionInfo(for: session).get()
-
-        #expect(productionConfiguration.isConfigured)
-        #expect(connectionInfo.serverURL.scheme?.isEmpty == false)
-        #expect(connectionInfo.roomName.isEmpty == false)
-        #expect(connectionInfo.token.isEmpty == false)
-
-        let smokeDescriptionIsRedacted = !String(describing: environment).contains(environment.fakeAccessToken)
-        let clientDescriptionIsRedacted = !String(describing: tokenClient).contains(environment.backendBaseURL.absoluteString)
-        let connectionDescriptionIsRedacted = !String(describing: connectionInfo).contains(connectionInfo.token)
-        #expect(smokeDescriptionIsRedacted)
-        #expect(clientDescriptionIsRedacted)
-        #expect(connectionDescriptionIsRedacted)
     }
 
     @Test
@@ -2727,54 +2686,6 @@ private final class MediaE2EEContextProviderSpy: DirectCallMediaE2EEContextProvi
 }
 
 private struct LiveKitClientTestError: Error { }
-
-private struct DirectCallBackendSmokeEnvironment: CustomStringConvertible, CustomDebugStringConvertible {
-    static let smokeEnabledKey = "SALEMX_DIRECTCALL_BACKEND_SMOKE"
-    static let backendBaseURLKey = "SALEMX_DIRECTCALL_BACKEND_BASE_URL"
-    static let fakeAccessTokenKey = "SALEMX_DIRECTCALL_BACKEND_FAKE_ACCESS_TOKEN"
-
-    static var current: DirectCallBackendSmokeEnvironment? {
-        DirectCallBackendSmokeEnvironment(environment: ProcessInfo.processInfo.environment)
-    }
-
-    static var isRunnableInCurrentProcess: Bool {
-        current != nil
-    }
-
-    let backendBaseURL: URL
-    let fakeAccessToken: String
-
-    init?(environment: [String: String]) {
-        guard environment[Self.smokeEnabledKey] == "1",
-              let backendBaseURLString = environment[Self.backendBaseURLKey]?.nonEmpty,
-              let backendBaseURL = URL(string: backendBaseURLString),
-              Self.isLocalBackendURL(backendBaseURL),
-              let fakeAccessToken = environment[Self.fakeAccessTokenKey]?.nonEmpty else {
-            return nil
-        }
-
-        self.backendBaseURL = backendBaseURL
-        self.fakeAccessToken = fakeAccessToken
-    }
-
-    var description: String {
-        "DirectCallBackendSmokeEnvironment(backendBaseURL: <redacted>, fakeAccessToken: <redacted>)"
-    }
-
-    var debugDescription: String {
-        description
-    }
-
-    private static func isLocalBackendURL(_ url: URL) -> Bool {
-        guard let scheme = url.scheme?.lowercased(),
-              ["http", "https"].contains(scheme),
-              let host = url.host?.lowercased() else {
-            return false
-        }
-
-        return ["127.0.0.1", "localhost", "::1"].contains(host)
-    }
-}
 
 private struct DirectCallLiveKitIntegrationEnvironment: Equatable {
     static var current: DirectCallLiveKitIntegrationEnvironment? {
