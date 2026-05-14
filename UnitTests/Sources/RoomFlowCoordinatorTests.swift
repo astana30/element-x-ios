@@ -999,7 +999,22 @@ final class RoomFlowCoordinatorTests {
         #expect(encodedResult.contains("endpointAccepted"))
         #expect(result.correlationID == request.correlationID)
 
-        let forbiddenFragments = ["debug" + "Info", "original" + "JSON", "raw " + "JSON", "encrypted_" + "payload", "j" + "wt", "raw " + "key"]
+        let forbiddenFragments = [
+            "debug" + "Info",
+            "original" + "JSON",
+            "original" + "Json",
+            "raw " + "JSON",
+            "encrypted_" + "payload",
+            "j" + "wt",
+            "raw " + "key",
+            "!room",
+            "@alice",
+            "peer-user",
+            "participant_" + "token",
+            "access_" + "token",
+            "matrix.example.com",
+            DirectCallProductionConfiguration.tokenEndpointPath
+        ]
         for fragment in forbiddenFragments {
             #expect((encodedRequest + encodedResult).localizedCaseInsensitiveContains(fragment) == false)
         }

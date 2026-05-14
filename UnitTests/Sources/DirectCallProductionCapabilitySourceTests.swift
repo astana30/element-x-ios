@@ -197,6 +197,99 @@ final class DirectCallProductionCapabilitySourceTests {
     }
 
     @Test
+    func productionActivationReadinessPackEnablesOnlyWhenEveryInputIsValid() async {
+        let pack = makeActivationReadinessPack()
+
+        let diagnostic = await pack.diagnostic()
+
+        #expect(diagnostic.isEnabled)
+        #expect(diagnostic.disabledReason == nil)
+        #expect(diagnostic.isCapabilityPresent)
+        #expect(diagnostic.areDependenciesReady)
+        #expect(diagnostic.isRoomEligible)
+        #expect(diagnostic.isEndpointAccepted)
+        assertActivationDiagnosticIsRedacted(diagnostic)
+        pack.expectProviderCalls(rollout: 1, capability: 1, dependencies: 1)
+        pack.expectNoRuntimeSideEffects()
+    }
+
+    @Test
+    func productionActivationReadinessPackFailsClosedForMissingReadinessInputs() async throws {
+        let externalEndpointURL = try #require(URL(string: "https://calls.example.net/_matrix/client/unstable/kz.salemx.direct_call/livekit/token"))
+        let cases: [CapabilitySourceActivationReadinessFailureCase] = [
+            .init(name: "rollout-disabled",
+                  pack: makeActivationReadinessPack(configuration: .init()),
+                  expectedReason: .appRolloutDisabled,
+                  expectedCapability: false,
+                  expectedDependencies: false,
+                  expectedRoom: true,
+                  expectedEndpoint: false),
+            .init(name: "capability-missing",
+                  pack: makeActivationReadinessPack(capabilityResult: .unavailable(.missingCapability)),
+                  expectedReason: .serverCapabilityUnavailable,
+                  expectedCapability: false,
+                  expectedDependencies: false,
+                  expectedRoom: true,
+                  expectedEndpoint: false),
+            .init(name: "capability-malformed",
+                  pack: makeActivationReadinessPack(capabilityResult: .unavailable(.malformedCapability)),
+                  expectedReason: .serverCapabilityUnavailable,
+                  expectedCapability: false,
+                  expectedDependencies: false,
+                  expectedRoom: true,
+                  expectedEndpoint: false),
+            .init(name: "capability-external-endpoint",
+                  pack: makeActivationReadinessPack(capabilityResult: .available(makeServerCapability(tokenEndpointPath: "https://calls.example.net/token"))),
+                  expectedReason: .tokenEndpointUnavailable,
+                  expectedCapability: true,
+                  expectedDependencies: true,
+                  expectedRoom: true,
+                  expectedEndpoint: false),
+            .init(name: "configured-external-endpoint",
+                  pack: makeActivationReadinessPack(configuration: .init(isEnabled: true, tokenEndpointBaseURL: externalEndpointURL)),
+                  expectedReason: .tokenEndpointNotSameOrigin,
+                  expectedCapability: true,
+                  expectedDependencies: true,
+                  expectedRoom: true,
+                  expectedEndpoint: false),
+            .init(name: "dependencies-missing",
+                  pack: makeActivationReadinessPack(dependencies: .disabled),
+                  expectedReason: .dependenciesUnavailable,
+                  expectedCapability: true,
+                  expectedDependencies: false,
+                  expectedRoom: true,
+                  expectedEndpoint: true),
+            .init(name: "room-not-encrypted",
+                  pack: makeActivationReadinessPack(roomEligibility: makeRoomEligibility(isEncrypted: false)),
+                  expectedReason: .roomNotEncrypted,
+                  expectedCapability: true,
+                  expectedDependencies: true,
+                  expectedRoom: false,
+                  expectedEndpoint: true),
+            .init(name: "room-not-one-to-one",
+                  pack: makeActivationReadinessPack(roomEligibility: makeRoomEligibility(joinedMemberCount: 3)),
+                  expectedReason: .roomNotOneToOne,
+                  expectedCapability: true,
+                  expectedDependencies: true,
+                  expectedRoom: false,
+                  expectedEndpoint: true)
+        ]
+
+        for failureCase in cases {
+            let diagnostic = await failureCase.pack.diagnostic()
+
+            #expect(diagnostic.isEnabled == false, "Expected \(failureCase.name) to fail closed.")
+            #expect(diagnostic.disabledReason == failureCase.expectedReason, "Unexpected reason for \(failureCase.name).")
+            #expect(diagnostic.isCapabilityPresent == failureCase.expectedCapability, "Unexpected capability flag for \(failureCase.name).")
+            #expect(diagnostic.areDependenciesReady == failureCase.expectedDependencies, "Unexpected dependency flag for \(failureCase.name).")
+            #expect(diagnostic.isRoomEligible == failureCase.expectedRoom, "Unexpected room flag for \(failureCase.name).")
+            #expect(diagnostic.isEndpointAccepted == failureCase.expectedEndpoint, "Unexpected endpoint flag for \(failureCase.name).")
+            assertActivationDiagnosticIsRedacted(diagnostic)
+            failureCase.pack.expectNoRuntimeSideEffects()
+        }
+    }
+
+    @Test
     func productionHTTPCapabilityProviderFailsClosedWithoutTransport() async throws {
         let homeserverBaseURL = try #require(URL(string: "https://matrix.example.com"))
         let provider = HTTPDirectCallProductionCapabilityProvider(homeserverBaseURL: homeserverBaseURL,
@@ -379,6 +472,56 @@ final class DirectCallProductionCapabilitySourceTests {
                                                mediaEngineFactory: NoOpDirectCallMediaEngineFactory())
     }
 
+    private func makeActivationReadinessPack(configuration: DirectCallProductionConfiguration = .init(isEnabled: true),
+                                             homeserverBaseURL: URL? = URL(string: "https://matrix.example.com"),
+                                             capabilityResult: DirectCallProductionCapabilityDiscoveryResult? = nil,
+                                             dependencies: NativeDirectCallProductionDependencies? = nil,
+                                             roomEligibility: DirectCallProductionRoomEligibility? = nil) -> CapabilitySourceActivationReadinessPack {
+        let encryptionService = CapabilitySourceEncryptionServiceSpy()
+        let mediaEngineFactory = CapabilitySourceMediaEngineFactorySpy()
+        let dependencyProvider = CapabilitySourceDependencyProviderSpy(dependencies: dependencies ?? NativeDirectCallProductionDependencies(encryptionService: encryptionService,
+                                                                                                                                            mediaEngineFactory: mediaEngineFactory))
+        let rolloutProvider = CapabilitySourceRolloutProviderSpy(configuration: configuration)
+        let capabilityProvider = CapabilitySourceProviderSpy(result: capabilityResult ?? .available(makeServerCapability()))
+        let service = DirectCallProductionActivationDecisionService(rolloutProvider: rolloutProvider,
+                                                                    capabilityProvider: capabilityProvider,
+                                                                    dependencyProvider: dependencyProvider)
+
+        return CapabilitySourceActivationReadinessPack(service: service,
+                                                       homeserverBaseURL: homeserverBaseURL,
+                                                       roomEligibility: roomEligibility ?? makeRoomEligibility(),
+                                                       rolloutProvider: rolloutProvider,
+                                                       capabilityProvider: capabilityProvider,
+                                                       dependencyProvider: dependencyProvider,
+                                                       encryptionService: encryptionService,
+                                                       mediaEngineFactory: mediaEngineFactory)
+    }
+
+    private func assertActivationDiagnosticIsRedacted(_ diagnostic: DirectCallProductionActivationDryRunDiagnostic) {
+        let description = String(describing: diagnostic)
+        let forbiddenFragments = [
+            "matrix.example.com",
+            "calls.example.net",
+            DirectCallProductionConfiguration.tokenEndpointPath,
+            "!room",
+            "@alice",
+            "peer-user",
+            "participant_" + "token",
+            "access_" + "token",
+            "bearer",
+            "j" + "wt",
+            "raw " + "key",
+            "encrypted_" + "payload",
+            "debug" + "Info",
+            "original" + "JSON",
+            "raw " + "JSON"
+        ]
+
+        for fragment in forbiddenFragments {
+            #expect(description.localizedCaseInsensitiveContains(fragment) == false)
+        }
+    }
+
     private func makeCapabilitiesPayload(tokenEndpointPath: String = DirectCallProductionConfiguration.tokenEndpointPath,
                                          mediaTransport: String = DirectCallProductionServerCapability.liveKitMediaTransport,
                                          isE2EERequired: Bool = true,
@@ -414,6 +557,47 @@ final class DirectCallProductionCapabilitySourceTests {
         }
         """
     }
+}
+
+@MainActor
+private struct CapabilitySourceActivationReadinessPack {
+    let service: DirectCallProductionActivationDryRunDiagnosing
+    let homeserverBaseURL: URL?
+    let roomEligibility: DirectCallProductionRoomEligibility
+    let rolloutProvider: CapabilitySourceRolloutProviderSpy
+    let capabilityProvider: CapabilitySourceProviderSpy
+    let dependencyProvider: CapabilitySourceDependencyProviderSpy
+    let encryptionService: CapabilitySourceEncryptionServiceSpy
+    let mediaEngineFactory: CapabilitySourceMediaEngineFactorySpy
+
+    func diagnostic() async -> DirectCallProductionActivationDryRunDiagnostic {
+        await service.directCallProductionActivationDryRunDiagnostic(homeserverBaseURL: homeserverBaseURL,
+                                                                     roomEligibility: roomEligibility)
+    }
+
+    func expectProviderCalls(rollout: Int, capability: Int, dependencies: Int) {
+        #expect(rolloutProvider.callCount == rollout)
+        #expect(capabilityProvider.callCount == capability)
+        #expect(dependencyProvider.callCount == dependencies)
+    }
+
+    func expectNoRuntimeSideEffects() {
+        #expect(encryptionService.generateKeyCallCount == 0)
+        #expect(encryptionService.consumeKeyCallCount == 0)
+        #expect(encryptionService.clearKeyCallCount == 0)
+        #expect(mediaEngineFactory.makeMediaEngineCallCount == 0)
+    }
+}
+
+@MainActor
+private struct CapabilitySourceActivationReadinessFailureCase {
+    let name: String
+    let pack: CapabilitySourceActivationReadinessPack
+    let expectedReason: DirectCallProductionActivationDisabledReason
+    let expectedCapability: Bool
+    let expectedDependencies: Bool
+    let expectedRoom: Bool
+    let expectedEndpoint: Bool
 }
 
 @MainActor
