@@ -470,7 +470,7 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
             case .success:
                 break
             case .failure(let error):
-                return .failed(error, triggerDiagnostic: triggerDiagnostic)
+                return .failed(error, operation: .listenerStart, triggerDiagnostic: triggerDiagnostic)
             }
         }
 
@@ -478,7 +478,7 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
         case .success(let session):
             return .started(session, triggerDiagnostic: triggerDiagnostic)
         case .failure(let error):
-            return .failed(error, triggerDiagnostic: triggerDiagnostic)
+            return .failed(error, operation: .outgoingStart, triggerDiagnostic: triggerDiagnostic)
         }
     }
     
@@ -1935,6 +1935,11 @@ enum NativeDirectCallProductionStartOutcome: String, Equatable, CustomStringConv
     }
 }
 
+enum NativeDirectCallProductionStartOperation {
+    case listenerStart
+    case outgoingStart
+}
+
 enum NativeDirectCallProductionStartBlockedReason: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     case appRolloutDisabled
     case roomUnavailable
@@ -1957,11 +1962,17 @@ enum NativeDirectCallProductionStartBlockedReason: String, Equatable, CustomStri
     case productionOwnerUnavailable
     case productionOwnerDisabled
     case controllerUnavailable
+    case listenerStartFailed
     case activeSessionExists
     case resetting
     case compositionUnavailable
+    case signalSendFailed
     case noIncomingCall
     case noActiveCall
+    case keyWrapUnavailable
+    case keyWrapFailed
+    case e2eeUnavailable
+    case engineStateInvalid
     case engineFailure
     case unknown
 
@@ -1974,6 +1985,11 @@ enum NativeDirectCallProductionStartBlockedReason: String, Equatable, CustomStri
     }
 
     init(_ ownerError: NativeDirectCallRoomFlowOwnerError) {
+        self.init(ownerError, operation: .outgoingStart)
+    }
+
+    init(_ ownerError: NativeDirectCallRoomFlowOwnerError,
+         operation: NativeDirectCallProductionStartOperation) {
         switch ownerError {
         case .disabled:
             self = .productionOwnerDisabled
@@ -1982,29 +1998,147 @@ enum NativeDirectCallProductionStartBlockedReason: String, Equatable, CustomStri
         case .resetting:
             self = .resetting
         case .trigger(let triggerError):
-            self.init(triggerError)
+            self.init(triggerError, operation: operation)
         }
     }
 
     init(_ triggerError: NativeDirectCallDeveloperRoomTriggerError) {
+        self.init(triggerError, operation: .outgoingStart)
+    }
+
+    private init(_ triggerError: NativeDirectCallDeveloperRoomTriggerError,
+                 operation: NativeDirectCallProductionStartOperation) {
         switch triggerError {
         case .disabled:
             self = .productionOwnerDisabled
         case .control(let controlError):
-            self.init(controlError)
+            self.init(controlError, operation: operation)
         }
     }
 
     init(_ controlError: NativeDirectCallRoomControlError) {
+        self.init(controlError, operation: .outgoingStart)
+    }
+
+    private init(_ controlError: NativeDirectCallRoomControlError,
+                 operation: NativeDirectCallProductionStartOperation) {
         switch controlError {
-        case .composition:
-            self = .compositionUnavailable
+        case .composition(let compositionError):
+            self.init(compositionError, operation: operation)
         case .noIncomingCall:
-            self = .noIncomingCall
+            self = operation == .listenerStart ? .listenerStartFailed : .noIncomingCall
         case .noActiveCall:
-            self = .noActiveCall
-        case .engine:
+            self = operation == .listenerStart ? .listenerStartFailed : .noActiveCall
+        case .engine(let engineError):
+            self.init(engineError)
+        }
+    }
+
+    private init(_ compositionError: JoinedRoomNativeDirectCallCompositionError,
+                 operation: NativeDirectCallProductionStartOperation) {
+        switch compositionError {
+        case .missingSignalSender, .missingTimelineListener:
+            self = .signalSendFailed
+        case .unknownRoomMetadata:
+            self = .controllerUnavailable
+        case .composition(let error):
+            self.init(error, operation: operation)
+        }
+    }
+
+    private init(_ compositionError: NativeDirectCallCompositionError,
+                 operation: NativeDirectCallProductionStartOperation) {
+        switch compositionError {
+        case .disabled:
+            self = .productionOwnerDisabled
+        case .invalidOwnUserID, .invalidRoomID:
+            self = .roomUnavailable
+        case .missingSignalTransport:
+            self = .signalSendFailed
+        case .nonDirectRoom:
+            self = .roomNotDirect
+        case .nonEncryptedRoom:
+            self = .roomNotEncrypted
+        case .missingPeer:
+            self = .peerUnavailable
+        }
+
+        if operation == .listenerStart, self == .compositionUnavailable {
+            self = .listenerStartFailed
+        }
+    }
+
+    private init(_ engineError: DirectCallEngineError) {
+        switch engineError {
+        case .invalidRoomID, .roomMismatch:
+            self = .roomUnavailable
+        case .invalidPeer, .invalidSender:
+            self = .peerUnavailable
+        case .invalidEncryptionTransition:
+            self = .e2eeUnavailable
+        case .encryptionFailed(let reason):
+            self.init(reason)
+        case .mediaConnectionFailed:
             self = .engineFailure
+        case .staleOrUnknownEvent,
+             .callIDMismatch,
+             .sessionAlreadyActive,
+             .invalidTransition,
+             .invalidCallID,
+             .invalidIntent:
+            self = .engineStateInvalid
+        }
+    }
+
+    private init(_ encryptionFailureReason: DirectCallEncryptionFailureReason) {
+        switch encryptionFailureReason {
+        case .e2eeUnavailable:
+            self = .keyWrapUnavailable
+        case .cannotWrap, .cannotUnwrap, .keyMismatch:
+            self = .keyWrapFailed
+        case .missingKeyExchange, .keyExchangeFailed, .e2eeNotProven:
+            self = .e2eeUnavailable
+        }
+    }
+
+    var isEngineFailureOutcome: Bool {
+        switch self {
+        case .keyWrapUnavailable,
+             .keyWrapFailed,
+             .e2eeUnavailable,
+             .signalSendFailed,
+             .engineStateInvalid,
+             .engineFailure:
+            true
+        case .appRolloutDisabled,
+             .roomUnavailable,
+             .serverCapabilityUnavailable,
+             .serverCapabilityDisabled,
+             .unsupportedCapabilityVersion,
+             .unsupportedIntent,
+             .unsupportedMediaTransport,
+             .e2eeNotRequiredByCapability,
+             .unsupportedKeyEnvelope,
+             .tokenEndpointUnavailable,
+             .tokenEndpointNotSameOrigin,
+             .dependenciesUnavailable,
+             .roomNotEncrypted,
+             .roomNotDirect,
+             .roomNotOneToOne,
+             .peerUnavailable,
+             .diagnosticsUnavailable,
+             .productionStartDisabled,
+             .productionOwnerUnavailable,
+             .productionOwnerDisabled,
+             .controllerUnavailable,
+             .listenerStartFailed,
+             .activeSessionExists,
+             .resetting,
+             .compositionUnavailable,
+             .noIncomingCall,
+             .noActiveCall,
+             .unknown:
+            false
         }
     }
 
@@ -2073,9 +2207,10 @@ struct NativeDirectCallProductionStartOutgoingAudioCallResult: Equatable, Custom
     }
 
     static func failed(_ error: NativeDirectCallRoomFlowOwnerError,
+                       operation: NativeDirectCallProductionStartOperation = .outgoingStart,
                        triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic) -> Self {
-        let reason = NativeDirectCallProductionStartBlockedReason(error)
-        let outcome: NativeDirectCallProductionStartOutcome = reason == .engineFailure ? .engineFailure : .blocked
+        let reason = NativeDirectCallProductionStartBlockedReason(error, operation: operation)
+        let outcome: NativeDirectCallProductionStartOutcome = reason.isEngineFailureOutcome ? .engineFailure : .blocked
         return .init(outcome: outcome,
                      reason: reason,
                      triggerDiagnostic: triggerDiagnostic,

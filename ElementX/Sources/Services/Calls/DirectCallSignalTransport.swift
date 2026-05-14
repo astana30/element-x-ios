@@ -1402,7 +1402,7 @@ extension DirectCallDiagnosticEnvelopeRejectedReason {
             self = .duplicateEventID
         case .sessionAlreadyActive, .invalidTransition:
             self = .unsupportedEvent
-        case .invalidEncryptionTransition, .mediaConnectionFailed:
+        case .invalidEncryptionTransition, .encryptionFailed, .mediaConnectionFailed:
             self = .unknown
         }
     }

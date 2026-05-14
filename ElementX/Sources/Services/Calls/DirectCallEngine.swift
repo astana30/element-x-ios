@@ -349,11 +349,11 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         switch await encryptionService.generatePerCallKey(callID: callID, roomID: roomID, peerUserID: peer) {
         case .success(let keyExchange):
             guard isGeneratedKeyExchangeValid(keyExchange, callID: callID, roomID: roomID) else {
-                return .failure(.invalidEncryptionTransition)
+                return .failure(.encryptionFailed(.keyMismatch))
             }
             generatedKeyExchange = keyExchange
-        case .failure:
-            return .failure(.invalidEncryptionTransition)
+        case .failure(let reason):
+            return .failure(.encryptionFailed(reason))
         }
 
         mediaKeyHandlesByCallID[callID] = generatedKeyExchange.keyHandle
@@ -415,7 +415,7 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         cancelAllTasks()
 
         guard let keyExchange = event.keyExchange else {
-            return .failure(.invalidEncryptionTransition)
+            return .failure(.encryptionFailed(.missingKeyExchange))
         }
 
         let keyHandle: DirectCallMediaKeyHandle
@@ -425,11 +425,11 @@ final class DirectCallEngine: DirectCallEngineProtocol {
                                                                  expectedSenderUserID: event.senderID) {
         case .success(let consumedKeyHandle):
             guard consumedKeyHandle.callID == event.callID, !consumedKeyHandle.keyID.isEmpty else {
-                return .failure(.invalidEncryptionTransition)
+                return .failure(.encryptionFailed(.keyMismatch))
             }
             keyHandle = consumedKeyHandle
-        case .failure:
-            return .failure(.invalidEncryptionTransition)
+        case .failure(let reason):
+            return .failure(.encryptionFailed(reason))
         }
 
         mediaKeyHandlesByCallID[event.callID] = keyHandle

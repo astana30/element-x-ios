@@ -750,6 +750,8 @@ extension UITestsSignal.NativeDirectCallDiagnosticFailureReason {
             self = .missingPeer
         case .invalidEncryptionTransition:
             self = .e2eeUnavailable
+        case .encryptionFailed:
+            self = .e2eeUnavailable
         case .mediaConnectionFailed:
             self = .mediaSetupUnavailable
         case .staleOrUnknownEvent,

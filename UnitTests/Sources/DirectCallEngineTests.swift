@@ -341,7 +341,7 @@ final class DirectCallEngineTests {
 
         let result = await engine.startOutgoingAudioCall(peer: peerUserID, roomID: roomID)
 
-        #expect(result == .failure(.invalidEncryptionTransition))
+        #expect(result == .failure(.encryptionFailed(.keyExchangeFailed)))
         #expect(engine.activeSessionPublisher.value == nil)
         #expect(emittedSignals.isEmpty)
     }
@@ -380,7 +380,7 @@ final class DirectCallEngineTests {
                                                                    intent: .audio,
                                                                    timestamp: .now))
 
-        #expect(result == .failure(.invalidEncryptionTransition))
+        #expect(result == .failure(.encryptionFailed(.missingKeyExchange)))
         #expect(engine.activeSessionPublisher.value == nil)
         #expect(mediaEngine.connectedSessions.isEmpty)
     }
@@ -406,7 +406,7 @@ final class DirectCallEngineTests {
                                                                        timestamp: .now,
                                                                        keyExchange: payload))
 
-            #expect(result == .failure(.invalidEncryptionTransition))
+            #expect(result == .failure(.encryptionFailed(.keyMismatch)))
             #expect(engine.activeSessionPublisher.value == nil)
             #expect(mediaEngine.connectedSessions.isEmpty)
         }
