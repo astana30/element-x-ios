@@ -13,9 +13,13 @@ from salemx_call_service.auth import AuthenticatedUser
 from salemx_call_service.dto import TokenRequest
 from salemx_call_service.errors import CallServiceError
 from salemx_call_service.livekit_tokens import IssuedLiveKitToken, LiveKitGrant, LiveKitJWTTokenIssuer
+from salemx_call_service.local_fake import DIRECT_CALL_CAPABILITY_NAME, FAKE_MODE_ENV, make_fake_capabilities_payload
 from salemx_call_service.room_validation import InMemoryRoomValidator, RoomEligibility, SynapseRoomValidator
 from salemx_call_service.service import DirectCallTokenService
 from salemx_call_service.synapse_http import SynapseHTTPResponse
+
+TOKEN_ENDPOINT_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/livekit/token"
+CAPABILITIES_PATH = "/_matrix/client/v3/capabilities"
 
 
 class FakeAuthValidator:
@@ -175,6 +179,38 @@ class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("matrix-token-a-sensitive", joined_logs)
         self.assertNotIn("participant-token-sensitive", joined_logs)
         self.assertNotIn("!room:example.test", joined_logs)
+
+
+class LocalFakeModeTests(unittest.TestCase):
+    def test_fake_capabilities_payload_matches_app_contract(self) -> None:
+        payload = make_fake_capabilities_payload(TOKEN_ENDPOINT_PATH)
+        capability = payload["capabilities"][DIRECT_CALL_CAPABILITY_NAME]
+
+        self.assertTrue(capability["enabled"])
+        self.assertEqual(capability["version"], 1)
+        self.assertEqual(capability["token_endpoint"], TOKEN_ENDPOINT_PATH)
+        self.assertEqual(capability["intents"], ["audio"])
+        self.assertEqual(capability["media_transport"], "livekit")
+        self.assertTrue(capability["e2ee_required"])
+        self.assertEqual(capability["key_envelope"], "matrix_sdk_direct_call_media_key_envelope_v1")
+
+    def test_fake_mode_registers_local_capabilities_route_only_when_explicitly_enabled(self) -> None:
+        try:
+            from salemx_call_service.app import create_app
+        except ModuleNotFoundError as error:
+            if error.name == "fastapi":
+                self.skipTest("FastAPI is not installed in this Python environment.")
+            raise
+
+        production_like_app = create_app(token_service=DirectCallTokenServiceTests().make_service())
+        production_like_paths = {route.path for route in production_like_app.routes}
+
+        with patch.dict(os.environ, {FAKE_MODE_ENV: "1"}, clear=False):
+            fake_app = create_app()
+        fake_paths = {route.path for route in fake_app.routes}
+
+        self.assertNotIn(CAPABILITIES_PATH, production_like_paths)
+        self.assertIn(CAPABILITIES_PATH, fake_paths)
 
 
 class LiveKitJWTTokenIssuerTests(unittest.IsolatedAsyncioTestCase):

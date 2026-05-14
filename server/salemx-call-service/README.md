@@ -119,6 +119,14 @@ SALEMX_CALL_SERVICE_FAKE_MODE=1 uvicorn salemx_call_service.app:app --host 127.0
 
 Fake mode is off by default and must never be enabled in production. It accepts a local dummy bearer token only; override it with `SALEMX_CALL_SERVICE_FAKE_ACCESS_TOKEN` if needed. The fake response is app-shaped but not usable for real LiveKit media.
 
+Fake mode also serves a local Matrix capabilities response at:
+
+```text
+GET /_matrix/client/v3/capabilities
+```
+
+The fake capability advertises `kz.salemx.direct_call.native` with the same relative token endpoint path used by the app-side production capability provider. This route exists only in fake mode and is intended for local app integration smoke tests.
+
 Smoke request shape:
 
 ```bash

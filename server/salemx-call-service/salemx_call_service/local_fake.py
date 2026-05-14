@@ -16,6 +16,8 @@ from .service import DirectCallTokenService
 
 FAKE_MODE_ENV = "SALEMX_CALL_SERVICE_FAKE_MODE"
 FAKE_ACCESS_TOKEN_ENV = "SALEMX_CALL_SERVICE_FAKE_ACCESS_TOKEN"
+DIRECT_CALL_CAPABILITY_NAME = "kz.salemx.direct_call.native"
+DIRECT_CALL_KEY_ENVELOPE = "matrix_sdk_direct_call_media_key_envelope_v1"
 
 
 class FakeLocalAuthValidator(MatrixAuthValidatorProtocol):
@@ -54,3 +56,19 @@ def make_fake_local_service() -> DirectCallTokenService:
         token_issuer=FakeLocalLiveKitTokenIssuer(),
         livekit_server_url="wss://local-smoke.livekit.invalid",
     )
+
+
+def make_fake_capabilities_payload(token_endpoint_path: str) -> dict[str, Any]:
+    return {
+        "capabilities": {
+            DIRECT_CALL_CAPABILITY_NAME: {
+                "enabled": True,
+                "version": 1,
+                "token_endpoint": token_endpoint_path,
+                "intents": ["audio"],
+                "media_transport": "livekit",
+                "e2ee_required": True,
+                "key_envelope": DIRECT_CALL_KEY_ENVELOPE,
+            }
+        }
+    }

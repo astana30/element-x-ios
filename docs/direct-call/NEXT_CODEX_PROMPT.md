@@ -7,10 +7,10 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.11I — production activation readiness pack complete.
+After 2.12B — local backend + app production token/capability integration pack complete.
 
 Current app code checkpoint:
-This commit: `Validate production direct-call activation readiness`
+This commit: `Add local production token integration smoke harness`
 
 Current SDK checkpoint:
 f7c2cfe5c `Add direct-call media key envelope crypto tests`
@@ -25,7 +25,7 @@ Artifact checksum:
 654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e
 
 Phase:
-2.11J — endpoint-aware production dependency readiness inspection/skeleton.
+2.12C — endpoint-aware production dependency readiness inspection/skeleton.
 
 Task:
 Inspect and, if safe, add a fail-closed endpoint-aware production dependency readiness seam for native direct calls.
@@ -37,13 +37,14 @@ Do not wire CallKit/push.
 Context:
 - Two-client Matrix signalling proof passed.
 - Diagnostic LiveKit active proof passed.
-- Backend token service skeleton exists but remains fake/skeleton for production.
+- Backend token service skeleton exists and local fake mode can serve both token and capability smoke responses.
 - Production token DTO/client/transport/config seams exist and remain inactive by default.
 - SDK and Swift wrapper expose async direct-call media key envelope APIs.
 - Production key wrapper/provider seams exist but are not activated.
 - `DirectCallProductionRolloutProviding` exists with `FailClosedDirectCallProductionRolloutProvider`, defaulting rollout off.
 - `HTTPDirectCallProductionCapabilityProvider` exists and fetches authenticated Matrix `/_matrix/client/v3/capabilities` through injected `DirectCallHTTPTransportProtocol` and `DirectCallMatrixAccessTokenProviding`.
-- `DirectCallProductionActivationDecisionService` now uses rollout and capability providers in a side-effect-free sequence.
+- The local backend smoke pack proves the token client and capability provider can talk to local fake mode through `URLSessionDirectCallHTTPTransport` when env-gated.
+- `DirectCallProductionActivationDecisionService` uses rollout and capability providers in a side-effect-free sequence.
 - `DirectCallProductionActivationGate` models app rollout, authenticated server capability, same-origin token endpoint, dependency readiness, and encrypted direct 1:1 room eligibility.
 - The readiness pack proves an enabled model only when rollout, capability, endpoint, dependencies, and room eligibility are all valid.
 - Fail-closed tests cover disabled rollout, missing capability, malformed capability, external endpoint rejection, unavailable dependencies, unavailable room, unencrypted room, and non-1:1 room cases.

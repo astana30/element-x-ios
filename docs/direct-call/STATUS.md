@@ -2,15 +2,15 @@
 
 ## Current Phase
 
-After 2.11I — production activation readiness pack complete.
+After 2.12B — local backend + app production token/capability integration pack complete.
 
 ## Latest App Code Checkpoint
 
-This commit: `Validate production direct-call activation readiness`
+This commit: `Add local production token integration smoke harness`
 
 ## Latest Code Checkpoint
 
-This commit: `Validate production direct-call activation readiness`
+This commit: `Add local production token integration smoke harness`
 
 ## Latest SDK Checkpoint
 
@@ -208,6 +208,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - No-side-effect checks prove the readiness path does not generate keys, consume keys, clear keys, construct media engines, start listeners, or send Matrix events.
   - The runner command remains read-only and production direct calls remain disabled by default.
   - Focused app unit tests, Release build, and forbidden scan pass after the readiness pack.
+- Local backend + app production token/capability integration smoke pack is complete:
+  - Backend fake mode now exposes a local-only Matrix capabilities response for `kz.salemx.direct_call.native`.
+  - The fake capabilities route exists only when `SALEMX_CALL_SERVICE_FAKE_MODE=1`.
+  - The existing env-gated app token smoke still verifies `ProductionDirectCallLiveKitTokenClient` can consume the local fake token response through `URLSessionDirectCallHTTPTransport`.
+  - A new env-gated app capability smoke verifies `HTTPDirectCallProductionCapabilityProvider` can fetch/decode the local fake capability response through `URLSessionDirectCallHTTPTransport`.
+  - The smoke also proves default rollout still returns `appRolloutDisabled`, while an all-valid test-only model can produce an enabled dry-run decision without runtime activation.
+  - Local smoke instructions are documented in `docs/direct-call/LOCAL_BACKEND_SMOKE.md`.
+  - Production direct calls remain disabled by default.
 
 ## Current Blocker
 
@@ -223,7 +231,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.11J — endpoint-aware production dependency readiness inspection/skeleton`
+`2.12C — endpoint-aware production dependency readiness inspection/skeleton`
 
 Goal: split side-effect-free runtime prerequisite readiness from endpoint-specific dependency assembly, or make dependency readiness receive an activation-accepted token endpoint, without activating visible UI or production direct calls.
 
