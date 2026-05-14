@@ -7,10 +7,10 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.12D — production dry-run enabled=true local fake pack.
+After 2.12E — runtime fake-enabled production activation dry-run.
 
 Current app code checkpoint:
-This commit: `Prove production direct-call activation dry-run enabled with fake inputs`
+This commit: `Add fake-enabled production dry-run runtime harness`
 
 Current SDK checkpoint:
 f7c2cfe5c `Add direct-call media key envelope crypto tests`
@@ -25,7 +25,7 @@ Artifact checksum:
 654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e
 
 Phase:
-2.12E — endpoint-aware production dependency readiness inspection/skeleton.
+2.12F — endpoint-aware production dependency readiness inspection/skeleton.
 
 Task:
 Inspect and, if safe, add a fail-closed endpoint-aware production dependency readiness seam for native direct calls.
@@ -47,6 +47,9 @@ Context:
 - `Tools/Scripts/run_direct_call_backend_smoke.sh` is the reliable command for local HTTP smoke: it validates fake backend reachability, writes a short-lived local smoke config file for hosted simulator tests, runs `DirectCallBackendSmokeTests`, and fails if either smoke is skipped.
 - The env-gated local fake capability smoke now proves the full activation dry-run model can return `enabled=true` with fake/local inputs only: rollout enabled, valid fake server capability, same-origin endpoint accepted, fake dependencies ready, and encrypted direct 1:1 room eligibility.
 - The enabled local fake dry-run proof performs only the capability GET, does not request a LiveKit token, and does not generate keys, consume keys, clear keys, construct media engines, start listeners, or send Matrix events.
+- The runtime dry-run command can now be fake-enabled only under DEBUG + integration diagnostics with `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED=1`.
+- The fake-enabled runtime path affects only the production activation dry-run diagnostic decision. It does not activate calls, start listeners, construct media engines, send Matrix events, or touch UI.
+- The two-client diagnostic runner passes the fake dry-run flag through `SIMCTL_CHILD_NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED`.
 - `DirectCallProductionActivationDecisionService` uses rollout and capability providers in a side-effect-free sequence.
 - `DirectCallProductionActivationGate` models app rollout, authenticated server capability, same-origin token endpoint, dependency readiness, and encrypted direct 1:1 room eligibility.
 - The readiness pack proves an enabled model only when rollout, capability, endpoint, dependencies, and room eligibility are all valid.

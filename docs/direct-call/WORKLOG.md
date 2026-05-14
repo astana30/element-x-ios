@@ -353,3 +353,13 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added side-effect assertions proving the enabled dry-run does not generate keys, consume keys, clear keys, or construct a media engine.
 - Reconfirmed default production configuration remains disabled and the fail-closed rollout provider still prevents capability/dependency queries.
 - Confirmed no visible UI, Element Call route, CallKit, push, listener start, media connect, Matrix send, or production activation changed.
+
+## 2026-05-14 — 2.12E Runtime Fake-Enabled Production Activation Dry-Run
+
+- Added the DEBUG/integration-only `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED=1` gate.
+- Gated the fake path behind the existing integration diagnostic command requirements so the flag cannot affect Release builds or normal production runtime.
+- Added an AppCoordinator dry-run provider factory branch that supplies fake rollout, fake server capability, and fake dependency readiness inputs only for the production activation dry-run diagnostic.
+- Kept fake dependency objects fail-closed if accidentally invoked; they exist only so the activation model can report dependency readiness in dry-run.
+- Updated the two-client diagnostic runner to pass the fake dry-run flag through `SIMCTL_CHILD_NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` without printing secrets.
+- Added unit tests proving default runtime dry-run remains disabled, fake-enabled dry-run can return `enabled=true` for an eligible room, and the env gate requires integration diagnostics.
+- Confirmed no visible UI, Element Call route, CallKit, push, listener start, media connect, Matrix send, or production activation changed.

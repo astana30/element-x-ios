@@ -627,6 +627,42 @@ final class RoomFlowCoordinatorTests {
     }
 
     @Test
+    func nativeDirectCallProductionActivationDryRunRuntimeFakeIsDisabledByDefault() async {
+        let roomProxy = makeEligibleNativeDirectCallRoomProxy()
+        let provider = AppCoordinator.makeNativeDirectCallProductionActivationDryRunProvider(roomProxy: roomProxy,
+                                                                                             homeserver: "https://matrix.example.test",
+                                                                                             environment: [:])
+
+        let diagnostic = await provider.nativeDirectCallProductionActivationDryRunDiagnostic()
+
+        #expect(diagnostic.isEnabled == false)
+        #expect(diagnostic.disabledReason == .appRolloutDisabled)
+        #expect(diagnostic.isCapabilityPresent == false)
+        #expect(diagnostic.areDependenciesReady == false)
+        #expect(diagnostic.isRoomEligible)
+        #expect(diagnostic.isEndpointAccepted == false)
+    }
+
+    @Test
+    func nativeDirectCallProductionActivationDryRunRuntimeFakeCanEnableEligibleRoomWithoutStartingCalls() async {
+        let roomProxy = makeEligibleNativeDirectCallRoomProxy()
+        let provider = AppCoordinator.makeNativeDirectCallProductionActivationDryRunProvider(roomProxy: roomProxy,
+                                                                                             homeserver: "https://matrix.example.test",
+                                                                                             environment: makeProductionDryRunFakeEnabledEnvironment())
+
+        let diagnostic = await provider.nativeDirectCallProductionActivationDryRunDiagnostic()
+
+        #expect(diagnostic.isEnabled)
+        #expect(diagnostic.disabledReason == nil)
+        #expect(diagnostic.isCapabilityPresent)
+        #expect(diagnostic.areDependenciesReady)
+        #expect(diagnostic.isRoomEligible)
+        #expect(diagnostic.isEndpointAccepted)
+        #expect(String(describing: diagnostic).contains("matrix.example.test") == false)
+        #expect(String(describing: diagnostic).contains(DirectCallProductionConfiguration.tokenEndpointPath) == false)
+    }
+
+    @Test
     func nativeDirectCallDeveloperCommandRouterIsDisabledByDefault() async {
         let owner = NativeDirectCallRoomFlowOwnerSpy()
         owner.isListenerStarted = true
@@ -1060,6 +1096,7 @@ final class RoomFlowCoordinatorTests {
             #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationCommandsEnabled(environment: environment) == false)
             #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationEncryptionEnabled(environment: environment) == false)
             #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationLiveKitEnabled(environment: environment) == false)
+            #expect(ProcessInfo.isNativeDirectCallProductionDryRunFakeEnabled(environment: environment) == false)
         }
 
         let harnessOnlyEnvironment = [
@@ -1070,6 +1107,7 @@ final class RoomFlowCoordinatorTests {
         #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationCommandsEnabled(environment: harnessOnlyEnvironment) == false)
         #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationEncryptionEnabled(environment: harnessOnlyEnvironment) == false)
         #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationLiveKitEnabled(environment: harnessOnlyEnvironment) == false)
+        #expect(ProcessInfo.isNativeDirectCallProductionDryRunFakeEnabled(environment: harnessOnlyEnvironment) == false)
 
         let commandsEnabledEnvironment = [
             "IS_RUNNING_INTEGRATION_TESTS": "1",
@@ -1080,6 +1118,11 @@ final class RoomFlowCoordinatorTests {
         #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationCommandsEnabled(environment: commandsEnabledEnvironment) == true)
         #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationEncryptionEnabled(environment: commandsEnabledEnvironment) == false)
         #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationLiveKitEnabled(environment: commandsEnabledEnvironment) == false)
+        #expect(ProcessInfo.isNativeDirectCallProductionDryRunFakeEnabled(environment: commandsEnabledEnvironment) == false)
+
+        var fakeDryRunEnvironment = commandsEnabledEnvironment
+        fakeDryRunEnvironment["NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED"] = "1"
+        #expect(ProcessInfo.isNativeDirectCallProductionDryRunFakeEnabled(environment: fakeDryRunEnvironment) == true)
 
         var encryptionEnvironment = commandsEnabledEnvironment
         encryptionEnvironment[NativeDirectCallDiagnosticEncryptionService.encryptionGateEnvironmentKey] = "1"
@@ -1220,6 +1263,22 @@ final class RoomFlowCoordinatorTests {
         for fulfillment in fulfillments {
             try await fulfillment.fulfill()
         }
+    }
+
+    private func makeEligibleNativeDirectCallRoomProxy() -> JoinedRoomProxyMock {
+        JoinedRoomProxyMock(.init(id: "!room:example.test",
+                                  isDirect: true,
+                                  isEncrypted: true,
+                                  members: [.mockMe, .mockBob]))
+    }
+
+    private func makeProductionDryRunFakeEnabledEnvironment() -> [String: String] {
+        [
+            "IS_RUNNING_INTEGRATION_TESTS": "1",
+            "NATIVE_DIRECT_CALL_DIAGNOSTICS": "1",
+            "NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED": "1",
+            "NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED": "1"
+        ]
     }
     
     private func setupRoomFlowCoordinator(asChildFlow: Bool = false,

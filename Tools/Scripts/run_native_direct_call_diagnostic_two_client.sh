@@ -82,6 +82,8 @@ Optional environment:
   NATIVE_DIRECT_CALL_LIVEKIT_TOKEN_B
                                   Required only when diagnostic LiveKit is enabled; never printed.
   NATIVE_DIRECT_CALL_LIVEKIT_ROOM Optional diagnostic LiveKit room name; never printed.
+  NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED
+                                  Optional. Set to 1 to make production-activation-dry-run use fake DEBUG-only enabled inputs.
 
 Example planned signalling sequence:
   $SCRIPT_NAME init both
@@ -169,6 +171,11 @@ log_livekit_environment_summary() {
         log "LiveKit room: $(redacted_env_state NATIVE_DIRECT_CALL_LIVEKIT_ROOM)"
     else
         log "LiveKit diagnostics: disabled"
+    fi
+    if [[ "${NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED:-}" == "1" ]]; then
+        log "Production activation dry-run fake inputs: enabled"
+    else
+        log "Production activation dry-run fake inputs: disabled"
     fi
 }
 
@@ -718,6 +725,7 @@ launch_client_with_environment() {
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_LIVEKIT_TOKEN_A="${NATIVE_DIRECT_CALL_LIVEKIT_TOKEN_A:-}" \
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_LIVEKIT_TOKEN_B="${NATIVE_DIRECT_CALL_LIVEKIT_TOKEN_B:-}" \
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_LIVEKIT_ROOM="${NATIVE_DIRECT_CALL_LIVEKIT_ROOM:-}" \
+        SIMCTL_CHILD_NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED="${NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED:-}" \
         SIMCTL_CHILD_UI_TESTS_SIGNALLING_CHANNEL="$channel" \
         SIMCTL_CHILD_INTEGRATION_TESTS_HOST="$INTEGRATION_TESTS_HOST" \
         SIMCTL_CHILD_INTEGRATION_TESTS_USERNAME="$username" \

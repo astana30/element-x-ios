@@ -1323,9 +1323,8 @@ extension AppCoordinator {
                                           mediaEngineFactory: nativeDirectCallDiagnosticMediaEngineFactory,
                                           encryptionService: nativeDirectCallDiagnosticEncryptionService)
         } nativeDirectCallProductionActivationDryRunProviderFactory: { roomProxy in
-            NativeDirectCallProductionActivationDryRunProvider(activationDryRunDiagnostics: DirectCallProductionActivationDecisionService(),
-                                                               homeserverBaseURL: URL(string: flowParameters.userSession.clientProxy.homeserver),
-                                                               roomEligibility: DirectCallProductionRoomEligibility(roomProxy: roomProxy))
+            Self.makeNativeDirectCallProductionActivationDryRunProvider(roomProxy: roomProxy,
+                                                                        homeserver: flowParameters.userSession.clientProxy.homeserver)
         }
         #else
         return UserSessionFlowCoordinator(isNewLogin: isNewLogin,
@@ -1350,6 +1349,25 @@ extension AppCoordinator {
         NativeDirectCallDiagnosticLiveKitMedia.makeMediaEngineFactoryIfEnabled(encryptionService: encryptionService,
                                                                                environment: environment,
                                                                                liveKitClient: liveKitClient)
+    }
+
+    static func makeNativeDirectCallProductionActivationDryRunProvider(roomProxy: JoinedRoomProxyProtocol,
+                                                                       homeserver: String,
+                                                                       environment: [String: String] = ProcessInfo.processInfo.environment) -> NativeDirectCallProductionActivationDryRunProviding {
+        let roomEligibility = DirectCallProductionRoomEligibility(roomProxy: roomProxy)
+        let homeserverBaseURL = URL(string: homeserver)
+        guard ProcessInfo.isNativeDirectCallProductionDryRunFakeEnabled(environment: environment) else {
+            return NativeDirectCallProductionActivationDryRunProvider(activationDryRunDiagnostics: DirectCallProductionActivationDecisionService(),
+                                                                      homeserverBaseURL: homeserverBaseURL,
+                                                                      roomEligibility: roomEligibility)
+        }
+
+        let decisionService = DirectCallProductionActivationDecisionService(rolloutProvider: NativeDirectCallProductionDryRunFakeRolloutProvider(),
+                                                                            capabilityProvider: NativeDirectCallProductionDryRunFakeCapabilityProvider(),
+                                                                            dependencyProvider: NativeDirectCallProductionDryRunFakeDependencyProvider())
+        return NativeDirectCallProductionActivationDryRunProvider(activationDryRunDiagnostics: decisionService,
+                                                                  homeserverBaseURL: homeserverBaseURL,
+                                                                  roomEligibility: roomEligibility)
     }
 
     private func configureNativeDirectCallIntegrationDiagnosticHarnessIfNeeded() {
@@ -1409,6 +1427,51 @@ extension AppCoordinator {
         } catch {
             MXLog.error("Native direct-call integration diagnostics signalling unavailable: \(error)")
         }
+    }
+}
+#endif
+
+#if DEBUG
+@MainActor
+private final class NativeDirectCallProductionDryRunFakeRolloutProvider: DirectCallProductionRolloutProviding {
+    func directCallProductionConfiguration() -> DirectCallProductionConfiguration {
+        .init(isEnabled: true)
+    }
+}
+
+@MainActor
+private final class NativeDirectCallProductionDryRunFakeCapabilityProvider: DirectCallProductionCapabilityProviding {
+    func directCallProductionServerCapability() async -> DirectCallProductionCapabilityDiscoveryResult {
+        .available(.init(isEnabled: true,
+                         intents: [DirectCallIntent.audio.rawValue]))
+    }
+}
+
+@MainActor
+private final class NativeDirectCallProductionDryRunFakeDependencyProvider: NativeDirectCallProductionDependencyProviding {
+    func nativeDirectCallProductionDependencies() -> NativeDirectCallProductionDependencies {
+        .init(encryptionService: NativeDirectCallProductionDryRunFakeEncryptionService(),
+              mediaEngineFactory: NativeDirectCallProductionDryRunFakeMediaEngineFactory())
+    }
+}
+
+@MainActor
+private final class NativeDirectCallProductionDryRunFakeEncryptionService: DirectCallEncryptionServiceProtocol {
+    func generatePerCallKey(callID: String, roomID: String, peerUserID: String) async -> Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason> {
+        .failure(.e2eeUnavailable)
+    }
+
+    func consumeRemoteEncryptedKey(_ payload: DirectCallEncryptedKeyExchangePayload, expectedCallID: String, expectedRoomID: String, expectedSenderUserID: String) async -> Result<DirectCallMediaKeyHandle, DirectCallEncryptionFailureReason> {
+        .failure(.e2eeUnavailable)
+    }
+
+    func clearPerCallKey(callID: String) { }
+}
+
+@MainActor
+private final class NativeDirectCallProductionDryRunFakeMediaEngineFactory: DirectCallMediaEngineFactoryProtocol {
+    func makeMediaEngine() -> Result<any DirectCallMediaEngineProtocol, DirectCallMediaError> {
+        .failure(.mediaSetupUnavailable)
     }
 }
 #endif

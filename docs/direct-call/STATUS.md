@@ -2,15 +2,15 @@
 
 ## Current Phase
 
-After 2.12D — production dry-run enabled=true local fake pack.
+After 2.12E — runtime fake-enabled production activation dry-run.
 
 ## Latest App Code Checkpoint
 
-This commit: `Prove production direct-call activation dry-run enabled with fake inputs`
+This commit: `Add fake-enabled production dry-run runtime harness`
 
 ## Latest Code Checkpoint
 
-This commit: `Prove production direct-call activation dry-run enabled with fake inputs`
+This commit: `Add fake-enabled production dry-run runtime harness`
 
 ## Latest SDK Checkpoint
 
@@ -95,6 +95,13 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Default `DirectCallProductionConfiguration` remains disabled.
   - The dry-run proof verifies no key generation, key consume, key cleanup, or media engine construction occurs.
   - Production direct calls remain disabled by default; no visible UI, Element Call route, CallKit, push, listener start, media connect, or Matrix send behavior changed.
+- Runtime fake-enabled production activation dry-run harness is complete:
+  - `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED=1` is recognized only in DEBUG when the integration diagnostic command gates are also enabled.
+  - The AppCoordinator dry-run provider factory can swap the production dry-run decision service to fake rollout, fake server capability, and fake dependency readiness inputs for the dry-run command only.
+  - The fake dependencies are fail-closed if accidentally invoked and are used only to make dependency readiness true for the dry-run model.
+  - The two-client diagnostic runner passes the fake dry-run flag to app launches through `SIMCTL_CHILD_NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED`.
+  - Unit tests prove default runtime dry-run remains disabled and fake-enabled dry-run can return `enabled=true` for an eligible encrypted direct 1:1 room.
+  - No real production call activation, listener start, media engine construction, Matrix send, visible UI, Element Call route, CallKit, or push behavior changed.
   - Focused app unit tests and Release build pass after the injection seam.
 - Production runtime SDK key wrapper provider seam is complete:
   - `DirectCallMediaKeyEnvelopeWrappingProviding` exposes only a direct-call envelope wrapper provider, not a raw SDK client, raw SDK room, raw timeline, or raw crypto object.
@@ -252,7 +259,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.12E — endpoint-aware production dependency readiness inspection/skeleton`
+`2.12F — endpoint-aware production dependency readiness inspection/skeleton`
 
 Goal: split side-effect-free runtime prerequisite readiness from endpoint-specific dependency assembly, or make dependency readiness receive an activation-accepted token endpoint, without activating visible UI or production direct calls.
 
