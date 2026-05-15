@@ -493,6 +493,12 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
             return .failed(error, operation: .outgoingStart, triggerDiagnostic: triggerDiagnostic)
         }
     }
+
+    #if DEBUG
+    func nativeDirectCallProductionStatus() -> NativeDirectCallProductionStatus {
+        .init(owner: nativeDirectCallProductionRoomFlowOwner)
+    }
+    #endif
     
     // MARK: - Private
     
@@ -2290,6 +2296,95 @@ struct NativeDirectCallProductionStartOutgoingAudioCallResult: Equatable, Custom
         description
     }
 }
+
+#if DEBUG
+struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let productionOwnerAvailable: Bool
+    let productionListenerStarted: Bool
+    let productionHasActiveSession: Bool
+    let productionSessionState: String
+    let productionEncryptionState: String
+    let productionLastSignalEventEmitted: DirectCallDiagnosticSignalEvent?
+    let productionLastSignalSendAttempted: Bool
+    let productionLastSignalSendSucceeded: Bool?
+    let productionLastSignalSendFailureReason: DirectCallDiagnosticSignalSendFailureReason?
+
+    @MainActor
+    init(owner: NativeDirectCallRoomFlowOwning?) {
+        guard let owner else {
+            self = .unavailable
+            return
+        }
+
+        let activeSession = owner.activeSession
+        let diagnosticSnapshot = owner.diagnosticSnapshot
+        productionOwnerAvailable = true
+        productionListenerStarted = owner.isListenerStarted
+        productionHasActiveSession = activeSession != nil
+        productionSessionState = if owner.isResetting {
+            NativeDirectCallRoomDiagnosticStatusState.resetting.description
+        } else if let activeSession {
+            String(describing: activeSession.state)
+        } else {
+            NativeDirectCallRoomDiagnosticStatusState.idle.description
+        }
+        productionEncryptionState = activeSession.map { String(describing: $0.encryptionState) } ?? "none"
+        productionLastSignalEventEmitted = diagnosticSnapshot.lastSignalEventEmitted
+        productionLastSignalSendAttempted = diagnosticSnapshot.lastSignalSendAttempted
+        productionLastSignalSendSucceeded = diagnosticSnapshot.lastSignalSendSucceeded
+        productionLastSignalSendFailureReason = diagnosticSnapshot.lastSignalSendFailureReason
+    }
+
+    static let unavailable = Self(productionOwnerAvailable: false,
+                                  productionListenerStarted: false,
+                                  productionHasActiveSession: false,
+                                  productionSessionState: NativeDirectCallRoomDiagnosticStatusState.unavailable.description,
+                                  productionEncryptionState: "none",
+                                  productionLastSignalEventEmitted: nil,
+                                  productionLastSignalSendAttempted: false,
+                                  productionLastSignalSendSucceeded: nil,
+                                  productionLastSignalSendFailureReason: nil)
+
+    private init(productionOwnerAvailable: Bool,
+                 productionListenerStarted: Bool,
+                 productionHasActiveSession: Bool,
+                 productionSessionState: String,
+                 productionEncryptionState: String,
+                 productionLastSignalEventEmitted: DirectCallDiagnosticSignalEvent?,
+                 productionLastSignalSendAttempted: Bool,
+                 productionLastSignalSendSucceeded: Bool?,
+                 productionLastSignalSendFailureReason: DirectCallDiagnosticSignalSendFailureReason?) {
+        self.productionOwnerAvailable = productionOwnerAvailable
+        self.productionListenerStarted = productionListenerStarted
+        self.productionHasActiveSession = productionHasActiveSession
+        self.productionSessionState = productionSessionState
+        self.productionEncryptionState = productionEncryptionState
+        self.productionLastSignalEventEmitted = productionLastSignalEventEmitted
+        self.productionLastSignalSendAttempted = productionLastSignalSendAttempted
+        self.productionLastSignalSendSucceeded = productionLastSignalSendSucceeded
+        self.productionLastSignalSendFailureReason = productionLastSignalSendFailureReason
+    }
+
+    var description: String {
+        let fields = [
+            "productionOwnerAvailable: \(productionOwnerAvailable)",
+            "productionListenerStarted: \(productionListenerStarted)",
+            "productionHasActiveSession: \(productionHasActiveSession)",
+            "productionSessionState: \(productionSessionState)",
+            "productionEncryptionState: \(productionEncryptionState)",
+            "productionLastSignalEventEmitted: \(String(describing: productionLastSignalEventEmitted))",
+            "productionLastSignalSendAttempted: \(productionLastSignalSendAttempted)",
+            "productionLastSignalSendSucceeded: \(String(describing: productionLastSignalSendSucceeded))",
+            "productionLastSignalSendFailureReason: \(String(describing: productionLastSignalSendFailureReason))"
+        ]
+        return "NativeDirectCallProductionStatus(\(fields.joined(separator: ", ")))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+#endif
 
 enum NativeDirectCallProductionRoomFlowOwnerFactoryResult {
     case owner(NativeDirectCallRoomFlowOwning)

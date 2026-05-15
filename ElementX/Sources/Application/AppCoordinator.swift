@@ -1435,6 +1435,7 @@ extension AppCoordinator {
                                                                 peerUserID: peerUserID)
     }
 
+    // swiftlint:disable:next cyclomatic_complexity
     private func configureNativeDirectCallIntegrationDiagnosticHarnessIfNeeded() {
         guard nativeDirectCallDiagnosticClient == nil else {
             return
@@ -1523,6 +1524,16 @@ extension AppCoordinator {
 
                             let result = UITestsSignal.NativeDirectCallProductionStartOutgoingAudioCallResult(correlationID: request.correlationID, startResult)
                             try? client?.send(.nativeDirectCallProductionStartOutgoingAudioCallResult(result))
+                        case .nativeDirectCallProductionStatus(let request):
+                            let status: NativeDirectCallProductionStatus
+                            if let flowCoordinator = self?.userSessionFlowCoordinator {
+                                status = flowCoordinator.nativeDirectCallProductionStatus()
+                            } else {
+                                status = .unavailable
+                            }
+
+                            let result = UITestsSignal.NativeDirectCallProductionStatusResult(correlationID: request.correlationID, status)
+                            try? client?.send(.nativeDirectCallProductionStatusResult(result))
                         default:
                             return
                         }

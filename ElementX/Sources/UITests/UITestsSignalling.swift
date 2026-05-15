@@ -70,6 +70,10 @@ enum UITestsSignal: Codable, Equatable {
     case nativeDirectCallProductionStartOutgoingAudioCall(NativeDirectCallProductionStartOutgoingAudioCallRequest)
     /// Reports a redacted DEBUG-only internal production native direct-call start command result.
     case nativeDirectCallProductionStartOutgoingAudioCallResult(NativeDirectCallProductionStartOutgoingAudioCallResult)
+    /// Requests redacted production native direct-call owner status for the active room.
+    case nativeDirectCallProductionStatus(NativeDirectCallProductionStatusRequest)
+    /// Reports redacted production native direct-call owner status for the active room.
+    case nativeDirectCallProductionStatusResult(NativeDirectCallProductionStatusResult)
 
     struct NativeDirectCallDiagnosticCommandRequest: Codable, Equatable {
         let command: NativeDirectCallDiagnosticCommand
@@ -283,6 +287,24 @@ enum UITestsSignal: Codable, Equatable {
         }
     }
 
+    struct NativeDirectCallProductionStatusRequest: Codable, Equatable {
+        let correlationID: String?
+
+        init(correlationID: String? = nil) {
+            self.correlationID = UITestsSignalling.sanitizedIdentifier(correlationID)
+        }
+    }
+
+    struct NativeDirectCallProductionStatusResult: Codable, Equatable {
+        let correlationID: String?
+        let status: NativeDirectCallProductionStatusPayload
+
+        init(correlationID: String? = nil, status: NativeDirectCallProductionStatusPayload) {
+            self.correlationID = UITestsSignalling.sanitizedIdentifier(correlationID)
+            self.status = status
+        }
+    }
+
     enum NativeDirectCallProductionStartResultOutcome: String, Codable, Equatable {
         case started
         case blocked
@@ -306,6 +328,38 @@ enum UITestsSignal: Codable, Equatable {
             self.intent = UITestsSignalling.sanitizedIdentifier(intent) ?? "unknown"
             self.state = UITestsSignalling.sanitizedIdentifier(state) ?? "unknown"
             self.encryptionState = UITestsSignalling.sanitizedIdentifier(encryptionState) ?? "unknown"
+        }
+    }
+
+    struct NativeDirectCallProductionStatusPayload: Codable, Equatable {
+        let productionOwnerAvailable: Bool
+        let productionListenerStarted: Bool
+        let productionHasActiveSession: Bool
+        let productionSessionState: String
+        let productionEncryptionState: String
+        let productionLastSignalEventEmitted: DirectCallDiagnosticSignalEvent?
+        let productionLastSignalSendAttempted: Bool
+        let productionLastSignalSendSucceeded: Bool?
+        let productionLastSignalSendFailureReason: DirectCallDiagnosticSignalSendFailureReason?
+
+        init(productionOwnerAvailable: Bool,
+             productionListenerStarted: Bool,
+             productionHasActiveSession: Bool,
+             productionSessionState: String,
+             productionEncryptionState: String,
+             productionLastSignalEventEmitted: DirectCallDiagnosticSignalEvent?,
+             productionLastSignalSendAttempted: Bool,
+             productionLastSignalSendSucceeded: Bool?,
+             productionLastSignalSendFailureReason: DirectCallDiagnosticSignalSendFailureReason?) {
+            self.productionOwnerAvailable = productionOwnerAvailable
+            self.productionListenerStarted = productionListenerStarted
+            self.productionHasActiveSession = productionHasActiveSession
+            self.productionSessionState = UITestsSignalling.sanitizedIdentifier(productionSessionState) ?? "unknown"
+            self.productionEncryptionState = UITestsSignalling.sanitizedIdentifier(productionEncryptionState) ?? "unknown"
+            self.productionLastSignalEventEmitted = productionLastSignalEventEmitted
+            self.productionLastSignalSendAttempted = productionLastSignalSendAttempted
+            self.productionLastSignalSendSucceeded = productionLastSignalSendSucceeded
+            self.productionLastSignalSendFailureReason = productionLastSignalSendFailureReason
         }
     }
 
@@ -662,6 +716,13 @@ extension UITestsSignal.NativeDirectCallProductionStartOutgoingAudioCallResult {
     }
 }
 
+extension UITestsSignal.NativeDirectCallProductionStatusResult {
+    init(correlationID: String? = nil, _ status: NativeDirectCallProductionStatus) {
+        self.init(correlationID: correlationID,
+                  status: .init(status))
+    }
+}
+
 extension UITestsSignal.NativeDirectCallProductionStartResultOutcome {
     init(_ outcome: NativeDirectCallProductionStartOutcome) {
         switch outcome {
@@ -682,6 +743,20 @@ extension UITestsSignal.NativeDirectCallProductionStartedSessionSummary {
                   intent: summary.intent,
                   state: summary.state,
                   encryptionState: summary.encryptionState)
+    }
+}
+
+extension UITestsSignal.NativeDirectCallProductionStatusPayload {
+    init(_ status: NativeDirectCallProductionStatus) {
+        self.init(productionOwnerAvailable: status.productionOwnerAvailable,
+                  productionListenerStarted: status.productionListenerStarted,
+                  productionHasActiveSession: status.productionHasActiveSession,
+                  productionSessionState: status.productionSessionState,
+                  productionEncryptionState: status.productionEncryptionState,
+                  productionLastSignalEventEmitted: status.productionLastSignalEventEmitted,
+                  productionLastSignalSendAttempted: status.productionLastSignalSendAttempted,
+                  productionLastSignalSendSucceeded: status.productionLastSignalSendSucceeded,
+                  productionLastSignalSendFailureReason: status.productionLastSignalSendFailureReason)
     }
 }
 

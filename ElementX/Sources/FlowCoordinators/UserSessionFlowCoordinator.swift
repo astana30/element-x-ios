@@ -289,6 +289,15 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
 
         return await chatsTabFlowCoordinator.nativeDirectCallProductionStartOutgoingAudioCall(isProductionStartEnabled: isProductionStartEnabled)
     }
+
+    func nativeDirectCallProductionStatus() -> NativeDirectCallProductionStatus {
+        guard nativeDirectCallDiagnosticRuntimeGate(),
+              navigationTabCoordinator.selectedTab == .chats else {
+            return .unavailable
+        }
+
+        return chatsTabFlowCoordinator.nativeDirectCallProductionStatus()
+    }
     #endif
 
     // MARK: - Private

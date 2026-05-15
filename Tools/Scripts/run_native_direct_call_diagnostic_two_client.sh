@@ -55,6 +55,7 @@ Usage:
   DRY_RUN=0 $SCRIPT_NAME production-activation-dry-run A|B
   DRY_RUN=0 $SCRIPT_NAME production-trigger-dry-run A|B
   DRY_RUN=0 $SCRIPT_NAME production-start-outgoing A|B
+  DRY_RUN=0 $SCRIPT_NAME production-status A|B
   DRY_RUN=0 $SCRIPT_NAME wait-status A|B incomingRinging
   DRY_RUN=0 $SCRIPT_NAME accept-when-ringing A|B
 
@@ -549,6 +550,39 @@ with open(file_path, "w", encoding="utf-8") as handle:
 PY
 }
 
+write_production_status_request() {
+    local client="$1"
+    local correlation_id="$2"
+    local file
+    file="$(signal_file "$client")"
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        log "DRY_RUN: query-production-status channel=$client correlationID=$correlation_id"
+        return
+    fi
+
+    python3 - "$file" "$correlation_id" <<'PY'
+import json
+import sys
+
+file_path, correlation_id = sys.argv[1:3]
+message = {
+    "mode": {
+        "tests": {}
+    },
+    "signal": {
+        "nativeDirectCallProductionStatus": {
+            "_0": {
+                "correlationID": correlation_id,
+            }
+        }
+    }
+}
+with open(file_path, "w", encoding="utf-8") as handle:
+    json.dump(message, handle, sort_keys=True, separators=(",", ":"))
+PY
+}
+
 extract_result() {
     local client="$1"
     local expected_signal="$2"
@@ -740,6 +774,23 @@ if expected_signal == "nativeDirectCallProductionStartOutgoingAudioCallResult":
             peer_trust_readiness=diagnostic.get("peerTrustReadiness") or "unknown",
             key_wrapper_source=diagnostic.get("keyWrapperSource") or "none",
             session_fields=session_fields,
+        )
+    )
+    sys.exit(0)
+
+if expected_signal == "nativeDirectCallProductionStatusResult":
+    status = body.get("status", {})
+    print(
+        "productionOwnerAvailable={owner} productionListenerStarted={listener} productionHasActiveSession={session} productionSessionState={state} productionEncryptionState={encryption_state} productionLastSignalEventEmitted={event} productionLastSignalSendAttempted={attempted} productionLastSignalSendSucceeded={succeeded} productionLastSignalSendFailureReason={failure}".format(
+            owner=str(status.get("productionOwnerAvailable", "unknown")).lower(),
+            listener=str(status.get("productionListenerStarted", "unknown")).lower(),
+            session=str(status.get("productionHasActiveSession", "unknown")).lower(),
+            state=status.get("productionSessionState", "unknown"),
+            encryption_state=status.get("productionEncryptionState", "unknown"),
+            event=status.get("productionLastSignalEventEmitted", "none"),
+            attempted=str(status.get("productionLastSignalSendAttempted", "unknown")).lower(),
+            succeeded=str(status.get("productionLastSignalSendSucceeded", "unknown")).lower(),
+            failure=status.get("productionLastSignalSendFailureReason", "none"),
         )
     )
     sys.exit(0)
@@ -1100,6 +1151,21 @@ query_production_start_outgoing() {
     log "channel=$client command=productionStartOutgoing correlationID=$id $result"
 }
 
+query_production_status() {
+    local client="$1"
+    local id
+    id="$(correlation_id "$client" productionStatus)"
+    write_production_status_request "$client" "$id"
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        return
+    fi
+
+    local result
+    result="$(wait_for_result "$client" nativeDirectCallProductionStatusResult "$id")"
+    log "channel=$client command=productionStatus correlationID=$id $result"
+}
+
 wait_for_status() {
     local client="$1"
     local expected="$2"
@@ -1281,6 +1347,12 @@ main() {
             require_common_environment
             [[ $# -eq 2 ]] || fail "Usage: $SCRIPT_NAME production-start-outgoing A|B"
             query_production_start_outgoing "$2"
+            ;;
+        production-status|productionStatus)
+            require_host_tools
+            require_common_environment
+            [[ $# -eq 2 ]] || fail "Usage: $SCRIPT_NAME production-status A|B"
+            query_production_status "$2"
             ;;
         wait-status)
             require_host_tools
