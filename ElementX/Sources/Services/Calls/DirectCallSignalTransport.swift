@@ -264,6 +264,7 @@ enum DirectCallMatrixSignalCodec {
                 return false
             }
             return keyExchange.callID == content.callID && keyExchange.roomID == roomID
+                && (keyExchange.recipientUserID == nil || keyExchange.recipientUserID == content.recipient)
         case .answer, .reject, .cancel, .hangup, .timeout:
             return true
         }
@@ -291,7 +292,8 @@ enum DirectCallMatrixSignalCodec {
 
             return keyExchange.callID == content.callID &&
                 keyExchange.roomID == envelope.roomID &&
-                keyExchange.senderUserID == envelope.senderUserID
+                keyExchange.senderUserID == envelope.senderUserID &&
+                (keyExchange.recipientUserID == nil || keyExchange.recipientUserID == envelope.ownUserID)
         case .answer, .reject, .cancel, .hangup, .timeout:
             return content.keyExchange == nil
         }
@@ -1407,6 +1409,48 @@ extension DirectCallDiagnosticEnvelopeRejectedReason {
         }
     }
 }
+
+extension DirectCallDiagnosticReceiveFailureReason {
+    init(_ error: DirectCallEngineError) {
+        switch error {
+        case .invalidPeer, .invalidSender:
+            self = .incomingWrongSender
+        case .invalidRoomID, .roomMismatch:
+            self = .incomingRoomMismatch
+        case .invalidCallID, .callIDMismatch:
+            self = .incomingCallMismatch
+        case .invalidIntent:
+            self = .incomingIntentMismatch
+        case .staleOrUnknownEvent:
+            self = .incomingDuplicate
+        case .sessionAlreadyActive, .invalidTransition, .invalidEncryptionTransition:
+            self = .incomingStateInvalid
+        case .mediaConnectionFailed:
+            self = .unknown
+        case .encryptionFailed(let reason):
+            self = .init(reason)
+        }
+    }
+
+    init(_ reason: DirectCallEncryptionFailureReason) {
+        switch reason {
+        case .sdkTrustViolation:
+            self = .incomingKeyTrustViolation
+        case .sdkNoEligibleDevice:
+            self = .incomingNoEligibleDevice
+        case .wrongRecipient:
+            self = .incomingWrongRecipient
+        case .expiredKeyExchange:
+            self = .incomingExpired
+        case .unsupportedEnvelope, .keyMismatch, .missingMetadata:
+            self = .incomingUnsupportedEnvelope
+        case .missingPeer:
+            self = .incomingWrongSender
+        case .missingKeyExchange, .keyExchangeFailed, .e2eeNotProven, .e2eeUnavailable, .cannotWrap, .cannotUnwrap, .sdkWrapperUnavailable, .sdkEnvelopeFailed, .unsupportedRuntime:
+            self = .incomingKeyUnwrapFailed
+        }
+    }
+}
 #endif
 
 private struct DirectCallMatrixSDKRawRoom: DirectCallMatrixRawRoomSending {
@@ -1418,16 +1462,26 @@ private struct DirectCallMatrixSDKRawRoom: DirectCallMatrixRawRoomSending {
 }
 
 private struct DirectCallMatrixKeyExchangeContent: Codable, Equatable {
+    let version: Int?
+    let algorithm: String?
     let callID: String
     let roomID: String
     let senderUserID: String
+    let recipientUserID: String?
+    let intent: String?
+    let expiresAtMilliseconds: UInt64?
     let keyID: String
     let encryptedPayload: String
 
     init(_ payload: DirectCallEncryptedKeyExchangePayload) {
+        version = payload.version
+        algorithm = payload.algorithm
         callID = payload.callID
         roomID = payload.roomID
         senderUserID = payload.senderUserID
+        recipientUserID = payload.recipientUserID
+        intent = payload.intent?.rawValue
+        expiresAtMilliseconds = payload.expiresAt.map(Self.millisecondsSince1970)
         keyID = payload.keyID
         encryptedPayload = payload.encryptedPayload
     }
@@ -1437,15 +1491,38 @@ private struct DirectCallMatrixKeyExchangeContent: Codable, Equatable {
               roomID: roomID,
               senderUserID: senderUserID,
               keyID: keyID,
-              encryptedPayload: encryptedPayload)
+              encryptedPayload: encryptedPayload,
+              version: version,
+              algorithm: algorithm,
+              recipientUserID: recipientUserID,
+              intent: DirectCallIntent.parse(intent),
+              expiresAt: expiresAtMilliseconds.map { Date(timeIntervalSince1970: TimeInterval($0) / 1000) })
     }
 
     private enum CodingKeys: String, CodingKey {
+        case version
+        case algorithm
         case callID = "call_id"
         case roomID = "room_id"
         case senderUserID = "sender_user_id"
+        case recipientUserID = "recipient_user_id"
+        case intent
+        case expiresAtMilliseconds = "expires_at_ms"
         case keyID = "key_id"
         case encryptedPayload = "encrypted_payload"
+    }
+
+    private static func millisecondsSince1970(from date: Date) -> UInt64 {
+        let milliseconds = date.timeIntervalSince1970 * 1000
+        guard milliseconds.isFinite, milliseconds > 0 else {
+            return 0
+        }
+
+        guard milliseconds < Double(UInt64.max) else {
+            return UInt64.max
+        }
+
+        return UInt64(milliseconds.rounded(.down))
     }
 }
 
@@ -1607,7 +1684,7 @@ final class DirectCallEngineSignalBridge {
                     #if DEBUG
                     if case .failure(let error) = result {
                         diagnosticState.lastEnvelopeRejectedReason = .init(error)
-                        diagnosticState.lastReceiveFailureReason = .engineRejected
+                        diagnosticState.lastReceiveFailureReason = .init(error)
                     }
                     #endif
                 }

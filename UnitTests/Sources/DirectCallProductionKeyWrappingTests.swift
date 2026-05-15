@@ -87,6 +87,11 @@ final class DirectCallProductionKeyWrappingTests {
 
         #expect(generated.keyHandle == .init(callID: callID, keyID: "key-a"))
         #expect(generated.payload.encryptedPayload == "opaque-key-a")
+        #expect(generated.payload.version == 1)
+        #expect(generated.payload.algorithm == "salemx.native_direct_call.media_key.v1")
+        #expect(generated.payload.recipientUserID == peerUserID)
+        #expect(generated.payload.intent == .audio)
+        #expect(generated.payload.expiresAt == Date(timeIntervalSince1970: 60))
         #expect(wrapper.wrappedMediaKeys == ["sensitive-media-material"])
         #expect(keyStore.makeKeyProvider(for: generated.keyHandle) != nil)
         #expect(String(describing: generated.payload).contains("opaque-key-a") == false)
@@ -107,7 +112,12 @@ final class DirectCallProductionKeyWrappingTests {
                                                             roomID: roomID,
                                                             senderUserID: peerUserID,
                                                             keyID: "key-a",
-                                                            encryptedPayload: "opaque-key-a")
+                                                            encryptedPayload: "opaque-key-a",
+                                                            version: 1,
+                                                            algorithm: "salemx.native_direct_call.media_key.v1",
+                                                            recipientUserID: ownUserID,
+                                                            intent: .audio,
+                                                            expiresAt: Date(timeIntervalSince1970: 60))
 
         let result = await service.consumeRemoteEncryptedKey(payload,
                                                              expectedCallID: callID,
@@ -1010,7 +1020,7 @@ final class DirectCallProductionKeyWrappingTests {
         #expect(await genericFailureWrapper.wrapMediaKey("sensitive-media-material",
                                                          request: makeWrapRequest()) == .failure(.sdkEnvelopeFailed))
         #expect(await unwrappingWrapper.unwrapMediaKeyEnvelope(makeWrappedEnvelope(),
-                                                               request: makeUnwrapRequest()) == .failure(.invalidMetadata))
+                                                               request: makeUnwrapRequest()) == .failure(.unsupportedEnvelope))
     }
 
     private func makeWrapRequest(expiresAt: Date = Date(timeIntervalSince1970: 1)) -> DirectCallMediaKeyWrapRequest {
@@ -1746,7 +1756,7 @@ private final class MediaKeyWrapperSpy: DirectCallMediaKeyWrappingProtocol {
             return .success(envelopeOverride)
         }
 
-        return .success(.init(algorithm: "test",
+        return .success(.init(algorithm: "salemx.native_direct_call.media_key.v1",
                               callID: request.callID,
                               roomID: request.roomID,
                               senderUserID: request.senderUserID,

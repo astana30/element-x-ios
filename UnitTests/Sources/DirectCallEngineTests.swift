@@ -7,6 +7,7 @@
 
 import Combine
 @testable import ElementX
+import Foundation
 import Testing
 
 @MainActor
@@ -408,13 +409,13 @@ final class DirectCallEngineTests {
 
     @Test
     func incomingInviteMismatchedKeyExchangeFailsClosed() async {
-        let mismatchedPayloads: [DirectCallEncryptedKeyExchangePayload] = [
-            keyExchange(callID: "other-call"),
-            keyExchange(callID: "call-a", roomID: "!other:example.com"),
-            keyExchange(callID: "call-a", senderUserID: "@mallory:example.com")
+        let cases: [(DirectCallEncryptedKeyExchangePayload, DirectCallEngineError)] = [
+            (keyExchange(callID: "other-call"), .callIDMismatch),
+            (keyExchange(callID: "call-a", roomID: "!other:example.com"), .roomMismatch),
+            (keyExchange(callID: "call-a", senderUserID: "@mallory:example.com"), .invalidSender)
         ]
 
-        for payload in mismatchedPayloads {
+        for (payload, expectedError) in cases {
             let mediaEngine = MediaEngineSpy()
             let engine = makeEngine(mediaEngine: mediaEngine)
 
@@ -427,7 +428,47 @@ final class DirectCallEngineTests {
                                                                        timestamp: .now,
                                                                        keyExchange: payload))
 
-            #expect(result == .failure(.encryptionFailed(.keyMismatch)))
+            #expect(result == .failure(expectedError))
+            #expect(engine.activeSessionPublisher.value == nil)
+            #expect(mediaEngine.connectedSessions.isEmpty)
+        }
+    }
+
+    @Test
+    func incomingInviteEnvelopeMetadataFailuresAreRejectedBeforeSessionCreation() async {
+        let expiredPayload = keyExchange(callID: "call-a",
+                                         recipientUserID: ownUserID,
+                                         intent: .audio,
+                                         expiresAt: Date(timeIntervalSince1970: 1))
+        let wrongRecipientPayload = keyExchange(callID: "call-b",
+                                                recipientUserID: "@other:example.com",
+                                                intent: .audio,
+                                                expiresAt: Date(timeIntervalSince1970: 60))
+        let wrongIntentPayload = keyExchange(callID: "call-c",
+                                             recipientUserID: ownUserID,
+                                             intent: .video,
+                                             expiresAt: Date(timeIntervalSince1970: 60))
+
+        let cases: [(DirectCallEncryptedKeyExchangePayload, DirectCallEngineError)] = [
+            (expiredPayload, .encryptionFailed(.expiredKeyExchange)),
+            (wrongRecipientPayload, .encryptionFailed(.wrongRecipient)),
+            (wrongIntentPayload, .invalidIntent)
+        ]
+
+        for (payload, expectedError) in cases {
+            let mediaEngine = MediaEngineSpy()
+            let engine = makeEngine(mediaEngine: mediaEngine) { Date(timeIntervalSince1970: 30) }
+
+            let result = await engine.receiveIncomingCall(event: .init(eventID: "$invite-\(payload.callID)",
+                                                                       roomID: roomID,
+                                                                       senderID: peerUserID,
+                                                                       callID: payload.callID,
+                                                                       type: .invite,
+                                                                       intent: .audio,
+                                                                       timestamp: .now,
+                                                                       keyExchange: payload))
+
+            #expect(result == .failure(expectedError))
             #expect(engine.activeSessionPublisher.value == nil)
             #expect(mediaEngine.connectedSessions.isEmpty)
         }
@@ -728,13 +769,15 @@ final class DirectCallEngineTests {
 
     private func makeEngine(encryptionService: DirectCallEncryptionServiceProtocol? = nil,
                             mediaEngine: DirectCallMediaEngineProtocol? = nil,
-                            cleanupDelay: Duration = .milliseconds(20)) -> DirectCallEngine {
+                            cleanupDelay: Duration = .milliseconds(20),
+                            now: @escaping () -> Date = Date.init) -> DirectCallEngine {
         DirectCallEngine(ownUserID: ownUserID,
                          configuration: .init(incomingRingingTimeout: .seconds(120),
                                               outgoingRingingTimeout: .seconds(120),
                                               connectingTimeout: .seconds(120),
                                               cleanupDelay: cleanupDelay,
                                               processedTerminalEventLimit: 64),
+                         now: now,
                          encryptionService: encryptionService ?? EncryptionServiceSpy(senderUserID: ownUserID),
                          mediaEngine: mediaEngine) { [roomID, peerUserID] id in
             id == roomID ? peerUserID : nil
@@ -745,12 +788,20 @@ final class DirectCallEngineTests {
                              roomID: String? = nil,
                              senderUserID: String? = nil,
                              keyID: String = "key-a",
-                             encryptedPayload: String = "encrypted") -> DirectCallEncryptedKeyExchangePayload {
+                             encryptedPayload: String = "encrypted",
+                             recipientUserID: String? = nil,
+                             intent: DirectCallIntent? = nil,
+                             expiresAt: Date? = nil) -> DirectCallEncryptedKeyExchangePayload {
         .init(callID: callID,
               roomID: roomID ?? self.roomID,
               senderUserID: senderUserID ?? peerUserID,
               keyID: keyID,
-              encryptedPayload: encryptedPayload)
+              encryptedPayload: encryptedPayload,
+              version: recipientUserID == nil && intent == nil && expiresAt == nil ? nil : 1,
+              algorithm: recipientUserID == nil && intent == nil && expiresAt == nil ? nil : "salemx.native_direct_call.media_key.v1",
+              recipientUserID: recipientUserID,
+              intent: intent,
+              expiresAt: expiresAt)
     }
 
     private func startOutgoingAndReceiveAnswer(engine: DirectCallEngine) async -> DirectCallSession? {

@@ -418,6 +418,10 @@ final class DirectCallEngine: DirectCallEngineProtocol {
             return .failure(.encryptionFailed(.missingKeyExchange))
         }
 
+        if let keyExchangeError = validateIncomingKeyExchange(keyExchange, event: event, intent: intent) {
+            return .failure(keyExchangeError)
+        }
+
         let keyHandle: DirectCallMediaKeyHandle
         switch await encryptionService.consumeRemoteEncryptedKey(keyExchange,
                                                                  expectedCallID: event.callID,
@@ -447,6 +451,49 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         publish(session)
         scheduleIncomingTimeout(for: session.callID)
         return .success(session)
+    }
+
+    private func validateIncomingKeyExchange(_ keyExchange: DirectCallEncryptedKeyExchangePayload,
+                                             event: DirectCallSignalEvent,
+                                             intent: DirectCallIntent) -> DirectCallEngineError? {
+        guard keyExchange.callID == event.callID else {
+            return .callIDMismatch
+        }
+
+        guard keyExchange.roomID == event.roomID else {
+            return .roomMismatch
+        }
+
+        guard keyExchange.senderUserID == event.senderID else {
+            return .invalidSender
+        }
+
+        guard !keyExchange.keyID.isEmpty,
+              !keyExchange.encryptedPayload.isEmpty else {
+            return .encryptionFailed(.missingKeyExchange)
+        }
+
+        if let recipientUserID = keyExchange.recipientUserID,
+           recipientUserID != ownUserID {
+            return .encryptionFailed(.wrongRecipient)
+        }
+
+        if let keyExchangeIntent = keyExchange.intent,
+           keyExchangeIntent != intent {
+            return .invalidIntent
+        }
+
+        if let expiresAt = keyExchange.expiresAt,
+           expiresAt < now() {
+            return .encryptionFailed(.expiredKeyExchange)
+        }
+
+        if let version = keyExchange.version,
+           version != 1 {
+            return .encryptionFailed(.unsupportedEnvelope)
+        }
+
+        return nil
     }
 
     private func handleIncomingAnswer(event: DirectCallSignalEvent) async -> Result<DirectCallSession?, DirectCallEngineError> {

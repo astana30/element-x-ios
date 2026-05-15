@@ -2182,6 +2182,8 @@ enum NativeDirectCallProductionStartBlockedReason: String, Equatable, CustomStri
             self = .sdkNoEligibleDevice
         case .sdkEnvelopeFailed:
             self = .sdkEnvelopeFailed
+        case .wrongRecipient, .expiredKeyExchange, .unsupportedEnvelope:
+            self = .keyWrapFailed
         case .unsupportedRuntime:
             self = .unsupportedRuntime
         case .missingKeyExchange, .keyExchangeFailed, .e2eeNotProven:

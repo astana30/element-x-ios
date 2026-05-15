@@ -8,17 +8,53 @@
 import CryptoKit
 import Foundation
 
-/// Ciphertext-only key exchange payload.
-/// The encrypted payload must travel via Matrix E2EE-protected signalling.
+/// Ciphertext plus non-secret key envelope metadata.
+/// The encrypted payload must travel via Matrix E2EE-protected signalling and must never contain plaintext media-key material.
 struct DirectCallEncryptedKeyExchangePayload: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let version: Int?
+    let algorithm: String?
     let callID: String
     let roomID: String
     let senderUserID: String
+    let recipientUserID: String?
+    let intent: DirectCallIntent?
+    let expiresAt: Date?
     let keyID: String
     let encryptedPayload: String
 
+    init(callID: String,
+         roomID: String,
+         senderUserID: String,
+         keyID: String,
+         encryptedPayload: String,
+         version: Int? = nil,
+         algorithm: String? = nil,
+         recipientUserID: String? = nil,
+         intent: DirectCallIntent? = nil,
+         expiresAt: Date? = nil) {
+        self.version = version
+        self.algorithm = algorithm
+        self.callID = callID
+        self.roomID = roomID
+        self.senderUserID = senderUserID
+        self.recipientUserID = recipientUserID
+        self.intent = intent
+        self.expiresAt = expiresAt
+        self.keyID = keyID
+        self.encryptedPayload = encryptedPayload
+    }
+
     var description: String {
-        "DirectCallEncryptedKeyExchangePayload(callID: \(callID), roomID: \(roomID), senderUserID: \(senderUserID), keyID: \(keyID), encryptedPayload: <redacted>)"
+        "DirectCallEncryptedKeyExchangePayload(" + [
+            "callID: \(callID)",
+            "roomID: \(roomID)",
+            "senderUserID: \(senderUserID)",
+            "recipientUserID: <redacted>",
+            "intent: \(String(describing: intent))",
+            "expiresAt: \(String(describing: expiresAt))",
+            "keyID: \(keyID)",
+            "encryptedPayload: <redacted>"
+        ].joined(separator: ", ") + ")"
     }
 
     var debugDescription: String {
@@ -179,6 +215,9 @@ enum DirectCallMediaKeyWrappingFailureReason: Error, Equatable {
     case sdkTrustViolation
     case sdkNoEligibleDevice
     case sdkEnvelopeFailed
+    case wrongRecipient
+    case expired
+    case unsupportedEnvelope
     case unsupportedRuntime
 }
 
@@ -305,12 +344,15 @@ final class ProductionDirectCallEncryptionService: DirectCallEncryptionServicePr
                                                         keyID: keyID)
         switch await keyWrapper.wrapMediaKey(mediaKey, request: wrapRequest) {
         case .success(let envelope):
-            guard envelope.callID == callID,
+            guard envelope.version == 1,
+                  envelope.algorithm == Self.keyAlgorithm,
+                  envelope.callID == callID,
                   envelope.roomID == roomID,
                   envelope.senderUserID == ownUserID,
                   envelope.recipientUserID == peerUserID,
                   envelope.keyID == keyID,
                   envelope.intent == .audio,
+                  envelope.expiresAt >= now(),
                   !envelope.opaqueEnvelope.isEmpty else {
                 return .failure(.keyMismatch)
             }
@@ -322,7 +364,12 @@ final class ProductionDirectCallEncryptionService: DirectCallEncryptionServicePr
                                                                     roomID: roomID,
                                                                     senderUserID: ownUserID,
                                                                     keyID: storedHandle.keyID,
-                                                                    encryptedPayload: envelope.opaqueEnvelope)
+                                                                    encryptedPayload: envelope.opaqueEnvelope,
+                                                                    version: envelope.version,
+                                                                    algorithm: envelope.algorithm,
+                                                                    recipientUserID: envelope.recipientUserID,
+                                                                    intent: envelope.intent,
+                                                                    expiresAt: envelope.expiresAt)
                 return .success(.init(payload: payload, keyHandle: storedHandle))
             case .failure:
                 return .failure(.e2eeUnavailable)
@@ -347,14 +394,40 @@ final class ProductionDirectCallEncryptionService: DirectCallEncryptionServicePr
             return .failure(.e2eeUnavailable)
         }
 
-        let envelope = DirectCallWrappedMediaKeyEnvelope(algorithm: Self.keyAlgorithm,
+        guard let recipientUserID = payload.recipientUserID else {
+            return .failure(.missingMetadata)
+        }
+
+        guard recipientUserID == ownUserID else {
+            return .failure(.wrongRecipient)
+        }
+
+        guard let version = payload.version,
+              let algorithm = payload.algorithm,
+              let intent = payload.intent,
+              let expiresAt = payload.expiresAt else {
+            return .failure(.missingMetadata)
+        }
+
+        guard version == 1,
+              algorithm == Self.keyAlgorithm,
+              intent == .audio else {
+            return .failure(.unsupportedEnvelope)
+        }
+
+        guard expiresAt >= now() else {
+            return .failure(.expiredKeyExchange)
+        }
+
+        let envelope = DirectCallWrappedMediaKeyEnvelope(version: version,
+                                                         algorithm: algorithm,
                                                          callID: payload.callID,
                                                          roomID: payload.roomID,
                                                          senderUserID: payload.senderUserID,
-                                                         recipientUserID: ownUserID,
+                                                         recipientUserID: recipientUserID,
                                                          senderDeviceID: nil,
-                                                         intent: .audio,
-                                                         expiresAt: now().addingTimeInterval(60),
+                                                         intent: intent,
+                                                         expiresAt: expiresAt,
                                                          keyID: payload.keyID,
                                                          opaqueEnvelope: payload.encryptedPayload)
         let unwrapRequest = DirectCallMediaKeyUnwrapRequest(expectedCallID: expectedCallID,
@@ -418,6 +491,12 @@ final class ProductionDirectCallEncryptionService: DirectCallEncryptionServicePr
             .sdkNoEligibleDevice
         case .sdkEnvelopeFailed:
             .sdkEnvelopeFailed
+        case .wrongRecipient:
+            .wrongRecipient
+        case .expired:
+            .expiredKeyExchange
+        case .unsupportedEnvelope:
+            .unsupportedEnvelope
         case .unsupportedRuntime:
             .unsupportedRuntime
         }

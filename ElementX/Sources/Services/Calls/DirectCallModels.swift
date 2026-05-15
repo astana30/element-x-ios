@@ -45,6 +45,9 @@ enum DirectCallEncryptionFailureReason: Error, Equatable {
     case sdkTrustViolation
     case sdkNoEligibleDevice
     case sdkEnvelopeFailed
+    case wrongRecipient
+    case expiredKeyExchange
+    case unsupportedEnvelope
     case unsupportedRuntime
 }
 
@@ -411,6 +414,18 @@ enum DirectCallDiagnosticEnvelopeRejectedReason: String, Codable, Equatable, Cus
 enum DirectCallDiagnosticReceiveFailureReason: String, Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     case decodeFailed
     case engineRejected
+    case incomingKeyUnwrapFailed
+    case incomingKeyTrustViolation
+    case incomingNoEligibleDevice
+    case incomingWrongRecipient
+    case incomingWrongSender
+    case incomingRoomMismatch
+    case incomingCallMismatch
+    case incomingIntentMismatch
+    case incomingExpired
+    case incomingDuplicate
+    case incomingStateInvalid
+    case incomingUnsupportedEnvelope
     case unknown
 
     var description: String {

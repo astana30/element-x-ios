@@ -198,8 +198,14 @@ final class MatrixSDKDirectCallMediaKeyWrapper: DirectCallMediaKeyWrappingProtoc
             return .sdkNoEligibleDevice
         case .TrustViolation:
             return .sdkTrustViolation
-        case .InvalidMetadata, .UnsupportedVersion, .MalformedEnvelope, .NotIntendedRecipient, .Expired:
+        case .InvalidMetadata:
             return .invalidMetadata
+        case .NotIntendedRecipient:
+            return .wrongRecipient
+        case .Expired:
+            return .expired
+        case .UnsupportedVersion, .MalformedEnvelope:
+            return .unsupportedEnvelope
         case .EncryptionFailed:
             return wrapping ? .sdkEnvelopeFailed : .cannotUnwrap
         case .DecryptionFailed:
