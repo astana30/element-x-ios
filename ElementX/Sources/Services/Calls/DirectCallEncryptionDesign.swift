@@ -173,6 +173,13 @@ enum DirectCallMediaKeyWrappingFailureReason: Error, Equatable {
     case cannotWrap
     case cannotUnwrap
     case invalidMetadata
+    case missingPeer
+    case missingMetadata
+    case sdkWrapperUnavailable
+    case sdkTrustViolation
+    case sdkNoEligibleDevice
+    case sdkEnvelopeFailed
+    case unsupportedRuntime
 }
 
 @MainActor
@@ -268,12 +275,18 @@ final class ProductionDirectCallEncryptionService: DirectCallEncryptionServicePr
     func generatePerCallKey(callID: String, roomID: String, peerUserID: String) async -> Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason> {
         guard let keyStore,
               let ownUserID,
-              !callID.isEmpty,
-              !roomID.isEmpty,
-              !peerUserID.isEmpty,
-              !ownUserID.isEmpty,
-              peerUserID != ownUserID else {
+              !ownUserID.isEmpty else {
             return .failure(.e2eeUnavailable)
+        }
+
+        guard !callID.isEmpty,
+              !roomID.isEmpty else {
+            return .failure(.missingMetadata)
+        }
+
+        guard !peerUserID.isEmpty,
+              peerUserID != ownUserID else {
+            return .failure(.missingPeer)
         }
 
         let keyID = keyIDProvider()
@@ -393,6 +406,20 @@ final class ProductionDirectCallEncryptionService: DirectCallEncryptionServicePr
             .cannotUnwrap
         case .invalidMetadata:
             .keyMismatch
+        case .missingPeer:
+            .missingPeer
+        case .missingMetadata:
+            .missingMetadata
+        case .sdkWrapperUnavailable:
+            .sdkWrapperUnavailable
+        case .sdkTrustViolation:
+            .sdkTrustViolation
+        case .sdkNoEligibleDevice:
+            .sdkNoEligibleDevice
+        case .sdkEnvelopeFailed:
+            .sdkEnvelopeFailed
+        case .unsupportedRuntime:
+            .unsupportedRuntime
         }
     }
 

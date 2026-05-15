@@ -57,9 +57,24 @@ final class MatrixSDKDirectCallMediaKeyWrapper: DirectCallMediaKeyWrappingProtoc
 
     func wrapMediaKey(_ mediaKey: String,
                       request: DirectCallMediaKeyWrapRequest) async -> Result<DirectCallWrappedMediaKeyEnvelope, DirectCallMediaKeyWrappingFailureReason> {
-        guard let encryption,
-              !mediaKey.isEmpty else {
-            return .failure(.e2eeUnavailable)
+        guard let encryption else {
+            return .failure(.sdkWrapperUnavailable)
+        }
+
+        guard !request.callID.isEmpty,
+              !request.roomID.isEmpty,
+              !request.keyID.isEmpty else {
+            return .failure(.missingMetadata)
+        }
+
+        guard !request.senderUserID.isEmpty,
+              !request.recipientUserID.isEmpty,
+              request.senderUserID != request.recipientUserID else {
+            return .failure(.missingPeer)
+        }
+
+        guard !mediaKey.isEmpty else {
+            return .failure(.cannotWrap)
         }
 
         do {
@@ -79,9 +94,24 @@ final class MatrixSDKDirectCallMediaKeyWrapper: DirectCallMediaKeyWrappingProtoc
 
     func unwrapMediaKeyEnvelope(_ envelope: DirectCallWrappedMediaKeyEnvelope,
                                 request: DirectCallMediaKeyUnwrapRequest) async -> Result<DirectCallUnwrappedMediaKey, DirectCallMediaKeyWrappingFailureReason> {
-        guard let encryption,
-              let sdkEnvelope = Self.sdkEnvelope(from: envelope) else {
-            return .failure(.e2eeUnavailable)
+        guard let encryption else {
+            return .failure(.sdkWrapperUnavailable)
+        }
+
+        guard !request.expectedCallID.isEmpty,
+              !request.expectedRoomID.isEmpty,
+              !envelope.keyID.isEmpty else {
+            return .failure(.missingMetadata)
+        }
+
+        guard !request.expectedSenderUserID.isEmpty,
+              !request.recipientUserID.isEmpty,
+              request.expectedSenderUserID != request.recipientUserID else {
+            return .failure(.missingPeer)
+        }
+
+        guard let sdkEnvelope = Self.sdkEnvelope(from: envelope) else {
+            return .failure(.invalidMetadata)
         }
 
         do {
@@ -158,18 +188,22 @@ final class MatrixSDKDirectCallMediaKeyWrapper: DirectCallMediaKeyWrappingProtoc
 
     private static func failureReason(for error: Error, wrapping: Bool) -> DirectCallMediaKeyWrappingFailureReason {
         guard let envelopeError = error as? MatrixRustSDK.DirectCallMediaKeyEnvelopeError else {
-            return wrapping ? .cannotWrap : .cannotUnwrap
+            return .sdkEnvelopeFailed
         }
 
         switch envelopeError {
-        case .MissingSession, .MissingOlmMachine, .NoEligibleDevices, .TrustViolation:
-            return .e2eeUnavailable
+        case .MissingSession, .MissingOlmMachine:
+            return .sdkWrapperUnavailable
+        case .NoEligibleDevices:
+            return .sdkNoEligibleDevice
+        case .TrustViolation:
+            return .sdkTrustViolation
         case .InvalidMetadata, .UnsupportedVersion, .MalformedEnvelope, .NotIntendedRecipient, .Expired:
             return .invalidMetadata
         case .EncryptionFailed:
-            return .cannotWrap
+            return wrapping ? .sdkEnvelopeFailed : .cannotUnwrap
         case .DecryptionFailed:
-            return .cannotUnwrap
+            return wrapping ? .cannotWrap : .sdkEnvelopeFailed
         }
     }
 }

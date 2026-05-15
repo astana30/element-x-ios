@@ -953,6 +953,43 @@ final class RoomFlowCoordinatorTests {
     }
 
     @Test
+    func nativeDirectCallProductionStartReportsSDKTrustViolation() async throws {
+        let productionOwner = NativeDirectCallRoomFlowOwnerSpy()
+        productionOwner.isListenerStarted = true
+        productionOwner.outgoingResult = .failure(.trigger(.control(.engine(.encryptionFailed(.sdkTrustViolation)))))
+        let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: enabledProductionActivationDiagnostic())
+        setupRoomFlowCoordinator(nativeDirectCallProductionActivationDryRunProviderFactory: { _ in provider },
+                                 nativeDirectCallProductionRoomFlowOwnerFactory: { _ in .owner(productionOwner) })
+
+        try await process(route: .room(roomID: "1", via: []))
+        let result = await roomFlowCoordinator.nativeDirectCallProductionStartOutgoingAudioCall(isProductionStartEnabled: true)
+
+        #expect(result.didStart == false)
+        #expect(result.outcome == .engineFailure)
+        #expect(result.reason == .sdkTrustViolation)
+        #expect(String(describing: result).contains("encrypted_payload") == false)
+        #expect(String(describing: result).contains("token") == false)
+        #expect(productionOwner.outgoingCount == 1)
+    }
+
+    @Test
+    func nativeDirectCallProductionStartReportsSDKNoEligibleDevice() async throws {
+        let productionOwner = NativeDirectCallRoomFlowOwnerSpy()
+        productionOwner.isListenerStarted = true
+        productionOwner.outgoingResult = .failure(.trigger(.control(.engine(.encryptionFailed(.sdkNoEligibleDevice)))))
+        let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: enabledProductionActivationDiagnostic())
+        setupRoomFlowCoordinator(nativeDirectCallProductionActivationDryRunProviderFactory: { _ in provider },
+                                 nativeDirectCallProductionRoomFlowOwnerFactory: { _ in .owner(productionOwner) })
+
+        try await process(route: .room(roomID: "1", via: []))
+        let result = await roomFlowCoordinator.nativeDirectCallProductionStartOutgoingAudioCall(isProductionStartEnabled: true)
+
+        #expect(result.didStart == false)
+        #expect(result.outcome == .engineFailure)
+        #expect(result.reason == .sdkNoEligibleDevice)
+    }
+
+    @Test
     func nativeDirectCallProductionStartReportsEngineStateInvalid() async throws {
         let productionOwner = NativeDirectCallRoomFlowOwnerSpy()
         productionOwner.isListenerStarted = true

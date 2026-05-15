@@ -347,6 +347,27 @@ final class DirectCallEngineTests {
     }
 
     @Test
+    func outgoingSDKTrustViolationEmitsNoInviteAndNoActiveSession() async {
+        let encryptionService = EncryptionServiceSpy(senderUserID: ownUserID,
+                                                     generateResult: .failure(.sdkTrustViolation))
+        let engine = makeEngine(encryptionService: encryptionService)
+        var emittedSignals = [DirectCallOutgoingSignal]()
+        let cancellable = engine.actionsPublisher.sink { action in
+            guard case .emitSignal(let signal) = action else {
+                return
+            }
+            emittedSignals.append(signal)
+        }
+        defer { cancellable.cancel() }
+
+        let result = await engine.startOutgoingAudioCall(peer: peerUserID, roomID: roomID)
+
+        #expect(result == .failure(.encryptionFailed(.sdkTrustViolation)))
+        #expect(engine.activeSessionPublisher.value == nil)
+        #expect(emittedSignals.isEmpty)
+    }
+
+    @Test
     func encryptionFailureFailsClosed() async {
         let engine = makeEngine()
 

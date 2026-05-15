@@ -39,6 +39,13 @@ enum DirectCallEncryptionFailureReason: Error, Equatable {
     case e2eeUnavailable
     case cannotWrap
     case cannotUnwrap
+    case missingPeer
+    case missingMetadata
+    case sdkWrapperUnavailable
+    case sdkTrustViolation
+    case sdkNoEligibleDevice
+    case sdkEnvelopeFailed
+    case unsupportedRuntime
 }
 
 enum DirectCallEncryptionState: Equatable {

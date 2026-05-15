@@ -1974,6 +1974,13 @@ enum NativeDirectCallProductionStartBlockedReason: String, Equatable, CustomStri
     case noActiveCall
     case keyWrapUnavailable
     case keyWrapFailed
+    case sdkWrapperUnavailable
+    case missingPeer
+    case missingMetadata
+    case sdkTrustViolation
+    case sdkNoEligibleDevice
+    case sdkEnvelopeFailed
+    case unsupportedRuntime
     case e2eeUnavailable
     case engineStateInvalid
     case engineFailure
@@ -2099,6 +2106,20 @@ enum NativeDirectCallProductionStartBlockedReason: String, Equatable, CustomStri
             self = .keyWrapUnavailable
         case .cannotWrap, .cannotUnwrap, .keyMismatch:
             self = .keyWrapFailed
+        case .missingPeer:
+            self = .missingPeer
+        case .missingMetadata:
+            self = .missingMetadata
+        case .sdkWrapperUnavailable:
+            self = .sdkWrapperUnavailable
+        case .sdkTrustViolation:
+            self = .sdkTrustViolation
+        case .sdkNoEligibleDevice:
+            self = .sdkNoEligibleDevice
+        case .sdkEnvelopeFailed:
+            self = .sdkEnvelopeFailed
+        case .unsupportedRuntime:
+            self = .unsupportedRuntime
         case .missingKeyExchange, .keyExchangeFailed, .e2eeNotProven:
             self = .e2eeUnavailable
         }
@@ -2108,6 +2129,13 @@ enum NativeDirectCallProductionStartBlockedReason: String, Equatable, CustomStri
         switch self {
         case .keyWrapUnavailable,
              .keyWrapFailed,
+             .sdkWrapperUnavailable,
+             .missingPeer,
+             .missingMetadata,
+             .sdkTrustViolation,
+             .sdkNoEligibleDevice,
+             .sdkEnvelopeFailed,
+             .unsupportedRuntime,
              .e2eeUnavailable,
              .signalSendFailed,
              .engineStateInvalid,

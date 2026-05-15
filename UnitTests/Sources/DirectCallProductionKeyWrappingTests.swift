@@ -911,8 +911,8 @@ final class DirectCallProductionKeyWrappingTests {
         let envelope = makeWrappedEnvelope()
         let unwrapRequest = makeUnwrapRequest()
 
-        #expect(await wrapper.wrapMediaKey("sensitive-media-material", request: wrapRequest) == .failure(.e2eeUnavailable))
-        #expect(await wrapper.unwrapMediaKeyEnvelope(envelope, request: unwrapRequest) == .failure(.e2eeUnavailable))
+        #expect(await wrapper.wrapMediaKey("sensitive-media-material", request: wrapRequest) == .failure(.sdkWrapperUnavailable))
+        #expect(await wrapper.unwrapMediaKeyEnvelope(envelope, request: unwrapRequest) == .failure(.sdkWrapperUnavailable))
         #expect(String(describing: wrapper).contains("sensitive-media-material") == false)
         #expect(String(reflecting: wrapper).contains("sensitive-media-material") == false)
     }
@@ -976,12 +976,20 @@ final class DirectCallProductionKeyWrappingTests {
     @Test
     func matrixSDKWrapperMapsSDKFailuresToFailClosedReasons() async {
         let trustFailureSDK = MatrixSDKDirectCallMediaKeyEnvelopeWrapperSpy(wrapError: DirectCallMediaKeyEnvelopeError.TrustViolation)
+        let noEligibleDeviceSDK = MatrixSDKDirectCallMediaKeyEnvelopeWrapperSpy(wrapError: DirectCallMediaKeyEnvelopeError.NoEligibleDevices)
+        let genericFailureSDK = MatrixSDKDirectCallMediaKeyEnvelopeWrapperSpy(wrapError: MatrixSDKDirectCallMediaKeyEnvelopeWrapperSpyError.genericFailure)
         let metadataFailureSDK = MatrixSDKDirectCallMediaKeyEnvelopeWrapperSpy(unwrapError: DirectCallMediaKeyEnvelopeError.MalformedEnvelope)
         let wrappingWrapper = MatrixSDKDirectCallMediaKeyWrapper(envelopeWrapper: trustFailureSDK)
+        let noEligibleDeviceWrapper = MatrixSDKDirectCallMediaKeyWrapper(envelopeWrapper: noEligibleDeviceSDK)
+        let genericFailureWrapper = MatrixSDKDirectCallMediaKeyWrapper(envelopeWrapper: genericFailureSDK)
         let unwrappingWrapper = MatrixSDKDirectCallMediaKeyWrapper(envelopeWrapper: metadataFailureSDK)
 
         #expect(await wrappingWrapper.wrapMediaKey("sensitive-media-material",
-                                                   request: makeWrapRequest()) == .failure(.e2eeUnavailable))
+                                                   request: makeWrapRequest()) == .failure(.sdkTrustViolation))
+        #expect(await noEligibleDeviceWrapper.wrapMediaKey("sensitive-media-material",
+                                                           request: makeWrapRequest()) == .failure(.sdkNoEligibleDevice))
+        #expect(await genericFailureWrapper.wrapMediaKey("sensitive-media-material",
+                                                         request: makeWrapRequest()) == .failure(.sdkEnvelopeFailed))
         #expect(await unwrappingWrapper.unwrapMediaKeyEnvelope(makeWrappedEnvelope(),
                                                                request: makeUnwrapRequest()) == .failure(.invalidMetadata))
     }
@@ -1139,6 +1147,68 @@ final class DirectCallProductionKeyWrappingTests {
     }
 }
 
+@MainActor
+final class DirectCallProductionKeyWrappingFailureReasonTests {
+    private let callID = "call-a"
+    private let roomID = "!room:example.com"
+    private let peerUserID = "@peer:example.com"
+    private let ownUserID = "@me:example.com"
+
+    @Test
+    func productionEncryptionReportsMissingPeerBeforeKeyWrapping() async {
+        let keyStore = DirectCallLiveKitMediaKeyStore { "key-a" }
+        let wrapper = MediaKeyWrapperSpy()
+        let service = ProductionDirectCallEncryptionService(keyWrapper: wrapper,
+                                                            keyStore: keyStore,
+                                                            ownUserID: ownUserID,
+                                                            senderDeviceID: "DEVICE",
+                                                            keyIDProvider: { "key-a" },
+                                                            mediaKeyProvider: { "sensitive-media-material" })
+
+        let result = await service.generatePerCallKey(callID: callID, roomID: roomID, peerUserID: "")
+
+        #expect(result == .failure(.missingPeer))
+        #expect(wrapper.wrappedRequests.isEmpty)
+        #expect(keyStore.makeKeyProvider(for: .init(callID: callID, keyID: "key-a")) == nil)
+    }
+
+    @Test
+    func productionEncryptionReportsMissingMetadataBeforeKeyWrapping() async {
+        let keyStore = DirectCallLiveKitMediaKeyStore { "key-a" }
+        let wrapper = MediaKeyWrapperSpy()
+        let service = ProductionDirectCallEncryptionService(keyWrapper: wrapper,
+                                                            keyStore: keyStore,
+                                                            ownUserID: ownUserID,
+                                                            senderDeviceID: "DEVICE",
+                                                            keyIDProvider: { "key-a" },
+                                                            mediaKeyProvider: { "sensitive-media-material" })
+
+        let result = await service.generatePerCallKey(callID: "", roomID: roomID, peerUserID: peerUserID)
+
+        #expect(result == .failure(.missingMetadata))
+        #expect(wrapper.wrappedRequests.isEmpty)
+        #expect(keyStore.makeKeyProvider(for: .init(callID: callID, keyID: "key-a")) == nil)
+    }
+
+    @Test
+    func productionEncryptionPreservesRedactedSDKKeyWrappingFailures() async {
+        let keyStore = DirectCallLiveKitMediaKeyStore()
+        let wrapper = MediaKeyWrapperSpy(wrapFailure: .sdkTrustViolation)
+        let service = ProductionDirectCallEncryptionService(keyWrapper: wrapper,
+                                                            keyStore: keyStore,
+                                                            ownUserID: ownUserID,
+                                                            keyIDProvider: { "key-a" },
+                                                            mediaKeyProvider: { "sensitive-media-material" })
+
+        let result = await service.generatePerCallKey(callID: callID, roomID: roomID, peerUserID: peerUserID)
+
+        #expect(result == .failure(.sdkTrustViolation))
+        #expect(wrapper.wrappedRequests.count == 1)
+        #expect(keyStore.makeKeyProvider(for: .init(callID: callID, keyID: "key-a")) == nil)
+        #expect(String(describing: wrapper.wrappedRequests[0]).contains(roomID) == false)
+    }
+}
+
 private final class MatrixSDKDirectCallMediaKeyEnvelopeWrapperSpy: MatrixSDKDirectCallMediaKeyEnvelopeWrappingProtocol {
     private let wrapEnvelope: MatrixRustSDK.DirectCallMediaKeyEnvelope?
     private let unwrapResult: MatrixRustSDK.DirectCallMediaKeyUnwrapResult
@@ -1192,6 +1262,10 @@ private final class MatrixSDKDirectCallMediaKeyEnvelopeWrapperSpy: MatrixSDKDire
 
         return unwrapResult
     }
+}
+
+private enum MatrixSDKDirectCallMediaKeyEnvelopeWrapperSpyError: Error {
+    case genericFailure
 }
 
 @MainActor
