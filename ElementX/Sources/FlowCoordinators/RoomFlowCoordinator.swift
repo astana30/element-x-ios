@@ -2038,6 +2038,8 @@ enum NativeDirectCallProductionStartBlockedReason: String, Equatable, CustomStri
     case noActiveCall
     case keyWrapUnavailable
     case keyWrapFailed
+    case outgoingWrapInvalidMetadata
+    case outgoingWrapUnsupportedAlgorithm
     case sdkWrapperUnavailable
     case missingPeer
     case missingMetadata
@@ -2168,8 +2170,10 @@ enum NativeDirectCallProductionStartBlockedReason: String, Equatable, CustomStri
         switch encryptionFailureReason {
         case .e2eeUnavailable:
             self = .keyWrapUnavailable
-        case .cannotWrap, .cannotUnwrap, .keyMismatch:
+        case .cannotWrap, .cannotUnwrap:
             self = .keyWrapFailed
+        case .keyMismatch:
+            self = .outgoingWrapInvalidMetadata
         case .missingPeer:
             self = .missingPeer
         case .missingMetadata:
@@ -2182,8 +2186,10 @@ enum NativeDirectCallProductionStartBlockedReason: String, Equatable, CustomStri
             self = .sdkNoEligibleDevice
         case .sdkEnvelopeFailed:
             self = .sdkEnvelopeFailed
-        case .wrongRecipient, .expiredKeyExchange, .unsupportedEnvelope:
+        case .wrongRecipient, .expiredKeyExchange:
             self = .keyWrapFailed
+        case .unsupportedEnvelope:
+            self = .outgoingWrapUnsupportedAlgorithm
         case .unsupportedRuntime:
             self = .unsupportedRuntime
         case .missingKeyExchange, .keyExchangeFailed, .e2eeNotProven:
@@ -2195,6 +2201,8 @@ enum NativeDirectCallProductionStartBlockedReason: String, Equatable, CustomStri
         switch self {
         case .keyWrapUnavailable,
              .keyWrapFailed,
+             .outgoingWrapInvalidMetadata,
+             .outgoingWrapUnsupportedAlgorithm,
              .sdkWrapperUnavailable,
              .missingPeer,
              .missingMetadata,

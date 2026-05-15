@@ -285,8 +285,6 @@ final class NoOpDirectCallEncryptionService: DirectCallEncryptionServiceProtocol
 /// Production-shaped placeholder for the future Matrix-crypto-backed media key exchange.
 /// It must stay fail-closed until the production key wrapping design is implemented.
 final class ProductionDirectCallEncryptionService: DirectCallEncryptionServiceProtocol, CustomStringConvertible, CustomDebugStringConvertible {
-    private static let keyAlgorithm = "salemx.native_direct_call.media_key.v1"
-
     private let keyWrapper: DirectCallMediaKeyWrappingProtocol
     private let keyStore: DirectCallLiveKitMediaKeyStore?
     private let ownUserID: String?
@@ -345,7 +343,7 @@ final class ProductionDirectCallEncryptionService: DirectCallEncryptionServicePr
         switch await keyWrapper.wrapMediaKey(mediaKey, request: wrapRequest) {
         case .success(let envelope):
             guard envelope.version == 1,
-                  envelope.algorithm == Self.keyAlgorithm,
+                  !envelope.algorithm.isEmpty,
                   envelope.callID == callID,
                   envelope.roomID == roomID,
                   envelope.senderUserID == ownUserID,
@@ -410,7 +408,7 @@ final class ProductionDirectCallEncryptionService: DirectCallEncryptionServicePr
         }
 
         guard version == 1,
-              algorithm == Self.keyAlgorithm,
+              !algorithm.isEmpty,
               intent == .audio else {
             return .failure(.unsupportedEnvelope)
         }

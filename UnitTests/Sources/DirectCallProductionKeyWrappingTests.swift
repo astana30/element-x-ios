@@ -11,6 +11,8 @@ import Foundation
 import MatrixRustSDK
 import Testing
 
+private let directCallSDKEnvelopeAlgorithm = "m.olm.v1.curve25519-aes-sha2"
+
 @MainActor
 // swiftlint:disable:next type_body_length
 final class DirectCallProductionKeyWrappingTests {
@@ -88,7 +90,7 @@ final class DirectCallProductionKeyWrappingTests {
         #expect(generated.keyHandle == .init(callID: callID, keyID: "key-a"))
         #expect(generated.payload.encryptedPayload == "opaque-key-a")
         #expect(generated.payload.version == 1)
-        #expect(generated.payload.algorithm == "salemx.native_direct_call.media_key.v1")
+        #expect(generated.payload.algorithm == directCallSDKEnvelopeAlgorithm)
         #expect(generated.payload.recipientUserID == peerUserID)
         #expect(generated.payload.intent == .audio)
         #expect(generated.payload.expiresAt == Date(timeIntervalSince1970: 60))
@@ -114,7 +116,7 @@ final class DirectCallProductionKeyWrappingTests {
                                                             keyID: "key-a",
                                                             encryptedPayload: "opaque-key-a",
                                                             version: 1,
-                                                            algorithm: "salemx.native_direct_call.media_key.v1",
+                                                            algorithm: directCallSDKEnvelopeAlgorithm,
                                                             recipientUserID: ownUserID,
                                                             intent: .audio,
                                                             expiresAt: Date(timeIntervalSince1970: 60))
@@ -146,6 +148,31 @@ final class DirectCallProductionKeyWrappingTests {
         let service = ProductionDirectCallEncryptionService(keyWrapper: wrapper,
                                                             keyStore: keyStore,
                                                             ownUserID: ownUserID,
+                                                            keyIDProvider: { "key-a" },
+                                                            mediaKeyProvider: { "sensitive-media-material" })
+
+        let result = await service.generatePerCallKey(callID: callID, roomID: roomID, peerUserID: peerUserID)
+
+        #expect(result == .failure(.keyMismatch))
+        #expect(keyStore.makeKeyProvider(for: .init(callID: callID, keyID: "key-a")) == nil)
+    }
+
+    @Test
+    func productionEncryptionRejectsEmptyWrappedAlgorithm() async {
+        let keyStore = DirectCallLiveKitMediaKeyStore()
+        let wrapper = MediaKeyWrapperSpy(envelopeOverride: .init(algorithm: "",
+                                                                 callID: callID,
+                                                                 roomID: roomID,
+                                                                 senderUserID: ownUserID,
+                                                                 recipientUserID: peerUserID,
+                                                                 intent: .audio,
+                                                                 expiresAt: Date(timeIntervalSince1970: 60),
+                                                                 keyID: "key-a",
+                                                                 opaqueEnvelope: "opaque-key-a"))
+        let service = ProductionDirectCallEncryptionService(keyWrapper: wrapper,
+                                                            keyStore: keyStore,
+                                                            ownUserID: ownUserID,
+                                                            now: { Date(timeIntervalSince1970: 0) },
                                                             keyIDProvider: { "key-a" },
                                                             mediaKeyProvider: { "sensitive-media-material" })
 
@@ -1047,7 +1074,7 @@ final class DirectCallProductionKeyWrappingTests {
     private func makeWrappedEnvelope(senderUserID: String? = nil,
                                      recipientUserID: String? = nil,
                                      opaqueEnvelope: String = "opaque-key-a") -> DirectCallWrappedMediaKeyEnvelope {
-        .init(algorithm: "salemx.native_direct_call.media_key.v1",
+        .init(algorithm: directCallSDKEnvelopeAlgorithm,
               callID: callID,
               roomID: roomID,
               senderUserID: senderUserID ?? ownUserID,
@@ -1061,7 +1088,7 @@ final class DirectCallProductionKeyWrappingTests {
 
     private func makeSDKEnvelope() -> MatrixRustSDK.DirectCallMediaKeyEnvelope {
         .init(version: 1,
-              algorithm: "salemx.native_direct_call.media_key.v1",
+              algorithm: directCallSDKEnvelopeAlgorithm,
               roomId: roomID,
               callId: callID,
               senderUserId: ownUserID,
@@ -1491,7 +1518,7 @@ private final class MatrixSDKDirectCallMediaKeyEnvelopeWrapperSpy: MatrixSDKDire
         }
 
         return wrapEnvelope ?? .init(version: 1,
-                                     algorithm: "salemx.native_direct_call.media_key.v1",
+                                     algorithm: directCallSDKEnvelopeAlgorithm,
                                      roomId: info.roomId,
                                      callId: info.callId,
                                      senderUserId: "@me:example.com",
@@ -1756,7 +1783,7 @@ private final class MediaKeyWrapperSpy: DirectCallMediaKeyWrappingProtocol {
             return .success(envelopeOverride)
         }
 
-        return .success(.init(algorithm: "salemx.native_direct_call.media_key.v1",
+        return .success(.init(algorithm: directCallSDKEnvelopeAlgorithm,
                               callID: request.callID,
                               roomID: request.roomID,
                               senderUserID: request.senderUserID,

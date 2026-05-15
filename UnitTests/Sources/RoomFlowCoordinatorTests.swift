@@ -1200,6 +1200,42 @@ final class RoomFlowCoordinatorTests {
     }
 
     @Test
+    func nativeDirectCallProductionStartReportsOutgoingWrapInvalidMetadata() async throws {
+        let productionOwner = NativeDirectCallRoomFlowOwnerSpy()
+        productionOwner.isListenerStarted = true
+        productionOwner.outgoingResult = .failure(.trigger(.control(.engine(.encryptionFailed(.keyMismatch)))))
+        let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: enabledProductionActivationDiagnostic())
+        setupRoomFlowCoordinator(nativeDirectCallProductionActivationDryRunProviderFactory: { _ in provider },
+                                 nativeDirectCallProductionRoomFlowOwnerFactory: { _ in .owner(productionOwner) })
+
+        try await process(route: .room(roomID: "1", via: []))
+        let result = await roomFlowCoordinator.nativeDirectCallProductionStartOutgoingAudioCall(isProductionStartEnabled: true)
+
+        #expect(result.didStart == false)
+        #expect(result.outcome == .engineFailure)
+        #expect(result.reason == .outgoingWrapInvalidMetadata)
+        #expect(String(describing: result).contains("encrypted_payload") == false)
+    }
+
+    @Test
+    func nativeDirectCallProductionStartReportsOutgoingWrapUnsupportedAlgorithm() async throws {
+        let productionOwner = NativeDirectCallRoomFlowOwnerSpy()
+        productionOwner.isListenerStarted = true
+        productionOwner.outgoingResult = .failure(.trigger(.control(.engine(.encryptionFailed(.unsupportedEnvelope)))))
+        let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: enabledProductionActivationDiagnostic())
+        setupRoomFlowCoordinator(nativeDirectCallProductionActivationDryRunProviderFactory: { _ in provider },
+                                 nativeDirectCallProductionRoomFlowOwnerFactory: { _ in .owner(productionOwner) })
+
+        try await process(route: .room(roomID: "1", via: []))
+        let result = await roomFlowCoordinator.nativeDirectCallProductionStartOutgoingAudioCall(isProductionStartEnabled: true)
+
+        #expect(result.didStart == false)
+        #expect(result.outcome == .engineFailure)
+        #expect(result.reason == .outgoingWrapUnsupportedAlgorithm)
+        #expect(String(describing: result).contains("encrypted_payload") == false)
+    }
+
+    @Test
     func nativeDirectCallProductionStartReportsSDKTrustViolation() async throws {
         let productionOwner = NativeDirectCallRoomFlowOwnerSpy()
         productionOwner.isListenerStarted = true
@@ -2519,7 +2555,7 @@ private final class ProductionDryRunClientProxyMock: ClientProxyMock, DirectCall
 private final class ProductionDryRunMatrixSDKKeyEnvelopeWrapperSpy: MatrixSDKDirectCallMediaKeyEnvelopeWrappingProtocol {
     func wrapDirectCallMediaKey(info: MatrixRustSDK.DirectCallMediaKeyWrapInfo) async throws -> MatrixRustSDK.DirectCallMediaKeyEnvelope {
         .init(version: 1,
-              algorithm: "salemx.native_direct_call.media_key.v1",
+              algorithm: "m.olm.v1.curve25519-aes-sha2",
               roomId: info.roomId,
               callId: info.callId,
               senderUserId: "@redacted:example.com",
