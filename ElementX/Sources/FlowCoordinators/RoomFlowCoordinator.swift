@@ -2402,6 +2402,25 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
     let productionLastSignalSendAttempted: Bool
     let productionLastSignalSendSucceeded: Bool?
     let productionLastSignalSendFailureReason: DirectCallDiagnosticSignalSendFailureReason?
+    let productionListenerAttached: Bool
+    let productionListenerHandleRetained: Bool
+    let productionListenerStartCount: Int
+    let productionTimelineUpdateCount: Int
+    let productionTimelineDiffReceivedCount: Int
+    let productionLastTimelineDiffKind: DirectCallDiagnosticTimelineDiffKind
+    let productionLastTimelineDiffItemCount: Int
+    let productionTimelineEventReceivedCount: Int
+    let productionDirectCallEventTypeSeenCount: Int
+    let productionEnvelopeExtractedCount: Int
+    let productionEnvelopeDeliveredToEngineCount: Int
+    let productionHistoricalEventIgnoredCount: Int
+    let productionLiveEventDeliveredCount: Int
+    let productionBaselineEstablished: Bool
+    let productionLastReceiveEventKind: DirectCallDiagnosticReceiveEventKind
+    let productionLastEnvelopeRejectedReason: DirectCallDiagnosticEnvelopeRejectedReason
+    let productionLastReceiveFailureReason: DirectCallDiagnosticReceiveFailureReason?
+    let productionSendRoomFingerprint: String?
+    let productionReceiveRoomFingerprint: String?
 
     @MainActor
     init(owner: NativeDirectCallRoomFlowOwning?) {
@@ -2427,6 +2446,25 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
         productionLastSignalSendAttempted = diagnosticSnapshot.lastSignalSendAttempted
         productionLastSignalSendSucceeded = diagnosticSnapshot.lastSignalSendSucceeded
         productionLastSignalSendFailureReason = diagnosticSnapshot.lastSignalSendFailureReason
+        productionListenerAttached = diagnosticSnapshot.listenerAttached
+        productionListenerHandleRetained = diagnosticSnapshot.listenerHandleRetained
+        productionListenerStartCount = diagnosticSnapshot.listenerStartCount
+        productionTimelineUpdateCount = diagnosticSnapshot.timelineUpdateCount
+        productionTimelineDiffReceivedCount = diagnosticSnapshot.timelineDiffReceivedCount
+        productionLastTimelineDiffKind = diagnosticSnapshot.lastTimelineDiffKind
+        productionLastTimelineDiffItemCount = diagnosticSnapshot.lastTimelineDiffItemCount
+        productionTimelineEventReceivedCount = diagnosticSnapshot.timelineEventReceivedCount
+        productionDirectCallEventTypeSeenCount = diagnosticSnapshot.directCallEventTypeSeenCount
+        productionEnvelopeExtractedCount = diagnosticSnapshot.envelopeExtractedCount
+        productionEnvelopeDeliveredToEngineCount = diagnosticSnapshot.envelopeDeliveredToEngineCount
+        productionHistoricalEventIgnoredCount = diagnosticSnapshot.historicalEventIgnoredCount
+        productionLiveEventDeliveredCount = diagnosticSnapshot.liveEventDeliveredCount
+        productionBaselineEstablished = diagnosticSnapshot.baselineEstablished
+        productionLastReceiveEventKind = diagnosticSnapshot.lastReceiveEventKind
+        productionLastEnvelopeRejectedReason = diagnosticSnapshot.lastEnvelopeRejectedReason
+        productionLastReceiveFailureReason = diagnosticSnapshot.lastReceiveFailureReason
+        productionSendRoomFingerprint = diagnosticSnapshot.sendRoomFingerprint
+        productionReceiveRoomFingerprint = diagnosticSnapshot.receiveRoomFingerprint
     }
 
     static let unavailable = Self(productionOwnerAvailable: false,
@@ -2437,7 +2475,26 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
                                   productionLastSignalEventEmitted: nil,
                                   productionLastSignalSendAttempted: false,
                                   productionLastSignalSendSucceeded: nil,
-                                  productionLastSignalSendFailureReason: nil)
+                                  productionLastSignalSendFailureReason: nil,
+                                  productionListenerAttached: false,
+                                  productionListenerHandleRetained: false,
+                                  productionListenerStartCount: 0,
+                                  productionTimelineUpdateCount: 0,
+                                  productionTimelineDiffReceivedCount: 0,
+                                  productionLastTimelineDiffKind: .none,
+                                  productionLastTimelineDiffItemCount: 0,
+                                  productionTimelineEventReceivedCount: 0,
+                                  productionDirectCallEventTypeSeenCount: 0,
+                                  productionEnvelopeExtractedCount: 0,
+                                  productionEnvelopeDeliveredToEngineCount: 0,
+                                  productionHistoricalEventIgnoredCount: 0,
+                                  productionLiveEventDeliveredCount: 0,
+                                  productionBaselineEstablished: false,
+                                  productionLastReceiveEventKind: .none,
+                                  productionLastEnvelopeRejectedReason: .none,
+                                  productionLastReceiveFailureReason: nil,
+                                  productionSendRoomFingerprint: nil,
+                                  productionReceiveRoomFingerprint: nil)
 
     private init(productionOwnerAvailable: Bool,
                  productionListenerStarted: Bool,
@@ -2447,7 +2504,26 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
                  productionLastSignalEventEmitted: DirectCallDiagnosticSignalEvent?,
                  productionLastSignalSendAttempted: Bool,
                  productionLastSignalSendSucceeded: Bool?,
-                 productionLastSignalSendFailureReason: DirectCallDiagnosticSignalSendFailureReason?) {
+                 productionLastSignalSendFailureReason: DirectCallDiagnosticSignalSendFailureReason?,
+                 productionListenerAttached: Bool,
+                 productionListenerHandleRetained: Bool,
+                 productionListenerStartCount: Int,
+                 productionTimelineUpdateCount: Int,
+                 productionTimelineDiffReceivedCount: Int,
+                 productionLastTimelineDiffKind: DirectCallDiagnosticTimelineDiffKind,
+                 productionLastTimelineDiffItemCount: Int,
+                 productionTimelineEventReceivedCount: Int,
+                 productionDirectCallEventTypeSeenCount: Int,
+                 productionEnvelopeExtractedCount: Int,
+                 productionEnvelopeDeliveredToEngineCount: Int,
+                 productionHistoricalEventIgnoredCount: Int,
+                 productionLiveEventDeliveredCount: Int,
+                 productionBaselineEstablished: Bool,
+                 productionLastReceiveEventKind: DirectCallDiagnosticReceiveEventKind,
+                 productionLastEnvelopeRejectedReason: DirectCallDiagnosticEnvelopeRejectedReason,
+                 productionLastReceiveFailureReason: DirectCallDiagnosticReceiveFailureReason?,
+                 productionSendRoomFingerprint: String?,
+                 productionReceiveRoomFingerprint: String?) {
         self.productionOwnerAvailable = productionOwnerAvailable
         self.productionListenerStarted = productionListenerStarted
         self.productionHasActiveSession = productionHasActiveSession
@@ -2457,6 +2533,25 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
         self.productionLastSignalSendAttempted = productionLastSignalSendAttempted
         self.productionLastSignalSendSucceeded = productionLastSignalSendSucceeded
         self.productionLastSignalSendFailureReason = productionLastSignalSendFailureReason
+        self.productionListenerAttached = productionListenerAttached
+        self.productionListenerHandleRetained = productionListenerHandleRetained
+        self.productionListenerStartCount = productionListenerStartCount
+        self.productionTimelineUpdateCount = productionTimelineUpdateCount
+        self.productionTimelineDiffReceivedCount = productionTimelineDiffReceivedCount
+        self.productionLastTimelineDiffKind = productionLastTimelineDiffKind
+        self.productionLastTimelineDiffItemCount = productionLastTimelineDiffItemCount
+        self.productionTimelineEventReceivedCount = productionTimelineEventReceivedCount
+        self.productionDirectCallEventTypeSeenCount = productionDirectCallEventTypeSeenCount
+        self.productionEnvelopeExtractedCount = productionEnvelopeExtractedCount
+        self.productionEnvelopeDeliveredToEngineCount = productionEnvelopeDeliveredToEngineCount
+        self.productionHistoricalEventIgnoredCount = productionHistoricalEventIgnoredCount
+        self.productionLiveEventDeliveredCount = productionLiveEventDeliveredCount
+        self.productionBaselineEstablished = productionBaselineEstablished
+        self.productionLastReceiveEventKind = productionLastReceiveEventKind
+        self.productionLastEnvelopeRejectedReason = productionLastEnvelopeRejectedReason
+        self.productionLastReceiveFailureReason = productionLastReceiveFailureReason
+        self.productionSendRoomFingerprint = productionSendRoomFingerprint
+        self.productionReceiveRoomFingerprint = productionReceiveRoomFingerprint
     }
 
     var description: String {
@@ -2469,7 +2564,26 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
             "productionLastSignalEventEmitted: \(String(describing: productionLastSignalEventEmitted))",
             "productionLastSignalSendAttempted: \(productionLastSignalSendAttempted)",
             "productionLastSignalSendSucceeded: \(String(describing: productionLastSignalSendSucceeded))",
-            "productionLastSignalSendFailureReason: \(String(describing: productionLastSignalSendFailureReason))"
+            "productionLastSignalSendFailureReason: \(String(describing: productionLastSignalSendFailureReason))",
+            "productionListenerAttached: \(productionListenerAttached)",
+            "productionListenerHandleRetained: \(productionListenerHandleRetained)",
+            "productionListenerStartCount: \(productionListenerStartCount)",
+            "productionTimelineUpdateCount: \(productionTimelineUpdateCount)",
+            "productionTimelineDiffReceivedCount: \(productionTimelineDiffReceivedCount)",
+            "productionLastTimelineDiffKind: \(productionLastTimelineDiffKind)",
+            "productionLastTimelineDiffItemCount: \(productionLastTimelineDiffItemCount)",
+            "productionTimelineEventReceivedCount: \(productionTimelineEventReceivedCount)",
+            "productionDirectCallEventTypeSeenCount: \(productionDirectCallEventTypeSeenCount)",
+            "productionEnvelopeExtractedCount: \(productionEnvelopeExtractedCount)",
+            "productionEnvelopeDeliveredToEngineCount: \(productionEnvelopeDeliveredToEngineCount)",
+            "productionHistoricalEventIgnoredCount: \(productionHistoricalEventIgnoredCount)",
+            "productionLiveEventDeliveredCount: \(productionLiveEventDeliveredCount)",
+            "productionBaselineEstablished: \(productionBaselineEstablished)",
+            "productionLastReceiveEventKind: \(productionLastReceiveEventKind)",
+            "productionLastEnvelopeRejectedReason: \(productionLastEnvelopeRejectedReason)",
+            "productionLastReceiveFailureReason: \(String(describing: productionLastReceiveFailureReason))",
+            "productionSendRoomFingerprint: \(String(describing: productionSendRoomFingerprint))",
+            "productionReceiveRoomFingerprint: \(String(describing: productionReceiveRoomFingerprint))"
         ]
         return "NativeDirectCallProductionStatus(\(fields.joined(separator: ", ")))"
     }

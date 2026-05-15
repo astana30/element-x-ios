@@ -652,6 +652,47 @@ if not isinstance(body, dict):
 if body.get("correlationID") != correlation_id:
     sys.exit(6)
 
+def format_production_status(status):
+    return (
+        "productionOwnerAvailable={owner} productionListenerStarted={listener} productionHasActiveSession={session} productionSessionState={state} productionEncryptionState={encryption_state} "
+        "productionLastSignalEventEmitted={event} productionLastSignalSendAttempted={attempted} productionLastSignalSendSucceeded={succeeded} productionLastSignalSendFailureReason={failure} "
+        "productionListenerAttached={attached} productionListenerHandleRetained={handle_retained} productionListenerStartCount={start_count} productionTimelineUpdateCount={update_count} "
+        "productionTimelineDiffReceivedCount={diff_count} productionLastTimelineDiffKind={diff_kind} productionLastTimelineDiffItemCount={diff_item_count} productionTimelineEventReceivedCount={event_count} "
+        "productionDirectCallEventTypeSeenCount={type_count} productionEnvelopeExtractedCount={extracted_count} productionEnvelopeDeliveredToEngineCount={delivered_count} "
+        "productionHistoricalEventIgnoredCount={historical_count} productionLiveEventDeliveredCount={live_count} productionBaselineEstablished={baseline} "
+        "productionLastReceiveEventKind={receive_kind} productionLastEnvelopeRejectedReason={rejected_reason} productionLastReceiveFailureReason={receive_failure} "
+        "productionSendRoomFingerprint={send_room} productionReceiveRoomFingerprint={receive_room}"
+    ).format(
+        owner=str(status.get("productionOwnerAvailable", "unknown")).lower(),
+        listener=str(status.get("productionListenerStarted", "unknown")).lower(),
+        session=str(status.get("productionHasActiveSession", "unknown")).lower(),
+        state=status.get("productionSessionState", "unknown"),
+        encryption_state=status.get("productionEncryptionState", "unknown"),
+        event=status.get("productionLastSignalEventEmitted", "none"),
+        attempted=str(status.get("productionLastSignalSendAttempted", "unknown")).lower(),
+        succeeded=str(status.get("productionLastSignalSendSucceeded", "unknown")).lower(),
+        failure=status.get("productionLastSignalSendFailureReason", "none"),
+        attached=str(status.get("productionListenerAttached", "unknown")).lower(),
+        handle_retained=str(status.get("productionListenerHandleRetained", "unknown")).lower(),
+        start_count=status.get("productionListenerStartCount", "unknown"),
+        update_count=status.get("productionTimelineUpdateCount", "unknown"),
+        diff_count=status.get("productionTimelineDiffReceivedCount", "unknown"),
+        diff_kind=status.get("productionLastTimelineDiffKind", "none"),
+        diff_item_count=status.get("productionLastTimelineDiffItemCount", "unknown"),
+        event_count=status.get("productionTimelineEventReceivedCount", "unknown"),
+        type_count=status.get("productionDirectCallEventTypeSeenCount", "unknown"),
+        extracted_count=status.get("productionEnvelopeExtractedCount", "unknown"),
+        delivered_count=status.get("productionEnvelopeDeliveredToEngineCount", "unknown"),
+        historical_count=status.get("productionHistoricalEventIgnoredCount", "unknown"),
+        live_count=status.get("productionLiveEventDeliveredCount", "unknown"),
+        baseline=str(status.get("productionBaselineEstablished", "unknown")).lower(),
+        receive_kind=status.get("productionLastReceiveEventKind", "none"),
+        rejected_reason=status.get("productionLastEnvelopeRejectedReason", "none"),
+        receive_failure=status.get("productionLastReceiveFailureReason", "none"),
+        send_room=status.get("productionSendRoomFingerprint", "none"),
+        receive_room=status.get("productionReceiveRoomFingerprint", "none"),
+    )
+
 if expected_signal == "nativeDirectCallDiagnosticResult":
     outcome = body.get("outcome", {})
     reason = body.get("reason")
@@ -815,8 +856,9 @@ if expected_signal == "nativeDirectCallProductionStartOutgoingAudioCallResult":
 if expected_signal == "nativeDirectCallProductionStartListenerResult":
     diagnostic = body.get("triggerDiagnostic", {})
     status = body.get("status", {})
+    status_fields = format_production_status(status)
     print(
-        "outcome={outcome} reason={reason} wouldStart={would_start} enabled={enabled} capabilityPresent={capability} dependenciesReady={dependencies} roomEligible={room} endpointAccepted={endpoint} peerTrustReady={peer_trust_ready} peerTrustReadiness={peer_trust_readiness} keyWrapperSource={key_wrapper_source} productionOwnerAvailable={owner} productionListenerStarted={listener} productionHasActiveSession={session} productionSessionState={state} productionEncryptionState={encryption_state} productionLastSignalEventEmitted={event} productionLastSignalSendAttempted={attempted} productionLastSignalSendSucceeded={succeeded} productionLastSignalSendFailureReason={failure}".format(
+        "outcome={outcome} reason={reason} wouldStart={would_start} enabled={enabled} capabilityPresent={capability} dependenciesReady={dependencies} roomEligible={room} endpointAccepted={endpoint} peerTrustReady={peer_trust_ready} peerTrustReadiness={peer_trust_readiness} keyWrapperSource={key_wrapper_source} {status_fields}".format(
             outcome=body.get("outcome", "unknown"),
             reason=body.get("reason") or "none",
             would_start=str(diagnostic.get("wouldStart", "unknown")).lower(),
@@ -828,34 +870,14 @@ if expected_signal == "nativeDirectCallProductionStartListenerResult":
             peer_trust_ready=str(diagnostic.get("peerTrustReady", "unknown")).lower(),
             peer_trust_readiness=diagnostic.get("peerTrustReadiness") or "unknown",
             key_wrapper_source=diagnostic.get("keyWrapperSource") or "none",
-            owner=str(status.get("productionOwnerAvailable", "unknown")).lower(),
-            listener=str(status.get("productionListenerStarted", "unknown")).lower(),
-            session=str(status.get("productionHasActiveSession", "unknown")).lower(),
-            state=status.get("productionSessionState", "unknown"),
-            encryption_state=status.get("productionEncryptionState", "unknown"),
-            event=status.get("productionLastSignalEventEmitted", "none"),
-            attempted=str(status.get("productionLastSignalSendAttempted", "unknown")).lower(),
-            succeeded=str(status.get("productionLastSignalSendSucceeded", "unknown")).lower(),
-            failure=status.get("productionLastSignalSendFailureReason", "none"),
+            status_fields=status_fields,
         )
     )
     sys.exit(0)
 
 if expected_signal == "nativeDirectCallProductionStatusResult":
     status = body.get("status", {})
-    print(
-        "productionOwnerAvailable={owner} productionListenerStarted={listener} productionHasActiveSession={session} productionSessionState={state} productionEncryptionState={encryption_state} productionLastSignalEventEmitted={event} productionLastSignalSendAttempted={attempted} productionLastSignalSendSucceeded={succeeded} productionLastSignalSendFailureReason={failure}".format(
-            owner=str(status.get("productionOwnerAvailable", "unknown")).lower(),
-            listener=str(status.get("productionListenerStarted", "unknown")).lower(),
-            session=str(status.get("productionHasActiveSession", "unknown")).lower(),
-            state=status.get("productionSessionState", "unknown"),
-            encryption_state=status.get("productionEncryptionState", "unknown"),
-            event=status.get("productionLastSignalEventEmitted", "none"),
-            attempted=str(status.get("productionLastSignalSendAttempted", "unknown")).lower(),
-            succeeded=str(status.get("productionLastSignalSendSucceeded", "unknown")).lower(),
-            failure=status.get("productionLastSignalSendFailureReason", "none"),
-        )
-    )
+    print(format_production_status(status))
     sys.exit(0)
 
 sys.exit(8)

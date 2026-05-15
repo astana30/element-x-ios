@@ -373,6 +373,25 @@ enum UITestsSignal: Codable, Equatable {
         let productionLastSignalSendAttempted: Bool
         let productionLastSignalSendSucceeded: Bool?
         let productionLastSignalSendFailureReason: DirectCallDiagnosticSignalSendFailureReason?
+        let productionListenerAttached: Bool
+        let productionListenerHandleRetained: Bool
+        let productionListenerStartCount: Int
+        let productionTimelineUpdateCount: Int
+        let productionTimelineDiffReceivedCount: Int
+        let productionLastTimelineDiffKind: DirectCallDiagnosticTimelineDiffKind
+        let productionLastTimelineDiffItemCount: Int
+        let productionTimelineEventReceivedCount: Int
+        let productionDirectCallEventTypeSeenCount: Int
+        let productionEnvelopeExtractedCount: Int
+        let productionEnvelopeDeliveredToEngineCount: Int
+        let productionHistoricalEventIgnoredCount: Int
+        let productionLiveEventDeliveredCount: Int
+        let productionBaselineEstablished: Bool
+        let productionLastReceiveEventKind: DirectCallDiagnosticReceiveEventKind
+        let productionLastEnvelopeRejectedReason: DirectCallDiagnosticEnvelopeRejectedReason
+        let productionLastReceiveFailureReason: DirectCallDiagnosticReceiveFailureReason?
+        let productionSendRoomFingerprint: String?
+        let productionReceiveRoomFingerprint: String?
 
         init(productionOwnerAvailable: Bool,
              productionListenerStarted: Bool,
@@ -382,7 +401,26 @@ enum UITestsSignal: Codable, Equatable {
              productionLastSignalEventEmitted: DirectCallDiagnosticSignalEvent?,
              productionLastSignalSendAttempted: Bool,
              productionLastSignalSendSucceeded: Bool?,
-             productionLastSignalSendFailureReason: DirectCallDiagnosticSignalSendFailureReason?) {
+             productionLastSignalSendFailureReason: DirectCallDiagnosticSignalSendFailureReason?,
+             productionListenerAttached: Bool = false,
+             productionListenerHandleRetained: Bool = false,
+             productionListenerStartCount: Int = 0,
+             productionTimelineUpdateCount: Int = 0,
+             productionTimelineDiffReceivedCount: Int = 0,
+             productionLastTimelineDiffKind: DirectCallDiagnosticTimelineDiffKind = .none,
+             productionLastTimelineDiffItemCount: Int = 0,
+             productionTimelineEventReceivedCount: Int = 0,
+             productionDirectCallEventTypeSeenCount: Int = 0,
+             productionEnvelopeExtractedCount: Int = 0,
+             productionEnvelopeDeliveredToEngineCount: Int = 0,
+             productionHistoricalEventIgnoredCount: Int = 0,
+             productionLiveEventDeliveredCount: Int = 0,
+             productionBaselineEstablished: Bool = false,
+             productionLastReceiveEventKind: DirectCallDiagnosticReceiveEventKind = .none,
+             productionLastEnvelopeRejectedReason: DirectCallDiagnosticEnvelopeRejectedReason = .none,
+             productionLastReceiveFailureReason: DirectCallDiagnosticReceiveFailureReason? = nil,
+             productionSendRoomFingerprint: String? = nil,
+             productionReceiveRoomFingerprint: String? = nil) {
             self.productionOwnerAvailable = productionOwnerAvailable
             self.productionListenerStarted = productionListenerStarted
             self.productionHasActiveSession = productionHasActiveSession
@@ -392,6 +430,25 @@ enum UITestsSignal: Codable, Equatable {
             self.productionLastSignalSendAttempted = productionLastSignalSendAttempted
             self.productionLastSignalSendSucceeded = productionLastSignalSendSucceeded
             self.productionLastSignalSendFailureReason = productionLastSignalSendFailureReason
+            self.productionListenerAttached = productionListenerAttached
+            self.productionListenerHandleRetained = productionListenerHandleRetained
+            self.productionListenerStartCount = productionListenerStartCount
+            self.productionTimelineUpdateCount = productionTimelineUpdateCount
+            self.productionTimelineDiffReceivedCount = productionTimelineDiffReceivedCount
+            self.productionLastTimelineDiffKind = productionLastTimelineDiffKind
+            self.productionLastTimelineDiffItemCount = productionLastTimelineDiffItemCount
+            self.productionTimelineEventReceivedCount = productionTimelineEventReceivedCount
+            self.productionDirectCallEventTypeSeenCount = productionDirectCallEventTypeSeenCount
+            self.productionEnvelopeExtractedCount = productionEnvelopeExtractedCount
+            self.productionEnvelopeDeliveredToEngineCount = productionEnvelopeDeliveredToEngineCount
+            self.productionHistoricalEventIgnoredCount = productionHistoricalEventIgnoredCount
+            self.productionLiveEventDeliveredCount = productionLiveEventDeliveredCount
+            self.productionBaselineEstablished = productionBaselineEstablished
+            self.productionLastReceiveEventKind = productionLastReceiveEventKind
+            self.productionLastEnvelopeRejectedReason = productionLastEnvelopeRejectedReason
+            self.productionLastReceiveFailureReason = productionLastReceiveFailureReason
+            self.productionSendRoomFingerprint = productionSendRoomFingerprint.flatMap { UITestsSignalling.sanitizedIdentifier($0) }
+            self.productionReceiveRoomFingerprint = productionReceiveRoomFingerprint.flatMap { UITestsSignalling.sanitizedIdentifier($0) }
         }
     }
 
@@ -798,7 +855,26 @@ extension UITestsSignal.NativeDirectCallProductionStatusPayload {
                   productionLastSignalEventEmitted: status.productionLastSignalEventEmitted,
                   productionLastSignalSendAttempted: status.productionLastSignalSendAttempted,
                   productionLastSignalSendSucceeded: status.productionLastSignalSendSucceeded,
-                  productionLastSignalSendFailureReason: status.productionLastSignalSendFailureReason)
+                  productionLastSignalSendFailureReason: status.productionLastSignalSendFailureReason,
+                  productionListenerAttached: status.productionListenerAttached,
+                  productionListenerHandleRetained: status.productionListenerHandleRetained,
+                  productionListenerStartCount: status.productionListenerStartCount,
+                  productionTimelineUpdateCount: status.productionTimelineUpdateCount,
+                  productionTimelineDiffReceivedCount: status.productionTimelineDiffReceivedCount,
+                  productionLastTimelineDiffKind: status.productionLastTimelineDiffKind,
+                  productionLastTimelineDiffItemCount: status.productionLastTimelineDiffItemCount,
+                  productionTimelineEventReceivedCount: status.productionTimelineEventReceivedCount,
+                  productionDirectCallEventTypeSeenCount: status.productionDirectCallEventTypeSeenCount,
+                  productionEnvelopeExtractedCount: status.productionEnvelopeExtractedCount,
+                  productionEnvelopeDeliveredToEngineCount: status.productionEnvelopeDeliveredToEngineCount,
+                  productionHistoricalEventIgnoredCount: status.productionHistoricalEventIgnoredCount,
+                  productionLiveEventDeliveredCount: status.productionLiveEventDeliveredCount,
+                  productionBaselineEstablished: status.productionBaselineEstablished,
+                  productionLastReceiveEventKind: status.productionLastReceiveEventKind,
+                  productionLastEnvelopeRejectedReason: status.productionLastEnvelopeRejectedReason,
+                  productionLastReceiveFailureReason: status.productionLastReceiveFailureReason,
+                  productionSendRoomFingerprint: status.productionSendRoomFingerprint,
+                  productionReceiveRoomFingerprint: status.productionReceiveRoomFingerprint)
     }
 }
 

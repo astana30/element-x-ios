@@ -1056,7 +1056,26 @@ final class RoomFlowCoordinatorTests {
         productionOwner.diagnosticSnapshot = .init(activeSessionPhase: .outgoingRinging,
                                                    lastSignalEventEmitted: .invite,
                                                    lastSignalSendAttempted: true,
-                                                   lastSignalSendSucceeded: true)
+                                                   lastSignalSendSucceeded: true,
+                                                   listenerAttached: true,
+                                                   listenerHandleRetained: true,
+                                                   listenerStartCount: 1,
+                                                   timelineUpdateCount: 1,
+                                                   timelineDiffReceivedCount: 1,
+                                                   lastTimelineDiffKind: .append,
+                                                   lastTimelineDiffItemCount: 1,
+                                                   timelineEventReceivedCount: 1,
+                                                   directCallEventTypeSeenCount: 1,
+                                                   envelopeExtractedCount: 1,
+                                                   envelopeDeliveredToEngineCount: 1,
+                                                   historicalEventIgnoredCount: 2,
+                                                   liveEventDeliveredCount: 1,
+                                                   baselineEstablished: true,
+                                                   lastReceiveEventKind: .directCallInvite,
+                                                   lastEnvelopeRejectedReason: .none,
+                                                   lastReceiveFailureReason: nil,
+                                                   sendRoomFingerprint: "send-room-redacted",
+                                                   receiveRoomFingerprint: "receive-room-redacted")
         let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: enabledProductionActivationDiagnostic())
         setupRoomFlowCoordinator(nativeDirectCallDiagnosticCommandConfiguration: .init(isEnabled: true)) { _ in
             diagnosticOwner
@@ -1081,6 +1100,25 @@ final class RoomFlowCoordinatorTests {
         #expect(productionStatus.productionLastSignalSendAttempted)
         #expect(productionStatus.productionLastSignalSendSucceeded == true)
         #expect(productionStatus.productionLastSignalSendFailureReason == nil)
+        #expect(productionStatus.productionListenerAttached)
+        #expect(productionStatus.productionListenerHandleRetained)
+        #expect(productionStatus.productionListenerStartCount == 1)
+        #expect(productionStatus.productionTimelineUpdateCount == 1)
+        #expect(productionStatus.productionTimelineDiffReceivedCount == 1)
+        #expect(productionStatus.productionLastTimelineDiffKind == .append)
+        #expect(productionStatus.productionLastTimelineDiffItemCount == 1)
+        #expect(productionStatus.productionTimelineEventReceivedCount == 1)
+        #expect(productionStatus.productionDirectCallEventTypeSeenCount == 1)
+        #expect(productionStatus.productionEnvelopeExtractedCount == 1)
+        #expect(productionStatus.productionEnvelopeDeliveredToEngineCount == 1)
+        #expect(productionStatus.productionHistoricalEventIgnoredCount == 2)
+        #expect(productionStatus.productionLiveEventDeliveredCount == 1)
+        #expect(productionStatus.productionBaselineEstablished)
+        #expect(productionStatus.productionLastReceiveEventKind == .directCallInvite)
+        #expect(productionStatus.productionLastEnvelopeRejectedReason == .none)
+        #expect(productionStatus.productionLastReceiveFailureReason == nil)
+        #expect(productionStatus.productionSendRoomFingerprint == "send-room-redacted")
+        #expect(productionStatus.productionReceiveRoomFingerprint == "receive-room-redacted")
         #expect(diagnosticStatus.state == .idle)
         #expect(diagnosticStatus.hasActiveSession == false)
         #expect(diagnosticStatus.lastSignalSendAttempted == false)
@@ -1919,6 +1957,8 @@ final class RoomFlowCoordinatorTests {
         #expect(encodedResult.contains("started"))
         #expect(encodedResult.contains("productionListenerStarted"))
         #expect(encodedResult.contains("productionLastSignalSendAttempted"))
+        #expect(encodedResult.contains("productionTimelineUpdateCount"))
+        #expect(encodedResult.contains("productionBaselineEstablished"))
         #expect(encodedResult.contains("peerTrustReady"))
         #expect(encodedResult.contains("peerTrustReadiness"))
         #expect(result.correlationID == request.correlationID)
@@ -1955,7 +1995,26 @@ final class RoomFlowCoordinatorTests {
                                                                            productionLastSignalEventEmitted: .invite,
                                                                            productionLastSignalSendAttempted: true,
                                                                            productionLastSignalSendSucceeded: true,
-                                                                           productionLastSignalSendFailureReason: nil)
+                                                                           productionLastSignalSendFailureReason: nil,
+                                                                           productionListenerAttached: true,
+                                                                           productionListenerHandleRetained: true,
+                                                                           productionListenerStartCount: 1,
+                                                                           productionTimelineUpdateCount: 2,
+                                                                           productionTimelineDiffReceivedCount: 3,
+                                                                           productionLastTimelineDiffKind: .append,
+                                                                           productionLastTimelineDiffItemCount: 1,
+                                                                           productionTimelineEventReceivedCount: 4,
+                                                                           productionDirectCallEventTypeSeenCount: 5,
+                                                                           productionEnvelopeExtractedCount: 6,
+                                                                           productionEnvelopeDeliveredToEngineCount: 7,
+                                                                           productionHistoricalEventIgnoredCount: 8,
+                                                                           productionLiveEventDeliveredCount: 9,
+                                                                           productionBaselineEstablished: true,
+                                                                           productionLastReceiveEventKind: .directCallInvite,
+                                                                           productionLastEnvelopeRejectedReason: .none,
+                                                                           productionLastReceiveFailureReason: .engineRejected,
+                                                                           productionSendRoomFingerprint: "send-room-redacted",
+                                                                           productionReceiveRoomFingerprint: "receive-room-redacted")
         let result = UITestsSignal.NativeDirectCallProductionStatusResult(correlationID: "call-A-1",
                                                                           status: status)
         let requestSignal = UITestsSignal.nativeDirectCallProductionStatus(request)
@@ -1974,6 +2033,23 @@ final class RoomFlowCoordinatorTests {
         #expect(encodedResult.contains("productionListenerStarted"))
         #expect(encodedResult.contains("productionHasActiveSession"))
         #expect(encodedResult.contains("productionLastSignalSendAttempted"))
+        #expect(encodedResult.contains("productionListenerAttached"))
+        #expect(encodedResult.contains("productionListenerHandleRetained"))
+        #expect(encodedResult.contains("productionTimelineUpdateCount"))
+        #expect(encodedResult.contains("productionTimelineDiffReceivedCount"))
+        #expect(encodedResult.contains("productionDirectCallEventTypeSeenCount"))
+        #expect(encodedResult.contains("productionEnvelopeExtractedCount"))
+        #expect(encodedResult.contains("productionEnvelopeDeliveredToEngineCount"))
+        #expect(encodedResult.contains("productionHistoricalEventIgnoredCount"))
+        #expect(encodedResult.contains("productionLiveEventDeliveredCount"))
+        #expect(encodedResult.contains("productionBaselineEstablished"))
+        #expect(encodedResult.contains("productionLastReceiveEventKind"))
+        #expect(encodedResult.contains("productionLastEnvelopeRejectedReason"))
+        #expect(encodedResult.contains("productionLastReceiveFailureReason"))
+        #expect(encodedResult.contains("productionSendRoomFingerprint"))
+        #expect(encodedResult.contains("productionReceiveRoomFingerprint"))
+        #expect(encodedResult.contains("send-room-redacted"))
+        #expect(encodedResult.contains("receive-room-redacted"))
         #expect(result.correlationID == request.correlationID)
 
         let forbiddenFragments = [
