@@ -1301,6 +1301,91 @@ final class DirectCallPeerTrustReadinessTests {
         #expect(diagnostic.lastVerificationErrorReason == .startSASFailed)
         #expect(String(describing: diagnostic).contains(peerUserID) == false)
     }
+
+    @Test
+    func verificationDiagnosticCommandDriverFailsClosedWithoutController() async {
+        let driver = SessionVerificationControllerDiagnosticCommandDriver(controller: nil)
+
+        let result = await driver.execute(.status)
+
+        #expect(result.outcome == .failed)
+        #expect(result.reason == .unavailable)
+        #expect(result.snapshot.verificationFlowState == .unavailable)
+    }
+
+    @Test
+    func verificationDiagnosticCommandDriverStartsSASOnlyWhenRequestAcceptedAndPending() async {
+        let controller = DirectCallTrustDiagnosticsSessionVerificationController(snapshot: .init(verificationRequestPending: true,
+                                                                                                 verificationFlowState: .requestAccepted,
+                                                                                                 lastVerificationErrorReason: .none))
+        let driver = SessionVerificationControllerDiagnosticCommandDriver(controller: controller)
+
+        let result = await driver.execute(.startSAS)
+
+        #expect(result.outcome == .succeeded)
+        #expect(result.reason == .none)
+        #expect(result.snapshot.verificationFlowState == .sasStarted)
+        #expect(result.sasStarted)
+        #expect(controller.startSasVerificationCallsCount == 1)
+
+        let wrongStateController = DirectCallTrustDiagnosticsSessionVerificationController(snapshot: .init(verificationRequestPending: true,
+                                                                                                           verificationFlowState: .requestAcknowledged,
+                                                                                                           lastVerificationErrorReason: .none))
+        let wrongStateResult = await SessionVerificationControllerDiagnosticCommandDriver(controller: wrongStateController).execute(.startSAS)
+
+        #expect(wrongStateResult.outcome == .blocked)
+        #expect(wrongStateResult.reason == .invalidFlowState)
+        #expect(wrongStateController.startSasVerificationCallsCount == 0)
+
+        let notPendingController = DirectCallTrustDiagnosticsSessionVerificationController(snapshot: .init(verificationRequestPending: false,
+                                                                                                           verificationFlowState: .requestAccepted,
+                                                                                                           lastVerificationErrorReason: .none))
+        let notPendingResult = await SessionVerificationControllerDiagnosticCommandDriver(controller: notPendingController).execute(.startSAS)
+
+        #expect(notPendingResult.outcome == .blocked)
+        #expect(notPendingResult.reason == .requestNotPending)
+        #expect(notPendingController.startSasVerificationCallsCount == 0)
+    }
+
+    @Test
+    func verificationDiagnosticCommandDriverCanAcceptAndCancelPendingFlow() async {
+        let acceptController = DirectCallTrustDiagnosticsSessionVerificationController(snapshot: .init(verificationRequestPending: true,
+                                                                                                       verificationFlowState: .requestAcknowledged,
+                                                                                                       lastVerificationErrorReason: .none))
+        let acceptResult = await SessionVerificationControllerDiagnosticCommandDriver(controller: acceptController).execute(.accept)
+
+        #expect(acceptResult.outcome == .succeeded)
+        #expect(acceptResult.snapshot.verificationFlowState == .requestAccepted)
+        #expect(acceptController.acceptVerificationRequestCallsCount == 1)
+
+        let cancelController = DirectCallTrustDiagnosticsSessionVerificationController(snapshot: .init(verificationRequestPending: true,
+                                                                                                       verificationFlowState: .requestAccepted,
+                                                                                                       lastVerificationErrorReason: .none))
+        let cancelResult = await SessionVerificationControllerDiagnosticCommandDriver(controller: cancelController).execute(.cancel)
+
+        #expect(cancelResult.outcome == .succeeded)
+        #expect(cancelResult.snapshot.verificationFlowState == .cancelled)
+        #expect(cancelResult.requestPending == false)
+        #expect(cancelController.cancelVerificationCallsCount == 1)
+    }
+
+    @Test
+    func verificationDiagnosticCommandDriverMapsFailuresAndRedactsDescription() async {
+        let controller = DirectCallTrustDiagnosticsSessionVerificationController(snapshot: .init(verificationRequestPending: true,
+                                                                                                 verificationFlowState: .requestAccepted,
+                                                                                                 lastVerificationErrorReason: .none),
+                                                                                 startSASResult: .failure(.failedStartingSasVerification))
+        let result = await SessionVerificationControllerDiagnosticCommandDriver(controller: controller).execute(.startSAS)
+
+        #expect(result.outcome == .failed)
+        #expect(result.reason == .startSASFailed)
+        #expect(result.snapshot.lastVerificationErrorReason == .startSASFailed)
+
+        let description = String(describing: result)
+        for fragment in [ownUserID, peerUserID, "DEVICE-", "to" + "ken", "j" + "wt", "raw " + "key"] {
+            #expect(description.localizedCaseInsensitiveContains(fragment) == false)
+        }
+    }
 }
 
 @MainActor
@@ -1426,10 +1511,27 @@ private enum MatrixSDKDirectCallMediaKeyEnvelopeWrapperSpyError: Error {
 
 private final class DirectCallTrustDiagnosticsSessionVerificationController: SessionVerificationControllerProxyProtocol, SessionVerificationControllerDiagnosticProviding {
     let actions = PassthroughSubject<SessionVerificationControllerProxyAction, Never>()
-    let diagnosticSnapshot: SessionVerificationControllerDiagnosticSnapshot
+    private var currentDiagnosticSnapshot: SessionVerificationControllerDiagnosticSnapshot
+    private let acceptResult: Result<Void, SessionVerificationControllerProxyError>
+    private let startSASResult: Result<Void, SessionVerificationControllerProxyError>
+    private let cancelResult: Result<Void, SessionVerificationControllerProxyError>
 
-    init(snapshot: SessionVerificationControllerDiagnosticSnapshot) {
-        diagnosticSnapshot = snapshot
+    private(set) var acceptVerificationRequestCallsCount = 0
+    private(set) var startSasVerificationCallsCount = 0
+    private(set) var cancelVerificationCallsCount = 0
+
+    var diagnosticSnapshot: SessionVerificationControllerDiagnosticSnapshot {
+        currentDiagnosticSnapshot
+    }
+
+    init(snapshot: SessionVerificationControllerDiagnosticSnapshot,
+         acceptResult: Result<Void, SessionVerificationControllerProxyError> = .success(()),
+         startSASResult: Result<Void, SessionVerificationControllerProxyError> = .success(()),
+         cancelResult: Result<Void, SessionVerificationControllerProxyError> = .success(())) {
+        currentDiagnosticSnapshot = snapshot
+        self.acceptResult = acceptResult
+        self.startSASResult = startSASResult
+        self.cancelResult = cancelResult
     }
 
     func acknowledgeVerificationRequest(details: ElementX.SessionVerificationRequestDetails) async -> Result<Void, SessionVerificationControllerProxyError> {
@@ -1437,7 +1539,20 @@ private final class DirectCallTrustDiagnosticsSessionVerificationController: Ses
     }
 
     func acceptVerificationRequest() async -> Result<Void, SessionVerificationControllerProxyError> {
-        .success(())
+        acceptVerificationRequestCallsCount += 1
+
+        switch acceptResult {
+        case .success:
+            currentDiagnosticSnapshot = .init(verificationRequestPending: true,
+                                              verificationFlowState: .requestAccepted,
+                                              lastVerificationErrorReason: .none)
+        case .failure:
+            currentDiagnosticSnapshot = .init(verificationRequestPending: false,
+                                              verificationFlowState: .failed,
+                                              lastVerificationErrorReason: .acceptFailed)
+        }
+
+        return acceptResult
     }
 
     func requestDeviceVerification() async -> Result<Void, SessionVerificationControllerProxyError> {
@@ -1449,7 +1564,20 @@ private final class DirectCallTrustDiagnosticsSessionVerificationController: Ses
     }
 
     func startSasVerification() async -> Result<Void, SessionVerificationControllerProxyError> {
-        .success(())
+        startSasVerificationCallsCount += 1
+
+        switch startSASResult {
+        case .success:
+            currentDiagnosticSnapshot = .init(verificationRequestPending: true,
+                                              verificationFlowState: .sasStarted,
+                                              lastVerificationErrorReason: .none)
+        case .failure:
+            currentDiagnosticSnapshot = .init(verificationRequestPending: false,
+                                              verificationFlowState: .failed,
+                                              lastVerificationErrorReason: .startSASFailed)
+        }
+
+        return startSASResult
     }
 
     func approveVerification() async -> Result<Void, SessionVerificationControllerProxyError> {
@@ -1461,7 +1589,20 @@ private final class DirectCallTrustDiagnosticsSessionVerificationController: Ses
     }
 
     func cancelVerification() async -> Result<Void, SessionVerificationControllerProxyError> {
-        .success(())
+        cancelVerificationCallsCount += 1
+
+        switch cancelResult {
+        case .success:
+            currentDiagnosticSnapshot = .init(verificationRequestPending: false,
+                                              verificationFlowState: .cancelled,
+                                              lastVerificationErrorReason: .none)
+        case .failure:
+            currentDiagnosticSnapshot = .init(verificationRequestPending: false,
+                                              verificationFlowState: .failed,
+                                              lastVerificationErrorReason: .cancelFailed)
+        }
+
+        return cancelResult
     }
 }
 

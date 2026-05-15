@@ -16,6 +16,7 @@ struct UserSessionFlowCoordinatorTests {
     private var userSessionFlowCoordinator: UserSessionFlowCoordinator!
     private var rootCoordinator: NavigationRootCoordinator!
     private var userIndicatorController: UserIndicatorControllerMock!
+    private var flowParameters: CommonFlowParameters!
     private let stateMachineFactory = PublishedStateMachineFactory()
     
     private let networkReachabilitySubject: CurrentValueSubject<NetworkMonitorReachability, Never> = .init(.reachable)
@@ -55,20 +56,20 @@ struct UserSessionFlowCoordinatorTests {
         
         userIndicatorController = UserIndicatorControllerMock()
         
-        let flowParameters = CommonFlowParameters(userSession: UserSessionMock(.init(clientProxy: clientProxy)),
-                                                  bugReportService: BugReportServiceMock(.init()),
-                                                  elementCallService: ElementCallServiceMock(.init()),
-                                                  directCallEngine: DirectCallEngine(ownUserID: "hi@bob") { _ in nil },
-                                                  timelineControllerFactory: TimelineControllerFactoryMock(.init()),
-                                                  emojiProvider: EmojiProvider(appSettings: ServiceLocator.shared.settings),
-                                                  linkMetadataProvider: LinkMetadataProvider(),
-                                                  appMediator: appMediator,
-                                                  appSettings: ServiceLocator.shared.settings,
-                                                  appHooks: AppHooks(),
-                                                  analytics: ServiceLocator.shared.analytics,
-                                                  userIndicatorController: userIndicatorController,
-                                                  notificationManager: NotificationManagerMock(),
-                                                  stateMachineFactory: stateMachineFactory)
+        flowParameters = CommonFlowParameters(userSession: UserSessionMock(.init(clientProxy: clientProxy)),
+                                              bugReportService: BugReportServiceMock(.init()),
+                                              elementCallService: ElementCallServiceMock(.init()),
+                                              directCallEngine: DirectCallEngine(ownUserID: "hi@bob") { _ in nil },
+                                              timelineControllerFactory: TimelineControllerFactoryMock(.init()),
+                                              emojiProvider: EmojiProvider(appSettings: ServiceLocator.shared.settings),
+                                              linkMetadataProvider: LinkMetadataProvider(),
+                                              appMediator: appMediator,
+                                              appSettings: ServiceLocator.shared.settings,
+                                              appHooks: AppHooks(),
+                                              analytics: ServiceLocator.shared.analytics,
+                                              userIndicatorController: userIndicatorController,
+                                              notificationManager: NotificationManagerMock(),
+                                              stateMachineFactory: stateMachineFactory)
         
         userSessionFlowCoordinator = UserSessionFlowCoordinator(isNewLogin: false,
                                                                 navigationRootCoordinator: rootCoordinator,
@@ -84,6 +85,19 @@ struct UserSessionFlowCoordinatorTests {
     func initialState() {
         #expect(chatsSplitCoordinator != nil)
         #expect(detailCoordinator == nil)
+    }
+
+    @Test
+    func nativeDirectCallVerificationDiagnosticCommandIsUnavailableWhenDiagnosticGateDisabled() async {
+        let coordinator = makeUserSessionFlowCoordinator {
+            false
+        }
+
+        let result = await coordinator.nativeDirectCallVerificationDiagnosticCommand(.status)
+
+        #expect(result.outcome == .failed)
+        #expect(result.reason == .unavailable)
+        #expect(result.snapshot.verificationFlowState == .unavailable)
     }
     
     @Test
@@ -260,6 +274,14 @@ struct UserSessionFlowCoordinatorTests {
         userSessionFlowCoordinator.handleAppRoute(route, animated: true)
         try await deferredUserSession?.fulfill()
         try await deferredChatsState?.fulfill()
+    }
+
+    private func makeUserSessionFlowCoordinator(nativeDirectCallDiagnosticRuntimeGate: @escaping () -> Bool) -> UserSessionFlowCoordinator {
+        UserSessionFlowCoordinator(isNewLogin: false,
+                                   navigationRootCoordinator: NavigationRootCoordinator(),
+                                   appLockService: AppLockServiceMock(),
+                                   flowParameters: flowParameters,
+                                   nativeDirectCallDiagnosticRuntimeGate: nativeDirectCallDiagnosticRuntimeGate)
     }
     
     /// Other services retract indicators, so this filters based on the reachability ID.

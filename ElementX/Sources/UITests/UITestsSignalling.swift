@@ -54,6 +54,10 @@ enum UITestsSignal: Codable, Equatable {
     case nativeDirectCallTrustDiagnostics(NativeDirectCallTrustDiagnosticsRequest)
     /// Reports redacted Matrix trust/verification diagnostics for the active direct-call room.
     case nativeDirectCallTrustDiagnosticsResult(NativeDirectCallTrustDiagnosticsResult)
+    /// Safely drives or inspects the active Matrix verification flow for direct-call diagnostics.
+    case nativeDirectCallVerificationFlowCommand(NativeDirectCallVerificationFlowCommandRequest)
+    /// Reports redacted Matrix verification flow driver diagnostics.
+    case nativeDirectCallVerificationFlowCommandResult(NativeDirectCallVerificationFlowCommandResult)
     /// Requests a redacted production native direct-call activation dry-run for the active room.
     case nativeDirectCallProductionActivationDryRun(NativeDirectCallProductionActivationDryRunRequest)
     /// Reports a redacted production native direct-call activation dry-run for the active room.
@@ -186,6 +190,30 @@ enum UITestsSignal: Codable, Equatable {
         let diagnostic: NativeDirectCallTrustDiagnostic
 
         init(correlationID: String? = nil, diagnostic: NativeDirectCallTrustDiagnostic) {
+            self.correlationID = UITestsSignalling.sanitizedIdentifier(correlationID)
+            self.diagnostic = diagnostic
+        }
+    }
+
+    struct NativeDirectCallVerificationFlowCommandRequest: Codable, Equatable {
+        let correlationID: String?
+        let command: String
+
+        init(correlationID: String? = nil, command: SessionVerificationControllerDiagnosticCommand) {
+            self.correlationID = UITestsSignalling.sanitizedIdentifier(correlationID)
+            self.command = command.description
+        }
+
+        var diagnosticCommand: SessionVerificationControllerDiagnosticCommand? {
+            SessionVerificationControllerDiagnosticCommand(rawValue: command)
+        }
+    }
+
+    struct NativeDirectCallVerificationFlowCommandResult: Codable, Equatable {
+        let correlationID: String?
+        let diagnostic: NativeDirectCallVerificationFlowDiagnostic
+
+        init(correlationID: String? = nil, diagnostic: NativeDirectCallVerificationFlowDiagnostic) {
             self.correlationID = UITestsSignalling.sanitizedIdentifier(correlationID)
             self.diagnostic = diagnostic
         }
@@ -345,6 +373,41 @@ enum UITestsSignal: Codable, Equatable {
             self.verificationRequestPending = verificationRequestPending
             self.verificationFlowState = UITestsSignalling.sanitizedIdentifier(verificationFlowState) ?? SessionVerificationControllerDiagnosticFlowState.unavailable.rawValue
             self.lastVerificationErrorReason = UITestsSignalling.sanitizedIdentifier(lastVerificationErrorReason) ?? SessionVerificationControllerDiagnosticErrorReason.unknown.rawValue
+        }
+    }
+
+    struct NativeDirectCallVerificationFlowDiagnostic: Codable, Equatable {
+        let outcome: String
+        let reason: String
+        let requestPending: Bool
+        let flowState: String
+        let sasStarted: Bool
+        let emojiReceived: Bool
+        let finished: Bool
+        let cancelled: Bool
+        let failed: Bool
+        let lastErrorReason: String
+
+        init(outcome: String,
+             reason: String,
+             requestPending: Bool,
+             flowState: String,
+             sasStarted: Bool,
+             emojiReceived: Bool,
+             finished: Bool,
+             cancelled: Bool,
+             failed: Bool,
+             lastErrorReason: String) {
+            self.outcome = UITestsSignalling.sanitizedIdentifier(outcome) ?? SessionVerificationControllerDiagnosticCommandOutcome.failed.rawValue
+            self.reason = UITestsSignalling.sanitizedIdentifier(reason) ?? SessionVerificationControllerDiagnosticCommandReason.unknown.rawValue
+            self.requestPending = requestPending
+            self.flowState = UITestsSignalling.sanitizedIdentifier(flowState) ?? SessionVerificationControllerDiagnosticFlowState.unavailable.rawValue
+            self.sasStarted = sasStarted
+            self.emojiReceived = emojiReceived
+            self.finished = finished
+            self.cancelled = cancelled
+            self.failed = failed
+            self.lastErrorReason = UITestsSignalling.sanitizedIdentifier(lastErrorReason) ?? SessionVerificationControllerDiagnosticErrorReason.unknown.rawValue
         }
     }
 
@@ -568,6 +631,13 @@ extension UITestsSignal.NativeDirectCallTrustDiagnosticsResult {
     }
 }
 
+extension UITestsSignal.NativeDirectCallVerificationFlowCommandResult {
+    init(correlationID: String? = nil, _ diagnostic: SessionVerificationControllerDiagnosticCommandResult) {
+        self.init(correlationID: correlationID,
+                  diagnostic: .init(diagnostic))
+    }
+}
+
 extension UITestsSignal.NativeDirectCallProductionActivationDryRunResult {
     init(correlationID: String? = nil, _ diagnostic: DirectCallProductionActivationDryRunDiagnostic) {
         self.init(correlationID: correlationID,
@@ -641,6 +711,21 @@ extension UITestsSignal.NativeDirectCallTrustDiagnostic {
                   verificationRequestPending: diagnostic.verificationRequestPending,
                   verificationFlowState: diagnostic.verificationFlowState.description,
                   lastVerificationErrorReason: diagnostic.lastVerificationErrorReason.description)
+    }
+}
+
+extension UITestsSignal.NativeDirectCallVerificationFlowDiagnostic {
+    init(_ diagnostic: SessionVerificationControllerDiagnosticCommandResult) {
+        self.init(outcome: diagnostic.outcome.description,
+                  reason: diagnostic.reason.description,
+                  requestPending: diagnostic.requestPending,
+                  flowState: diagnostic.snapshot.verificationFlowState.description,
+                  sasStarted: diagnostic.sasStarted,
+                  emojiReceived: diagnostic.emojiReceived,
+                  finished: diagnostic.finished,
+                  cancelled: diagnostic.cancelled,
+                  failed: diagnostic.failed,
+                  lastErrorReason: diagnostic.snapshot.lastVerificationErrorReason.description)
     }
 }
 

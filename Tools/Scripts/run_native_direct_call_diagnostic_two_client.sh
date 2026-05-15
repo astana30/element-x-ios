@@ -48,6 +48,10 @@ Usage:
   DRY_RUN=0 $SCRIPT_NAME send A|B <command>
   DRY_RUN=0 $SCRIPT_NAME status A|B
   DRY_RUN=0 $SCRIPT_NAME trust-diagnostics A|B
+  DRY_RUN=0 $SCRIPT_NAME verification-status A|B
+  DRY_RUN=0 $SCRIPT_NAME verification-accept A|B
+  DRY_RUN=0 $SCRIPT_NAME verification-start-sas A|B
+  DRY_RUN=0 $SCRIPT_NAME verification-cancel A|B
   DRY_RUN=0 $SCRIPT_NAME production-activation-dry-run A|B
   DRY_RUN=0 $SCRIPT_NAME production-trigger-dry-run A|B
   DRY_RUN=0 $SCRIPT_NAME production-start-outgoing A|B
@@ -411,6 +415,41 @@ with open(file_path, "w", encoding="utf-8") as handle:
 PY
 }
 
+write_verification_flow_command_request() {
+    local client="$1"
+    local command="$2"
+    local correlation_id="$3"
+    local file
+    file="$(signal_file "$client")"
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        log "DRY_RUN: verification-flow-command channel=$client command=$command correlationID=$correlation_id"
+        return
+    fi
+
+    python3 - "$file" "$command" "$correlation_id" <<'PY'
+import json
+import sys
+
+file_path, command, correlation_id = sys.argv[1:4]
+message = {
+    "mode": {
+        "tests": {}
+    },
+    "signal": {
+        "nativeDirectCallVerificationFlowCommand": {
+            "_0": {
+                "correlationID": correlation_id,
+                "command": command,
+            }
+        }
+    }
+}
+with open(file_path, "w", encoding="utf-8") as handle:
+    json.dump(message, handle, sort_keys=True, separators=(",", ":"))
+PY
+}
+
 write_production_activation_dry_run_request() {
     local client="$1"
     local correlation_id="$2"
@@ -618,6 +657,24 @@ if expected_signal == "nativeDirectCallTrustDiagnosticsResult":
             verification_pending=str(diagnostic.get("verificationRequestPending", "unknown")).lower(),
             verification_state=diagnostic.get("verificationFlowState") or "unknown",
             verification_error=diagnostic.get("lastVerificationErrorReason") or "unknown",
+        )
+    )
+    sys.exit(0)
+
+if expected_signal == "nativeDirectCallVerificationFlowCommandResult":
+    diagnostic = body.get("diagnostic", {})
+    print(
+        "outcome={outcome} reason={reason} requestPending={request_pending} flowState={flow_state} sasStarted={sas_started} emojiReceived={emoji_received} finished={finished} cancelled={cancelled} failed={failed} lastErrorReason={last_error}".format(
+            outcome=diagnostic.get("outcome") or "unknown",
+            reason=diagnostic.get("reason") or "unknown",
+            request_pending=str(diagnostic.get("requestPending", "unknown")).lower(),
+            flow_state=diagnostic.get("flowState") or "unknown",
+            sas_started=str(diagnostic.get("sasStarted", "unknown")).lower(),
+            emoji_received=str(diagnostic.get("emojiReceived", "unknown")).lower(),
+            finished=str(diagnostic.get("finished", "unknown")).lower(),
+            cancelled=str(diagnostic.get("cancelled", "unknown")).lower(),
+            failed=str(diagnostic.get("failed", "unknown")).lower(),
+            last_error=diagnostic.get("lastErrorReason") or "unknown",
         )
     )
     sys.exit(0)
@@ -981,6 +1038,23 @@ query_trust_diagnostics() {
     log "channel=$client command=trustDiagnostics correlationID=$id $result"
 }
 
+query_verification_flow_command() {
+    local client="$1"
+    local command="$2"
+    local label="$3"
+    local id
+    id="$(correlation_id "$client" "$label")"
+    write_verification_flow_command_request "$client" "$command" "$id"
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        return
+    fi
+
+    local result
+    result="$(wait_for_result "$client" nativeDirectCallVerificationFlowCommandResult "$id")"
+    log "channel=$client command=$label correlationID=$id $result"
+}
+
 query_production_activation_dry_run() {
     local client="$1"
     local id
@@ -1165,6 +1239,30 @@ main() {
             require_common_environment
             [[ $# -eq 2 ]] || fail "Usage: $SCRIPT_NAME trust-diagnostics A|B"
             query_trust_diagnostics "$2"
+            ;;
+        verification-status|verificationStatus)
+            require_host_tools
+            require_common_environment
+            [[ $# -eq 2 ]] || fail "Usage: $SCRIPT_NAME verification-status A|B"
+            query_verification_flow_command "$2" status verificationStatus
+            ;;
+        verification-accept|verificationAccept)
+            require_host_tools
+            require_common_environment
+            [[ $# -eq 2 ]] || fail "Usage: $SCRIPT_NAME verification-accept A|B"
+            query_verification_flow_command "$2" accept verificationAccept
+            ;;
+        verification-start-sas|verificationStartSAS)
+            require_host_tools
+            require_common_environment
+            [[ $# -eq 2 ]] || fail "Usage: $SCRIPT_NAME verification-start-sas A|B"
+            query_verification_flow_command "$2" startSAS verificationStartSAS
+            ;;
+        verification-cancel|verificationCancel)
+            require_host_tools
+            require_common_environment
+            [[ $# -eq 2 ]] || fail "Usage: $SCRIPT_NAME verification-cancel A|B"
+            query_verification_flow_command "$2" cancel verificationCancel
             ;;
         production-activation-dry-run|productionActivationDryRun)
             require_host_tools

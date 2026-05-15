@@ -1481,6 +1481,17 @@ extension AppCoordinator {
 
                             let result = UITestsSignal.NativeDirectCallTrustDiagnosticsResult(correlationID: request.correlationID, diagnostic)
                             try? client?.send(.nativeDirectCallTrustDiagnosticsResult(result))
+                        case .nativeDirectCallVerificationFlowCommand(let request):
+                            let diagnostic: SessionVerificationControllerDiagnosticCommandResult
+                            if let command = request.diagnosticCommand,
+                               let flowCoordinator = self?.userSessionFlowCoordinator {
+                                diagnostic = await flowCoordinator.nativeDirectCallVerificationDiagnosticCommand(command)
+                            } else {
+                                diagnostic = .unavailable
+                            }
+
+                            let result = UITestsSignal.NativeDirectCallVerificationFlowCommandResult(correlationID: request.correlationID, diagnostic)
+                            try? client?.send(.nativeDirectCallVerificationFlowCommandResult(result))
                         case .nativeDirectCallProductionActivationDryRun(let request):
                             let diagnostic: DirectCallProductionActivationDryRunDiagnostic
                             if let flowCoordinator = self?.userSessionFlowCoordinator {

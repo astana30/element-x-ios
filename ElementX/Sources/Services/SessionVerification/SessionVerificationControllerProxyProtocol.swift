@@ -101,6 +101,219 @@ protocol SessionVerificationControllerDiagnosticProviding {
     var diagnosticSnapshot: SessionVerificationControllerDiagnosticSnapshot { get }
 }
 
+enum SessionVerificationControllerDiagnosticCommand: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case status
+    case accept
+    case startSAS
+    case cancel
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum SessionVerificationControllerDiagnosticCommandOutcome: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case status
+    case succeeded
+    case blocked
+    case failed
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum SessionVerificationControllerDiagnosticCommandReason: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case none
+    case unavailable
+    case requestNotPending
+    case invalidFlowState
+    case acceptFailed
+    case startSASFailed
+    case cancelFailed
+    case unknown
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct SessionVerificationControllerDiagnosticCommandResult: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let outcome: SessionVerificationControllerDiagnosticCommandOutcome
+    let reason: SessionVerificationControllerDiagnosticCommandReason
+    let snapshot: SessionVerificationControllerDiagnosticSnapshot
+
+    init(outcome: SessionVerificationControllerDiagnosticCommandOutcome,
+         reason: SessionVerificationControllerDiagnosticCommandReason = .none,
+         snapshot: SessionVerificationControllerDiagnosticSnapshot) {
+        self.outcome = outcome
+        self.reason = reason
+        self.snapshot = snapshot
+    }
+
+    static let unavailable = Self(outcome: .failed,
+                                  reason: .unavailable,
+                                  snapshot: .unavailable)
+
+    var requestPending: Bool {
+        snapshot.verificationRequestPending
+    }
+
+    var sasStarted: Bool {
+        switch snapshot.verificationFlowState {
+        case .sasStarted, .emojiReceived:
+            true
+        default:
+            false
+        }
+    }
+
+    var emojiReceived: Bool {
+        snapshot.verificationFlowState == .emojiReceived
+    }
+
+    var finished: Bool {
+        snapshot.verificationFlowState == .finished
+    }
+
+    var cancelled: Bool {
+        snapshot.verificationFlowState == .cancelled
+    }
+
+    var failed: Bool {
+        snapshot.verificationFlowState == .failed
+    }
+
+    var description: String {
+        "SessionVerificationControllerDiagnosticCommandResult(" + [
+            "outcome: \(outcome)",
+            "reason: \(reason)",
+            "requestPending: \(requestPending)",
+            "flowState: \(snapshot.verificationFlowState)",
+            "sasStarted: \(sasStarted)",
+            "emojiReceived: \(emojiReceived)",
+            "finished: \(finished)",
+            "cancelled: \(cancelled)",
+            "failed: \(failed)",
+            "lastErrorReason: \(snapshot.lastVerificationErrorReason)"
+        ].joined(separator: ", ") + ")"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+@MainActor
+struct SessionVerificationControllerDiagnosticCommandDriver {
+    private let controller: SessionVerificationControllerProxyProtocol?
+
+    init(controller: SessionVerificationControllerProxyProtocol?) {
+        self.controller = controller
+    }
+
+    func execute(_ command: SessionVerificationControllerDiagnosticCommand) async -> SessionVerificationControllerDiagnosticCommandResult {
+        guard let controller else {
+            return .unavailable
+        }
+
+        switch command {
+        case .status:
+            return .init(outcome: .status, snapshot: snapshot(from: controller))
+        case .accept:
+            return await accept(controller)
+        case .startSAS:
+            return await startSAS(controller)
+        case .cancel:
+            return await cancel(controller)
+        }
+    }
+
+    private func accept(_ controller: SessionVerificationControllerProxyProtocol) async -> SessionVerificationControllerDiagnosticCommandResult {
+        let currentSnapshot = snapshot(from: controller)
+        guard currentSnapshot.verificationRequestPending else {
+            return .init(outcome: .blocked,
+                         reason: .requestNotPending,
+                         snapshot: currentSnapshot)
+        }
+
+        guard currentSnapshot.verificationFlowState == .requestReceived ||
+            currentSnapshot.verificationFlowState == .requestAcknowledged ||
+            currentSnapshot.verificationFlowState == .verificationRequested else {
+            return .init(outcome: .blocked,
+                         reason: .invalidFlowState,
+                         snapshot: currentSnapshot)
+        }
+
+        switch await controller.acceptVerificationRequest() {
+        case .success:
+            return .init(outcome: .succeeded, snapshot: snapshot(from: controller))
+        case .failure:
+            return .init(outcome: .failed,
+                         reason: .acceptFailed,
+                         snapshot: snapshot(from: controller))
+        }
+    }
+
+    private func startSAS(_ controller: SessionVerificationControllerProxyProtocol) async -> SessionVerificationControllerDiagnosticCommandResult {
+        let currentSnapshot = snapshot(from: controller)
+        guard currentSnapshot.verificationRequestPending else {
+            return .init(outcome: .blocked,
+                         reason: .requestNotPending,
+                         snapshot: currentSnapshot)
+        }
+
+        guard currentSnapshot.verificationFlowState == .requestAccepted else {
+            return .init(outcome: .blocked,
+                         reason: .invalidFlowState,
+                         snapshot: currentSnapshot)
+        }
+
+        switch await controller.startSasVerification() {
+        case .success:
+            return .init(outcome: .succeeded, snapshot: snapshot(from: controller))
+        case .failure:
+            return .init(outcome: .failed,
+                         reason: .startSASFailed,
+                         snapshot: snapshot(from: controller))
+        }
+    }
+
+    private func cancel(_ controller: SessionVerificationControllerProxyProtocol) async -> SessionVerificationControllerDiagnosticCommandResult {
+        let currentSnapshot = snapshot(from: controller)
+        guard currentSnapshot.verificationRequestPending else {
+            return .init(outcome: .blocked,
+                         reason: .requestNotPending,
+                         snapshot: currentSnapshot)
+        }
+
+        switch await controller.cancelVerification() {
+        case .success:
+            return .init(outcome: .succeeded, snapshot: snapshot(from: controller))
+        case .failure:
+            return .init(outcome: .failed,
+                         reason: .cancelFailed,
+                         snapshot: snapshot(from: controller))
+        }
+    }
+
+    private func snapshot(from controller: SessionVerificationControllerProxyProtocol) -> SessionVerificationControllerDiagnosticSnapshot {
+        (controller as? SessionVerificationControllerDiagnosticProviding)?.diagnosticSnapshot ?? .unavailable
+    }
+}
+
 struct SessionVerificationRequestDetails: Equatable {
     let senderProfile: UserProfileProxy
     let flowID: String

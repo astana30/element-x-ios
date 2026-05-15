@@ -249,6 +249,15 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
         return await chatsTabFlowCoordinator.nativeDirectCallPeerTrustDiagnostic()
     }
 
+    func nativeDirectCallVerificationDiagnosticCommand(_ command: SessionVerificationControllerDiagnosticCommand) async -> SessionVerificationControllerDiagnosticCommandResult {
+        guard nativeDirectCallDiagnosticRuntimeGate() else {
+            return .unavailable
+        }
+
+        let driver = SessionVerificationControllerDiagnosticCommandDriver(controller: userSession.clientProxy.sessionVerificationController)
+        return await driver.execute(command)
+    }
+
     func nativeDirectCallProductionActivationDryRunDiagnostic() async -> DirectCallProductionActivationDryRunDiagnostic {
         guard nativeDirectCallDiagnosticRuntimeGate(),
               navigationTabCoordinator.selectedTab == .chats else {

@@ -1502,6 +1502,59 @@ final class RoomFlowCoordinatorTests {
     }
 
     @Test
+    func nativeDirectCallVerificationFlowCommandSignalEncodesRedactedResult() throws {
+        let request = UITestsSignal.NativeDirectCallVerificationFlowCommandRequest(correlationID: "call-A-1",
+                                                                                   command: .startSAS)
+        let result = UITestsSignal.NativeDirectCallVerificationFlowCommandResult(correlationID: "call-A-1",
+                                                                                 diagnostic: .init(outcome: "succeeded",
+                                                                                                   reason: "none",
+                                                                                                   requestPending: true,
+                                                                                                   flowState: "sasStarted",
+                                                                                                   sasStarted: true,
+                                                                                                   emojiReceived: false,
+                                                                                                   finished: false,
+                                                                                                   cancelled: false,
+                                                                                                   failed: false,
+                                                                                                   lastErrorReason: "none"))
+        let requestSignal = UITestsSignal.nativeDirectCallVerificationFlowCommand(request)
+        let resultSignal = UITestsSignal.nativeDirectCallVerificationFlowCommandResult(result)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+
+        let encodedRequest = try #require(String(data: encoder.encode(requestSignal), encoding: .utf8))
+        let encodedResult = try #require(String(data: encoder.encode(resultSignal), encoding: .utf8))
+
+        #expect(try JSONDecoder().decode(UITestsSignal.self, from: Data(encodedRequest.utf8)) == requestSignal)
+        #expect(try JSONDecoder().decode(UITestsSignal.self, from: Data(encodedResult.utf8)) == resultSignal)
+        #expect(request.diagnosticCommand == .startSAS)
+        #expect(encodedRequest.contains("nativeDirectCallVerificationFlowCommand"))
+        #expect(encodedResult.contains("nativeDirectCallVerificationFlowCommandResult"))
+        #expect(encodedResult.contains("requestPending"))
+        #expect(encodedResult.contains("flowState"))
+        #expect(encodedResult.contains("sasStarted"))
+        #expect(encodedResult.contains("emojiReceived"))
+        #expect(encodedResult.contains("lastErrorReason"))
+
+        let forbiddenFragments = [
+            "@alice",
+            "@bob",
+            "DEVICE-",
+            "debug" + "Info",
+            "original" + "JSON",
+            "original" + "Json",
+            "raw " + "JSON",
+            "encrypted_" + "payload",
+            "to" + "ken",
+            "j" + "wt",
+            "raw " + "key"
+        ]
+        let combinedSignals = encodedRequest + encodedResult
+        for fragment in forbiddenFragments {
+            #expect(combinedSignals.localizedCaseInsensitiveContains(fragment) == false)
+        }
+    }
+
+    @Test
     func nativeDirectCallProductionActivationDryRunSignalEncodesRedactedResult() throws {
         let request = UITestsSignal.NativeDirectCallProductionActivationDryRunRequest(correlationID: "call-A-1")
         let result = UITestsSignal.NativeDirectCallProductionActivationDryRunResult(correlationID: "call-A-1",
