@@ -495,6 +495,41 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
     }
 
     #if DEBUG
+    func nativeDirectCallProductionStartListener() async -> NativeDirectCallProductionStartListenerResult {
+        let triggerDiagnostic = await nativeDirectCallProductionTriggerDryRunDiagnostic()
+
+        guard triggerDiagnostic.isEnabled else {
+            return .blocked(triggerDiagnostic.blockedReason, triggerDiagnostic: triggerDiagnostic)
+        }
+
+        if let activeSession = nativeDirectCallRoomFlowOwner?.activeSession, !activeSession.state.isTerminal {
+            return .blocked(.activeSessionExists, triggerDiagnostic: triggerDiagnostic)
+        }
+
+        let nativeDirectCallProductionRoomFlowOwner: NativeDirectCallRoomFlowOwning
+        switch makeNativeDirectCallProductionRoomFlowOwner() {
+        case .owner(let owner):
+            nativeDirectCallProductionRoomFlowOwner = owner
+        case .blocked(let reason):
+            return .blocked(reason, triggerDiagnostic: triggerDiagnostic)
+        }
+
+        guard !nativeDirectCallProductionRoomFlowOwner.isListenerStarted else {
+            return .started(owner: nativeDirectCallProductionRoomFlowOwner,
+                            triggerDiagnostic: triggerDiagnostic)
+        }
+
+        switch await nativeDirectCallProductionRoomFlowOwner.startListener() {
+        case .success:
+            return .started(owner: nativeDirectCallProductionRoomFlowOwner,
+                            triggerDiagnostic: triggerDiagnostic)
+        case .failure(let error):
+            return .failed(error,
+                           owner: nativeDirectCallProductionRoomFlowOwner,
+                           triggerDiagnostic: triggerDiagnostic)
+        }
+    }
+
     func nativeDirectCallProductionStatus() -> NativeDirectCallProductionStatus {
         .init(owner: nativeDirectCallProductionRoomFlowOwner)
     }
@@ -2298,6 +2333,65 @@ struct NativeDirectCallProductionStartOutgoingAudioCallResult: Equatable, Custom
 }
 
 #if DEBUG
+struct NativeDirectCallProductionStartListenerResult: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let outcome: NativeDirectCallProductionStartOutcome
+    let reason: NativeDirectCallProductionStartBlockedReason?
+    let triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic
+    let status: NativeDirectCallProductionStatus
+
+    var didStartListener: Bool {
+        outcome == .started && status.productionListenerStarted
+    }
+
+    static func blocked(_ reason: NativeDirectCallProductionStartBlockedReason,
+                        triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic) -> Self {
+        .init(outcome: .blocked,
+              reason: reason,
+              triggerDiagnostic: triggerDiagnostic,
+              status: .unavailable)
+    }
+
+    static func blocked(_ activationReason: DirectCallProductionActivationDisabledReason?,
+                        triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic) -> Self {
+        .blocked(.init(activationReason), triggerDiagnostic: triggerDiagnostic)
+    }
+
+    @MainActor
+    static func started(owner: NativeDirectCallRoomFlowOwning,
+                        triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic) -> Self {
+        .init(outcome: .started,
+              reason: nil,
+              triggerDiagnostic: triggerDiagnostic,
+              status: .init(owner: owner))
+    }
+
+    @MainActor
+    static func failed(_ error: NativeDirectCallRoomFlowOwnerError,
+                       owner: NativeDirectCallRoomFlowOwning,
+                       triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic) -> Self {
+        let reason = NativeDirectCallProductionStartBlockedReason(error, operation: .listenerStart)
+        let outcome: NativeDirectCallProductionStartOutcome = reason.isEngineFailureOutcome ? .engineFailure : .blocked
+        return .init(outcome: outcome,
+                     reason: reason,
+                     triggerDiagnostic: triggerDiagnostic,
+                     status: .init(owner: owner))
+    }
+
+    var description: String {
+        let fields = [
+            "outcome: \(outcome)",
+            "reason: \(reason?.description ?? "none")",
+            "triggerDiagnostic: \(triggerDiagnostic)",
+            "status: \(status)"
+        ]
+        return "NativeDirectCallProductionStartListenerResult(\(fields.joined(separator: ", ")))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
 struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     let productionOwnerAvailable: Bool
     let productionListenerStarted: Bool

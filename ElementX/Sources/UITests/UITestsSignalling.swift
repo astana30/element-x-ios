@@ -70,6 +70,10 @@ enum UITestsSignal: Codable, Equatable {
     case nativeDirectCallProductionStartOutgoingAudioCall(NativeDirectCallProductionStartOutgoingAudioCallRequest)
     /// Reports a redacted DEBUG-only internal production native direct-call start command result.
     case nativeDirectCallProductionStartOutgoingAudioCallResult(NativeDirectCallProductionStartOutgoingAudioCallResult)
+    /// Requests a DEBUG-only internal production native direct-call listener start command for the active room.
+    case nativeDirectCallProductionStartListener(NativeDirectCallProductionStartListenerRequest)
+    /// Reports a redacted DEBUG-only internal production native direct-call listener start command result.
+    case nativeDirectCallProductionStartListenerResult(NativeDirectCallProductionStartListenerResult)
     /// Requests redacted production native direct-call owner status for the active room.
     case nativeDirectCallProductionStatus(NativeDirectCallProductionStatusRequest)
     /// Reports redacted production native direct-call owner status for the active room.
@@ -284,6 +288,34 @@ enum UITestsSignal: Codable, Equatable {
             self.reason = reason.flatMap { UITestsSignalling.sanitizedIdentifier($0) }
             self.triggerDiagnostic = triggerDiagnostic
             self.sessionSummary = sessionSummary
+        }
+    }
+
+    struct NativeDirectCallProductionStartListenerRequest: Codable, Equatable {
+        let correlationID: String?
+
+        init(correlationID: String? = nil) {
+            self.correlationID = UITestsSignalling.sanitizedIdentifier(correlationID)
+        }
+    }
+
+    struct NativeDirectCallProductionStartListenerResult: Codable, Equatable {
+        let correlationID: String?
+        let outcome: NativeDirectCallProductionStartResultOutcome
+        let reason: String?
+        let triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnosticPayload
+        let status: NativeDirectCallProductionStatusPayload
+
+        init(correlationID: String? = nil,
+             outcome: NativeDirectCallProductionStartResultOutcome,
+             reason: String?,
+             triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnosticPayload,
+             status: NativeDirectCallProductionStatusPayload) {
+            self.correlationID = UITestsSignalling.sanitizedIdentifier(correlationID)
+            self.outcome = outcome
+            self.reason = reason.flatMap { UITestsSignalling.sanitizedIdentifier($0) }
+            self.triggerDiagnostic = triggerDiagnostic
+            self.status = status
         }
     }
 
@@ -713,6 +745,16 @@ extension UITestsSignal.NativeDirectCallProductionStartOutgoingAudioCallResult {
                   reason: result.reason?.description,
                   triggerDiagnostic: .init(result.triggerDiagnostic),
                   sessionSummary: result.sessionSummary.map { .init($0) })
+    }
+}
+
+extension UITestsSignal.NativeDirectCallProductionStartListenerResult {
+    init(correlationID: String? = nil, _ result: NativeDirectCallProductionStartListenerResult) {
+        self.init(correlationID: correlationID,
+                  outcome: .init(result.outcome),
+                  reason: result.reason?.description,
+                  triggerDiagnostic: .init(result.triggerDiagnostic),
+                  status: .init(result.status))
     }
 }
 

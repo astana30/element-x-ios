@@ -930,6 +930,104 @@ final class RoomFlowCoordinatorTests {
     }
 
     @Test
+    func nativeDirectCallProductionStartListenerCreatesOwnerAndStartsOnlyListener() async throws {
+        let diagnosticOwner = NativeDirectCallRoomFlowOwnerSpy()
+        let productionOwner = NativeDirectCallRoomFlowOwnerSpy()
+        productionOwner.startResult = .success(nativeDirectCallComposition())
+        let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: enabledProductionActivationDiagnostic())
+        setupRoomFlowCoordinator(nativeDirectCallDiagnosticCommandConfiguration: .init(isEnabled: true)) { _ in
+            diagnosticOwner
+        } nativeDirectCallProductionActivationDryRunProviderFactory: { _ in
+            provider
+        } nativeDirectCallProductionRoomFlowOwnerFactory: { _ in
+            .owner(productionOwner)
+        }
+
+        try await process(route: .room(roomID: "1", via: []))
+        let result = await roomFlowCoordinator.nativeDirectCallProductionStartListener()
+        let status = roomFlowCoordinator.nativeDirectCallProductionStatus()
+        let diagnosticStatus = roomFlowCoordinator.nativeDirectCallDiagnosticStatus()
+
+        #expect(result.didStartListener)
+        #expect(result.outcome == .started)
+        #expect(result.reason == nil)
+        #expect(result.status.productionOwnerAvailable)
+        #expect(result.status.productionListenerStarted)
+        #expect(result.status.productionHasActiveSession == false)
+        #expect(status.productionOwnerAvailable)
+        #expect(status.productionListenerStarted)
+        #expect(status.productionHasActiveSession == false)
+        #expect(status.productionLastSignalSendAttempted == false)
+        #expect(diagnosticStatus.state == .idle)
+        #expect(diagnosticStatus.lastSignalSendAttempted == false)
+        #expect(diagnosticOwner.startCount == 0)
+        #expect(diagnosticOwner.outgoingCount == 0)
+        #expect(productionOwner.startCount == 1)
+        #expect(productionOwner.outgoingCount == 0)
+        #expect(provider.callCount == 1)
+    }
+
+    @Test
+    func nativeDirectCallProductionStartListenerBlocksWhenActivationDisabled() async throws {
+        let productionOwner = NativeDirectCallRoomFlowOwnerSpy()
+        let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: .disabled(.appRolloutDisabled))
+        setupRoomFlowCoordinator(nativeDirectCallProductionActivationDryRunProviderFactory: { _ in provider },
+                                 nativeDirectCallProductionRoomFlowOwnerFactory: { _ in .owner(productionOwner) })
+
+        try await process(route: .room(roomID: "1", via: []))
+        let result = await roomFlowCoordinator.nativeDirectCallProductionStartListener()
+
+        #expect(result.didStartListener == false)
+        #expect(result.outcome == .blocked)
+        #expect(result.reason == .appRolloutDisabled)
+        #expect(result.status.productionOwnerAvailable == false)
+        #expect(productionOwner.startCount == 0)
+        #expect(productionOwner.outgoingCount == 0)
+        #expect(provider.callCount == 1)
+    }
+
+    @Test
+    func nativeDirectCallProductionStartListenerReportsListenerFailure() async throws {
+        let productionOwner = NativeDirectCallRoomFlowOwnerSpy()
+        productionOwner.startResult = .failure(.trigger(.control(.noActiveCall)))
+        let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: enabledProductionActivationDiagnostic())
+        setupRoomFlowCoordinator(nativeDirectCallProductionActivationDryRunProviderFactory: { _ in provider },
+                                 nativeDirectCallProductionRoomFlowOwnerFactory: { _ in .owner(productionOwner) })
+
+        try await process(route: .room(roomID: "1", via: []))
+        let result = await roomFlowCoordinator.nativeDirectCallProductionStartListener()
+
+        #expect(result.didStartListener == false)
+        #expect(result.outcome == .blocked)
+        #expect(result.reason == .listenerStartFailed)
+        #expect(result.status.productionOwnerAvailable)
+        #expect(result.status.productionListenerStarted == false)
+        #expect(productionOwner.startCount == 1)
+        #expect(productionOwner.outgoingCount == 0)
+    }
+
+    @Test
+    func nativeDirectCallProductionStartListenerKeepsIncomingSessionVisible() async throws {
+        let productionOwner = NativeDirectCallRoomFlowOwnerSpy()
+        productionOwner.isListenerStarted = true
+        productionOwner.activeSession = directCallSession(direction: .incoming, state: .incomingRinging)
+        productionOwner.diagnosticSnapshot = .init(activeSessionPhase: .incomingRinging)
+        let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: enabledProductionActivationDiagnostic())
+        setupRoomFlowCoordinator(nativeDirectCallProductionActivationDryRunProviderFactory: { _ in provider },
+                                 nativeDirectCallProductionRoomFlowOwnerFactory: { _ in .owner(productionOwner) })
+
+        try await process(route: .room(roomID: "1", via: []))
+        let result = await roomFlowCoordinator.nativeDirectCallProductionStartListener()
+
+        #expect(result.didStartListener)
+        #expect(result.status.productionHasActiveSession)
+        #expect(result.status.productionSessionState == "incomingRinging")
+        #expect(result.status.productionEncryptionState == "ready")
+        #expect(productionOwner.startCount == 0)
+        #expect(productionOwner.outgoingCount == 0)
+    }
+
+    @Test
     func nativeDirectCallProductionStatusDoesNotCreateOwner() async throws {
         // swiftlint:disable trailing_closure
         setupRoomFlowCoordinator(nativeDirectCallProductionRoomFlowOwnerFactory: { _ in
@@ -1782,6 +1880,71 @@ final class RoomFlowCoordinatorTests {
     }
 
     @Test
+    func nativeDirectCallProductionStartListenerSignalEncodesRedactedResult() throws {
+        let request = UITestsSignal.NativeDirectCallProductionStartListenerRequest(correlationID: "call-A-1")
+        let status = UITestsSignal.NativeDirectCallProductionStatusPayload(productionOwnerAvailable: true,
+                                                                           productionListenerStarted: true,
+                                                                           productionHasActiveSession: false,
+                                                                           productionSessionState: "idle",
+                                                                           productionEncryptionState: "unknown",
+                                                                           productionLastSignalEventEmitted: nil,
+                                                                           productionLastSignalSendAttempted: false,
+                                                                           productionLastSignalSendSucceeded: nil,
+                                                                           productionLastSignalSendFailureReason: nil)
+        let result = UITestsSignal.NativeDirectCallProductionStartListenerResult(correlationID: "call-A-1",
+                                                                                 outcome: .started,
+                                                                                 reason: nil,
+                                                                                 triggerDiagnostic: .init(wouldStart: true,
+                                                                                                          enabled: true,
+                                                                                                          reason: nil,
+                                                                                                          capabilityPresent: true,
+                                                                                                          dependenciesReady: true,
+                                                                                                          roomEligible: true,
+                                                                                                          endpointAccepted: true,
+                                                                                                          peerTrustReady: true,
+                                                                                                          peerTrustReadiness: DirectCallPeerTrustReadiness.peerTrustReady.rawValue),
+                                                                                 status: status)
+        let requestSignal = UITestsSignal.nativeDirectCallProductionStartListener(request)
+        let resultSignal = UITestsSignal.nativeDirectCallProductionStartListenerResult(result)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+
+        let encodedRequest = try #require(String(data: encoder.encode(requestSignal), encoding: .utf8))
+        let encodedResult = try #require(String(data: encoder.encode(resultSignal), encoding: .utf8))
+
+        #expect(try JSONDecoder().decode(UITestsSignal.self, from: Data(encodedRequest.utf8)) == requestSignal)
+        #expect(try JSONDecoder().decode(UITestsSignal.self, from: Data(encodedResult.utf8)) == resultSignal)
+        #expect(encodedRequest.contains("nativeDirectCallProductionStartListener"))
+        #expect(encodedResult.contains("nativeDirectCallProductionStartListenerResult"))
+        #expect(encodedResult.contains("started"))
+        #expect(encodedResult.contains("productionListenerStarted"))
+        #expect(encodedResult.contains("productionLastSignalSendAttempted"))
+        #expect(encodedResult.contains("peerTrustReady"))
+        #expect(encodedResult.contains("peerTrustReadiness"))
+        #expect(result.correlationID == request.correlationID)
+
+        let forbiddenFragments = [
+            "debug" + "Info",
+            "original" + "JSON",
+            "original" + "Json",
+            "raw " + "JSON",
+            "encrypted_" + "payload",
+            "j" + "wt",
+            "raw " + "key",
+            "!room",
+            "@alice",
+            "peer-user",
+            "participant_" + "token",
+            "access_" + "token",
+            "matrix.example.com",
+            DirectCallProductionConfiguration.tokenEndpointPath
+        ]
+        for fragment in forbiddenFragments {
+            #expect((encodedRequest + encodedResult).localizedCaseInsensitiveContains(fragment) == false)
+        }
+    }
+
+    @Test
     func nativeDirectCallProductionStatusSignalEncodesRedactedResult() throws {
         let request = UITestsSignal.NativeDirectCallProductionStatusRequest(correlationID: "call-A-1")
         let status = UITestsSignal.NativeDirectCallProductionStatusPayload(productionOwnerAvailable: true,
@@ -2193,6 +2356,19 @@ final class RoomFlowCoordinatorTests {
                           updatedAt: .now,
                           state: state,
                           encryptionState: .ready)
+    }
+
+    private func nativeDirectCallComposition() -> NativeDirectCallComposition {
+        let engine = DirectCallEngine(ownUserID: "hi@bob") { _ in
+            "@alice:example.com"
+        }
+        let signalBridge = DirectCallEngineSignalBridge(ownUserID: "hi@bob",
+                                                        engine: engine,
+                                                        signalTransport: InMemoryDirectCallSignalTransport())
+        return NativeDirectCallComposition(roomID: "room-1",
+                                           peerUserID: "@alice:example.com",
+                                           engine: engine,
+                                           signalBridge: signalBridge)
     }
 }
 

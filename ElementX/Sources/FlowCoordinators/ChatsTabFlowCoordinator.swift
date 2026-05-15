@@ -170,6 +170,20 @@ class ChatsTabFlowCoordinator: FlowCoordinatorProtocol {
         return await roomFlowCoordinator.nativeDirectCallProductionStartOutgoingAudioCall(isProductionStartEnabled: isProductionStartEnabled)
     }
 
+    func nativeDirectCallProductionStartListener() async -> NativeDirectCallProductionStartListenerResult {
+        guard nativeDirectCallDiagnosticRuntimeGate() else {
+            return .blocked(NativeDirectCallProductionStartBlockedReason.diagnosticsUnavailable,
+                            triggerDiagnostic: .blocked(.roomUnavailable))
+        }
+
+        guard let roomFlowCoordinator else {
+            return .blocked(NativeDirectCallProductionStartBlockedReason.roomUnavailable,
+                            triggerDiagnostic: .blocked(.roomUnavailable))
+        }
+
+        return await roomFlowCoordinator.nativeDirectCallProductionStartListener()
+    }
+
     func nativeDirectCallProductionStatus() -> NativeDirectCallProductionStatus {
         guard nativeDirectCallDiagnosticRuntimeGate(),
               let roomFlowCoordinator else {
