@@ -54,8 +54,13 @@ private final class WeakSessionVerificationControllerProxy: SessionVerificationC
     }
 }
 
-class SessionVerificationControllerProxy: SessionVerificationControllerProxyProtocol {
+class SessionVerificationControllerProxy: SessionVerificationControllerProxyProtocol, SessionVerificationControllerDiagnosticProviding {
     private let sessionVerificationController: SessionVerificationController
+    private var currentDiagnosticSnapshot = SessionVerificationControllerDiagnosticSnapshot()
+
+    var diagnosticSnapshot: SessionVerificationControllerDiagnosticSnapshot {
+        currentDiagnosticSnapshot
+    }
     
     init(sessionVerificationController: SessionVerificationController) {
         self.sessionVerificationController = sessionVerificationController
@@ -73,9 +78,13 @@ class SessionVerificationControllerProxy: SessionVerificationControllerProxyProt
         
         do {
             try await sessionVerificationController.acknowledgeVerificationRequest(senderId: details.senderProfile.userID, flowId: details.flowID)
+            updateDiagnosticSnapshot(flowState: .requestAcknowledged, verificationRequestPending: true)
             return .success(())
         } catch {
             MXLog.error("Failed requesting session verification with error: \(error)")
+            updateDiagnosticSnapshot(flowState: .failed,
+                                     verificationRequestPending: false,
+                                     errorReason: .acknowledgeFailed)
             return .failure(.failedAcknowledgingVerificationRequest)
         }
     }
@@ -85,9 +94,13 @@ class SessionVerificationControllerProxy: SessionVerificationControllerProxyProt
         
         do {
             try await sessionVerificationController.acceptVerificationRequest()
+            updateDiagnosticSnapshot(flowState: .requestAccepted, verificationRequestPending: true)
             return .success(())
         } catch {
             MXLog.error("Failed requesting session verification with error: \(error)")
+            updateDiagnosticSnapshot(flowState: .failed,
+                                     verificationRequestPending: false,
+                                     errorReason: .acceptFailed)
             return .failure(.failedAcceptingVerificationRequest)
         }
     }
@@ -97,9 +110,13 @@ class SessionVerificationControllerProxy: SessionVerificationControllerProxyProt
         
         do {
             try await sessionVerificationController.requestDeviceVerification()
+            updateDiagnosticSnapshot(flowState: .verificationRequested, verificationRequestPending: true)
             return .success(())
         } catch {
             MXLog.error("Failed requesting device verification with error: \(error)")
+            updateDiagnosticSnapshot(flowState: .failed,
+                                     verificationRequestPending: false,
+                                     errorReason: .requestFailed)
             return .failure(.failedRequestingVerification)
         }
     }
@@ -109,9 +126,13 @@ class SessionVerificationControllerProxy: SessionVerificationControllerProxyProt
         
         do {
             try await sessionVerificationController.requestUserVerification(userId: userID)
+            updateDiagnosticSnapshot(flowState: .verificationRequested, verificationRequestPending: true)
             return .success(())
         } catch {
             MXLog.error("Failed requesting verification for user \(userID) with error: \(error)")
+            updateDiagnosticSnapshot(flowState: .failed,
+                                     verificationRequestPending: false,
+                                     errorReason: .requestFailed)
             return .failure(.failedRequestingVerification)
         }
     }
@@ -121,9 +142,13 @@ class SessionVerificationControllerProxy: SessionVerificationControllerProxyProt
         
         do {
             try await sessionVerificationController.startSasVerification()
+            updateDiagnosticSnapshot(flowState: .sasStarted, verificationRequestPending: true)
             return .success(())
         } catch {
             MXLog.error("Failed starting SAS verification with error: \(error)")
+            updateDiagnosticSnapshot(flowState: .failed,
+                                     verificationRequestPending: false,
+                                     errorReason: .startSASFailed)
             return .failure(.failedStartingSasVerification)
         }
     }
@@ -136,6 +161,9 @@ class SessionVerificationControllerProxy: SessionVerificationControllerProxyProt
             return .success(())
         } catch {
             MXLog.error("Failed approving verification with error: \(error)")
+            updateDiagnosticSnapshot(flowState: .failed,
+                                     verificationRequestPending: false,
+                                     errorReason: .approveFailed)
             return .failure(.failedApprovingVerification)
         }
     }
@@ -145,9 +173,13 @@ class SessionVerificationControllerProxy: SessionVerificationControllerProxyProt
         
         do {
             try await sessionVerificationController.declineVerification()
+            updateDiagnosticSnapshot(flowState: .cancelled, verificationRequestPending: false)
             return .success(())
         } catch {
             MXLog.error("Failed declining verification with error: \(error)")
+            updateDiagnosticSnapshot(flowState: .failed,
+                                     verificationRequestPending: false,
+                                     errorReason: .declineFailed)
             return .failure(.failedDecliningVerification)
         }
     }
@@ -157,17 +189,30 @@ class SessionVerificationControllerProxy: SessionVerificationControllerProxyProt
         
         do {
             try await sessionVerificationController.cancelVerification()
+            updateDiagnosticSnapshot(flowState: .cancelled, verificationRequestPending: false)
             return .success(())
         } catch {
             MXLog.error("Failed cancelling verification with error: \(error)")
+            updateDiagnosticSnapshot(flowState: .failed,
+                                     verificationRequestPending: false,
+                                     errorReason: .cancelFailed)
             return .failure(.failedCancellingVerification)
         }
     }
     
     // MARK: - Private
+
+    private func updateDiagnosticSnapshot(flowState: SessionVerificationControllerDiagnosticFlowState,
+                                          verificationRequestPending: Bool,
+                                          errorReason: SessionVerificationControllerDiagnosticErrorReason = .none) {
+        currentDiagnosticSnapshot = .init(verificationRequestPending: verificationRequestPending,
+                                          verificationFlowState: flowState,
+                                          lastVerificationErrorReason: errorReason)
+    }
     
     fileprivate func didReceiveVerificationRequest(details: MatrixRustSDK.SessionVerificationRequestDetails) {
-        MXLog.info("Received verification request \(details)")
+        MXLog.info("Received verification request")
+        updateDiagnosticSnapshot(flowState: .requestReceived, verificationRequestPending: true)
         
         let details = SessionVerificationRequestDetails(senderProfile: UserProfileProxy(sdkUserProfile: details.senderProfile),
                                                         flowID: details.flowId,
@@ -180,18 +225,21 @@ class SessionVerificationControllerProxy: SessionVerificationControllerProxyProt
     
     fileprivate func didAcceptVerificationRequest() {
         MXLog.info("Accepted verification request")
+        updateDiagnosticSnapshot(flowState: .requestAccepted, verificationRequestPending: true)
         
         actions.send(.acceptedVerificationRequest)
     }
     
     fileprivate func didStartSasVerification() {
         MXLog.info("Started SAS verification")
+        updateDiagnosticSnapshot(flowState: .sasStarted, verificationRequestPending: true)
         
         actions.send(.startedSasVerification)
     }
     
     fileprivate func didReceiveData(_ data: [MatrixRustSDK.SessionVerificationEmoji]) {
         MXLog.info("Received verification data")
+        updateDiagnosticSnapshot(flowState: .emojiReceived, verificationRequestPending: true)
         
         actions.send(.receivedVerificationData(data.map { emoji in
             SessionVerificationEmoji(symbol: emoji.symbol(), description: emoji.description())
@@ -199,14 +247,19 @@ class SessionVerificationControllerProxy: SessionVerificationControllerProxyProt
     }
     
     fileprivate func didFail() {
+        updateDiagnosticSnapshot(flowState: .failed,
+                                 verificationRequestPending: false,
+                                 errorReason: .callbackFailed)
         actions.send(.failed)
     }
     
     fileprivate func didFinish() {
+        updateDiagnosticSnapshot(flowState: .finished, verificationRequestPending: false)
         actions.send(.finished)
     }
     
     fileprivate func didCancel() {
+        updateDiagnosticSnapshot(flowState: .cancelled, verificationRequestPending: false)
         actions.send(.cancelled)
     }
 }

@@ -240,6 +240,15 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
         return chatsTabFlowCoordinator.nativeDirectCallDiagnosticStatus()
     }
 
+    func nativeDirectCallPeerTrustDiagnostic() async -> DirectCallPeerTrustDiagnostic {
+        guard nativeDirectCallDiagnosticRuntimeGate(),
+              navigationTabCoordinator.selectedTab == .chats else {
+            return .unavailable
+        }
+
+        return await chatsTabFlowCoordinator.nativeDirectCallPeerTrustDiagnostic()
+    }
+
     func nativeDirectCallProductionActivationDryRunDiagnostic() async -> DirectCallProductionActivationDryRunDiagnostic {
         guard nativeDirectCallDiagnosticRuntimeGate(),
               navigationTabCoordinator.selectedTab == .chats else {

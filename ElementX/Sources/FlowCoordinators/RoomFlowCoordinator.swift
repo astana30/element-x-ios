@@ -423,6 +423,18 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
     func nativeDirectCallDiagnosticStatus() -> NativeDirectCallRoomDiagnosticStatus {
         makeNativeDirectCallDiagnosticCommandRouter().status()
     }
+
+    func nativeDirectCallPeerTrustDiagnostic() async -> DirectCallPeerTrustDiagnostic {
+        guard let roomProxy else {
+            return .unavailable
+        }
+
+        let peerUserID = JoinedRoomProxy.nativeDirectCallPeerUserID(ownUserID: roomProxy.ownUserID,
+                                                                    members: roomProxy.membersPublisher.value)
+        let provider = UserIdentityDirectCallPeerTrustDiagnosticsProvider(clientProxy: userSession.clientProxy,
+                                                                          peerUserID: peerUserID)
+        return await provider.directCallPeerTrustDiagnostic()
+    }
     #endif
 
     func nativeDirectCallProductionActivationDryRunDiagnostic() async -> DirectCallProductionActivationDryRunDiagnostic {

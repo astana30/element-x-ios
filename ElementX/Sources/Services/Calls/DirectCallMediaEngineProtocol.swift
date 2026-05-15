@@ -832,6 +832,166 @@ struct UserIdentityDirectCallPeerTrustReadinessProvider: DirectCallPeerTrustRead
     }
 }
 
+struct DirectCallPeerTrustDiagnostic: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let ownUserIdentityAvailable: Bool
+    let ownSessionVerified: Bool
+    let crossSigningReady: Bool
+    let peerIdentityAvailable: Bool
+    let peerIdentityVerified: Bool
+    let peerTrustReadiness: DirectCallPeerTrustReadiness
+    let verificationRequestPending: Bool
+    let verificationFlowState: SessionVerificationControllerDiagnosticFlowState
+    let lastVerificationErrorReason: SessionVerificationControllerDiagnosticErrorReason
+
+    init(ownUserIdentityAvailable: Bool = false,
+         ownSessionVerified: Bool = false,
+         crossSigningReady: Bool = false,
+         peerIdentityAvailable: Bool = false,
+         peerIdentityVerified: Bool = false,
+         peerTrustReadiness: DirectCallPeerTrustReadiness = .peerTrustUnavailable,
+         verificationSnapshot: SessionVerificationControllerDiagnosticSnapshot = .unavailable) {
+        self.ownUserIdentityAvailable = ownUserIdentityAvailable
+        self.ownSessionVerified = ownSessionVerified
+        self.crossSigningReady = crossSigningReady
+        self.peerIdentityAvailable = peerIdentityAvailable
+        self.peerIdentityVerified = peerIdentityVerified
+        self.peerTrustReadiness = peerTrustReadiness
+        verificationRequestPending = verificationSnapshot.verificationRequestPending
+        verificationFlowState = verificationSnapshot.verificationFlowState
+        lastVerificationErrorReason = verificationSnapshot.lastVerificationErrorReason
+    }
+
+    var peerTrustReady: Bool {
+        peerTrustReadiness == .peerTrustReady
+    }
+
+    static let unavailable = Self()
+
+    var description: String {
+        "DirectCallPeerTrustDiagnostic(" + [
+            "ownUserIdentityAvailable: \(ownUserIdentityAvailable)",
+            "ownSessionVerified: \(ownSessionVerified)",
+            "crossSigningReady: \(crossSigningReady)",
+            "peerIdentityAvailable: \(peerIdentityAvailable)",
+            "peerIdentityVerified: \(peerIdentityVerified)",
+            "peerTrustReady: \(peerTrustReady)",
+            "peerTrustReadiness: \(peerTrustReadiness)",
+            "verificationRequestPending: \(verificationRequestPending)",
+            "verificationFlowState: \(verificationFlowState)",
+            "lastVerificationErrorReason: \(lastVerificationErrorReason)"
+        ].joined(separator: ", ") + ")"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+@MainActor
+protocol DirectCallPeerTrustDiagnosing {
+    func directCallPeerTrustDiagnostic() async -> DirectCallPeerTrustDiagnostic
+}
+
+@MainActor
+struct FailClosedDirectCallPeerTrustDiagnosticsProvider: DirectCallPeerTrustDiagnosing, CustomStringConvertible, CustomDebugStringConvertible {
+    func directCallPeerTrustDiagnostic() async -> DirectCallPeerTrustDiagnostic {
+        .unavailable
+    }
+
+    nonisolated var description: String {
+        "FailClosedDirectCallPeerTrustDiagnosticsProvider(status: failClosed)"
+    }
+
+    nonisolated var debugDescription: String {
+        description
+    }
+}
+
+@MainActor
+struct UserIdentityDirectCallPeerTrustDiagnosticsProvider: DirectCallPeerTrustDiagnosing, CustomStringConvertible, CustomDebugStringConvertible {
+    private let clientProxy: ClientProxyProtocol?
+    private let peerUserID: String?
+
+    init(clientProxy: ClientProxyProtocol?, peerUserID: String?) {
+        self.clientProxy = clientProxy
+        self.peerUserID = peerUserID
+    }
+
+    func directCallPeerTrustDiagnostic() async -> DirectCallPeerTrustDiagnostic {
+        let verificationSnapshot = (clientProxy?.sessionVerificationController as? SessionVerificationControllerDiagnosticProviding)?.diagnosticSnapshot ?? .unavailable
+
+        guard let clientProxy else {
+            return .init(verificationSnapshot: verificationSnapshot)
+        }
+
+        let ownSessionVerified = clientProxy.verificationStatePublisher.value == .verified
+        let ownUserIdentityAvailable = await userIdentityAvailable(userID: clientProxy.userID, clientProxy: clientProxy)
+        let crossSigningReady = ownUserIdentityAvailable && ownSessionVerified
+
+        guard let peerUserID,
+              !peerUserID.isEmpty,
+              peerUserID != clientProxy.userID else {
+            return .init(ownUserIdentityAvailable: ownUserIdentityAvailable,
+                         ownSessionVerified: ownSessionVerified,
+                         crossSigningReady: crossSigningReady,
+                         verificationSnapshot: verificationSnapshot)
+        }
+
+        switch await clientProxy.userIdentity(for: peerUserID, fallBackToServer: true) {
+        case .success(let identity):
+            guard let identity else {
+                return .init(ownUserIdentityAvailable: ownUserIdentityAvailable,
+                             ownSessionVerified: ownSessionVerified,
+                             crossSigningReady: crossSigningReady,
+                             peerTrustReadiness: .crossSigningUnavailable,
+                             verificationSnapshot: verificationSnapshot)
+            }
+
+            let peerIdentityVerified = identity.verificationState == .verified
+            let readiness: DirectCallPeerTrustReadiness = switch identity.verificationState {
+            case .verified:
+                .peerTrustReady
+            case .notVerified, .verificationViolation:
+                .unverifiedDevice
+            }
+
+            return .init(ownUserIdentityAvailable: ownUserIdentityAvailable,
+                         ownSessionVerified: ownSessionVerified,
+                         crossSigningReady: crossSigningReady,
+                         peerIdentityAvailable: true,
+                         peerIdentityVerified: peerIdentityVerified,
+                         peerTrustReadiness: readiness,
+                         verificationSnapshot: verificationSnapshot)
+        case .failure:
+            return .init(ownUserIdentityAvailable: ownUserIdentityAvailable,
+                         ownSessionVerified: ownSessionVerified,
+                         crossSigningReady: crossSigningReady,
+                         verificationSnapshot: verificationSnapshot)
+        }
+    }
+
+    nonisolated var description: String {
+        "UserIdentityDirectCallPeerTrustDiagnosticsProvider(peer: <redacted>)"
+    }
+
+    nonisolated var debugDescription: String {
+        description
+    }
+
+    private func userIdentityAvailable(userID: String, clientProxy: ClientProxyProtocol) async -> Bool {
+        guard !userID.isEmpty else {
+            return false
+        }
+
+        return switch await clientProxy.userIdentity(for: userID, fallBackToServer: true) {
+        case .success(let identity):
+            identity != nil
+        case .failure:
+            false
+        }
+    }
+}
+
 enum DirectCallProductionActivationDisabledReason: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     case appRolloutDisabled
     case roomUnavailable

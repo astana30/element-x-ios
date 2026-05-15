@@ -5,6 +5,7 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
+import Combine
 @testable import ElementX
 import Foundation
 import MatrixRustSDK
@@ -1220,6 +1221,86 @@ final class DirectCallPeerTrustReadinessTests {
                                                                                    peerUserID: nil)
         #expect(await missingPeerProvider.directCallPeerTrustReadiness() == .peerTrustUnavailable)
     }
+
+    @Test
+    func peerTrustDiagnosticsProviderFailsClosedWithoutClient() async {
+        let provider = UserIdentityDirectCallPeerTrustDiagnosticsProvider(clientProxy: nil,
+                                                                          peerUserID: peerUserID)
+
+        let diagnostic = await provider.directCallPeerTrustDiagnostic()
+
+        #expect(diagnostic.ownUserIdentityAvailable == false)
+        #expect(diagnostic.ownSessionVerified == false)
+        #expect(diagnostic.crossSigningReady == false)
+        #expect(diagnostic.peerIdentityAvailable == false)
+        #expect(diagnostic.peerTrustReadiness == .peerTrustUnavailable)
+        #expect(diagnostic.verificationFlowState == .unavailable)
+        #expect(String(describing: diagnostic).contains(peerUserID) == false)
+    }
+
+    @Test
+    func peerTrustDiagnosticsProviderMapsUnverifiedIdentityAndVerificationSnapshot() async {
+        let clientProxy = ClientProxyMock(.init(userID: ownUserID))
+        clientProxy.verificationStatePublisher = .init(.verified)
+        clientProxy.sessionVerificationController = DirectCallTrustDiagnosticsSessionVerificationController(snapshot: .init(verificationRequestPending: true,
+                                                                                                                            verificationFlowState: .requestAccepted,
+                                                                                                                            lastVerificationErrorReason: .none))
+        clientProxy.userIdentityForFallBackToServerClosure = { userID, _ in
+            if userID == self.ownUserID {
+                return .success(UserIdentityProxyMock(configuration: .init(verificationState: .verified)))
+            }
+
+            if userID == self.peerUserID {
+                return .success(UserIdentityProxyMock(configuration: .init(verificationState: .notVerified)))
+            }
+
+            return .success(nil)
+        }
+        let provider = UserIdentityDirectCallPeerTrustDiagnosticsProvider(clientProxy: clientProxy,
+                                                                          peerUserID: peerUserID)
+
+        let diagnostic = await provider.directCallPeerTrustDiagnostic()
+
+        #expect(diagnostic.ownUserIdentityAvailable)
+        #expect(diagnostic.ownSessionVerified)
+        #expect(diagnostic.crossSigningReady)
+        #expect(diagnostic.peerIdentityAvailable)
+        #expect(diagnostic.peerIdentityVerified == false)
+        #expect(diagnostic.peerTrustReady == false)
+        #expect(diagnostic.peerTrustReadiness == .unverifiedDevice)
+        #expect(diagnostic.verificationRequestPending)
+        #expect(diagnostic.verificationFlowState == .requestAccepted)
+        #expect(diagnostic.lastVerificationErrorReason == .none)
+        #expect(String(describing: diagnostic).contains(peerUserID) == false)
+        #expect(String(describing: diagnostic).contains(ownUserID) == false)
+    }
+
+    @Test
+    func peerTrustDiagnosticsProviderMapsVerifiedIdentityAndRedactedVerificationError() async {
+        let clientProxy = ClientProxyMock(.init(userID: ownUserID))
+        clientProxy.verificationStatePublisher = .init(.verified)
+        clientProxy.sessionVerificationController = DirectCallTrustDiagnosticsSessionVerificationController(snapshot: .init(verificationRequestPending: false,
+                                                                                                                            verificationFlowState: .failed,
+                                                                                                                            lastVerificationErrorReason: .startSASFailed))
+        clientProxy.userIdentityForFallBackToServerClosure = { userID, _ in
+            guard userID == self.ownUserID || userID == self.peerUserID else {
+                return .success(nil)
+            }
+
+            return .success(UserIdentityProxyMock(configuration: .init(verificationState: .verified)))
+        }
+        let provider = UserIdentityDirectCallPeerTrustDiagnosticsProvider(clientProxy: clientProxy,
+                                                                          peerUserID: peerUserID)
+
+        let diagnostic = await provider.directCallPeerTrustDiagnostic()
+
+        #expect(diagnostic.peerTrustReady)
+        #expect(diagnostic.peerTrustReadiness == .peerTrustReady)
+        #expect(diagnostic.peerIdentityVerified)
+        #expect(diagnostic.verificationFlowState == .failed)
+        #expect(diagnostic.lastVerificationErrorReason == .startSASFailed)
+        #expect(String(describing: diagnostic).contains(peerUserID) == false)
+    }
 }
 
 @MainActor
@@ -1341,6 +1422,47 @@ private final class MatrixSDKDirectCallMediaKeyEnvelopeWrapperSpy: MatrixSDKDire
 
 private enum MatrixSDKDirectCallMediaKeyEnvelopeWrapperSpyError: Error {
     case genericFailure
+}
+
+private final class DirectCallTrustDiagnosticsSessionVerificationController: SessionVerificationControllerProxyProtocol, SessionVerificationControllerDiagnosticProviding {
+    let actions = PassthroughSubject<SessionVerificationControllerProxyAction, Never>()
+    let diagnosticSnapshot: SessionVerificationControllerDiagnosticSnapshot
+
+    init(snapshot: SessionVerificationControllerDiagnosticSnapshot) {
+        diagnosticSnapshot = snapshot
+    }
+
+    func acknowledgeVerificationRequest(details: ElementX.SessionVerificationRequestDetails) async -> Result<Void, SessionVerificationControllerProxyError> {
+        .success(())
+    }
+
+    func acceptVerificationRequest() async -> Result<Void, SessionVerificationControllerProxyError> {
+        .success(())
+    }
+
+    func requestDeviceVerification() async -> Result<Void, SessionVerificationControllerProxyError> {
+        .success(())
+    }
+
+    func requestUserVerification(_ userID: String) async -> Result<Void, SessionVerificationControllerProxyError> {
+        .success(())
+    }
+
+    func startSasVerification() async -> Result<Void, SessionVerificationControllerProxyError> {
+        .success(())
+    }
+
+    func approveVerification() async -> Result<Void, SessionVerificationControllerProxyError> {
+        .success(())
+    }
+
+    func declineVerification() async -> Result<Void, SessionVerificationControllerProxyError> {
+        .success(())
+    }
+
+    func cancelVerification() async -> Result<Void, SessionVerificationControllerProxyError> {
+        .success(())
+    }
 }
 
 @MainActor

@@ -885,6 +885,16 @@ class MockScreen: Identifiable {
 
                             let result = UITestsSignal.NativeDirectCallDiagnosticStatusResult(correlationID: request.correlationID, statusResult)
                             try? client?.send(.nativeDirectCallDiagnosticStatusResult(result))
+                        case .nativeDirectCallTrustDiagnostics(let request):
+                            let diagnostic: DirectCallPeerTrustDiagnostic
+                            if let flowCoordinator {
+                                diagnostic = await flowCoordinator.nativeDirectCallPeerTrustDiagnostic()
+                            } else {
+                                diagnostic = .unavailable
+                            }
+
+                            let result = UITestsSignal.NativeDirectCallTrustDiagnosticsResult(correlationID: request.correlationID, diagnostic)
+                            try? client?.send(.nativeDirectCallTrustDiagnosticsResult(result))
                         case .nativeDirectCallProductionActivationDryRun(let request):
                             let diagnostic: DirectCallProductionActivationDryRunDiagnostic
                             if let flowCoordinator {

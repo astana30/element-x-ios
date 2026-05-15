@@ -1200,6 +1200,45 @@ final class RoomFlowCoordinatorTests {
     }
 
     @Test
+    func nativeDirectCallTrustDiagnosticFailsClosedWithoutActiveRoom() async {
+        setupRoomFlowCoordinator()
+
+        let diagnostic = await roomFlowCoordinator.nativeDirectCallPeerTrustDiagnostic()
+
+        #expect(diagnostic.peerTrustReadiness == .peerTrustUnavailable)
+        #expect(diagnostic.verificationFlowState == .unavailable)
+    }
+
+    @Test
+    func nativeDirectCallTrustDiagnosticUsesActiveRoomPeerWithoutStartingCalls() async throws {
+        setupRoomFlowCoordinator()
+        let roomProxy = makeEligibleNativeDirectCallRoomProxy()
+        clientProxy.roomForIdentifierClosure = { _ in
+            .joined(roomProxy)
+        }
+        clientProxy.verificationStatePublisher = .init(.verified)
+        clientProxy.userIdentityForFallBackToServerClosure = { userID, _ in
+            guard userID == self.clientProxy.userID || userID == RoomMemberProxyMock.mockBob.userID else {
+                return .success(nil)
+            }
+
+            return .success(UserIdentityProxyMock(configuration: .init(verificationState: .verified)))
+        }
+
+        try await process(route: .room(roomID: "1", via: []))
+        let diagnostic = await roomFlowCoordinator.nativeDirectCallPeerTrustDiagnostic()
+
+        #expect(diagnostic.ownUserIdentityAvailable)
+        #expect(diagnostic.ownSessionVerified)
+        #expect(diagnostic.crossSigningReady)
+        #expect(diagnostic.peerIdentityAvailable)
+        #expect(diagnostic.peerIdentityVerified)
+        #expect(diagnostic.peerTrustReady)
+        #expect(diagnostic.peerTrustReadiness == .peerTrustReady)
+        #expect(diagnostic.verificationFlowState == .unavailable)
+    }
+
+    @Test
     func nativeDirectCallDiagnosticCommandEntryDelegatesExplicitCommandsOnly() async throws {
         let owner = NativeDirectCallRoomFlowOwnerSpy()
         let session = directCallSession()
@@ -1401,6 +1440,62 @@ final class RoomFlowCoordinatorTests {
             + encodedFailureResult
             + encodedStatus
             + encodedStatusResult
+        for fragment in forbiddenFragments {
+            #expect(combinedSignals.localizedCaseInsensitiveContains(fragment) == false)
+        }
+    }
+
+    @Test
+    func nativeDirectCallTrustDiagnosticsSignalEncodesRedactedResult() throws {
+        let request = UITestsSignal.NativeDirectCallTrustDiagnosticsRequest(correlationID: "call-A-1")
+        let result = UITestsSignal.NativeDirectCallTrustDiagnosticsResult(correlationID: "call-A-1",
+                                                                          diagnostic: .init(ownUserIdentityAvailable: true,
+                                                                                            ownSessionVerified: false,
+                                                                                            crossSigningReady: false,
+                                                                                            peerIdentityAvailable: true,
+                                                                                            peerIdentityVerified: false,
+                                                                                            peerTrustReady: false,
+                                                                                            peerTrustReadiness: "unverifiedDevice",
+                                                                                            verificationRequestPending: true,
+                                                                                            verificationFlowState: "requestAccepted",
+                                                                                            lastVerificationErrorReason: "none"))
+        let requestSignal = UITestsSignal.nativeDirectCallTrustDiagnostics(request)
+        let resultSignal = UITestsSignal.nativeDirectCallTrustDiagnosticsResult(result)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+
+        let encodedRequest = try #require(String(data: encoder.encode(requestSignal), encoding: .utf8))
+        let encodedResult = try #require(String(data: encoder.encode(resultSignal), encoding: .utf8))
+
+        #expect(try JSONDecoder().decode(UITestsSignal.self, from: Data(encodedRequest.utf8)) == requestSignal)
+        #expect(try JSONDecoder().decode(UITestsSignal.self, from: Data(encodedResult.utf8)) == resultSignal)
+        #expect(encodedRequest.contains("nativeDirectCallTrustDiagnostics"))
+        #expect(encodedResult.contains("nativeDirectCallTrustDiagnosticsResult"))
+        #expect(encodedResult.contains("ownUserIdentityAvailable"))
+        #expect(encodedResult.contains("ownSessionVerified"))
+        #expect(encodedResult.contains("crossSigningReady"))
+        #expect(encodedResult.contains("peerIdentityAvailable"))
+        #expect(encodedResult.contains("peerIdentityVerified"))
+        #expect(encodedResult.contains("peerTrustReadiness"))
+        #expect(encodedResult.contains("verificationRequestPending"))
+        #expect(encodedResult.contains("verificationFlowState"))
+        #expect(encodedResult.contains("lastVerificationErrorReason"))
+        #expect(result.correlationID == request.correlationID)
+
+        let forbiddenFragments = [
+            "@alice",
+            "@bob",
+            "DEVICE-",
+            "debug" + "Info",
+            "original" + "JSON",
+            "original" + "Json",
+            "raw " + "JSON",
+            "encrypted_" + "payload",
+            "to" + "ken",
+            "j" + "wt",
+            "raw " + "key"
+        ]
+        let combinedSignals = encodedRequest + encodedResult
         for fragment in forbiddenFragments {
             #expect(combinedSignals.localizedCaseInsensitiveContains(fragment) == false)
         }

@@ -47,6 +47,7 @@ Usage:
   DRY_RUN=0 $SCRIPT_NAME launch A|B|both
   DRY_RUN=0 $SCRIPT_NAME send A|B <command>
   DRY_RUN=0 $SCRIPT_NAME status A|B
+  DRY_RUN=0 $SCRIPT_NAME trust-diagnostics A|B
   DRY_RUN=0 $SCRIPT_NAME production-activation-dry-run A|B
   DRY_RUN=0 $SCRIPT_NAME production-trigger-dry-run A|B
   DRY_RUN=0 $SCRIPT_NAME production-start-outgoing A|B
@@ -377,6 +378,39 @@ with open(file_path, "w", encoding="utf-8") as handle:
 PY
 }
 
+write_trust_diagnostics_request() {
+    local client="$1"
+    local correlation_id="$2"
+    local file
+    file="$(signal_file "$client")"
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        log "DRY_RUN: query-trust-diagnostics channel=$client correlationID=$correlation_id"
+        return
+    fi
+
+    python3 - "$file" "$correlation_id" <<'PY'
+import json
+import sys
+
+file_path, correlation_id = sys.argv[1:3]
+message = {
+    "mode": {
+        "tests": {}
+    },
+    "signal": {
+        "nativeDirectCallTrustDiagnostics": {
+            "_0": {
+                "correlationID": correlation_id,
+            }
+        }
+    }
+}
+with open(file_path, "w", encoding="utf-8") as handle:
+    json.dump(message, handle, sort_keys=True, separators=(",", ":"))
+PY
+}
+
 write_production_activation_dry_run_request() {
     local client="$1"
     local correlation_id="$2"
@@ -566,6 +600,24 @@ if expected_signal == "nativeDirectCallDiagnosticStatusResult":
             media_connect=str(status.get("mediaConnectAttempted", "unknown")).lower(),
             livekit_connect=str(status.get("liveKitClientConnectAttempted", "unknown")).lower(),
             media_failure=status.get("mediaFailureReason", "none"),
+        )
+    )
+    sys.exit(0)
+
+if expected_signal == "nativeDirectCallTrustDiagnosticsResult":
+    diagnostic = body.get("diagnostic", {})
+    print(
+        "ownUserIdentityAvailable={own_identity} ownSessionVerified={own_verified} crossSigningReady={cross_signing} peerIdentityAvailable={peer_identity} peerIdentityVerified={peer_verified} peerTrustReady={peer_trust_ready} peerTrustReadiness={peer_trust_readiness} verificationRequestPending={verification_pending} verificationFlowState={verification_state} lastVerificationErrorReason={verification_error}".format(
+            own_identity=str(diagnostic.get("ownUserIdentityAvailable", "unknown")).lower(),
+            own_verified=str(diagnostic.get("ownSessionVerified", "unknown")).lower(),
+            cross_signing=str(diagnostic.get("crossSigningReady", "unknown")).lower(),
+            peer_identity=str(diagnostic.get("peerIdentityAvailable", "unknown")).lower(),
+            peer_verified=str(diagnostic.get("peerIdentityVerified", "unknown")).lower(),
+            peer_trust_ready=str(diagnostic.get("peerTrustReady", "unknown")).lower(),
+            peer_trust_readiness=diagnostic.get("peerTrustReadiness") or "unknown",
+            verification_pending=str(diagnostic.get("verificationRequestPending", "unknown")).lower(),
+            verification_state=diagnostic.get("verificationFlowState") or "unknown",
+            verification_error=diagnostic.get("lastVerificationErrorReason") or "unknown",
         )
     )
     sys.exit(0)
@@ -914,6 +966,21 @@ query_status() {
     log "channel=$client command=status correlationID=$id $result"
 }
 
+query_trust_diagnostics() {
+    local client="$1"
+    local id
+    id="$(correlation_id "$client" trustDiagnostics)"
+    write_trust_diagnostics_request "$client" "$id"
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        return
+    fi
+
+    local result
+    result="$(wait_for_result "$client" nativeDirectCallTrustDiagnosticsResult "$id")"
+    log "channel=$client command=trustDiagnostics correlationID=$id $result"
+}
+
 query_production_activation_dry_run() {
     local client="$1"
     local id
@@ -1092,6 +1159,12 @@ main() {
             require_common_environment
             [[ $# -eq 2 ]] || fail "Usage: $SCRIPT_NAME status A|B"
             query_status "$2"
+            ;;
+        trust-diagnostics|trustDiagnostics)
+            require_host_tools
+            require_common_environment
+            [[ $# -eq 2 ]] || fail "Usage: $SCRIPT_NAME trust-diagnostics A|B"
+            query_trust_diagnostics "$2"
             ;;
         production-activation-dry-run|productionActivationDryRun)
             require_host_tools

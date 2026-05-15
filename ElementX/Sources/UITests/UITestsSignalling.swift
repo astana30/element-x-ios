@@ -50,6 +50,10 @@ enum UITestsSignal: Codable, Equatable {
     case nativeDirectCallDiagnosticStatus(NativeDirectCallDiagnosticStatusRequest)
     /// Reports redacted native direct-call diagnostic state.
     case nativeDirectCallDiagnosticStatusResult(NativeDirectCallDiagnosticStatusResult)
+    /// Requests redacted Matrix trust/verification diagnostics for the active direct-call room.
+    case nativeDirectCallTrustDiagnostics(NativeDirectCallTrustDiagnosticsRequest)
+    /// Reports redacted Matrix trust/verification diagnostics for the active direct-call room.
+    case nativeDirectCallTrustDiagnosticsResult(NativeDirectCallTrustDiagnosticsResult)
     /// Requests a redacted production native direct-call activation dry-run for the active room.
     case nativeDirectCallProductionActivationDryRun(NativeDirectCallProductionActivationDryRunRequest)
     /// Reports a redacted production native direct-call activation dry-run for the active room.
@@ -166,6 +170,24 @@ enum UITestsSignal: Codable, Equatable {
         init(correlationID: String? = nil, status: NativeDirectCallDiagnosticStatus) {
             self.correlationID = UITestsSignalling.sanitizedIdentifier(correlationID)
             self.status = status
+        }
+    }
+
+    struct NativeDirectCallTrustDiagnosticsRequest: Codable, Equatable {
+        let correlationID: String?
+
+        init(correlationID: String? = nil) {
+            self.correlationID = UITestsSignalling.sanitizedIdentifier(correlationID)
+        }
+    }
+
+    struct NativeDirectCallTrustDiagnosticsResult: Codable, Equatable {
+        let correlationID: String?
+        let diagnostic: NativeDirectCallTrustDiagnostic
+
+        init(correlationID: String? = nil, diagnostic: NativeDirectCallTrustDiagnostic) {
+            self.correlationID = UITestsSignalling.sanitizedIdentifier(correlationID)
+            self.diagnostic = diagnostic
         }
     }
 
@@ -288,6 +310,41 @@ enum UITestsSignal: Codable, Equatable {
             self.peerTrustReady = peerTrustReady
             self.peerTrustReadiness = UITestsSignalling.sanitizedIdentifier(peerTrustReadiness) ?? DirectCallPeerTrustReadiness.peerTrustUnavailable.rawValue
             self.keyWrapperSource = keyWrapperSource.flatMap { UITestsSignalling.sanitizedIdentifier($0) }
+        }
+    }
+
+    struct NativeDirectCallTrustDiagnostic: Codable, Equatable {
+        let ownUserIdentityAvailable: Bool
+        let ownSessionVerified: Bool
+        let crossSigningReady: Bool
+        let peerIdentityAvailable: Bool
+        let peerIdentityVerified: Bool
+        let peerTrustReady: Bool
+        let peerTrustReadiness: String
+        let verificationRequestPending: Bool
+        let verificationFlowState: String
+        let lastVerificationErrorReason: String
+
+        init(ownUserIdentityAvailable: Bool,
+             ownSessionVerified: Bool,
+             crossSigningReady: Bool,
+             peerIdentityAvailable: Bool,
+             peerIdentityVerified: Bool,
+             peerTrustReady: Bool,
+             peerTrustReadiness: String,
+             verificationRequestPending: Bool,
+             verificationFlowState: String,
+             lastVerificationErrorReason: String) {
+            self.ownUserIdentityAvailable = ownUserIdentityAvailable
+            self.ownSessionVerified = ownSessionVerified
+            self.crossSigningReady = crossSigningReady
+            self.peerIdentityAvailable = peerIdentityAvailable
+            self.peerIdentityVerified = peerIdentityVerified
+            self.peerTrustReady = peerTrustReady
+            self.peerTrustReadiness = UITestsSignalling.sanitizedIdentifier(peerTrustReadiness) ?? DirectCallPeerTrustReadiness.peerTrustUnavailable.rawValue
+            self.verificationRequestPending = verificationRequestPending
+            self.verificationFlowState = UITestsSignalling.sanitizedIdentifier(verificationFlowState) ?? SessionVerificationControllerDiagnosticFlowState.unavailable.rawValue
+            self.lastVerificationErrorReason = UITestsSignalling.sanitizedIdentifier(lastVerificationErrorReason) ?? SessionVerificationControllerDiagnosticErrorReason.unknown.rawValue
         }
     }
 
@@ -504,6 +561,13 @@ extension UITestsSignal.NativeDirectCallDiagnosticStatusResult {
     }
 }
 
+extension UITestsSignal.NativeDirectCallTrustDiagnosticsResult {
+    init(correlationID: String? = nil, _ diagnostic: DirectCallPeerTrustDiagnostic) {
+        self.init(correlationID: correlationID,
+                  diagnostic: .init(diagnostic))
+    }
+}
+
 extension UITestsSignal.NativeDirectCallProductionActivationDryRunResult {
     init(correlationID: String? = nil, _ diagnostic: DirectCallProductionActivationDryRunDiagnostic) {
         self.init(correlationID: correlationID,
@@ -562,6 +626,21 @@ extension UITestsSignal.NativeDirectCallProductionActivationDryRunDiagnostic {
                   peerTrustReady: diagnostic.isPeerTrustReady,
                   peerTrustReadiness: diagnostic.peerTrustReadiness.description,
                   keyWrapperSource: diagnostic.keyWrapperSource?.description)
+    }
+}
+
+extension UITestsSignal.NativeDirectCallTrustDiagnostic {
+    init(_ diagnostic: DirectCallPeerTrustDiagnostic) {
+        self.init(ownUserIdentityAvailable: diagnostic.ownUserIdentityAvailable,
+                  ownSessionVerified: diagnostic.ownSessionVerified,
+                  crossSigningReady: diagnostic.crossSigningReady,
+                  peerIdentityAvailable: diagnostic.peerIdentityAvailable,
+                  peerIdentityVerified: diagnostic.peerIdentityVerified,
+                  peerTrustReady: diagnostic.peerTrustReady,
+                  peerTrustReadiness: diagnostic.peerTrustReadiness.description,
+                  verificationRequestPending: diagnostic.verificationRequestPending,
+                  verificationFlowState: diagnostic.verificationFlowState.description,
+                  lastVerificationErrorReason: diagnostic.lastVerificationErrorReason.description)
     }
 }
 

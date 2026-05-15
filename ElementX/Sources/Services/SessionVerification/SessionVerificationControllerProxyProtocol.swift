@@ -30,6 +30,77 @@ enum SessionVerificationControllerProxyAction: Equatable {
     case failed
 }
 
+enum SessionVerificationControllerDiagnosticFlowState: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case unavailable
+    case idle
+    case requestReceived
+    case requestAcknowledged
+    case requestAccepted
+    case verificationRequested
+    case sasStarted
+    case emojiReceived
+    case finished
+    case cancelled
+    case failed
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum SessionVerificationControllerDiagnosticErrorReason: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case none
+    case acknowledgeFailed
+    case acceptFailed
+    case requestFailed
+    case startSASFailed
+    case approveFailed
+    case declineFailed
+    case cancelFailed
+    case callbackFailed
+    case unknown
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct SessionVerificationControllerDiagnosticSnapshot: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let verificationRequestPending: Bool
+    let verificationFlowState: SessionVerificationControllerDiagnosticFlowState
+    let lastVerificationErrorReason: SessionVerificationControllerDiagnosticErrorReason
+
+    init(verificationRequestPending: Bool = false,
+         verificationFlowState: SessionVerificationControllerDiagnosticFlowState = .idle,
+         lastVerificationErrorReason: SessionVerificationControllerDiagnosticErrorReason = .none) {
+        self.verificationRequestPending = verificationRequestPending
+        self.verificationFlowState = verificationFlowState
+        self.lastVerificationErrorReason = lastVerificationErrorReason
+    }
+
+    static let unavailable = Self(verificationFlowState: .unavailable)
+
+    var description: String {
+        "SessionVerificationControllerDiagnosticSnapshot(verificationRequestPending: \(verificationRequestPending), verificationFlowState: \(verificationFlowState), lastVerificationErrorReason: \(lastVerificationErrorReason))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+protocol SessionVerificationControllerDiagnosticProviding {
+    var diagnosticSnapshot: SessionVerificationControllerDiagnosticSnapshot { get }
+}
+
 struct SessionVerificationRequestDetails: Equatable {
     let senderProfile: UserProfileProxy
     let flowID: String
