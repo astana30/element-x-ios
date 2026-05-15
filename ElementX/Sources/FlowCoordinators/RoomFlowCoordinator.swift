@@ -1888,6 +1888,8 @@ struct NativeDirectCallProductionTriggerDryRunDiagnostic: Equatable, CustomStrin
     let areDependenciesReady: Bool
     let isRoomEligible: Bool
     let isEndpointAccepted: Bool
+    let isPeerTrustReady: Bool
+    let peerTrustReadiness: DirectCallPeerTrustReadiness
     let keyWrapperSource: NativeDirectCallProductionKeyWrapperSource?
 
     init(activationDiagnostic: DirectCallProductionActivationDryRunDiagnostic) {
@@ -1898,6 +1900,8 @@ struct NativeDirectCallProductionTriggerDryRunDiagnostic: Equatable, CustomStrin
         areDependenciesReady = activationDiagnostic.areDependenciesReady
         isRoomEligible = activationDiagnostic.isRoomEligible
         isEndpointAccepted = activationDiagnostic.isEndpointAccepted
+        isPeerTrustReady = activationDiagnostic.isPeerTrustReady
+        peerTrustReadiness = activationDiagnostic.peerTrustReadiness
         keyWrapperSource = activationDiagnostic.keyWrapperSource
     }
 
@@ -1914,6 +1918,8 @@ struct NativeDirectCallProductionTriggerDryRunDiagnostic: Equatable, CustomStrin
             "areDependenciesReady: \(areDependenciesReady)",
             "isRoomEligible: \(isRoomEligible)",
             "isEndpointAccepted: \(isEndpointAccepted)",
+            "isPeerTrustReady: \(isPeerTrustReady)",
+            "peerTrustReadiness: \(peerTrustReadiness)",
             "keyWrapperSource: \(keyWrapperSource?.description ?? "none")"
         ]
         return "NativeDirectCallProductionTriggerDryRunDiagnostic(\(fields.joined(separator: ", ")))"
@@ -1960,6 +1966,11 @@ enum NativeDirectCallProductionStartBlockedReason: String, Equatable, CustomStri
     case roomNotDirect
     case roomNotOneToOne
     case peerUnavailable
+    case peerTrustUnavailable
+    case unverifiedDevice
+    case noEligibleDevice
+    case crossSigningUnavailable
+    case peerTrustUnknown
     case diagnosticsUnavailable
     case productionStartDisabled
     case productionOwnerUnavailable
@@ -2157,6 +2168,11 @@ enum NativeDirectCallProductionStartBlockedReason: String, Equatable, CustomStri
              .roomNotDirect,
              .roomNotOneToOne,
              .peerUnavailable,
+             .peerTrustUnavailable,
+             .unverifiedDevice,
+             .noEligibleDevice,
+             .crossSigningUnavailable,
+             .peerTrustUnknown,
              .diagnosticsUnavailable,
              .productionStartDisabled,
              .productionOwnerUnavailable,

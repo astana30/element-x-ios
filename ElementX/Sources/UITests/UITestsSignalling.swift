@@ -266,6 +266,8 @@ enum UITestsSignal: Codable, Equatable {
         let dependenciesReady: Bool
         let roomEligible: Bool
         let endpointAccepted: Bool
+        let peerTrustReady: Bool
+        let peerTrustReadiness: String
         let keyWrapperSource: String?
 
         init(enabled: Bool,
@@ -274,6 +276,8 @@ enum UITestsSignal: Codable, Equatable {
              dependenciesReady: Bool,
              roomEligible: Bool,
              endpointAccepted: Bool,
+             peerTrustReady: Bool = false,
+             peerTrustReadiness: String = DirectCallPeerTrustReadiness.peerTrustUnavailable.rawValue,
              keyWrapperSource: String? = nil) {
             self.enabled = enabled
             self.reason = reason.flatMap { UITestsSignalling.sanitizedIdentifier($0) }
@@ -281,6 +285,8 @@ enum UITestsSignal: Codable, Equatable {
             self.dependenciesReady = dependenciesReady
             self.roomEligible = roomEligible
             self.endpointAccepted = endpointAccepted
+            self.peerTrustReady = peerTrustReady
+            self.peerTrustReadiness = UITestsSignalling.sanitizedIdentifier(peerTrustReadiness) ?? DirectCallPeerTrustReadiness.peerTrustUnavailable.rawValue
             self.keyWrapperSource = keyWrapperSource.flatMap { UITestsSignalling.sanitizedIdentifier($0) }
         }
     }
@@ -293,6 +299,8 @@ enum UITestsSignal: Codable, Equatable {
         let dependenciesReady: Bool
         let roomEligible: Bool
         let endpointAccepted: Bool
+        let peerTrustReady: Bool
+        let peerTrustReadiness: String
         let keyWrapperSource: String?
 
         init(wouldStart: Bool,
@@ -302,6 +310,8 @@ enum UITestsSignal: Codable, Equatable {
              dependenciesReady: Bool,
              roomEligible: Bool,
              endpointAccepted: Bool,
+             peerTrustReady: Bool = false,
+             peerTrustReadiness: String = DirectCallPeerTrustReadiness.peerTrustUnavailable.rawValue,
              keyWrapperSource: String? = nil) {
             self.wouldStart = wouldStart
             self.enabled = enabled
@@ -310,6 +320,8 @@ enum UITestsSignal: Codable, Equatable {
             self.dependenciesReady = dependenciesReady
             self.roomEligible = roomEligible
             self.endpointAccepted = endpointAccepted
+            self.peerTrustReady = peerTrustReady
+            self.peerTrustReadiness = UITestsSignalling.sanitizedIdentifier(peerTrustReadiness) ?? DirectCallPeerTrustReadiness.peerTrustUnavailable.rawValue
             self.keyWrapperSource = keyWrapperSource.flatMap { UITestsSignalling.sanitizedIdentifier($0) }
         }
     }
@@ -547,6 +559,8 @@ extension UITestsSignal.NativeDirectCallProductionActivationDryRunDiagnostic {
                   dependenciesReady: diagnostic.areDependenciesReady,
                   roomEligible: diagnostic.isRoomEligible,
                   endpointAccepted: diagnostic.isEndpointAccepted,
+                  peerTrustReady: diagnostic.isPeerTrustReady,
+                  peerTrustReadiness: diagnostic.peerTrustReadiness.description,
                   keyWrapperSource: diagnostic.keyWrapperSource?.description)
     }
 }
@@ -560,6 +574,8 @@ extension UITestsSignal.NativeDirectCallProductionTriggerDryRunDiagnosticPayload
                   dependenciesReady: diagnostic.areDependenciesReady,
                   roomEligible: diagnostic.isRoomEligible,
                   endpointAccepted: diagnostic.isEndpointAccepted,
+                  peerTrustReady: diagnostic.isPeerTrustReady,
+                  peerTrustReadiness: diagnostic.peerTrustReadiness.description,
                   keyWrapperSource: diagnostic.keyWrapperSource?.description)
     }
 }

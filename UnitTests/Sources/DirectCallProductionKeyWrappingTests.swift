@@ -11,6 +11,7 @@ import MatrixRustSDK
 import Testing
 
 @MainActor
+// swiftlint:disable:next type_body_length
 final class DirectCallProductionKeyWrappingTests {
     private let callID = "call-a"
     private let roomID = "!room:example.com"
@@ -588,7 +589,8 @@ final class DirectCallProductionKeyWrappingTests {
         let capabilityProvider = DirectCallProductionCapabilityProviderSpy(result: .available(makeServerCapability()))
         let dependencyProvider = NativeDirectCallProductionDependencyProviderSpy(dependencies: makeActivationReadyDependencies())
         let service = DirectCallProductionActivationDecisionService(capabilityProvider: capabilityProvider,
-                                                                    dependencyProvider: dependencyProvider)
+                                                                    dependencyProvider: dependencyProvider,
+                                                                    peerTrustReadinessProvider: StaticDirectCallPeerTrustReadinessProvider(readiness: .peerTrustReady))
 
         let decision = await service.directCallProductionActivationDecision(homeserverBaseURL: homeserverBaseURL,
                                                                             roomEligibility: makeRoomEligibility())
@@ -608,7 +610,8 @@ final class DirectCallProductionKeyWrappingTests {
         let dependencyProvider = NativeDirectCallProductionDependencyProviderSpy(dependencies: makeActivationReadyDependencies())
         let service = DirectCallProductionActivationDecisionService(configuration: configuration,
                                                                     capabilityProvider: capabilityProvider,
-                                                                    dependencyProvider: dependencyProvider)
+                                                                    dependencyProvider: dependencyProvider,
+                                                                    peerTrustReadinessProvider: StaticDirectCallPeerTrustReadinessProvider(readiness: .peerTrustReady))
 
         let decision = await service.directCallProductionActivationDecision(homeserverBaseURL: homeserverBaseURL,
                                                                             roomEligibility: makeRoomEligibility())
@@ -626,7 +629,8 @@ final class DirectCallProductionKeyWrappingTests {
         let dependencyProvider = NativeDirectCallProductionDependencyProviderSpy(dependencies: makeActivationReadyDependencies())
         let service = DirectCallProductionActivationDecisionService(configuration: configuration,
                                                                     capabilityProvider: capabilityProvider,
-                                                                    dependencyProvider: dependencyProvider)
+                                                                    dependencyProvider: dependencyProvider,
+                                                                    peerTrustReadinessProvider: StaticDirectCallPeerTrustReadinessProvider(readiness: .peerTrustReady))
 
         let decision = await service.directCallProductionActivationDecision(homeserverBaseURL: homeserverBaseURL,
                                                                             roomEligibility: makeRoomEligibility())
@@ -644,7 +648,8 @@ final class DirectCallProductionKeyWrappingTests {
         let dependencyProvider = NativeDirectCallProductionDependencyProviderSpy(dependencies: makeActivationReadyDependencies())
         let service = DirectCallProductionActivationDecisionService(configuration: configuration,
                                                                     capabilityProvider: capabilityProvider,
-                                                                    dependencyProvider: dependencyProvider)
+                                                                    dependencyProvider: dependencyProvider,
+                                                                    peerTrustReadinessProvider: StaticDirectCallPeerTrustReadinessProvider(readiness: .peerTrustReady))
 
         let decision = await service.directCallProductionActivationDecision(homeserverBaseURL: homeserverBaseURL,
                                                                             roomEligibility: makeRoomEligibility())
@@ -662,7 +667,8 @@ final class DirectCallProductionKeyWrappingTests {
         let dependencyProvider = NativeDirectCallProductionDependencyProviderSpy(dependencies: makeActivationReadyDependencies())
         let service = DirectCallProductionActivationDecisionService(configuration: configuration,
                                                                     capabilityProvider: capabilityProvider,
-                                                                    dependencyProvider: dependencyProvider)
+                                                                    dependencyProvider: dependencyProvider,
+                                                                    peerTrustReadinessProvider: StaticDirectCallPeerTrustReadinessProvider(readiness: .peerTrustReady))
 
         let decision = await service.directCallProductionActivationDecision(homeserverBaseURL: homeserverBaseURL,
                                                                             roomEligibility: makeRoomEligibility())
@@ -678,7 +684,8 @@ final class DirectCallProductionKeyWrappingTests {
         let dependencyProvider = NativeDirectCallProductionDependencyProviderSpy(dependencies: .disabled)
         let service = DirectCallProductionActivationDecisionService(configuration: configuration,
                                                                     capabilityProvider: capabilityProvider,
-                                                                    dependencyProvider: dependencyProvider)
+                                                                    dependencyProvider: dependencyProvider,
+                                                                    peerTrustReadinessProvider: StaticDirectCallPeerTrustReadinessProvider(readiness: .peerTrustReady))
 
         let decision = await service.directCallProductionActivationDecision(homeserverBaseURL: homeserverBaseURL,
                                                                             roomEligibility: makeRoomEligibility())
@@ -694,7 +701,8 @@ final class DirectCallProductionKeyWrappingTests {
         let dependencyProvider = NativeDirectCallProductionDependencyProviderSpy(dependencies: makeActivationReadyDependencies())
         let service = DirectCallProductionActivationDecisionService(configuration: configuration,
                                                                     capabilityProvider: capabilityProvider,
-                                                                    dependencyProvider: dependencyProvider)
+                                                                    dependencyProvider: dependencyProvider,
+                                                                    peerTrustReadinessProvider: StaticDirectCallPeerTrustReadinessProvider(readiness: .peerTrustReady))
 
         let decision = await service.directCallProductionActivationDecision(homeserverBaseURL: homeserverBaseURL,
                                                                             roomEligibility: makeRoomEligibility(isEncrypted: false))
@@ -710,7 +718,8 @@ final class DirectCallProductionKeyWrappingTests {
         let dependencyProvider = NativeDirectCallProductionDependencyProviderSpy(dependencies: makeActivationReadyDependencies())
         let service = DirectCallProductionActivationDecisionService(configuration: configuration,
                                                                     capabilityProvider: capabilityProvider,
-                                                                    dependencyProvider: dependencyProvider)
+                                                                    dependencyProvider: dependencyProvider,
+                                                                    peerTrustReadinessProvider: StaticDirectCallPeerTrustReadinessProvider(readiness: .peerTrustReady))
 
         let decision = await service.directCallProductionActivationDecision(homeserverBaseURL: homeserverBaseURL,
                                                                             roomEligibility: makeRoomEligibility())
@@ -728,7 +737,8 @@ final class DirectCallProductionKeyWrappingTests {
         let capabilityProvider = DirectCallProductionCapabilityProviderSpy(result: .available(makeServerCapability()))
         let dependencyProvider = NativeDirectCallProductionDependencyProviderSpy(dependencies: makeActivationReadyDependencies())
         let service = DirectCallProductionActivationDecisionService(capabilityProvider: capabilityProvider,
-                                                                    dependencyProvider: dependencyProvider)
+                                                                    dependencyProvider: dependencyProvider,
+                                                                    peerTrustReadinessProvider: StaticDirectCallPeerTrustReadinessProvider(readiness: .peerTrustReady))
 
         let diagnostic = await service.directCallProductionActivationDryRunDiagnostic(homeserverBaseURL: homeserverBaseURL,
                                                                                       roomEligibility: makeRoomEligibility())
@@ -753,7 +763,8 @@ final class DirectCallProductionKeyWrappingTests {
         let dependencyProvider = NativeDirectCallProductionDependencyProviderSpy(dependencies: makeActivationReadyDependencies())
         let service = DirectCallProductionActivationDecisionService(configuration: configuration,
                                                                     capabilityProvider: capabilityProvider,
-                                                                    dependencyProvider: dependencyProvider)
+                                                                    dependencyProvider: dependencyProvider,
+                                                                    peerTrustReadinessProvider: StaticDirectCallPeerTrustReadinessProvider(readiness: .peerTrustReady))
 
         let diagnostic = await service.directCallProductionActivationDryRunDiagnostic(homeserverBaseURL: homeserverBaseURL,
                                                                                       roomEligibility: makeRoomEligibility())
@@ -776,7 +787,8 @@ final class DirectCallProductionKeyWrappingTests {
         let dependencyProvider = NativeDirectCallProductionDependencyProviderSpy(dependencies: makeActivationReadyDependencies())
         let service = DirectCallProductionActivationDecisionService(configuration: configuration,
                                                                     capabilityProvider: capabilityProvider,
-                                                                    dependencyProvider: dependencyProvider)
+                                                                    dependencyProvider: dependencyProvider,
+                                                                    peerTrustReadinessProvider: StaticDirectCallPeerTrustReadinessProvider(readiness: .peerTrustReady))
 
         let diagnostic = await service.directCallProductionActivationDryRunDiagnostic(homeserverBaseURL: homeserverBaseURL,
                                                                                       roomEligibility: makeRoomEligibility(isEncrypted: false))
@@ -801,7 +813,8 @@ final class DirectCallProductionKeyWrappingTests {
                                                                                                                                       keyWrapperSource: .explicitWrapper))
         let service = DirectCallProductionActivationDecisionService(configuration: configuration,
                                                                     capabilityProvider: capabilityProvider,
-                                                                    dependencyProvider: dependencyProvider)
+                                                                    dependencyProvider: dependencyProvider,
+                                                                    peerTrustReadinessProvider: StaticDirectCallPeerTrustReadinessProvider(readiness: .peerTrustReady))
 
         let diagnostic = await service.directCallProductionActivationDryRunDiagnostic(homeserverBaseURL: homeserverBaseURL,
                                                                                       roomEligibility: makeRoomEligibility())
@@ -844,7 +857,12 @@ final class DirectCallProductionKeyWrappingTests {
             (makeActivationContext(homeserverBaseURL: homeserverBaseURL, roomEligibility: makeRoomEligibility(isEncrypted: false)), .roomNotEncrypted),
             (makeActivationContext(homeserverBaseURL: homeserverBaseURL, roomEligibility: makeRoomEligibility(isDirect: false)), .roomNotDirect),
             (makeActivationContext(homeserverBaseURL: homeserverBaseURL, roomEligibility: makeRoomEligibility(joinedMemberCount: 3)), .roomNotOneToOne),
-            (makeActivationContext(homeserverBaseURL: homeserverBaseURL, roomEligibility: makeRoomEligibility(hasPeerUserID: false)), .peerUnavailable)
+            (makeActivationContext(homeserverBaseURL: homeserverBaseURL, roomEligibility: makeRoomEligibility(hasPeerUserID: false)), .peerUnavailable),
+            (makeActivationContext(homeserverBaseURL: homeserverBaseURL, peerTrustReadiness: .peerTrustUnavailable), .peerTrustUnavailable),
+            (makeActivationContext(homeserverBaseURL: homeserverBaseURL, peerTrustReadiness: .unverifiedDevice), .unverifiedDevice),
+            (makeActivationContext(homeserverBaseURL: homeserverBaseURL, peerTrustReadiness: .noEligibleDevice), .noEligibleDevice),
+            (makeActivationContext(homeserverBaseURL: homeserverBaseURL, peerTrustReadiness: .crossSigningUnavailable), .crossSigningUnavailable),
+            (makeActivationContext(homeserverBaseURL: homeserverBaseURL, peerTrustReadiness: .unknown), .peerTrustUnknown)
         ]
 
         for (context, reason) in failureCases {
@@ -1065,13 +1083,15 @@ final class DirectCallProductionKeyWrappingTests {
                                        roomEligibility: DirectCallProductionRoomEligibility = DirectCallProductionRoomEligibility(isDirect: true,
                                                                                                                                   isEncrypted: true,
                                                                                                                                   joinedMemberCount: 2,
-                                                                                                                                  hasPeerUserID: true)) -> DirectCallProductionActivationContext {
+                                                                                                                                  hasPeerUserID: true),
+                                       peerTrustReadiness: DirectCallPeerTrustReadiness = .peerTrustReady) -> DirectCallProductionActivationContext {
         DirectCallProductionActivationContext(appRolloutEnabled: appRolloutEnabled,
                                               homeserverBaseURL: homeserverBaseURL,
                                               serverCapability: serverCapability,
                                               configuredTokenEndpointURL: configuredTokenEndpointURL,
                                               dependencies: dependencies ?? makeActivationReadyDependencies(),
-                                              roomEligibility: roomEligibility)
+                                              roomEligibility: roomEligibility,
+                                              peerTrustReadiness: peerTrustReadiness)
     }
 
     private func makeServerCapability(isEnabled: Bool = true,
@@ -1144,6 +1164,61 @@ final class DirectCallProductionKeyWrappingTests {
           "key_envelope": "\(keyEnvelope)"
         }
         """
+    }
+}
+
+@MainActor
+final class DirectCallPeerTrustReadinessTests {
+    private let peerUserID = "@peer:example.com"
+    private let ownUserID = "@me:example.com"
+
+    @Test
+    func failClosedPeerTrustReadinessProviderFailsClosedByDefault() async {
+        let provider = FailClosedDirectCallPeerTrustReadinessProvider()
+
+        let readiness = await provider.directCallPeerTrustReadiness()
+
+        #expect(readiness == .peerTrustUnavailable)
+        #expect(String(describing: provider).contains(peerUserID) == false)
+        #expect(String(describing: readiness).contains(peerUserID) == false)
+    }
+
+    @Test
+    func userIdentityPeerTrustReadinessProviderMapsIdentityStateWithoutDeviceDetails() async {
+        let clientProxy = ClientProxyMock(.init(userID: ownUserID))
+        clientProxy.userIdentityForFallBackToServerClosure = { _, _ in
+            .success(UserIdentityProxyMock(configuration: .init(verificationState: .verified)))
+        }
+        let provider = UserIdentityDirectCallPeerTrustReadinessProvider(clientProxy: clientProxy,
+                                                                        peerUserID: peerUserID)
+
+        let readiness = await provider.directCallPeerTrustReadiness()
+
+        #expect(readiness == .peerTrustReady)
+        #expect(clientProxy.userIdentityForFallBackToServerReceivedArguments?.userID == peerUserID)
+        #expect(clientProxy.userIdentityForFallBackToServerReceivedArguments?.fallBackToServer == true)
+        #expect(String(describing: provider).contains(peerUserID) == false)
+    }
+
+    @Test
+    func userIdentityPeerTrustReadinessProviderFailsClosedForUnverifiedOrMissingIdentity() async {
+        let clientProxy = ClientProxyMock(.init(userID: ownUserID))
+        let provider = UserIdentityDirectCallPeerTrustReadinessProvider(clientProxy: clientProxy,
+                                                                        peerUserID: peerUserID)
+
+        clientProxy.userIdentityForFallBackToServerClosure = { _, _ in
+            .success(UserIdentityProxyMock(configuration: .init(verificationState: .notVerified)))
+        }
+        #expect(await provider.directCallPeerTrustReadiness() == .unverifiedDevice)
+
+        clientProxy.userIdentityForFallBackToServerClosure = { _, _ in
+            .success(nil)
+        }
+        #expect(await provider.directCallPeerTrustReadiness() == .crossSigningUnavailable)
+
+        let missingPeerProvider = UserIdentityDirectCallPeerTrustReadinessProvider(clientProxy: clientProxy,
+                                                                                   peerUserID: nil)
+        #expect(await missingPeerProvider.directCallPeerTrustReadiness() == .peerTrustUnavailable)
     }
 }
 

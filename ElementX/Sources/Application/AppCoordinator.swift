@@ -1370,7 +1370,9 @@ extension AppCoordinator {
         let decisionService = DirectCallProductionActivationDecisionService(rolloutProvider: NativeDirectCallProductionDryRunFakeRolloutProvider(),
                                                                             capabilityProvider: NativeDirectCallProductionDryRunFakeCapabilityProvider(),
                                                                             dependencyProvider: makeNativeDirectCallProductionDependencyProvider(clientProxy: clientProxy,
-                                                                                                                                                 tokenEndpointBaseURL: homeserverBaseURL))
+                                                                                                                                                 tokenEndpointBaseURL: homeserverBaseURL),
+                                                                            peerTrustReadinessProvider: makeNativeDirectCallProductionPeerTrustReadinessProvider(roomProxy: roomProxy,
+                                                                                                                                                                 clientProxy: clientProxy))
         return NativeDirectCallProductionActivationDryRunProvider(activationDryRunDiagnostics: decisionService,
                                                                   homeserverBaseURL: homeserverBaseURL,
                                                                   roomEligibility: roomEligibility)
@@ -1421,6 +1423,16 @@ extension AppCoordinator {
                                                             keyEnvelopeWrapperProvider: clientProxy as? DirectCallMediaKeyEnvelopeWrappingProviding,
                                                             ownUserID: clientProxy.userID,
                                                             senderDeviceID: clientProxy.deviceID)
+    }
+
+    @MainActor
+    private static func makeNativeDirectCallProductionPeerTrustReadinessProvider(roomProxy: JoinedRoomProxyProtocol,
+                                                                                 clientProxy: ClientProxyProtocol?) -> DirectCallPeerTrustReadinessProviding {
+        let peerUserID = roomProxy.membersPublisher.value.first { member in
+            !member.userID.isEmpty && member.userID != roomProxy.ownUserID
+        }?.userID
+        return UserIdentityDirectCallPeerTrustReadinessProvider(clientProxy: clientProxy,
+                                                                peerUserID: peerUserID)
     }
 
     private func configureNativeDirectCallIntegrationDiagnosticHarnessIfNeeded() {

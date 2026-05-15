@@ -9,6 +9,7 @@
 import Combine
 @testable import ElementX
 import Foundation
+import MatrixRustSDK
 import MatrixRustSDKMocks
 import Testing
 
@@ -647,8 +648,10 @@ final class RoomFlowCoordinatorTests {
     @Test
     func nativeDirectCallProductionActivationDryRunRuntimeFakeCanEnableEligibleRoomWithoutStartingCalls() async {
         let roomProxy = makeEligibleNativeDirectCallRoomProxy()
+        let clientProxy = makeVerifiedPeerClientProxy()
         let provider = AppCoordinator.makeNativeDirectCallProductionActivationDryRunProvider(roomProxy: roomProxy,
                                                                                              homeserver: "https://matrix.example.test",
+                                                                                             clientProxy: clientProxy,
                                                                                              environment: makeProductionDryRunFakeEnabledEnvironment())
 
         let diagnostic = await provider.nativeDirectCallProductionActivationDryRunDiagnostic()
@@ -659,8 +662,28 @@ final class RoomFlowCoordinatorTests {
         #expect(diagnostic.areDependenciesReady)
         #expect(diagnostic.isRoomEligible)
         #expect(diagnostic.isEndpointAccepted)
+        #expect(diagnostic.isPeerTrustReady)
         #expect(String(describing: diagnostic).contains("matrix.example.test") == false)
         #expect(String(describing: diagnostic).contains(DirectCallProductionConfiguration.tokenEndpointPath) == false)
+    }
+
+    @Test
+    func nativeDirectCallProductionActivationDryRunRuntimeFakeFailsClosedWithoutPeerTrust() async {
+        let roomProxy = makeEligibleNativeDirectCallRoomProxy()
+        let provider = AppCoordinator.makeNativeDirectCallProductionActivationDryRunProvider(roomProxy: roomProxy,
+                                                                                             homeserver: "https://matrix.example.test",
+                                                                                             environment: makeProductionDryRunFakeEnabledEnvironment())
+
+        let diagnostic = await provider.nativeDirectCallProductionActivationDryRunDiagnostic()
+
+        #expect(diagnostic.isEnabled == false)
+        #expect(diagnostic.disabledReason == .peerTrustUnavailable)
+        #expect(diagnostic.isCapabilityPresent)
+        #expect(diagnostic.areDependenciesReady)
+        #expect(diagnostic.isRoomEligible)
+        #expect(diagnostic.isEndpointAccepted)
+        #expect(diagnostic.isPeerTrustReady == false)
+        #expect(diagnostic.peerTrustReadiness == .peerTrustUnavailable)
     }
 
     @Test
@@ -794,6 +817,33 @@ final class RoomFlowCoordinatorTests {
         #expect(result.triggerDiagnostic.isEnabled == false)
         #expect(provider.callCount == 1)
         #expect(productionOwner.outgoingCount == 0)
+    }
+
+    @Test
+    func nativeDirectCallProductionStartBlocksBeforeOwnerWhenPeerTrustIsNotReady() async throws {
+        let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: .init(isEnabled: false,
+                                                                                           disabledReason: .unverifiedDevice,
+                                                                                           isCapabilityPresent: true,
+                                                                                           areDependenciesReady: true,
+                                                                                           isRoomEligible: true,
+                                                                                           isEndpointAccepted: true,
+                                                                                           peerTrustReadiness: .unverifiedDevice,
+                                                                                           keyWrapperSource: .providerWrapper))
+        setupRoomFlowCoordinator(nativeDirectCallProductionActivationDryRunProviderFactory: { _ in provider },
+                                 nativeDirectCallProductionRoomFlowOwnerFactory: { _ in
+                                     Issue.record("Production owner should not be created when peer trust is not ready.")
+                                     return .owner(NativeDirectCallRoomFlowOwnerSpy())
+                                 })
+
+        try await process(route: .room(roomID: "1", via: []))
+        let result = await roomFlowCoordinator.nativeDirectCallProductionStartOutgoingAudioCall(isProductionStartEnabled: true)
+
+        #expect(result.didStart == false)
+        #expect(result.outcome == .blocked)
+        #expect(result.reason == .unverifiedDevice)
+        #expect(result.triggerDiagnostic.isPeerTrustReady == false)
+        #expect(result.triggerDiagnostic.peerTrustReadiness == .unverifiedDevice)
+        #expect(provider.callCount == 1)
     }
 
     @Test
@@ -1384,6 +1434,8 @@ final class RoomFlowCoordinatorTests {
         #expect(encodedResult.contains("dependenciesReady"))
         #expect(encodedResult.contains("roomEligible"))
         #expect(encodedResult.contains("endpointAccepted"))
+        #expect(encodedResult.contains("peerTrustReady"))
+        #expect(encodedResult.contains("peerTrustReadiness"))
         #expect(result.correlationID == request.correlationID)
 
         let forbiddenFragments = [
@@ -1437,6 +1489,8 @@ final class RoomFlowCoordinatorTests {
         #expect(encodedResult.contains("dependenciesReady"))
         #expect(encodedResult.contains("roomEligible"))
         #expect(encodedResult.contains("endpointAccepted"))
+        #expect(encodedResult.contains("peerTrustReady"))
+        #expect(encodedResult.contains("peerTrustReadiness"))
         #expect(result.correlationID == request.correlationID)
 
         let forbiddenFragments = [
@@ -1472,7 +1526,9 @@ final class RoomFlowCoordinatorTests {
                                                                                                                    capabilityPresent: true,
                                                                                                                    dependenciesReady: true,
                                                                                                                    roomEligible: true,
-                                                                                                                   endpointAccepted: true))
+                                                                                                                   endpointAccepted: true,
+                                                                                                                   peerTrustReady: true,
+                                                                                                                   peerTrustReadiness: DirectCallPeerTrustReadiness.peerTrustReady.rawValue))
         let requestSignal = UITestsSignal.nativeDirectCallProductionStartOutgoingAudioCall(request)
         let resultSignal = UITestsSignal.nativeDirectCallProductionStartOutgoingAudioCallResult(result)
         let encoder = JSONEncoder()
@@ -1491,6 +1547,8 @@ final class RoomFlowCoordinatorTests {
         #expect(encodedResult.contains("dependenciesReady"))
         #expect(encodedResult.contains("roomEligible"))
         #expect(encodedResult.contains("endpointAccepted"))
+        #expect(encodedResult.contains("peerTrustReady"))
+        #expect(encodedResult.contains("peerTrustReadiness"))
         #expect(result.correlationID == request.correlationID)
 
         let forbiddenFragments = [
@@ -1753,7 +1811,21 @@ final class RoomFlowCoordinatorTests {
               isCapabilityPresent: true,
               areDependenciesReady: true,
               isRoomEligible: true,
-              isEndpointAccepted: true)
+              isEndpointAccepted: true,
+              peerTrustReadiness: .peerTrustReady,
+              keyWrapperSource: .providerWrapper)
+    }
+
+    private func makeVerifiedPeerClientProxy() -> ClientProxyMock {
+        let clientProxy = ProductionDryRunClientProxyMock(.init(userID: RoomMemberProxyMock.mockMe.userID))
+        clientProxy.userIdentityForFallBackToServerClosure = { userID, _ in
+            guard userID == RoomMemberProxyMock.mockBob.userID else {
+                return .success(nil)
+            }
+
+            return .success(UserIdentityProxyMock(configuration: .init(verificationState: .verified)))
+        }
+        return clientProxy
     }
     
     private func setupRoomFlowCoordinator(asChildFlow: Bool = false,
@@ -1917,6 +1989,39 @@ private final class NativeDirectCallProductionDependencyProviderSpy: NativeDirec
 
     func nativeDirectCallProductionDependencies() -> NativeDirectCallProductionDependencies {
         dependencies
+    }
+}
+
+private final class ProductionDryRunClientProxyMock: ClientProxyMock, DirectCallMatrixAccessTokenProviding, DirectCallMediaKeyEnvelopeWrappingProviding {
+    func matrixAccessToken() async -> String? {
+        "redacted-test-access"
+    }
+
+    func makeDirectCallMediaKeyEnvelopeWrapper() -> MatrixSDKDirectCallMediaKeyEnvelopeWrappingProtocol? {
+        ProductionDryRunMatrixSDKKeyEnvelopeWrapperSpy()
+    }
+}
+
+private final class ProductionDryRunMatrixSDKKeyEnvelopeWrapperSpy: MatrixSDKDirectCallMediaKeyEnvelopeWrappingProtocol {
+    func wrapDirectCallMediaKey(info: MatrixRustSDK.DirectCallMediaKeyWrapInfo) async throws -> MatrixRustSDK.DirectCallMediaKeyEnvelope {
+        .init(version: 1,
+              algorithm: "salemx.native_direct_call.media_key.v1",
+              roomId: info.roomId,
+              callId: info.callId,
+              senderUserId: "@redacted:example.com",
+              recipientUserId: info.recipientUserId,
+              intent: info.intent,
+              keyId: info.keyId,
+              expiresAtMs: info.expiresAtMs,
+              opaqueCiphertext: "redacted-opaque-envelope")
+    }
+
+    func unwrapDirectCallMediaKeyEnvelope(info _: MatrixRustSDK.DirectCallMediaKeyUnwrapInfo,
+                                          envelope: MatrixRustSDK.DirectCallMediaKeyEnvelope) async throws -> MatrixRustSDK.DirectCallMediaKeyUnwrapResult {
+        .init(keyId: envelope.keyId,
+              mediaKey: "redacted-test-media-key",
+              senderUserId: envelope.senderUserId,
+              senderDeviceId: nil)
     }
 }
 

@@ -742,6 +742,96 @@ struct DirectCallProductionRoomEligibility: Equatable, CustomStringConvertible, 
     }
 }
 
+enum DirectCallPeerTrustReadiness: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case peerTrustReady
+    case peerTrustUnavailable
+    case unverifiedDevice
+    case noEligibleDevice
+    case crossSigningUnavailable
+    case unknown
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+@MainActor
+protocol DirectCallPeerTrustReadinessProviding {
+    func directCallPeerTrustReadiness() async -> DirectCallPeerTrustReadiness
+}
+
+@MainActor
+struct FailClosedDirectCallPeerTrustReadinessProvider: DirectCallPeerTrustReadinessProviding, CustomStringConvertible, CustomDebugStringConvertible {
+    func directCallPeerTrustReadiness() async -> DirectCallPeerTrustReadiness {
+        .peerTrustUnavailable
+    }
+
+    nonisolated var description: String {
+        "FailClosedDirectCallPeerTrustReadinessProvider(status: failClosed)"
+    }
+
+    nonisolated var debugDescription: String {
+        description
+    }
+}
+
+@MainActor
+struct StaticDirectCallPeerTrustReadinessProvider: DirectCallPeerTrustReadinessProviding {
+    let readiness: DirectCallPeerTrustReadiness
+
+    func directCallPeerTrustReadiness() async -> DirectCallPeerTrustReadiness {
+        readiness
+    }
+}
+
+@MainActor
+struct UserIdentityDirectCallPeerTrustReadinessProvider: DirectCallPeerTrustReadinessProviding, CustomStringConvertible, CustomDebugStringConvertible {
+    private let clientProxy: ClientProxyProtocol?
+    private let peerUserID: String?
+
+    init(clientProxy: ClientProxyProtocol?, peerUserID: String?) {
+        self.clientProxy = clientProxy
+        self.peerUserID = peerUserID
+    }
+
+    func directCallPeerTrustReadiness() async -> DirectCallPeerTrustReadiness {
+        guard let clientProxy,
+              let peerUserID,
+              !peerUserID.isEmpty,
+              peerUserID != clientProxy.userID else {
+            return .peerTrustUnavailable
+        }
+
+        switch await clientProxy.userIdentity(for: peerUserID, fallBackToServer: true) {
+        case .success(let identity):
+            guard let identity else {
+                return .crossSigningUnavailable
+            }
+
+            switch identity.verificationState {
+            case .verified:
+                return .peerTrustReady
+            case .notVerified, .verificationViolation:
+                return .unverifiedDevice
+            }
+        case .failure:
+            return .peerTrustUnavailable
+        }
+    }
+
+    nonisolated var description: String {
+        "UserIdentityDirectCallPeerTrustReadinessProvider(peer: <redacted>)"
+    }
+
+    nonisolated var debugDescription: String {
+        description
+    }
+}
+
 enum DirectCallProductionActivationDisabledReason: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     case appRolloutDisabled
     case roomUnavailable
@@ -759,6 +849,11 @@ enum DirectCallProductionActivationDisabledReason: String, Equatable, CustomStri
     case roomNotDirect
     case roomNotOneToOne
     case peerUnavailable
+    case peerTrustUnavailable
+    case unverifiedDevice
+    case noEligibleDevice
+    case crossSigningUnavailable
+    case peerTrustUnknown
 
     var description: String {
         rawValue
@@ -776,19 +871,22 @@ struct DirectCallProductionActivationContext {
     let configuredTokenEndpointURL: URL?
     let dependencies: NativeDirectCallProductionDependencies
     let roomEligibility: DirectCallProductionRoomEligibility
+    let peerTrustReadiness: DirectCallPeerTrustReadiness
 
     init(appRolloutEnabled: Bool = false,
          homeserverBaseURL: URL? = nil,
          serverCapability: DirectCallProductionServerCapability? = nil,
          configuredTokenEndpointURL: URL? = nil,
          dependencies: NativeDirectCallProductionDependencies = .disabled,
-         roomEligibility: DirectCallProductionRoomEligibility = .init()) {
+         roomEligibility: DirectCallProductionRoomEligibility = .init(),
+         peerTrustReadiness: DirectCallPeerTrustReadiness = .peerTrustUnavailable) {
         self.appRolloutEnabled = appRolloutEnabled
         self.homeserverBaseURL = homeserverBaseURL
         self.serverCapability = serverCapability
         self.configuredTokenEndpointURL = configuredTokenEndpointURL
         self.dependencies = dependencies
         self.roomEligibility = roomEligibility
+        self.peerTrustReadiness = peerTrustReadiness
     }
 }
 
@@ -821,6 +919,8 @@ struct DirectCallProductionActivationDryRunDiagnostic: Equatable, CustomStringCo
     let areDependenciesReady: Bool
     let isRoomEligible: Bool
     let isEndpointAccepted: Bool
+    let isPeerTrustReady: Bool
+    let peerTrustReadiness: DirectCallPeerTrustReadiness
     let keyWrapperSource: NativeDirectCallProductionKeyWrapperSource?
 
     init(isEnabled: Bool,
@@ -829,6 +929,7 @@ struct DirectCallProductionActivationDryRunDiagnostic: Equatable, CustomStringCo
          areDependenciesReady: Bool,
          isRoomEligible: Bool,
          isEndpointAccepted: Bool,
+         peerTrustReadiness: DirectCallPeerTrustReadiness = .peerTrustUnavailable,
          keyWrapperSource: NativeDirectCallProductionKeyWrapperSource? = nil) {
         self.isEnabled = isEnabled
         self.disabledReason = disabledReason
@@ -836,6 +937,8 @@ struct DirectCallProductionActivationDryRunDiagnostic: Equatable, CustomStringCo
         self.areDependenciesReady = areDependenciesReady
         self.isRoomEligible = isRoomEligible
         self.isEndpointAccepted = isEndpointAccepted
+        isPeerTrustReady = peerTrustReadiness == .peerTrustReady
+        self.peerTrustReadiness = peerTrustReadiness
         self.keyWrapperSource = keyWrapperSource
     }
 
@@ -846,6 +949,7 @@ struct DirectCallProductionActivationDryRunDiagnostic: Equatable, CustomStringCo
               areDependenciesReady: false,
               isRoomEligible: false,
               isEndpointAccepted: false,
+              peerTrustReadiness: .peerTrustUnavailable,
               keyWrapperSource: nil)
     }
 
@@ -857,6 +961,8 @@ struct DirectCallProductionActivationDryRunDiagnostic: Equatable, CustomStringCo
             "areDependenciesReady: \(areDependenciesReady)",
             "isRoomEligible: \(isRoomEligible)",
             "isEndpointAccepted: \(isEndpointAccepted)",
+            "isPeerTrustReady: \(isPeerTrustReady)",
+            "peerTrustReadiness: \(peerTrustReadiness)",
             "keyWrapperSource: \(keyWrapperSource?.description ?? "none")"
         ]
         return "DirectCallProductionActivationDryRunDiagnostic(\(fields.joined(separator: ", ")))"
@@ -901,6 +1007,10 @@ struct DirectCallProductionActivationGate {
             return .disabled(disabledReason)
         }
 
+        if let disabledReason = peerTrustDisabledReason(context.peerTrustReadiness) {
+            return .disabled(disabledReason)
+        }
+
         return .enabled(tokenEndpointURL: tokenEndpointURL)
     }
 
@@ -912,6 +1022,7 @@ struct DirectCallProductionActivationGate {
                                                               areDependenciesReady: context.dependencies.isReadyForProductionStart,
                                                               isRoomEligible: roomEligibilityDisabledReason(context.roomEligibility) == nil,
                                                               isEndpointAccepted: isTokenEndpointAccepted(for: context),
+                                                              peerTrustReadiness: context.peerTrustReadiness,
                                                               keyWrapperSource: context.dependencies.keyWrapperSource)
     }
 
@@ -1017,6 +1128,23 @@ struct DirectCallProductionActivationGate {
             return nil
         }
     }
+
+    private func peerTrustDisabledReason(_ readiness: DirectCallPeerTrustReadiness) -> DirectCallProductionActivationDisabledReason? {
+        switch readiness {
+        case .peerTrustReady:
+            return nil
+        case .peerTrustUnavailable:
+            return .peerTrustUnavailable
+        case .unverifiedDevice:
+            return .unverifiedDevice
+        case .noEligibleDevice:
+            return .noEligibleDevice
+        case .crossSigningUnavailable:
+            return .crossSigningUnavailable
+        case .unknown:
+            return .peerTrustUnknown
+        }
+    }
 }
 
 @MainActor
@@ -1036,25 +1164,30 @@ final class DirectCallProductionActivationDecisionService: DirectCallProductionA
     private let rolloutProvider: DirectCallProductionRolloutProviding
     private let capabilityProvider: DirectCallProductionCapabilityProviding
     private let dependencyProvider: NativeDirectCallProductionDependencyProviding
+    private let peerTrustReadinessProvider: DirectCallPeerTrustReadinessProviding
     private let activationGate: DirectCallProductionActivationGate
 
     init(rolloutProvider: DirectCallProductionRolloutProviding,
          capabilityProvider: DirectCallProductionCapabilityProviding? = nil,
          dependencyProvider: NativeDirectCallProductionDependencyProviding? = nil,
+         peerTrustReadinessProvider: DirectCallPeerTrustReadinessProviding? = nil,
          activationGate: DirectCallProductionActivationGate = .init()) {
         self.rolloutProvider = rolloutProvider
         self.capabilityProvider = capabilityProvider ?? FailClosedDirectCallProductionCapabilityProvider()
         self.dependencyProvider = dependencyProvider ?? NativeDirectCallProductionDependencyAssembly(configuration: rolloutProvider.directCallProductionConfiguration())
+        self.peerTrustReadinessProvider = peerTrustReadinessProvider ?? FailClosedDirectCallPeerTrustReadinessProvider()
         self.activationGate = activationGate
     }
 
     convenience init(configuration: DirectCallProductionConfiguration = .init(),
                      capabilityProvider: DirectCallProductionCapabilityProviding? = nil,
                      dependencyProvider: NativeDirectCallProductionDependencyProviding? = nil,
+                     peerTrustReadinessProvider: DirectCallPeerTrustReadinessProviding? = nil,
                      activationGate: DirectCallProductionActivationGate = .init()) {
         self.init(rolloutProvider: StaticDirectCallProductionRolloutProvider(configuration: configuration),
                   capabilityProvider: capabilityProvider,
                   dependencyProvider: dependencyProvider ?? NativeDirectCallProductionDependencyAssembly(configuration: configuration),
+                  peerTrustReadinessProvider: peerTrustReadinessProvider,
                   activationGate: activationGate)
     }
 
@@ -1091,12 +1224,28 @@ final class DirectCallProductionActivationDecisionService: DirectCallProductionA
                          roomEligibility: roomEligibility)
         }
 
+        let dependencies = dependencyProvider.nativeDirectCallProductionDependencies()
+        let peerTrustReadiness: DirectCallPeerTrustReadiness
+        if dependencies.isReadyForProductionStart, isRoomEligibleForPeerTrustCheck(roomEligibility) {
+            peerTrustReadiness = await peerTrustReadinessProvider.directCallPeerTrustReadiness()
+        } else {
+            peerTrustReadiness = .peerTrustUnavailable
+        }
+
         return .init(appRolloutEnabled: true,
                      homeserverBaseURL: homeserverBaseURL,
                      serverCapability: serverCapability,
                      configuredTokenEndpointURL: configuration.tokenEndpointURL,
-                     dependencies: dependencyProvider.nativeDirectCallProductionDependencies(),
-                     roomEligibility: roomEligibility)
+                     dependencies: dependencies,
+                     roomEligibility: roomEligibility,
+                     peerTrustReadiness: peerTrustReadiness)
+    }
+
+    private func isRoomEligibleForPeerTrustCheck(_ roomEligibility: DirectCallProductionRoomEligibility) -> Bool {
+        roomEligibility.isEncrypted &&
+            roomEligibility.isDirect &&
+            roomEligibility.hasExactlyTwoJoinedMembers &&
+            roomEligibility.hasPeerUserID
     }
 
     nonisolated var description: String {
