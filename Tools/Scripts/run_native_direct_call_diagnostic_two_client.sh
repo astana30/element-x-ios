@@ -56,6 +56,7 @@ Usage:
   DRY_RUN=0 $SCRIPT_NAME production-trigger-dry-run A|B
   DRY_RUN=0 $SCRIPT_NAME production-start-outgoing A|B
   DRY_RUN=0 $SCRIPT_NAME production-start-listener A|B
+  DRY_RUN=0 $SCRIPT_NAME production-accept B
   DRY_RUN=0 $SCRIPT_NAME production-status A|B
   DRY_RUN=0 $SCRIPT_NAME wait-status A|B incomingRinging
   DRY_RUN=0 $SCRIPT_NAME accept-when-ringing A|B
@@ -584,6 +585,39 @@ with open(file_path, "w", encoding="utf-8") as handle:
 PY
 }
 
+write_production_accept_request() {
+    local client="$1"
+    local correlation_id="$2"
+    local file
+    file="$(signal_file "$client")"
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        log "DRY_RUN: query-production-accept channel=$client correlationID=$correlation_id"
+        return
+    fi
+
+    python3 - "$file" "$correlation_id" <<'PY'
+import json
+import sys
+
+file_path, correlation_id = sys.argv[1:3]
+message = {
+    "mode": {
+        "tests": {}
+    },
+    "signal": {
+        "nativeDirectCallProductionAcceptIncomingCall": {
+            "_0": {
+                "correlationID": correlation_id,
+            }
+        }
+    }
+}
+with open(file_path, "w", encoding="utf-8") as handle:
+    json.dump(message, handle, sort_keys=True, separators=(",", ":"))
+PY
+}
+
 write_production_status_request() {
     local client="$1"
     local correlation_id="$2"
@@ -870,6 +904,39 @@ if expected_signal == "nativeDirectCallProductionStartListenerResult":
             peer_trust_ready=str(diagnostic.get("peerTrustReady", "unknown")).lower(),
             peer_trust_readiness=diagnostic.get("peerTrustReadiness") or "unknown",
             key_wrapper_source=diagnostic.get("keyWrapperSource") or "none",
+            status_fields=status_fields,
+        )
+    )
+    sys.exit(0)
+
+if expected_signal == "nativeDirectCallProductionAcceptIncomingCallResult":
+    diagnostic = body.get("triggerDiagnostic", {})
+    session = body.get("sessionSummary") or {}
+    status = body.get("status", {})
+    status_fields = format_production_status(status)
+    session_fields = ""
+    if session:
+        session_fields = " sessionHasCallID={has_call_id} sessionDirection={direction} sessionIntent={intent} sessionState={state} sessionEncryptionState={encryption_state}".format(
+            has_call_id=str(session.get("hasCallID", "unknown")).lower(),
+            direction=session.get("direction", "unknown"),
+            intent=session.get("intent", "unknown"),
+            state=session.get("state", "unknown"),
+            encryption_state=session.get("encryptionState", "unknown"),
+        )
+    print(
+        "outcome={outcome} reason={reason} wouldStart={would_start} enabled={enabled} capabilityPresent={capability} dependenciesReady={dependencies} roomEligible={room} endpointAccepted={endpoint} peerTrustReady={peer_trust_ready} peerTrustReadiness={peer_trust_readiness} keyWrapperSource={key_wrapper_source}{session_fields} {status_fields}".format(
+            outcome=body.get("outcome", "unknown"),
+            reason=body.get("reason") or "none",
+            would_start=str(diagnostic.get("wouldStart", "unknown")).lower(),
+            enabled=str(diagnostic.get("enabled", "unknown")).lower(),
+            capability=str(diagnostic.get("capabilityPresent", "unknown")).lower(),
+            dependencies=str(diagnostic.get("dependenciesReady", "unknown")).lower(),
+            room=str(diagnostic.get("roomEligible", "unknown")).lower(),
+            endpoint=str(diagnostic.get("endpointAccepted", "unknown")).lower(),
+            peer_trust_ready=str(diagnostic.get("peerTrustReady", "unknown")).lower(),
+            peer_trust_readiness=diagnostic.get("peerTrustReadiness") or "unknown",
+            key_wrapper_source=diagnostic.get("keyWrapperSource") or "none",
+            session_fields=session_fields,
             status_fields=status_fields,
         )
     )
@@ -1251,6 +1318,21 @@ query_production_start_listener() {
     log "channel=$client command=productionStartListener correlationID=$id $result"
 }
 
+query_production_accept() {
+    local client="$1"
+    local id
+    id="$(correlation_id "$client" productionAccept)"
+    write_production_accept_request "$client" "$id"
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        return
+    fi
+
+    local result
+    result="$(wait_for_result "$client" nativeDirectCallProductionAcceptIncomingCallResult "$id")"
+    log "channel=$client command=productionAccept correlationID=$id $result"
+}
+
 query_production_status() {
     local client="$1"
     local id
@@ -1453,6 +1535,12 @@ main() {
             require_common_environment
             [[ $# -eq 2 ]] || fail "Usage: $SCRIPT_NAME production-start-listener A|B"
             query_production_start_listener "$2"
+            ;;
+        production-accept|productionAccept|production-accept-incoming|productionAcceptIncoming)
+            require_host_tools
+            require_common_environment
+            [[ $# -eq 2 ]] || fail "Usage: $SCRIPT_NAME production-accept A|B"
+            query_production_accept "$2"
             ;;
         production-status|productionStatus)
             require_host_tools

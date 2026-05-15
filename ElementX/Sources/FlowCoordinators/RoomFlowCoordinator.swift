@@ -530,6 +530,41 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
         }
     }
 
+    func nativeDirectCallProductionAcceptIncomingCall() async -> NativeDirectCallProductionAcceptIncomingCallResult {
+        let triggerDiagnostic = await nativeDirectCallProductionTriggerDryRunDiagnostic()
+
+        guard triggerDiagnostic.isEnabled else {
+            return .blocked(triggerDiagnostic.blockedReason, triggerDiagnostic: triggerDiagnostic)
+        }
+
+        if let activeSession = nativeDirectCallRoomFlowOwner?.activeSession, !activeSession.state.isTerminal {
+            return .blocked(.activeSessionExists, triggerDiagnostic: triggerDiagnostic)
+        }
+
+        guard let nativeDirectCallProductionRoomFlowOwner else {
+            return .blocked(.productionOwnerUnavailable, triggerDiagnostic: triggerDiagnostic)
+        }
+
+        guard let activeSession = nativeDirectCallProductionRoomFlowOwner.activeSession,
+              activeSession.direction == .incoming,
+              activeSession.state == .incomingRinging else {
+            return .blocked(.noIncomingCall,
+                            triggerDiagnostic: triggerDiagnostic,
+                            owner: nativeDirectCallProductionRoomFlowOwner)
+        }
+
+        switch await nativeDirectCallProductionRoomFlowOwner.acceptIncomingCall() {
+        case .success(let session):
+            return .accepted(session,
+                             owner: nativeDirectCallProductionRoomFlowOwner,
+                             triggerDiagnostic: triggerDiagnostic)
+        case .failure(let error):
+            return .failed(error,
+                           owner: nativeDirectCallProductionRoomFlowOwner,
+                           triggerDiagnostic: triggerDiagnostic)
+        }
+    }
+
     func nativeDirectCallProductionStatus() -> NativeDirectCallProductionStatus {
         .init(owner: nativeDirectCallProductionRoomFlowOwner)
     }
@@ -2000,6 +2035,7 @@ enum NativeDirectCallProductionStartOutcome: String, Equatable, CustomStringConv
 enum NativeDirectCallProductionStartOperation {
     case listenerStart
     case outgoingStart
+    case acceptIncoming
 }
 
 enum NativeDirectCallProductionStartBlockedReason: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
@@ -2395,6 +2431,77 @@ struct NativeDirectCallProductionStartListenerResult: Equatable, CustomStringCon
             "status: \(status)"
         ]
         return "NativeDirectCallProductionStartListenerResult(\(fields.joined(separator: ", ")))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct NativeDirectCallProductionAcceptIncomingCallResult: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let outcome: NativeDirectCallProductionStartOutcome
+    let reason: NativeDirectCallProductionStartBlockedReason?
+    let triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic
+    let sessionSummary: NativeDirectCallProductionStartedSessionSummary?
+    let status: NativeDirectCallProductionStatus
+
+    var didAccept: Bool {
+        outcome == .started
+    }
+
+    @MainActor
+    static func blocked(_ reason: NativeDirectCallProductionStartBlockedReason,
+                        triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic,
+                        owner: NativeDirectCallRoomFlowOwning? = nil) -> Self {
+        .init(outcome: .blocked,
+              reason: reason,
+              triggerDiagnostic: triggerDiagnostic,
+              sessionSummary: nil,
+              status: .init(owner: owner))
+    }
+
+    @MainActor
+    static func blocked(_ activationReason: DirectCallProductionActivationDisabledReason?,
+                        triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic,
+                        owner: NativeDirectCallRoomFlowOwning? = nil) -> Self {
+        .blocked(.init(activationReason),
+                 triggerDiagnostic: triggerDiagnostic,
+                 owner: owner)
+    }
+
+    @MainActor
+    static func accepted(_ session: DirectCallSession,
+                         owner: NativeDirectCallRoomFlowOwning,
+                         triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic) -> Self {
+        .init(outcome: .started,
+              reason: nil,
+              triggerDiagnostic: triggerDiagnostic,
+              sessionSummary: .init(session: session),
+              status: .init(owner: owner))
+    }
+
+    @MainActor
+    static func failed(_ error: NativeDirectCallRoomFlowOwnerError,
+                       owner: NativeDirectCallRoomFlowOwning,
+                       triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic) -> Self {
+        let reason = NativeDirectCallProductionStartBlockedReason(error, operation: .acceptIncoming)
+        let outcome: NativeDirectCallProductionStartOutcome = reason.isEngineFailureOutcome ? .engineFailure : .blocked
+        return .init(outcome: outcome,
+                     reason: reason,
+                     triggerDiagnostic: triggerDiagnostic,
+                     sessionSummary: nil,
+                     status: .init(owner: owner))
+    }
+
+    var description: String {
+        let fields = [
+            "outcome: \(outcome)",
+            "reason: \(reason?.description ?? "none")",
+            "triggerDiagnostic: \(triggerDiagnostic)",
+            "sessionSummary: \(sessionSummary?.description ?? "none")",
+            "status: \(status)"
+        ]
+        return "NativeDirectCallProductionAcceptIncomingCallResult(\(fields.joined(separator: ", ")))"
     }
 
     var debugDescription: String {

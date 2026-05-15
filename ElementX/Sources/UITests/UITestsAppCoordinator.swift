@@ -949,6 +949,17 @@ class MockScreen: Identifiable {
 
                             let result = UITestsSignal.NativeDirectCallProductionStartListenerResult(correlationID: request.correlationID, startResult)
                             try? client?.send(.nativeDirectCallProductionStartListenerResult(result))
+                        case .nativeDirectCallProductionAcceptIncomingCall(let request):
+                            let acceptResult: NativeDirectCallProductionAcceptIncomingCallResult
+                            if let flowCoordinator {
+                                acceptResult = await flowCoordinator.nativeDirectCallProductionAcceptIncomingCall()
+                            } else {
+                                acceptResult = .blocked(NativeDirectCallProductionStartBlockedReason.roomUnavailable,
+                                                        triggerDiagnostic: .blocked(.roomUnavailable))
+                            }
+
+                            let result = UITestsSignal.NativeDirectCallProductionAcceptIncomingCallResult(correlationID: request.correlationID, acceptResult)
+                            try? client?.send(.nativeDirectCallProductionAcceptIncomingCallResult(result))
                         case .nativeDirectCallProductionStatus(let request):
                             let status: NativeDirectCallProductionStatus
                             if let flowCoordinator {

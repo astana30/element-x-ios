@@ -304,6 +304,20 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
         return await chatsTabFlowCoordinator.nativeDirectCallProductionStartListener()
     }
 
+    func nativeDirectCallProductionAcceptIncomingCall() async -> NativeDirectCallProductionAcceptIncomingCallResult {
+        guard nativeDirectCallDiagnosticRuntimeGate() else {
+            return .blocked(NativeDirectCallProductionStartBlockedReason.diagnosticsUnavailable,
+                            triggerDiagnostic: .blocked(.roomUnavailable))
+        }
+
+        guard navigationTabCoordinator.selectedTab == .chats else {
+            return .blocked(NativeDirectCallProductionStartBlockedReason.roomUnavailable,
+                            triggerDiagnostic: .blocked(.roomUnavailable))
+        }
+
+        return await chatsTabFlowCoordinator.nativeDirectCallProductionAcceptIncomingCall()
+    }
+
     func nativeDirectCallProductionStatus() -> NativeDirectCallProductionStatus {
         guard nativeDirectCallDiagnosticRuntimeGate(),
               navigationTabCoordinator.selectedTab == .chats else {
