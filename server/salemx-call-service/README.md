@@ -114,10 +114,14 @@ For a local endpoint smoke without real Synapse or LiveKit credentials, enable t
 
 ```bash
 cd server/salemx-call-service
-SALEMX_CALL_SERVICE_FAKE_MODE=1 uvicorn salemx_call_service.app:app --host 127.0.0.1 --port 8088
+SALEMX_CALL_SERVICE_FAKE_MODE=1 \
+LIVEKIT_URL=ws://localhost:7880 \
+uvicorn salemx_call_service.app:app --host 127.0.0.1 --port 8088
 ```
 
 Fake mode is off by default and must never be enabled in production. It accepts any non-empty local `Authorization: Bearer ...` value without validating it against Synapse, and never logs the bearer value. The fake response is app-shaped but not usable for real LiveKit media.
+
+If `LIVEKIT_URL` is set in fake mode, the fake response uses it as `livekit.server_url`. If it is absent or blank, fake mode falls back to the local smoke placeholder URL. Fake mode does not require or log LiveKit API credentials.
 
 Fake mode also serves a local Matrix capabilities response at:
 

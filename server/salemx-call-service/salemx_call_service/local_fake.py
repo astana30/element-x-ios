@@ -15,6 +15,8 @@ from .room_validation import RoomEligibility, RoomValidatorProtocol
 from .service import DirectCallTokenService
 
 FAKE_MODE_ENV = "SALEMX_CALL_SERVICE_FAKE_MODE"
+FAKE_LIVEKIT_URL_ENV = "LIVEKIT_URL"
+DEFAULT_FAKE_LIVEKIT_URL = "wss://local-smoke.livekit.invalid"
 DIRECT_CALL_CAPABILITY_NAME = "kz.salemx.direct_call.native"
 DIRECT_CALL_KEY_ENVELOPE = "matrix_sdk_direct_call_media_key_envelope_v1"
 
@@ -49,13 +51,18 @@ def fake_mode_enabled() -> bool:
     return environ.get(FAKE_MODE_ENV) == "1"
 
 
+def fake_livekit_url() -> str:
+    configured_url = environ.get(FAKE_LIVEKIT_URL_ENV, "").strip()
+    return configured_url or DEFAULT_FAKE_LIVEKIT_URL
+
+
 def make_fake_local_service() -> DirectCallTokenService:
     return DirectCallTokenService(
         auth_validator=FakeLocalAuthValidator(),
         room_validator=FakeLocalRoomValidator(),
         allocation_store=InMemoryAllocationStore(allocation_ttl_seconds=300),
         token_issuer=FakeLocalLiveKitTokenIssuer(),
-        livekit_server_url="wss://local-smoke.livekit.invalid",
+        livekit_server_url=fake_livekit_url(),
     )
 
 

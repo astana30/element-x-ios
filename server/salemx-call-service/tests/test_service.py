@@ -13,7 +13,13 @@ from salemx_call_service.auth import AuthenticatedUser
 from salemx_call_service.dto import TokenRequest
 from salemx_call_service.errors import CallServiceError
 from salemx_call_service.livekit_tokens import IssuedLiveKitToken, LiveKitGrant, LiveKitJWTTokenIssuer
-from salemx_call_service.local_fake import DIRECT_CALL_CAPABILITY_NAME, FAKE_MODE_ENV, make_fake_capabilities_payload
+from salemx_call_service.local_fake import (
+    DEFAULT_FAKE_LIVEKIT_URL,
+    DIRECT_CALL_CAPABILITY_NAME,
+    FAKE_LIVEKIT_URL_ENV,
+    FAKE_MODE_ENV,
+    make_fake_capabilities_payload,
+)
 from salemx_call_service.room_validation import InMemoryRoomValidator, RoomEligibility, SynapseRoomValidator
 from salemx_call_service.service import DirectCallTokenService
 from salemx_call_service.synapse_http import SynapseHTTPResponse
@@ -412,8 +418,53 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["allocation"]["call_id"], "call-a")
         self.assertEqual(body["allocation"]["intent"], "audio")
         self.assertTrue(body["livekit"]["room_name"].startswith("salemx-dc-"))
-        self.assertEqual(body["livekit"]["server_url"], "wss://local-smoke.livekit.invalid")
+        self.assertEqual(body["livekit"]["server_url"], DEFAULT_FAKE_LIVEKIT_URL)
         self.assertTrue(body["livekit"]["participant_token"])
+
+    async def test_fake_mode_uses_livekit_url_env_when_present(self) -> None:
+        from salemx_call_service import local_fake
+
+        with patch.dict(os.environ, {
+            local_fake.FAKE_MODE_ENV: "1",
+            local_fake.FAKE_LIVEKIT_URL_ENV: "ws://localhost:7880",
+        }, clear=True):
+            service = local_fake.make_fake_local_service()
+            response = await service.issue_token("Bearer local-fake-bearer", {
+                "version": 1,
+                "call_id": "call-a",
+                "room_id": "!runtime-room:example.test",
+                "peer_user_id": "@runtime-peer:example.test",
+                "intent": "audio",
+                "direction": "outgoing",
+                "device_id": "REALDEVICE",
+            })
+
+        body = response.as_dict()
+        self.assertEqual(body["version"], 1)
+        self.assertEqual(body["livekit"]["server_url"], "ws://localhost:7880")
+        self.assertEqual(body["allocation"]["call_id"], "call-a")
+        self.assertTrue(body["livekit"]["room_name"].startswith("salemx-dc-"))
+        self.assertTrue(body["livekit"]["participant_token"])
+
+    async def test_fake_mode_uses_default_livekit_url_when_env_is_blank(self) -> None:
+        from salemx_call_service import local_fake
+
+        with patch.dict(os.environ, {
+            local_fake.FAKE_MODE_ENV: "1",
+            local_fake.FAKE_LIVEKIT_URL_ENV: "   ",
+        }, clear=True):
+            service = local_fake.make_fake_local_service()
+            response = await service.issue_token("Bearer local-fake-bearer", {
+                "version": 1,
+                "call_id": "call-a",
+                "room_id": "!runtime-room:example.test",
+                "peer_user_id": "@runtime-peer:example.test",
+                "intent": "audio",
+                "direction": "outgoing",
+                "device_id": "REALDEVICE",
+            })
+
+        self.assertEqual(response.as_dict()["livekit"]["server_url"], DEFAULT_FAKE_LIVEKIT_URL)
 
     async def test_fake_mode_rejects_missing_bearer(self) -> None:
         from salemx_call_service import local_fake
@@ -476,7 +527,10 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
                 self.skipTest("FastAPI is not installed in this Python environment.")
             raise
 
-        with patch.dict(os.environ, {FAKE_MODE_ENV: "1"}, clear=True):
+        with patch.dict(os.environ, {
+            FAKE_MODE_ENV: "1",
+            FAKE_LIVEKIT_URL_ENV: "ws://localhost:7880",
+        }, clear=True):
             app = create_app()
 
         status_code, body = await _asgi_post_json(app, ENDPOINT_PATH, {
@@ -496,9 +550,22 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["version"], 1)
         self.assertEqual(body["allocation"]["call_id"], "call-a")
         self.assertEqual(body["allocation"]["intent"], "audio")
-        self.assertEqual(body["livekit"]["server_url"], "wss://local-smoke.livekit.invalid")
+        self.assertEqual(body["livekit"]["server_url"], "ws://localhost:7880")
         self.assertTrue(body["livekit"]["room_name"].startswith("salemx-dc-"))
         self.assertTrue(body["livekit"]["participant_token"])
+
+    async def test_default_mode_still_requires_production_config(self) -> None:
+        try:
+            with patch.dict(os.environ, {}, clear=True):
+                from salemx_call_service.app import create_app
+        except ModuleNotFoundError as error:
+            if error.name == "fastapi":
+                self.skipTest("FastAPI is not installed in this Python environment.")
+            raise
+
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "SYNAPSE_BASE_URL"):
+                create_app()
 
 
 async def _asgi_post_json(app: object, path: str, headers: dict[str, str], payload: dict[str, object]) -> tuple[int, dict[str, object]]:
