@@ -11,23 +11,26 @@ from .auth import AuthenticatedUser, MatrixAuthValidatorProtocol
 from .dto import TokenRequest
 from .errors import CallServiceError
 from .livekit_tokens import IssuedLiveKitToken, LiveKitGrant, LiveKitTokenIssuerProtocol
-from .room_validation import InMemoryRoomValidator, RoomEligibility
+from .room_validation import RoomEligibility, RoomValidatorProtocol
 from .service import DirectCallTokenService
 
 FAKE_MODE_ENV = "SALEMX_CALL_SERVICE_FAKE_MODE"
-FAKE_ACCESS_TOKEN_ENV = "SALEMX_CALL_SERVICE_FAKE_ACCESS_TOKEN"
 DIRECT_CALL_CAPABILITY_NAME = "kz.salemx.direct_call.native"
 DIRECT_CALL_KEY_ENVELOPE = "matrix_sdk_direct_call_media_key_envelope_v1"
 
 
 class FakeLocalAuthValidator(MatrixAuthValidatorProtocol):
-    def __init__(self, access_token: str) -> None:
-        self._access_token = access_token
-
     async def validate_bearer_token(self, bearer_token: str) -> AuthenticatedUser:
-        if bearer_token != self._access_token:
+        if not bearer_token.strip():
             raise CallServiceError(status_code=401, errcode="M_UNKNOWN_TOKEN", error="Missing or invalid Matrix access token.")
-        return AuthenticatedUser("@alice:local.test", "DEVICEA")
+        return AuthenticatedUser("@local-smoke-user:local.test")
+
+
+class FakeLocalRoomValidator(RoomValidatorProtocol):
+    async def validate_direct_call_room(self, authenticated_user: AuthenticatedUser, token_request: TokenRequest) -> RoomEligibility:
+        if token_request.peer_user_id == authenticated_user.user_id:
+            raise CallServiceError(status_code=403, errcode="M_DIRECT_CALL_PEER_MISMATCH", error="Peer user does not match the direct-call room.")
+        return RoomEligibility((authenticated_user.user_id, token_request.peer_user_id), True)
 
 
 class FakeLocalLiveKitTokenIssuer(LiveKitTokenIssuerProtocol):
@@ -48,10 +51,8 @@ def fake_mode_enabled() -> bool:
 
 def make_fake_local_service() -> DirectCallTokenService:
     return DirectCallTokenService(
-        auth_validator=FakeLocalAuthValidator(environ.get(FAKE_ACCESS_TOKEN_ENV, "local-smoke-token")),
-        room_validator=InMemoryRoomValidator({
-            "!local-smoke:example.test": RoomEligibility(("@alice:local.test", "@bob:local.test"), True),
-        }),
+        auth_validator=FakeLocalAuthValidator(),
+        room_validator=FakeLocalRoomValidator(),
         allocation_store=InMemoryAllocationStore(allocation_ttl_seconds=300),
         token_issuer=FakeLocalLiveKitTokenIssuer(),
         livekit_server_url="wss://local-smoke.livekit.invalid",

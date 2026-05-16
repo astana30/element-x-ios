@@ -117,7 +117,7 @@ cd server/salemx-call-service
 SALEMX_CALL_SERVICE_FAKE_MODE=1 uvicorn salemx_call_service.app:app --host 127.0.0.1 --port 8088
 ```
 
-Fake mode is off by default and must never be enabled in production. It accepts a local dummy bearer token only; override it with `SALEMX_CALL_SERVICE_FAKE_ACCESS_TOKEN` if needed. The fake response is app-shaped but not usable for real LiveKit media.
+Fake mode is off by default and must never be enabled in production. It accepts any non-empty local `Authorization: Bearer ...` value without validating it against Synapse, and never logs the bearer value. The fake response is app-shaped but not usable for real LiveKit media.
 
 Fake mode also serves a local Matrix capabilities response at:
 

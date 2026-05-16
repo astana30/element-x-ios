@@ -27,7 +27,6 @@ Run from the repository root:
 ```bash
 cd server/salemx-call-service
 SALEMX_CALL_SERVICE_FAKE_MODE=1 \
-SALEMX_CALL_SERVICE_FAKE_ACCESS_TOKEN=<fake-local-access-credential> \
 python3 -m uvicorn salemx_call_service.app:app --host 127.0.0.1 --port 8088
 ```
 
@@ -40,6 +39,8 @@ GET /_matrix/client/v3/capabilities
 
 Both are local-only smoke endpoints. Fake mode is off by default.
 
+In fake mode, the service accepts any non-empty local `Authorization: Bearer ...` value without validating it against Synapse. This exists only to let the iOS production-shaped token client exercise the local endpoint; the bearer value is not logged and must not be a real Matrix credential.
+
 ## Run App Smoke Tests
 
 In another shell, run the env-gated smoke wrapper against the local fake service:
@@ -47,7 +48,7 @@ In another shell, run the env-gated smoke wrapper against the local fake service
 ```bash
 SALEMX_DIRECTCALL_BACKEND_SMOKE=1 \
 SALEMX_DIRECTCALL_BACKEND_BASE_URL=http://127.0.0.1:8088 \
-SALEMX_DIRECTCALL_BACKEND_FAKE_ACCESS_TOKEN=<same-fake-local-access-credential> \
+SALEMX_DIRECTCALL_BACKEND_FAKE_ACCESS_TOKEN=<fake-local-access-credential> \
 Tools/Scripts/run_direct_call_backend_smoke.sh
 ```
 
@@ -60,7 +61,7 @@ If you need to run the underlying Xcode command manually, use suite-level select
 ```bash
 SALEMX_DIRECTCALL_BACKEND_SMOKE=1 \
 SALEMX_DIRECTCALL_BACKEND_BASE_URL=http://127.0.0.1:8088 \
-SALEMX_DIRECTCALL_BACKEND_FAKE_ACCESS_TOKEN=<same-fake-local-access-credential> \
+SALEMX_DIRECTCALL_BACKEND_FAKE_ACCESS_TOKEN=<fake-local-access-credential> \
 xcodebuild test \
   -project SalemX.xcodeproj \
   -scheme UnitTests \

@@ -181,7 +181,7 @@ class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("!room:example.test", joined_logs)
 
 
-class LocalFakeModeTests(unittest.TestCase):
+class LocalFakeCapabilityTests(unittest.IsolatedAsyncioTestCase):
     def test_fake_capabilities_payload_matches_app_contract(self) -> None:
         payload = make_fake_capabilities_payload(TOKEN_ENDPOINT_PATH)
         capability = payload["capabilities"][DIRECT_CALL_CAPABILITY_NAME]
@@ -194,9 +194,11 @@ class LocalFakeModeTests(unittest.TestCase):
         self.assertTrue(capability["e2ee_required"])
         self.assertEqual(capability["key_envelope"], "matrix_sdk_direct_call_media_key_envelope_v1")
 
-    def test_fake_mode_registers_local_capabilities_route_only_when_explicitly_enabled(self) -> None:
+    async def test_fake_mode_registers_local_capabilities_route_only_when_explicitly_enabled(self) -> None:
         try:
-            from salemx_call_service.app import create_app
+            with patch.dict(os.environ, {FAKE_MODE_ENV: "1"}, clear=True):
+                from salemx_call_service.app import CAPABILITIES_PATH as app_capabilities_path
+                from salemx_call_service.app import create_app
         except ModuleNotFoundError as error:
             if error.name == "fastapi":
                 self.skipTest("FastAPI is not installed in this Python environment.")
@@ -209,8 +211,8 @@ class LocalFakeModeTests(unittest.TestCase):
             fake_app = create_app()
         fake_paths = {route.path for route in fake_app.routes}
 
-        self.assertNotIn(CAPABILITIES_PATH, production_like_paths)
-        self.assertIn(CAPABILITIES_PATH, fake_paths)
+        self.assertNotIn(app_capabilities_path, production_like_paths)
+        self.assertIn(app_capabilities_path, fake_paths)
 
 
 class LiveKitJWTTokenIssuerTests(unittest.IsolatedAsyncioTestCase):
@@ -388,22 +390,21 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
         with patch.dict(os.environ, {}, clear=True):
             self.assertFalse(local_fake.fake_mode_enabled())
 
-    async def test_fake_mode_can_issue_app_shaped_response(self) -> None:
+    async def test_fake_mode_accepts_non_empty_bearer_and_can_issue_app_shaped_response(self) -> None:
         from salemx_call_service import local_fake
 
         with patch.dict(os.environ, {
             local_fake.FAKE_MODE_ENV: "1",
-            local_fake.FAKE_ACCESS_TOKEN_ENV: "local-token-sensitive",
         }, clear=True):
             service = local_fake.make_fake_local_service()
-            response = await service.issue_token("Bearer local-token-sensitive", {
+            response = await service.issue_token("Bearer local-fake-bearer", {
                 "version": 1,
                 "call_id": "call-a",
-                "room_id": "!local-smoke:example.test",
-                "peer_user_id": "@bob:local.test",
+                "room_id": "!runtime-room:example.test",
+                "peer_user_id": "@runtime-peer:example.test",
                 "intent": "audio",
                 "direction": "outgoing",
-                "device_id": "DEVICEA",
+                "device_id": "REALDEVICE",
             })
 
         body = response.as_dict()
@@ -413,6 +414,126 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(body["livekit"]["room_name"].startswith("salemx-dc-"))
         self.assertEqual(body["livekit"]["server_url"], "wss://local-smoke.livekit.invalid")
         self.assertTrue(body["livekit"]["participant_token"])
+
+    async def test_fake_mode_rejects_missing_bearer(self) -> None:
+        from salemx_call_service import local_fake
+
+        with patch.dict(os.environ, {local_fake.FAKE_MODE_ENV: "1"}, clear=True):
+            service = local_fake.make_fake_local_service()
+            with self.assertRaises(CallServiceError) as context:
+                await service.issue_token(None, {
+                    "version": 1,
+                    "call_id": "call-a",
+                    "room_id": "!runtime-room:example.test",
+                    "peer_user_id": "@runtime-peer:example.test",
+                    "intent": "audio",
+                    "direction": "outgoing",
+                })
+
+        self.assertEqual(context.exception.errcode, "M_UNKNOWN_TOKEN")
+
+    async def test_fake_mode_rejects_blank_bearer(self) -> None:
+        from salemx_call_service import local_fake
+
+        with patch.dict(os.environ, {local_fake.FAKE_MODE_ENV: "1"}, clear=True):
+            service = local_fake.make_fake_local_service()
+            with self.assertRaises(CallServiceError) as context:
+                await service.issue_token("Bearer   ", {
+                    "version": 1,
+                    "call_id": "call-a",
+                    "room_id": "!runtime-room:example.test",
+                    "peer_user_id": "@runtime-peer:example.test",
+                    "intent": "audio",
+                    "direction": "outgoing",
+                })
+
+        self.assertEqual(context.exception.errcode, "M_UNKNOWN_TOKEN")
+
+    async def test_fake_mode_does_not_log_bearer_value(self) -> None:
+        from salemx_call_service import local_fake
+
+        local_bearer = "redaction-check-bearer"
+        with patch.dict(os.environ, {local_fake.FAKE_MODE_ENV: "1"}, clear=True):
+            service = local_fake.make_fake_local_service()
+            with self.assertLogs("salemx_call_service.service", level="INFO") as logs:
+                await service.issue_token(f"Bearer {local_bearer}", {
+                    "version": 1,
+                    "call_id": "call-a",
+                    "room_id": "!runtime-room:example.test",
+                    "peer_user_id": "@runtime-peer:example.test",
+                    "intent": "audio",
+                    "direction": "outgoing",
+                })
+
+        self.assertNotIn(local_bearer, "\n".join(logs.output))
+
+    async def test_fake_mode_token_endpoint_returns_200(self) -> None:
+        try:
+            with patch.dict(os.environ, {FAKE_MODE_ENV: "1"}, clear=True):
+                from salemx_call_service.app import ENDPOINT_PATH, create_app
+        except ModuleNotFoundError as error:
+            if error.name == "fastapi":
+                self.skipTest("FastAPI is not installed in this Python environment.")
+            raise
+
+        with patch.dict(os.environ, {FAKE_MODE_ENV: "1"}, clear=True):
+            app = create_app()
+
+        status_code, body = await _asgi_post_json(app, ENDPOINT_PATH, {
+            "authorization": "Bearer local-fake-bearer",
+            "content-type": "application/json",
+        }, {
+            "version": 1,
+            "call_id": "call-a",
+            "room_id": "!runtime-room:example.test",
+            "peer_user_id": "@runtime-peer:example.test",
+            "intent": "audio",
+            "direction": "outgoing",
+            "device_id": "REALDEVICE",
+        })
+
+        self.assertEqual(status_code, 200)
+        self.assertEqual(body["version"], 1)
+        self.assertEqual(body["allocation"]["call_id"], "call-a")
+        self.assertEqual(body["allocation"]["intent"], "audio")
+        self.assertEqual(body["livekit"]["server_url"], "wss://local-smoke.livekit.invalid")
+        self.assertTrue(body["livekit"]["room_name"].startswith("salemx-dc-"))
+        self.assertTrue(body["livekit"]["participant_token"])
+
+
+async def _asgi_post_json(app: object, path: str, headers: dict[str, str], payload: dict[str, object]) -> tuple[int, dict[str, object]]:
+    body = json.dumps(payload).encode("utf-8")
+    sent_messages: list[dict[str, object]] = []
+    received = False
+
+    async def receive() -> dict[str, object]:
+        nonlocal received
+        if received:
+            return {"type": "http.disconnect"}
+        received = True
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    async def send(message: dict[str, object]) -> None:
+        sent_messages.append(message)
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": path,
+        "raw_path": path.encode("ascii"),
+        "query_string": b"",
+        "headers": [(key.encode("ascii"), value.encode("utf-8")) for key, value in headers.items()],
+        "client": ("127.0.0.1", 12345),
+        "server": ("testserver", 80),
+    }
+    await app(scope, receive, send)  # type: ignore[operator]
+
+    status = next(message["status"] for message in sent_messages if message["type"] == "http.response.start")
+    response_body = b"".join(message.get("body", b"") for message in sent_messages if message["type"] == "http.response.body")
+    return int(status), json.loads(response_body.decode("utf-8"))
 
 
 if __name__ == "__main__":
