@@ -1324,7 +1324,7 @@ final class NativeDirectCallCompositionFactoryTests {
                                                 intent: nil,
                                                 timestamp: .now)
         let answerResult = await composition.engine.receiveIncomingCall(event: answerEvent)
-        expectFailure(answerResult, .mediaConnectionFailed)
+        expectFailure(answerResult, .mediaConnectionFailed(.tokenUnavailable))
         #expect(composition.engine.activeSessionPublisher.value?.state == .failed)
     }
 
@@ -1625,7 +1625,7 @@ final class JoinedRoomNativeDirectCallCompositionFactoryTests {
                                                 intent: nil,
                                                 timestamp: .now)
         let answerResult = await composition.engine.receiveIncomingCall(event: answerEvent)
-        expectFailure(answerResult, .mediaConnectionFailed)
+        expectFailure(answerResult, .mediaConnectionFailed(.tokenUnavailable))
         #expect(composition.engine.activeSessionPublisher.value?.state == .failed)
     }
 
@@ -2662,9 +2662,44 @@ final class MatrixDirectCallEngineIntegrationTests {
                              to: harness.listenerA)
 
         #expect(await waitUntil { harness.engineA.activeSessionPublisher.value?.state == .failed })
+        #expect(harness.bridgeA.diagnosticSnapshot.lastReceiveFailureReason == .mediaTokenUnavailable)
         #expect(harness.mediaEngineA.connectedSessions.map(\.callID) == [outgoingSession.callID])
         #expect(harness.mediaEngineA.cleanupCallIDs == [outgoingSession.callID])
         #expect(harness.engineA.activeSessionPublisher.value?.state != .activeAudio)
+    }
+
+    @Test
+    func matrixSignalTransportBridgeReportsMediaSetupUnavailableWhenCallerReceivesAnswer() async throws {
+        let failingMediaEngine = SignalMediaEngineSpy(connectResult: .failure(.mediaSetupUnavailable))
+        let harness = await makeMatrixHarness(cleanupDelay: .seconds(1),
+                                              mediaEngineA: failingMediaEngine)
+        defer { harness.stop() }
+
+        let outgoingResult = await harness.engineA.startOutgoingAudioCall(peer: userB, roomID: roomID)
+        guard case .success(let outgoingSession) = outgoingResult else {
+            Issue.record("Expected outgoing Matrix direct call start to succeed.")
+            return
+        }
+
+        #expect(await waitUntil { harness.senderA.sentSignals.count == 1 })
+        try emitMatrixSignal(#require(harness.senderA.sentSignals.last),
+                             eventID: "$matrix-invite",
+                             senderUserID: userA,
+                             ownUserID: userB,
+                             to: harness.listenerB)
+        #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .incomingRinging })
+
+        _ = await harness.engineB.acceptCall(callID: outgoingSession.callID)
+        #expect(await waitUntil { harness.senderB.sentSignals.count == 1 })
+        try emitMatrixSignal(#require(harness.senderB.sentSignals.last),
+                             eventID: "$matrix-answer",
+                             senderUserID: userB,
+                             ownUserID: userA,
+                             to: harness.listenerA)
+
+        #expect(await waitUntil { harness.bridgeA.diagnosticSnapshot.lastReceiveFailureReason == .mediaSetupUnavailable })
+        #expect(harness.engineA.activeSessionPublisher.value?.state == .failed)
+        #expect(harness.mediaEngineA.cleanupCallIDs == [outgoingSession.callID])
     }
 
     @Test
@@ -2692,6 +2727,7 @@ final class MatrixDirectCallEngineIntegrationTests {
 
         #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .failed })
         #expect(await waitUntil { harness.senderB.sentSignals.count == 1 })
+        #expect(harness.engineB.diagnosticSnapshot.mediaFailureReason == .mediaSetupUnavailable)
         #expect(harness.mediaEngineB.connectedSessions.map(\.callID) == [outgoingSession.callID])
         #expect(harness.mediaEngineB.cleanupCallIDs == [outgoingSession.callID])
         #expect(harness.senderB.sentSignals.map(\.eventType) == [DirectCallMatrixSignalCodec.eventType])

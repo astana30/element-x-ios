@@ -2084,6 +2084,12 @@ enum NativeDirectCallProductionStartBlockedReason: String, Equatable, CustomStri
     case sdkEnvelopeFailed
     case unsupportedRuntime
     case e2eeUnavailable
+    case mediaTokenUnavailable
+    case mediaFactoryUnavailable
+    case mediaE2EEContextUnavailable
+    case mediaConnectFailed
+    case mediaSetupUnavailable
+    case mediaUnsupportedIntent
     case engineStateInvalid
     case engineFailure
     case unknown
@@ -2190,14 +2196,31 @@ enum NativeDirectCallProductionStartBlockedReason: String, Equatable, CustomStri
             self = .e2eeUnavailable
         case .encryptionFailed(let reason):
             self.init(reason)
-        case .mediaConnectionFailed:
-            self = .engineFailure
+        case .mediaConnectionFailed(let mediaError):
+            self.init(mediaError)
         case .staleOrUnknownEvent,
              .callIDMismatch,
              .sessionAlreadyActive,
              .invalidTransition,
              .invalidCallID,
              .invalidIntent:
+            self = .engineStateInvalid
+        }
+    }
+
+    private init(_ mediaError: DirectCallMediaError) {
+        switch mediaError {
+        case .tokenUnavailable:
+            self = .mediaTokenUnavailable
+        case .e2eeContextUnavailable:
+            self = .mediaE2EEContextUnavailable
+        case .mediaSetupUnavailable:
+            self = .mediaSetupUnavailable
+        case .unsupportedIntent:
+            self = .mediaUnsupportedIntent
+        case .audioRouteFailed:
+            self = .mediaConnectFailed
+        case .invalidSession, .e2eeNotReady, .keyMismatch:
             self = .engineStateInvalid
         }
     }
@@ -2247,6 +2270,12 @@ enum NativeDirectCallProductionStartBlockedReason: String, Equatable, CustomStri
              .sdkEnvelopeFailed,
              .unsupportedRuntime,
              .e2eeUnavailable,
+             .mediaTokenUnavailable,
+             .mediaFactoryUnavailable,
+             .mediaE2EEContextUnavailable,
+             .mediaConnectFailed,
+             .mediaSetupUnavailable,
+             .mediaUnsupportedIntent,
              .signalSendFailed,
              .engineStateInvalid,
              .engineFailure:
@@ -2538,6 +2567,14 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
     let productionLastReceiveFailureReason: DirectCallDiagnosticReceiveFailureReason?
     let productionSendRoomFingerprint: String?
     let productionReceiveRoomFingerprint: String?
+    let productionMediaFactoryInjected: Bool
+    let productionMediaCredentialProviderAvailable: Bool
+    let productionMediaE2EEProviderAvailable: Bool
+    let productionMediaKeyHandleAvailable: Bool
+    let productionMediaKeyBridgeHit: Bool
+    let productionMediaConnectAttempted: Bool
+    let productionLiveKitClientConnectAttempted: Bool
+    let productionMediaFailureReason: DirectCallDiagnosticMediaFailureReason
 
     @MainActor
     init(owner: NativeDirectCallRoomFlowOwning?) {
@@ -2582,6 +2619,14 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
         productionLastReceiveFailureReason = diagnosticSnapshot.lastReceiveFailureReason
         productionSendRoomFingerprint = diagnosticSnapshot.sendRoomFingerprint
         productionReceiveRoomFingerprint = diagnosticSnapshot.receiveRoomFingerprint
+        productionMediaFactoryInjected = diagnosticSnapshot.mediaFactoryInjected
+        productionMediaCredentialProviderAvailable = diagnosticSnapshot.mediaCredentialProviderAvailable
+        productionMediaE2EEProviderAvailable = diagnosticSnapshot.mediaE2EEProviderAvailable
+        productionMediaKeyHandleAvailable = diagnosticSnapshot.mediaKeyHandleAvailable
+        productionMediaKeyBridgeHit = diagnosticSnapshot.mediaKeyBridgeHit
+        productionMediaConnectAttempted = diagnosticSnapshot.mediaConnectAttempted
+        productionLiveKitClientConnectAttempted = diagnosticSnapshot.liveKitClientConnectAttempted
+        productionMediaFailureReason = diagnosticSnapshot.mediaFailureReason
     }
 
     static let unavailable = Self(productionOwnerAvailable: false,
@@ -2611,7 +2656,15 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
                                   productionLastEnvelopeRejectedReason: .none,
                                   productionLastReceiveFailureReason: nil,
                                   productionSendRoomFingerprint: nil,
-                                  productionReceiveRoomFingerprint: nil)
+                                  productionReceiveRoomFingerprint: nil,
+                                  productionMediaFactoryInjected: false,
+                                  productionMediaCredentialProviderAvailable: false,
+                                  productionMediaE2EEProviderAvailable: false,
+                                  productionMediaKeyHandleAvailable: false,
+                                  productionMediaKeyBridgeHit: false,
+                                  productionMediaConnectAttempted: false,
+                                  productionLiveKitClientConnectAttempted: false,
+                                  productionMediaFailureReason: .none)
 
     private init(productionOwnerAvailable: Bool,
                  productionListenerStarted: Bool,
@@ -2640,7 +2693,15 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
                  productionLastEnvelopeRejectedReason: DirectCallDiagnosticEnvelopeRejectedReason,
                  productionLastReceiveFailureReason: DirectCallDiagnosticReceiveFailureReason?,
                  productionSendRoomFingerprint: String?,
-                 productionReceiveRoomFingerprint: String?) {
+                 productionReceiveRoomFingerprint: String?,
+                 productionMediaFactoryInjected: Bool,
+                 productionMediaCredentialProviderAvailable: Bool,
+                 productionMediaE2EEProviderAvailable: Bool,
+                 productionMediaKeyHandleAvailable: Bool,
+                 productionMediaKeyBridgeHit: Bool,
+                 productionMediaConnectAttempted: Bool,
+                 productionLiveKitClientConnectAttempted: Bool,
+                 productionMediaFailureReason: DirectCallDiagnosticMediaFailureReason) {
         self.productionOwnerAvailable = productionOwnerAvailable
         self.productionListenerStarted = productionListenerStarted
         self.productionHasActiveSession = productionHasActiveSession
@@ -2669,6 +2730,14 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
         self.productionLastReceiveFailureReason = productionLastReceiveFailureReason
         self.productionSendRoomFingerprint = productionSendRoomFingerprint
         self.productionReceiveRoomFingerprint = productionReceiveRoomFingerprint
+        self.productionMediaFactoryInjected = productionMediaFactoryInjected
+        self.productionMediaCredentialProviderAvailable = productionMediaCredentialProviderAvailable
+        self.productionMediaE2EEProviderAvailable = productionMediaE2EEProviderAvailable
+        self.productionMediaKeyHandleAvailable = productionMediaKeyHandleAvailable
+        self.productionMediaKeyBridgeHit = productionMediaKeyBridgeHit
+        self.productionMediaConnectAttempted = productionMediaConnectAttempted
+        self.productionLiveKitClientConnectAttempted = productionLiveKitClientConnectAttempted
+        self.productionMediaFailureReason = productionMediaFailureReason
     }
 
     var description: String {
@@ -2700,7 +2769,15 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
             "productionLastEnvelopeRejectedReason: \(productionLastEnvelopeRejectedReason)",
             "productionLastReceiveFailureReason: \(String(describing: productionLastReceiveFailureReason))",
             "productionSendRoomFingerprint: \(String(describing: productionSendRoomFingerprint))",
-            "productionReceiveRoomFingerprint: \(String(describing: productionReceiveRoomFingerprint))"
+            "productionReceiveRoomFingerprint: \(String(describing: productionReceiveRoomFingerprint))",
+            "productionMediaFactoryInjected: \(productionMediaFactoryInjected)",
+            "productionMediaCredentialProviderAvailable: \(productionMediaCredentialProviderAvailable)",
+            "productionMediaE2EEProviderAvailable: \(productionMediaE2EEProviderAvailable)",
+            "productionMediaKeyHandleAvailable: \(productionMediaKeyHandleAvailable)",
+            "productionMediaKeyBridgeHit: \(productionMediaKeyBridgeHit)",
+            "productionMediaConnectAttempted: \(productionMediaConnectAttempted)",
+            "productionLiveKitClientConnectAttempted: \(productionLiveKitClientConnectAttempted)",
+            "productionMediaFailureReason: \(productionMediaFailureReason)"
         ]
         return "NativeDirectCallProductionStatus(\(fields.joined(separator: ", ")))"
     }

@@ -234,7 +234,7 @@ final class DirectCallEngine: DirectCallEngineProtocol {
             transitionSession(to: .failed)
             await cleanupMediaIfNeeded(callID: session.callID)
             scheduleCleanup(for: session.callID)
-            return .failure(.mediaConnectionFailed)
+            return .failure(.mediaConnectionFailed(.unsupportedIntent))
         }
 
         switch await mediaEngine.connectAudio(for: session, keyHandle: keyHandle) {
@@ -245,14 +245,14 @@ final class DirectCallEngine: DirectCallEngineProtocol {
                 return .failure(.invalidTransition)
             }
             return .success(activeSession)
-        case .failure:
+        case .failure(let error):
             transitionSession(to: .failed)
             await cleanupMediaIfNeeded(callID: session.callID)
             scheduleCleanup(for: session.callID)
             guard activeSessionSubject.value != nil else {
-                return .failure(.mediaConnectionFailed)
+                return .failure(.mediaConnectionFailed(error))
             }
-            return .failure(.mediaConnectionFailed)
+            return .failure(.mediaConnectionFailed(error))
         }
     }
 

@@ -562,7 +562,7 @@ final class DirectCallEngineTests {
                                                                    intent: nil,
                                                                    timestamp: .now))
 
-        #expect(result == .failure(.mediaConnectionFailed))
+        #expect(result == .failure(.mediaConnectionFailed(.mediaSetupUnavailable)))
         #expect(engine.activeSessionPublisher.value?.state == .failed)
         #expect(mediaEngine.cleanupCallIDs == [startedSession.callID])
     }

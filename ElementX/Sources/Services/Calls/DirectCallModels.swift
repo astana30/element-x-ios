@@ -236,7 +236,7 @@ enum DirectCallEngineError: Error, Equatable {
     case invalidTransition
     case invalidEncryptionTransition
     case encryptionFailed(DirectCallEncryptionFailureReason)
-    case mediaConnectionFailed
+    case mediaConnectionFailed(DirectCallMediaError)
 }
 
 #if DEBUG
@@ -414,6 +414,10 @@ enum DirectCallDiagnosticEnvelopeRejectedReason: String, Codable, Equatable, Cus
 enum DirectCallDiagnosticReceiveFailureReason: String, Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     case decodeFailed
     case engineRejected
+    case answerAccepted
+    case answerWrongCall
+    case answerWrongSender
+    case answerStateInvalid
     case incomingKeyUnwrapFailed
     case incomingKeyTrustViolation
     case incomingNoEligibleDevice
@@ -426,6 +430,12 @@ enum DirectCallDiagnosticReceiveFailureReason: String, Codable, Equatable, Custo
     case incomingDuplicate
     case incomingStateInvalid
     case incomingUnsupportedEnvelope
+    case mediaTokenUnavailable
+    case mediaFactoryUnavailable
+    case mediaE2EEContextUnavailable
+    case mediaConnectFailed
+    case mediaSetupUnavailable
+    case mediaUnsupportedIntent
     case unknown
 
     var description: String {
@@ -445,18 +455,28 @@ enum DirectCallDiagnosticMediaFailureReason: String, Codable, Equatable, CustomS
     case keyBridgeMiss
     case liveKitConnectFailed
     case invalidSessionState
+    case mediaFactoryUnavailable
+    case mediaTokenUnavailable
+    case mediaE2EEContextUnavailable
+    case mediaConnectFailed
+    case mediaSetupUnavailable
+    case mediaUnsupportedIntent
     case unknown
 
     init(_ error: DirectCallMediaError) {
         switch error {
-        case .invalidSession, .unsupportedIntent, .e2eeNotReady, .keyMismatch, .audioRouteFailed:
+        case .invalidSession, .e2eeNotReady, .keyMismatch:
             self = .invalidSessionState
+        case .unsupportedIntent:
+            self = .mediaUnsupportedIntent
         case .e2eeContextUnavailable:
-            self = .e2eeContextUnavailable
+            self = .mediaE2EEContextUnavailable
         case .tokenUnavailable:
-            self = .credentialUnavailable
+            self = .mediaTokenUnavailable
+        case .audioRouteFailed:
+            self = .mediaConnectFailed
         case .mediaSetupUnavailable:
-            self = .unknown
+            self = .mediaSetupUnavailable
         }
     }
 

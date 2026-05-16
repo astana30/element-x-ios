@@ -1395,7 +1395,7 @@ final class DirectCallMediaProviderSkeletonTests {
                                                                          intent: nil,
                                                                          timestamp: .now))
 
-        guard case .failure(.mediaConnectionFailed) = answerResult else {
+        guard case .failure(.mediaConnectionFailed(.mediaSetupUnavailable)) = answerResult else {
             Issue.record("Expected fake LiveKit client connect failure to fail closed at the engine boundary.")
             return
         }

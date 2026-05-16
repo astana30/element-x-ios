@@ -166,6 +166,11 @@ enum UITestsSignal: Codable, Equatable {
         case e2eeUnavailable
         case mediaSetupUnavailable
         case mediaCredentialUnavailable
+        case mediaTokenUnavailable
+        case mediaFactoryUnavailable
+        case mediaE2EEContextUnavailable
+        case mediaConnectFailed
+        case mediaUnsupportedIntent
         case inviteSendFailed
         case resetting
         case unknown
@@ -427,6 +432,14 @@ enum UITestsSignal: Codable, Equatable {
         let productionLastReceiveFailureReason: DirectCallDiagnosticReceiveFailureReason?
         let productionSendRoomFingerprint: String?
         let productionReceiveRoomFingerprint: String?
+        let productionMediaFactoryInjected: Bool
+        let productionMediaCredentialProviderAvailable: Bool
+        let productionMediaE2EEProviderAvailable: Bool
+        let productionMediaKeyHandleAvailable: Bool
+        let productionMediaKeyBridgeHit: Bool
+        let productionMediaConnectAttempted: Bool
+        let productionLiveKitClientConnectAttempted: Bool
+        let productionMediaFailureReason: DirectCallDiagnosticMediaFailureReason
 
         init(productionOwnerAvailable: Bool,
              productionListenerStarted: Bool,
@@ -455,7 +468,15 @@ enum UITestsSignal: Codable, Equatable {
              productionLastEnvelopeRejectedReason: DirectCallDiagnosticEnvelopeRejectedReason = .none,
              productionLastReceiveFailureReason: DirectCallDiagnosticReceiveFailureReason? = nil,
              productionSendRoomFingerprint: String? = nil,
-             productionReceiveRoomFingerprint: String? = nil) {
+             productionReceiveRoomFingerprint: String? = nil,
+             productionMediaFactoryInjected: Bool = false,
+             productionMediaCredentialProviderAvailable: Bool = false,
+             productionMediaE2EEProviderAvailable: Bool = false,
+             productionMediaKeyHandleAvailable: Bool = false,
+             productionMediaKeyBridgeHit: Bool = false,
+             productionMediaConnectAttempted: Bool = false,
+             productionLiveKitClientConnectAttempted: Bool = false,
+             productionMediaFailureReason: DirectCallDiagnosticMediaFailureReason = .none) {
             self.productionOwnerAvailable = productionOwnerAvailable
             self.productionListenerStarted = productionListenerStarted
             self.productionHasActiveSession = productionHasActiveSession
@@ -484,6 +505,14 @@ enum UITestsSignal: Codable, Equatable {
             self.productionLastReceiveFailureReason = productionLastReceiveFailureReason
             self.productionSendRoomFingerprint = productionSendRoomFingerprint.flatMap { UITestsSignalling.sanitizedIdentifier($0) }
             self.productionReceiveRoomFingerprint = productionReceiveRoomFingerprint.flatMap { UITestsSignalling.sanitizedIdentifier($0) }
+            self.productionMediaFactoryInjected = productionMediaFactoryInjected
+            self.productionMediaCredentialProviderAvailable = productionMediaCredentialProviderAvailable
+            self.productionMediaE2EEProviderAvailable = productionMediaE2EEProviderAvailable
+            self.productionMediaKeyHandleAvailable = productionMediaKeyHandleAvailable
+            self.productionMediaKeyBridgeHit = productionMediaKeyBridgeHit
+            self.productionMediaConnectAttempted = productionMediaConnectAttempted
+            self.productionLiveKitClientConnectAttempted = productionLiveKitClientConnectAttempted
+            self.productionMediaFailureReason = productionMediaFailureReason
         }
     }
 
@@ -920,7 +949,15 @@ extension UITestsSignal.NativeDirectCallProductionStatusPayload {
                   productionLastEnvelopeRejectedReason: status.productionLastEnvelopeRejectedReason,
                   productionLastReceiveFailureReason: status.productionLastReceiveFailureReason,
                   productionSendRoomFingerprint: status.productionSendRoomFingerprint,
-                  productionReceiveRoomFingerprint: status.productionReceiveRoomFingerprint)
+                  productionReceiveRoomFingerprint: status.productionReceiveRoomFingerprint,
+                  productionMediaFactoryInjected: status.productionMediaFactoryInjected,
+                  productionMediaCredentialProviderAvailable: status.productionMediaCredentialProviderAvailable,
+                  productionMediaE2EEProviderAvailable: status.productionMediaE2EEProviderAvailable,
+                  productionMediaKeyHandleAvailable: status.productionMediaKeyHandleAvailable,
+                  productionMediaKeyBridgeHit: status.productionMediaKeyBridgeHit,
+                  productionMediaConnectAttempted: status.productionMediaConnectAttempted,
+                  productionLiveKitClientConnectAttempted: status.productionLiveKitClientConnectAttempted,
+                  productionMediaFailureReason: status.productionMediaFailureReason)
     }
 }
 
@@ -1179,8 +1216,8 @@ extension UITestsSignal.NativeDirectCallDiagnosticFailureReason {
             self = .e2eeUnavailable
         case .encryptionFailed:
             self = .e2eeUnavailable
-        case .mediaConnectionFailed:
-            self = .mediaSetupUnavailable
+        case .mediaConnectionFailed(let mediaError):
+            self = .init(mediaError)
         case .staleOrUnknownEvent,
              .roomMismatch,
              .callIDMismatch,
@@ -1188,6 +1225,23 @@ extension UITestsSignal.NativeDirectCallDiagnosticFailureReason {
              .invalidTransition,
              .invalidCallID,
              .invalidIntent:
+            self = .engineStateInvalid
+        }
+    }
+
+    private init(_ mediaError: DirectCallMediaError) {
+        switch mediaError {
+        case .tokenUnavailable:
+            self = .mediaTokenUnavailable
+        case .e2eeContextUnavailable:
+            self = .mediaE2EEContextUnavailable
+        case .mediaSetupUnavailable:
+            self = .mediaSetupUnavailable
+        case .unsupportedIntent:
+            self = .mediaUnsupportedIntent
+        case .audioRouteFailed:
+            self = .mediaConnectFailed
+        case .invalidSession, .e2eeNotReady, .keyMismatch:
             self = .engineStateInvalid
         }
     }

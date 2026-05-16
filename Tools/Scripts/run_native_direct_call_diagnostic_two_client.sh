@@ -695,7 +695,10 @@ def format_production_status(status):
         "productionDirectCallEventTypeSeenCount={type_count} productionEnvelopeExtractedCount={extracted_count} productionEnvelopeDeliveredToEngineCount={delivered_count} "
         "productionHistoricalEventIgnoredCount={historical_count} productionLiveEventDeliveredCount={live_count} productionBaselineEstablished={baseline} "
         "productionLastReceiveEventKind={receive_kind} productionLastEnvelopeRejectedReason={rejected_reason} productionLastReceiveFailureReason={receive_failure} "
-        "productionSendRoomFingerprint={send_room} productionReceiveRoomFingerprint={receive_room}"
+        "productionSendRoomFingerprint={send_room} productionReceiveRoomFingerprint={receive_room} "
+        "productionMediaFactoryInjected={media_factory} productionMediaCredentialProviderAvailable={media_credentials} productionMediaE2EEProviderAvailable={media_e2ee_provider} "
+        "productionMediaKeyHandleAvailable={media_key_handle} productionMediaKeyBridgeHit={media_key_bridge} productionMediaConnectAttempted={media_connect} "
+        "productionLiveKitClientConnectAttempted={livekit_connect} productionMediaFailureReason={media_failure}"
     ).format(
         owner=str(status.get("productionOwnerAvailable", "unknown")).lower(),
         listener=str(status.get("productionListenerStarted", "unknown")).lower(),
@@ -725,6 +728,14 @@ def format_production_status(status):
         receive_failure=status.get("productionLastReceiveFailureReason", "none"),
         send_room=status.get("productionSendRoomFingerprint", "none"),
         receive_room=status.get("productionReceiveRoomFingerprint", "none"),
+        media_factory=str(status.get("productionMediaFactoryInjected", "unknown")).lower(),
+        media_credentials=str(status.get("productionMediaCredentialProviderAvailable", "unknown")).lower(),
+        media_e2ee_provider=str(status.get("productionMediaE2EEProviderAvailable", "unknown")).lower(),
+        media_key_handle=str(status.get("productionMediaKeyHandleAvailable", "unknown")).lower(),
+        media_key_bridge=str(status.get("productionMediaKeyBridgeHit", "unknown")).lower(),
+        media_connect=str(status.get("productionMediaConnectAttempted", "unknown")).lower(),
+        livekit_connect=str(status.get("productionLiveKitClientConnectAttempted", "unknown")).lower(),
+        media_failure=status.get("productionMediaFailureReason", "none"),
     )
 
 if expected_signal == "nativeDirectCallDiagnosticResult":

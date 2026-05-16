@@ -1425,8 +1425,28 @@ extension DirectCallDiagnosticReceiveFailureReason {
             self = .incomingDuplicate
         case .sessionAlreadyActive, .invalidTransition, .invalidEncryptionTransition:
             self = .incomingStateInvalid
-        case .mediaConnectionFailed:
-            self = .unknown
+        case .mediaConnectionFailed(let mediaError):
+            self = .init(mediaError)
+        case .encryptionFailed(let reason):
+            self = .init(reason)
+        }
+    }
+
+    init(_ error: DirectCallEngineError, signalType: DirectCallSignalType) {
+        guard signalType == .answer else {
+            self.init(error)
+            return
+        }
+
+        switch error {
+        case .invalidPeer, .invalidSender:
+            self = .answerWrongSender
+        case .invalidRoomID, .roomMismatch, .invalidCallID, .callIDMismatch, .staleOrUnknownEvent:
+            self = .answerWrongCall
+        case .invalidIntent, .sessionAlreadyActive, .invalidTransition, .invalidEncryptionTransition:
+            self = .answerStateInvalid
+        case .mediaConnectionFailed(let mediaError):
+            self = .init(mediaError)
         case .encryptionFailed(let reason):
             self = .init(reason)
         }
@@ -1448,6 +1468,23 @@ extension DirectCallDiagnosticReceiveFailureReason {
             self = .incomingWrongSender
         case .missingKeyExchange, .keyExchangeFailed, .e2eeNotProven, .e2eeUnavailable, .cannotWrap, .cannotUnwrap, .sdkWrapperUnavailable, .sdkEnvelopeFailed, .unsupportedRuntime:
             self = .incomingKeyUnwrapFailed
+        }
+    }
+
+    init(_ mediaError: DirectCallMediaError) {
+        switch mediaError {
+        case .tokenUnavailable:
+            self = .mediaTokenUnavailable
+        case .e2eeContextUnavailable:
+            self = .mediaE2EEContextUnavailable
+        case .mediaSetupUnavailable:
+            self = .mediaSetupUnavailable
+        case .unsupportedIntent:
+            self = .mediaUnsupportedIntent
+        case .audioRouteFailed:
+            self = .mediaConnectFailed
+        case .invalidSession, .e2eeNotReady, .keyMismatch:
+            self = .answerStateInvalid
         }
     }
 }
@@ -1684,7 +1721,7 @@ final class DirectCallEngineSignalBridge {
                     #if DEBUG
                     if case .failure(let error) = result {
                         diagnosticState.lastEnvelopeRejectedReason = .init(error)
-                        diagnosticState.lastReceiveFailureReason = .init(error)
+                        diagnosticState.lastReceiveFailureReason = .init(error, signalType: signalEvent.type)
                     }
                     #endif
                 }

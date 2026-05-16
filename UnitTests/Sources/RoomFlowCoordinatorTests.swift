@@ -1096,6 +1096,42 @@ final class RoomFlowCoordinatorTests {
     }
 
     @Test
+    func nativeDirectCallProductionAcceptReportsMediaTokenUnavailable() async throws {
+        let productionOwner = NativeDirectCallRoomFlowOwnerSpy()
+        productionOwner.isListenerStarted = true
+        productionOwner.activeSession = directCallSession(direction: .incoming, state: .incomingRinging)
+        productionOwner.acceptResult = .failure(.trigger(.control(.engine(.mediaConnectionFailed(.tokenUnavailable)))))
+        productionOwner.diagnosticSnapshot = .init(lastSignalEventEmitted: .answer,
+                                                   lastSignalSendAttempted: true,
+                                                   lastSignalSendSucceeded: true,
+                                                   mediaFactoryInjected: true,
+                                                   mediaCredentialProviderAvailable: true,
+                                                   mediaE2EEProviderAvailable: true,
+                                                   mediaKeyHandleAvailable: true,
+                                                   mediaConnectAttempted: true,
+                                                   mediaFailureReason: .mediaTokenUnavailable)
+        let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: enabledProductionActivationDiagnostic())
+        setupRoomFlowCoordinator(nativeDirectCallProductionActivationDryRunProviderFactory: { _ in provider },
+                                 nativeDirectCallProductionRoomFlowOwnerFactory: { _ in .owner(productionOwner) })
+
+        try await process(route: .room(roomID: "1", via: []))
+        _ = await roomFlowCoordinator.nativeDirectCallProductionStartListener()
+        let result = await roomFlowCoordinator.nativeDirectCallProductionAcceptIncomingCall()
+
+        #expect(result.didAccept == false)
+        #expect(result.outcome == .engineFailure)
+        #expect(result.reason == .mediaTokenUnavailable)
+        #expect(result.status.productionLastSignalEventEmitted == .answer)
+        #expect(result.status.productionLastSignalSendAttempted)
+        #expect(result.status.productionLastSignalSendSucceeded == true)
+        #expect(result.status.productionMediaConnectAttempted)
+        #expect(result.status.productionMediaFailureReason == .mediaTokenUnavailable)
+        #expect(String(describing: result).contains("participant_token") == false)
+        #expect(String(describing: result).contains("encrypted_payload") == false)
+        #expect(productionOwner.acceptCount == 1)
+    }
+
+    @Test
     func nativeDirectCallProductionStatusDoesNotCreateOwner() async throws {
         // swiftlint:disable trailing_closure
         setupRoomFlowCoordinator(nativeDirectCallProductionRoomFlowOwnerFactory: { _ in
@@ -1143,7 +1179,15 @@ final class RoomFlowCoordinatorTests {
                                                    lastEnvelopeRejectedReason: .none,
                                                    lastReceiveFailureReason: nil,
                                                    sendRoomFingerprint: "send-room-redacted",
-                                                   receiveRoomFingerprint: "receive-room-redacted")
+                                                   receiveRoomFingerprint: "receive-room-redacted",
+                                                   mediaFactoryInjected: true,
+                                                   mediaCredentialProviderAvailable: true,
+                                                   mediaE2EEProviderAvailable: true,
+                                                   mediaKeyHandleAvailable: true,
+                                                   mediaKeyBridgeHit: true,
+                                                   mediaConnectAttempted: true,
+                                                   liveKitClientConnectAttempted: true,
+                                                   mediaFailureReason: .mediaSetupUnavailable)
         let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: enabledProductionActivationDiagnostic())
         setupRoomFlowCoordinator(nativeDirectCallDiagnosticCommandConfiguration: .init(isEnabled: true)) { _ in
             diagnosticOwner
@@ -1187,6 +1231,14 @@ final class RoomFlowCoordinatorTests {
         #expect(productionStatus.productionLastReceiveFailureReason == nil)
         #expect(productionStatus.productionSendRoomFingerprint == "send-room-redacted")
         #expect(productionStatus.productionReceiveRoomFingerprint == "receive-room-redacted")
+        #expect(productionStatus.productionMediaFactoryInjected)
+        #expect(productionStatus.productionMediaCredentialProviderAvailable)
+        #expect(productionStatus.productionMediaE2EEProviderAvailable)
+        #expect(productionStatus.productionMediaKeyHandleAvailable)
+        #expect(productionStatus.productionMediaKeyBridgeHit)
+        #expect(productionStatus.productionMediaConnectAttempted)
+        #expect(productionStatus.productionLiveKitClientConnectAttempted)
+        #expect(productionStatus.productionMediaFailureReason == .mediaSetupUnavailable)
         #expect(diagnosticStatus.state == .idle)
         #expect(diagnosticStatus.hasActiveSession == false)
         #expect(diagnosticStatus.lastSignalSendAttempted == false)
@@ -2188,7 +2240,15 @@ final class RoomFlowCoordinatorTests {
                                                                            productionLastEnvelopeRejectedReason: .none,
                                                                            productionLastReceiveFailureReason: .engineRejected,
                                                                            productionSendRoomFingerprint: "send-room-redacted",
-                                                                           productionReceiveRoomFingerprint: "receive-room-redacted")
+                                                                           productionReceiveRoomFingerprint: "receive-room-redacted",
+                                                                           productionMediaFactoryInjected: true,
+                                                                           productionMediaCredentialProviderAvailable: true,
+                                                                           productionMediaE2EEProviderAvailable: true,
+                                                                           productionMediaKeyHandleAvailable: true,
+                                                                           productionMediaKeyBridgeHit: true,
+                                                                           productionMediaConnectAttempted: true,
+                                                                           productionLiveKitClientConnectAttempted: true,
+                                                                           productionMediaFailureReason: .mediaSetupUnavailable)
         let result = UITestsSignal.NativeDirectCallProductionStatusResult(correlationID: "call-A-1",
                                                                           status: status)
         let requestSignal = UITestsSignal.nativeDirectCallProductionStatus(request)
@@ -2222,6 +2282,15 @@ final class RoomFlowCoordinatorTests {
         #expect(encodedResult.contains("productionLastReceiveFailureReason"))
         #expect(encodedResult.contains("productionSendRoomFingerprint"))
         #expect(encodedResult.contains("productionReceiveRoomFingerprint"))
+        #expect(encodedResult.contains("productionMediaFactoryInjected"))
+        #expect(encodedResult.contains("productionMediaCredentialProviderAvailable"))
+        #expect(encodedResult.contains("productionMediaE2EEProviderAvailable"))
+        #expect(encodedResult.contains("productionMediaKeyHandleAvailable"))
+        #expect(encodedResult.contains("productionMediaKeyBridgeHit"))
+        #expect(encodedResult.contains("productionMediaConnectAttempted"))
+        #expect(encodedResult.contains("productionLiveKitClientConnectAttempted"))
+        #expect(encodedResult.contains("productionMediaFailureReason"))
+        #expect(encodedResult.contains("mediaSetupUnavailable"))
         #expect(encodedResult.contains("send-room-redacted"))
         #expect(encodedResult.contains("receive-room-redacted"))
         #expect(result.correlationID == request.correlationID)
