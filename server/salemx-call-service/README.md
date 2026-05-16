@@ -116,12 +116,16 @@ For a local endpoint smoke without real Synapse or LiveKit credentials, enable t
 cd server/salemx-call-service
 SALEMX_CALL_SERVICE_FAKE_MODE=1 \
 LIVEKIT_URL=ws://localhost:7880 \
+LIVEKIT_API_KEY=<local-livekit-api-key> \
+LIVEKIT_API_SECRET=<local-livekit-api-secret> \
 uvicorn salemx_call_service.app:app --host 127.0.0.1 --port 8088
 ```
 
-Fake mode is off by default and must never be enabled in production. It accepts any non-empty local `Authorization: Bearer ...` value without validating it against Synapse, and never logs the bearer value. The fake response is app-shaped but not usable for real LiveKit media.
+Fake mode is off by default and must never be enabled in production. It accepts any non-empty local `Authorization: Bearer ...` value without validating it against Synapse, and never logs the bearer value. Without local LiveKit signing configuration, the fake response is app-shaped but not usable for real LiveKit media.
 
-If `LIVEKIT_URL` is set in fake mode, the fake response uses it as `livekit.server_url`. If it is absent or blank, fake mode falls back to the local smoke placeholder URL. Fake mode does not require or log LiveKit API credentials.
+If `LIVEKIT_URL` is set in fake mode, the fake response uses it as `livekit.server_url`. If it is absent or blank, fake mode falls back to the local smoke placeholder URL.
+
+If `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` are both set in fake mode, the fake response contains a short-lived LiveKit-compatible participant JWT signed for the allocated room. This is intended only for local media smoke tests against a local LiveKit dev server. If either value is absent, fake mode keeps returning a placeholder participant token for response-shape tests. Fake mode must not log these values or the issued participant token.
 
 Fake mode also serves a local Matrix capabilities response at:
 

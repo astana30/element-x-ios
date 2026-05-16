@@ -28,6 +28,8 @@ Run from the repository root:
 cd server/salemx-call-service
 SALEMX_CALL_SERVICE_FAKE_MODE=1 \
 LIVEKIT_URL=ws://localhost:7880 \
+LIVEKIT_API_KEY=<local-livekit-api-key> \
+LIVEKIT_API_SECRET=<local-livekit-api-secret> \
 python3 -m uvicorn salemx_call_service.app:app --host 127.0.0.1 --port 8088
 ```
 
@@ -42,7 +44,9 @@ Both are local-only smoke endpoints. Fake mode is off by default.
 
 In fake mode, the service accepts any non-empty local `Authorization: Bearer ...` value without validating it against Synapse. This exists only to let the iOS production-shaped token client exercise the local endpoint; the bearer value is not logged and must not be a real Matrix credential.
 
-If `LIVEKIT_URL` is set in fake mode, the fake token response uses it as `livekit.server_url`. If it is absent or blank, the response keeps the local smoke fallback URL. This controls only the app-visible LiveKit URL in the fake response; fake mode does not require or log LiveKit API credentials.
+If `LIVEKIT_URL` is set in fake mode, the fake token response uses it as `livekit.server_url`. If it is absent or blank, the response keeps the local smoke fallback URL.
+
+If `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` are both set in fake mode, the fake token response contains a short-lived LiveKit-compatible participant JWT signed for the allocated room. This is needed for local media smoke tests against a local LiveKit dev server. If either value is absent, fake mode keeps returning a placeholder participant token that is useful only for app-side response-shape tests. Fake mode must not log these values or the issued participant token.
 
 ## Run App Smoke Tests
 

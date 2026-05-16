@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
+import hmac
 import json
 import os
 import unittest
@@ -16,6 +18,8 @@ from salemx_call_service.livekit_tokens import IssuedLiveKitToken, LiveKitGrant,
 from salemx_call_service.local_fake import (
     DEFAULT_FAKE_LIVEKIT_URL,
     DIRECT_CALL_CAPABILITY_NAME,
+    FAKE_LIVEKIT_API_KEY_ENV,
+    FAKE_LIVEKIT_API_SECRET_ENV,
     FAKE_LIVEKIT_URL_ENV,
     FAKE_MODE_ENV,
     make_fake_capabilities_payload,
@@ -245,6 +249,12 @@ class LiveKitJWTTokenIssuerTests(unittest.IsolatedAsyncioTestCase):
         claims = self.decode_unverified_claims(issued.participant_token)
 
         self.assertEqual(claims["iss"], "test-api-key")
+        self.assertIsInstance(claims["sub"], str)
+        self.assertTrue(claims["sub"])
+        self.assertNotIn("iat", claims)
+        self.assertIsInstance(claims["nbf"], int)
+        self.assertIsInstance(claims["exp"], int)
+        self.assertLess(claims["nbf"], claims["exp"])
         self.assertEqual(claims["video"]["room"], "salemx-dc-allocation-a")
         self.assertTrue(claims["video"]["roomJoin"])
         self.assertTrue(claims["video"]["canPublish"])
@@ -258,6 +268,15 @@ class LiveKitJWTTokenIssuerTests(unittest.IsolatedAsyncioTestCase):
         payload = token.split(".")[1]
         padded = payload + "=" * (-len(payload) % 4)
         return json.loads(base64.urlsafe_b64decode(padded.encode("ascii")))
+
+    @staticmethod
+    def verify_hs256_signature(token: str, signing_key: str) -> bool:
+        header, payload, signature = token.split(".")
+        expected_signature = hmac.new(signing_key.encode("utf-8"),
+                                      f"{header}.{payload}".encode("ascii"),
+                                      hashlib.sha256).digest()
+        expected = base64.urlsafe_b64encode(expected_signature).rstrip(b"=").decode("ascii")
+        return hmac.compare_digest(signature, expected)
 
 
 class FakeSynapseHTTPClient:
@@ -427,6 +446,8 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
         with patch.dict(os.environ, {
             local_fake.FAKE_MODE_ENV: "1",
             local_fake.FAKE_LIVEKIT_URL_ENV: "ws://localhost:7880",
+            local_fake.FAKE_LIVEKIT_API_KEY_ENV: "test-api-key",
+            local_fake.FAKE_LIVEKIT_API_SECRET_ENV: "test-signing-key",
         }, clear=True):
             service = local_fake.make_fake_local_service()
             response = await service.issue_token("Bearer local-fake-bearer", {
@@ -445,6 +466,73 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["allocation"]["call_id"], "call-a")
         self.assertTrue(body["livekit"]["room_name"].startswith("salemx-dc-"))
         self.assertTrue(body["livekit"]["participant_token"])
+
+    async def test_fake_mode_uses_livekit_jwt_when_api_credentials_are_present(self) -> None:
+        from salemx_call_service import local_fake
+
+        with patch.dict(os.environ, {
+            local_fake.FAKE_MODE_ENV: "1",
+            local_fake.FAKE_LIVEKIT_URL_ENV: "ws://localhost:7880",
+            local_fake.FAKE_LIVEKIT_API_KEY_ENV: "test-api-key",
+            local_fake.FAKE_LIVEKIT_API_SECRET_ENV: "test-signing-key",
+        }, clear=True):
+            service = local_fake.make_fake_local_service()
+            response = await service.issue_token("Bearer local-fake-bearer", {
+                "version": 1,
+                "call_id": "call-a",
+                "room_id": "!runtime-room:example.test",
+                "peer_user_id": "@runtime-peer:example.test",
+                "intent": "audio",
+                "direction": "outgoing",
+                "device_id": "REALDEVICE",
+            })
+            incoming_response = await service.issue_token("Bearer local-fake-bearer", {
+                "version": 1,
+                "call_id": "call-a",
+                "room_id": "!runtime-room:example.test",
+                "peer_user_id": "@runtime-peer:example.test",
+                "intent": "audio",
+                "direction": "incoming",
+                "device_id": "REALDEVICE",
+            })
+
+        body = response.as_dict()
+        participant_token = body["livekit"]["participant_token"]
+        claims = LiveKitJWTTokenIssuerTests.decode_unverified_claims(participant_token)
+        self.assertEqual(claims["iss"], "test-api-key")
+        self.assertTrue(claims["sub"])
+        self.assertIsInstance(claims["iat"], int)
+        self.assertIsInstance(claims["nbf"], int)
+        self.assertIsInstance(claims["exp"], int)
+        self.assertLess(claims["nbf"], claims["exp"])
+        self.assertEqual(claims["video"]["room"], body["livekit"]["room_name"])
+        self.assertTrue(claims["video"]["roomJoin"])
+        self.assertTrue(claims["video"]["canPublish"])
+        self.assertTrue(claims["video"]["canSubscribe"])
+        self.assertFalse(claims["video"]["canPublishData"])
+        self.assertTrue(LiveKitJWTTokenIssuerTests.verify_hs256_signature(participant_token, "test-signing-key"))
+        incoming_claims = LiveKitJWTTokenIssuerTests.decode_unverified_claims(incoming_response.as_dict()["livekit"]["participant_token"])
+        self.assertNotEqual(claims["sub"], incoming_claims["sub"])
+
+    async def test_fake_mode_uses_placeholder_token_without_api_credentials(self) -> None:
+        from salemx_call_service import local_fake
+
+        with patch.dict(os.environ, {
+            local_fake.FAKE_MODE_ENV: "1",
+            local_fake.FAKE_LIVEKIT_URL_ENV: "ws://localhost:7880",
+        }, clear=True):
+            service = local_fake.make_fake_local_service()
+            response = await service.issue_token("Bearer local-fake-bearer", {
+                "version": 1,
+                "call_id": "call-a",
+                "room_id": "!runtime-room:example.test",
+                "peer_user_id": "@runtime-peer:example.test",
+                "intent": "audio",
+                "direction": "outgoing",
+                "device_id": "REALDEVICE",
+            })
+
+        self.assertEqual(response.as_dict()["livekit"]["participant_token"], "local-smoke-participant-token")
 
     async def test_fake_mode_uses_default_livekit_url_when_env_is_blank(self) -> None:
         from salemx_call_service import local_fake
@@ -530,6 +618,8 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
         with patch.dict(os.environ, {
             FAKE_MODE_ENV: "1",
             FAKE_LIVEKIT_URL_ENV: "ws://localhost:7880",
+            FAKE_LIVEKIT_API_KEY_ENV: "test-api-key",
+            FAKE_LIVEKIT_API_SECRET_ENV: "test-signing-key",
         }, clear=True):
             app = create_app()
 
@@ -552,7 +642,10 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["allocation"]["intent"], "audio")
         self.assertEqual(body["livekit"]["server_url"], "ws://localhost:7880")
         self.assertTrue(body["livekit"]["room_name"].startswith("salemx-dc-"))
-        self.assertTrue(body["livekit"]["participant_token"])
+        claims = LiveKitJWTTokenIssuerTests.decode_unverified_claims(body["livekit"]["participant_token"])
+        self.assertEqual(claims["iss"], "test-api-key")
+        self.assertEqual(claims["video"]["room"], body["livekit"]["room_name"])
+        self.assertTrue(LiveKitJWTTokenIssuerTests.verify_hs256_signature(body["livekit"]["participant_token"], "test-signing-key"))
 
     async def test_default_mode_still_requires_production_config(self) -> None:
         try:

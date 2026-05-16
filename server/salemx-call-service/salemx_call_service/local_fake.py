@@ -10,12 +10,14 @@ from .allocation import InMemoryAllocationStore
 from .auth import AuthenticatedUser, MatrixAuthValidatorProtocol
 from .dto import TokenRequest
 from .errors import CallServiceError
-from .livekit_tokens import IssuedLiveKitToken, LiveKitGrant, LiveKitTokenIssuerProtocol
+from .livekit_tokens import IssuedLiveKitToken, LiveKitGrant, LiveKitJWTTokenIssuer, LiveKitTokenIssuerProtocol
 from .room_validation import RoomEligibility, RoomValidatorProtocol
 from .service import DirectCallTokenService
 
 FAKE_MODE_ENV = "SALEMX_CALL_SERVICE_FAKE_MODE"
 FAKE_LIVEKIT_URL_ENV = "LIVEKIT_URL"
+FAKE_LIVEKIT_API_KEY_ENV = "LIVEKIT_API_KEY"
+FAKE_LIVEKIT_API_SECRET_ENV = "LIVEKIT_API_SECRET"
 DEFAULT_FAKE_LIVEKIT_URL = "wss://local-smoke.livekit.invalid"
 DIRECT_CALL_CAPABILITY_NAME = "kz.salemx.direct_call.native"
 DIRECT_CALL_KEY_ENVELOPE = "matrix_sdk_direct_call_media_key_envelope_v1"
@@ -56,12 +58,24 @@ def fake_livekit_url() -> str:
     return configured_url or DEFAULT_FAKE_LIVEKIT_URL
 
 
+def fake_token_issuer() -> LiveKitTokenIssuerProtocol:
+    api_key = environ.get(FAKE_LIVEKIT_API_KEY_ENV, "").strip()
+    api_secret = environ.get(FAKE_LIVEKIT_API_SECRET_ENV, "").strip()
+    if api_key and api_secret:
+        return LiveKitJWTTokenIssuer(api_key=api_key,
+                                     api_secret=api_secret,
+                                     token_ttl_seconds=120,
+                                     include_issued_at=True,
+                                     include_device_in_identity=True)
+    return FakeLocalLiveKitTokenIssuer()
+
+
 def make_fake_local_service() -> DirectCallTokenService:
     return DirectCallTokenService(
         auth_validator=FakeLocalAuthValidator(),
         room_validator=FakeLocalRoomValidator(),
         allocation_store=InMemoryAllocationStore(allocation_ttl_seconds=300),
-        token_issuer=FakeLocalLiveKitTokenIssuer(),
+        token_issuer=fake_token_issuer(),
         livekit_server_url=fake_livekit_url(),
     )
 

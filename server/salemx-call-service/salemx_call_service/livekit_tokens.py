@@ -51,10 +51,17 @@ class LiveKitJWTTokenIssuer:
     The API secret remains server-side only. Returned participant tokens must not be logged.
     """
 
-    def __init__(self, api_key: str, api_secret: str, token_ttl_seconds: int = 120) -> None:
+    def __init__(self,
+                 api_key: str,
+                 api_secret: str,
+                 token_ttl_seconds: int = 120,
+                 include_issued_at: bool = False,
+                 include_device_in_identity: bool = False) -> None:
         self._api_key = api_key
         self._api_secret = api_secret.encode("utf-8")
         self._token_ttl_seconds = token_ttl_seconds
+        self._include_issued_at = include_issued_at
+        self._include_device_in_identity = include_device_in_identity
 
     async def issue_token(self, authenticated_user: AuthenticatedUser, token_request: TokenRequest, allocation: Allocation) -> IssuedLiveKitToken:
         now = datetime.now(timezone.utc)
@@ -68,17 +75,24 @@ class LiveKitJWTTokenIssuer:
         )
         claims = {
             "iss": self._api_key,
-            "sub": self._participant_identity(allocation, authenticated_user),
+            "sub": self._participant_identity(allocation, authenticated_user, token_request),
             "nbf": int(now.timestamp()),
             "exp": int(expires_at.timestamp()),
             "video": grant.as_livekit_claim(),
         }
+        if self._include_issued_at:
+            claims["iat"] = int(now.timestamp())
+
         token = _encode_hs256_jwt(claims, self._api_secret)
         return IssuedLiveKitToken(participant_token=token, expires_at=expires_at, grant=grant)
 
-    @staticmethod
-    def _participant_identity(allocation: Allocation, authenticated_user: AuthenticatedUser) -> str:
-        digest = hashlib.sha256(f"{allocation.id}:{authenticated_user.user_id}".encode("utf-8")).hexdigest()[:24]
+    def _participant_identity(self, allocation: Allocation, authenticated_user: AuthenticatedUser, token_request: TokenRequest) -> str:
+        if not self._include_device_in_identity:
+            digest = hashlib.sha256(f"{allocation.id}:{authenticated_user.user_id}".encode("utf-8")).hexdigest()[:24]
+            return f"salemx-dc-{digest}"
+
+        device_id = authenticated_user.device_id or token_request.device_id or "unknown-device"
+        digest = hashlib.sha256(f"{allocation.id}:{authenticated_user.user_id}:{device_id}:{token_request.direction}".encode("utf-8")).hexdigest()[:24]
         return f"salemx-dc-{digest}"
 
 
