@@ -176,6 +176,14 @@ enum UITestsSignal: Codable, Equatable {
         case mediaE2EEContextUnavailable
         case mediaConnectFailed
         case mediaUnsupportedIntent
+        case liveKitURLInvalid
+        case liveKitURLUnreachable
+        case liveKitTokenRejected
+        case liveKitRoomJoinFailed
+        case liveKitE2EEConfigFailed
+        case liveKitNetworkFailed
+        case liveKitSDKError
+        case liveKitUnknown
         case inviteSendFailed
         case resetting
         case unknown
@@ -1252,6 +1260,22 @@ extension UITestsSignal.NativeDirectCallDiagnosticFailureReason {
             self = .mediaE2EEContextUnavailable
         case .mediaSetupUnavailable:
             self = .mediaSetupUnavailable
+        case .liveKitURLInvalid:
+            self = .liveKitURLInvalid
+        case .liveKitURLUnreachable:
+            self = .liveKitURLUnreachable
+        case .liveKitTokenRejected:
+            self = .liveKitTokenRejected
+        case .liveKitRoomJoinFailed:
+            self = .liveKitRoomJoinFailed
+        case .liveKitE2EEConfigFailed:
+            self = .liveKitE2EEConfigFailed
+        case .liveKitNetworkFailed:
+            self = .liveKitNetworkFailed
+        case .liveKitSDKError:
+            self = .liveKitSDKError
+        case .liveKitUnknown:
+            self = .liveKitUnknown
         case .unsupportedIntent:
             self = .mediaUnsupportedIntent
         case .audioRouteFailed:

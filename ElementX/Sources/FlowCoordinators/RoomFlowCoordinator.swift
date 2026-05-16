@@ -2094,6 +2094,14 @@ enum NativeDirectCallProductionStartBlockedReason: String, Equatable, CustomStri
     case mediaConnectFailed
     case mediaSetupUnavailable
     case mediaUnsupportedIntent
+    case liveKitURLInvalid
+    case liveKitURLUnreachable
+    case liveKitTokenRejected
+    case liveKitRoomJoinFailed
+    case liveKitE2EEConfigFailed
+    case liveKitNetworkFailed
+    case liveKitSDKError
+    case liveKitUnknown
     case engineStateInvalid
     case engineFailure
     case unknown
@@ -2230,6 +2238,22 @@ enum NativeDirectCallProductionStartBlockedReason: String, Equatable, CustomStri
             self = .mediaE2EEContextUnavailable
         case .mediaSetupUnavailable:
             self = .mediaSetupUnavailable
+        case .liveKitURLInvalid:
+            self = .liveKitURLInvalid
+        case .liveKitURLUnreachable:
+            self = .liveKitURLUnreachable
+        case .liveKitTokenRejected:
+            self = .liveKitTokenRejected
+        case .liveKitRoomJoinFailed:
+            self = .liveKitRoomJoinFailed
+        case .liveKitE2EEConfigFailed:
+            self = .liveKitE2EEConfigFailed
+        case .liveKitNetworkFailed:
+            self = .liveKitNetworkFailed
+        case .liveKitSDKError:
+            self = .liveKitSDKError
+        case .liveKitUnknown:
+            self = .liveKitUnknown
         case .unsupportedIntent:
             self = .mediaUnsupportedIntent
         case .audioRouteFailed:
@@ -2295,6 +2319,14 @@ enum NativeDirectCallProductionStartBlockedReason: String, Equatable, CustomStri
              .mediaConnectFailed,
              .mediaSetupUnavailable,
              .mediaUnsupportedIntent,
+             .liveKitURLInvalid,
+             .liveKitURLUnreachable,
+             .liveKitTokenRejected,
+             .liveKitRoomJoinFailed,
+             .liveKitE2EEConfigFailed,
+             .liveKitNetworkFailed,
+             .liveKitSDKError,
+             .liveKitUnknown,
              .signalSendFailed,
              .engineStateInvalid,
              .engineFailure:

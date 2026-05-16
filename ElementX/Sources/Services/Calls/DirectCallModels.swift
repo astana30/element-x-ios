@@ -441,6 +441,14 @@ enum DirectCallDiagnosticReceiveFailureReason: String, Codable, Equatable, Custo
     case mediaConnectFailed
     case mediaSetupUnavailable
     case mediaUnsupportedIntent
+    case liveKitURLInvalid
+    case liveKitURLUnreachable
+    case liveKitTokenRejected
+    case liveKitRoomJoinFailed
+    case liveKitE2EEConfigFailed
+    case liveKitNetworkFailed
+    case liveKitSDKError
+    case liveKitUnknown
     case unknown
 
     var description: String {
@@ -471,6 +479,14 @@ enum DirectCallDiagnosticMediaFailureReason: String, Codable, Equatable, CustomS
     case mediaConnectFailed
     case mediaSetupUnavailable
     case mediaUnsupportedIntent
+    case liveKitURLInvalid
+    case liveKitURLUnreachable
+    case liveKitTokenRejected
+    case liveKitRoomJoinFailed
+    case liveKitE2EEConfigFailed
+    case liveKitNetworkFailed
+    case liveKitSDKError
+    case liveKitUnknown
     case unknown
 
     init(_ error: DirectCallMediaError) {
@@ -497,6 +513,22 @@ enum DirectCallDiagnosticMediaFailureReason: String, Codable, Equatable, CustomS
             self = .mediaConnectFailed
         case .mediaSetupUnavailable:
             self = .mediaSetupUnavailable
+        case .liveKitURLInvalid:
+            self = .liveKitURLInvalid
+        case .liveKitURLUnreachable:
+            self = .liveKitURLUnreachable
+        case .liveKitTokenRejected:
+            self = .liveKitTokenRejected
+        case .liveKitRoomJoinFailed:
+            self = .liveKitRoomJoinFailed
+        case .liveKitE2EEConfigFailed:
+            self = .liveKitE2EEConfigFailed
+        case .liveKitNetworkFailed:
+            self = .liveKitNetworkFailed
+        case .liveKitSDKError:
+            self = .liveKitSDKError
+        case .liveKitUnknown:
+            self = .liveKitUnknown
         }
     }
 

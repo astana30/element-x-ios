@@ -177,19 +177,23 @@ final class LiveKitDirectCallClient: DirectCallLiveKitClientProtocol, @unchecked
             return .failure(.mediaSetupUnavailable)
         }
 
+        guard Self.isSupportedLiveKitURL(connectionInfo.serverURL) else {
+            return .failure(.liveKitURLInvalid)
+        }
+
         guard let liveKitE2EEContext = e2eeContext as? any DirectCallLiveKitE2EEContextProtocol else {
-            return .failure(.e2eeContextUnavailable)
+            return .failure(.liveKitE2EEConfigFailed)
         }
 
         let roomOptions: RoomOptions
         switch liveKitE2EEContext.makeLiveKitRoomOptions() {
         case .success(let options):
             guard options.e2eeOptions != nil || options.encryptionOptions != nil else {
-                return .failure(.e2eeContextUnavailable)
+                return .failure(.liveKitE2EEConfigFailed)
             }
             roomOptions = options
-        case .failure(let error):
-            return .failure(error)
+        case .failure:
+            return .failure(.liveKitE2EEConfigFailed)
         }
 
         let connectOptions = ConnectOptions(autoSubscribe: false, enableMicrophone: false)
@@ -208,7 +212,7 @@ final class LiveKitDirectCallClient: DirectCallLiveKitClientProtocol, @unchecked
             return .success(())
         } catch {
             await cleanup()
-            return .failure(.mediaSetupUnavailable)
+            return .failure(Self.connectFailureReason(from: error))
         }
     }
 
@@ -308,6 +312,122 @@ final class LiveKitDirectCallClient: DirectCallLiveKitClientProtocol, @unchecked
 
                 try await remotePublication.set(subscribed: isEnabled)
             }
+        }
+    }
+
+    private static func isSupportedLiveKitURL(_ url: URL) -> Bool {
+        guard url.host?.isEmpty == false else {
+            return false
+        }
+
+        switch url.scheme?.lowercased() {
+        case "ws", "wss", "http", "https":
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static func connectFailureReason(from error: Error) -> DirectCallMediaError {
+        if let mediaError = error as? DirectCallMediaError {
+            return mediaError
+        }
+
+        if let urlError = error as? URLError {
+            return connectFailureReason(from: urlError)
+        }
+
+        if let liveKitError = error as? LiveKitError {
+            if let internalURLError = liveKitError.internalError as? URLError {
+                return connectFailureReason(from: internalURLError)
+            }
+            return connectFailureReason(from: liveKitError.type)
+        }
+
+        let nsError = error as NSError
+        switch nsError.domain {
+        case NSURLErrorDomain, "kCFErrorDomainCFNetwork":
+            return .liveKitNetworkFailed
+        case NSPOSIXErrorDomain:
+            let socketCodes: Set<Int32> = [
+                ECONNREFUSED, ECONNRESET, ECONNABORTED,
+                ETIMEDOUT, ENETUNREACH, ENETDOWN,
+                EHOSTUNREACH, EPIPE, ENOTCONN
+            ]
+            return socketCodes.contains(Int32(nsError.code)) ? .liveKitNetworkFailed : .liveKitSDKError
+        default:
+            return .liveKitSDKError
+        }
+    }
+
+    private static func connectFailureReason(from error: URLError) -> DirectCallMediaError {
+        switch error.code {
+        case .badURL, .unsupportedURL:
+            return .liveKitURLInvalid
+        case .cannotFindHost:
+            return .liveKitURLUnreachable
+        case .cannotConnectToHost,
+             .networkConnectionLost,
+             .notConnectedToInternet,
+             .timedOut,
+             .dnsLookupFailed,
+             .internationalRoamingOff,
+             .callIsActive,
+             .dataNotAllowed,
+             .secureConnectionFailed,
+             .serverCertificateHasBadDate,
+             .serverCertificateUntrusted,
+             .serverCertificateHasUnknownRoot,
+             .serverCertificateNotYetValid,
+             .clientCertificateRejected,
+             .clientCertificateRequired:
+            return .liveKitNetworkFailed
+        case .userAuthenticationRequired,
+             .userCancelledAuthentication:
+            return .liveKitTokenRejected
+        default:
+            return .liveKitSDKError
+        }
+    }
+
+    private static func connectFailureReason(from errorType: LiveKitErrorType) -> DirectCallMediaError {
+        switch errorType {
+        case .failedToParseUrl, .invalidParameter:
+            return .liveKitURLInvalid
+        case .serviceNotFound:
+            return .liveKitURLUnreachable
+        case .network, .timedOut, .serverPingTimedOut:
+            return .liveKitNetworkFailed
+        case .validation, .insufficientPermissions:
+            return .liveKitTokenRejected
+        case .duplicateIdentity,
+             .participantRemoved,
+             .roomDeleted,
+             .stateMismatch,
+             .joinFailure:
+            return .liveKitRoomJoinFailed
+        case .encryptionFailed, .decryptionFailed:
+            return .liveKitE2EEConfigFailed
+        case .webRTC,
+             .failedToConvertData,
+             .invalidState,
+             .serverShutdown,
+             .deviceNotFound,
+             .captureFormatNotFound,
+             .unableToResolveFPSRange,
+             .capturerDimensionsNotResolved,
+             .deviceAccessDenied,
+             .audioEngine,
+             .audioSession,
+             .soundPlayer,
+             .codecNotSupported,
+             .onlyForCloud,
+             .regionManager:
+            return .liveKitSDKError
+        case .cancelled, .unknown:
+            return .liveKitUnknown
+        @unknown default:
+            return .liveKitUnknown
         }
     }
 

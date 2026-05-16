@@ -118,7 +118,7 @@ final class DirectCallMediaEngineTests {
 
         let result = await client.connect(connectionInfo: makeConnectionInfo(), e2eeContext: MediaE2EEContextSpy())
 
-        guard case .failure(.e2eeContextUnavailable) = result else {
+        guard case .failure(.liveKitE2EEConfigFailed) = result else {
             Issue.record("Expected SDK-backed client to fail closed without SDK E2EE context.")
             return
         }
@@ -136,7 +136,7 @@ final class DirectCallMediaEngineTests {
 
         let result = await client.connect(connectionInfo: makeConnectionInfo(), e2eeContext: context)
 
-        guard case .failure(.e2eeContextUnavailable) = result else {
+        guard case .failure(.liveKitE2EEConfigFailed) = result else {
             Issue.record("Expected SDK E2EE option preparation failure.")
             return
         }
@@ -193,15 +193,15 @@ final class DirectCallMediaEngineTests {
 
         let result = await client.connect(connectionInfo: makeConnectionInfo(), e2eeContext: context)
 
-        guard case .failure(.mediaSetupUnavailable) = result else {
-            Issue.record("Expected SDK connect failure to map to a safe media setup error.")
+        guard case .failure(.liveKitSDKError) = result else {
+            Issue.record("Expected uncategorized SDK connect failure to map to a redacted SDK error.")
             return
         }
         #expect(connectCallCount == 1)
         #expect(context.cleanupCount == 1)
 
         let retryResult = await client.connect(connectionInfo: makeConnectionInfo(), e2eeContext: context)
-        guard case .failure(.mediaSetupUnavailable) = retryResult else {
+        guard case .failure(.liveKitSDKError) = retryResult else {
             Issue.record("Expected retry to reach the connector after partial cleanup.")
             return
         }
@@ -1168,10 +1168,170 @@ final class DirectCallMediaEngineTests {
                           encryptionState: encryptionState)
     }
 
-    private func makeConnectionInfo() -> DirectCallMediaConnectionInfo {
-        DirectCallMediaConnectionInfo(serverURL: URL(fileURLWithPath: "/tmp/livekit.example.com"),
+    private func makeConnectionInfo(serverURL: URL = URLComponents.liveKitTestURL) -> DirectCallMediaConnectionInfo {
+        DirectCallMediaConnectionInfo(serverURL: serverURL,
                                       roomName: "direct-call",
                                       token: "test-token")
+    }
+}
+
+@MainActor
+final class DirectCallLiveKitClientConnectFailureTests {
+    @Test
+    func liveKitClientRejectsInvalidURLBeforeRoomCreation() async {
+        var roomFactoryCallCount = 0
+        let client = LiveKitDirectCallClient { connectOptions, roomOptions in
+            roomFactoryCallCount += 1
+            return Room(connectOptions: connectOptions, roomOptions: roomOptions)
+        }
+        let context = LiveKitMediaE2EEContextSpy()
+
+        let result = await client.connect(connectionInfo: makeConnectionInfo(serverURL: URL(fileURLWithPath: "/tmp/livekit.example.com")),
+                                          e2eeContext: context)
+
+        guard case .failure(.liveKitURLInvalid) = result else {
+            Issue.record("Expected invalid LiveKit URL to fail closed before room creation.")
+            return
+        }
+        #expect(roomFactoryCallCount == 0)
+        #expect(context.makeRoomOptionsCount == 0)
+    }
+
+    @Test
+    func liveKitClientMapsTokenRejectionToRedactedConnectFailure() async {
+        let result = await makeClient(throwing: LiveKitError(.validation))
+            .connect(connectionInfo: makeConnectionInfo(), e2eeContext: LiveKitMediaE2EEContextSpy())
+
+        guard case .failure(.liveKitTokenRejected) = result else {
+            Issue.record("Expected LiveKit token rejection to map to a redacted token failure.")
+            return
+        }
+    }
+
+    @Test
+    func liveKitClientMapsNetworkFailureToRedactedConnectFailure() async {
+        let result = await makeClient(throwing: URLError(.cannotConnectToHost))
+            .connect(connectionInfo: makeConnectionInfo(), e2eeContext: LiveKitMediaE2EEContextSpy())
+
+        guard case .failure(.liveKitNetworkFailed) = result else {
+            Issue.record("Expected LiveKit network failure to map to a redacted network failure.")
+            return
+        }
+    }
+
+    @Test
+    func liveKitClientMapsUnreachableURLToRedactedConnectFailure() async {
+        let result = await makeClient(throwing: LiveKitError(.network, internalError: URLError(.cannotFindHost)))
+            .connect(connectionInfo: makeConnectionInfo(), e2eeContext: LiveKitMediaE2EEContextSpy())
+
+        guard case .failure(.liveKitURLUnreachable) = result else {
+            Issue.record("Expected LiveKit unreachable URL to map to a redacted URL failure.")
+            return
+        }
+    }
+
+    @Test
+    func liveKitClientMapsRoomJoinFailureToRedactedConnectFailure() async {
+        let result = await makeClient(throwing: LiveKitError(.joinFailure))
+            .connect(connectionInfo: makeConnectionInfo(), e2eeContext: LiveKitMediaE2EEContextSpy())
+
+        guard case .failure(.liveKitRoomJoinFailed) = result else {
+            Issue.record("Expected LiveKit room join failure to map to a redacted room join failure.")
+            return
+        }
+    }
+
+    @Test
+    func liveKitClientMapsE2EEFailureToRedactedConnectFailure() async {
+        let result = await makeClient(throwing: LiveKitError(.encryptionFailed))
+            .connect(connectionInfo: makeConnectionInfo(), e2eeContext: LiveKitMediaE2EEContextSpy())
+
+        guard case .failure(.liveKitE2EEConfigFailed) = result else {
+            Issue.record("Expected LiveKit E2EE failure to map to a redacted E2EE config failure.")
+            return
+        }
+    }
+
+    private func makeClient(throwing error: Error) -> LiveKitDirectCallClient {
+        LiveKitDirectCallClient { connectOptions, roomOptions in
+            Room(connectOptions: connectOptions, roomOptions: roomOptions)
+        } roomConnector: { _, _, _, _ in
+            throw error
+        }
+    }
+
+    private func makeConnectionInfo(serverURL: URL = URLComponents.liveKitTestURL) -> DirectCallMediaConnectionInfo {
+        DirectCallMediaConnectionInfo(serverURL: serverURL,
+                                      roomName: "direct-call",
+                                      token: "test-token")
+    }
+}
+
+@MainActor
+final class DirectCallLiveKitMediaEngineDiagnosticsTests {
+    private let callID = "call-a"
+    private let roomID = "!room:example.com"
+    private let peerUserID = "@alice:example.com"
+
+    @Test
+    func liveKitMediaEngineDiagnosticsReportConnectFailureStage() async {
+        let liveKitClient = LiveKitClientSpy(connectResult: .failure(.mediaSetupUnavailable))
+        let engine = LiveKitDirectCallMediaEngine(tokenProvider: MediaTokenProviderSpy(),
+                                                  e2eeContextProvider: MediaE2EEContextProviderSpy(),
+                                                  liveKitClient: liveKitClient)
+        let session = makeSession(encryptionState: .ready)
+
+        let result = await engine.connectAudio(for: session, keyHandle: DirectCallMediaKeyHandle(callID: callID, keyID: "key-a"))
+
+        guard case .failure(.mediaSetupUnavailable) = result else {
+            Issue.record("Expected failing fake LiveKit client to fail media setup.")
+            return
+        }
+        #expect(engine.diagnosticSnapshot.mediaFactoryInjected)
+        #expect(engine.diagnosticSnapshot.mediaCredentialProviderAvailable)
+        #expect(engine.diagnosticSnapshot.mediaE2EEProviderAvailable)
+        #expect(engine.diagnosticSnapshot.mediaKeyHandleAvailable)
+        #expect(engine.diagnosticSnapshot.mediaConnectAttempted)
+        #expect(engine.diagnosticSnapshot.liveKitClientConnectAttempted)
+        #expect(engine.diagnosticSnapshot.mediaFailureReason == DirectCallDiagnosticMediaFailureReason.liveKitConnectFailed)
+        #expect(String(describing: engine.diagnosticSnapshot).contains("test-token") == false)
+        #expect(String(describing: engine.diagnosticSnapshot).contains("livekit.example.com") == false)
+    }
+
+    @Test
+    func liveKitMediaEngineDiagnosticsReportPreciseLiveKitFailureReason() async {
+        let liveKitClient = LiveKitClientSpy(connectResult: .failure(.liveKitTokenRejected))
+        let engine = LiveKitDirectCallMediaEngine(tokenProvider: MediaTokenProviderSpy(),
+                                                  e2eeContextProvider: MediaE2EEContextProviderSpy(),
+                                                  liveKitClient: liveKitClient)
+        let session = makeSession(encryptionState: .ready)
+
+        let result = await engine.connectAudio(for: session, keyHandle: DirectCallMediaKeyHandle(callID: callID, keyID: "key-a"))
+
+        guard case .failure(.liveKitTokenRejected) = result else {
+            Issue.record("Expected precise fake LiveKit failure to propagate.")
+            return
+        }
+        #expect(engine.diagnosticSnapshot.mediaConnectAttempted)
+        #expect(engine.diagnosticSnapshot.liveKitClientConnectAttempted)
+        #expect(engine.diagnosticSnapshot.mediaFailureReason == .liveKitTokenRejected)
+        #expect(String(describing: engine.diagnosticSnapshot).contains("test-token") == false)
+        #expect(String(describing: engine.diagnosticSnapshot).contains("livekit.example.com") == false)
+    }
+
+    private func makeSession(intent: DirectCallIntent = .audio,
+                             encryptionState: DirectCallEncryptionState,
+                             state: DirectCallState = .connecting) -> DirectCallSession {
+        DirectCallSession(callID: callID,
+                          roomID: roomID,
+                          peerUserID: peerUserID,
+                          direction: .outgoing,
+                          intent: intent,
+                          encryptionMode: .e2eeRequired,
+                          startedAt: .now,
+                          updatedAt: .now,
+                          state: state,
+                          encryptionState: encryptionState)
     }
 }
 
@@ -2268,31 +2428,6 @@ final class DirectCallMediaProviderSkeletonTests {
     }
 
     @Test
-    func liveKitMediaEngineDiagnosticsReportConnectFailureStage() async {
-        let liveKitClient = LiveKitClientSpy(connectResult: .failure(.mediaSetupUnavailable))
-        let engine = LiveKitDirectCallMediaEngine(tokenProvider: MediaTokenProviderSpy(),
-                                                  e2eeContextProvider: MediaE2EEContextProviderSpy(),
-                                                  liveKitClient: liveKitClient)
-        let session = makeSession(encryptionState: .ready)
-
-        let result = await engine.connectAudio(for: session, keyHandle: DirectCallMediaKeyHandle(callID: callID, keyID: "key-a"))
-
-        guard case .failure(.mediaSetupUnavailable) = result else {
-            Issue.record("Expected failing fake LiveKit client to fail media setup.")
-            return
-        }
-        #expect(engine.diagnosticSnapshot.mediaFactoryInjected)
-        #expect(engine.diagnosticSnapshot.mediaCredentialProviderAvailable)
-        #expect(engine.diagnosticSnapshot.mediaE2EEProviderAvailable)
-        #expect(engine.diagnosticSnapshot.mediaKeyHandleAvailable)
-        #expect(engine.diagnosticSnapshot.mediaConnectAttempted)
-        #expect(engine.diagnosticSnapshot.liveKitClientConnectAttempted)
-        #expect(engine.diagnosticSnapshot.mediaFailureReason == DirectCallDiagnosticMediaFailureReason.liveKitConnectFailed)
-        #expect(String(describing: engine.diagnosticSnapshot).contains("test-token") == false)
-        #expect(String(describing: engine.diagnosticSnapshot).contains("livekit.example.com") == false)
-    }
-
-    @Test
     func liveKitMediaEngineReportsTokenEndpointUnavailableBeforeLiveKitConnect() async {
         let liveKitClient = LiveKitClientSpy()
         let engine = LiveKitDirectCallMediaEngine(tokenProvider: MediaTokenProviderSpy(result: .failure(.tokenEndpointUnavailable)),
@@ -3340,6 +3475,15 @@ private actor LiveKitIntegrationCompletionState {
 
     func finish() {
         didFinish = true
+    }
+}
+
+private extension URLComponents {
+    static var liveKitTestURL: URL {
+        var components = URLComponents()
+        components.scheme = "ws"
+        components.host = "livekit.example.test"
+        return components.url ?? URL(fileURLWithPath: "/invalid-livekit-test-url")
     }
 }
 

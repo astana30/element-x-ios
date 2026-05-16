@@ -31,6 +31,14 @@ enum DirectCallMediaError: Error, Equatable {
     case tokenResponseInvalid
     case audioRouteFailed
     case mediaSetupUnavailable
+    case liveKitURLInvalid
+    case liveKitURLUnreachable
+    case liveKitTokenRejected
+    case liveKitRoomJoinFailed
+    case liveKitE2EEConfigFailed
+    case liveKitNetworkFailed
+    case liveKitSDKError
+    case liveKitUnknown
 }
 
 enum DirectCallAudioRoute: Equatable {
