@@ -96,6 +96,8 @@ Optional environment:
                                   Optional. Set to 1 to make production-activation-dry-run use fake DEBUG-only enabled inputs.
   NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED
                                   Optional. Set to 1 to allow the DEBUG-only production-start-outgoing command.
+  NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL
+                                  Optional DEBUG-only local token backend base URL; never printed.
 
 Example planned signalling sequence:
   $SCRIPT_NAME init both
@@ -194,6 +196,7 @@ log_livekit_environment_summary() {
     else
         log "Production start command: disabled"
     fi
+    log "Production token backend base URL: $(redacted_env_state NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL)"
 }
 
 sanitize_identifier() {
@@ -1176,6 +1179,7 @@ launch_client_with_environment() {
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_LIVEKIT_ROOM="${NATIVE_DIRECT_CALL_LIVEKIT_ROOM:-}" \
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED="${NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED:-}" \
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED="${NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED:-}" \
+        SIMCTL_CHILD_NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL="${NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL:-}" \
         SIMCTL_CHILD_UI_TESTS_SIGNALLING_CHANNEL="$channel" \
         SIMCTL_CHILD_INTEGRATION_TESTS_HOST="$INTEGRATION_TESTS_HOST" \
         SIMCTL_CHILD_INTEGRATION_TESTS_USERNAME="$username" \

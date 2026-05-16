@@ -431,6 +431,11 @@ enum DirectCallDiagnosticReceiveFailureReason: String, Codable, Equatable, Custo
     case incomingStateInvalid
     case incomingUnsupportedEnvelope
     case mediaTokenUnavailable
+    case tokenEndpointUnavailable
+    case accessTokenUnavailable
+    case tokenHTTPUnavailable
+    case tokenBackendRejected
+    case tokenResponseInvalid
     case mediaFactoryUnavailable
     case mediaE2EEContextUnavailable
     case mediaConnectFailed
@@ -457,6 +462,11 @@ enum DirectCallDiagnosticMediaFailureReason: String, Codable, Equatable, CustomS
     case invalidSessionState
     case mediaFactoryUnavailable
     case mediaTokenUnavailable
+    case tokenEndpointUnavailable
+    case accessTokenUnavailable
+    case tokenHTTPUnavailable
+    case tokenBackendRejected
+    case tokenResponseInvalid
     case mediaE2EEContextUnavailable
     case mediaConnectFailed
     case mediaSetupUnavailable
@@ -473,6 +483,16 @@ enum DirectCallDiagnosticMediaFailureReason: String, Codable, Equatable, CustomS
             self = .mediaE2EEContextUnavailable
         case .tokenUnavailable:
             self = .mediaTokenUnavailable
+        case .tokenEndpointUnavailable:
+            self = .tokenEndpointUnavailable
+        case .accessTokenUnavailable:
+            self = .accessTokenUnavailable
+        case .tokenHTTPUnavailable:
+            self = .tokenHTTPUnavailable
+        case .tokenBackendRejected:
+            self = .tokenBackendRejected
+        case .tokenResponseInvalid:
+            self = .tokenResponseInvalid
         case .audioRouteFailed:
             self = .mediaConnectFailed
         case .mediaSetupUnavailable:

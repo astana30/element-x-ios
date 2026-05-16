@@ -184,5 +184,15 @@ extension ProcessInfo {
         isNativeDirectCallDiagnosticIntegrationCommandsEnabled(environment: environment) &&
             environment["NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED"] == "1"
     }
+
+    static func nativeDirectCallProductionTokenBaseURL(environment: [String: String]) -> URL? {
+        guard isNativeDirectCallDiagnosticIntegrationCommandsEnabled(environment: environment),
+              let value = environment["NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL"],
+              !value.isEmpty else {
+            return nil
+        }
+
+        return URL(string: value)
+    }
 }
 #endif

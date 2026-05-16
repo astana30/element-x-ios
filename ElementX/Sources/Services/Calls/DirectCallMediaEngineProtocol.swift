@@ -1484,24 +1484,24 @@ final class ProductionDirectCallLiveKitTokenClient: DirectCallLiveKitTokenClient
         }
 
         guard let endpointURL = configuration.tokenEndpointURL else {
-            return .failure(.tokenUnavailable)
+            return .failure(.tokenEndpointUnavailable)
         }
 
         guard let httpTransport else {
-            return .failure(.tokenUnavailable)
+            return .failure(.tokenHTTPUnavailable)
         }
 
         guard let accessTokenProvider,
               let accessToken = await accessTokenProvider.matrixAccessToken(),
               !accessToken.isEmpty else {
-            return .failure(.tokenUnavailable)
+            return .failure(.accessTokenUnavailable)
         }
 
         let requestData: Data
         do {
             requestData = try jsonEncoder.encode(DirectCallProductionLiveKitTokenRequestDTO(request: request))
         } catch {
-            return .failure(.tokenUnavailable)
+            return .failure(.tokenResponseInvalid)
         }
 
         let transportRequest = DirectCallHTTPTransportRequest.postJSON(to: endpointURL,
@@ -1510,8 +1510,8 @@ final class ProductionDirectCallLiveKitTokenClient: DirectCallLiveKitTokenClient
         switch await httpTransport.send(transportRequest) {
         case .success(let response):
             return decodeConnectionResponse(response, for: request)
-        case .failure(let error):
-            return .failure(error)
+        case .failure:
+            return .failure(.tokenHTTPUnavailable)
         }
     }
 
@@ -1533,20 +1533,20 @@ final class ProductionDirectCallLiveKitTokenClient: DirectCallLiveKitTokenClient
             let dto = try jsonDecoder.decode(DirectCallProductionLiveKitTokenResponseDTO.self, from: response.data)
             return tokenResponse(from: dto, for: request)
         } catch {
-            return .failure(.tokenUnavailable)
+            return .failure(.tokenResponseInvalid)
         }
     }
 
     private func decodeError(_ data: Data) -> DirectCallMediaError {
         guard let errorDTO = try? jsonDecoder.decode(DirectCallProductionLiveKitTokenErrorDTO.self, from: data) else {
-            return .tokenUnavailable
+            return .tokenBackendRejected
         }
 
         switch errorDTO.errcode {
         case "M_DIRECT_CALL_UNSUPPORTED_INTENT":
             return .unsupportedIntent
         default:
-            return .tokenUnavailable
+            return .tokenBackendRejected
         }
     }
 
@@ -1558,7 +1558,7 @@ final class ProductionDirectCallLiveKitTokenClient: DirectCallLiveKitTokenClient
               !dto.liveKit.serverURL.isEmpty,
               !dto.liveKit.roomName.isEmpty,
               !dto.liveKit.participantToken.isEmpty else {
-            return .failure(.tokenUnavailable)
+            return .failure(.tokenResponseInvalid)
         }
 
         return .success(.init(serverURLString: dto.liveKit.serverURL,
@@ -1596,8 +1596,8 @@ final class DirectCallLiveKitTokenProvider: DirectCallMediaTokenProviderProtocol
         switch await tokenClient.connection(for: request) {
         case .success(let response):
             return Self.connectionInfo(from: response)
-        case .failure:
-            return .failure(.tokenUnavailable)
+        case .failure(let error):
+            return .failure(error)
         }
     }
 
@@ -1608,7 +1608,7 @@ final class DirectCallLiveKitTokenProvider: DirectCallMediaTokenProviderProtocol
               let scheme = serverURL.scheme?.lowercased(),
               ["http", "https", "ws", "wss"].contains(scheme),
               serverURL.host?.isEmpty == false else {
-            return .failure(.tokenUnavailable)
+            return .failure(.tokenResponseInvalid)
         }
 
         return .success(.init(serverURL: serverURL,

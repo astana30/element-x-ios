@@ -2391,6 +2391,9 @@ final class RoomFlowCoordinatorTests {
         var productionStartEnvironment = commandsEnabledEnvironment
         productionStartEnvironment["NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED"] = "1"
         #expect(ProcessInfo.isNativeDirectCallProductionStartEnabled(environment: productionStartEnvironment) == true)
+        #expect(ProcessInfo.nativeDirectCallProductionTokenBaseURL(environment: productionStartEnvironment) == nil)
+        productionStartEnvironment["NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL"] = "http://127.0.0.1:8088"
+        #expect(ProcessInfo.nativeDirectCallProductionTokenBaseURL(environment: productionStartEnvironment)?.absoluteString == "http://127.0.0.1:8088")
 
         var encryptionEnvironment = commandsEnabledEnvironment
         encryptionEnvironment[NativeDirectCallDiagnosticEncryptionService.encryptionGateEnvironmentKey] = "1"
@@ -2433,6 +2436,38 @@ final class RoomFlowCoordinatorTests {
         liveKitEnvironment[NativeDirectCallDiagnosticLiveKitMedia.tokenBEnvironmentKey] = "opaque-b"
         #expect(AppCoordinator.makeNativeDirectCallDiagnosticMediaEngineFactory(encryptionService: encryptionService,
                                                                                 environment: liveKitEnvironment) != nil)
+    }
+
+    @Test
+    func nativeDirectCallProductionTokenBaseURLUsesHomeserverUnlessDebugIntegrationOverrideIsSet() {
+        let disabledOverrideEnvironment = [
+            "NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL": "http://127.0.0.1:8088"
+        ]
+        var enabledOverrideEnvironment = makeProductionDryRunFakeEnabledEnvironment()
+        enabledOverrideEnvironment["NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL"] = "http://127.0.0.1:8088"
+
+        #expect(AppCoordinator.nativeDirectCallProductionTokenEndpointBaseURL(homeserver: "https://matrix.example.test",
+                                                                              environment: disabledOverrideEnvironment)?.absoluteString == "https://matrix.example.test")
+        #expect(AppCoordinator.nativeDirectCallProductionTokenEndpointBaseURL(homeserver: "https://matrix.example.test",
+                                                                              environment: enabledOverrideEnvironment)?.absoluteString == "http://127.0.0.1:8088")
+    }
+
+    @Test
+    func nativeDirectCallProductionRoomFlowOwnerRejectsInvalidDebugTokenBaseURL() {
+        let roomProxy = makeEligibleNativeDirectCallRoomProxy()
+        let clientProxy = makeVerifiedPeerClientProxy()
+        clientProxy.homeserver = "https://matrix.example.test"
+        var environment = makeProductionDryRunFakeEnabledEnvironment()
+        environment["NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL"] = "file:///tmp/salemx-call-service"
+
+        let result = AppCoordinator.makeNativeDirectCallProductionRoomFlowOwner(roomProxy: roomProxy,
+                                                                                clientProxy: clientProxy,
+                                                                                environment: environment)
+
+        guard case .blocked(.tokenEndpointUnavailable) = result else {
+            Issue.record("Expected invalid DEBUG token endpoint override to fail closed.")
+            return
+        }
     }
 
     @Test
@@ -2749,7 +2784,7 @@ private final class NativeDirectCallProductionDependencyProviderSpy: NativeDirec
     }
 }
 
-private final class ProductionDryRunClientProxyMock: ClientProxyMock, DirectCallMatrixAccessTokenProviding, DirectCallMediaKeyEnvelopeWrappingProviding {
+private final class ProductionDryRunClientProxyMock: ClientProxyMock, DirectCallMatrixAccessTokenProviding, DirectCallMediaKeyEnvelopeWrappingProviding, @unchecked Sendable {
     func matrixAccessToken() async -> String? {
         "redacted-test-access"
     }

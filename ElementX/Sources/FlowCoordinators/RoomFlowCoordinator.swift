@@ -2085,6 +2085,10 @@ enum NativeDirectCallProductionStartBlockedReason: String, Equatable, CustomStri
     case unsupportedRuntime
     case e2eeUnavailable
     case mediaTokenUnavailable
+    case accessTokenUnavailable
+    case tokenHTTPUnavailable
+    case tokenBackendRejected
+    case tokenResponseInvalid
     case mediaFactoryUnavailable
     case mediaE2EEContextUnavailable
     case mediaConnectFailed
@@ -2212,6 +2216,16 @@ enum NativeDirectCallProductionStartBlockedReason: String, Equatable, CustomStri
         switch mediaError {
         case .tokenUnavailable:
             self = .mediaTokenUnavailable
+        case .tokenEndpointUnavailable:
+            self = .tokenEndpointUnavailable
+        case .accessTokenUnavailable:
+            self = .accessTokenUnavailable
+        case .tokenHTTPUnavailable:
+            self = .tokenHTTPUnavailable
+        case .tokenBackendRejected:
+            self = .tokenBackendRejected
+        case .tokenResponseInvalid:
+            self = .tokenResponseInvalid
         case .e2eeContextUnavailable:
             self = .mediaE2EEContextUnavailable
         case .mediaSetupUnavailable:
@@ -2271,6 +2285,11 @@ enum NativeDirectCallProductionStartBlockedReason: String, Equatable, CustomStri
              .unsupportedRuntime,
              .e2eeUnavailable,
              .mediaTokenUnavailable,
+             .tokenEndpointUnavailable,
+             .accessTokenUnavailable,
+             .tokenHTTPUnavailable,
+             .tokenBackendRejected,
+             .tokenResponseInvalid,
              .mediaFactoryUnavailable,
              .mediaE2EEContextUnavailable,
              .mediaConnectFailed,
@@ -2289,7 +2308,6 @@ enum NativeDirectCallProductionStartBlockedReason: String, Equatable, CustomStri
              .unsupportedMediaTransport,
              .e2eeNotRequiredByCapability,
              .unsupportedKeyEnvelope,
-             .tokenEndpointUnavailable,
              .tokenEndpointNotSameOrigin,
              .dependenciesUnavailable,
              .roomNotEncrypted,

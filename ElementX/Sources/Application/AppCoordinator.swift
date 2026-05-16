@@ -1367,10 +1367,12 @@ extension AppCoordinator {
                                                                       roomEligibility: roomEligibility)
         }
 
+        let tokenEndpointBaseURL = nativeDirectCallProductionTokenEndpointBaseURL(homeserver: homeserver,
+                                                                                  environment: environment)
         let decisionService = DirectCallProductionActivationDecisionService(rolloutProvider: NativeDirectCallProductionDryRunFakeRolloutProvider(),
                                                                             capabilityProvider: NativeDirectCallProductionDryRunFakeCapabilityProvider(),
                                                                             dependencyProvider: makeNativeDirectCallProductionDependencyProvider(clientProxy: clientProxy,
-                                                                                                                                                 tokenEndpointBaseURL: homeserverBaseURL),
+                                                                                                                                                 tokenEndpointBaseURL: tokenEndpointBaseURL),
                                                                             peerTrustReadinessProvider: makeNativeDirectCallProductionPeerTrustReadinessProvider(roomProxy: roomProxy,
                                                                                                                                                                  clientProxy: clientProxy))
         return NativeDirectCallProductionActivationDryRunProvider(activationDryRunDiagnostics: decisionService,
@@ -1380,13 +1382,19 @@ extension AppCoordinator {
 
     @MainActor
     static func makeNativeDirectCallProductionRoomFlowOwner(roomProxy: JoinedRoomProxyProtocol,
-                                                            clientProxy: ClientProxyProtocol) -> NativeDirectCallProductionRoomFlowOwnerFactoryResult {
-        guard let tokenEndpointBaseURL = URL(string: clientProxy.homeserver) else {
+                                                            clientProxy: ClientProxyProtocol,
+                                                            environment: [String: String] = ProcessInfo.processInfo.environment) -> NativeDirectCallProductionRoomFlowOwnerFactoryResult {
+        guard let tokenEndpointBaseURL = nativeDirectCallProductionTokenEndpointBaseURL(homeserver: clientProxy.homeserver,
+                                                                                        environment: environment) else {
             return .blocked(.tokenEndpointUnavailable)
         }
 
         let configuration = DirectCallProductionConfiguration(isEnabled: true,
                                                               tokenEndpointBaseURL: tokenEndpointBaseURL)
+        guard configuration.isConfigured else {
+            return .blocked(.tokenEndpointUnavailable)
+        }
+
         let dependencyAssembly = NativeDirectCallProductionDependencyAssembly(configuration: configuration,
                                                                               httpTransport: URLSessionDirectCallHTTPTransport(),
                                                                               accessTokenProvider: clientProxy as? DirectCallMatrixAccessTokenProviding,
@@ -1404,6 +1412,12 @@ extension AppCoordinator {
                                                     compositionConfiguration: .init(isEnabled: true),
                                                     mediaEngineFactory: dependencies.mediaEngineFactory,
                                                     encryptionService: dependencies.encryptionService))
+    }
+
+    static func nativeDirectCallProductionTokenEndpointBaseURL(homeserver: String,
+                                                               environment: [String: String] = ProcessInfo.processInfo.environment) -> URL? {
+        let localTokenBaseURL = ProcessInfo.nativeDirectCallProductionTokenBaseURL(environment: environment)
+        return localTokenBaseURL ?? URL(string: homeserver)
     }
 
     @MainActor

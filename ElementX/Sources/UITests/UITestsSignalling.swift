@@ -167,6 +167,11 @@ enum UITestsSignal: Codable, Equatable {
         case mediaSetupUnavailable
         case mediaCredentialUnavailable
         case mediaTokenUnavailable
+        case tokenEndpointUnavailable
+        case accessTokenUnavailable
+        case tokenHTTPUnavailable
+        case tokenBackendRejected
+        case tokenResponseInvalid
         case mediaFactoryUnavailable
         case mediaE2EEContextUnavailable
         case mediaConnectFailed
@@ -1233,6 +1238,16 @@ extension UITestsSignal.NativeDirectCallDiagnosticFailureReason {
         switch mediaError {
         case .tokenUnavailable:
             self = .mediaTokenUnavailable
+        case .tokenEndpointUnavailable:
+            self = .tokenEndpointUnavailable
+        case .accessTokenUnavailable:
+            self = .accessTokenUnavailable
+        case .tokenHTTPUnavailable:
+            self = .tokenHTTPUnavailable
+        case .tokenBackendRejected:
+            self = .tokenBackendRejected
+        case .tokenResponseInvalid:
+            self = .tokenResponseInvalid
         case .e2eeContextUnavailable:
             self = .mediaE2EEContextUnavailable
         case .mediaSetupUnavailable:

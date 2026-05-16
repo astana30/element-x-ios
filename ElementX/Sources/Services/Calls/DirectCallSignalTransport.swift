@@ -1475,6 +1475,16 @@ extension DirectCallDiagnosticReceiveFailureReason {
         switch mediaError {
         case .tokenUnavailable:
             self = .mediaTokenUnavailable
+        case .tokenEndpointUnavailable:
+            self = .tokenEndpointUnavailable
+        case .accessTokenUnavailable:
+            self = .accessTokenUnavailable
+        case .tokenHTTPUnavailable:
+            self = .tokenHTTPUnavailable
+        case .tokenBackendRejected:
+            self = .tokenBackendRejected
+        case .tokenResponseInvalid:
+            self = .tokenResponseInvalid
         case .e2eeContextUnavailable:
             self = .mediaE2EEContextUnavailable
         case .mediaSetupUnavailable:
