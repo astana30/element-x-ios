@@ -2,15 +2,15 @@
 
 ## Current Phase
 
-After 2.16E — internal native call panel runtime visual/action proof.
+After 2.17C — private native call room card runtime proof.
 
 ## Latest App Code Checkpoint
 
-2.16D `Polish internal native call panel layout`
+2.17B `Add private native call room card seam`
 
 ## Latest Code Checkpoint
 
-2.16D `Polish internal native call panel layout`
+2.17B `Add private native call room card seam`
 
 ## Latest SDK Checkpoint
 
@@ -351,7 +351,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Internal native call panel runtime proof is recorded:
   - Without `NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED`, the internal native call panel was hidden.
   - With `NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED=1`, the panel appeared in both open encrypted r1/r2 DMs.
-  - Panel status output was redacted: no tokens, keys, JWTs, raw Matrix content, raw room IDs, or peer IDs were shown.
+  - Panel status output was redacted: no credential values or keys, JWTs, raw Matrix content, raw room IDs, or peer IDs were shown.
   - The runner fallback was used for actions because synthetic UI taps were unavailable in the runtime environment.
   - The runner exercised the same room-scoped production methods as the panel: listener, start, accept, and hangup.
   - Before hangup, A and B reached `activeAudio`, encryption was ready, media connect was attempted, LiveKit connect was attempted, and media failure was `none`.
@@ -364,7 +364,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Internal native call panel visual/action proof is recorded:
   - With `NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED=1`, the polished panel appeared in both A/B encrypted DM rooms.
   - The two-row layout was readable and no longer clipped.
-  - Status text remained redacted: no tokens, keys, raw Matrix content, raw room IDs, or peer IDs.
+  - Status text remained redacted: no credential values or keys, raw Matrix content, raw room IDs, or peer IDs.
   - Existing Element Call phone/video buttons remained unchanged.
   - Initial visual state was `notRefreshed`, with only Refresh enabled.
   - Runner dry-run confirmed readiness with `wouldStart=true`, `enabled=true`, and peer trust ready.
@@ -374,6 +374,29 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Cleanup and disconnect were attempted after hangup.
   - No code changes were needed during the runtime proof.
   - Scope remained DEBUG/internal only with no public UI activation, Element Call route changes, CallKit/push, or global production activation.
+- Private native call room card seam is complete:
+  - A product-shaped room card state model exists for hidden, unavailable, can start, outgoing ringing, incoming ringing, connecting, active audio, failed, and ended states.
+  - User-safe unavailable/failure reasons cover native calls unavailable, server unsupported, room not encrypted, non-1:1 room, unverified device, peer trust unavailable, call service unavailable, LiveKit network failure, timeout, and unknown.
+  - A typed room-card action model exists for refresh status, start audio, accept, decline, and hang up.
+  - The room card uses a narrow room-scoped provider/handler seam over the already proven production room methods.
+  - The card is hidden by default and appears only behind the separate DEBUG/integration product UI gate `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`.
+  - The existing DEBUG/internal diagnostic panel remains gated separately by `NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED=1`.
+  - Existing Element Call phone/video buttons, `displayCall`, `presentCallScreen`, and `ElementCallService` remain untouched.
+- Private native call room card runtime proof is recorded:
+  - With `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`, the private native call card appeared in A/B encrypted DM rooms.
+  - Without `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED`, the card was hidden.
+  - `NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED` was not set, and the diagnostic panel did not appear.
+  - The product card appeared independently through the product UI gate.
+  - Existing Element Call phone/video buttons stayed visible and unchanged.
+  - Card status and runner output were user-safe/redacted: no credential values, JWTs, keys, raw Matrix content, raw room IDs, or peer IDs were printed.
+  - Runner fallback was used because synthetic UI taps were unavailable.
+  - The underlying room-scoped production lifecycle succeeded: B listener, A outgoing, B incoming ringing, B accept, A/B active audio, A hangup, and A/B idle.
+  - Before hangup, A and B reported active audio, encryption ready, media connect attempted, LiveKit connect attempted, and media failure `none`.
+  - After hangup, A and B reported no active session, idle state, media disconnect attempted, media cleanup attempted, and media failure `none`.
+  - A sent hangup successfully and B received `directCallHangup`.
+  - No new visual clipping was observed.
+  - Current UI nuance: the card initially shows `unavailable(nativeCallsUnavailable)` until refreshed, and live visual refresh was not verified without synthetic taps.
+  - No code changes were needed during the runtime proof.
 
 ## Current Blocker
 
@@ -381,14 +404,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Production backend remains a skeleton/local fake proof and is not deployed as a hardened production service.
 - Production rollout and server capability sources remain fail-closed by default.
 - Real production activation still requires hardened backend deployment, capability rollout, endpoint configuration, trusted peer readiness, visible UI design, and later CallKit/push work.
-- The next immediate gap is planning the transition from the DEBUG/internal panel and command lane toward a product UI path without reusing or disturbing the existing Element Call route.
+- The next immediate gap is polishing the private product-shaped room card so refresh/state binding is clearer and less dependent on manual Refresh, without changing the Element Call route or production call core.
 - No public production activation, Element Call route change, CallKit, or push integration exists yet.
 
 ## Next Recommended Phase
 
-`2.17A — internal native call product UI transition plan`
+`2.17D — private native call card refresh/state binding polish`
 
-Goal: design the safe transition from the hidden DEBUG/internal native direct-call panel to a future product-facing room call UI, while keeping Element Call routing, CallKit/push, public production activation, and global production activation untouched.
+Goal: make the private product-shaped card refresh and state binding easier to verify at runtime while keeping the card private, gated, redacted, and separate from Element Call routing, CallKit/push, public production activation, and global production activation.
 
 ## Do-Not-Touch Constraints
 

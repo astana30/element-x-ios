@@ -488,7 +488,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Recorded runtime proof for the hidden DEBUG/internal native direct-call room control panel.
 - Confirmed the panel was hidden without `NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED`.
 - Confirmed the panel appeared in both open encrypted r1/r2 DMs with `NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED=1`.
-- Confirmed panel output/status remained redacted: no tokens, keys, JWTs, raw Matrix content, raw room IDs, or peer IDs.
+- Confirmed panel output/status remained redacted: no credential values or keys, JWTs, raw Matrix content, raw room IDs, or peer IDs.
 - Used runner fallback actions because synthetic UI taps were unavailable in the runtime environment.
 - Confirmed the runner exercised the same room-scoped production methods used by the panel: listener, start, accept, and hangup.
 - Before hangup, A and B reached `activeAudio`, encryption was ready, media connect was attempted, LiveKit connect was attempted, and media failure was `none`.
@@ -514,7 +514,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Recorded runtime visual/action proof for the polished hidden DEBUG/internal native direct-call room panel.
 - Confirmed the panel appeared in both A/B encrypted DM rooms with `NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED=1`.
 - Confirmed the two-row layout was readable and not clipped.
-- Confirmed status text was redacted: no tokens, keys, raw Matrix content, raw room IDs, or peer IDs were shown.
+- Confirmed status text was redacted: no credential values or keys, raw Matrix content, raw room IDs, or peer IDs were shown.
 - Confirmed existing Element Call phone/video buttons remained unchanged.
 - Observed the initial visual state as `notRefreshed`, with only Refresh enabled.
 - Confirmed runner dry-run readiness reported `wouldStart=true`, `enabled=true`, and peer trust ready.
@@ -525,3 +525,22 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Confirmed no code changes were needed for the runtime proof.
 - Kept scope DEBUG/internal only: no public UI activation, Element Call route changes, CallKit/push, or global production activation.
 - Recommended next phase: `2.17A — internal native call product UI transition plan`.
+
+## 2026-05-18 — 2.17C Private Native Call Room Card Runtime Proof
+
+- Recorded runtime proof for the private product-shaped native direct-call room card.
+- Confirmed the card appeared in A/B encrypted DM rooms with `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`.
+- Confirmed the card was hidden without `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED`.
+- Confirmed `NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED` was not set and the diagnostic panel did not appear.
+- Confirmed the product card appeared independently through the product UI gate.
+- Confirmed existing Element Call phone/video buttons stayed visible and unchanged.
+- Confirmed card status and runner output were user-safe/redacted: no credential values, JWTs, keys, raw Matrix content, raw room IDs, or peer IDs were printed.
+- Used runner fallback because synthetic UI taps were unavailable.
+- Confirmed the underlying room-scoped production lifecycle succeeded: B listener, A outgoing, B incoming ringing, B accept, A/B active audio, A hangup, and A/B idle.
+- Before hangup, A and B reported active audio, encryption ready, media connect attempted, LiveKit connect attempted, and media failure `none`.
+- After hangup, A and B reported no active session, idle state, media disconnect attempted, media cleanup attempted, and media failure `none`.
+- Confirmed A sent hangup successfully and B received `directCallHangup`.
+- Observed no new visual clipping.
+- Noted current UI nuance: the card initially shows `unavailable(nativeCallsUnavailable)` until refreshed, and live visual refresh was not verified without synthetic taps.
+- Confirmed no code changes were needed for the runtime proof.
+- Recommended next phase: `2.17D — private native call card refresh/state binding polish`.
