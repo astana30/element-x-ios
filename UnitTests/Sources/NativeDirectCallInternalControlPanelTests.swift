@@ -53,6 +53,32 @@ final class NativeDirectCallInternalControlPanelTests {
     }
 
     @Test
+    func productCardRefreshesReadOnlyOnFirstAppearance() async throws {
+        let provider = NativeDirectCallRoomCardProviderSpy()
+        let viewModel = RoomScreenViewModel.mock(roomProxyMock: JoinedRoomProxyMock(.init()),
+                                                 nativeDirectCallRoomStateProvider: provider,
+                                                 nativeDirectCallRoomActionHandler: provider)
+        self.viewModel = viewModel
+
+        #expect(viewModel.context.viewState.nativeDirectCallRoomCard.state == .unavailable(reason: .nativeCallsUnavailable))
+
+        let deferred = deferFulfillment(viewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallRoomCard.state == .canStart
+        }
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCardAppeared)
+        try await deferred.fulfill()
+
+        #expect(provider.refreshCount == 1)
+        #expect(provider.performedActions.isEmpty)
+        #expect(viewModel.context.viewState.nativeDirectCallRoomCard.lastAction == nil)
+        #expect(viewModel.context.viewState.nativeDirectCallRoomCard.lastActionOutcome == nil)
+
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCardAppeared)
+        #expect(provider.refreshCount == 1)
+        #expect(provider.performedActions.isEmpty)
+    }
+
+    @Test
     func productCardStartAudioDoesNotUseElementCallRoute() async throws {
         let provider = NativeDirectCallRoomCardProviderSpy()
         let viewModel = RoomScreenViewModel.mock(roomProxyMock: JoinedRoomProxyMock(.init()),
@@ -333,6 +359,7 @@ private final class NativeDirectCallInternalControlProviderSpy: NativeDirectCall
 private final class NativeDirectCallRoomCardProviderSpy: NativeDirectCallRoomStateProviding, NativeDirectCallRoomActionHandling {
     private(set) var refreshCount = 0
     private(set) var startAudioCount = 0
+    private(set) var performedActions = [NativeDirectCallRoomCardAction]()
 
     func nativeDirectCallRoomCardState() async -> NativeDirectCallRoomCardState {
         refreshCount += 1
@@ -340,6 +367,7 @@ private final class NativeDirectCallRoomCardProviderSpy: NativeDirectCallRoomSta
     }
 
     func performNativeDirectCallRoomCardAction(_ action: NativeDirectCallRoomCardAction) async -> NativeDirectCallRoomCardActionResult {
+        performedActions.append(action)
         if action == .startAudio {
             startAudioCount += 1
         }

@@ -23,6 +23,7 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
     private let nativeDirectCallRoomStateProvider: NativeDirectCallRoomStateProviding?
     private let nativeDirectCallRoomActionHandler: NativeDirectCallRoomActionHandling?
     private let nativeDirectCallInternalControlProvider: NativeDirectCallInternalControlProviding?
+    private var hasRefreshedNativeDirectCallRoomCardOnAppear = false
     
     private var initialSelectedPinnedEventID: String?
     private let pinnedEventStringBuilder: RoomEventStringBuilder
@@ -118,6 +119,8 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
             actionsSubject.send(.displayCall(startMode: startMode))
             actionsSubject.send(.removeComposerFocus)
             analyticsService.trackInteraction(name: .MobileRoomCallButton)
+        case .nativeDirectCallRoomCardAppeared:
+            handleNativeDirectCallRoomCardAppeared()
         case .nativeDirectCallRoomCard(let action):
             handleNativeDirectCallRoomCardAction(action)
         case .nativeDirectCallInternalControl(let action):
@@ -210,9 +213,23 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
         }
     }
 
+    private func handleNativeDirectCallRoomCardAppeared() {
+        guard !hasRefreshedNativeDirectCallRoomCardOnAppear else {
+            return
+        }
+
+        hasRefreshedNativeDirectCallRoomCardOnAppear = true
+        refreshNativeDirectCallRoomCard(markAsManualRefresh: false)
+    }
+
     private func handleNativeDirectCallRoomCardAction(_ action: NativeDirectCallRoomCardAction) {
-        guard let nativeDirectCallRoomStateProvider,
+        guard nativeDirectCallRoomStateProvider != nil,
               let nativeDirectCallRoomActionHandler else {
+            return
+        }
+
+        if action == .refreshStatus {
+            refreshNativeDirectCallRoomCard(markAsManualRefresh: true)
             return
         }
 
@@ -220,16 +237,30 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
         Task { @MainActor [weak self] in
             guard let self else { return }
 
-            switch action {
-            case .refreshStatus:
-                state.nativeDirectCallRoomCard.state = await nativeDirectCallRoomStateProvider.nativeDirectCallRoomCardState()
+            let result = await nativeDirectCallRoomActionHandler.performNativeDirectCallRoomCardAction(action)
+            state.nativeDirectCallRoomCard.state = result.state
+            state.nativeDirectCallRoomCard.lastAction = action
+            state.nativeDirectCallRoomCard.lastActionOutcome = result.outcome
+
+            state.nativeDirectCallRoomCard.isVisible = state.nativeDirectCallRoomCard.state != .hidden
+            state.nativeDirectCallRoomCard.isLoading = false
+        }
+    }
+
+    private func refreshNativeDirectCallRoomCard(markAsManualRefresh: Bool) {
+        guard let nativeDirectCallRoomStateProvider,
+              nativeDirectCallRoomActionHandler != nil else {
+            return
+        }
+
+        state.nativeDirectCallRoomCard.isLoading = true
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            state.nativeDirectCallRoomCard.state = await nativeDirectCallRoomStateProvider.nativeDirectCallRoomCardState()
+            if markAsManualRefresh {
                 state.nativeDirectCallRoomCard.lastAction = .refreshStatus
                 state.nativeDirectCallRoomCard.lastActionOutcome = .refreshed
-            case .startAudio, .accept, .decline, .hangUp:
-                let result = await nativeDirectCallRoomActionHandler.performNativeDirectCallRoomCardAction(action)
-                state.nativeDirectCallRoomCard.state = result.state
-                state.nativeDirectCallRoomCard.lastAction = action
-                state.nativeDirectCallRoomCard.lastActionOutcome = result.outcome
             }
 
             state.nativeDirectCallRoomCard.isVisible = state.nativeDirectCallRoomCard.state != .hidden

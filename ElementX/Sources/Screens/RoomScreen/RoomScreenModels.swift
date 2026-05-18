@@ -27,6 +27,7 @@ enum RoomScreenViewAction {
     case viewAllPins
     case displayRoomDetails
     case displayCall(startMode: ElementCallStartMode)
+    case nativeDirectCallRoomCardAppeared
     case nativeDirectCallRoomCard(NativeDirectCallRoomCardAction)
     case nativeDirectCallInternalControl(NativeDirectCallInternalControlAction)
     case footerViewAction(RoomScreenFooterViewAction)

@@ -242,6 +242,9 @@ struct NativeDirectCallRoomCard: View {
                 Divider()
             }
             .accessibilityIdentifier("nativeDirectCallRoomCard")
+            .task {
+                send(.nativeDirectCallRoomCardAppeared)
+            }
         }
     }
 
