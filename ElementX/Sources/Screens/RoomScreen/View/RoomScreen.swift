@@ -53,6 +53,12 @@ struct RoomScreen: View {
                     }
 
                     #if DEBUG
+                    if context.viewState.nativeDirectCallRoomCard.isVisible {
+                        NativeDirectCallRoomCard(state: context.viewState.nativeDirectCallRoomCard) { action in
+                            context.send(viewAction: action)
+                        }
+                    }
+
                     if context.viewState.nativeDirectCallInternalControlPanel.isVisible {
                         NativeDirectCallInternalControlPanel(state: context.viewState.nativeDirectCallInternalControlPanel) { action in
                             context.send(viewAction: action)
@@ -218,6 +224,105 @@ struct RoomScreen: View {
 }
 
 #if DEBUG
+struct NativeDirectCallRoomCard: View {
+    let state: NativeDirectCallRoomCardViewState
+    let send: (RoomScreenViewAction) -> Void
+
+    var body: some View {
+        if state.state != .hidden {
+            VStack(alignment: .leading, spacing: 10) {
+                header
+                statusLine
+                actionRows
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color.compound.bgSubtleSecondary)
+            .overlay(alignment: .top) {
+                Divider()
+            }
+            .accessibilityIdentifier("nativeDirectCallRoomCard")
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            Text("Private native audio")
+                .font(.compound.bodySMSemibold)
+                .foregroundStyle(.compound.textPrimary)
+
+            Text("Internal")
+                .font(.compound.bodyXS)
+                .foregroundStyle(.compound.textSecondary)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.compound.bgCanvasDefault)
+                .clipShape(Capsule())
+
+            Spacer()
+
+            if state.isLoading {
+                ProgressView()
+                    .controlSize(.small)
+            }
+        }
+    }
+
+    private var statusLine: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("State:")
+                    .font(.compound.bodyXS)
+                    .foregroundStyle(.compound.textSecondary)
+                Text(state.state.description)
+                    .font(.compound.bodyXS)
+                    .foregroundStyle(.compound.textPrimary)
+                    .lineLimit(1)
+            }
+
+            if let lastAction = state.lastAction,
+               let lastActionOutcome = state.lastActionOutcome {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("Last action:")
+                        .font(.compound.bodyXS)
+                        .foregroundStyle(.compound.textSecondary)
+                    Text("\(lastAction.description):\(lastActionOutcome.description)")
+                        .font(.compound.bodyXS)
+                        .foregroundStyle(.compound.textPrimary)
+                        .lineLimit(1)
+                }
+            }
+        }
+    }
+
+    private var actionRows: some View {
+        VStack(spacing: 6) {
+            ForEach(NativeDirectCallRoomCardAction.cardRows.indices, id: \.self) { rowIndex in
+                HStack(spacing: 8) {
+                    ForEach(NativeDirectCallRoomCardAction.cardRows[rowIndex], id: \.self) { action in
+                        cardButton(action.buttonTitle,
+                                   isEnabled: action.isEnabled(in: state.state, isLoading: state.isLoading)) {
+                            send(.nativeDirectCallRoomCard(action))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func cardButton(_ title: String, isEnabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.compound(.secondary, size: .small))
+        .frame(maxWidth: .infinity)
+        .disabled(!isEnabled)
+    }
+}
+
 struct NativeDirectCallInternalControlPanel: View {
     let state: NativeDirectCallInternalControlPanelState
     let send: (RoomScreenViewAction) -> Void

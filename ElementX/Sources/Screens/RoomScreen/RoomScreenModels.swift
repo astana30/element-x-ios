@@ -27,6 +27,7 @@ enum RoomScreenViewAction {
     case viewAllPins
     case displayRoomDetails
     case displayCall(startMode: ElementCallStartMode)
+    case nativeDirectCallRoomCard(NativeDirectCallRoomCardAction)
     case nativeDirectCallInternalControl(NativeDirectCallInternalControlAction)
     case footerViewAction(RoomScreenFooterViewAction)
     case acceptKnock(eventID: String)
@@ -87,6 +88,7 @@ struct RoomScreenViewState: BindableState {
     
     var footerDetails: RoomScreenFooterViewDetails?
 
+    var nativeDirectCallRoomCard: NativeDirectCallRoomCardViewState = .hidden
     var nativeDirectCallInternalControlPanel: NativeDirectCallInternalControlPanelState = .hidden
     
     var bindings = RoomScreenViewStateBindings()
@@ -511,7 +513,402 @@ struct NativeDirectCallInternalControlPanelState: Equatable {
     static let visible = Self(isVisible: true, isLoading: false, status: .notRefreshed)
 }
 
+enum NativeDirectCallRoomCardUnavailableReason: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case nativeCallsUnavailable
+    case serverUnsupported
+    case roomNotEncrypted
+    case roomNotOneToOne
+    case unverifiedDevice
+    case peerTrustUnavailable
+    case callServiceUnavailable
+    case liveKitNetworkFailed
+    case callTimedOut
+    case unknown
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum NativeDirectCallRoomCardFailureReason: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case nativeCallsUnavailable
+    case serverUnsupported
+    case roomNotEncrypted
+    case roomNotOneToOne
+    case unverifiedDevice
+    case peerTrustUnavailable
+    case callServiceUnavailable
+    case liveKitNetworkFailed
+    case callTimedOut
+    case unknown
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum NativeDirectCallRoomCardState: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case hidden
+    case unavailable(reason: NativeDirectCallRoomCardUnavailableReason)
+    case canStart
+    case outgoingRinging
+    case incomingRinging
+    case connecting
+    case activeAudio
+    case failed(reason: NativeDirectCallRoomCardFailureReason)
+    case ended(reason: NativeDirectCallRoomCardFailureReason)
+
+    var description: String {
+        switch self {
+        case .hidden:
+            "hidden"
+        case .unavailable(let reason):
+            "unavailable(\(reason))"
+        case .canStart:
+            "canStart"
+        case .outgoingRinging:
+            "outgoingRinging"
+        case .incomingRinging:
+            "incomingRinging"
+        case .connecting:
+            "connecting"
+        case .activeAudio:
+            "activeAudio"
+        case .failed(let reason):
+            "failed(\(reason))"
+        case .ended(let reason):
+            "ended(\(reason))"
+        }
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum NativeDirectCallRoomCardAction: String, CaseIterable, Equatable, Hashable, CustomStringConvertible, CustomDebugStringConvertible {
+    case refreshStatus
+    case startAudio
+    case accept
+    case decline
+    case hangUp
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+
+    #if DEBUG
+    var buttonTitle: String {
+        switch self {
+        case .refreshStatus:
+            "Refresh"
+        case .startAudio:
+            "Start audio"
+        case .accept:
+            "Accept"
+        case .decline:
+            "Decline"
+        case .hangUp:
+            "Hang up"
+        }
+    }
+
+    func isEnabled(in state: NativeDirectCallRoomCardState, isLoading: Bool) -> Bool {
+        switch self {
+        case .refreshStatus:
+            true
+        case .startAudio:
+            !isLoading && state == .canStart
+        case .accept, .decline:
+            !isLoading && state == .incomingRinging
+        case .hangUp:
+            !isLoading && Self.hangUpEnabledStates.contains(state)
+        }
+    }
+
+    private static let hangUpEnabledStates: [NativeDirectCallRoomCardState] = [
+        .outgoingRinging,
+        .incomingRinging,
+        .connecting,
+        .activeAudio
+    ]
+
+    static let cardRows: [[Self]] = [
+        [.refreshStatus, .startAudio, .accept],
+        [.decline, .hangUp]
+    ]
+    #endif
+}
+
+enum NativeDirectCallRoomCardActionOutcome: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case refreshed
+    case started
+    case accepted
+    case declined
+    case hungUp
+    case blocked
+    case failed
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct NativeDirectCallRoomCardActionResult: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let action: NativeDirectCallRoomCardAction
+    let outcome: NativeDirectCallRoomCardActionOutcome
+    let state: NativeDirectCallRoomCardState
+
+    static func blocked(action: NativeDirectCallRoomCardAction,
+                        reason: NativeDirectCallRoomCardUnavailableReason) -> Self {
+        .init(action: action, outcome: .blocked, state: .unavailable(reason: reason))
+    }
+
+    var description: String {
+        "NativeDirectCallRoomCardActionResult(action: \(action), outcome: \(outcome), state: \(state))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+@MainActor
+protocol NativeDirectCallRoomStateProviding: AnyObject {
+    func nativeDirectCallRoomCardState() async -> NativeDirectCallRoomCardState
+}
+
+@MainActor
+protocol NativeDirectCallRoomActionHandling: AnyObject {
+    func performNativeDirectCallRoomCardAction(_ action: NativeDirectCallRoomCardAction) async -> NativeDirectCallRoomCardActionResult
+}
+
+@MainActor
+final class ClosureNativeDirectCallRoomCardProvider: NativeDirectCallRoomStateProviding, NativeDirectCallRoomActionHandling {
+    private let stateClosure: @MainActor () async -> NativeDirectCallRoomCardState
+    private let actionClosure: @MainActor (NativeDirectCallRoomCardAction) async -> NativeDirectCallRoomCardActionResult
+
+    init(state: @escaping @MainActor () async -> NativeDirectCallRoomCardState,
+         action: @escaping @MainActor (NativeDirectCallRoomCardAction) async -> NativeDirectCallRoomCardActionResult) {
+        stateClosure = state
+        actionClosure = action
+    }
+
+    func nativeDirectCallRoomCardState() async -> NativeDirectCallRoomCardState {
+        await stateClosure()
+    }
+
+    func performNativeDirectCallRoomCardAction(_ action: NativeDirectCallRoomCardAction) async -> NativeDirectCallRoomCardActionResult {
+        await actionClosure(action)
+    }
+}
+
+struct NativeDirectCallRoomCardViewState: Equatable {
+    var isVisible: Bool
+    var isLoading: Bool
+    var state: NativeDirectCallRoomCardState
+    var lastAction: NativeDirectCallRoomCardAction?
+    var lastActionOutcome: NativeDirectCallRoomCardActionOutcome?
+
+    static let hidden = Self(isVisible: false,
+                             isLoading: false,
+                             state: .hidden,
+                             lastAction: nil,
+                             lastActionOutcome: nil)
+
+    static let visible = Self(isVisible: true,
+                              isLoading: false,
+                              state: .unavailable(reason: .nativeCallsUnavailable),
+                              lastAction: nil,
+                              lastActionOutcome: nil)
+}
+
 #if DEBUG
+extension NativeDirectCallRoomCardActionOutcome {
+    init(_ productionStartOutcome: NativeDirectCallProductionStartOutcome) {
+        switch productionStartOutcome {
+        case .started:
+            self = .started
+        case .blocked:
+            self = .blocked
+        case .engineFailure:
+            self = .failed
+        }
+    }
+
+    init(acceptOutcome: NativeDirectCallProductionStartOutcome) {
+        switch acceptOutcome {
+        case .started:
+            self = .accepted
+        case .blocked:
+            self = .blocked
+        case .engineFailure:
+            self = .failed
+        }
+    }
+
+    init(declineOutcome: NativeDirectCallProductionHangupOutcome) {
+        switch declineOutcome {
+        case .hungUp:
+            self = .declined
+        case .blocked:
+            self = .blocked
+        case .engineFailure:
+            self = .failed
+        }
+    }
+
+    init(hangUpOutcome: NativeDirectCallProductionHangupOutcome) {
+        switch hangUpOutcome {
+        case .hungUp:
+            self = .hungUp
+        case .blocked:
+            self = .blocked
+        case .engineFailure:
+            self = .failed
+        }
+    }
+}
+
+extension NativeDirectCallRoomCardState {
+    static func make(triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic,
+                     productionStatus: NativeDirectCallProductionStatus) -> Self {
+        make(isActivationEnabled: triggerDiagnostic.isEnabled,
+             disabledReason: triggerDiagnostic.blockedReason,
+             productionHasActiveSession: productionStatus.productionHasActiveSession,
+             sessionState: productionStatus.productionSessionState,
+             mediaFailureReason: productionStatus.productionMediaFailureReason,
+             terminalReason: productionStatus.productionLastTerminalReason)
+    }
+
+    static func make(isActivationEnabled: Bool,
+                     disabledReason: DirectCallProductionActivationDisabledReason?,
+                     productionHasActiveSession: Bool,
+                     sessionState: String,
+                     mediaFailureReason: DirectCallDiagnosticMediaFailureReason,
+                     terminalReason: DirectCallDiagnosticTerminalReason?) -> Self {
+        guard productionHasActiveSession else {
+            if isActivationEnabled {
+                return .canStart
+            }
+
+            return .unavailable(reason: .init(disabledReason))
+        }
+
+        switch sessionState {
+        case "outgoingRinging":
+            return .outgoingRinging
+        case "incomingRinging":
+            return .incomingRinging
+        case "connecting":
+            return .connecting
+        case "activeAudio":
+            return .activeAudio
+        case "failed":
+            return .failed(reason: .init(mediaFailureReason))
+        case "ended", "cancelled", "missed":
+            return .ended(reason: .init(terminalReason))
+        default:
+            return .unavailable(reason: .unknown)
+        }
+    }
+}
+
+private extension NativeDirectCallRoomCardUnavailableReason {
+    init(_ disabledReason: DirectCallProductionActivationDisabledReason?) {
+        switch disabledReason {
+        case .serverCapabilityUnavailable,
+             .serverCapabilityDisabled,
+             .unsupportedCapabilityVersion,
+             .unsupportedIntent,
+             .unsupportedMediaTransport,
+             .e2eeNotRequiredByCapability,
+             .unsupportedKeyEnvelope:
+            self = .serverUnsupported
+        case .roomNotEncrypted:
+            self = .roomNotEncrypted
+        case .roomNotDirect, .roomNotOneToOne:
+            self = .roomNotOneToOne
+        case .unverifiedDevice:
+            self = .unverifiedDevice
+        case .peerTrustUnavailable,
+             .noEligibleDevice,
+             .crossSigningUnavailable,
+             .peerTrustUnknown:
+            self = .peerTrustUnavailable
+        case .appRolloutDisabled,
+             .roomUnavailable,
+             .peerUnavailable,
+             .none:
+            self = .nativeCallsUnavailable
+        default:
+            self = .callServiceUnavailable
+        }
+    }
+}
+
+private extension NativeDirectCallRoomCardFailureReason {
+    init(_ mediaFailureReason: DirectCallDiagnosticMediaFailureReason) {
+        switch mediaFailureReason {
+        case .none:
+            self = .unknown
+        case .liveKitConnectFailed,
+             .liveKitURLInvalid,
+             .liveKitURLUnreachable,
+             .liveKitNetworkFailed,
+             .liveKitSDKError,
+             .liveKitUnknown:
+            self = .liveKitNetworkFailed
+        case .factoryUnavailable,
+             .credentialUnavailable,
+             .e2eeContextUnavailable,
+             .keyBridgeMiss,
+             .mediaFactoryUnavailable,
+             .mediaE2EEContextUnavailable,
+             .mediaConnectFailed,
+             .mediaSetupUnavailable,
+             .mediaUnsupportedIntent,
+             .invalidSessionState,
+             .liveKitRoomJoinFailed,
+             .liveKitE2EEConfigFailed:
+            self = .callServiceUnavailable
+        case .unknown:
+            self = .unknown
+        default:
+            self = .callServiceUnavailable
+        }
+    }
+
+    init(_ terminalReason: DirectCallDiagnosticTerminalReason?) {
+        switch terminalReason {
+        case .outgoingTimeout, .incomingTimeout:
+            self = .callTimedOut
+        case .connectingFailed:
+            self = .liveKitNetworkFailed
+        case .cancelled, .hangup:
+            self = .unknown
+        case .failed, .unknown, .none:
+            self = .unknown
+        }
+    }
+}
+
 extension NativeDirectCallInternalControlStatus {
     static func make(triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic,
                      productionStatus: NativeDirectCallProductionStatus,

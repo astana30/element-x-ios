@@ -20,6 +20,8 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
     private let appSettings: AppSettings
     private let analyticsService: AnalyticsService
     private let userIndicatorController: UserIndicatorControllerProtocol
+    private let nativeDirectCallRoomStateProvider: NativeDirectCallRoomStateProviding?
+    private let nativeDirectCallRoomActionHandler: NativeDirectCallRoomActionHandling?
     private let nativeDirectCallInternalControlProvider: NativeDirectCallInternalControlProviding?
     
     private var initialSelectedPinnedEventID: String?
@@ -59,12 +61,16 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
          appHooks: AppHooks,
          analyticsService: AnalyticsService,
          userIndicatorController: UserIndicatorControllerProtocol,
+         nativeDirectCallRoomStateProvider: NativeDirectCallRoomStateProviding? = nil,
+         nativeDirectCallRoomActionHandler: NativeDirectCallRoomActionHandling? = nil,
          nativeDirectCallInternalControlProvider: NativeDirectCallInternalControlProviding? = nil) {
         clientProxy = userSession.clientProxy
         self.roomProxy = roomProxy
         self.appSettings = appSettings
         self.analyticsService = analyticsService
         self.userIndicatorController = userIndicatorController
+        self.nativeDirectCallRoomStateProvider = nativeDirectCallRoomStateProvider
+        self.nativeDirectCallRoomActionHandler = nativeDirectCallRoomActionHandler
         self.nativeDirectCallInternalControlProvider = nativeDirectCallInternalControlProvider
         
         self.initialSelectedPinnedEventID = initialSelectedPinnedEventID
@@ -81,6 +87,10 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
                                             hasOngoingCall: roomProxy.infoPublisher.value.hasRoomCall,
                                             hasSuccessor: roomProxy.infoPublisher.value.successor != nil,
                                             roomHistorySharingState: roomHistorySharingState)
+        if nativeDirectCallRoomStateProvider != nil,
+           nativeDirectCallRoomActionHandler != nil {
+            viewState.nativeDirectCallRoomCard = .visible
+        }
         if nativeDirectCallInternalControlProvider != nil {
             viewState.nativeDirectCallInternalControlPanel = .visible
         }
@@ -108,6 +118,8 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
             actionsSubject.send(.displayCall(startMode: startMode))
             actionsSubject.send(.removeComposerFocus)
             analyticsService.trackInteraction(name: .MobileRoomCallButton)
+        case .nativeDirectCallRoomCard(let action):
+            handleNativeDirectCallRoomCardAction(action)
         case .nativeDirectCallInternalControl(let action):
             handleNativeDirectCallInternalControlAction(action)
         case .footerViewAction(let action):
@@ -195,6 +207,33 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
             }
 
             state.nativeDirectCallInternalControlPanel.isLoading = false
+        }
+    }
+
+    private func handleNativeDirectCallRoomCardAction(_ action: NativeDirectCallRoomCardAction) {
+        guard let nativeDirectCallRoomStateProvider,
+              let nativeDirectCallRoomActionHandler else {
+            return
+        }
+
+        state.nativeDirectCallRoomCard.isLoading = true
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            switch action {
+            case .refreshStatus:
+                state.nativeDirectCallRoomCard.state = await nativeDirectCallRoomStateProvider.nativeDirectCallRoomCardState()
+                state.nativeDirectCallRoomCard.lastAction = .refreshStatus
+                state.nativeDirectCallRoomCard.lastActionOutcome = .refreshed
+            case .startAudio, .accept, .decline, .hangUp:
+                let result = await nativeDirectCallRoomActionHandler.performNativeDirectCallRoomCardAction(action)
+                state.nativeDirectCallRoomCard.state = result.state
+                state.nativeDirectCallRoomCard.lastAction = action
+                state.nativeDirectCallRoomCard.lastActionOutcome = result.outcome
+            }
+
+            state.nativeDirectCallRoomCard.isVisible = state.nativeDirectCallRoomCard.state != .hidden
+            state.nativeDirectCallRoomCard.isLoading = false
         }
     }
     
@@ -491,6 +530,8 @@ extension RoomScreenViewModel {
     static func mock(roomProxyMock: JoinedRoomProxyMock,
                      clientProxyMock: ClientProxyMock = ClientProxyMock(.init()),
                      appHooks: AppHooks = AppHooks(),
+                     nativeDirectCallRoomStateProvider: NativeDirectCallRoomStateProviding? = nil,
+                     nativeDirectCallRoomActionHandler: NativeDirectCallRoomActionHandling? = nil,
                      nativeDirectCallInternalControlProvider: NativeDirectCallInternalControlProviding? = nil) -> RoomScreenViewModel {
         RoomScreenViewModel(userSession: UserSessionMock(.init(clientProxy: clientProxyMock)),
                             roomProxy: roomProxyMock,
@@ -500,6 +541,8 @@ extension RoomScreenViewModel {
                             appHooks: appHooks,
                             analyticsService: ServiceLocator.shared.analytics,
                             userIndicatorController: ServiceLocator.shared.userIndicatorController,
+                            nativeDirectCallRoomStateProvider: nativeDirectCallRoomStateProvider,
+                            nativeDirectCallRoomActionHandler: nativeDirectCallRoomActionHandler,
                             nativeDirectCallInternalControlProvider: nativeDirectCallInternalControlProvider)
     }
 }

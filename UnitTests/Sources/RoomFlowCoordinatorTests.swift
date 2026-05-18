@@ -2559,6 +2559,33 @@ final class RoomFlowCoordinatorTests {
     }
 
     @Test
+    func nativeDirectCallProductUIGateRequiresExplicitIntegrationCommandsAndSeparateGate() {
+        let commandsEnabledEnvironment = [
+            "IS_RUNNING_INTEGRATION_TESTS": "1",
+            "NATIVE_DIRECT_CALL_DIAGNOSTICS": "1",
+            "NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED": "1"
+        ]
+        #expect(ProcessInfo.isNativeDirectCallProductUIEnabled(environment: commandsEnabledEnvironment) == false)
+
+        var internalUIEnvironment = commandsEnabledEnvironment
+        internalUIEnvironment["NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED"] = "1"
+        #expect(ProcessInfo.isNativeDirectCallInternalUIEnabled(environment: internalUIEnvironment) == true)
+        #expect(ProcessInfo.isNativeDirectCallProductUIEnabled(environment: internalUIEnvironment) == false)
+
+        var productUIEnvironment = commandsEnabledEnvironment
+        productUIEnvironment["NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED"] = "1"
+        #expect(ProcessInfo.isNativeDirectCallProductUIEnabled(environment: productUIEnvironment) == true)
+        #expect(ProcessInfo.isNativeDirectCallInternalUIEnabled(environment: productUIEnvironment) == false)
+
+        let productGateWithoutCommands = [
+            "IS_RUNNING_INTEGRATION_TESTS": "1",
+            "NATIVE_DIRECT_CALL_DIAGNOSTICS": "1",
+            "NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED": "1"
+        ]
+        #expect(ProcessInfo.isNativeDirectCallProductUIEnabled(environment: productGateWithoutCommands) == false)
+    }
+
+    @Test
     func nativeDirectCallProductionTokenBaseURLUsesHomeserverUnlessDebugIntegrationOverrideIsSet() {
         let disabledOverrideEnvironment = [
             "NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL": "http://127.0.0.1:8088"

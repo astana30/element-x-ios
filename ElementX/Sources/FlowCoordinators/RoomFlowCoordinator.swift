@@ -673,6 +673,66 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
                      productionStatus: status,
                      lastAction: .refreshStatus)
     }
+
+    private func makeNativeDirectCallRoomCardProvider() -> (NativeDirectCallRoomStateProviding & NativeDirectCallRoomActionHandling)? {
+        guard ProcessInfo.isNativeDirectCallProductUIEnabled else {
+            return nil
+        }
+
+        return ClosureNativeDirectCallRoomCardProvider(state: { [weak self] in
+            guard let self else {
+                return .unavailable(reason: .nativeCallsUnavailable)
+            }
+
+            return await nativeDirectCallRoomCardState()
+        }, action: { [weak self] action in
+            guard let self else {
+                return .blocked(action: action, reason: .nativeCallsUnavailable)
+            }
+
+            return await nativeDirectCallRoomCardActionResult(for: action)
+        })
+    }
+
+    private func nativeDirectCallRoomCardActionResult(for action: NativeDirectCallRoomCardAction) async -> NativeDirectCallRoomCardActionResult {
+        switch action {
+        case .refreshStatus:
+            let state = await nativeDirectCallRoomCardState()
+            return .init(action: action,
+                         outcome: .refreshed,
+                         state: state)
+        case .startAudio:
+            let result = await nativeDirectCallProductionStartOutgoingAudioCall(isProductionStartEnabled: ProcessInfo.isNativeDirectCallProductionStartEnabled)
+            let state = await nativeDirectCallRoomCardState()
+            return .init(action: action,
+                         outcome: NativeDirectCallRoomCardActionOutcome(result.outcome),
+                         state: state)
+        case .accept:
+            let result = await nativeDirectCallProductionAcceptIncomingCall()
+            let state = await nativeDirectCallRoomCardState()
+            return .init(action: action,
+                         outcome: NativeDirectCallRoomCardActionOutcome(acceptOutcome: result.outcome),
+                         state: state)
+        case .decline:
+            let result = await nativeDirectCallProductionHangup()
+            let state = await nativeDirectCallRoomCardState()
+            return .init(action: action,
+                         outcome: NativeDirectCallRoomCardActionOutcome(declineOutcome: result.outcome),
+                         state: state)
+        case .hangUp:
+            let result = await nativeDirectCallProductionHangup()
+            let state = await nativeDirectCallRoomCardState()
+            return .init(action: action,
+                         outcome: NativeDirectCallRoomCardActionOutcome(hangUpOutcome: result.outcome),
+                         state: state)
+        }
+    }
+
+    private func nativeDirectCallRoomCardState() async -> NativeDirectCallRoomCardState {
+        let triggerDiagnostic = await nativeDirectCallProductionTriggerDryRunDiagnostic()
+        return .make(triggerDiagnostic: triggerDiagnostic,
+                     productionStatus: nativeDirectCallProductionStatus())
+    }
     #endif
     
     // MARK: - Private
@@ -1001,8 +1061,10 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
                                                         threadRootEventID: nil)
 
         #if DEBUG
+        let nativeDirectCallRoomCardProvider = makeNativeDirectCallRoomCardProvider()
         let nativeDirectCallInternalControlProvider = makeNativeDirectCallInternalControlProvider()
         #else
+        let nativeDirectCallRoomCardProvider: (NativeDirectCallRoomStateProviding & NativeDirectCallRoomActionHandling)? = nil
         let nativeDirectCallInternalControlProvider: NativeDirectCallInternalControlProviding? = nil
         #endif
         
@@ -1023,6 +1085,8 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
                                                          composerDraftService: composerDraftService,
                                                          timelineControllerFactory: flowParameters.timelineControllerFactory,
                                                          userIndicatorController: flowParameters.userIndicatorController)
+        parameters.nativeDirectCallRoomStateProvider = nativeDirectCallRoomCardProvider
+        parameters.nativeDirectCallRoomActionHandler = nativeDirectCallRoomCardProvider
         parameters.nativeDirectCallInternalControlProvider = nativeDirectCallInternalControlProvider
         
         let coordinator = RoomScreenCoordinator(parameters: parameters)
