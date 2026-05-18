@@ -317,7 +317,7 @@ final class ClosureNativeDirectCallInternalControlProvider: NativeDirectCallInte
     }
 }
 
-enum NativeDirectCallInternalControlAction: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+enum NativeDirectCallInternalControlAction: String, CaseIterable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     case refreshStatus
     case armListener
     case startAudio
@@ -331,6 +331,43 @@ enum NativeDirectCallInternalControlAction: String, Equatable, CustomStringConve
     var debugDescription: String {
         description
     }
+
+    #if DEBUG
+    static let panelRows: [[Self]] = [
+        [.refreshStatus, .armListener],
+        [.startAudio, .accept, .hangUp]
+    ]
+
+    var buttonTitle: String {
+        switch self {
+        case .refreshStatus:
+            "Refresh"
+        case .armListener:
+            "Arm listener"
+        case .startAudio:
+            "Start audio"
+        case .accept:
+            "Accept"
+        case .hangUp:
+            "Hang up"
+        }
+    }
+
+    func isEnabled(in status: NativeDirectCallInternalControlStatus, isLoading: Bool) -> Bool {
+        switch self {
+        case .refreshStatus:
+            return true
+        case .armListener:
+            return !isLoading && status.canArmListener
+        case .startAudio:
+            return !isLoading && status.canStartAudio
+        case .accept:
+            return !isLoading && status.canAccept
+        case .hangUp:
+            return !isLoading && status.canHangUp
+        }
+    }
+    #endif
 }
 
 enum NativeDirectCallInternalControlAvailability: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
@@ -483,7 +520,7 @@ extension NativeDirectCallInternalControlStatus {
                      lastActionReason: String = "none") -> Self {
         let activationReason = triggerDiagnostic.blockedReason?.description ?? "none"
         let availability = availability(triggerDiagnostic: triggerDiagnostic, productionStatus: productionStatus)
-        let canArmListener = triggerDiagnostic.isEnabled && !productionStatus.productionListenerStarted
+        let canArmListener = triggerDiagnostic.isEnabled && (!productionStatus.productionListenerStarted || productionStatus.productionSessionState == "idle")
         let canStartAudio = triggerDiagnostic.isEnabled && !productionStatus.productionHasActiveSession
         let canAccept = triggerDiagnostic.isEnabled && productionStatus.productionSessionState == "incomingRinging"
         let canHangUp = productionStatus.productionHasActiveSession && hangUpEnabledStates.contains(productionStatus.productionSessionState)

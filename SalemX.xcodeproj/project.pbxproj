@@ -1331,6 +1331,7 @@
 		E15D2BACE3C71E25BC74A471 /* Backports.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4261E9D79B9E13FBA690A368 /* Backports.swift */; };
 		E15E9D2C3D372780A768D411 /* SpaceAddRoomsScreenViewModelProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 623E7B47ED951BC4484476CA /* SpaceAddRoomsScreenViewModelProtocol.swift */; };
 		E162BFD93D39E33EBDF3C864 /* KnockRequestsListScreenCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB4685E9DBEDD1B4F1E9BF7A /* KnockRequestsListScreenCoordinator.swift */; };
+		E2138954892B53499FC9F9CC /* NativeDirectCallInternalControlPanelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40C2D0B26DB57B2539233663 /* NativeDirectCallInternalControlPanelTests.swift */; };
 		E22AEAC9616519F4FE00F695 /* XCUIElement.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC2480E25CDB17599B193787 /* XCUIElement.swift */; };
 		E25A274708827152EDB6109C /* LocationSharingScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF90C582CABE99560D5CA627 /* LocationSharingScreen.swift */; };
 		E2859F5ACD9B3C3AF8AE2E25 /* landscape_test_video.mov in Resources */ = {isa = PBXBuildFile; fileRef = EE11A7D00EA06796026ED126 /* landscape_test_video.mov */; };
@@ -1933,6 +1934,7 @@
 		401072B5B096F05290207E42 /* AppLockSetupFlowCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLockSetupFlowCoordinator.swift; sourceTree = "<group>"; };
 		4030F6836BE7E0EC2FE31855 /* QRCodeLoginScreenViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRCodeLoginScreenViewModelTests.swift; sourceTree = "<group>"; };
 		405CA6C666EC461264015B69 /* CompoundIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompoundIcon.swift; sourceTree = "<group>"; };
+		40C2D0B26DB57B2539233663 /* NativeDirectCallInternalControlPanelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeDirectCallInternalControlPanelTests.swift; sourceTree = "<group>"; };
 		413047FC174EF1112ECEDC93 /* AppLockSettingsScreenViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLockSettingsScreenViewModelTests.swift; sourceTree = "<group>"; };
 		415BBF86F2AB59167D0565C6 /* PinnedEventsTimelineScreenModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedEventsTimelineScreenModels.swift; sourceTree = "<group>"; };
 		416B3264F5C186B5B3A66C9E /* BugReportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BugReportTests.swift; sourceTree = "<group>"; };
@@ -6504,6 +6506,7 @@
 				A16E4911FE007A0F5C5A2716 /* MediaUploadingPreprocessorTests.swift */,
 				6567B0A6A10689AECD368A9C /* MediaUploadPreviewScreenViewModelTests.swift */,
 				2F6AD200F06F149B9C3BACA5 /* MessageForwardingScreenViewModelTests.swift */,
+				40C2D0B26DB57B2539233663 /* NativeDirectCallInternalControlPanelTests.swift */,
 				B5BA5ED23A927FC12CE25AE6 /* NavigationRootCoordinatorTests.swift */,
 				0109A44AA15D4F4A11860F7C /* NavigationSplitCoordinatorTests.swift */,
 				9C0CBBF1A1BE21F12F9B0811 /* NavigationStackCoordinatorTests.swift */,
@@ -8999,6 +9002,7 @@
 				8E379651FA9987F4CF5D0778 /* MessageForwardingScreenViewModelTests.swift in Sources */,
 				C2B9074E536DAD6BAA3C8A4D /* MockCoder.swift in Sources */,
 				EDEDAC80C330C8FF9CF768B4 /* MockImageCache.swift in Sources */,
+				E2138954892B53499FC9F9CC /* NativeDirectCallInternalControlPanelTests.swift in Sources */,
 				CD047A3A5C2EE52B5A95D1EE /* NavigationRootCoordinatorTests.swift in Sources */,
 				6678679502E9711F7FF1B6F6 /* NavigationSplitCoordinatorTests.swift in Sources */,
 				5B9D87DDAD6CB5DD0434EA95 /* NavigationStackCoordinatorTests.swift in Sources */,

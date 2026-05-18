@@ -239,25 +239,7 @@ struct NativeDirectCallInternalControlPanel: View {
 
             statusGrid
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    controlButton("Refresh", isEnabled: !state.isLoading) {
-                        send(.nativeDirectCallInternalControl(.refreshStatus))
-                    }
-                    controlButton("Arm listener", isEnabled: state.status.canArmListener && !state.isLoading) {
-                        send(.nativeDirectCallInternalControl(.armListener))
-                    }
-                    controlButton("Start audio", isEnabled: state.status.canStartAudio && !state.isLoading) {
-                        send(.nativeDirectCallInternalControl(.startAudio))
-                    }
-                    controlButton("Accept", isEnabled: state.status.canAccept && !state.isLoading) {
-                        send(.nativeDirectCallInternalControl(.accept))
-                    }
-                    controlButton("Hang up", isEnabled: state.status.canHangUp && !state.isLoading) {
-                        send(.nativeDirectCallInternalControl(.hangUp))
-                    }
-                }
-            }
+            controlButtons
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -266,6 +248,20 @@ struct NativeDirectCallInternalControlPanel: View {
             Divider()
         }
         .accessibilityIdentifier("nativeDirectCallInternalControlPanel")
+    }
+
+    private var controlButtons: some View {
+        VStack(spacing: 6) {
+            ForEach(NativeDirectCallInternalControlAction.panelRows.indices, id: \.self) { rowIndex in
+                HStack(spacing: 8) {
+                    ForEach(NativeDirectCallInternalControlAction.panelRows[rowIndex], id: \.self) { action in
+                        controlButton(action.buttonTitle, isEnabled: action.isEnabled(in: state.status, isLoading: state.isLoading)) {
+                            send(.nativeDirectCallInternalControl(action))
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private var statusGrid: some View {
@@ -302,9 +298,15 @@ struct NativeDirectCallInternalControlPanel: View {
     }
 
     private func controlButton(_ title: String, isEnabled: Bool, action: @escaping () -> Void) -> some View {
-        Button(title, action: action)
-            .buttonStyle(.compound(.secondary, size: .small))
-            .disabled(!isEnabled)
+        Button(action: action) {
+            Text(title)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.compound(.secondary, size: .small))
+        .frame(maxWidth: .infinity)
+        .disabled(!isEnabled)
     }
 }
 #endif
