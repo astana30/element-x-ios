@@ -283,13 +283,12 @@ struct NativeDirectCallRoomCard: View {
                     .lineLimit(1)
             }
 
-            if let lastAction = state.lastAction,
-               let lastActionOutcome = state.lastActionOutcome {
+            if let lastAction = state.lastAction {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text("Last action:")
                         .font(.compound.bodyXS)
                         .foregroundStyle(.compound.textSecondary)
-                    Text("\(lastAction.description):\(lastActionOutcome.description)")
+                    Text("\(lastAction.description):\(state.lastActionOutcome?.description ?? "pending")")
                         .font(.compound.bodyXS)
                         .foregroundStyle(.compound.textPrimary)
                         .lineLimit(1)
@@ -303,7 +302,7 @@ struct NativeDirectCallRoomCard: View {
             ForEach(NativeDirectCallRoomCardAction.cardRows.indices, id: \.self) { rowIndex in
                 HStack(spacing: 8) {
                     ForEach(NativeDirectCallRoomCardAction.cardRows[rowIndex], id: \.self) { action in
-                        cardButton(action.buttonTitle,
+                        cardButton(action,
                                    isEnabled: action.isEnabled(in: state.state, isLoading: state.isLoading)) {
                             send(.nativeDirectCallRoomCard(action))
                         }
@@ -313,16 +312,18 @@ struct NativeDirectCallRoomCard: View {
         }
     }
 
-    private func cardButton(_ title: String, isEnabled: Bool, action: @escaping () -> Void) -> some View {
+    private func cardButton(_ cardAction: NativeDirectCallRoomCardAction, isEnabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(title)
+            Text(cardAction.buttonTitle)
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
                 .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.compound(.secondary, size: .small))
         .frame(maxWidth: .infinity)
         .disabled(!isEnabled)
+        .accessibilityIdentifier(cardAction.accessibilityIdentifier)
     }
 }
 

@@ -24,6 +24,7 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
     private let nativeDirectCallRoomActionHandler: NativeDirectCallRoomActionHandling?
     private let nativeDirectCallInternalControlProvider: NativeDirectCallInternalControlProviding?
     private let nativeDirectCallRoomCardAppearanceFollowUpDelay: Duration
+    private let nativeDirectCallRoomCardAppearanceFollowUpRefreshCount: Int
     private var hasRefreshedNativeDirectCallRoomCardOnAppear = false
     
     private var initialSelectedPinnedEventID: String?
@@ -66,7 +67,8 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
          nativeDirectCallRoomStateProvider: NativeDirectCallRoomStateProviding? = nil,
          nativeDirectCallRoomActionHandler: NativeDirectCallRoomActionHandling? = nil,
          nativeDirectCallInternalControlProvider: NativeDirectCallInternalControlProviding? = nil,
-         nativeDirectCallRoomCardAppearanceFollowUpDelay: Duration = .seconds(1)) {
+         nativeDirectCallRoomCardAppearanceFollowUpDelay: Duration = .seconds(1),
+         nativeDirectCallRoomCardAppearanceFollowUpRefreshCount: Int = 300) {
         clientProxy = userSession.clientProxy
         self.roomProxy = roomProxy
         self.appSettings = appSettings
@@ -76,6 +78,7 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
         self.nativeDirectCallRoomActionHandler = nativeDirectCallRoomActionHandler
         self.nativeDirectCallInternalControlProvider = nativeDirectCallInternalControlProvider
         self.nativeDirectCallRoomCardAppearanceFollowUpDelay = nativeDirectCallRoomCardAppearanceFollowUpDelay
+        self.nativeDirectCallRoomCardAppearanceFollowUpRefreshCount = nativeDirectCallRoomCardAppearanceFollowUpRefreshCount
         
         self.initialSelectedPinnedEventID = initialSelectedPinnedEventID
         pinnedEventStringBuilder = .pinnedEventStringBuilder(userID: roomProxy.ownUserID)
@@ -223,7 +226,7 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
 
         hasRefreshedNativeDirectCallRoomCardOnAppear = true
         refreshNativeDirectCallRoomCard(markAsManualRefresh: false)
-        scheduleNativeDirectCallRoomCardAppearanceFollowUpRefresh()
+        scheduleNativeDirectCallRoomCardAppearanceFollowUpRefreshes()
     }
 
     private func handleNativeDirectCallRoomCardAction(_ action: NativeDirectCallRoomCardAction) {
@@ -237,6 +240,8 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
             return
         }
 
+        state.nativeDirectCallRoomCard.lastAction = action
+        state.nativeDirectCallRoomCard.lastActionOutcome = nil
         state.nativeDirectCallRoomCard.isLoading = true
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -251,42 +256,62 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
         }
     }
 
-    private func refreshNativeDirectCallRoomCard(markAsManualRefresh: Bool) {
+    private func refreshNativeDirectCallRoomCard(markAsManualRefresh: Bool, showsLoadingIndicator: Bool = true) {
         guard let nativeDirectCallRoomStateProvider,
               nativeDirectCallRoomActionHandler != nil else {
             return
         }
 
-        state.nativeDirectCallRoomCard.isLoading = true
+        if showsLoadingIndicator {
+            state.nativeDirectCallRoomCard.isLoading = true
+        }
         Task { @MainActor [weak self] in
             guard let self else { return }
 
-            state.nativeDirectCallRoomCard.state = await nativeDirectCallRoomStateProvider.nativeDirectCallRoomCardState()
+            let refreshedState = await nativeDirectCallRoomStateProvider.nativeDirectCallRoomCardState()
+            guard showsLoadingIndicator || !state.nativeDirectCallRoomCard.isLoading else {
+                return
+            }
+
+            state.nativeDirectCallRoomCard.state = refreshedState
             if markAsManualRefresh {
                 state.nativeDirectCallRoomCard.lastAction = .refreshStatus
                 state.nativeDirectCallRoomCard.lastActionOutcome = .refreshed
             }
 
             state.nativeDirectCallRoomCard.isVisible = state.nativeDirectCallRoomCard.state != .hidden
-            state.nativeDirectCallRoomCard.isLoading = false
+            if showsLoadingIndicator {
+                state.nativeDirectCallRoomCard.isLoading = false
+            }
         }
     }
 
-    private func scheduleNativeDirectCallRoomCardAppearanceFollowUpRefresh() {
+    private func scheduleNativeDirectCallRoomCardAppearanceFollowUpRefreshes() {
         let delay = nativeDirectCallRoomCardAppearanceFollowUpDelay
+        let refreshCount = nativeDirectCallRoomCardAppearanceFollowUpRefreshCount
+        guard refreshCount > 0 else {
+            return
+        }
+
         Task { @MainActor [weak self] in
-            do {
-                try await Task.sleep(for: delay)
-            } catch {
-                return
-            }
+            for _ in 0..<refreshCount {
+                do {
+                    try await Task.sleep(for: delay)
+                } catch {
+                    return
+                }
 
-            guard let self,
-                  state.nativeDirectCallRoomCard.lastAction == nil else {
-                return
-            }
+                guard let self else {
+                    return
+                }
 
-            refreshNativeDirectCallRoomCard(markAsManualRefresh: false)
+                guard state.nativeDirectCallRoomCard.isVisible,
+                      !state.nativeDirectCallRoomCard.isLoading else {
+                    continue
+                }
+
+                refreshNativeDirectCallRoomCard(markAsManualRefresh: false, showsLoadingIndicator: false)
+            }
         }
     }
     
@@ -586,7 +611,8 @@ extension RoomScreenViewModel {
                      nativeDirectCallRoomStateProvider: NativeDirectCallRoomStateProviding? = nil,
                      nativeDirectCallRoomActionHandler: NativeDirectCallRoomActionHandling? = nil,
                      nativeDirectCallInternalControlProvider: NativeDirectCallInternalControlProviding? = nil,
-                     nativeDirectCallRoomCardAppearanceFollowUpDelay: Duration = .seconds(1)) -> RoomScreenViewModel {
+                     nativeDirectCallRoomCardAppearanceFollowUpDelay: Duration = .seconds(1),
+                     nativeDirectCallRoomCardAppearanceFollowUpRefreshCount: Int = 300) -> RoomScreenViewModel {
         RoomScreenViewModel(userSession: UserSessionMock(.init(clientProxy: clientProxyMock)),
                             roomProxy: roomProxyMock,
                             initialSelectedPinnedEventID: nil,
@@ -598,7 +624,8 @@ extension RoomScreenViewModel {
                             nativeDirectCallRoomStateProvider: nativeDirectCallRoomStateProvider,
                             nativeDirectCallRoomActionHandler: nativeDirectCallRoomActionHandler,
                             nativeDirectCallInternalControlProvider: nativeDirectCallInternalControlProvider,
-                            nativeDirectCallRoomCardAppearanceFollowUpDelay: nativeDirectCallRoomCardAppearanceFollowUpDelay)
+                            nativeDirectCallRoomCardAppearanceFollowUpDelay: nativeDirectCallRoomCardAppearanceFollowUpDelay,
+                            nativeDirectCallRoomCardAppearanceFollowUpRefreshCount: nativeDirectCallRoomCardAppearanceFollowUpRefreshCount)
     }
 }
 

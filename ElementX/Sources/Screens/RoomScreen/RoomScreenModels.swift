@@ -626,6 +626,10 @@ enum NativeDirectCallRoomCardAction: String, CaseIterable, Equatable, Hashable, 
         }
     }
 
+    var accessibilityIdentifier: String {
+        "nativeDirectCallRoomCard.\(rawValue)"
+    }
+
     func isEnabled(in state: NativeDirectCallRoomCardState, isLoading: Bool) -> Bool {
         switch self {
         case .refreshStatus:

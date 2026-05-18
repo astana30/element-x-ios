@@ -87,7 +87,8 @@ final class NativeDirectCallInternalControlPanelTests {
         let viewModel = RoomScreenViewModel.mock(roomProxyMock: JoinedRoomProxyMock(.init()),
                                                  nativeDirectCallRoomStateProvider: provider,
                                                  nativeDirectCallRoomActionHandler: provider,
-                                                 nativeDirectCallRoomCardAppearanceFollowUpDelay: .milliseconds(10))
+                                                 nativeDirectCallRoomCardAppearanceFollowUpDelay: .milliseconds(10),
+                                                 nativeDirectCallRoomCardAppearanceFollowUpRefreshCount: 1)
         self.viewModel = viewModel
 
         let deferred = deferFulfillment(viewModel.context.$viewState) { viewState in
@@ -100,6 +101,66 @@ final class NativeDirectCallInternalControlPanelTests {
         #expect(provider.performedActions.isEmpty)
         #expect(viewModel.context.viewState.nativeDirectCallRoomCard.lastAction == nil)
         #expect(viewModel.context.viewState.nativeDirectCallRoomCard.lastActionOutcome == nil)
+    }
+
+    @Test
+    func productCardPassivelyRefreshesRemoteStateChangesAfterAppearance() async throws {
+        let provider = NativeDirectCallRoomCardProviderSpy(states: [
+            .canStart,
+            .canStart,
+            .incomingRinging
+        ])
+        let viewModel = RoomScreenViewModel.mock(roomProxyMock: JoinedRoomProxyMock(.init()),
+                                                 nativeDirectCallRoomStateProvider: provider,
+                                                 nativeDirectCallRoomActionHandler: provider,
+                                                 nativeDirectCallRoomCardAppearanceFollowUpDelay: .milliseconds(10),
+                                                 nativeDirectCallRoomCardAppearanceFollowUpRefreshCount: 2)
+        self.viewModel = viewModel
+
+        let deferred = deferFulfillment(viewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallRoomCard.state == .incomingRinging
+        }
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCardAppeared)
+        try await deferred.fulfill()
+
+        #expect(provider.refreshCount == 3)
+        #expect(provider.performedActions.isEmpty)
+        #expect(viewModel.context.viewState.nativeDirectCallRoomCard.lastAction == nil)
+        #expect(viewModel.context.viewState.nativeDirectCallRoomCard.lastActionOutcome == nil)
+    }
+
+    @Test
+    func productCardPassiveFollowUpRefreshDoesNotDisableActions() async throws {
+        let provider = DelayedNativeDirectCallRoomCardProviderSpy(states: [
+            .canStart,
+            .incomingRinging
+        ], delay: .milliseconds(40))
+        let viewModel = RoomScreenViewModel.mock(roomProxyMock: JoinedRoomProxyMock(.init()),
+                                                 nativeDirectCallRoomStateProvider: provider,
+                                                 nativeDirectCallRoomActionHandler: provider,
+                                                 nativeDirectCallRoomCardAppearanceFollowUpDelay: .milliseconds(10),
+                                                 nativeDirectCallRoomCardAppearanceFollowUpRefreshCount: 10)
+        self.viewModel = viewModel
+
+        let canStart = deferFulfillment(viewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallRoomCard.state == .canStart && !viewState.nativeDirectCallRoomCard.isLoading
+        }
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCardAppeared)
+        try await canStart.fulfill()
+
+        let incoming = deferFulfillment(viewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallRoomCard.state == .incomingRinging
+        }
+        try await Task.sleep(for: .milliseconds(25))
+
+        let card = viewModel.context.viewState.nativeDirectCallRoomCard
+        #expect(card.state == .canStart)
+        #expect(!card.isLoading)
+        #expect(NativeDirectCallRoomCardAction.startAudio.isEnabled(in: card.state, isLoading: card.isLoading))
+
+        try await incoming.fulfill()
+        #expect(provider.refreshCount >= 2)
+        #expect(provider.performedActions.isEmpty)
     }
 
     @Test
@@ -183,6 +244,16 @@ final class NativeDirectCallInternalControlPanelTests {
         #expect(cardRows.count == 2)
         #expect(cardRows.allSatisfy { $0.count <= 3 })
         #expect(cardRows.flatMap { $0 } == NativeDirectCallRoomCardAction.allCases)
+    }
+
+    @Test
+    func productCardActionsHaveStableAccessibilityIdentifiers() {
+        let identifiers = NativeDirectCallRoomCardAction.allCases.map(\.accessibilityIdentifier)
+
+        #expect(Set(identifiers).count == NativeDirectCallRoomCardAction.allCases.count)
+        #expect(identifiers.contains("nativeDirectCallRoomCard.startAudio"))
+        #expect(identifiers.contains("nativeDirectCallRoomCard.accept"))
+        #expect(identifiers.contains("nativeDirectCallRoomCard.hangUp"))
     }
 
     @Test
@@ -408,6 +479,34 @@ private final class NativeDirectCallRoomCardProviderSpy: NativeDirectCallRoomSta
         return .init(action: action,
                      outcome: action == .startAudio ? .started : .refreshed,
                      state: action == .startAudio ? .outgoingRinging : .canStart)
+    }
+}
+
+@MainActor
+private final class DelayedNativeDirectCallRoomCardProviderSpy: NativeDirectCallRoomStateProviding, NativeDirectCallRoomActionHandling {
+    private(set) var refreshCount = 0
+    private(set) var performedActions = [NativeDirectCallRoomCardAction]()
+    private let delay: Duration
+    private var states: [NativeDirectCallRoomCardState]
+
+    init(states: [NativeDirectCallRoomCardState], delay: Duration) {
+        self.states = states
+        self.delay = delay
+    }
+
+    func nativeDirectCallRoomCardState() async -> NativeDirectCallRoomCardState {
+        refreshCount += 1
+        try? await Task.sleep(for: delay)
+        if states.count > 1 {
+            return states.removeFirst()
+        }
+
+        return states.first ?? .canStart
+    }
+
+    func performNativeDirectCallRoomCardAction(_ action: NativeDirectCallRoomCardAction) async -> NativeDirectCallRoomCardActionResult {
+        performedActions.append(action)
+        return .init(action: action, outcome: .started, state: .outgoingRinging)
     }
 }
 #endif
