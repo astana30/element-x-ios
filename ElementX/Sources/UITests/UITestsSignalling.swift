@@ -78,6 +78,10 @@ enum UITestsSignal: Codable, Equatable {
     case nativeDirectCallProductionAcceptIncomingCall(NativeDirectCallProductionAcceptIncomingCallRequest)
     /// Reports a redacted DEBUG-only internal production native direct-call accept command result.
     case nativeDirectCallProductionAcceptIncomingCallResult(NativeDirectCallProductionAcceptIncomingCallResult)
+    /// Requests a DEBUG-only internal production native direct-call hangup command for the active room.
+    case nativeDirectCallProductionHangup(NativeDirectCallProductionHangupRequest)
+    /// Reports a redacted DEBUG-only internal production native direct-call hangup command result.
+    case nativeDirectCallProductionHangupResult(NativeDirectCallProductionHangupResult)
     /// Requests redacted production native direct-call owner status for the active room.
     case nativeDirectCallProductionStatus(NativeDirectCallProductionStatusRequest)
     /// Reports redacted production native direct-call owner status for the active room.
@@ -372,6 +376,34 @@ enum UITestsSignal: Codable, Equatable {
         }
     }
 
+    struct NativeDirectCallProductionHangupRequest: Codable, Equatable {
+        let correlationID: String?
+
+        init(correlationID: String? = nil) {
+            self.correlationID = UITestsSignalling.sanitizedIdentifier(correlationID)
+        }
+    }
+
+    struct NativeDirectCallProductionHangupResult: Codable, Equatable {
+        let correlationID: String?
+        let outcome: NativeDirectCallProductionHangupResultOutcome
+        let reason: String?
+        let sessionSummary: NativeDirectCallProductionStartedSessionSummary?
+        let status: NativeDirectCallProductionStatusPayload
+
+        init(correlationID: String? = nil,
+             outcome: NativeDirectCallProductionHangupResultOutcome,
+             reason: String?,
+             sessionSummary: NativeDirectCallProductionStartedSessionSummary? = nil,
+             status: NativeDirectCallProductionStatusPayload) {
+            self.correlationID = UITestsSignalling.sanitizedIdentifier(correlationID)
+            self.outcome = outcome
+            self.reason = reason.flatMap { UITestsSignalling.sanitizedIdentifier($0) }
+            self.sessionSummary = sessionSummary
+            self.status = status
+        }
+    }
+
     struct NativeDirectCallProductionStatusRequest: Codable, Equatable {
         let correlationID: String?
 
@@ -392,6 +424,12 @@ enum UITestsSignal: Codable, Equatable {
 
     enum NativeDirectCallProductionStartResultOutcome: String, Codable, Equatable {
         case started
+        case blocked
+        case engineFailure
+    }
+
+    enum NativeDirectCallProductionHangupResultOutcome: String, Codable, Equatable {
+        case hungUp
         case blocked
         case engineFailure
     }
@@ -426,6 +464,7 @@ enum UITestsSignal: Codable, Equatable {
         let productionLastSignalSendAttempted: Bool
         let productionLastSignalSendSucceeded: Bool?
         let productionLastSignalSendFailureReason: DirectCallDiagnosticSignalSendFailureReason?
+        let productionLastTerminalReason: DirectCallDiagnosticTerminalReason?
         let productionListenerAttached: Bool
         let productionListenerHandleRetained: Bool
         let productionListenerStartCount: Int
@@ -451,6 +490,8 @@ enum UITestsSignal: Codable, Equatable {
         let productionMediaKeyHandleAvailable: Bool
         let productionMediaKeyBridgeHit: Bool
         let productionMediaConnectAttempted: Bool
+        let productionMediaDisconnectAttempted: Bool
+        let productionMediaCleanupAttempted: Bool
         let productionLiveKitClientConnectAttempted: Bool
         let productionMediaFailureReason: DirectCallDiagnosticMediaFailureReason
 
@@ -463,6 +504,7 @@ enum UITestsSignal: Codable, Equatable {
              productionLastSignalSendAttempted: Bool,
              productionLastSignalSendSucceeded: Bool?,
              productionLastSignalSendFailureReason: DirectCallDiagnosticSignalSendFailureReason?,
+             productionLastTerminalReason: DirectCallDiagnosticTerminalReason? = nil,
              productionListenerAttached: Bool = false,
              productionListenerHandleRetained: Bool = false,
              productionListenerStartCount: Int = 0,
@@ -488,6 +530,8 @@ enum UITestsSignal: Codable, Equatable {
              productionMediaKeyHandleAvailable: Bool = false,
              productionMediaKeyBridgeHit: Bool = false,
              productionMediaConnectAttempted: Bool = false,
+             productionMediaDisconnectAttempted: Bool = false,
+             productionMediaCleanupAttempted: Bool = false,
              productionLiveKitClientConnectAttempted: Bool = false,
              productionMediaFailureReason: DirectCallDiagnosticMediaFailureReason = .none) {
             self.productionOwnerAvailable = productionOwnerAvailable
@@ -499,6 +543,7 @@ enum UITestsSignal: Codable, Equatable {
             self.productionLastSignalSendAttempted = productionLastSignalSendAttempted
             self.productionLastSignalSendSucceeded = productionLastSignalSendSucceeded
             self.productionLastSignalSendFailureReason = productionLastSignalSendFailureReason
+            self.productionLastTerminalReason = productionLastTerminalReason
             self.productionListenerAttached = productionListenerAttached
             self.productionListenerHandleRetained = productionListenerHandleRetained
             self.productionListenerStartCount = productionListenerStartCount
@@ -524,6 +569,8 @@ enum UITestsSignal: Codable, Equatable {
             self.productionMediaKeyHandleAvailable = productionMediaKeyHandleAvailable
             self.productionMediaKeyBridgeHit = productionMediaKeyBridgeHit
             self.productionMediaConnectAttempted = productionMediaConnectAttempted
+            self.productionMediaDisconnectAttempted = productionMediaDisconnectAttempted
+            self.productionMediaCleanupAttempted = productionMediaCleanupAttempted
             self.productionLiveKitClientConnectAttempted = productionLiveKitClientConnectAttempted
             self.productionMediaFailureReason = productionMediaFailureReason
         }
@@ -903,6 +950,16 @@ extension UITestsSignal.NativeDirectCallProductionAcceptIncomingCallResult {
     }
 }
 
+extension UITestsSignal.NativeDirectCallProductionHangupResult {
+    init(correlationID: String? = nil, _ result: NativeDirectCallProductionHangupResult) {
+        self.init(correlationID: correlationID,
+                  outcome: .init(result.outcome),
+                  reason: result.reason?.description,
+                  sessionSummary: result.sessionSummary.map { .init($0) },
+                  status: .init(result.status))
+    }
+}
+
 extension UITestsSignal.NativeDirectCallProductionStatusResult {
     init(correlationID: String? = nil, _ status: NativeDirectCallProductionStatus) {
         self.init(correlationID: correlationID,
@@ -915,6 +972,19 @@ extension UITestsSignal.NativeDirectCallProductionStartResultOutcome {
         switch outcome {
         case .started:
             self = .started
+        case .blocked:
+            self = .blocked
+        case .engineFailure:
+            self = .engineFailure
+        }
+    }
+}
+
+extension UITestsSignal.NativeDirectCallProductionHangupResultOutcome {
+    init(_ outcome: NativeDirectCallProductionHangupOutcome) {
+        switch outcome {
+        case .hungUp:
+            self = .hungUp
         case .blocked:
             self = .blocked
         case .engineFailure:
@@ -944,6 +1014,7 @@ extension UITestsSignal.NativeDirectCallProductionStatusPayload {
                   productionLastSignalSendAttempted: status.productionLastSignalSendAttempted,
                   productionLastSignalSendSucceeded: status.productionLastSignalSendSucceeded,
                   productionLastSignalSendFailureReason: status.productionLastSignalSendFailureReason,
+                  productionLastTerminalReason: status.productionLastTerminalReason,
                   productionListenerAttached: status.productionListenerAttached,
                   productionListenerHandleRetained: status.productionListenerHandleRetained,
                   productionListenerStartCount: status.productionListenerStartCount,
@@ -969,6 +1040,8 @@ extension UITestsSignal.NativeDirectCallProductionStatusPayload {
                   productionMediaKeyHandleAvailable: status.productionMediaKeyHandleAvailable,
                   productionMediaKeyBridgeHit: status.productionMediaKeyBridgeHit,
                   productionMediaConnectAttempted: status.productionMediaConnectAttempted,
+                  productionMediaDisconnectAttempted: status.productionMediaDisconnectAttempted,
+                  productionMediaCleanupAttempted: status.productionMediaCleanupAttempted,
                   productionLiveKitClientConnectAttempted: status.productionLiveKitClientConnectAttempted,
                   productionMediaFailureReason: status.productionMediaFailureReason)
     }

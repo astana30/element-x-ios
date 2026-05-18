@@ -1560,6 +1560,16 @@ extension AppCoordinator {
 
                             let result = UITestsSignal.NativeDirectCallProductionAcceptIncomingCallResult(correlationID: request.correlationID, acceptResult)
                             try? client?.send(.nativeDirectCallProductionAcceptIncomingCallResult(result))
+                        case .nativeDirectCallProductionHangup(let request):
+                            let hangupResult: NativeDirectCallProductionHangupResult
+                            if let flowCoordinator = self?.userSessionFlowCoordinator {
+                                hangupResult = await flowCoordinator.nativeDirectCallProductionHangup()
+                            } else {
+                                hangupResult = .blocked(.roomUnavailable)
+                            }
+
+                            let result = UITestsSignal.NativeDirectCallProductionHangupResult(correlationID: request.correlationID, hangupResult)
+                            try? client?.send(.nativeDirectCallProductionHangupResult(result))
                         case .nativeDirectCallProductionStatus(let request):
                             let status: NativeDirectCallProductionStatus
                             if let flowCoordinator = self?.userSessionFlowCoordinator {

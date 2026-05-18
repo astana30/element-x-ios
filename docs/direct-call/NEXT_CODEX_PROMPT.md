@@ -7,10 +7,10 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.14E — iOS internal production native direct-call activeAudio proof.
+After 2.15A — internal production call cleanup/hangup command.
 
 Current code checkpoints:
-- App: 2.14C `Add production LiveKit connect failure diagnostics`
+- App: 2.15A `Add production direct-call hangup command`
 - Backend: 2.14E `Fix fake backend LiveKit dev token grants`
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`
@@ -21,41 +21,49 @@ Current proven state:
 - Production token DTO/client/transport/config seams exist and remain disabled by default.
 - Backend token service skeleton exists with local fake mode for internal proof.
 - Production Matrix SDK key envelope wrapping is integrated through a narrow provider seam.
-- Production activation gate, dry-run, trigger dry-run, start command, receive listener, incoming invite handling, accept command, and media failure diagnostics exist on the DEBUG/integration internal command path.
+- Production activation gate, dry-run, trigger dry-run, start command, receive listener, incoming invite handling, accept command, media failure diagnostics, and hangup command exist on the DEBUG/integration internal command path.
 - Local fake backend plus local LiveKit dev server reached `activeAudio` on both iOS clients through the internal production command lane.
-- A and B both reported `productionEncryptionState=ready`, `productionMediaConnectAttempted=true`, `productionLiveKitClientConnectAttempted=true`, and `productionMediaFailureReason=none`.
-- This proof did not add visible UI, did not change the Element Call route, did not wire CallKit/push, and did not globally activate production direct calls.
+- The new `production-hangup A|B` runner command routes through the production owner path and performs immediate terminal cleanup after a successful terminal signal.
+- Production status exposes redacted terminal reason, media disconnect attempted, and media cleanup attempted fields.
+- No visible UI, Element Call route, RoomScreen call presentation, ElementCallService, CallKit, push, or global production activation has been added.
 
 Phase:
-2.15A — internal production call cleanup/hangup command.
+2.15B — internal production hangup runtime proof.
 
 Task:
-Add a DEBUG/integration-only production hangup/end-call command for internal native direct-call sessions.
+Run a DEBUG/integration runtime proof for `production-hangup` after an internal production native direct call reaches `activeAudio`.
+Do not modify app code unless a runner-only bug is found.
 Do not add visible UI.
 Do not modify the Element Call route.
 Do not wire CallKit/push.
 Do not globally activate production direct calls.
 
 Goal:
-Allow the runner to cleanly terminate active or ringing production native direct-call sessions created by the internal command lane, and prove both sides return to terminal/idle state with redacted diagnostics.
+Prove the internal production command lane can cleanly terminate an active local fake-backend/native LiveKit proof call and return both sides to no active production session with redacted terminal and media cleanup diagnostics.
 
-Suggested command shape:
-- UITestsSignalling request: `nativeDirectCallProductionHangup` or `nativeDirectCallProductionEndCall`
-- Runner command: `production-hangup A|B` or `production-end-call A|B`
+Suggested runtime sequence:
+1. Start the local fake SalemX call service and local LiveKit dev server using the existing local smoke instructions.
+2. Launch A/B diagnostic harness with the existing DEBUG/integration gates for fake-enabled activation and production start.
+3. Open the same encrypted 1:1 room on A and B.
+4. Run `production-start-listener B`.
+5. Run `production-start-outgoing A`.
+6. Run `production-status A` and `production-status B` until B shows `incomingRinging`.
+7. Run `production-accept B`.
+8. Run `production-status A` and `production-status B` until both show `activeAudio` and media failure reason `none`.
+9. Run `production-hangup A`.
+10. After a short wait, run `production-status A` and `production-status B`.
 
-Expected behavior:
-1. Requires DEBUG/integration diagnostics.
-2. Requires the dedicated production start command gate if that is the current safety model.
-3. Requires a production owner for the active room.
-4. If there is no active/ringing production session, return a redacted blocked/no-op result.
-5. If there is an active/ringing session, send the production hangup or cancel terminal signal as appropriate.
-6. Stop or disconnect media if connected.
-7. Clear the production media key handle/store for the call.
-8. Leave the receive listener state explicit: either retained for the current room or stopped if the owner is reset, but document and test the choice.
-9. Return a redacted status summary.
-10. Keep diagnostic and production owners separate.
+Expected result:
+- `production-hangup A` returns `outcome=hungUp`, `reason=none`, and redacted status fields.
+- A sends a production terminal event and reports signal send attempted/succeeded.
+- A reports no active production session after cleanup.
+- A reports a terminal reason and media disconnect/cleanup attempted where applicable.
+- B receives the terminal event and reports no active production session.
+- B reports the receive event kind/terminal reason if surfaced by existing diagnostics.
+- No visible UI, Element Call route, CallKit, push, public activation, or product call route is involved.
 
 Hard constraints:
+- No app code changes unless a runner-only issue blocks the proof.
 - No visible UI.
 - No `RoomScreenViewModel.displayCall` changes.
 - No `RoomScreenCoordinator.presentCallScreen` changes.
@@ -67,40 +75,18 @@ Hard constraints:
 - No broad Matrix SDK raw APIs.
 - Do not print or store credentials, bearer values, participant credentials, media-key material, SDK envelope contents, Matrix event content, or copied secret-bearing logs.
 
-Tests:
-- Command is unavailable outside DEBUG/integration diagnostics.
-- Command blocks/no-ops with no production owner.
-- Command blocks/no-ops with no active production session.
-- Command terminates outgoing ringing sessions.
-- Command terminates incoming ringing sessions.
-- Command terminates active audio sessions.
-- Terminal signal send diagnostics are redacted.
-- Media cleanup is invoked when media was connected.
-- Media key cleanup is invoked and idempotent.
-- Repeated hangup is idempotent and redacted.
-- Remote side can observe the terminal signal and leave active/ringing state.
-- Diagnostic owner remains unaffected.
-- No visible UI, Element Call route, CallKit, push, or global activation behavior changes.
-
 Validation:
-- `git diff --check`
-- SwiftFormat/SwiftLint on changed Swift files.
-- Runner `bash -n` if scripts change.
-- Targeted tests:
-  - `RoomFlowCoordinatorTests`
-  - `DirectCallEngineTests`
-  - `DirectCallEngineSignalTransportTests`
-  - `DirectCallMediaEngineTests`
-  - `DirectCallProductionKeyWrappingTests`
-- Release build.
-- Forbidden scan for credential/key/logging regressions.
+- Runner syntax check if touched.
+- `git diff --check` if anything changes.
+- Docs secret scan if docs are updated.
+- Commit only runner/docs fixes if required and validated.
 
 Expected report:
-A. Files changed.
-B. Command name and routing path.
-C. Cleanup/hangup behavior.
-D. Whether terminal Matrix signal is sent and redacted.
-E. Media/key cleanup behavior.
-F. Tests/build results.
-G. Runtime command sequence to prove cleanup after `activeAudio`.
-H. Commit hash.
+A. Runtime command sequence used.
+B. A/B activeAudio status before hangup.
+C. `production-hangup` result.
+D. A/B production status after hangup.
+E. Whether terminal signal send/receive was observed.
+F. Whether media disconnect/cleanup was observed.
+G. Whether any code changes were needed.
+H. Commit hash if a fix/docs update was committed.

@@ -565,6 +565,31 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
         }
     }
 
+    func nativeDirectCallProductionHangup() async -> NativeDirectCallProductionHangupResult {
+        guard let nativeDirectCallProductionRoomFlowOwner else {
+            return .blocked(.productionOwnerUnavailable)
+        }
+
+        guard let activeSession = nativeDirectCallProductionRoomFlowOwner.activeSession,
+              !activeSession.state.isTerminal else {
+            return .blocked(.noActiveCall, owner: nativeDirectCallProductionRoomFlowOwner)
+        }
+
+        switch await nativeDirectCallProductionRoomFlowOwner.hangup() {
+        case .success(let session):
+            switch await nativeDirectCallProductionRoomFlowOwner.cleanupTerminalCall(callID: session.callID) {
+            case .success:
+                return .hungUp(session, owner: nativeDirectCallProductionRoomFlowOwner)
+            case .failure(let error):
+                return .failed(error,
+                               owner: nativeDirectCallProductionRoomFlowOwner)
+            }
+        case .failure(let error):
+            return .failed(error,
+                           owner: nativeDirectCallProductionRoomFlowOwner)
+        }
+    }
+
     func nativeDirectCallProductionStatus() -> NativeDirectCallProductionStatus {
         .init(owner: nativeDirectCallProductionRoomFlowOwner)
     }
@@ -2036,6 +2061,7 @@ enum NativeDirectCallProductionStartOperation {
     case listenerStart
     case outgoingStart
     case acceptIncoming
+    case hangup
 }
 
 enum NativeDirectCallProductionStartBlockedReason: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
@@ -2588,6 +2614,74 @@ struct NativeDirectCallProductionAcceptIncomingCallResult: Equatable, CustomStri
     }
 }
 
+enum NativeDirectCallProductionHangupOutcome: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case hungUp
+    case blocked
+    case engineFailure
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct NativeDirectCallProductionHangupResult: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let outcome: NativeDirectCallProductionHangupOutcome
+    let reason: NativeDirectCallProductionStartBlockedReason?
+    let sessionSummary: NativeDirectCallProductionStartedSessionSummary?
+    let status: NativeDirectCallProductionStatus
+
+    var didHangUp: Bool {
+        outcome == .hungUp
+    }
+
+    @MainActor
+    static func blocked(_ reason: NativeDirectCallProductionStartBlockedReason,
+                        owner: NativeDirectCallRoomFlowOwning? = nil) -> Self {
+        .init(outcome: .blocked,
+              reason: reason,
+              sessionSummary: nil,
+              status: .init(owner: owner))
+    }
+
+    @MainActor
+    static func hungUp(_ session: DirectCallSession,
+                       owner: NativeDirectCallRoomFlowOwning) -> Self {
+        .init(outcome: .hungUp,
+              reason: nil,
+              sessionSummary: .init(session: session),
+              status: .init(owner: owner))
+    }
+
+    @MainActor
+    static func failed(_ error: NativeDirectCallRoomFlowOwnerError,
+                       owner: NativeDirectCallRoomFlowOwning) -> Self {
+        let reason = NativeDirectCallProductionStartBlockedReason(error, operation: .hangup)
+        let outcome: NativeDirectCallProductionHangupOutcome = reason.isEngineFailureOutcome ? .engineFailure : .blocked
+        return .init(outcome: outcome,
+                     reason: reason,
+                     sessionSummary: nil,
+                     status: .init(owner: owner))
+    }
+
+    var description: String {
+        let fields = [
+            "outcome: \(outcome)",
+            "reason: \(reason?.description ?? "none")",
+            "sessionSummary: \(sessionSummary?.description ?? "none")",
+            "status: \(status)"
+        ]
+        return "NativeDirectCallProductionHangupResult(\(fields.joined(separator: ", ")))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
 struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     let productionOwnerAvailable: Bool
     let productionListenerStarted: Bool
@@ -2598,6 +2692,7 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
     let productionLastSignalSendAttempted: Bool
     let productionLastSignalSendSucceeded: Bool?
     let productionLastSignalSendFailureReason: DirectCallDiagnosticSignalSendFailureReason?
+    let productionLastTerminalReason: DirectCallDiagnosticTerminalReason?
     let productionListenerAttached: Bool
     let productionListenerHandleRetained: Bool
     let productionListenerStartCount: Int
@@ -2623,6 +2718,8 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
     let productionMediaKeyHandleAvailable: Bool
     let productionMediaKeyBridgeHit: Bool
     let productionMediaConnectAttempted: Bool
+    let productionMediaDisconnectAttempted: Bool
+    let productionMediaCleanupAttempted: Bool
     let productionLiveKitClientConnectAttempted: Bool
     let productionMediaFailureReason: DirectCallDiagnosticMediaFailureReason
 
@@ -2650,6 +2747,7 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
         productionLastSignalSendAttempted = diagnosticSnapshot.lastSignalSendAttempted
         productionLastSignalSendSucceeded = diagnosticSnapshot.lastSignalSendSucceeded
         productionLastSignalSendFailureReason = diagnosticSnapshot.lastSignalSendFailureReason
+        productionLastTerminalReason = diagnosticSnapshot.lastTerminalReason
         productionListenerAttached = diagnosticSnapshot.listenerAttached
         productionListenerHandleRetained = diagnosticSnapshot.listenerHandleRetained
         productionListenerStartCount = diagnosticSnapshot.listenerStartCount
@@ -2675,6 +2773,8 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
         productionMediaKeyHandleAvailable = diagnosticSnapshot.mediaKeyHandleAvailable
         productionMediaKeyBridgeHit = diagnosticSnapshot.mediaKeyBridgeHit
         productionMediaConnectAttempted = diagnosticSnapshot.mediaConnectAttempted
+        productionMediaDisconnectAttempted = diagnosticSnapshot.mediaDisconnectAttempted
+        productionMediaCleanupAttempted = diagnosticSnapshot.mediaCleanupAttempted
         productionLiveKitClientConnectAttempted = diagnosticSnapshot.liveKitClientConnectAttempted
         productionMediaFailureReason = diagnosticSnapshot.mediaFailureReason
     }
@@ -2688,6 +2788,7 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
                                   productionLastSignalSendAttempted: false,
                                   productionLastSignalSendSucceeded: nil,
                                   productionLastSignalSendFailureReason: nil,
+                                  productionLastTerminalReason: nil,
                                   productionListenerAttached: false,
                                   productionListenerHandleRetained: false,
                                   productionListenerStartCount: 0,
@@ -2713,6 +2814,8 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
                                   productionMediaKeyHandleAvailable: false,
                                   productionMediaKeyBridgeHit: false,
                                   productionMediaConnectAttempted: false,
+                                  productionMediaDisconnectAttempted: false,
+                                  productionMediaCleanupAttempted: false,
                                   productionLiveKitClientConnectAttempted: false,
                                   productionMediaFailureReason: .none)
 
@@ -2725,6 +2828,7 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
                  productionLastSignalSendAttempted: Bool,
                  productionLastSignalSendSucceeded: Bool?,
                  productionLastSignalSendFailureReason: DirectCallDiagnosticSignalSendFailureReason?,
+                 productionLastTerminalReason: DirectCallDiagnosticTerminalReason?,
                  productionListenerAttached: Bool,
                  productionListenerHandleRetained: Bool,
                  productionListenerStartCount: Int,
@@ -2750,6 +2854,8 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
                  productionMediaKeyHandleAvailable: Bool,
                  productionMediaKeyBridgeHit: Bool,
                  productionMediaConnectAttempted: Bool,
+                 productionMediaDisconnectAttempted: Bool,
+                 productionMediaCleanupAttempted: Bool,
                  productionLiveKitClientConnectAttempted: Bool,
                  productionMediaFailureReason: DirectCallDiagnosticMediaFailureReason) {
         self.productionOwnerAvailable = productionOwnerAvailable
@@ -2761,6 +2867,7 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
         self.productionLastSignalSendAttempted = productionLastSignalSendAttempted
         self.productionLastSignalSendSucceeded = productionLastSignalSendSucceeded
         self.productionLastSignalSendFailureReason = productionLastSignalSendFailureReason
+        self.productionLastTerminalReason = productionLastTerminalReason
         self.productionListenerAttached = productionListenerAttached
         self.productionListenerHandleRetained = productionListenerHandleRetained
         self.productionListenerStartCount = productionListenerStartCount
@@ -2786,6 +2893,8 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
         self.productionMediaKeyHandleAvailable = productionMediaKeyHandleAvailable
         self.productionMediaKeyBridgeHit = productionMediaKeyBridgeHit
         self.productionMediaConnectAttempted = productionMediaConnectAttempted
+        self.productionMediaDisconnectAttempted = productionMediaDisconnectAttempted
+        self.productionMediaCleanupAttempted = productionMediaCleanupAttempted
         self.productionLiveKitClientConnectAttempted = productionLiveKitClientConnectAttempted
         self.productionMediaFailureReason = productionMediaFailureReason
     }
@@ -2801,6 +2910,7 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
             "productionLastSignalSendAttempted: \(productionLastSignalSendAttempted)",
             "productionLastSignalSendSucceeded: \(String(describing: productionLastSignalSendSucceeded))",
             "productionLastSignalSendFailureReason: \(String(describing: productionLastSignalSendFailureReason))",
+            "productionLastTerminalReason: \(String(describing: productionLastTerminalReason))",
             "productionListenerAttached: \(productionListenerAttached)",
             "productionListenerHandleRetained: \(productionListenerHandleRetained)",
             "productionListenerStartCount: \(productionListenerStartCount)",
@@ -2826,6 +2936,8 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
             "productionMediaKeyHandleAvailable: \(productionMediaKeyHandleAvailable)",
             "productionMediaKeyBridgeHit: \(productionMediaKeyBridgeHit)",
             "productionMediaConnectAttempted: \(productionMediaConnectAttempted)",
+            "productionMediaDisconnectAttempted: \(productionMediaDisconnectAttempted)",
+            "productionMediaCleanupAttempted: \(productionMediaCleanupAttempted)",
             "productionLiveKitClientConnectAttempted: \(productionLiveKitClientConnectAttempted)",
             "productionMediaFailureReason: \(productionMediaFailureReason)"
         ]
@@ -2859,6 +2971,7 @@ protocol NativeDirectCallRoomFlowOwning: AnyObject {
     func startOutgoingAudioCall() async -> Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError>
     func acceptIncomingCall() async -> Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError>
     func hangup() async -> Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError>
+    func cleanupTerminalCall(callID: String) async -> Result<Void, NativeDirectCallRoomFlowOwnerError>
     func stop()
     func beginReset()
     func reset() async
@@ -2964,6 +3077,16 @@ final class NativeDirectCallRoomFlowOwner: NativeDirectCallRoomFlowOwning {
         switch makeTrigger() {
         case .success(let trigger):
             return await trigger.hangup()
+                .mapError { .trigger($0) }
+        case .failure(let error):
+            return .failure(error)
+        }
+    }
+
+    func cleanupTerminalCall(callID: String) async -> Result<Void, NativeDirectCallRoomFlowOwnerError> {
+        switch makeTrigger() {
+        case .success(let trigger):
+            return await trigger.cleanupTerminalCall(callID: callID)
                 .mapError { .trigger($0) }
         case .failure(let error):
             return .failure(error)

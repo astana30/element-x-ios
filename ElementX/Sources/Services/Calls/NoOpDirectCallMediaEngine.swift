@@ -155,6 +155,10 @@ final class NoOpDirectCallMediaEngine: DirectCallMediaEngineProtocol {
     }
 
     func disconnect(callID: String) async {
+        #if DEBUG
+        diagnosticState.mediaDisconnectAttempted = true
+        #endif
+
         guard !callID.isEmpty, !disconnectedCallIDs.contains(callID) else {
             return
         }
@@ -180,6 +184,10 @@ final class NoOpDirectCallMediaEngine: DirectCallMediaEngineProtocol {
     }
 
     func cleanup(callID: String) async {
+        #if DEBUG
+        diagnosticState.mediaCleanupAttempted = true
+        #endif
+
         await disconnect(callID: callID)
         if mediaStateSubject.value.callID == callID {
             mediaStateSubject.send(.idle)

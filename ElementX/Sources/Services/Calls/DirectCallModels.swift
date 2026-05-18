@@ -615,6 +615,8 @@ struct DirectCallDiagnosticSnapshot: Codable, Equatable, CustomStringConvertible
     var mediaKeyHandleAvailable = false
     var mediaKeyBridgeHit = false
     var mediaConnectAttempted = false
+    var mediaDisconnectAttempted = false
+    var mediaCleanupAttempted = false
     var liveKitClientConnectAttempted = false
     var mediaFailureReason: DirectCallDiagnosticMediaFailureReason = .none
 
@@ -658,6 +660,8 @@ struct DirectCallDiagnosticSnapshot: Codable, Equatable, CustomStringConvertible
         mediaKeyHandleAvailable = mediaKeyHandleAvailable || other.mediaKeyHandleAvailable
         mediaKeyBridgeHit = mediaKeyBridgeHit || other.mediaKeyBridgeHit
         mediaConnectAttempted = mediaConnectAttempted || other.mediaConnectAttempted
+        mediaDisconnectAttempted = mediaDisconnectAttempted || other.mediaDisconnectAttempted
+        mediaCleanupAttempted = mediaCleanupAttempted || other.mediaCleanupAttempted
         liveKitClientConnectAttempted = liveKitClientConnectAttempted || other.liveKitClientConnectAttempted
         if other.mediaFailureReason != .none {
             mediaFailureReason = other.mediaFailureReason
@@ -696,6 +700,8 @@ struct DirectCallDiagnosticSnapshot: Codable, Equatable, CustomStringConvertible
             "mediaKeyHandleAvailable: \(mediaKeyHandleAvailable), " +
             "mediaKeyBridgeHit: \(mediaKeyBridgeHit), " +
             "mediaConnectAttempted: \(mediaConnectAttempted), " +
+            "mediaDisconnectAttempted: \(mediaDisconnectAttempted), " +
+            "mediaCleanupAttempted: \(mediaCleanupAttempted), " +
             "liveKitClientConnectAttempted: \(liveKitClientConnectAttempted), " +
             "mediaFailureReason: \(mediaFailureReason))"
     }

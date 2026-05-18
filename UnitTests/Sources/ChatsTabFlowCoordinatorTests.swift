@@ -427,6 +427,10 @@ private final class ChatsTabNativeDirectCallRoomFlowOwnerSpy: NativeDirectCallRo
         .failure(.disabled)
     }
 
+    func cleanupTerminalCall(callID _: String) async -> Result<Void, NativeDirectCallRoomFlowOwnerError> {
+        .failure(.disabled)
+    }
+
     func stop() { }
 
     func beginReset() { }

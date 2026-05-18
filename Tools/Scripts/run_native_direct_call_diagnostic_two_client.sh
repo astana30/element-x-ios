@@ -57,6 +57,7 @@ Usage:
   DRY_RUN=0 $SCRIPT_NAME production-start-outgoing A|B
   DRY_RUN=0 $SCRIPT_NAME production-start-listener A|B
   DRY_RUN=0 $SCRIPT_NAME production-accept B
+  DRY_RUN=0 $SCRIPT_NAME production-hangup A|B
   DRY_RUN=0 $SCRIPT_NAME production-status A|B
   DRY_RUN=0 $SCRIPT_NAME wait-status A|B incomingRinging
   DRY_RUN=0 $SCRIPT_NAME accept-when-ringing A|B
@@ -621,6 +622,39 @@ with open(file_path, "w", encoding="utf-8") as handle:
 PY
 }
 
+write_production_hangup_request() {
+    local client="$1"
+    local correlation_id="$2"
+    local file
+    file="$(signal_file "$client")"
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        log "DRY_RUN: query-production-hangup channel=$client correlationID=$correlation_id"
+        return
+    fi
+
+    python3 - "$file" "$correlation_id" <<'PY'
+import json
+import sys
+
+file_path, correlation_id = sys.argv[1:3]
+message = {
+    "mode": {
+        "tests": {}
+    },
+    "signal": {
+        "nativeDirectCallProductionHangup": {
+            "_0": {
+                "correlationID": correlation_id,
+            }
+        }
+    }
+}
+with open(file_path, "w", encoding="utf-8") as handle:
+    json.dump(message, handle, sort_keys=True, separators=(",", ":"))
+PY
+}
+
 write_production_status_request() {
     local client="$1"
     local correlation_id="$2"
@@ -693,6 +727,7 @@ def format_production_status(status):
     return (
         "productionOwnerAvailable={owner} productionListenerStarted={listener} productionHasActiveSession={session} productionSessionState={state} productionEncryptionState={encryption_state} "
         "productionLastSignalEventEmitted={event} productionLastSignalSendAttempted={attempted} productionLastSignalSendSucceeded={succeeded} productionLastSignalSendFailureReason={failure} "
+        "productionLastTerminalReason={terminal} "
         "productionListenerAttached={attached} productionListenerHandleRetained={handle_retained} productionListenerStartCount={start_count} productionTimelineUpdateCount={update_count} "
         "productionTimelineDiffReceivedCount={diff_count} productionLastTimelineDiffKind={diff_kind} productionLastTimelineDiffItemCount={diff_item_count} productionTimelineEventReceivedCount={event_count} "
         "productionDirectCallEventTypeSeenCount={type_count} productionEnvelopeExtractedCount={extracted_count} productionEnvelopeDeliveredToEngineCount={delivered_count} "
@@ -701,6 +736,7 @@ def format_production_status(status):
         "productionSendRoomFingerprint={send_room} productionReceiveRoomFingerprint={receive_room} "
         "productionMediaFactoryInjected={media_factory} productionMediaCredentialProviderAvailable={media_credentials} productionMediaE2EEProviderAvailable={media_e2ee_provider} "
         "productionMediaKeyHandleAvailable={media_key_handle} productionMediaKeyBridgeHit={media_key_bridge} productionMediaConnectAttempted={media_connect} "
+        "productionMediaDisconnectAttempted={media_disconnect} productionMediaCleanupAttempted={media_cleanup} "
         "productionLiveKitClientConnectAttempted={livekit_connect} productionMediaFailureReason={media_failure}"
     ).format(
         owner=str(status.get("productionOwnerAvailable", "unknown")).lower(),
@@ -712,6 +748,7 @@ def format_production_status(status):
         attempted=str(status.get("productionLastSignalSendAttempted", "unknown")).lower(),
         succeeded=str(status.get("productionLastSignalSendSucceeded", "unknown")).lower(),
         failure=status.get("productionLastSignalSendFailureReason", "none"),
+        terminal=status.get("productionLastTerminalReason", "none"),
         attached=str(status.get("productionListenerAttached", "unknown")).lower(),
         handle_retained=str(status.get("productionListenerHandleRetained", "unknown")).lower(),
         start_count=status.get("productionListenerStartCount", "unknown"),
@@ -737,6 +774,8 @@ def format_production_status(status):
         media_key_handle=str(status.get("productionMediaKeyHandleAvailable", "unknown")).lower(),
         media_key_bridge=str(status.get("productionMediaKeyBridgeHit", "unknown")).lower(),
         media_connect=str(status.get("productionMediaConnectAttempted", "unknown")).lower(),
+        media_disconnect=str(status.get("productionMediaDisconnectAttempted", "unknown")).lower(),
+        media_cleanup=str(status.get("productionMediaCleanupAttempted", "unknown")).lower(),
         livekit_connect=str(status.get("productionLiveKitClientConnectAttempted", "unknown")).lower(),
         media_failure=status.get("productionMediaFailureReason", "none"),
     )
@@ -950,6 +989,29 @@ if expected_signal == "nativeDirectCallProductionAcceptIncomingCallResult":
             peer_trust_ready=str(diagnostic.get("peerTrustReady", "unknown")).lower(),
             peer_trust_readiness=diagnostic.get("peerTrustReadiness") or "unknown",
             key_wrapper_source=diagnostic.get("keyWrapperSource") or "none",
+            session_fields=session_fields,
+            status_fields=status_fields,
+        )
+    )
+    sys.exit(0)
+
+if expected_signal == "nativeDirectCallProductionHangupResult":
+    session = body.get("sessionSummary") or {}
+    status = body.get("status", {})
+    status_fields = format_production_status(status)
+    session_fields = ""
+    if session:
+        session_fields = " sessionHasCallID={has_call_id} sessionDirection={direction} sessionIntent={intent} sessionState={state} sessionEncryptionState={encryption_state}".format(
+            has_call_id=str(session.get("hasCallID", "unknown")).lower(),
+            direction=session.get("direction", "unknown"),
+            intent=session.get("intent", "unknown"),
+            state=session.get("state", "unknown"),
+            encryption_state=session.get("encryptionState", "unknown"),
+        )
+    print(
+        "outcome={outcome} reason={reason}{session_fields} {status_fields}".format(
+            outcome=body.get("outcome", "unknown"),
+            reason=body.get("reason") or "none",
             session_fields=session_fields,
             status_fields=status_fields,
         )
@@ -1348,6 +1410,21 @@ query_production_accept() {
     log "channel=$client command=productionAccept correlationID=$id $result"
 }
 
+query_production_hangup() {
+    local client="$1"
+    local id
+    id="$(correlation_id "$client" productionHangup)"
+    write_production_hangup_request "$client" "$id"
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        return
+    fi
+
+    local result
+    result="$(wait_for_result "$client" nativeDirectCallProductionHangupResult "$id")"
+    log "channel=$client command=productionHangup correlationID=$id $result"
+}
+
 query_production_status() {
     local client="$1"
     local id
@@ -1556,6 +1633,12 @@ main() {
             require_common_environment
             [[ $# -eq 2 ]] || fail "Usage: $SCRIPT_NAME production-accept A|B"
             query_production_accept "$2"
+            ;;
+        production-hangup|productionHangup|production-end-call|productionEndCall)
+            require_host_tools
+            require_common_environment
+            [[ $# -eq 2 ]] || fail "Usage: $SCRIPT_NAME production-hangup A|B"
+            query_production_hangup "$2"
             ;;
         production-status|productionStatus)
             require_host_tools

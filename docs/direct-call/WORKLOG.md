@@ -449,3 +449,16 @@ This file records durable phase-level progress for future Codex and strategy ses
 - A and B both reported `productionMediaFailureReason=none`.
 - Confirmed no visible UI, Element Call route, CallKit, push, or global production activation changed.
 - Recommended next phase: `2.15A — internal production call cleanup/hangup command`.
+
+## 2026-05-18 — 2.15A Internal Production Hangup Command
+
+- Added a DEBUG/integration-only `nativeDirectCallProductionHangup` request and redacted result to `UITestsSignalling`.
+- Added `production-hangup A|B` plus aliases to the two-client diagnostic runner.
+- Routed the command through AppCoordinator, UserSessionFlowCoordinator, ChatsTabFlowCoordinator, and the active RoomFlowCoordinator production command lane.
+- Required a retained production owner and active non-terminal production session before attempting hangup.
+- On success, the command sends the terminal production signal through the production owner/controller path, then immediately runs terminal cleanup for the call.
+- Extended production status with redacted terminal and media cleanup fields: last terminal reason, media disconnect attempted, and media cleanup attempted.
+- Updated no-op and LiveKit media engines to record disconnect and cleanup attempts in diagnostics without exposing credentials or media-key material.
+- Added tests for missing owner, missing active production session, successful hangup and cleanup, redacted engine failure, diagnostic owner isolation, and production status cleanup fields.
+- Confirmed no visible UI, Element Call route, RoomScreen call presentation, ElementCallService, CallKit, push, or global production activation changed.
+- Recommended next phase: `2.15B — internal production hangup runtime proof`.

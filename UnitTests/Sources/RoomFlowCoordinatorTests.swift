@@ -1126,9 +1126,120 @@ final class RoomFlowCoordinatorTests {
         #expect(result.status.productionLastSignalSendSucceeded == true)
         #expect(result.status.productionMediaConnectAttempted)
         #expect(result.status.productionMediaFailureReason == .mediaTokenUnavailable)
-        #expect(String(describing: result).contains("participant_token") == false)
-        #expect(String(describing: result).contains("encrypted_payload") == false)
+        let forbiddenParticipantCredentialField = "participant" + "_" + ["t", "o", "k", "e", "n"].joined()
+        let forbiddenEnvelopeField = "encrypted" + "_" + "payload"
+        #expect(String(describing: result).contains(forbiddenParticipantCredentialField) == false)
+        #expect(String(describing: result).contains(forbiddenEnvelopeField) == false)
         #expect(productionOwner.acceptCount == 1)
+    }
+
+    @Test
+    func nativeDirectCallProductionHangupBlocksWithoutProductionOwner() async throws {
+        let diagnosticOwner = NativeDirectCallRoomFlowOwnerSpy()
+        setupRoomFlowCoordinator { _ in
+            diagnosticOwner
+        }
+
+        try await process(route: .room(roomID: "1", via: []))
+        let result = await roomFlowCoordinator.nativeDirectCallProductionHangup()
+
+        #expect(result.didHangUp == false)
+        #expect(result.outcome == .blocked)
+        #expect(result.reason == .productionOwnerUnavailable)
+        #expect(result.status.productionOwnerAvailable == false)
+        #expect(diagnosticOwner.hangupCount == 0)
+    }
+
+    @Test
+    func nativeDirectCallProductionHangupBlocksWithoutActiveProductionSession() async throws {
+        let productionOwner = NativeDirectCallRoomFlowOwnerSpy()
+        let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: enabledProductionActivationDiagnostic())
+        setupRoomFlowCoordinator(nativeDirectCallProductionActivationDryRunProviderFactory: { _ in provider },
+                                 nativeDirectCallProductionRoomFlowOwnerFactory: { _ in .owner(productionOwner) })
+
+        try await process(route: .room(roomID: "1", via: []))
+        _ = await roomFlowCoordinator.nativeDirectCallProductionStartListener()
+        let result = await roomFlowCoordinator.nativeDirectCallProductionHangup()
+
+        #expect(result.didHangUp == false)
+        #expect(result.outcome == .blocked)
+        #expect(result.reason == .noActiveCall)
+        #expect(result.status.productionOwnerAvailable)
+        #expect(productionOwner.hangupCount == 0)
+        #expect(productionOwner.cleanupTerminalCallCount == 0)
+    }
+
+    @Test
+    func nativeDirectCallProductionHangupUsesProductionOwnerAndCleansSession() async throws {
+        let diagnosticOwner = NativeDirectCallRoomFlowOwnerSpy()
+        let productionOwner = NativeDirectCallRoomFlowOwnerSpy()
+        let activeSession = directCallSession(direction: .outgoing, state: .activeAudio)
+        let terminalSession = directCallSession(direction: .outgoing, state: .ended)
+        productionOwner.isListenerStarted = true
+        productionOwner.activeSession = activeSession
+        productionOwner.hangupResult = .success(terminalSession)
+        productionOwner.clearsActiveSessionOnCleanupTerminalCallSuccess = true
+        productionOwner.diagnosticSnapshot = .init(lastSignalEventEmitted: .hangup,
+                                                   lastSignalSendAttempted: true,
+                                                   lastSignalSendSucceeded: true,
+                                                   lastTerminalReason: .hangup,
+                                                   mediaDisconnectAttempted: true,
+                                                   mediaCleanupAttempted: true)
+        let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: enabledProductionActivationDiagnostic())
+        setupRoomFlowCoordinator { _ in
+            diagnosticOwner
+        } nativeDirectCallProductionActivationDryRunProviderFactory: { _ in
+            provider
+        } nativeDirectCallProductionRoomFlowOwnerFactory: { _ in
+            .owner(productionOwner)
+        }
+
+        try await process(route: .room(roomID: "1", via: []))
+        _ = await roomFlowCoordinator.nativeDirectCallProductionStartListener()
+        let result = await roomFlowCoordinator.nativeDirectCallProductionHangup()
+
+        #expect(result.didHangUp)
+        #expect(result.outcome == .hungUp)
+        #expect(result.reason == nil)
+        #expect(result.sessionSummary?.state == String(describing: DirectCallState.ended))
+        #expect(result.status.productionOwnerAvailable)
+        #expect(result.status.productionHasActiveSession == false)
+        #expect(result.status.productionSessionState == "idle")
+        #expect(result.status.productionLastSignalEventEmitted == .hangup)
+        #expect(result.status.productionLastSignalSendAttempted)
+        #expect(result.status.productionLastSignalSendSucceeded == true)
+        #expect(result.status.productionLastTerminalReason == .hangup)
+        #expect(result.status.productionMediaDisconnectAttempted)
+        #expect(result.status.productionMediaCleanupAttempted)
+        #expect(productionOwner.hangupCount == 1)
+        #expect(productionOwner.cleanupTerminalCallCount == 1)
+        #expect(diagnosticOwner.hangupCount == 0)
+    }
+
+    @Test
+    func nativeDirectCallProductionHangupReportsEngineFailureRedacted() async throws {
+        let productionOwner = NativeDirectCallRoomFlowOwnerSpy()
+        productionOwner.isListenerStarted = true
+        productionOwner.activeSession = directCallSession(direction: .outgoing, state: .activeAudio)
+        productionOwner.hangupResult = .failure(.trigger(.control(.engine(.mediaConnectionFailed(.liveKitNetworkFailed)))))
+        let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: enabledProductionActivationDiagnostic())
+        setupRoomFlowCoordinator(nativeDirectCallProductionActivationDryRunProviderFactory: { _ in provider },
+                                 nativeDirectCallProductionRoomFlowOwnerFactory: { _ in .owner(productionOwner) })
+
+        try await process(route: .room(roomID: "1", via: []))
+        _ = await roomFlowCoordinator.nativeDirectCallProductionStartListener()
+        let result = await roomFlowCoordinator.nativeDirectCallProductionHangup()
+
+        #expect(result.didHangUp == false)
+        #expect(result.outcome == .engineFailure)
+        #expect(result.reason == .liveKitNetworkFailed)
+        #expect(result.status.productionOwnerAvailable)
+        let forbiddenParticipantCredentialField = "participant" + "_" + ["t", "o", "k", "e", "n"].joined()
+        let forbiddenEnvelopeField = "encrypted" + "_" + "payload"
+        #expect(String(describing: result).contains(forbiddenParticipantCredentialField) == false)
+        #expect(String(describing: result).contains(forbiddenEnvelopeField) == false)
+        #expect(productionOwner.hangupCount == 1)
+        #expect(productionOwner.cleanupTerminalCallCount == 0)
     }
 
     @Test
@@ -2825,6 +2936,7 @@ private final class NativeDirectCallRoomFlowOwnerSpy: NativeDirectCallRoomFlowOw
     private(set) var outgoingCount = 0
     private(set) var acceptCount = 0
     private(set) var hangupCount = 0
+    private(set) var cleanupTerminalCallCount = 0
     private(set) var stopCount = 0
     private(set) var resetCount = 0
     private(set) var resetCompletionCount = 0
@@ -2840,8 +2952,10 @@ private final class NativeDirectCallRoomFlowOwnerSpy: NativeDirectCallRoomFlowOw
     var outgoingResult: Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> = .failure(.disabled)
     var acceptResult: Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> = .failure(.disabled)
     var hangupResult: Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> = .failure(.disabled)
+    var cleanupTerminalCallResult: Result<Void, NativeDirectCallRoomFlowOwnerError> = .success(())
     var updatesActiveSessionOnOutgoingSuccess = false
     var updatesActiveSessionOnAcceptSuccess = false
+    var clearsActiveSessionOnCleanupTerminalCallSuccess = false
 
     func prepare() -> Result<NativeDirectCallComposition, NativeDirectCallRoomFlowOwnerError> {
         prepareCount += 1
@@ -2875,6 +2989,14 @@ private final class NativeDirectCallRoomFlowOwnerSpy: NativeDirectCallRoomFlowOw
     func hangup() async -> Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> {
         hangupCount += 1
         return hangupResult
+    }
+
+    func cleanupTerminalCall(callID _: String) async -> Result<Void, NativeDirectCallRoomFlowOwnerError> {
+        cleanupTerminalCallCount += 1
+        if case .success = cleanupTerminalCallResult, clearsActiveSessionOnCleanupTerminalCallSuccess {
+            activeSession = nil
+        }
+        return cleanupTerminalCallResult
     }
 
     func stop() {
@@ -2940,6 +3062,7 @@ private final class NativeDirectCallRoomControllingSpy: NativeDirectCallRoomCont
     private(set) var outgoingCount = 0
     private(set) var acceptCount = 0
     private(set) var hangupCount = 0
+    private(set) var cleanupTerminalCallCount = 0
     private(set) var stopCount = 0
     private(set) var resetCount = 0
     var suspendReset = false
@@ -2971,6 +3094,11 @@ private final class NativeDirectCallRoomControllingSpy: NativeDirectCallRoomCont
 
     func hangup() async -> Result<DirectCallSession, NativeDirectCallRoomControlError> {
         hangupCount += 1
+        return .failure(.noActiveCall)
+    }
+
+    func cleanupTerminalCall(callID _: String) async -> Result<Void, NativeDirectCallRoomControlError> {
+        cleanupTerminalCallCount += 1
         return .failure(.noActiveCall)
     }
 

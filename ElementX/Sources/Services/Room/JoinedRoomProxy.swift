@@ -1054,6 +1054,22 @@ final class NativeDirectCallRoomController {
         }
     }
 
+    func cleanupTerminalCall(callID: String) async -> Result<Void, NativeDirectCallRoomControlError> {
+        switch prepare() {
+        case .success(let composition):
+            guard let session = composition.engine.activeSessionPublisher.value,
+                  session.callID == callID,
+                  session.state.isTerminal else {
+                return .failure(.noActiveCall)
+            }
+
+            await composition.engine.cleanupCall(callID: callID)
+            return .success(())
+        case .failure(let error):
+            return .failure(error)
+        }
+    }
+
     func stop() {
         compositionController.stop()
     }
@@ -1107,6 +1123,7 @@ protocol NativeDirectCallRoomControlling: AnyObject {
     func startOutgoingAudioCall() async -> Result<DirectCallSession, NativeDirectCallRoomControlError>
     func acceptIncomingCall() async -> Result<DirectCallSession, NativeDirectCallRoomControlError>
     func hangup() async -> Result<DirectCallSession, NativeDirectCallRoomControlError>
+    func cleanupTerminalCall(callID: String) async -> Result<Void, NativeDirectCallRoomControlError>
     func stop()
     func reset() async
 }
@@ -1192,6 +1209,15 @@ final class NativeDirectCallDeveloperRoomTrigger {
         }
 
         return await controller.hangup()
+            .mapError { .control($0) }
+    }
+
+    func cleanupTerminalCall(callID: String) async -> Result<Void, NativeDirectCallDeveloperRoomTriggerError> {
+        guard configuration.isEnabled else {
+            return .failure(.disabled)
+        }
+
+        return await controller.cleanupTerminalCall(callID: callID)
             .mapError { .control($0) }
     }
 

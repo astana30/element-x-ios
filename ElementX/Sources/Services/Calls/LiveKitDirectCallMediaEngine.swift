@@ -249,6 +249,10 @@ final class LiveKitDirectCallMediaEngine: DirectCallMediaEngineProtocol {
     }
 
     func disconnect(callID: String) async {
+        #if DEBUG
+        diagnosticState.mediaDisconnectAttempted = true
+        #endif
+
         guard !callID.isEmpty, !disconnectedCallIDs.contains(callID) else {
             return
         }
@@ -276,6 +280,10 @@ final class LiveKitDirectCallMediaEngine: DirectCallMediaEngineProtocol {
     }
 
     func cleanup(callID: String) async {
+        #if DEBUG
+        diagnosticState.mediaCleanupAttempted = true
+        #endif
+
         await disconnect(callID: callID)
         if !callID.isEmpty, !cleanedCallIDs.contains(callID) {
             await liveKitClient.cleanup()
