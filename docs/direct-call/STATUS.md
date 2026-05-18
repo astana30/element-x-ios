@@ -2,15 +2,15 @@
 
 ## Current Phase
 
-After 2.15B — iOS internal production native direct-call full lifecycle proof.
+After 2.16C — internal native call panel runtime proof.
 
 ## Latest App Code Checkpoint
 
-2.15B `Record iOS production direct-call lifecycle proof`
+2.16C `Forward internal native call UI gate to simulator launch`
 
 ## Latest Code Checkpoint
 
-2.15A `Add production direct-call hangup command`
+2.16B `Add internal native direct-call room control panel`
 
 ## Latest SDK Checkpoint
 
@@ -337,25 +337,44 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - A and B both reported `productionMediaCleanupAttempted=true`.
   - A and B both reported `productionMediaFailureReason=none`.
   - No visible UI, Element Call route, CallKit, push, or global production activation changed.
+- Internal native call room control panel skeleton is complete:
+  - The panel is hidden by default and visible only in DEBUG/internal room context when `NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED=1`.
+  - It uses a room-scoped provider that calls the existing production dry-run/status, listener, start, accept, and hangup methods.
+  - The panel renders only redacted status fields and does not expose tokens, keys, SDK envelope contents, raw Matrix content, raw room IDs, or peer IDs.
+  - It remains separate from the existing Element Call route, `RoomScreenViewModel.displayCall`, `RoomScreenCoordinator.presentCallScreen`, and `ElementCallService`.
+  - No CallKit, push, global production activation, or public product UI activation was added.
+- Internal native call panel runtime proof is recorded:
+  - Without `NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED`, the internal native call panel was hidden.
+  - With `NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED=1`, the panel appeared in both open encrypted r1/r2 DMs.
+  - Panel status output was redacted: no tokens, keys, JWTs, raw Matrix content, raw room IDs, or peer IDs were shown.
+  - The runner fallback was used for actions because synthetic UI taps were unavailable in the runtime environment.
+  - The runner exercised the same room-scoped production methods as the panel: listener, start, accept, and hangup.
+  - Before hangup, A and B reached `activeAudio`, encryption was ready, media connect was attempted, LiveKit connect was attempted, and media failure was `none`.
+  - After `production-hangup A`, A and B returned to idle with no active session.
+  - A sent hangup successfully and B received `directCallHangup`.
+  - Media disconnect and cleanup were attempted on both sides.
+  - A and B reported media failure `none`.
+  - Minor UI issue found: the control row is horizontally clipped at the trailing edge, so later controls require horizontal scrolling.
+  - Scope remained DEBUG/internal only with no public UI activation, Element Call route changes, CallKit/push, or global production activation.
 
 ## Current Blocker
 
-- The internal DEBUG/integration command path can now complete start, accept, active audio, hangup, and cleanup with the local fake backend and local LiveKit dev server, but this is not product activation.
+- The internal DEBUG/integration command path and hidden internal room panel can now complete start, accept, active audio, hangup, and cleanup with the local fake backend and local LiveKit dev server, but this is not product activation.
 - Production backend remains a skeleton/local fake proof and is not deployed as a hardened production service.
 - Production rollout and server capability sources remain fail-closed by default.
 - Real production activation still requires hardened backend deployment, capability rollout, endpoint configuration, trusted peer readiness, visible UI design, and later CallKit/push work.
-- The next immediate gap is design inspection for the first internal iOS native direct-call UI surface, while keeping Element Call routing separate and production disabled by default.
-- No production activation, visible UI, Element Call route change, CallKit, or push integration exists yet.
+- The next immediate gap is internal panel layout/action polish, especially the clipped control row and safer button ergonomics.
+- No public production activation, Element Call route change, CallKit, or push integration exists yet.
 
 ## Next Recommended Phase
 
-`2.16A — internal production call UI design inspection`
+`2.16D — internal native call panel layout/action polish`
 
-Goal: inspect and design the first safe internal iOS UI surface for native direct calls without adding visible product UI yet, changing the Element Call route, wiring CallKit/push, or globally activating production direct calls.
+Goal: polish the DEBUG/internal native direct-call room panel layout and action affordances after runtime proof, while keeping Element Call routing, CallKit/push, public UI activation, and global production activation untouched.
 
 ## Do-Not-Touch Constraints
 
-- No visible UI yet.
+- No public visible UI activation yet.
 - No Element Call route reuse.
 - No CallKit or push yet.
 - No production feature activation.

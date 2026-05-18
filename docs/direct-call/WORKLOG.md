@@ -482,3 +482,20 @@ This file records durable phase-level progress for future Codex and strategy ses
 - A and B both reported no production media failure.
 - Confirmed no visible UI, Element Call route, CallKit, push, or global production activation changed.
 - Recommended next phase: `2.16A — internal production call UI design inspection`.
+
+## 2026-05-18 — 2.16C Internal Native Call Panel Runtime Proof
+
+- Recorded runtime proof for the hidden DEBUG/internal native direct-call room control panel.
+- Confirmed the panel was hidden without `NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED`.
+- Confirmed the panel appeared in both open encrypted r1/r2 DMs with `NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED=1`.
+- Confirmed panel output/status remained redacted: no tokens, keys, JWTs, raw Matrix content, raw room IDs, or peer IDs.
+- Used runner fallback actions because synthetic UI taps were unavailable in the runtime environment.
+- Confirmed the runner exercised the same room-scoped production methods used by the panel: listener, start, accept, and hangup.
+- Before hangup, A and B reached `activeAudio`, encryption was ready, media connect was attempted, LiveKit connect was attempted, and media failure was `none`.
+- After `production-hangup A`, A and B returned to idle with no active session.
+- A sent hangup successfully and B received `directCallHangup`.
+- A and B reported media disconnect and cleanup attempts, with media failure `none`.
+- Found a minor internal UI issue: the control row is horizontally clipped at the trailing edge, so later controls require horizontal scrolling.
+- Kept scope DEBUG/internal only: no public UI activation, Element Call route changes, CallKit/push, or global production activation.
+- Added and committed a runner-only fix so `NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED` is forwarded into simulator launch.
+- Recommended next phase: `2.16D — internal native call panel layout/action polish`.
