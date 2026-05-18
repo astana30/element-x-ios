@@ -499,3 +499,29 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Kept scope DEBUG/internal only: no public UI activation, Element Call route changes, CallKit/push, or global production activation.
 - Added and committed a runner-only fix so `NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED` is forwarded into simulator launch.
 - Recommended next phase: `2.16D — internal native call panel layout/action polish`.
+
+## 2026-05-18 — 2.16D Internal Native Call Panel Layout/Action Polish
+
+- Replaced the clipping-prone single control row with a compact two-row DEBUG/internal panel layout.
+- Added explicit action enablement for Refresh, Arm listener, Start audio, Accept, and Hang up based on redacted native direct-call state.
+- Kept status rendering side-effect-free: it does not start listeners, send Matrix events, request credentials, create media, or connect LiveKit.
+- Confirmed the existing Element Call phone/video route remains untouched and separate from native direct-call controls.
+- Added focused panel state tests for hidden-by-default behavior, gated visibility, action row grouping, button enablement, side-effect-free refresh/status rendering, and redaction.
+- Committed app changes as `76b69aa27 Polish internal native call panel layout`.
+
+## 2026-05-18 — 2.16E Internal Native Call Panel Runtime Visual/Action Proof
+
+- Recorded runtime visual/action proof for the polished hidden DEBUG/internal native direct-call room panel.
+- Confirmed the panel appeared in both A/B encrypted DM rooms with `NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED=1`.
+- Confirmed the two-row layout was readable and not clipped.
+- Confirmed status text was redacted: no tokens, keys, raw Matrix content, raw room IDs, or peer IDs were shown.
+- Confirmed existing Element Call phone/video buttons remained unchanged.
+- Observed the initial visual state as `notRefreshed`, with only Refresh enabled.
+- Confirmed runner dry-run readiness reported `wouldStart=true`, `enabled=true`, and peer trust ready.
+- Used runner fallback because synthetic UI taps were unavailable.
+- Confirmed the fallback exercised the same room-scoped production methods as the panel: B listener, A start, B incoming, B accept, A/B active audio, A hangup, and A/B idle.
+- Confirmed media connected on both sides before hangup.
+- Confirmed cleanup and disconnect were attempted after hangup.
+- Confirmed no code changes were needed for the runtime proof.
+- Kept scope DEBUG/internal only: no public UI activation, Element Call route changes, CallKit/push, or global production activation.
+- Recommended next phase: `2.17A — internal native call product UI transition plan`.

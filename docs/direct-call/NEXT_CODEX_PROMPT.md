@@ -7,12 +7,12 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.16C — internal native call panel runtime proof.
+After 2.16E — internal native call panel runtime visual/action proof.
 
 Current checkpoints:
-- App code: 2.16B `Add internal native direct-call room control panel`
+- App code: 2.16D `Polish internal native call panel layout`
 - Runner fix: 2.16C `Forward internal native call UI gate to simulator launch`
-- Docs: 2.16C `Record internal native call panel runtime proof`
+- Docs: 2.16E `Record internal native call panel runtime proof`
 - Backend: 2.14E `Fix fake backend LiveKit dev token grants`
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`
@@ -26,75 +26,73 @@ Current proven state:
 - Production activation gate, dry-run, trigger dry-run, start command, receive listener, incoming invite handling, accept command, media failure diagnostics, and hangup command exist on the DEBUG/integration internal command path.
 - Local fake backend plus local LiveKit dev server reached `activeAudio` on both iOS clients through the internal production command lane.
 - Full internal lifecycle proof passed: B listener, A outgoing, B incoming ringing, B accept, A/B active audio, A hangup, A/B idle cleanup.
-- Hidden DEBUG/internal native direct-call room control panel exists.
-- Without `NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED`, the panel is hidden.
-- With `NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED=1`, the panel appeared in both open encrypted r1/r2 DMs.
-- Panel status output is redacted: no tokens, keys, JWTs, raw Matrix content, raw room IDs, or peer IDs.
+- Hidden DEBUG/internal native direct-call room control panel exists and remains hidden by default.
+- With the internal UI gate enabled, the polished panel appears in both A/B encrypted DM rooms.
+- The panel now uses a readable two-row layout and is not clipped.
+- Initial panel visual state is `notRefreshed`, with only Refresh enabled.
+- Panel status output is redacted: no tokens, keys, raw Matrix content, raw room IDs, or peer IDs.
+- Existing Element Call phone/video buttons remained unchanged during runtime proof.
 - Runtime proof used runner fallback actions because synthetic UI taps were unavailable, and the runner exercised the same room-scoped production methods as the panel.
-- Before hangup, A and B reached `activeAudio`, encryption ready, media connect attempted, LiveKit connect attempted, and media failure `none`.
-- After hangup, A and B returned to idle with no active session; A sent hangup and B received `directCallHangup`; media disconnect/cleanup was attempted; media failure remained `none`.
+- The runtime flow succeeded: B listener, A start, B incoming, B accept, A/B active audio, A hangup, A/B idle.
+- Media connected on both sides, and cleanup/disconnect was attempted after hangup.
 - No public UI activation, Element Call route changes, RoomScreen call presentation changes, ElementCallService changes, CallKit, push, or global production activation has been added.
 
 Phase:
-2.16D — internal native call panel layout/action polish.
+2.17A — internal native call product UI transition plan.
 
 Task:
-Polish the hidden DEBUG/internal native direct-call room control panel after runtime proof.
-Do not activate public production direct calls.
-Do not change the Element Call route.
-Do not wire CallKit/push.
-Do not globally activate production direct calls.
+Inspection/design only. Do not modify code. Do not commit.
 
-Context:
-2.16C runtime proof found one minor UI issue:
-- The control row is horizontally clipped at the trailing edge, so later controls require horizontal scrolling.
+Goal:
+Design the safe transition from the hidden DEBUG/internal native direct-call panel toward a future product-facing native direct-call UI in encrypted 1:1 rooms, without changing existing Element Call behavior yet.
 
-Goals:
-1. Inspect the panel layout in `RoomScreen.swift`, `RoomScreenModels.swift`, `RoomScreenViewModel.swift`, `RoomFlowCoordinator.swift`, and existing room composer/inset layout.
-2. Improve the internal panel layout so all controls are reachable and readable in the active room width.
-3. Keep the panel hidden by default and visible only under DEBUG/internal gate plus provider.
-4. Preserve redacted status text only:
-   - availability/state
-   - activation reason
-   - peer trust readiness
-   - session state
-   - encryption state
-   - media failure reason
-   - terminal reason
-   - last action
-5. Preserve existing Element Call toolbar behavior and route.
-6. Keep runner command path unchanged unless a small test-only issue is found.
-7. Add or update tests for layout/state behavior if feasible:
-   - panel hidden by default
-   - panel visible only with provider/gate path
-   - status refresh has no side effects
-   - action buttons map to provider calls
-   - no displayCall/presentCallScreen/ElementCallService calls
-   - no raw token/key/JWT/envelope/Matrix content in descriptions
+Inspect:
+1. `RoomScreen.swift`
+2. `RoomScreenModels.swift`
+3. `RoomScreenViewModel.swift`
+4. `RoomScreenCoordinator.swift`
+5. `RoomFlowCoordinator.swift`
+6. `RoomFlowCoordinatorAction`
+7. Existing Element Call phone/video button handling
+8. `JoinCallButton` and related room call toolbar/menu surfaces
+9. `NativeDirectCallRoomFlowOwner` and production room-scoped command methods
+10. Production activation dry-run and trigger dry-run providers
+11. Internal native call panel provider and state model
+12. Any existing feature flag, app rollout, server capability, and room eligibility models
+13. Current analytics/event tracking around call actions if relevant
+
+Questions:
+A. What should the first product-facing native direct-call entry point be?
+B. Should it be a separate native call affordance or eventually replace one existing 1:1 call affordance under a server capability gate?
+C. How should the app keep Element Call routing untouched until native production readiness is complete?
+D. Which activation checks must pass before any product UI shows Start/Accept/Hang up controls?
+E. How should incoming ringing be surfaced before CallKit/push exists?
+F. How should product UI represent unavailable states such as rollout disabled, capability missing, peer trust unavailable, or backend unavailable?
+G. What state model should be promoted from the internal panel into production UI?
+H. What user-visible copy will be needed later, and where should it live?
+I. What tests are required before implementing a product-facing native direct-call UI?
+J. What is the minimal safe implementation phase after this inspection?
 
 Hard constraints:
-- No public visible UI activation.
-- No `RoomScreenViewModel.displayCall` changes.
-- No `RoomScreenCoordinator.presentCallScreen` changes.
-- No Element Call route changes.
+- Do not modify code in this phase.
+- Do not commit in this phase unless explicitly asked for docs-only tracking.
+- No public production activation.
+- No existing Element Call route changes.
+- No `RoomScreenViewModel.displayCall` behavior changes.
+- No `RoomScreenCoordinator.presentCallScreen` behavior changes.
 - No `ElementCallService` changes.
-- No `directOneToOneCallsEnabled` use.
-- No CallKit/push.
-- No global production runtime activation.
+- No `directOneToOneCallsEnabled` reuse for native production UI.
+- No CallKit or push wiring.
 - No broad Matrix SDK raw APIs.
 - Do not print or store credentials, bearer values, participant credentials, media-key material, SDK envelope contents, Matrix event content, or copied secret-bearing logs.
 
-Validation:
-- `git diff --check`
-- SwiftFormat/SwiftLint on changed Swift files if Swift changes
-- targeted tests:
-  - `RoomScreenViewModelTests`
-  - `RoomFlowCoordinatorTests`
-  - `DirectCallMediaEngineTests` if touched
-- Release build if app source changes
-- forbidden scan
-
-Commit only if validation passes.
-
-Suggested commit:
-Polish internal native call panel layout
+Expected output:
+1. Files inspected.
+2. Recommended first product UI entry point.
+3. Feature/capability/eligibility gate model.
+4. State model for Start, Accept, Hang up, ringing, active, failed, and ended states.
+5. How Element Call route remains untouched.
+6. User-visible copy/localisation plan.
+7. Test plan.
+8. Risks/blockers.
+9. Minimal next implementation phase.

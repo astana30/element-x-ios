@@ -2,15 +2,15 @@
 
 ## Current Phase
 
-After 2.16C — internal native call panel runtime proof.
+After 2.16E — internal native call panel runtime visual/action proof.
 
 ## Latest App Code Checkpoint
 
-2.16C `Forward internal native call UI gate to simulator launch`
+2.16D `Polish internal native call panel layout`
 
 ## Latest Code Checkpoint
 
-2.16B `Add internal native direct-call room control panel`
+2.16D `Polish internal native call panel layout`
 
 ## Latest SDK Checkpoint
 
@@ -343,6 +343,11 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - The panel renders only redacted status fields and does not expose tokens, keys, SDK envelope contents, raw Matrix content, raw room IDs, or peer IDs.
   - It remains separate from the existing Element Call route, `RoomScreenViewModel.displayCall`, `RoomScreenCoordinator.presentCallScreen`, and `ElementCallService`.
   - No CallKit, push, global production activation, or public product UI activation was added.
+- Internal native call panel layout/action polish is complete:
+  - The panel now uses a compact two-row layout instead of one clipping-prone control row.
+  - Action enablement is explicit: refresh/status is always safe, arm listener is available before listener setup or when idle, start depends on readiness, accept is limited to incoming ringing, and hangup is limited to ringing/connecting/active call states.
+  - Rendering the panel remains side-effect-free and does not start listeners, send Matrix events, request media credentials, or connect media.
+  - Existing Element Call phone/video buttons and routing remain unchanged.
 - Internal native call panel runtime proof is recorded:
   - Without `NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED`, the internal native call panel was hidden.
   - With `NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED=1`, the panel appeared in both open encrypted r1/r2 DMs.
@@ -356,6 +361,19 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - A and B reported media failure `none`.
   - Minor UI issue found: the control row is horizontally clipped at the trailing edge, so later controls require horizontal scrolling.
   - Scope remained DEBUG/internal only with no public UI activation, Element Call route changes, CallKit/push, or global production activation.
+- Internal native call panel visual/action proof is recorded:
+  - With `NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED=1`, the polished panel appeared in both A/B encrypted DM rooms.
+  - The two-row layout was readable and no longer clipped.
+  - Status text remained redacted: no tokens, keys, raw Matrix content, raw room IDs, or peer IDs.
+  - Existing Element Call phone/video buttons remained unchanged.
+  - Initial visual state was `notRefreshed`, with only Refresh enabled.
+  - Runner dry-run confirmed readiness with `wouldStart=true`, `enabled=true`, and peer trust ready.
+  - Runner fallback was used because synthetic UI taps were unavailable.
+  - The fallback exercised the same room-scoped production methods as the panel: B listener, A start, B incoming, B accept, A/B active audio, A hangup, and A/B idle.
+  - Media connected on both sides.
+  - Cleanup and disconnect were attempted after hangup.
+  - No code changes were needed during the runtime proof.
+  - Scope remained DEBUG/internal only with no public UI activation, Element Call route changes, CallKit/push, or global production activation.
 
 ## Current Blocker
 
@@ -363,14 +381,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Production backend remains a skeleton/local fake proof and is not deployed as a hardened production service.
 - Production rollout and server capability sources remain fail-closed by default.
 - Real production activation still requires hardened backend deployment, capability rollout, endpoint configuration, trusted peer readiness, visible UI design, and later CallKit/push work.
-- The next immediate gap is internal panel layout/action polish, especially the clipped control row and safer button ergonomics.
+- The next immediate gap is planning the transition from the DEBUG/internal panel and command lane toward a product UI path without reusing or disturbing the existing Element Call route.
 - No public production activation, Element Call route change, CallKit, or push integration exists yet.
 
 ## Next Recommended Phase
 
-`2.16D — internal native call panel layout/action polish`
+`2.17A — internal native call product UI transition plan`
 
-Goal: polish the DEBUG/internal native direct-call room panel layout and action affordances after runtime proof, while keeping Element Call routing, CallKit/push, public UI activation, and global production activation untouched.
+Goal: design the safe transition from the hidden DEBUG/internal native direct-call panel to a future product-facing room call UI, while keeping Element Call routing, CallKit/push, public production activation, and global production activation untouched.
 
 ## Do-Not-Touch Constraints
 
