@@ -30,6 +30,7 @@ struct RoomScreenCoordinatorParameters {
     let composerDraftService: ComposerDraftServiceProtocol
     let timelineControllerFactory: TimelineControllerFactoryProtocol
     let userIndicatorController: UserIndicatorControllerProtocol
+    var nativeDirectCallInternalControlProvider: NativeDirectCallInternalControlProviding?
 }
 
 enum RoomScreenCoordinatorAction {
@@ -76,7 +77,8 @@ final class RoomScreenCoordinator: CoordinatorProtocol {
                                             appSettings: parameters.appSettings,
                                             appHooks: parameters.appHooks,
                                             analyticsService: parameters.analytics,
-                                            userIndicatorController: parameters.userIndicatorController)
+                                            userIndicatorController: parameters.userIndicatorController,
+                                            nativeDirectCallInternalControlProvider: parameters.nativeDirectCallInternalControlProvider)
         
         timelineViewModel = TimelineViewModel(roomProxy: parameters.roomProxy,
                                               focussedEventID: parameters.focussedEvent?.eventID,

@@ -540,4 +540,117 @@ final class RoomScreenViewModelTests {
         }
         try await deferredWorldReadable.fulfill()
     }
+
+    // MARK: - Native Direct Call Internal Controls
+
+    @Test
+    func nativeDirectCallInternalControlPanelHiddenByDefault() {
+        let viewModel = RoomScreenViewModel.mock(roomProxyMock: JoinedRoomProxyMock(.init()))
+        self.viewModel = viewModel
+
+        #expect(viewModel.context.viewState.nativeDirectCallInternalControlPanel.isVisible == false)
+    }
+
+    @Test
+    func nativeDirectCallInternalControlPanelVisibleWithProviderAndRefreshesExplicitly() async throws {
+        let provider = NativeDirectCallInternalControlProviderSpy()
+        let viewModel = RoomScreenViewModel.mock(roomProxyMock: JoinedRoomProxyMock(.init()),
+                                                 nativeDirectCallInternalControlProvider: provider)
+        self.viewModel = viewModel
+
+        #expect(viewModel.context.viewState.nativeDirectCallInternalControlPanel.isVisible)
+        #expect(provider.refreshCount == 0)
+
+        let deferred = deferFulfillment(viewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallInternalControlPanel.status.availability == .canStart
+        }
+        viewModel.context.send(viewAction: .nativeDirectCallInternalControl(.refreshStatus))
+        try await deferred.fulfill()
+
+        #expect(provider.refreshCount == 1)
+        #expect(viewModel.context.viewState.nativeDirectCallInternalControlPanel.isLoading == false)
+    }
+
+    @Test
+    func nativeDirectCallInternalStartAudioDoesNotUseElementCallRoute() async throws {
+        let provider = NativeDirectCallInternalControlProviderSpy()
+        let viewModel = RoomScreenViewModel.mock(roomProxyMock: JoinedRoomProxyMock(.init()),
+                                                 nativeDirectCallInternalControlProvider: provider)
+        self.viewModel = viewModel
+
+        let unexpectedDisplayCall = deferFailure(viewModel.actions, timeout: .seconds(1)) { action in
+            if case .displayCall = action {
+                return true
+            }
+            return false
+        }
+        let deferred = deferFulfillment(viewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallInternalControlPanel.status.lastAction == .startAudio
+        }
+
+        viewModel.context.send(viewAction: .nativeDirectCallInternalControl(.startAudio))
+        try await deferred.fulfill()
+        try await unexpectedDisplayCall.fulfill()
+
+        #expect(provider.startAudioCount == 1)
+    }
 }
+
+#if DEBUG
+@MainActor
+private final class NativeDirectCallInternalControlProviderSpy: NativeDirectCallInternalControlProviding {
+    private(set) var refreshCount = 0
+    private(set) var startAudioCount = 0
+
+    func refreshStatus() async -> NativeDirectCallInternalControlStatus {
+        refreshCount += 1
+        return Self.status(lastAction: .refreshStatus)
+    }
+
+    func armListener() async -> NativeDirectCallInternalControlActionResult {
+        .init(action: .armListener,
+              outcome: "started",
+              reason: "none",
+              status: Self.status(lastAction: .armListener))
+    }
+
+    func startAudio() async -> NativeDirectCallInternalControlActionResult {
+        startAudioCount += 1
+        return .init(action: .startAudio,
+                     outcome: "started",
+                     reason: "none",
+                     status: Self.status(lastAction: .startAudio))
+    }
+
+    func accept() async -> NativeDirectCallInternalControlActionResult {
+        .init(action: .accept,
+              outcome: "started",
+              reason: "none",
+              status: Self.status(lastAction: .accept))
+    }
+
+    func hangUp() async -> NativeDirectCallInternalControlActionResult {
+        .init(action: .hangUp,
+              outcome: "hungUp",
+              reason: "none",
+              status: Self.status(lastAction: .hangUp))
+    }
+
+    private static func status(lastAction: NativeDirectCallInternalControlAction?) -> NativeDirectCallInternalControlStatus {
+        .init(availability: .canStart,
+              activationReason: "none",
+              peerTrustReadiness: "peerTrustReady",
+              sessionState: "idle",
+              encryptionState: "none",
+              mediaFailureReason: "none",
+              terminalReason: "none",
+              lastAction: lastAction,
+              lastActionOutcome: "started",
+              lastActionReason: "none",
+              canArmListener: true,
+              canStartAudio: true,
+              canAccept: false,
+              canHangUp: false)
+    }
+}
+#endif

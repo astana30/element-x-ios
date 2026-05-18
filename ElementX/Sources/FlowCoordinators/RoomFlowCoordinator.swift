@@ -593,6 +593,86 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
     func nativeDirectCallProductionStatus() -> NativeDirectCallProductionStatus {
         .init(owner: nativeDirectCallProductionRoomFlowOwner)
     }
+
+    private func makeNativeDirectCallInternalControlProvider() -> NativeDirectCallInternalControlProviding? {
+        guard ProcessInfo.isNativeDirectCallInternalUIEnabled else {
+            return nil
+        }
+
+        return ClosureNativeDirectCallInternalControlProvider(refreshStatus: { [weak self] in
+            guard let self else {
+                return .unavailable(reason: "coordinatorUnavailable")
+            }
+
+            return await nativeDirectCallInternalControlStatus()
+        }, armListener: { [weak self] in
+            guard let self else {
+                return .unavailable(action: .armListener, reason: "coordinatorUnavailable")
+            }
+
+            let result = await nativeDirectCallProductionStartListener()
+            return .init(action: .armListener,
+                         outcome: result.outcome.description,
+                         reason: result.reason?.description ?? "none",
+                         status: .make(triggerDiagnostic: result.triggerDiagnostic,
+                                       productionStatus: result.status,
+                                       lastAction: .armListener,
+                                       lastActionOutcome: result.outcome.description,
+                                       lastActionReason: result.reason?.description ?? "none"))
+        }, startAudio: { [weak self] in
+            guard let self else {
+                return .unavailable(action: .startAudio, reason: "coordinatorUnavailable")
+            }
+
+            let result = await nativeDirectCallProductionStartOutgoingAudioCall(isProductionStartEnabled: ProcessInfo.isNativeDirectCallProductionStartEnabled)
+            let status = nativeDirectCallProductionStatus()
+            return .init(action: .startAudio,
+                         outcome: result.outcome.description,
+                         reason: result.reason?.description ?? "none",
+                         status: .make(triggerDiagnostic: result.triggerDiagnostic,
+                                       productionStatus: status,
+                                       lastAction: .startAudio,
+                                       lastActionOutcome: result.outcome.description,
+                                       lastActionReason: result.reason?.description ?? "none"))
+        }, accept: { [weak self] in
+            guard let self else {
+                return .unavailable(action: .accept, reason: "coordinatorUnavailable")
+            }
+
+            let result = await nativeDirectCallProductionAcceptIncomingCall()
+            return .init(action: .accept,
+                         outcome: result.outcome.description,
+                         reason: result.reason?.description ?? "none",
+                         status: .make(triggerDiagnostic: result.triggerDiagnostic,
+                                       productionStatus: result.status,
+                                       lastAction: .accept,
+                                       lastActionOutcome: result.outcome.description,
+                                       lastActionReason: result.reason?.description ?? "none"))
+        }, hangUp: { [weak self] in
+            guard let self else {
+                return .unavailable(action: .hangUp, reason: "coordinatorUnavailable")
+            }
+
+            let result = await nativeDirectCallProductionHangup()
+            let triggerDiagnostic = await nativeDirectCallProductionTriggerDryRunDiagnostic()
+            return .init(action: .hangUp,
+                         outcome: result.outcome.description,
+                         reason: result.reason?.description ?? "none",
+                         status: .make(triggerDiagnostic: triggerDiagnostic,
+                                       productionStatus: result.status,
+                                       lastAction: .hangUp,
+                                       lastActionOutcome: result.outcome.description,
+                                       lastActionReason: result.reason?.description ?? "none"))
+        })
+    }
+
+    private func nativeDirectCallInternalControlStatus() async -> NativeDirectCallInternalControlStatus {
+        let triggerDiagnostic = await nativeDirectCallProductionTriggerDryRunDiagnostic()
+        let status = nativeDirectCallProductionStatus()
+        return .make(triggerDiagnostic: triggerDiagnostic,
+                     productionStatus: status,
+                     lastAction: .refreshStatus)
+    }
     #endif
     
     // MARK: - Private
@@ -919,8 +999,14 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
         let composerDraftService = ComposerDraftService(roomProxy: roomProxy,
                                                         timelineItemfactory: timelineItemFactory,
                                                         threadRootEventID: nil)
+
+        #if DEBUG
+        let nativeDirectCallInternalControlProvider = makeNativeDirectCallInternalControlProvider()
+        #else
+        let nativeDirectCallInternalControlProvider: NativeDirectCallInternalControlProviding? = nil
+        #endif
         
-        let parameters = RoomScreenCoordinatorParameters(userSession: userSession,
+        var parameters = RoomScreenCoordinatorParameters(userSession: userSession,
                                                          roomProxy: roomProxy,
                                                          focussedEvent: presentationAction?.focusedEvent,
                                                          sharedText: presentationAction?.sharedText,
@@ -937,6 +1023,7 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
                                                          composerDraftService: composerDraftService,
                                                          timelineControllerFactory: flowParameters.timelineControllerFactory,
                                                          userIndicatorController: flowParameters.userIndicatorController)
+        parameters.nativeDirectCallInternalControlProvider = nativeDirectCallInternalControlProvider
         
         let coordinator = RoomScreenCoordinator(parameters: parameters)
         coordinator.actions

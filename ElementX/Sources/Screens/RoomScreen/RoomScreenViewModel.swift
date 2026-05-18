@@ -20,6 +20,7 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
     private let appSettings: AppSettings
     private let analyticsService: AnalyticsService
     private let userIndicatorController: UserIndicatorControllerProtocol
+    private let nativeDirectCallInternalControlProvider: NativeDirectCallInternalControlProviding?
     
     private var initialSelectedPinnedEventID: String?
     private let pinnedEventStringBuilder: RoomEventStringBuilder
@@ -57,12 +58,14 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
          appSettings: AppSettings,
          appHooks: AppHooks,
          analyticsService: AnalyticsService,
-         userIndicatorController: UserIndicatorControllerProtocol) {
+         userIndicatorController: UserIndicatorControllerProtocol,
+         nativeDirectCallInternalControlProvider: NativeDirectCallInternalControlProviding? = nil) {
         clientProxy = userSession.clientProxy
         self.roomProxy = roomProxy
         self.appSettings = appSettings
         self.analyticsService = analyticsService
         self.userIndicatorController = userIndicatorController
+        self.nativeDirectCallInternalControlProvider = nativeDirectCallInternalControlProvider
         
         self.initialSelectedPinnedEventID = initialSelectedPinnedEventID
         pinnedEventStringBuilder = .pinnedEventStringBuilder(userID: roomProxy.ownUserID)
@@ -73,11 +76,14 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
             nil
         }
         
-        let viewState = RoomScreenViewState(roomTitle: roomProxy.infoPublisher.value.displayName ?? roomProxy.id,
+        var viewState = RoomScreenViewState(roomTitle: roomProxy.infoPublisher.value.displayName ?? roomProxy.id,
                                             roomAvatar: roomProxy.infoPublisher.value.avatar,
                                             hasOngoingCall: roomProxy.infoPublisher.value.hasRoomCall,
                                             hasSuccessor: roomProxy.infoPublisher.value.successor != nil,
                                             roomHistorySharingState: roomHistorySharingState)
+        if nativeDirectCallInternalControlProvider != nil {
+            viewState.nativeDirectCallInternalControlPanel = .visible
+        }
         super.init(initialViewState: appHooks.roomScreenHook.update(viewState),
                    mediaProvider: userSession.mediaProvider)
         
@@ -102,6 +108,8 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
             actionsSubject.send(.displayCall(startMode: startMode))
             actionsSubject.send(.removeComposerFocus)
             analyticsService.trackInteraction(name: .MobileRoomCallButton)
+        case .nativeDirectCallInternalControl(let action):
+            handleNativeDirectCallInternalControlAction(action)
         case .footerViewAction(let action):
             switch action {
             case .resolvePinViolation(let userID):
@@ -157,6 +165,37 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
         .store(in: &cancellables)
         
         state.bindings.mediaPreviewViewModel = mediaPreviewViewModel
+    }
+
+    private func handleNativeDirectCallInternalControlAction(_ action: NativeDirectCallInternalControlAction) {
+        guard let nativeDirectCallInternalControlProvider else {
+            return
+        }
+
+        state.nativeDirectCallInternalControlPanel.isLoading = true
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            switch action {
+            case .refreshStatus:
+                let status = await nativeDirectCallInternalControlProvider.refreshStatus()
+                state.nativeDirectCallInternalControlPanel.status = status
+            case .armListener:
+                let result = await nativeDirectCallInternalControlProvider.armListener()
+                state.nativeDirectCallInternalControlPanel.status = result.status
+            case .startAudio:
+                let result = await nativeDirectCallInternalControlProvider.startAudio()
+                state.nativeDirectCallInternalControlPanel.status = result.status
+            case .accept:
+                let result = await nativeDirectCallInternalControlProvider.accept()
+                state.nativeDirectCallInternalControlPanel.status = result.status
+            case .hangUp:
+                let result = await nativeDirectCallInternalControlProvider.hangUp()
+                state.nativeDirectCallInternalControlPanel.status = result.status
+            }
+
+            state.nativeDirectCallInternalControlPanel.isLoading = false
+        }
     }
     
     // MARK: - Private
@@ -451,7 +490,8 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
 extension RoomScreenViewModel {
     static func mock(roomProxyMock: JoinedRoomProxyMock,
                      clientProxyMock: ClientProxyMock = ClientProxyMock(.init()),
-                     appHooks: AppHooks = AppHooks()) -> RoomScreenViewModel {
+                     appHooks: AppHooks = AppHooks(),
+                     nativeDirectCallInternalControlProvider: NativeDirectCallInternalControlProviding? = nil) -> RoomScreenViewModel {
         RoomScreenViewModel(userSession: UserSessionMock(.init(clientProxy: clientProxyMock)),
                             roomProxy: roomProxyMock,
                             initialSelectedPinnedEventID: nil,
@@ -459,7 +499,8 @@ extension RoomScreenViewModel {
                             appSettings: ServiceLocator.shared.settings,
                             appHooks: appHooks,
                             analyticsService: ServiceLocator.shared.analytics,
-                            userIndicatorController: ServiceLocator.shared.userIndicatorController)
+                            userIndicatorController: ServiceLocator.shared.userIndicatorController,
+                            nativeDirectCallInternalControlProvider: nativeDirectCallInternalControlProvider)
     }
 }
 

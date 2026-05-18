@@ -27,6 +27,7 @@ enum RoomScreenViewAction {
     case viewAllPins
     case displayRoomDetails
     case displayCall(startMode: ElementCallStartMode)
+    case nativeDirectCallInternalControl(NativeDirectCallInternalControlAction)
     case footerViewAction(RoomScreenFooterViewAction)
     case acceptKnock(eventID: String)
     case dismissKnockRequests
@@ -85,6 +86,8 @@ struct RoomScreenViewState: BindableState {
     var roomHistorySharingState: RoomHistorySharingState?
     
     var footerDetails: RoomScreenFooterViewDetails?
+
+    var nativeDirectCallInternalControlPanel: NativeDirectCallInternalControlPanelState = .hidden
     
     var bindings = RoomScreenViewStateBindings()
 }
@@ -263,3 +266,270 @@ struct PinnedEventsState: Equatable {
         }
     }
 }
+
+@MainActor
+protocol NativeDirectCallInternalControlProviding: AnyObject {
+    func refreshStatus() async -> NativeDirectCallInternalControlStatus
+    func armListener() async -> NativeDirectCallInternalControlActionResult
+    func startAudio() async -> NativeDirectCallInternalControlActionResult
+    func accept() async -> NativeDirectCallInternalControlActionResult
+    func hangUp() async -> NativeDirectCallInternalControlActionResult
+}
+
+@MainActor
+final class ClosureNativeDirectCallInternalControlProvider: NativeDirectCallInternalControlProviding {
+    private let refreshStatusClosure: @MainActor () async -> NativeDirectCallInternalControlStatus
+    private let armListenerClosure: @MainActor () async -> NativeDirectCallInternalControlActionResult
+    private let startAudioClosure: @MainActor () async -> NativeDirectCallInternalControlActionResult
+    private let acceptClosure: @MainActor () async -> NativeDirectCallInternalControlActionResult
+    private let hangUpClosure: @MainActor () async -> NativeDirectCallInternalControlActionResult
+
+    init(refreshStatus: @escaping @MainActor () async -> NativeDirectCallInternalControlStatus,
+         armListener: @escaping @MainActor () async -> NativeDirectCallInternalControlActionResult,
+         startAudio: @escaping @MainActor () async -> NativeDirectCallInternalControlActionResult,
+         accept: @escaping @MainActor () async -> NativeDirectCallInternalControlActionResult,
+         hangUp: @escaping @MainActor () async -> NativeDirectCallInternalControlActionResult) {
+        refreshStatusClosure = refreshStatus
+        armListenerClosure = armListener
+        startAudioClosure = startAudio
+        acceptClosure = accept
+        hangUpClosure = hangUp
+    }
+
+    func refreshStatus() async -> NativeDirectCallInternalControlStatus {
+        await refreshStatusClosure()
+    }
+
+    func armListener() async -> NativeDirectCallInternalControlActionResult {
+        await armListenerClosure()
+    }
+
+    func startAudio() async -> NativeDirectCallInternalControlActionResult {
+        await startAudioClosure()
+    }
+
+    func accept() async -> NativeDirectCallInternalControlActionResult {
+        await acceptClosure()
+    }
+
+    func hangUp() async -> NativeDirectCallInternalControlActionResult {
+        await hangUpClosure()
+    }
+}
+
+enum NativeDirectCallInternalControlAction: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case refreshStatus
+    case armListener
+    case startAudio
+    case accept
+    case hangUp
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum NativeDirectCallInternalControlAvailability: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case hidden
+    case notRefreshed
+    case unavailable
+    case canStart
+    case outgoingRinging
+    case incomingRinging
+    case connecting
+    case activeAudio
+    case activeVideo
+    case failed
+    case ended
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct NativeDirectCallInternalControlStatus: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let availability: NativeDirectCallInternalControlAvailability
+    let activationReason: String
+    let peerTrustReadiness: String
+    let sessionState: String
+    let encryptionState: String
+    let mediaFailureReason: String
+    let terminalReason: String
+    let lastAction: NativeDirectCallInternalControlAction?
+    let lastActionOutcome: String
+    let lastActionReason: String
+    let canArmListener: Bool
+    let canStartAudio: Bool
+    let canAccept: Bool
+    let canHangUp: Bool
+
+    static let hidden = Self(availability: .hidden,
+                             activationReason: "none",
+                             peerTrustReadiness: "unknown",
+                             sessionState: "hidden",
+                             encryptionState: "none",
+                             mediaFailureReason: "none",
+                             terminalReason: "none",
+                             lastAction: nil,
+                             lastActionOutcome: "none",
+                             lastActionReason: "none",
+                             canArmListener: false,
+                             canStartAudio: false,
+                             canAccept: false,
+                             canHangUp: false)
+
+    static let notRefreshed = Self(availability: .notRefreshed,
+                                   activationReason: "notRefreshed",
+                                   peerTrustReadiness: "unknown",
+                                   sessionState: "notRefreshed",
+                                   encryptionState: "none",
+                                   mediaFailureReason: "none",
+                                   terminalReason: "none",
+                                   lastAction: nil,
+                                   lastActionOutcome: "none",
+                                   lastActionReason: "none",
+                                   canArmListener: false,
+                                   canStartAudio: false,
+                                   canAccept: false,
+                                   canHangUp: false)
+
+    static func unavailable(reason: String) -> Self {
+        Self(availability: .unavailable,
+             activationReason: reason,
+             peerTrustReadiness: "unknown",
+             sessionState: "unavailable",
+             encryptionState: "none",
+             mediaFailureReason: "none",
+             terminalReason: "none",
+             lastAction: nil,
+             lastActionOutcome: "none",
+             lastActionReason: reason,
+             canArmListener: false,
+             canStartAudio: false,
+             canAccept: false,
+             canHangUp: false)
+    }
+
+    var description: String {
+        let fields = [
+            "availability: \(availability)",
+            "activationReason: \(activationReason)",
+            "peerTrustReadiness: \(peerTrustReadiness)",
+            "sessionState: \(sessionState)",
+            "encryptionState: \(encryptionState)",
+            "mediaFailureReason: \(mediaFailureReason)",
+            "terminalReason: \(terminalReason)",
+            "lastAction: \(lastAction?.description ?? "none")",
+            "lastActionOutcome: \(lastActionOutcome)",
+            "lastActionReason: \(lastActionReason)",
+            "canArmListener: \(canArmListener)",
+            "canStartAudio: \(canStartAudio)",
+            "canAccept: \(canAccept)",
+            "canHangUp: \(canHangUp)"
+        ]
+        return "NativeDirectCallInternalControlStatus(\(fields.joined(separator: ", ")))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct NativeDirectCallInternalControlActionResult: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let action: NativeDirectCallInternalControlAction
+    let outcome: String
+    let reason: String
+    let status: NativeDirectCallInternalControlStatus
+
+    static func unavailable(action: NativeDirectCallInternalControlAction, reason: String) -> Self {
+        .init(action: action,
+              outcome: "blocked",
+              reason: reason,
+              status: .unavailable(reason: reason))
+    }
+
+    var description: String {
+        "NativeDirectCallInternalControlActionResult(action: \(action), outcome: \(outcome), reason: \(reason), status: \(status))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct NativeDirectCallInternalControlPanelState: Equatable {
+    var isVisible: Bool
+    var isLoading: Bool
+    var status: NativeDirectCallInternalControlStatus
+
+    static let hidden = Self(isVisible: false, isLoading: false, status: .hidden)
+    static let visible = Self(isVisible: true, isLoading: false, status: .notRefreshed)
+}
+
+#if DEBUG
+extension NativeDirectCallInternalControlStatus {
+    static func make(triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic,
+                     productionStatus: NativeDirectCallProductionStatus,
+                     lastAction: NativeDirectCallInternalControlAction? = nil,
+                     lastActionOutcome: String = "none",
+                     lastActionReason: String = "none") -> Self {
+        let activationReason = triggerDiagnostic.blockedReason?.description ?? "none"
+        let availability = availability(triggerDiagnostic: triggerDiagnostic, productionStatus: productionStatus)
+        let canArmListener = triggerDiagnostic.isEnabled && !productionStatus.productionListenerStarted
+        let canStartAudio = triggerDiagnostic.isEnabled && !productionStatus.productionHasActiveSession
+        let canAccept = triggerDiagnostic.isEnabled && productionStatus.productionSessionState == "incomingRinging"
+        let canHangUp = productionStatus.productionHasActiveSession && hangUpEnabledStates.contains(productionStatus.productionSessionState)
+
+        return Self(availability: availability,
+                    activationReason: activationReason,
+                    peerTrustReadiness: triggerDiagnostic.peerTrustReadiness.description,
+                    sessionState: productionStatus.productionSessionState,
+                    encryptionState: productionStatus.productionEncryptionState,
+                    mediaFailureReason: productionStatus.productionMediaFailureReason.description,
+                    terminalReason: productionStatus.productionLastTerminalReason?.description ?? "none",
+                    lastAction: lastAction,
+                    lastActionOutcome: lastActionOutcome,
+                    lastActionReason: lastActionReason,
+                    canArmListener: canArmListener,
+                    canStartAudio: canStartAudio,
+                    canAccept: canAccept,
+                    canHangUp: canHangUp)
+    }
+
+    private static let hangUpEnabledStates = Set(["outgoingRinging", "incomingRinging", "connecting", "activeAudio", "activeVideo", "ending"])
+
+    private static func availability(triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic,
+                                     productionStatus: NativeDirectCallProductionStatus) -> NativeDirectCallInternalControlAvailability {
+        if productionStatus.productionHasActiveSession {
+            switch productionStatus.productionSessionState {
+            case "outgoingRinging":
+                return .outgoingRinging
+            case "incomingRinging":
+                return .incomingRinging
+            case "connecting":
+                return .connecting
+            case "activeAudio":
+                return .activeAudio
+            case "activeVideo":
+                return .activeVideo
+            case "failed":
+                return .failed
+            case "ended", "cancelled", "missed":
+                return .ended
+            default:
+                return .unavailable
+            }
+        }
+
+        return triggerDiagnostic.isEnabled ? .canStart : .unavailable
+    }
+}
+#endif

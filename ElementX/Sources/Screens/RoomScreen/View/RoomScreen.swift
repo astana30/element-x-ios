@@ -51,6 +51,14 @@ struct RoomScreen: View {
                                          mediaProvider: context.mediaProvider) { action in
                         context.send(viewAction: .footerViewAction(action))
                     }
+
+                    #if DEBUG
+                    if context.viewState.nativeDirectCallInternalControlPanel.isVisible {
+                        NativeDirectCallInternalControlPanel(state: context.viewState.nativeDirectCallInternalControlPanel) { action in
+                            context.send(viewAction: action)
+                        }
+                    }
+                    #endif
                     
                     composer
                         .padding(.top, 8)
@@ -208,6 +216,98 @@ struct RoomScreen: View {
         }
     }
 }
+
+#if DEBUG
+struct NativeDirectCallInternalControlPanel: View {
+    let state: NativeDirectCallInternalControlPanelState
+    let send: (RoomScreenViewAction) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("Native call controls")
+                    .font(.compound.bodySMSemibold)
+                    .foregroundStyle(.compound.textPrimary)
+
+                Spacer()
+
+                if state.isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+
+            statusGrid
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    controlButton("Refresh", isEnabled: !state.isLoading) {
+                        send(.nativeDirectCallInternalControl(.refreshStatus))
+                    }
+                    controlButton("Arm listener", isEnabled: state.status.canArmListener && !state.isLoading) {
+                        send(.nativeDirectCallInternalControl(.armListener))
+                    }
+                    controlButton("Start audio", isEnabled: state.status.canStartAudio && !state.isLoading) {
+                        send(.nativeDirectCallInternalControl(.startAudio))
+                    }
+                    controlButton("Accept", isEnabled: state.status.canAccept && !state.isLoading) {
+                        send(.nativeDirectCallInternalControl(.accept))
+                    }
+                    controlButton("Hang up", isEnabled: state.status.canHangUp && !state.isLoading) {
+                        send(.nativeDirectCallInternalControl(.hangUp))
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Color.compound.bgCanvasDefault)
+        .overlay(alignment: .top) {
+            Divider()
+        }
+        .accessibilityIdentifier("nativeDirectCallInternalControlPanel")
+    }
+
+    private var statusGrid: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            statusLine("Availability", state.status.availability.description)
+            statusLine("Activation", state.status.activationReason)
+            statusLine("Peer trust", state.status.peerTrustReadiness)
+            statusLine("Session", state.status.sessionState)
+            statusLine("Encryption", state.status.encryptionState)
+            statusLine("Media", state.status.mediaFailureReason)
+            statusLine("Terminal", state.status.terminalReason)
+            statusLine("Last action", lastActionDescription)
+        }
+    }
+
+    private var lastActionDescription: String {
+        guard let lastAction = state.status.lastAction else {
+            return "none"
+        }
+
+        return "\(lastAction.description):\(state.status.lastActionOutcome):\(state.status.lastActionReason)"
+    }
+
+    private func statusLine(_ title: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text("\(title):")
+                .font(.compound.bodyXS)
+                .foregroundStyle(.compound.textSecondary)
+            Text(value)
+                .font(.compound.bodyXS)
+                .foregroundStyle(.compound.textPrimary)
+        }
+        .lineLimit(1)
+    }
+
+    private func controlButton(_ title: String, isEnabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(title, action: action)
+            .buttonStyle(.compound(.secondary, size: .small))
+            .disabled(!isEnabled)
+    }
+}
+#endif
 
 // MARK: - Previews
 

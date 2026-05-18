@@ -2469,6 +2469,7 @@ final class RoomFlowCoordinatorTests {
             #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationLiveKitEnabled(environment: environment) == false)
             #expect(ProcessInfo.isNativeDirectCallProductionDryRunFakeEnabled(environment: environment) == false)
             #expect(ProcessInfo.isNativeDirectCallProductionStartEnabled(environment: environment) == false)
+            #expect(ProcessInfo.isNativeDirectCallInternalUIEnabled(environment: environment) == false)
         }
 
         let harnessOnlyEnvironment = [
@@ -2481,6 +2482,7 @@ final class RoomFlowCoordinatorTests {
         #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationLiveKitEnabled(environment: harnessOnlyEnvironment) == false)
         #expect(ProcessInfo.isNativeDirectCallProductionDryRunFakeEnabled(environment: harnessOnlyEnvironment) == false)
         #expect(ProcessInfo.isNativeDirectCallProductionStartEnabled(environment: harnessOnlyEnvironment) == false)
+        #expect(ProcessInfo.isNativeDirectCallInternalUIEnabled(environment: harnessOnlyEnvironment) == false)
 
         let commandsEnabledEnvironment = [
             "IS_RUNNING_INTEGRATION_TESTS": "1",
@@ -2493,18 +2495,25 @@ final class RoomFlowCoordinatorTests {
         #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationLiveKitEnabled(environment: commandsEnabledEnvironment) == false)
         #expect(ProcessInfo.isNativeDirectCallProductionDryRunFakeEnabled(environment: commandsEnabledEnvironment) == false)
         #expect(ProcessInfo.isNativeDirectCallProductionStartEnabled(environment: commandsEnabledEnvironment) == false)
+        #expect(ProcessInfo.isNativeDirectCallInternalUIEnabled(environment: commandsEnabledEnvironment) == false)
 
         var fakeDryRunEnvironment = commandsEnabledEnvironment
         fakeDryRunEnvironment["NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED"] = "1"
         #expect(ProcessInfo.isNativeDirectCallProductionDryRunFakeEnabled(environment: fakeDryRunEnvironment) == true)
         #expect(ProcessInfo.isNativeDirectCallProductionStartEnabled(environment: fakeDryRunEnvironment) == false)
+        #expect(ProcessInfo.isNativeDirectCallInternalUIEnabled(environment: fakeDryRunEnvironment) == false)
 
         var productionStartEnvironment = commandsEnabledEnvironment
         productionStartEnvironment["NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED"] = "1"
         #expect(ProcessInfo.isNativeDirectCallProductionStartEnabled(environment: productionStartEnvironment) == true)
+        #expect(ProcessInfo.isNativeDirectCallInternalUIEnabled(environment: productionStartEnvironment) == false)
         #expect(ProcessInfo.nativeDirectCallProductionTokenBaseURL(environment: productionStartEnvironment) == nil)
         productionStartEnvironment["NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL"] = "http://127.0.0.1:8088"
         #expect(ProcessInfo.nativeDirectCallProductionTokenBaseURL(environment: productionStartEnvironment)?.absoluteString == "http://127.0.0.1:8088")
+
+        var internalUIEnvironment = commandsEnabledEnvironment
+        internalUIEnvironment["NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED"] = "1"
+        #expect(ProcessInfo.isNativeDirectCallInternalUIEnabled(environment: internalUIEnvironment) == true)
 
         var encryptionEnvironment = commandsEnabledEnvironment
         encryptionEnvironment[NativeDirectCallDiagnosticEncryptionService.encryptionGateEnvironmentKey] = "1"
