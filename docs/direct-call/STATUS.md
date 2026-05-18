@@ -2,15 +2,15 @@
 
 ## Current Phase
 
-After 2.13G — production owner wiring inspection/skeleton.
+After 2.14E — iOS internal production native direct-call activeAudio proof.
 
 ## Latest App Code Checkpoint
 
-2.13G `Wire production direct-call owner for internal start command`
+2.14C `Add production LiveKit connect failure diagnostics`
 
 ## Latest Code Checkpoint
 
-2.13G `Wire production direct-call owner for internal start command`
+2.14E `Fix fake backend LiveKit dev token grants`
 
 ## Latest SDK Checkpoint
 
@@ -295,26 +295,36 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Default runs skip the HTTP smoke tests when the smoke file/env is absent or stale.
   - Env-gated local smoke run proved both production token client and capability provider can call the local FastAPI fake backend over HTTP.
   - Output remains redacted and production direct calls remain disabled.
+- iOS internal production native direct-call activeAudio proof is recorded:
+  - The proof used only the DEBUG/integration internal command path.
+  - The proof used the local fake backend and local LiveKit dev server.
+  - B `production-start-listener` succeeded.
+  - A `production-start-outgoing` succeeded.
+  - B received the production invite and entered `incomingRinging`.
+  - B `production-accept` succeeded.
+  - B emitted an answer and answer send succeeded.
+  - A received the answer.
+  - A and B both reached `productionSessionState=activeAudio`.
+  - A and B both reported `productionEncryptionState=ready`.
+  - A and B both reported `productionMediaConnectAttempted=true`.
+  - A and B both reported `productionLiveKitClientConnectAttempted=true`.
+  - A and B both reported `productionMediaFailureReason=none`.
+  - No visible UI, Element Call route, CallKit, push, or global production activation changed.
 
 ## Current Blocker
 
-- Production backend is still skeleton/fake mode.
-- Production E2EE Matrix crypto key wrapping now has narrow provider, disabled assembly, activation gate, capability discovery, decision assembly, provider-backed rollout/capability inputs, room-scoped dry-run seams, and a consolidated readiness test pack, but the assembly is not yet threaded into the real session/room-flow runtime for activation.
-- The production activation decision can consume an app rollout provider and an injectable authenticated `/capabilities` fetch provider, but these providers are not yet wired into real session/room-flow runtime construction by default.
-- The current production dependency readiness path is still coupled to explicit `DirectCallProductionConfiguration.tokenEndpointBaseURL`, so capability-sourced endpoints need a two-stage readiness/assembly path before dry-run can report dependencies ready from server capability alone.
-- The room-flow dry-run seam and production trigger dry-run command can now be queried by the DEBUG/integration runner and have both fail-closed and fake-enabled runtime proofs for A/B; there is still no visible UI or public production runtime activation.
-- The production start command is DEBUG/integration-only, behind `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`, and now lazily assembles a production-shaped owner only after activation passes.
-- The first runtime proof showed fail-closed command behavior: `productionStartDisabled` without the start gate, then `productionOwnerUnavailable` before owner wiring, with no side effects.
-- The production owner wiring skeleton can now pass activation-approved runtime providers into `NativeDirectCallRoomFlowOwner`, but real production backend/capability/token/E2EE readiness is still not available by default.
-- The default app path remains fail-closed unless future production configuration and dependency assembly explicitly enable native direct-call dependencies.
-- The production trust policy for peer devices is not finalized; the safest initial policy should fail closed on unknown or unverifiable device trust.
-- No production activation, visible UI, CallKit, or push integration exists yet.
+- The internal DEBUG/integration command path can now reach `activeAudio` with the local fake backend and local LiveKit dev server, but this is not product activation.
+- Production backend remains a skeleton/local fake proof and is not deployed as a hardened production service.
+- Production rollout and server capability sources remain fail-closed by default.
+- Real production activation still requires hardened backend deployment, capability rollout, endpoint configuration, trusted peer readiness, cleanup/hangup handling, visible UI design, and later CallKit/push work.
+- The next immediate gap is internal call cleanup: the command lane needs a safe DEBUG/integration hangup/end-call path that can terminate active or ringing production sessions, clean media/key state, and report redacted terminal diagnostics.
+- No production activation, visible UI, Element Call route change, CallKit, or push integration exists yet.
 
 ## Next Recommended Phase
 
-`2.13H — production start command runtime proof with owner wiring`
+`2.15A — internal production call cleanup/hangup command`
 
-Goal: rerun the DEBUG/integration-only `production-start-outgoing` command after production owner wiring, verify the command no longer stops at `productionOwnerUnavailable` when runtime providers are present, and confirm any remaining block/failure is redacted and caused by real production dependency readiness rather than missing owner construction.
+Goal: add a DEBUG/integration-only production hangup/end-call command that can cleanly terminate active or ringing internal production native direct-call sessions without visible UI, Element Call route changes, CallKit, push, or global production activation.
 
 ## Do-Not-Touch Constraints
 

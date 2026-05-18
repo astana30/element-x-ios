@@ -7,110 +7,100 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.13G — production owner wiring inspection/skeleton.
+After 2.14E — iOS internal production native direct-call activeAudio proof.
 
-Current app code checkpoint:
-2.13G `Wire production direct-call owner for internal start command`
+Current code checkpoints:
+- App: 2.14C `Add production LiveKit connect failure diagnostics`
+- Backend: 2.14E `Fix fake backend LiveKit dev token grants`
+- SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`
+- Wrapper: 1e58d0a `Add direct-call media key envelope bindings`
 
-Current SDK checkpoint:
-f7c2cfe5c `Add direct-call media key envelope crypto tests`
-
-Current wrapper checkpoint:
-1e58d0a `Add direct-call media key envelope bindings`
-
-Published artifact:
-https://github.com/astana30/matrix-rust-sdk/releases/download/salemx-direct-call-key-envelope-f7c2cfe5c/MatrixSDKFFI-f7c2cfe5c.xcframework.zip
-
-Artifact checksum:
-654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e
-
-Phase:
-2.13H — production start command runtime proof with owner wiring.
-
-Task:
-Run the DEBUG/integration-only internal production native direct-call start command after production owner wiring.
-Do not add visible UI.
-Do not modify Element Call route.
-Do not wire CallKit/push.
-Do not activate production direct calls globally.
-Do not print or store secrets.
-
-Goal:
-Verify that `production-start-outgoing` no longer blocks at `productionOwnerUnavailable` when the room-scoped production owner can be assembled from runtime providers. Any remaining block/failure should be a precise redacted production dependency, key wrapping, token, listener, signalling, or media setup reason.
-
-Context:
+Current proven state:
 - Two-client Matrix signalling proof passed.
 - Diagnostic LiveKit active proof passed.
-- Backend token service skeleton exists and local fake mode can serve token and capability smoke responses.
-- Production token DTO/client/transport/config seams exist and remain inactive by default.
-- SDK and Swift wrapper expose async direct-call media key envelope APIs.
-- Production key wrapper/provider seams exist but are not publicly activated.
-- Production dependency assembly exists and remains disabled by default unless explicitly configured.
-- Room-scoped `production-activation-dry-run` exists through the DEBUG/integration diagnostic command path.
-- Room-scoped `production-trigger-dry-run` exists through the DEBUG/integration diagnostic command path.
-- Runtime fake-enabled `production-trigger-dry-run` proof passed for A and B in an active encrypted 1:1 room.
-- 2.13E added `nativeDirectCallProductionStartOutgoingAudioCall` and runner command `production-start-outgoing A|B`.
-- 2.13F runtime proof showed `productionStartDisabled` without `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`, then `productionOwnerUnavailable` with the start gate enabled before owner wiring.
-- 2.13G added lazy room-scoped production owner creation and retention in `RoomFlowCoordinator`.
-- Production owner construction remains separate from the diagnostic owner and uses production-shaped dependencies from AppCoordinator.
-- The start command starts the production listener before outgoing start only after DEBUG/integration command gates, the dedicated start gate, and activation readiness all pass.
-- If production dependencies cannot be assembled, the command should now block with `dependenciesUnavailable`, not `productionOwnerUnavailable`.
-- Production remains disabled by default.
-- `directOneToOneCallsEnabled` remains unused for native production activation.
+- Production token DTO/client/transport/config seams exist and remain disabled by default.
+- Backend token service skeleton exists with local fake mode for internal proof.
+- Production Matrix SDK key envelope wrapping is integrated through a narrow provider seam.
+- Production activation gate, dry-run, trigger dry-run, start command, receive listener, incoming invite handling, accept command, and media failure diagnostics exist on the DEBUG/integration internal command path.
+- Local fake backend plus local LiveKit dev server reached `activeAudio` on both iOS clients through the internal production command lane.
+- A and B both reported `productionEncryptionState=ready`, `productionMediaConnectAttempted=true`, `productionLiveKitClientConnectAttempted=true`, and `productionMediaFailureReason=none`.
+- This proof did not add visible UI, did not change the Element Call route, did not wire CallKit/push, and did not globally activate production direct calls.
 
-Suggested runtime checks:
-1. Validate the two-client runner:
-   `bash -n Tools/Scripts/run_native_direct_call_diagnostic_two_client.sh`
-2. Launch A/B with normal DEBUG/integration diagnostic gates but without `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED`.
-3. Open the same encrypted 1:1 room if needed.
-4. Run:
-   `DRY_RUN=0 Tools/Scripts/run_native_direct_call_diagnostic_two_client.sh production-start-outgoing A`
-5. Expected without the dedicated start gate:
-   - `outcome=blocked`
-   - `reason=productionStartDisabled`
-   - redacted activation fields only
-6. Relaunch A/B with:
-   - `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`
-   - `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED=1` if fake-enabled activation is still needed
-7. Run `production-trigger-dry-run A|B` first to confirm `wouldStart=true` if using fake-enabled activation inputs.
-8. Run:
-   `DRY_RUN=0 Tools/Scripts/run_native_direct_call_diagnostic_two_client.sh production-start-outgoing A`
-9. Expected after owner wiring:
-   - not `productionOwnerUnavailable` if runtime providers are available
-   - likely `dependenciesUnavailable`, `engineFailure`, or a precise redacted media/token/key/listener/signalling reason if production-shaped dependencies are still incomplete
-   - if it starts, immediately inspect A/B status for only intended direct-call side effects
-10. Check status A/B for:
-   - listenerStarted
-   - hasActiveSession
-   - lastSignalSendAttempted
-   - mediaConnectAttempted
-11. Confirm no visible UI, Element Call route, CallKit, push, or public production activation side effects are observed.
+Phase:
+2.15A — internal production call cleanup/hangup command.
+
+Task:
+Add a DEBUG/integration-only production hangup/end-call command for internal native direct-call sessions.
+Do not add visible UI.
+Do not modify the Element Call route.
+Do not wire CallKit/push.
+Do not globally activate production direct calls.
+
+Goal:
+Allow the runner to cleanly terminate active or ringing production native direct-call sessions created by the internal command lane, and prove both sides return to terminal/idle state with redacted diagnostics.
+
+Suggested command shape:
+- UITestsSignalling request: `nativeDirectCallProductionHangup` or `nativeDirectCallProductionEndCall`
+- Runner command: `production-hangup A|B` or `production-end-call A|B`
+
+Expected behavior:
+1. Requires DEBUG/integration diagnostics.
+2. Requires the dedicated production start command gate if that is the current safety model.
+3. Requires a production owner for the active room.
+4. If there is no active/ringing production session, return a redacted blocked/no-op result.
+5. If there is an active/ringing session, send the production hangup or cancel terminal signal as appropriate.
+6. Stop or disconnect media if connected.
+7. Clear the production media key handle/store for the call.
+8. Leave the receive listener state explicit: either retained for the current room or stopped if the owner is reset, but document and test the choice.
+9. Return a redacted status summary.
+10. Keep diagnostic and production owners separate.
 
 Hard constraints:
 - No visible UI.
 - No `RoomScreenViewModel.displayCall` changes.
 - No `RoomScreenCoordinator.presentCallScreen` changes.
 - No Element Call route changes.
-- No `directOneToOneCallsEnabled` activation or reuse.
+- No `ElementCallService` changes.
+- No `directOneToOneCallsEnabled` use.
 - No CallKit/push.
 - No global production runtime activation.
 - No broad Matrix SDK raw APIs.
-- No raw Matrix event JSON, `debugInfo`, `originalJSON`, or `originalJson`.
-- No logging unwrapped media-key material, credentials, bearer values, JWTs, encrypted-payload values, or Matrix event content.
-- Do not print passwords, Matrix access tokens, LiveKit tokens, participant tokens, backend secrets, diagnostic secrets, raw keys, or copied secret-bearing logs.
-- Do not run shutdown/reboot/sleep/logout/killall/osascript power-management commands.
+- Do not print or store credentials, bearer values, participant credentials, media-key material, SDK envelope contents, Matrix event content, or copied secret-bearing logs.
+
+Tests:
+- Command is unavailable outside DEBUG/integration diagnostics.
+- Command blocks/no-ops with no production owner.
+- Command blocks/no-ops with no active production session.
+- Command terminates outgoing ringing sessions.
+- Command terminates incoming ringing sessions.
+- Command terminates active audio sessions.
+- Terminal signal send diagnostics are redacted.
+- Media cleanup is invoked when media was connected.
+- Media key cleanup is invoked and idempotent.
+- Repeated hangup is idempotent and redacted.
+- Remote side can observe the terminal signal and leave active/ringing state.
+- Diagnostic owner remains unaffected.
+- No visible UI, Element Call route, CallKit, push, or global activation behavior changes.
 
 Validation:
-- Runtime command outputs are redacted.
-- No app code changes unless a runner-only or production-owner wiring bug is found.
-- If code changes are required, rerun focused room-flow/direct-call tests, Release build, and the direct-call forbidden scan.
-- If docs are updated, run `git diff --check` and the docs secret scan.
+- `git diff --check`
+- SwiftFormat/SwiftLint on changed Swift files.
+- Runner `bash -n` if scripts change.
+- Targeted tests:
+  - `RoomFlowCoordinatorTests`
+  - `DirectCallEngineTests`
+  - `DirectCallEngineSignalTransportTests`
+  - `DirectCallMediaEngineTests`
+  - `DirectCallProductionKeyWrappingTests`
+- Release build.
+- Forbidden scan for credential/key/logging regressions.
 
-Expected output:
-1. Command output without the dedicated start gate.
-2. Command output with the dedicated start gate and fake-enabled activation, if run.
-3. Whether output is redacted.
-4. Whether `productionOwnerUnavailable` is gone after owner wiring.
-5. Whether any listener, Matrix send, active session, token request, key wrapping, media connect, UI, Element Call, CallKit, or push side effects occurred.
-6. Whether code changes were needed.
-7. Docs update if useful.
+Expected report:
+A. Files changed.
+B. Command name and routing path.
+C. Cleanup/hangup behavior.
+D. Whether terminal Matrix signal is sent and redacted.
+E. Media/key cleanup behavior.
+F. Tests/build results.
+G. Runtime command sequence to prove cleanup after `activeAudio`.
+H. Commit hash.

@@ -431,3 +431,21 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Confirmed no visible UI, Element Call route, RoomScreen call presentation, ElementCallService, CallKit, push, global production activation, diagnostic secret/token use, broad SDK raw API, credential logging, or key logging changed.
 - Ran `git diff --check`, SwiftFormat/SwiftLint on changed Swift files, focused direct-call and room-flow unit tests, Release build, and the direct-call forbidden scan.
 - Recommended next phase: runtime proof for `production-start-outgoing` after production owner wiring, expecting either a redacted start attempt or a more precise production dependency/media/key/token failure than `productionOwnerUnavailable`.
+
+## 2026-05-18 — 2.14E iOS Internal Production ActiveAudio Proof
+
+- Recorded the first iOS internal production native direct-call `activeAudio` proof.
+- Confirmed the proof used only the DEBUG/integration internal command path.
+- Confirmed the proof used the local fake backend and local LiveKit dev server.
+- B `production-start-listener` succeeded.
+- A `production-start-outgoing` succeeded.
+- B received the production invite and entered `incomingRinging`.
+- B `production-accept` succeeded.
+- B emitted an answer and answer send succeeded.
+- A received the answer.
+- A and B both reached `productionSessionState=activeAudio`.
+- A and B both reported `productionEncryptionState=ready`.
+- A and B both reported `productionMediaConnectAttempted=true` and `productionLiveKitClientConnectAttempted=true`.
+- A and B both reported `productionMediaFailureReason=none`.
+- Confirmed no visible UI, Element Call route, CallKit, push, or global production activation changed.
+- Recommended next phase: `2.15A — internal production call cleanup/hangup command`.
