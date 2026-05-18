@@ -462,3 +462,23 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added tests for missing owner, missing active production session, successful hangup and cleanup, redacted engine failure, diagnostic owner isolation, and production status cleanup fields.
 - Confirmed no visible UI, Element Call route, RoomScreen call presentation, ElementCallService, CallKit, push, or global production activation changed.
 - Recommended next phase: `2.15B — internal production hangup runtime proof`.
+
+## 2026-05-18 — 2.15B iOS Internal Production Full Lifecycle Proof
+
+- Recorded the first iOS internal production native direct-call full lifecycle proof.
+- Confirmed the proof used only the DEBUG/integration internal command path.
+- Confirmed the proof used the local fake backend and local LiveKit dev server.
+- B `production-start-listener` succeeded.
+- A `production-start-outgoing` succeeded.
+- B reached `incomingRinging`.
+- B `production-accept` succeeded.
+- A and B both reached `productionSessionState=activeAudio`.
+- A `production-hangup` succeeded with `outcome=hungUp`.
+- A emitted hangup and the send succeeded.
+- A cleared its active production session and returned to idle.
+- B received `directCallHangup`.
+- B cleared its active production session and returned to idle.
+- A and B both reported media disconnect and cleanup attempts.
+- A and B both reported no production media failure.
+- Confirmed no visible UI, Element Call route, CallKit, push, or global production activation changed.
+- Recommended next phase: `2.16A — internal production call UI design inspection`.

@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-After 2.15A — internal production call cleanup/hangup command.
+After 2.15B — iOS internal production native direct-call full lifecycle proof.
 
 ## Latest App Code Checkpoint
 
-2.15A `Add production direct-call hangup command`
+2.15B `Record iOS production direct-call lifecycle proof`
 
 ## Latest Code Checkpoint
 
@@ -320,21 +320,38 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Media engines mark disconnect and cleanup attempts in redacted diagnostics.
   - The diagnostic owner remains separate and unaffected by the production hangup command tests.
   - No visible UI, Element Call route, RoomScreen call presentation, ElementCallService, CallKit, push, or global production activation changed.
+- iOS internal production native direct-call full lifecycle proof is recorded:
+  - The proof used only the DEBUG/integration internal command path.
+  - The proof used the local fake backend and local LiveKit dev server.
+  - B `production-start-listener` succeeded.
+  - A `production-start-outgoing` succeeded.
+  - B reached `incomingRinging`.
+  - B `production-accept` succeeded.
+  - A and B both reached `productionSessionState=activeAudio`.
+  - A `production-hangup` succeeded with `outcome=hungUp`.
+  - A emitted the hangup event and the send succeeded.
+  - A cleared the active production session and returned to idle.
+  - B received `directCallHangup`.
+  - B cleared the active production session and returned to idle.
+  - A and B both reported `productionMediaDisconnectAttempted=true`.
+  - A and B both reported `productionMediaCleanupAttempted=true`.
+  - A and B both reported `productionMediaFailureReason=none`.
+  - No visible UI, Element Call route, CallKit, push, or global production activation changed.
 
 ## Current Blocker
 
-- The internal DEBUG/integration command path can now reach `activeAudio` with the local fake backend and local LiveKit dev server, but this is not product activation.
+- The internal DEBUG/integration command path can now complete start, accept, active audio, hangup, and cleanup with the local fake backend and local LiveKit dev server, but this is not product activation.
 - Production backend remains a skeleton/local fake proof and is not deployed as a hardened production service.
 - Production rollout and server capability sources remain fail-closed by default.
-- Real production activation still requires hardened backend deployment, capability rollout, endpoint configuration, trusted peer readiness, runtime hangup proof, visible UI design, and later CallKit/push work.
-- The next immediate gap is runtime cleanup proof: the command lane needs to prove `production-hangup` can terminate an `activeAudio` internal production call and clear both local and remote production sessions.
+- Real production activation still requires hardened backend deployment, capability rollout, endpoint configuration, trusted peer readiness, visible UI design, and later CallKit/push work.
+- The next immediate gap is design inspection for the first internal iOS native direct-call UI surface, while keeping Element Call routing separate and production disabled by default.
 - No production activation, visible UI, Element Call route change, CallKit, or push integration exists yet.
 
 ## Next Recommended Phase
 
-`2.15B — internal production hangup runtime proof`
+`2.16A — internal production call UI design inspection`
 
-Goal: run the DEBUG/integration internal production command lane through listener, outgoing start, accept, active audio, and `production-hangup`, then verify both clients return to no active production session with redacted terminal and media cleanup diagnostics.
+Goal: inspect and design the first safe internal iOS UI surface for native direct calls without adding visible product UI yet, changing the Element Call route, wiring CallKit/push, or globally activating production direct calls.
 
 ## Do-Not-Touch Constraints
 

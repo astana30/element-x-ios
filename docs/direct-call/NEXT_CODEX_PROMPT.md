@@ -7,10 +7,11 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.15A — internal production call cleanup/hangup command.
+After 2.15B — iOS internal production native direct-call full lifecycle proof.
 
-Current code checkpoints:
-- App: 2.15A `Add production direct-call hangup command`
+Current checkpoints:
+- App code: 2.15A `Add production direct-call hangup command`
+- Docs: 2.15B `Record iOS production direct-call lifecycle proof`
 - Backend: 2.14E `Fix fake backend LiveKit dev token grants`
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`
@@ -23,48 +24,55 @@ Current proven state:
 - Production Matrix SDK key envelope wrapping is integrated through a narrow provider seam.
 - Production activation gate, dry-run, trigger dry-run, start command, receive listener, incoming invite handling, accept command, media failure diagnostics, and hangup command exist on the DEBUG/integration internal command path.
 - Local fake backend plus local LiveKit dev server reached `activeAudio` on both iOS clients through the internal production command lane.
-- The new `production-hangup A|B` runner command routes through the production owner path and performs immediate terminal cleanup after a successful terminal signal.
-- Production status exposes redacted terminal reason, media disconnect attempted, and media cleanup attempted fields.
+- The full internal lifecycle proof passed: B listener, A outgoing, B incoming ringing, B accept, A/B active audio, A hangup, A/B idle cleanup.
+- A emitted hangup and send succeeded.
+- B received `directCallHangup` and cleared its active production session.
+- A and B both reported media disconnect and cleanup attempts, with production media failure reason `none`.
 - No visible UI, Element Call route, RoomScreen call presentation, ElementCallService, CallKit, push, or global production activation has been added.
 
 Phase:
-2.15B — internal production hangup runtime proof.
+2.16A — internal production call UI design inspection.
 
 Task:
-Run a DEBUG/integration runtime proof for `production-hangup` after an internal production native direct call reaches `activeAudio`.
-Do not modify app code unless a runner-only bug is found.
-Do not add visible UI.
+Inspection/design only. Do not modify code. Do not commit unless docs-only tracking is explicitly requested.
+Design the first safe internal iOS UI surface for native direct calls.
+Do not add visible product UI yet.
 Do not modify the Element Call route.
 Do not wire CallKit/push.
 Do not globally activate production direct calls.
 
 Goal:
-Prove the internal production command lane can cleanly terminate an active local fake-backend/native LiveKit proof call and return both sides to no active production session with redacted terminal and media cleanup diagnostics.
+Decide how native direct-call UI should be introduced after the internal command lane has proven full lifecycle locally, while preserving the existing Element Call route and production activation safety gates.
 
-Suggested runtime sequence:
-1. Start the local fake SalemX call service and local LiveKit dev server using the existing local smoke instructions.
-2. Launch A/B diagnostic harness with the existing DEBUG/integration gates for fake-enabled activation and production start.
-3. Open the same encrypted 1:1 room on A and B.
-4. Run `production-start-listener B`.
-5. Run `production-start-outgoing A`.
-6. Run `production-status A` and `production-status B` until B shows `incomingRinging`.
-7. Run `production-accept B`.
-8. Run `production-status A` and `production-status B` until both show `activeAudio` and media failure reason `none`.
-9. Run `production-hangup A`.
-10. After a short wait, run `production-status A` and `production-status B`.
+Inspect:
+1. `RoomScreenViewModel`
+2. `RoomScreenCoordinator`
+3. `RoomScreen`
+4. `RoomFlowCoordinator`
+5. `NativeDirectCallRoomFlowOwner`
+6. `NativeDirectCallRoomController`
+7. Existing call button/action paths
+8. Existing Element Call route and `ElementCallService`
+9. Existing RoomScreen call presentation methods
+10. Existing feature flags, developer diagnostics, and production activation gates
+11. Existing incoming call UI patterns, if any
+12. Existing media/call screen components that could be reused without coupling to Element Call
 
-Expected result:
-- `production-hangup A` returns `outcome=hungUp`, `reason=none`, and redacted status fields.
-- A sends a production terminal event and reports signal send attempted/succeeded.
-- A reports no active production session after cleanup.
-- A reports a terminal reason and media disconnect/cleanup attempted where applicable.
-- B receives the terminal event and reports no active production session.
-- B reports the receive event kind/terminal reason if surfaced by existing diagnostics.
-- No visible UI, Element Call route, CallKit, push, public activation, or product call route is involved.
+Questions:
+A. What is the safest first UI surface: internal debug affordance, hidden developer option, room toolbar experiment, or separate native call screen skeleton?
+B. Should the first UI remain DEBUG/integration-only, or can it be behind app rollout plus server capability gates?
+C. How should UI query production activation readiness without starting listeners, media, or Matrix sends?
+D. How should outgoing start require activation enabled, peer trust ready, production dependencies ready, and no active session?
+E. How should incoming ringing be represented before CallKit/push exists?
+F. What state should the native call screen show for ringing, connecting, active audio, failed, and terminal states?
+G. How can Element Call route remain untouched until native UI is intentionally launched?
+H. Which existing command-lane diagnostics should become internal UI state, and which should remain developer-only?
+I. What should be tested before any visible button is added?
+J. What minimal next implementation phase is safe?
 
 Hard constraints:
-- No app code changes unless a runner-only issue blocks the proof.
-- No visible UI.
+- No code changes in this inspection phase.
+- No visible product UI.
 - No `RoomScreenViewModel.displayCall` changes.
 - No `RoomScreenCoordinator.presentCallScreen` changes.
 - No Element Call route changes.
@@ -75,18 +83,13 @@ Hard constraints:
 - No broad Matrix SDK raw APIs.
 - Do not print or store credentials, bearer values, participant credentials, media-key material, SDK envelope contents, Matrix event content, or copied secret-bearing logs.
 
-Validation:
-- Runner syntax check if touched.
-- `git diff --check` if anything changes.
-- Docs secret scan if docs are updated.
-- Commit only runner/docs fixes if required and validated.
-
-Expected report:
-A. Runtime command sequence used.
-B. A/B activeAudio status before hangup.
-C. `production-hangup` result.
-D. A/B production status after hangup.
-E. Whether terminal signal send/receive was observed.
-F. Whether media disconnect/cleanup was observed.
-G. Whether any code changes were needed.
-H. Commit hash if a fix/docs update was committed.
+Expected output:
+1. Files inspected.
+2. Recommended first UI surface.
+3. Why Element Call route remains untouched.
+4. Required activation and trust checks.
+5. Proposed UI state model.
+6. Incoming call behavior before CallKit/push.
+7. Test plan.
+8. Minimal next implementation phase.
+9. Risks/blockers.
