@@ -763,6 +763,7 @@ final class ClosureNativeDirectCallRoomCardProvider: NativeDirectCallRoomStatePr
 struct NativeDirectCallRoomCardViewState: Equatable {
     var isVisible: Bool
     var isLoading: Bool
+    var isStartAudioTemporarilyDisabled = false
     var state: NativeDirectCallRoomCardState
     var lastAction: NativeDirectCallRoomCardAction?
     var lastActionOutcome: NativeDirectCallRoomCardActionOutcome?
@@ -782,6 +783,14 @@ struct NativeDirectCallRoomCardViewState: Equatable {
     #if DEBUG
     var visibleActionRows: [[NativeDirectCallRoomCardAction]] {
         NativeDirectCallRoomCardAction.visibleRows(in: state)
+    }
+
+    func isActionEnabled(_ action: NativeDirectCallRoomCardAction) -> Bool {
+        guard action != .startAudio || !isStartAudioTemporarilyDisabled else {
+            return false
+        }
+
+        return action.isEnabled(in: state, isLoading: isLoading)
     }
     #endif
 }

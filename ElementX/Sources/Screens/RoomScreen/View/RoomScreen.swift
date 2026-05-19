@@ -303,7 +303,7 @@ struct NativeDirectCallRoomCard: View {
                 HStack(spacing: 8) {
                     ForEach(row, id: \.self) { action in
                         cardButton(action,
-                                   isEnabled: action.isEnabled(in: state.state, isLoading: state.isLoading)) {
+                                   isEnabled: state.isActionEnabled(action)) {
                             send(.nativeDirectCallRoomCard(action))
                         }
                     }

@@ -269,6 +269,164 @@ final class NativeDirectCallInternalControlPanelTests {
     }
 
     @Test
+    func productCardHangUpSuppressesImmediateRestartAfterCompletion() async throws {
+        let provider = NativeDirectCallRoomCardProviderSpy(states: [.activeAudio])
+        let viewModel = RoomScreenViewModel.mock(roomProxyMock: JoinedRoomProxyMock(.init()),
+                                                 nativeDirectCallRoomStateProvider: provider,
+                                                 nativeDirectCallRoomActionHandler: provider,
+                                                 nativeDirectCallRoomCardPostTerminalStartCooldown: .milliseconds(50))
+        self.viewModel = viewModel
+
+        let active = deferFulfillment(viewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallRoomCard.state == .activeAudio
+        }
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.refreshStatus))
+        try await active.fulfill()
+
+        let completed = deferFulfillment(viewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallRoomCard.lastAction == .hangUp &&
+                viewState.nativeDirectCallRoomCard.lastActionOutcome == .hungUp &&
+                viewState.nativeDirectCallRoomCard.isStartAudioTemporarilyDisabled
+        }
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.hangUp))
+        try await completed.fulfill()
+
+        let card = viewModel.context.viewState.nativeDirectCallRoomCard
+        #expect(card.state == .canStart)
+        #expect(!card.isLoading)
+        #expect(!card.isActionEnabled(.startAudio))
+
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.startAudio))
+        try await Task.sleep(for: .milliseconds(10))
+
+        #expect(provider.performedActions == [.hangUp])
+    }
+
+    @Test
+    func productCardStartAudioReenablesAfterPostTerminalCooldown() async throws {
+        let provider = NativeDirectCallRoomCardProviderSpy(states: [.activeAudio])
+        let viewModel = RoomScreenViewModel.mock(roomProxyMock: JoinedRoomProxyMock(.init()),
+                                                 nativeDirectCallRoomStateProvider: provider,
+                                                 nativeDirectCallRoomActionHandler: provider,
+                                                 nativeDirectCallRoomCardPostTerminalStartCooldown: .milliseconds(10))
+        self.viewModel = viewModel
+
+        let active = deferFulfillment(viewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallRoomCard.state == .activeAudio
+        }
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.refreshStatus))
+        try await active.fulfill()
+
+        let hungUp = deferFulfillment(viewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallRoomCard.lastAction == .hangUp &&
+                viewState.nativeDirectCallRoomCard.lastActionOutcome == .hungUp &&
+                viewState.nativeDirectCallRoomCard.isStartAudioTemporarilyDisabled
+        }
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.hangUp))
+        try await hungUp.fulfill()
+
+        try await Task.sleep(for: .milliseconds(20))
+        #expect(viewModel.context.viewState.nativeDirectCallRoomCard.isActionEnabled(.startAudio))
+
+        let restarted = deferFulfillment(viewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallRoomCard.lastAction == .startAudio &&
+                viewState.nativeDirectCallRoomCard.lastActionOutcome == .started
+        }
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.startAudio))
+        try await restarted.fulfill()
+
+        #expect(provider.performedActions == [.hangUp, .startAudio])
+    }
+
+    @Test
+    func productCardManualRefreshClearsPostTerminalStartSuppression() async throws {
+        let provider = NativeDirectCallRoomCardProviderSpy(states: [.activeAudio, .canStart])
+        let viewModel = RoomScreenViewModel.mock(roomProxyMock: JoinedRoomProxyMock(.init()),
+                                                 nativeDirectCallRoomStateProvider: provider,
+                                                 nativeDirectCallRoomActionHandler: provider,
+                                                 nativeDirectCallRoomCardPostTerminalStartCooldown: .seconds(5))
+        self.viewModel = viewModel
+
+        let active = deferFulfillment(viewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallRoomCard.state == .activeAudio
+        }
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.refreshStatus))
+        try await active.fulfill()
+
+        let hungUp = deferFulfillment(viewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallRoomCard.lastAction == .hangUp &&
+                viewState.nativeDirectCallRoomCard.lastActionOutcome == .hungUp &&
+                viewState.nativeDirectCallRoomCard.isStartAudioTemporarilyDisabled
+        }
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.hangUp))
+        try await hungUp.fulfill()
+
+        let refreshed = deferFulfillment(viewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallRoomCard.lastAction == .refreshStatus &&
+                viewState.nativeDirectCallRoomCard.lastActionOutcome == .refreshed &&
+                !viewState.nativeDirectCallRoomCard.isStartAudioTemporarilyDisabled
+        }
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.refreshStatus))
+        try await refreshed.fulfill()
+
+        #expect(viewModel.context.viewState.nativeDirectCallRoomCard.isActionEnabled(.startAudio))
+        #expect(provider.performedActions == [.hangUp])
+    }
+
+    @Test
+    func productCardCancelAndDeclineSuppressImmediateRestartAfterCompletion() async throws {
+        let cancelProvider = NativeDirectCallRoomCardProviderSpy(states: [.outgoingRinging])
+        let cancelViewModel = RoomScreenViewModel.mock(roomProxyMock: JoinedRoomProxyMock(.init()),
+                                                       nativeDirectCallRoomStateProvider: cancelProvider,
+                                                       nativeDirectCallRoomActionHandler: cancelProvider,
+                                                       nativeDirectCallRoomCardPostTerminalStartCooldown: .milliseconds(50))
+        viewModel = cancelViewModel
+
+        let outgoing = deferFulfillment(cancelViewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallRoomCard.state == .outgoingRinging
+        }
+        cancelViewModel.context.send(viewAction: .nativeDirectCallRoomCard(.refreshStatus))
+        try await outgoing.fulfill()
+
+        let cancelled = deferFulfillment(cancelViewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallRoomCard.lastAction == .cancelOutgoing &&
+                viewState.nativeDirectCallRoomCard.lastActionOutcome == .cancelled &&
+                viewState.nativeDirectCallRoomCard.isStartAudioTemporarilyDisabled
+        }
+        cancelViewModel.context.send(viewAction: .nativeDirectCallRoomCard(.cancelOutgoing))
+        try await cancelled.fulfill()
+
+        cancelViewModel.context.send(viewAction: .nativeDirectCallRoomCard(.startAudio))
+        try await Task.sleep(for: .milliseconds(10))
+        #expect(cancelProvider.performedActions == [.cancelOutgoing])
+
+        let declineProvider = NativeDirectCallRoomCardProviderSpy(states: [.incomingRinging])
+        let declineViewModel = RoomScreenViewModel.mock(roomProxyMock: JoinedRoomProxyMock(.init()),
+                                                        nativeDirectCallRoomStateProvider: declineProvider,
+                                                        nativeDirectCallRoomActionHandler: declineProvider,
+                                                        nativeDirectCallRoomCardPostTerminalStartCooldown: .milliseconds(50))
+        viewModel = declineViewModel
+
+        let incoming = deferFulfillment(declineViewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallRoomCard.state == .incomingRinging
+        }
+        declineViewModel.context.send(viewAction: .nativeDirectCallRoomCard(.refreshStatus))
+        try await incoming.fulfill()
+
+        let declined = deferFulfillment(declineViewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallRoomCard.lastAction == .declineIncoming &&
+                viewState.nativeDirectCallRoomCard.lastActionOutcome == .declined &&
+                viewState.nativeDirectCallRoomCard.isStartAudioTemporarilyDisabled
+        }
+        declineViewModel.context.send(viewAction: .nativeDirectCallRoomCard(.declineIncoming))
+        try await declined.fulfill()
+
+        declineViewModel.context.send(viewAction: .nativeDirectCallRoomCard(.startAudio))
+        try await Task.sleep(for: .milliseconds(10))
+        #expect(declineProvider.performedActions == [.declineIncoming])
+    }
+
+    @Test
     func productCardIgnoresRetryDismissAndRefreshWhileActionPending() async throws {
         let provider = DelayedNativeDirectCallRoomCardProviderSpy(states: [.canStart], delay: .milliseconds(40))
         let viewModel = RoomScreenViewModel.mock(roomProxyMock: JoinedRoomProxyMock(.init()),
