@@ -561,3 +561,20 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Confirmed existing Element Call buttons remained untouched.
 - Kept scope private/internal product UI gate only: no CallKit, push, global production activation, or Element Call route change.
 - Recommended next phase: `2.18D — private native call card repeated-call and edge-state proof`.
+
+## 2026-05-19 — 2.18D Private Native Call Card Repeated-Call and Backend-Off Edge Proof
+
+- Recorded repeated manual runtime proof for the private product-shaped native direct-call room card.
+- First cycle succeeded from the private card: A Start audio, B Accept, A/B `activeAudio`, A Hang up, and A/B idle.
+- Second cycle succeeded without relaunch: A Start audio again, B Accept again, A/B `activeAudio` again, B Hang up, and A/B idle.
+- Confirmed no stale active session blocked the second call.
+- Confirmed no stale terminal state blocked the second call.
+- Confirmed the production listener and owner remained safe across cycles.
+- Confirmed media disconnect and cleanup were attempted after hangups.
+- Confirmed production media failure remained `none` during successful cycles.
+- Recorded reverse-direction/backend-off edge behavior: B started a call, A reached `incomingRinging`, A accepted and sent answer successfully, and B received `directCallAnswer`.
+- With the local token backend unavailable during the reverse-direction media step, the media/token path failed closed with user-safe `tokenHTTPUnavailable`.
+- Confirmed A and B returned idle with `connectingFailed`, media disconnect/cleanup attempted, and no active session remaining.
+- Confirmed no raw token, JWT, key, endpoint, room ID, peer ID, or raw Matrix content was printed.
+- Kept scope private/internal product UI gate only: local fake backend / local LiveKit dev setup, no Element Call route change, no CallKit/push, and no global production activation.
+- Recommended next phase: `2.18E — private native call card backend-recovery and LiveKit-off edge proof`, or `2.19A — private native call UI hardening plan` if edge coverage is considered sufficient.

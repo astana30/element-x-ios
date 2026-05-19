@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.18C — private native call card manual lifecycle proof.
+After 2.18D — private native call card repeated-call and backend-off edge proof.
 
 ## Latest App Code Checkpoint
 
@@ -415,6 +415,18 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - A and B reported media disconnect and cleanup attempted after hangup.
   - Existing Element Call buttons remained untouched.
   - Scope remained private/internal product UI gate only, with no CallKit, push, or global production activation.
+- Private native call card repeated-call and backend-off edge proof is recorded:
+  - First manual private-card cycle succeeded: A Start audio, B Accept, A/B `activeAudio`, A Hang up, A/B idle.
+  - Second manual private-card cycle succeeded: A Start audio again, B Accept again, A/B `activeAudio` again, B Hang up, A/B idle.
+  - No stale active session or stale terminal state blocked the second call.
+  - Production listener and owner remained safe across cycles.
+  - Media disconnect and cleanup were attempted after hangups.
+  - Production media failure remained `none` during successful cycles.
+  - Reverse-direction signalling also worked: B started a call, A reached `incomingRinging`, A accepted and sent answer, and B received `directCallAnswer`.
+  - With the local token backend unavailable during the reverse-direction media step, the media/token path failed closed with the user-safe `tokenHTTPUnavailable` reason.
+  - A and B returned to idle with `connectingFailed`, media disconnect/cleanup attempted, and no active session remaining.
+  - No raw token, JWT, key, endpoint, room ID, peer ID, or raw Matrix content was printed.
+  - Scope remained private/internal product UI gate only, with no Element Call route change, CallKit, push, or global production activation.
 
 ## Current Blocker
 
@@ -422,14 +434,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Production backend remains a skeleton/local fake proof and is not deployed as a hardened production service.
 - Production rollout and server capability sources remain fail-closed by default.
 - Real production activation still requires hardened backend deployment, capability rollout, endpoint configuration, trusted peer readiness, visible UI design, and later CallKit/push work.
-- The next immediate gap is repeated-call and edge-state proof for the private product-shaped room card, without changing the Element Call route or production call core.
+- The next immediate gap is backend-recovery and LiveKit-off edge proof for the private product-shaped room card, without changing the Element Call route or production call core.
 - No public production activation, Element Call route change, CallKit, or push integration exists yet.
 
 ## Next Recommended Phase
 
-`2.18D — private native call card repeated-call and edge-state proof`
+`2.18E — private native call card backend-recovery and LiveKit-off edge proof`
 
-Goal: prove repeated private-card call cycles and edge states while keeping the card private, gated, redacted, and separate from Element Call routing, CallKit/push, public production activation, and global production activation.
+Goal: prove the private product-shaped card recovers after backend/token failure and reports LiveKit-off media failure safely, while keeping the card private, gated, redacted, and separate from Element Call routing, CallKit/push, public production activation, and global production activation.
 
 ## Do-Not-Touch Constraints
 
