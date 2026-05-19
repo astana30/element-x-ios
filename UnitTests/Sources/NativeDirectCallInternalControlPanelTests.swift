@@ -231,6 +231,12 @@ final class NativeDirectCallInternalControlPanelTests {
         viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.refreshStatus))
         try await failed.fulfill()
 
+        let unexpectedDisplayCall = deferFailure(viewModel.actions, timeout: .seconds(1)) { action in
+            if case .displayCall = action {
+                return true
+            }
+            return false
+        }
         let retried = deferFulfillment(viewModel.context.$viewState) { viewState in
             viewState.nativeDirectCallRoomCard.state == .canStart &&
                 viewState.nativeDirectCallRoomCard.lastAction == .retry &&
@@ -238,6 +244,7 @@ final class NativeDirectCallInternalControlPanelTests {
         }
         viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.retry))
         try await retried.fulfill()
+        try await unexpectedDisplayCall.fulfill()
 
         #expect(provider.refreshCount == 2)
         #expect(provider.performedActions.isEmpty)
@@ -259,7 +266,14 @@ final class NativeDirectCallInternalControlPanelTests {
         viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.refreshStatus))
         try await failed.fulfill()
 
+        let unexpectedDisplayCall = deferFailure(viewModel.actions, timeout: .seconds(1)) { action in
+            if case .displayCall = action {
+                return true
+            }
+            return false
+        }
         viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.dismissError))
+        try await unexpectedDisplayCall.fulfill()
 
         let card = viewModel.context.viewState.nativeDirectCallRoomCard
         #expect(card.state == .canStart)
@@ -320,11 +334,6 @@ final class NativeDirectCallInternalControlPanelTests {
         #expect(rows.count == 2)
         #expect(rows.allSatisfy { $0.count <= 3 })
         #expect(rows.flatMap { $0 } == NativeDirectCallInternalControlAction.allCases)
-
-        let cardRows = NativeDirectCallRoomCardAction.cardRows
-        #expect(cardRows.count == 3)
-        #expect(cardRows.allSatisfy { $0.count <= 3 })
-        #expect(cardRows.flatMap { $0 } == NativeDirectCallRoomCardAction.allCases)
     }
 
     @Test
@@ -396,8 +405,28 @@ final class NativeDirectCallInternalControlPanelTests {
         #expect(NativeDirectCallRoomCardAction.visibleRows(in: .incomingRinging).flatMap { $0 } == [.refreshStatus, .accept, .declineIncoming])
         #expect(NativeDirectCallRoomCardAction.visibleRows(in: .outgoingRinging).flatMap { $0 } == [.refreshStatus, .cancelOutgoing])
         #expect(NativeDirectCallRoomCardAction.visibleRows(in: .activeAudio).flatMap { $0 } == [.refreshStatus, .hangUp])
-        #expect(NativeDirectCallRoomCardAction.visibleRows(in: .failed(reason: .callServiceUnavailable)).flatMap { $0 } == [.retry, .dismissError, .refreshStatus])
-        #expect(NativeDirectCallRoomCardAction.visibleRows(in: .ended(reason: .cancelled)).flatMap { $0 } == [.dismissError, .refreshStatus])
+        #expect(NativeDirectCallRoomCardAction.visibleRows(in: .failed(reason: .callServiceUnavailable)).flatMap { $0 } == [.retry, .dismissError])
+        #expect(NativeDirectCallRoomCardAction.visibleRows(in: .ended(reason: .cancelled)).flatMap { $0 } == [.dismissError])
+    }
+
+    @Test
+    func productCardViewStateFailedRowsRenderRetryAndDismissOnly() {
+        let card = NativeDirectCallRoomCardViewState(isVisible: true,
+                                                     isLoading: false,
+                                                     state: .failed(reason: .callServiceUnavailable),
+                                                     lastAction: .accept,
+                                                     lastActionOutcome: .failed)
+        let visibleActions = card.visibleActionRows.flatMap { $0 }
+
+        #expect(card.visibleActionRows == [[.retry, .dismissError]])
+        #expect(visibleActions.contains(.retry))
+        #expect(visibleActions.contains(.dismissError))
+        #expect(!visibleActions.contains(.startAudio))
+        #expect(!visibleActions.contains(.accept))
+        #expect(!visibleActions.contains(.declineIncoming))
+        #expect(!visibleActions.contains(.hangUp))
+        #expect(NativeDirectCallRoomCardAction.retry.isEnabled(in: card.state, isLoading: card.isLoading))
+        #expect(NativeDirectCallRoomCardAction.dismissError.isEnabled(in: card.state, isLoading: card.isLoading))
     }
 
     @Test

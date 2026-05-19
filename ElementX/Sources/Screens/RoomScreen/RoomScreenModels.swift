@@ -660,12 +660,6 @@ enum NativeDirectCallRoomCardAction: String, CaseIterable, Equatable, Hashable, 
         }
     }
 
-    static let cardRows: [[Self]] = [
-        [.refreshStatus, .startAudio, .accept],
-        [.declineIncoming, .cancelOutgoing, .hangUp],
-        [.retry, .dismissError]
-    ]
-
     static func visibleRows(in state: NativeDirectCallRoomCardState) -> [[Self]] {
         switch state {
         case .hidden:
@@ -683,9 +677,9 @@ enum NativeDirectCallRoomCardAction: String, CaseIterable, Equatable, Hashable, 
         case .activeAudio:
             [[.refreshStatus, .hangUp]]
         case .failed:
-            [[.retry, .dismissError], [.refreshStatus]]
+            [[.retry, .dismissError]]
         case .ended:
-            [[.dismissError, .refreshStatus]]
+            [[.dismissError]]
         }
     }
 
@@ -784,6 +778,12 @@ struct NativeDirectCallRoomCardViewState: Equatable {
                               state: .unavailable(reason: .nativeCallsUnavailable),
                               lastAction: nil,
                               lastActionOutcome: nil)
+
+    #if DEBUG
+    var visibleActionRows: [[NativeDirectCallRoomCardAction]] {
+        NativeDirectCallRoomCardAction.visibleRows(in: state)
+    }
+    #endif
 }
 
 #if DEBUG

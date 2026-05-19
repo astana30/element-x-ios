@@ -299,10 +299,9 @@ struct NativeDirectCallRoomCard: View {
 
     private var actionRows: some View {
         VStack(spacing: 6) {
-            let visibleRows = NativeDirectCallRoomCardAction.visibleRows(in: state.state)
-            ForEach(visibleRows.indices, id: \.self) { rowIndex in
+            ForEach(state.visibleActionRows, id: \.self) { row in
                 HStack(spacing: 8) {
-                    ForEach(visibleRows[rowIndex], id: \.self) { action in
+                    ForEach(row, id: \.self) { action in
                         cardButton(action,
                                    isEnabled: action.isEnabled(in: state.state, isLoading: state.isLoading)) {
                             send(.nativeDirectCallRoomCard(action))
