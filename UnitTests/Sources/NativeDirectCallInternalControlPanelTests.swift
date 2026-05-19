@@ -189,6 +189,87 @@ final class NativeDirectCallInternalControlPanelTests {
     }
 
     @Test
+    func productCardDeclineAndCancelDoNotUseElementCallRoute() async throws {
+        let provider = NativeDirectCallRoomCardProviderSpy()
+        let viewModel = RoomScreenViewModel.mock(roomProxyMock: JoinedRoomProxyMock(.init()),
+                                                 nativeDirectCallRoomStateProvider: provider,
+                                                 nativeDirectCallRoomActionHandler: provider)
+        self.viewModel = viewModel
+
+        let unexpectedDisplayCall = deferFailure(viewModel.actions, timeout: .seconds(1)) { action in
+            if case .displayCall = action {
+                return true
+            }
+            return false
+        }
+        let deferred = deferFulfillment(viewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallRoomCard.lastAction == .cancelOutgoing
+        }
+
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.declineIncoming))
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.cancelOutgoing))
+        try await deferred.fulfill()
+        try await unexpectedDisplayCall.fulfill()
+
+        #expect(provider.performedActions == [.declineIncoming, .cancelOutgoing])
+    }
+
+    @Test
+    func productCardRetryRefreshesReadOnlyAfterFailure() async throws {
+        let provider = NativeDirectCallRoomCardProviderSpy(states: [
+            .failed(reason: .liveKitNetworkFailed),
+            .canStart
+        ])
+        let viewModel = RoomScreenViewModel.mock(roomProxyMock: JoinedRoomProxyMock(.init()),
+                                                 nativeDirectCallRoomStateProvider: provider,
+                                                 nativeDirectCallRoomActionHandler: provider)
+        self.viewModel = viewModel
+
+        let failed = deferFulfillment(viewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallRoomCard.state == .failed(reason: .liveKitNetworkFailed)
+        }
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.refreshStatus))
+        try await failed.fulfill()
+
+        let retried = deferFulfillment(viewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallRoomCard.state == .canStart &&
+                viewState.nativeDirectCallRoomCard.lastAction == .retry &&
+                viewState.nativeDirectCallRoomCard.lastActionOutcome == .retried
+        }
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.retry))
+        try await retried.fulfill()
+
+        #expect(provider.refreshCount == 2)
+        #expect(provider.performedActions.isEmpty)
+    }
+
+    @Test
+    func productCardDismissErrorClearsDisplayedFailureLocally() async throws {
+        let provider = NativeDirectCallRoomCardProviderSpy(states: [
+            .failed(reason: .callServiceUnavailable)
+        ])
+        let viewModel = RoomScreenViewModel.mock(roomProxyMock: JoinedRoomProxyMock(.init()),
+                                                 nativeDirectCallRoomStateProvider: provider,
+                                                 nativeDirectCallRoomActionHandler: provider)
+        self.viewModel = viewModel
+
+        let failed = deferFulfillment(viewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallRoomCard.state == .failed(reason: .callServiceUnavailable)
+        }
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.refreshStatus))
+        try await failed.fulfill()
+
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.dismissError))
+
+        let card = viewModel.context.viewState.nativeDirectCallRoomCard
+        #expect(card.state == .canStart)
+        #expect(card.lastAction == .dismissError)
+        #expect(card.lastActionOutcome == .dismissed)
+        #expect(provider.refreshCount == 1)
+        #expect(provider.performedActions.isEmpty)
+    }
+
+    @Test
     func panelVisibleWithProviderAndRefreshesExplicitly() async throws {
         let provider = NativeDirectCallInternalControlProviderSpy()
         let viewModel = RoomScreenViewModel.mock(roomProxyMock: JoinedRoomProxyMock(.init()),
@@ -241,7 +322,7 @@ final class NativeDirectCallInternalControlPanelTests {
         #expect(rows.flatMap { $0 } == NativeDirectCallInternalControlAction.allCases)
 
         let cardRows = NativeDirectCallRoomCardAction.cardRows
-        #expect(cardRows.count == 2)
+        #expect(cardRows.count == 3)
         #expect(cardRows.allSatisfy { $0.count <= 3 })
         #expect(cardRows.flatMap { $0 } == NativeDirectCallRoomCardAction.allCases)
     }
@@ -253,6 +334,10 @@ final class NativeDirectCallInternalControlPanelTests {
         #expect(Set(identifiers).count == NativeDirectCallRoomCardAction.allCases.count)
         #expect(identifiers.contains("nativeDirectCallRoomCard.startAudio"))
         #expect(identifiers.contains("nativeDirectCallRoomCard.accept"))
+        #expect(identifiers.contains("nativeDirectCallRoomCard.declineIncoming"))
+        #expect(identifiers.contains("nativeDirectCallRoomCard.cancelOutgoing"))
+        #expect(identifiers.contains("nativeDirectCallRoomCard.retry"))
+        #expect(identifiers.contains("nativeDirectCallRoomCard.dismissError"))
         #expect(identifiers.contains("nativeDirectCallRoomCard.hangUp"))
     }
 
@@ -292,11 +377,27 @@ final class NativeDirectCallInternalControlPanelTests {
         #expect(NativeDirectCallRoomCardAction.startAudio.isEnabled(in: .canStart, isLoading: false))
         #expect(!NativeDirectCallRoomCardAction.startAudio.isEnabled(in: .incomingRinging, isLoading: false))
         #expect(NativeDirectCallRoomCardAction.accept.isEnabled(in: .incomingRinging, isLoading: false))
-        #expect(NativeDirectCallRoomCardAction.decline.isEnabled(in: .incomingRinging, isLoading: false))
-        #expect(NativeDirectCallRoomCardAction.hangUp.isEnabled(in: .incomingRinging, isLoading: false))
+        #expect(NativeDirectCallRoomCardAction.declineIncoming.isEnabled(in: .incomingRinging, isLoading: false))
+        #expect(!NativeDirectCallRoomCardAction.hangUp.isEnabled(in: .incomingRinging, isLoading: false))
+        #expect(NativeDirectCallRoomCardAction.cancelOutgoing.isEnabled(in: .outgoingRinging, isLoading: false))
+        #expect(NativeDirectCallRoomCardAction.cancelOutgoing.isEnabled(in: .connecting, isLoading: false))
+        #expect(!NativeDirectCallRoomCardAction.cancelOutgoing.isEnabled(in: .activeAudio, isLoading: false))
         #expect(NativeDirectCallRoomCardAction.hangUp.isEnabled(in: .activeAudio, isLoading: false))
+        #expect(NativeDirectCallRoomCardAction.retry.isEnabled(in: .failed(reason: .liveKitNetworkFailed), isLoading: false))
+        #expect(NativeDirectCallRoomCardAction.dismissError.isEnabled(in: .failed(reason: .liveKitNetworkFailed), isLoading: false))
+        #expect(NativeDirectCallRoomCardAction.dismissError.isEnabled(in: .ended(reason: .cancelled), isLoading: false))
         #expect(!NativeDirectCallRoomCardAction.hangUp.isEnabled(in: .canStart, isLoading: false))
         #expect(!NativeDirectCallRoomCardAction.startAudio.isEnabled(in: .canStart, isLoading: true))
+    }
+
+    @Test
+    func productCardVisibleActionsFollowStateModel() {
+        #expect(NativeDirectCallRoomCardAction.visibleRows(in: .canStart).flatMap { $0 } == [.refreshStatus, .startAudio])
+        #expect(NativeDirectCallRoomCardAction.visibleRows(in: .incomingRinging).flatMap { $0 } == [.refreshStatus, .accept, .declineIncoming])
+        #expect(NativeDirectCallRoomCardAction.visibleRows(in: .outgoingRinging).flatMap { $0 } == [.refreshStatus, .cancelOutgoing])
+        #expect(NativeDirectCallRoomCardAction.visibleRows(in: .activeAudio).flatMap { $0 } == [.refreshStatus, .hangUp])
+        #expect(NativeDirectCallRoomCardAction.visibleRows(in: .failed(reason: .callServiceUnavailable)).flatMap { $0 } == [.retry, .dismissError, .refreshStatus])
+        #expect(NativeDirectCallRoomCardAction.visibleRows(in: .ended(reason: .cancelled)).flatMap { $0 } == [.dismissError, .refreshStatus])
     }
 
     @Test
@@ -349,6 +450,24 @@ final class NativeDirectCallInternalControlPanelTests {
                                                    sessionState: "ended",
                                                    mediaFailureReason: .none,
                                                    terminalReason: .outgoingTimeout) == .ended(reason: .callTimedOut))
+        #expect(NativeDirectCallRoomCardState.make(isActivationEnabled: true,
+                                                   disabledReason: nil,
+                                                   productionHasActiveSession: true,
+                                                   sessionState: "cancelled",
+                                                   mediaFailureReason: .none,
+                                                   terminalReason: .cancelled) == .ended(reason: .cancelled))
+    }
+
+    @Test
+    func productCardStateDisplayTextUsesUserSafeCopy() {
+        #expect(NativeDirectCallRoomCardState.incomingRinging.displayText == UntranslatedL10n.screenRoomNativeDirectCallIncoming)
+        #expect(NativeDirectCallRoomCardState.outgoingRinging.displayText == UntranslatedL10n.screenRoomNativeDirectCallCalling)
+        #expect(NativeDirectCallRoomCardState.activeAudio.displayText == UntranslatedL10n.screenRoomNativeDirectCallActive)
+        #expect(NativeDirectCallRoomCardState.failed(reason: .callServiceUnavailable).displayText == UntranslatedL10n.screenRoomNativeDirectCallServiceUnavailable)
+        #expect(NativeDirectCallRoomCardState.failed(reason: .liveKitNetworkFailed).displayText == UntranslatedL10n.screenRoomNativeDirectCallCouldntConnectAudio)
+        #expect(NativeDirectCallRoomCardState.failed(reason: .unverifiedDevice).displayText == UntranslatedL10n.screenRoomNativeDirectCallVerifyBeforeCalling)
+        #expect(NativeDirectCallRoomCardState.ended(reason: .declined).displayText == UntranslatedL10n.screenRoomNativeDirectCallDeclined)
+        #expect(NativeDirectCallRoomCardState.ended(reason: .cancelled).displayText == UntranslatedL10n.screenRoomNativeDirectCallCancelled)
     }
 
     @Test
@@ -482,9 +601,24 @@ private final class NativeDirectCallRoomCardProviderSpy: NativeDirectCallRoomSta
             startAudioCount += 1
         }
 
-        return .init(action: action,
-                     outcome: action == .startAudio ? .started : .refreshed,
-                     state: action == .startAudio ? .outgoingRinging : .canStart)
+        switch action {
+        case .refreshStatus:
+            return .init(action: action, outcome: .refreshed, state: .canStart)
+        case .startAudio:
+            return .init(action: action, outcome: .started, state: .outgoingRinging)
+        case .accept:
+            return .init(action: action, outcome: .accepted, state: .activeAudio)
+        case .declineIncoming:
+            return .init(action: action, outcome: .declined, state: .canStart)
+        case .cancelOutgoing:
+            return .init(action: action, outcome: .cancelled, state: .canStart)
+        case .hangUp:
+            return .init(action: action, outcome: .hungUp, state: .canStart)
+        case .retry:
+            return .init(action: action, outcome: .retried, state: .canStart)
+        case .dismissError:
+            return .init(action: action, outcome: .dismissed, state: .canStart)
+        }
     }
 }
 

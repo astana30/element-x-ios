@@ -277,7 +277,7 @@ struct NativeDirectCallRoomCard: View {
                 Text("State:")
                     .font(.compound.bodyXS)
                     .foregroundStyle(.compound.textSecondary)
-                Text(state.state.description)
+                Text(state.state.displayText)
                     .font(.compound.bodyXS)
                     .foregroundStyle(.compound.textPrimary)
                     .lineLimit(1)
@@ -299,9 +299,10 @@ struct NativeDirectCallRoomCard: View {
 
     private var actionRows: some View {
         VStack(spacing: 6) {
-            ForEach(NativeDirectCallRoomCardAction.cardRows.indices, id: \.self) { rowIndex in
+            let visibleRows = NativeDirectCallRoomCardAction.visibleRows(in: state.state)
+            ForEach(visibleRows.indices, id: \.self) { rowIndex in
                 HStack(spacing: 8) {
-                    ForEach(NativeDirectCallRoomCardAction.cardRows[rowIndex], id: \.self) { action in
+                    ForEach(visibleRows[rowIndex], id: \.self) { action in
                         cardButton(action,
                                    isEnabled: action.isEnabled(in: state.state, isLoading: state.isLoading)) {
                             send(.nativeDirectCallRoomCard(action))

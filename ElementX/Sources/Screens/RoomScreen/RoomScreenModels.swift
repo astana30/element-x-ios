@@ -545,6 +545,8 @@ enum NativeDirectCallRoomCardFailureReason: String, Equatable, CustomStringConve
     case callServiceUnavailable
     case liveKitNetworkFailed
     case callTimedOut
+    case declined
+    case cancelled
     case unknown
 
     var description: String {
@@ -599,8 +601,11 @@ enum NativeDirectCallRoomCardAction: String, CaseIterable, Equatable, Hashable, 
     case refreshStatus
     case startAudio
     case accept
-    case decline
+    case declineIncoming
+    case cancelOutgoing
     case hangUp
+    case retry
+    case dismissError
 
     var description: String {
         rawValue
@@ -614,15 +619,21 @@ enum NativeDirectCallRoomCardAction: String, CaseIterable, Equatable, Hashable, 
     var buttonTitle: String {
         switch self {
         case .refreshStatus:
-            "Refresh"
+            UntranslatedL10n.screenRoomNativeDirectCallActionRefresh
         case .startAudio:
-            "Start audio"
+            UntranslatedL10n.screenRoomNativeDirectCallActionStartAudio
         case .accept:
-            "Accept"
-        case .decline:
-            "Decline"
+            UntranslatedL10n.screenRoomNativeDirectCallActionAccept
+        case .declineIncoming:
+            UntranslatedL10n.screenRoomNativeDirectCallActionDecline
+        case .cancelOutgoing:
+            UntranslatedL10n.screenRoomNativeDirectCallActionCancel
         case .hangUp:
-            "Hang up"
+            UntranslatedL10n.screenRoomNativeDirectCallActionHangUp
+        case .retry:
+            L10n.actionRetry
+        case .dismissError:
+            L10n.actionDismiss
         }
     }
 
@@ -636,23 +647,51 @@ enum NativeDirectCallRoomCardAction: String, CaseIterable, Equatable, Hashable, 
             true
         case .startAudio:
             !isLoading && state == .canStart
-        case .accept, .decline:
+        case .accept, .declineIncoming:
             !isLoading && state == .incomingRinging
+        case .cancelOutgoing:
+            !isLoading && Self.cancelEnabledStates.contains(state)
         case .hangUp:
-            !isLoading && Self.hangUpEnabledStates.contains(state)
+            !isLoading && state == .activeAudio
+        case .retry:
+            !isLoading && state.isFailed
+        case .dismissError:
+            !isLoading && state.isDismissible
         }
     }
 
-    private static let hangUpEnabledStates: [NativeDirectCallRoomCardState] = [
-        .outgoingRinging,
-        .incomingRinging,
-        .connecting,
-        .activeAudio
-    ]
-
     static let cardRows: [[Self]] = [
         [.refreshStatus, .startAudio, .accept],
-        [.decline, .hangUp]
+        [.declineIncoming, .cancelOutgoing, .hangUp],
+        [.retry, .dismissError]
+    ]
+
+    static func visibleRows(in state: NativeDirectCallRoomCardState) -> [[Self]] {
+        switch state {
+        case .hidden:
+            []
+        case .unavailable:
+            [[.refreshStatus]]
+        case .canStart:
+            [[.refreshStatus, .startAudio]]
+        case .outgoingRinging:
+            [[.refreshStatus, .cancelOutgoing]]
+        case .incomingRinging:
+            [[.refreshStatus, .accept, .declineIncoming]]
+        case .connecting:
+            [[.refreshStatus, .cancelOutgoing]]
+        case .activeAudio:
+            [[.refreshStatus, .hangUp]]
+        case .failed:
+            [[.retry, .dismissError], [.refreshStatus]]
+        case .ended:
+            [[.dismissError, .refreshStatus]]
+        }
+    }
+
+    private static let cancelEnabledStates: [NativeDirectCallRoomCardState] = [
+        .outgoingRinging,
+        .connecting
     ]
     #endif
 }
@@ -662,7 +701,10 @@ enum NativeDirectCallRoomCardActionOutcome: String, Equatable, CustomStringConve
     case started
     case accepted
     case declined
+    case cancelled
     case hungUp
+    case retried
+    case dismissed
     case blocked
     case failed
 
@@ -779,6 +821,17 @@ extension NativeDirectCallRoomCardActionOutcome {
         }
     }
 
+    init(cancelOutcome: NativeDirectCallProductionHangupOutcome) {
+        switch cancelOutcome {
+        case .hungUp:
+            self = .cancelled
+        case .blocked:
+            self = .blocked
+        case .engineFailure:
+            self = .failed
+        }
+    }
+
     init(hangUpOutcome: NativeDirectCallProductionHangupOutcome) {
         switch hangUpOutcome {
         case .hungUp:
@@ -831,6 +884,92 @@ extension NativeDirectCallRoomCardState {
             return .ended(reason: .init(terminalReason))
         default:
             return .unavailable(reason: .unknown)
+        }
+    }
+}
+
+extension NativeDirectCallRoomCardState {
+    var displayText: String {
+        switch self {
+        case .hidden:
+            ""
+        case .unavailable(let reason):
+            reason.displayText
+        case .canStart:
+            UntranslatedL10n.screenRoomNativeDirectCallReady
+        case .outgoingRinging:
+            UntranslatedL10n.screenRoomNativeDirectCallCalling
+        case .incomingRinging:
+            UntranslatedL10n.screenRoomNativeDirectCallIncoming
+        case .connecting:
+            UntranslatedL10n.screenRoomNativeDirectCallConnecting
+        case .activeAudio:
+            UntranslatedL10n.screenRoomNativeDirectCallActive
+        case .failed(let reason):
+            reason.displayText
+        case .ended(let reason):
+            reason.displayText
+        }
+    }
+
+    fileprivate var isFailed: Bool {
+        if case .failed = self {
+            return true
+        }
+
+        return false
+    }
+
+    fileprivate var isDismissible: Bool {
+        switch self {
+        case .failed, .ended:
+            true
+        case .hidden, .unavailable, .canStart, .outgoingRinging, .incomingRinging, .connecting, .activeAudio:
+            false
+        }
+    }
+}
+
+private extension NativeDirectCallRoomCardUnavailableReason {
+    var displayText: String {
+        switch self {
+        case .unverifiedDevice, .peerTrustUnavailable:
+            UntranslatedL10n.screenRoomNativeDirectCallVerifyBeforeCalling
+        case .liveKitNetworkFailed:
+            UntranslatedL10n.screenRoomNativeDirectCallCouldntConnectAudio
+        case .callTimedOut:
+            UntranslatedL10n.screenRoomNativeDirectCallEnded
+        case .nativeCallsUnavailable,
+             .serverUnsupported,
+             .roomNotEncrypted,
+             .roomNotOneToOne,
+             .callServiceUnavailable,
+             .unknown:
+            UntranslatedL10n.screenRoomNativeDirectCallServiceUnavailable
+        }
+    }
+}
+
+private extension NativeDirectCallRoomCardFailureReason {
+    var displayText: String {
+        switch self {
+        case .unverifiedDevice, .peerTrustUnavailable:
+            UntranslatedL10n.screenRoomNativeDirectCallVerifyBeforeCalling
+        case .liveKitNetworkFailed:
+            UntranslatedL10n.screenRoomNativeDirectCallCouldntConnectAudio
+        case .callTimedOut:
+            UntranslatedL10n.screenRoomNativeDirectCallEnded
+        case .declined:
+            UntranslatedL10n.screenRoomNativeDirectCallDeclined
+        case .cancelled:
+            UntranslatedL10n.screenRoomNativeDirectCallCancelled
+        case .nativeCallsUnavailable,
+             .serverUnsupported,
+             .roomNotEncrypted,
+             .roomNotOneToOne,
+             .callServiceUnavailable,
+             .unknown:
+            UntranslatedL10n.screenRoomNativeDirectCallServiceUnavailable
         }
     }
 }
@@ -906,7 +1045,9 @@ private extension NativeDirectCallRoomCardFailureReason {
             self = .callTimedOut
         case .connectingFailed:
             self = .liveKitNetworkFailed
-        case .cancelled, .hangup:
+        case .cancelled:
+            self = .cancelled
+        case .hangup:
             self = .unknown
         case .failed, .unknown, .none:
             self = .unknown

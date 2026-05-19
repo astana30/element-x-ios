@@ -713,11 +713,17 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
             return .init(action: action,
                          outcome: NativeDirectCallRoomCardActionOutcome(acceptOutcome: result.outcome),
                          state: state)
-        case .decline:
+        case .declineIncoming:
             let result = await nativeDirectCallProductionHangup()
             let state = await nativeDirectCallRoomCardState()
             return .init(action: action,
                          outcome: NativeDirectCallRoomCardActionOutcome(declineOutcome: result.outcome),
+                         state: state)
+        case .cancelOutgoing:
+            let result = await nativeDirectCallProductionHangup()
+            let state = await nativeDirectCallRoomCardState()
+            return .init(action: action,
+                         outcome: NativeDirectCallRoomCardActionOutcome(cancelOutcome: result.outcome),
                          state: state)
         case .hangUp:
             let result = await nativeDirectCallProductionHangup()
@@ -725,6 +731,15 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
             return .init(action: action,
                          outcome: NativeDirectCallRoomCardActionOutcome(hangUpOutcome: result.outcome),
                          state: state)
+        case .retry:
+            let state = await nativeDirectCallRoomCardState()
+            return .init(action: action,
+                         outcome: .retried,
+                         state: state)
+        case .dismissError:
+            return .init(action: action,
+                         outcome: .dismissed,
+                         state: .canStart)
         }
     }
 

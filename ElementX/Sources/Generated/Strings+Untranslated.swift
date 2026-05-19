@@ -42,6 +42,40 @@ internal enum UntranslatedL10n {
   internal static var screenCallsEmptyTitle: String { return UntranslatedL10n.tr("Untranslated", "screen_calls_empty_title") }
   /// Звонки
   internal static var screenHomeTabCalls: String { return UntranslatedL10n.tr("Untranslated", "screen_home_tab_calls") }
+  /// Accept
+  internal static var screenRoomNativeDirectCallActionAccept: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_action_accept") }
+  /// Cancel
+  internal static var screenRoomNativeDirectCallActionCancel: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_action_cancel") }
+  /// Decline
+  internal static var screenRoomNativeDirectCallActionDecline: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_action_decline") }
+  /// Hang up
+  internal static var screenRoomNativeDirectCallActionHangUp: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_action_hang_up") }
+  /// Refresh
+  internal static var screenRoomNativeDirectCallActionRefresh: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_action_refresh") }
+  /// Start audio
+  internal static var screenRoomNativeDirectCallActionStartAudio: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_action_start_audio") }
+  /// Call active
+  internal static var screenRoomNativeDirectCallActive: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_active") }
+  /// Calling...
+  internal static var screenRoomNativeDirectCallCalling: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_calling") }
+  /// Call cancelled
+  internal static var screenRoomNativeDirectCallCancelled: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_cancelled") }
+  /// Connecting...
+  internal static var screenRoomNativeDirectCallConnecting: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_connecting") }
+  /// Couldn't connect audio
+  internal static var screenRoomNativeDirectCallCouldntConnectAudio: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_couldnt_connect_audio") }
+  /// Call declined
+  internal static var screenRoomNativeDirectCallDeclined: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_declined") }
+  /// Call ended
+  internal static var screenRoomNativeDirectCallEnded: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_ended") }
+  /// Incoming call
+  internal static var screenRoomNativeDirectCallIncoming: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_incoming") }
+  /// Ready to call
+  internal static var screenRoomNativeDirectCallReady: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_ready") }
+  /// Call service unavailable
+  internal static var screenRoomNativeDirectCallServiceUnavailable: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_service_unavailable") }
+  /// Verify this chat before calling
+  internal static var screenRoomNativeDirectCallVerifyBeforeCalling: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_verify_before_calling") }
   /// Clear all data currently stored on this device?
   /// Sign in again to access your account data and messages.
   internal static var softLogoutClearDataDialogContent: String { return UntranslatedL10n.tr("Untranslated", "soft_logout_clear_data_dialog_content") }

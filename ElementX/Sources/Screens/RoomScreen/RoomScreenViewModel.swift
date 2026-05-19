@@ -240,6 +240,16 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
             return
         }
 
+        if action == .retry {
+            retryNativeDirectCallRoomCard()
+            return
+        }
+
+        if action == .dismissError {
+            dismissNativeDirectCallRoomCardError()
+            return
+        }
+
         state.nativeDirectCallRoomCard.lastAction = action
         state.nativeDirectCallRoomCard.lastActionOutcome = nil
         state.nativeDirectCallRoomCard.isLoading = true
@@ -254,6 +264,41 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
             state.nativeDirectCallRoomCard.isVisible = state.nativeDirectCallRoomCard.state != .hidden
             state.nativeDirectCallRoomCard.isLoading = false
         }
+    }
+
+    private func retryNativeDirectCallRoomCard() {
+        guard let nativeDirectCallRoomStateProvider,
+              nativeDirectCallRoomActionHandler != nil else {
+            return
+        }
+
+        state.nativeDirectCallRoomCard.lastAction = .retry
+        state.nativeDirectCallRoomCard.lastActionOutcome = nil
+        state.nativeDirectCallRoomCard.isLoading = true
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            let refreshedState = await nativeDirectCallRoomStateProvider.nativeDirectCallRoomCardState()
+            state.nativeDirectCallRoomCard.state = refreshedState
+            state.nativeDirectCallRoomCard.lastAction = .retry
+            state.nativeDirectCallRoomCard.lastActionOutcome = .retried
+            state.nativeDirectCallRoomCard.isVisible = state.nativeDirectCallRoomCard.state != .hidden
+            state.nativeDirectCallRoomCard.isLoading = false
+        }
+    }
+
+    private func dismissNativeDirectCallRoomCardError() {
+        switch state.nativeDirectCallRoomCard.state {
+        case .failed, .ended:
+            state.nativeDirectCallRoomCard.state = .canStart
+        case .hidden, .unavailable, .canStart, .outgoingRinging, .incomingRinging, .connecting, .activeAudio:
+            break
+        }
+
+        state.nativeDirectCallRoomCard.lastAction = .dismissError
+        state.nativeDirectCallRoomCard.lastActionOutcome = .dismissed
+        state.nativeDirectCallRoomCard.isVisible = state.nativeDirectCallRoomCard.state != .hidden
+        state.nativeDirectCallRoomCard.isLoading = false
     }
 
     private func refreshNativeDirectCallRoomCard(markAsManualRefresh: Bool, showsLoadingIndicator: Bool = true) {

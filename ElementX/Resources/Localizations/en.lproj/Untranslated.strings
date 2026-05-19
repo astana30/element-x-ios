@@ -32,3 +32,23 @@
 "screen_home_tab_calls" = "Звонки";
 "screen_calls_empty_title" = "Пока нет звонков";
 "screen_calls_empty_subtitle" = "Здесь будут отображаться недавние и текущие звонки.";
+
+// MARK: - Private native direct calls
+
+"screen_room_native_direct_call_action_accept" = "Accept";
+"screen_room_native_direct_call_action_cancel" = "Cancel";
+"screen_room_native_direct_call_action_decline" = "Decline";
+"screen_room_native_direct_call_action_hang_up" = "Hang up";
+"screen_room_native_direct_call_action_refresh" = "Refresh";
+"screen_room_native_direct_call_action_start_audio" = "Start audio";
+"screen_room_native_direct_call_active" = "Call active";
+"screen_room_native_direct_call_cancelled" = "Call cancelled";
+"screen_room_native_direct_call_calling" = "Calling...";
+"screen_room_native_direct_call_connecting" = "Connecting...";
+"screen_room_native_direct_call_couldnt_connect_audio" = "Couldn't connect audio";
+"screen_room_native_direct_call_declined" = "Call declined";
+"screen_room_native_direct_call_ended" = "Call ended";
+"screen_room_native_direct_call_incoming" = "Incoming call";
+"screen_room_native_direct_call_ready" = "Ready to call";
+"screen_room_native_direct_call_service_unavailable" = "Call service unavailable";
+"screen_room_native_direct_call_verify_before_calling" = "Verify this chat before calling";
