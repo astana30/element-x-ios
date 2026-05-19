@@ -7,12 +7,12 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.18D — private native call card repeated-call and backend-off edge proof.
+After 2.18E — private native call card backend-recovery and LiveKit-off edge proof.
 
 Current checkpoints:
 - App code: 2.18B `Fix private native call card action delivery`
 - Runner fix: 2.18C `Forward product native call UI gate to simulator launch`
-- Runtime proof: 2.18D private native call card repeated-call and backend-off edge proof passed.
+- Runtime proof: 2.18E private native call card backend-recovery and LiveKit-off edge proof passed.
 - Backend: 2.14E `Fix fake backend LiveKit dev token grants`
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`
@@ -55,79 +55,90 @@ Current proven state:
   - B received `directCallAnswer`.
   - With the local token backend unavailable during media setup, the media/token path failed closed with user-safe `tokenHTTPUnavailable`.
   - A/B returned idle with `connectingFailed`, media disconnect/cleanup attempted, and no active session remaining.
+- Backend recovery proof passed:
+  - Backend-off behavior failed closed with `tokenHTTPUnavailable`.
+  - A/B returned idle with no active session and media disconnect/cleanup attempted.
+  - After the local fake backend was restarted, private-card Start/Accept recovered to `activeAudio` on A/B with encryption ready.
+  - Hangup returned A/B idle.
+- LiveKit-off and recovery proof passed:
+  - LiveKit-off behavior failed closed with `liveKitNetworkFailed`.
+  - A/B returned idle with no stale active session and media disconnect/cleanup attempted.
+  - After LiveKit was restarted, private-card Start/Accept recovered to `activeAudio` on A/B.
+  - Final hangup succeeded, A emitted hangup, B received `directCallHangup`, and A/B returned idle with cleanup/disconnect attempted.
+- Diagnostic nuance from 2.18E:
+  - `productionMediaFailureReason` can remain stale after recovery.
+  - `tokenHTTPUnavailable` remained visible during the backend-recovered active call.
+  - `liveKitNetworkFailed` remained visible after the LiveKit-recovered active call.
+  - Treat this as a diagnostic/status cleanup issue, not a runtime call blocker.
 - No raw token, JWT, key, endpoint, room ID, peer ID, or raw Matrix content was printed.
 - No public UI activation, Element Call route changes, RoomScreen call presentation changes, ElementCallService changes, CallKit, push, or global production activation has been added.
 
 Phase:
-2.18E — private native call card backend-recovery and LiveKit-off edge proof.
+2.19B — private native call card stale media failure cleanup.
 
 Task:
-Runtime/manual proof and light diagnostics only. Do not modify code unless a small UI-only/test-only issue is found.
+Diagnose and fix stale production media failure reporting after a later successful private native call card recovery.
 Do not change Element Call route.
 Do not wire CallKit/push.
 Do not globally activate production direct calls.
 
-Goal:
-Prove the private native call card recovers after the backend/token failure edge and reports LiveKit-off media failure safely.
-If this edge coverage is considered sufficient instead, move to `2.19A — private native call UI hardening plan` as inspection/design only.
+Context:
+2.18E proved backend recovery and LiveKit recovery at runtime, but `productionMediaFailureReason` can remain stale after a later successful media connection:
+- `tokenHTTPUnavailable` remained visible during a backend-recovered `activeAudio` call.
+- `liveKitNetworkFailed` remained visible after a LiveKit-recovered `activeAudio` call.
+- Calls still reached `activeAudio`, hangup succeeded, and cleanup/disconnect was attempted.
+- This is a diagnostic/status/card state cleanup issue, not a runtime call blocker.
 
-Required env:
-- `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`
-- `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED=1`
-- `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`
-- `NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=http://127.0.0.1:8088`
+Goals:
+1. Inspect media failure state ownership and status mapping:
+   - `NativeDirectCallRoomController` diagnostics.
+   - `DirectCallEngine` media connect/recovery path.
+   - `DirectCallMediaEngine` / LiveKit media diagnostics.
+   - production status assembly in `RoomFlowCoordinator`.
+   - private native call card state/reason mapping.
 
-Preconditions:
-- r1/r2 trusted.
-- A/B launched with env.
-- A/B opened same encrypted DM.
-- Private native call card visible.
-- Local fake backend and local LiveKit dev server can be started/stopped safely.
+2. Fix stale failure reporting safely:
+   - Clear or supersede `productionMediaFailureReason` when a later media connection succeeds.
+   - Ensure active `activeAudio` with successful media connection does not surface an old failure reason.
+   - Preserve terminal failure reason for the failed attempt when appropriate.
+   - Keep final hangup/cleanup diagnostics intact.
 
-Proof 1 — backend recovery:
-1. Start or restart the local fake backend.
-2. Confirm A/B private card can return to a startable/readiness state after the previous `tokenHTTPUnavailable` failure.
-3. Start a call from the private card.
-4. Accept from the private card.
-5. Confirm A/B reach `activeAudio` again.
-6. Hang up and confirm A/B idle.
-7. Confirm media disconnect/cleanup attempted and production media failure returns to `none` for the recovered happy path.
+3. Add tests:
+   - token/backend failure records user-safe failure.
+   - later successful media connect clears or supersedes stale media failure.
+   - LiveKit network failure records user-safe failure.
+   - later successful LiveKit connect clears or supersedes stale media failure.
+   - activeAudio state maps to user-safe active state, not failed, after recovery.
+   - cleanup/hangup preserves idle state without reintroducing stale failure.
+   - redaction: no raw token/JWT/key/envelope/Matrix content, raw room ID, or peer ID.
 
-Proof 2 — LiveKit off:
-1. Keep the fake backend running.
-2. Stop the local LiveKit dev server/container.
-3. Start/accept a call from the private card until media connect is attempted.
-4. Confirm the UI/status reports a user-safe media failure, expected around `liveKitNetworkFailed`, `liveKitConnectFailed`, or equivalent redacted connection failure.
-5. Confirm no raw LiveKit token, JWT, endpoint, key, room ID, peer ID, or raw Matrix content is printed.
-6. Confirm A/B end idle or can be cleaned up with Hang up.
-7. Restart LiveKit after proof.
-
-Optional Proof 3 — move to hardening plan:
-If backend recovery and LiveKit-off are already sufficient or not worth additional runtime churn, perform inspection/design only for `2.19A — private native call UI hardening plan`.
+4. Keep scope private/internal:
+   - no public UI activation.
+   - no Element Call route changes.
+   - no CallKit/push.
+   - no global production activation.
 
 Hard constraints:
-- No Element Call route changes.
 - No `displayCall` / `presentCallScreen` changes.
 - No `ElementCallService` changes.
+- No `directOneToOneCallsEnabled` use.
 - No CallKit/push.
 - No global production activation.
 - No raw token/JWT/key/envelope/Matrix content.
 - No raw room ID or peer ID in UI/logs/docs.
+- Do not weaken production E2EE or trust policy.
 
-Expected report:
-A. Backend recovery result.
-B. LiveKit-off result.
-C. Final production-status A/B.
-D. Any UI issue.
-E. Whether code changes were needed.
-F. Whether next phase should be 2.18F additional edge proof or 2.19A hardening plan.
-
-Validation if docs/code changes are made:
+Validation:
 - `git diff --check`
-- Docs secret scan for docs-only updates.
-- SwiftFormat/SwiftLint and focused tests if Swift changes.
-- `bash -n` if runner changes.
+- SwiftFormat/SwiftLint changed Swift files if code changes.
+- Targeted tests:
+  - RoomScreenViewModel native call tests if card mapping changes.
+  - RoomFlowCoordinatorTests if production status mapping changes.
+  - DirectCallMediaEngineTests / DirectCallEngineTests if media diagnostics change.
+  - DirectCallProductionKeyWrappingTests only if touched.
 - Release build if app source changes.
+- Forbidden scan.
+- Update docs after proof/fix.
 
-Suggested docs commit after proof:
-Record private native call backend recovery proof
+Suggested commit:
+Clear stale native call media failure after recovery

@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.18D — private native call card repeated-call and backend-off edge proof.
+After 2.18E — private native call card backend-recovery and LiveKit-off edge proof.
 
 ## Latest App Code Checkpoint
 
@@ -427,6 +427,17 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - A and B returned to idle with `connectingFailed`, media disconnect/cleanup attempted, and no active session remaining.
   - No raw token, JWT, key, endpoint, room ID, peer ID, or raw Matrix content was printed.
   - Scope remained private/internal product UI gate only, with no Element Call route change, CallKit, push, or global production activation.
+- Private native call card backend-recovery and LiveKit-off edge proof is recorded:
+  - Backend-off behavior failed closed with the user-safe `tokenHTTPUnavailable` reason.
+  - A and B returned idle with no active session, and media disconnect/cleanup was attempted.
+  - After the local fake backend was restarted, private-card Start/Accept recovered to `activeAudio` on A and B with encryption ready.
+  - Hangup returned A and B to idle.
+  - LiveKit-off behavior failed closed with the user-safe `liveKitNetworkFailed` reason.
+  - A and B again returned idle with no stale active session, and media disconnect/cleanup was attempted.
+  - After LiveKit was restarted, private-card Start/Accept recovered to `activeAudio` on A and B.
+  - Final hangup succeeded: A emitted hangup and the send succeeded, B received `directCallHangup`, and both sides returned idle with cleanup/disconnect attempted.
+  - No new UI issue was observed, and the existing Element Call route remained untouched.
+  - Diagnostic nuance: `productionMediaFailureReason` can remain stale after recovery. `tokenHTTPUnavailable` remained visible during the backend-recovered active call, and `liveKitNetworkFailed` remained visible after the LiveKit-recovered active call. Treat this as a diagnostic/status cleanup issue, not a runtime call blocker.
 
 ## Current Blocker
 
@@ -434,14 +445,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Production backend remains a skeleton/local fake proof and is not deployed as a hardened production service.
 - Production rollout and server capability sources remain fail-closed by default.
 - Real production activation still requires hardened backend deployment, capability rollout, endpoint configuration, trusted peer readiness, visible UI design, and later CallKit/push work.
-- The next immediate gap is backend-recovery and LiveKit-off edge proof for the private product-shaped room card, without changing the Element Call route or production call core.
+- The next immediate gap is stale media failure diagnostics on the private product-shaped room card/status path after a later successful recovery call.
 - No public production activation, Element Call route change, CallKit, or push integration exists yet.
 
 ## Next Recommended Phase
 
-`2.18E — private native call card backend-recovery and LiveKit-off edge proof`
+`2.19B — private native call card stale media failure cleanup`
 
-Goal: prove the private product-shaped card recovers after backend/token failure and reports LiveKit-off media failure safely, while keeping the card private, gated, redacted, and separate from Element Call routing, CallKit/push, public production activation, and global production activation.
+Goal: clear or supersede stale `productionMediaFailureReason` values after a later successful media connection, while keeping the private card gated, redacted, and separate from Element Call routing, CallKit/push, public production activation, and global production activation.
 
 ## Do-Not-Touch Constraints
 

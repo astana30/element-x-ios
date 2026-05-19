@@ -578,3 +578,27 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Confirmed no raw token, JWT, key, endpoint, room ID, peer ID, or raw Matrix content was printed.
 - Kept scope private/internal product UI gate only: local fake backend / local LiveKit dev setup, no Element Call route change, no CallKit/push, and no global production activation.
 - Recommended next phase: `2.18E — private native call card backend-recovery and LiveKit-off edge proof`, or `2.19A — private native call UI hardening plan` if edge coverage is considered sufficient.
+
+## 2026-05-19 — 2.18E Private Native Call Card Backend-Recovery and LiveKit-Off Edge Proof
+
+- Recorded runtime edge proof for backend recovery and LiveKit-off handling through the private product-shaped native direct-call room card.
+- Backend-off behavior failed closed with the user-safe `tokenHTTPUnavailable` reason.
+- Confirmed A and B returned idle with no active session.
+- Confirmed media disconnect and cleanup were attempted.
+- Confirmed output remained redacted.
+- After the local fake backend was restarted, private-card Start/Accept recovered to `activeAudio` on A and B.
+- Confirmed the recovered call reported encryption ready.
+- Confirmed hangup returned A and B to idle.
+- LiveKit-off behavior failed closed with the user-safe `liveKitNetworkFailed` reason.
+- Confirmed A and B returned idle with no stale active session.
+- Confirmed media disconnect and cleanup were attempted.
+- After LiveKit was restarted, private-card Start/Accept recovered to `activeAudio` on A and B.
+- Confirmed final hangup succeeded.
+- Final production status showed A idle with no active session after emitting hangup and sending successfully.
+- Final production status showed B idle with no active session after receiving `directCallHangup`.
+- Confirmed cleanup and disconnect were attempted on both sides.
+- Confirmed no new UI issue was observed and the existing Element Call route remained untouched.
+- Noted a diagnostic nuance for the next phase: `productionMediaFailureReason` can remain stale after recovery. `tokenHTTPUnavailable` remained visible during the backend-recovered active call, and `liveKitNetworkFailed` remained visible after the LiveKit-recovered active call.
+- Treat the stale media failure value as a diagnostic/status cleanup issue, not a runtime call blocker.
+- Confirmed no code changes were needed.
+- Recommended next phase: `2.19B — private native call card stale media failure cleanup`.
