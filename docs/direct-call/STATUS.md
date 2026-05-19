@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-After 2.18E — private native call card backend-recovery and LiveKit-off edge proof.
+After 2.19C — stale media failure cleanup runtime proof.
 
 ## Latest App Code Checkpoint
 
-2.18B `Fix private native call card action delivery`
+2.19B `Clear stale production media failure diagnostics`
 
 ## Latest Code Checkpoint
 
@@ -438,6 +438,18 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Final hangup succeeded: A emitted hangup and the send succeeded, B received `directCallHangup`, and both sides returned idle with cleanup/disconnect attempted.
   - No new UI issue was observed, and the existing Element Call route remained untouched.
   - Diagnostic nuance: `productionMediaFailureReason` can remain stale after recovery. `tokenHTTPUnavailable` remained visible during the backend-recovered active call, and `liveKitNetworkFailed` remained visible after the LiveKit-recovered active call. Treat this as a diagnostic/status cleanup issue, not a runtime call blocker.
+- Stale media failure cleanup runtime proof is recorded:
+  - Backend-off with the local fake backend stopped failed closed with the user-safe `tokenHTTPUnavailable` reason.
+  - A and B returned idle with no active session, and media disconnect/cleanup was attempted.
+  - After the local fake backend was restarted, private-card Start/Accept recovered to `activeAudio` on A and B.
+  - `productionMediaFailureReason=none` on both sides, proving stale `tokenHTTPUnavailable` was cleared by the later successful media connection.
+  - LiveKit-off with the backend still running failed closed with the user-safe `liveKitNetworkFailed` reason.
+  - A and B returned idle with no active session, and media disconnect/cleanup was attempted.
+  - After LiveKit was restarted, private-card Start/Accept recovered to `activeAudio` on A and B.
+  - `productionMediaFailureReason=none` on both sides, proving stale `liveKitNetworkFailed` was cleared by the later successful media connection.
+  - Final hangup succeeded: A returned idle after emitting hangup and sending successfully; B returned idle after receiving `directCallHangup`.
+  - Cleanup and disconnect were attempted on both sides.
+  - No UI issue was observed, no code changes were needed during the runtime proof, and the worktree was clean.
 
 ## Current Blocker
 
@@ -445,14 +457,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Production backend remains a skeleton/local fake proof and is not deployed as a hardened production service.
 - Production rollout and server capability sources remain fail-closed by default.
 - Real production activation still requires hardened backend deployment, capability rollout, endpoint configuration, trusted peer readiness, visible UI design, and later CallKit/push work.
-- The next immediate gap is stale media failure diagnostics on the private product-shaped room card/status path after a later successful recovery call.
+- The next immediate gap is private-card decline, cancel, and retry UX/action hardening before broader internal usability work.
 - No public production activation, Element Call route change, CallKit, or push integration exists yet.
 
 ## Next Recommended Phase
 
-`2.19B — private native call card stale media failure cleanup`
+`2.19D — private native call card decline/cancel/retry UX skeleton`
 
-Goal: clear or supersede stale `productionMediaFailureReason` values after a later successful media connection, while keeping the private card gated, redacted, and separate from Element Call routing, CallKit/push, public production activation, and global production activation.
+Goal: add private/internal product-card skeleton support for decline incoming, cancel outgoing, and retry after recoverable failure states, while keeping the card gated, redacted, and separate from Element Call routing, CallKit/push, public production activation, and global production activation.
 
 ## Do-Not-Touch Constraints
 

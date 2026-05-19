@@ -602,3 +602,23 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Treat the stale media failure value as a diagnostic/status cleanup issue, not a runtime call blocker.
 - Confirmed no code changes were needed.
 - Recommended next phase: `2.19B — private native call card stale media failure cleanup`.
+
+## 2026-05-19 — 2.19C Stale Media Failure Cleanup Runtime Proof
+
+- Recorded runtime proof for stale production media failure cleanup after backend and LiveKit recovery.
+- Backend-off with the local fake backend stopped failed closed with the user-safe `tokenHTTPUnavailable` reason.
+- Confirmed A and B returned idle with no active session.
+- Confirmed media disconnect and cleanup were attempted.
+- After the local fake backend was restarted, private-card Start/Accept recovered to `activeAudio` on A and B.
+- Confirmed `productionMediaFailureReason=none` on A and B, proving stale `tokenHTTPUnavailable` was cleared after the successful retry.
+- LiveKit-off with the backend still running failed closed with the user-safe `liveKitNetworkFailed` reason.
+- Confirmed A and B returned idle with no active session.
+- Confirmed media disconnect and cleanup were attempted.
+- After LiveKit was restarted, private-card Start/Accept recovered to `activeAudio` on A and B.
+- Confirmed `productionMediaFailureReason=none` on A and B, proving stale `liveKitNetworkFailed` was cleared after the successful retry.
+- Confirmed final hangup succeeded: A returned idle after emitting hangup and sending successfully, and B returned idle after receiving `directCallHangup`.
+- Confirmed cleanup and disconnect were attempted on both sides after final hangup.
+- Confirmed no UI issue was observed.
+- Confirmed no code changes were needed during the runtime proof and the worktree was clean.
+- Kept scope private/internal product UI gate only, with no Element Call route change, CallKit/push, or global production activation.
+- Recommended next phase: `2.19D — private native call card decline/cancel/retry UX skeleton`.

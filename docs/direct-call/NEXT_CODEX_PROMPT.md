@@ -7,12 +7,12 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.18E — private native call card backend-recovery and LiveKit-off edge proof.
+After 2.19C — stale media failure cleanup runtime proof.
 
 Current checkpoints:
-- App code: 2.18B `Fix private native call card action delivery`
+- App code: 2.19B `Clear stale production media failure diagnostics`
 - Runner fix: 2.18C `Forward product native call UI gate to simulator launch`
-- Runtime proof: 2.18E private native call card backend-recovery and LiveKit-off edge proof passed.
+- Runtime proof: 2.19C stale media failure cleanup runtime proof passed.
 - Backend: 2.14E `Fix fake backend LiveKit dev token grants`
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`
@@ -65,60 +65,72 @@ Current proven state:
   - A/B returned idle with no stale active session and media disconnect/cleanup attempted.
   - After LiveKit was restarted, private-card Start/Accept recovered to `activeAudio` on A/B.
   - Final hangup succeeded, A emitted hangup, B received `directCallHangup`, and A/B returned idle with cleanup/disconnect attempted.
-- Diagnostic nuance from 2.18E:
-  - `productionMediaFailureReason` can remain stale after recovery.
-  - `tokenHTTPUnavailable` remained visible during the backend-recovered active call.
-  - `liveKitNetworkFailed` remained visible after the LiveKit-recovered active call.
-  - Treat this as a diagnostic/status cleanup issue, not a runtime call blocker.
+- Stale media failure cleanup is fixed and runtime-proven:
+  - 2.19B clears prior retryable media failure diagnostics when a new media connect attempt starts and after successful media recovery.
+  - 2.19C backend-off reproduced `tokenHTTPUnavailable`, then backend recovery reached `activeAudio` on A/B with `productionMediaFailureReason=none` on both sides.
+  - 2.19C LiveKit-off reproduced `liveKitNetworkFailed`, then LiveKit recovery reached `activeAudio` on A/B with `productionMediaFailureReason=none` on both sides.
+  - Final hangup returned A/B idle with no active session and cleanup/disconnect attempted.
 - No raw token, JWT, key, endpoint, room ID, peer ID, or raw Matrix content was printed.
 - No public UI activation, Element Call route changes, RoomScreen call presentation changes, ElementCallService changes, CallKit, push, or global production activation has been added.
 
 Phase:
-2.19B — private native call card stale media failure cleanup.
+2.19D — private native call card decline/cancel/retry UX skeleton.
 
 Task:
-Diagnose and fix stale production media failure reporting after a later successful private native call card recovery.
+Add private/internal native call card UX skeletons for decline, cancel, and retry actions.
+Keep the card hidden by default.
 Do not change Element Call route.
 Do not wire CallKit/push.
 Do not globally activate production direct calls.
 
 Context:
-2.18E proved backend recovery and LiveKit recovery at runtime, but `productionMediaFailureReason` can remain stale after a later successful media connection:
-- `tokenHTTPUnavailable` remained visible during a backend-recovered `activeAudio` call.
-- `liveKitNetworkFailed` remained visible after a LiveKit-recovered `activeAudio` call.
-- Calls still reached `activeAudio`, hangup succeeded, and cleanup/disconnect was attempted.
-- This is a diagnostic/status/card state cleanup issue, not a runtime call blocker.
+2.19C proved stale media failure diagnostics clear after successful backend and LiveKit recovery:
+- Backend-off fails closed with `tokenHTTPUnavailable`.
+- Backend recovery reaches `activeAudio` with `productionMediaFailureReason=none` on A/B.
+- LiveKit-off fails closed with `liveKitNetworkFailed`.
+- LiveKit recovery reaches `activeAudio` with `productionMediaFailureReason=none` on A/B.
+- Final hangup returns A/B idle with cleanup/disconnect attempted.
 
 Goals:
-1. Inspect media failure state ownership and status mapping:
-   - `NativeDirectCallRoomController` diagnostics.
-   - `DirectCallEngine` media connect/recovery path.
-   - `DirectCallMediaEngine` / LiveKit media diagnostics.
-   - production status assembly in `RoomFlowCoordinator`.
-   - private native call card state/reason mapping.
+1. Add or complete private-card action/state support for user-safe edge actions:
+   - Decline incoming ringing.
+   - Cancel outgoing ringing.
+   - Retry after a failed call.
 
-2. Fix stale failure reporting safely:
-   - Clear or supersede `productionMediaFailureReason` when a later media connection succeeds.
-   - Ensure active `activeAudio` with successful media connection does not surface an old failure reason.
-   - Preserve terminal failure reason for the failed attempt when appropriate.
-   - Keep final hangup/cleanup diagnostics intact.
+2. Keep action availability explicit and user-safe:
+   - Start audio available only from `canStart` or appropriate retry state.
+   - Accept available only for `incomingRinging`.
+   - Decline available only for `incomingRinging`.
+   - Cancel available only for `outgoingRinging` / pre-active connecting states.
+   - Hang up available for active/ringing/connecting states where terminal cleanup is valid.
+   - Retry available only after failed/ended states where readiness still passes.
 
-3. Add tests:
-   - token/backend failure records user-safe failure.
-   - later successful media connect clears or supersedes stale media failure.
-   - LiveKit network failure records user-safe failure.
-   - later successful LiveKit connect clears or supersedes stale media failure.
-   - activeAudio state maps to user-safe active state, not failed, after recovery.
-   - cleanup/hangup preserves idle state without reintroducing stale failure.
-   - redaction: no raw token/JWT/key/envelope/Matrix content, raw room ID, or peer ID.
+3. Route actions through the existing private room-scoped production methods or add narrow private-card handler methods if needed:
+   - Do not use `displayCall`.
+   - Do not use `presentCallScreen`.
+   - Do not use `ElementCallService`.
+   - Do not use `directOneToOneCallsEnabled`.
 
-4. Keep scope private/internal:
-   - no public UI activation.
-   - no Element Call route changes.
-   - no CallKit/push.
-   - no global production activation.
+4. Preserve side-effect-free rendering and refresh:
+   - Rendering and status refresh must not start listeners, send Matrix events, request LiveKit credentials, connect media, accept, decline, cancel, or hang up.
+
+5. Add tests:
+   - Decline action is enabled only for `incomingRinging`.
+   - Cancel action is enabled only for outgoing/connecting pre-active states.
+   - Retry action is available after failed recoverable states and maps to a safe start path.
+   - Decline/cancel emit terminal cleanup through the native private-card handler, not Element Call routes.
+   - Retry clears stale user-safe failure when a later successful media connect reaches `activeAudio`.
+   - Existing Start/Accept/Hangup behavior remains unchanged.
+   - Redaction: no raw token/JWT/key/envelope/Matrix content, raw room ID, or peer ID.
+
+6. Optional runtime proof after implementation:
+   - Incoming decline returns both sides to idle.
+   - Outgoing cancel returns both sides to idle.
+   - Failed backend-off or LiveKit-off state can retry after recovery and reach `activeAudio` with `productionMediaFailureReason=none`.
 
 Hard constraints:
+- No public visible UI activation.
+- No Element Call route changes.
 - No `displayCall` / `presentCallScreen` changes.
 - No `ElementCallService` changes.
 - No `directOneToOneCallsEnabled` use.
@@ -133,12 +145,12 @@ Validation:
 - SwiftFormat/SwiftLint changed Swift files if code changes.
 - Targeted tests:
   - RoomScreenViewModel native call tests if card mapping changes.
-  - RoomFlowCoordinatorTests if production status mapping changes.
-  - DirectCallMediaEngineTests / DirectCallEngineTests if media diagnostics change.
-  - DirectCallProductionKeyWrappingTests only if touched.
+  - NativeDirectCallInternalControlPanelTests if shared internal action models change.
+  - RoomFlowCoordinatorTests if production command/action handling changes.
+  - DirectCallEngineTests / DirectCallMediaEngineTests if engine terminal or retry behavior changes.
 - Release build if app source changes.
 - Forbidden scan.
 - Update docs after proof/fix.
 
 Suggested commit:
-Clear stale native call media failure after recovery
+Add private native call decline cancel retry skeleton
