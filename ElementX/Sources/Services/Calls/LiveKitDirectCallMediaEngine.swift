@@ -123,6 +123,7 @@ final class LiveKitDirectCallMediaEngine: DirectCallMediaEngineProtocol {
         #if DEBUG
         diagnosticState.mediaConnectAttempted = true
         diagnosticState.mediaKeyHandleAvailable = !keyHandle.keyID.isEmpty && keyHandle.callID == session.callID
+        diagnosticState.mediaFailureReason = .none
         #endif
 
         let preparingState = DirectCallMediaState(callID: session.callID,

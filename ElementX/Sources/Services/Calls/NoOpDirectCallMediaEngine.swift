@@ -19,6 +19,7 @@ final class NoOpDirectCallMediaEngine: DirectCallMediaEngineProtocol {
 
     #if DEBUG
     private var diagnosticState = DirectCallDiagnosticSnapshot()
+    private let diagnosticFailureReason: DirectCallDiagnosticMediaFailureReason
 
     var diagnosticSnapshot: DirectCallDiagnosticSnapshot {
         diagnosticState
@@ -37,6 +38,7 @@ final class NoOpDirectCallMediaEngine: DirectCallMediaEngineProtocol {
         self.tokenProvider = tokenProvider ?? NoOpDirectCallMediaTokenProvider()
         self.audioRouteController = audioRouteController ?? NoOpDirectCallAudioRouteController()
         self.encryptionService = encryptionService ?? NoOpDirectCallEncryptionService()
+        self.diagnosticFailureReason = diagnosticFailureReason
         diagnosticState.mediaFactoryInjected = diagnosticFailureReason != .factoryUnavailable
         diagnosticState.mediaCredentialProviderAvailable = tokenProvider != nil
         diagnosticState.mediaFailureReason = diagnosticFailureReason
@@ -74,6 +76,9 @@ final class NoOpDirectCallMediaEngine: DirectCallMediaEngineProtocol {
         #if DEBUG
         diagnosticState.mediaConnectAttempted = true
         diagnosticState.mediaKeyHandleAvailable = !keyHandle.keyID.isEmpty && keyHandle.callID == session.callID
+        if diagnosticFailureReason == .none {
+            diagnosticState.mediaFailureReason = .none
+        }
         #endif
 
         if let error = session.directAudioConnectionError(keyHandle: keyHandle) {

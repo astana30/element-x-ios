@@ -1319,6 +1319,62 @@ final class DirectCallLiveKitMediaEngineDiagnosticsTests {
         #expect(String(describing: engine.diagnosticSnapshot).contains("livekit.example.com") == false)
     }
 
+    @Test
+    func liveKitMediaEngineClearsTokenFailureOnSuccessfulRetry() async {
+        let tokenProvider = MediaTokenProviderSpy(result: .failure(.tokenHTTPUnavailable))
+        let engine = LiveKitDirectCallMediaEngine(tokenProvider: tokenProvider,
+                                                  e2eeContextProvider: MediaE2EEContextProviderSpy(),
+                                                  liveKitClient: LiveKitClientSpy())
+        let session = makeSession(encryptionState: .ready)
+        let keyHandle = DirectCallMediaKeyHandle(callID: callID, keyID: "key-a")
+
+        let failedResult = await engine.connectAudio(for: session, keyHandle: keyHandle)
+
+        #expect(failedResult == .failure(.tokenHTTPUnavailable))
+        #expect(engine.diagnosticSnapshot.mediaFailureReason == .tokenHTTPUnavailable)
+
+        tokenProvider.result = .success(.init(serverURL: URLComponents.liveKitTestURL,
+                                              roomName: "direct-call",
+                                              token: "test-token"))
+
+        let recoveredResult = await engine.connectAudio(for: session, keyHandle: keyHandle)
+
+        guard case .success(let mediaState) = recoveredResult else {
+            Issue.record("Expected retry after token failure to connect successfully.")
+            return
+        }
+        #expect(mediaState.phase == .activeAudio)
+        #expect(engine.diagnosticSnapshot.mediaFailureReason == .none)
+        #expect(String(describing: engine.diagnosticSnapshot).contains("test-token") == false)
+    }
+
+    @Test
+    func liveKitMediaEngineClearsLiveKitFailureOnSuccessfulRetry() async {
+        let liveKitClient = LiveKitClientSpy(connectResult: .failure(.liveKitNetworkFailed))
+        let engine = LiveKitDirectCallMediaEngine(tokenProvider: MediaTokenProviderSpy(),
+                                                  e2eeContextProvider: MediaE2EEContextProviderSpy(),
+                                                  liveKitClient: liveKitClient)
+        let session = makeSession(encryptionState: .ready)
+        let keyHandle = DirectCallMediaKeyHandle(callID: callID, keyID: "key-a")
+
+        let failedResult = await engine.connectAudio(for: session, keyHandle: keyHandle)
+
+        #expect(failedResult == .failure(.liveKitNetworkFailed))
+        #expect(engine.diagnosticSnapshot.mediaFailureReason == .liveKitNetworkFailed)
+
+        liveKitClient.connectResult = .success(())
+
+        let recoveredResult = await engine.connectAudio(for: session, keyHandle: keyHandle)
+
+        guard case .success(let mediaState) = recoveredResult else {
+            Issue.record("Expected retry after LiveKit failure to connect successfully.")
+            return
+        }
+        #expect(mediaState.phase == .activeAudio)
+        #expect(engine.diagnosticSnapshot.mediaFailureReason == .none)
+        #expect(String(describing: engine.diagnosticSnapshot).contains("test-token") == false)
+    }
+
     private func makeSession(intent: DirectCallIntent = .audio,
                              encryptionState: DirectCallEncryptionState,
                              state: DirectCallState = .connecting) -> DirectCallSession {

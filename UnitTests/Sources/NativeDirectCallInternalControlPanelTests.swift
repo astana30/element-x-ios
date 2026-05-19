@@ -334,6 +334,12 @@ final class NativeDirectCallInternalControlPanelTests {
         #expect(NativeDirectCallRoomCardState.make(isActivationEnabled: true,
                                                    disabledReason: nil,
                                                    productionHasActiveSession: true,
+                                                   sessionState: "activeAudio",
+                                                   mediaFailureReason: .liveKitNetworkFailed,
+                                                   terminalReason: nil) == .activeAudio)
+        #expect(NativeDirectCallRoomCardState.make(isActivationEnabled: true,
+                                                   disabledReason: nil,
+                                                   productionHasActiveSession: true,
                                                    sessionState: "failed",
                                                    mediaFailureReason: .liveKitNetworkFailed,
                                                    terminalReason: nil) == .failed(reason: .liveKitNetworkFailed))
