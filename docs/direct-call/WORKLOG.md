@@ -622,3 +622,24 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Confirmed no code changes were needed during the runtime proof and the worktree was clean.
 - Kept scope private/internal product UI gate only, with no Element Call route change, CallKit/push, or global production activation.
 - Recommended next phase: `2.19D — private native call card decline/cancel/retry UX skeleton`.
+
+## 2026-05-19 — 2.19E Private Native Call Card Decline/Cancel/Retry/Dismiss Runtime Proof
+
+- Recorded runtime proof for private native call card decline, cancel, retry, and dismiss actions.
+- Decline incoming proof passed: B received `incomingRinging`, B tapped Decline, B emitted reject, and the send succeeded.
+- Confirmed A received `directCallReject`.
+- Confirmed A and B returned idle with no active session after decline.
+- Confirmed `productionMediaFailureReason=none` after the decline proof.
+- Cancel outgoing proof passed: A started outgoing, A tapped Cancel before B accepted, A emitted cancel, and the send succeeded.
+- Confirmed B received `directCallCancel`.
+- Confirmed A and B returned idle with no active session after cancel.
+- Confirmed `productionMediaFailureReason=none` after the cancel proof.
+- Verified failed-state Retry/Dismiss rendering after the 2.19E fix: `failed(callServiceUnavailable)` now shows Retry and Dismiss instead of the broad disabled action row.
+- Confirmed Retry did not auto-start a call.
+- Confirmed A and B remained idle with no active session after Retry.
+- Confirmed Dismiss cleared the local displayed error/outcome.
+- Confirmed the card returned to Ready to call and the last action showed `dismissError:dismissed`.
+- Confirmed existing Element Call phone/video buttons remained untouched.
+- Confirmed no CallKit, push, or global production activation was introduced.
+- Confirmed no raw token, JWT, key, envelope, or Matrix content was printed.
+- Recommended next phase: `2.20A — private native call card timeout/rapid-tap hardening`.

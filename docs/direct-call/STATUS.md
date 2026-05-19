@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-After 2.19C — stale media failure cleanup runtime proof.
+After 2.19E — private native call card decline/cancel/retry/dismiss runtime proof.
 
 ## Latest App Code Checkpoint
 
-2.19B `Clear stale production media failure diagnostics`
+2.19E `Show retry dismiss actions for failed native call card`
 
 ## Latest Code Checkpoint
 
@@ -450,6 +450,16 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Final hangup succeeded: A returned idle after emitting hangup and sending successfully; B returned idle after receiving `directCallHangup`.
   - Cleanup and disconnect were attempted on both sides.
   - No UI issue was observed, no code changes were needed during the runtime proof, and the worktree was clean.
+- Private native call card decline/cancel/retry/dismiss UX is complete and runtime-proven:
+  - The private card supports explicit decline incoming, cancel outgoing, retry, and dismiss error actions.
+  - Incoming ringing shows Accept and Decline; outgoing ringing shows Cancel; failed states now show Retry and Dismiss instead of a broad disabled action row.
+  - Decline incoming proof passed: B received `incomingRinging`, B tapped Decline, B emitted reject and the send succeeded, A received `directCallReject`, and A/B returned idle with no active session.
+  - Cancel outgoing proof passed: A started outgoing, A tapped Cancel before B accepted, A emitted cancel and the send succeeded, B received `directCallCancel`, and A/B returned idle with no active session.
+  - Retry after `failed(callServiceUnavailable)` did not auto-start a call; A/B remained idle with no active session.
+  - Dismiss cleared the local displayed error/outcome, returned the card to Ready to call, and showed the redacted last action as `dismissError:dismissed`.
+  - `productionMediaFailureReason` remained `none` for decline/cancel proof paths.
+  - Existing Element Call phone/video buttons remained untouched.
+  - No CallKit, push, global production activation, or sensitive credential/key/Matrix-content logging was introduced.
 
 ## Current Blocker
 
@@ -457,14 +467,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Production backend remains a skeleton/local fake proof and is not deployed as a hardened production service.
 - Production rollout and server capability sources remain fail-closed by default.
 - Real production activation still requires hardened backend deployment, capability rollout, endpoint configuration, trusted peer readiness, visible UI design, and later CallKit/push work.
-- The next immediate gap is private-card decline, cancel, and retry UX/action hardening before broader internal usability work.
+- The next immediate gap is private-card timeout and rapid-tap hardening before broader internal usability work.
 - No public production activation, Element Call route change, CallKit, or push integration exists yet.
 
 ## Next Recommended Phase
 
-`2.19D — private native call card decline/cancel/retry UX skeleton`
+`2.20A — private native call card timeout/rapid-tap hardening`
 
-Goal: add private/internal product-card skeleton support for decline incoming, cancel outgoing, and retry after recoverable failure states, while keeping the card gated, redacted, and separate from Element Call routing, CallKit/push, public production activation, and global production activation.
+Goal: harden the private/internal product-card action path against call timeouts and repeated rapid taps, while keeping the card gated, redacted, and separate from Element Call routing, CallKit/push, public production activation, and global production activation.
 
 ## Do-Not-Touch Constraints
 
