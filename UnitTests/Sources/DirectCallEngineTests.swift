@@ -676,6 +676,67 @@ final class DirectCallEngineTests {
     }
 
     @Test
+    func outgoingRingingTimeoutEmitsTimeoutSignalAndFailsClosed() async throws {
+        let mediaEngine = MediaEngineSpy()
+        let engine = makeEngine(mediaEngine: mediaEngine,
+                                cleanupDelay: .seconds(120),
+                                outgoingRingingTimeout: .milliseconds(10))
+        var emittedSignals = [DirectCallOutgoingSignal]()
+        let cancellable = engine.actionsPublisher.sink { action in
+            guard case .emitSignal(let signal) = action else {
+                return
+            }
+            emittedSignals.append(signal)
+        }
+        defer { cancellable.cancel() }
+
+        let startResult = await engine.startOutgoingAudioCall(peer: peerUserID, roomID: roomID)
+        guard case .success(let session) = startResult else {
+            Issue.record("Expected outgoing call start to succeed.")
+            return
+        }
+
+        try await Task.sleep(for: .milliseconds(40))
+
+        #expect(engine.activeSessionPublisher.value?.state == .failed)
+        #expect(emittedSignals.map(\.type) == [.invite, .timeout])
+        #expect(mediaEngine.disconnectCallIDs == [session.callID])
+        #expect(mediaEngine.cleanupCallIDs.isEmpty)
+    }
+
+    @Test
+    func incomingRingingTimeoutEmitsTimeoutSignalAndMissesCall() async throws {
+        let mediaEngine = MediaEngineSpy()
+        let engine = makeEngine(mediaEngine: mediaEngine,
+                                cleanupDelay: .seconds(120),
+                                incomingRingingTimeout: .milliseconds(10))
+        var emittedSignals = [DirectCallOutgoingSignal]()
+        let cancellable = engine.actionsPublisher.sink { action in
+            guard case .emitSignal(let signal) = action else {
+                return
+            }
+            emittedSignals.append(signal)
+        }
+        defer { cancellable.cancel() }
+
+        _ = await engine.receiveIncomingCall(event: .init(eventID: "$invite-timeout",
+                                                          roomID: roomID,
+                                                          senderID: peerUserID,
+                                                          callID: "call-timeout",
+                                                          type: .invite,
+                                                          intent: .audio,
+                                                          timestamp: .now,
+                                                          keyExchange: keyExchange(callID: "call-timeout")))
+
+        try await Task.sleep(for: .milliseconds(40))
+
+        #expect(engine.activeSessionPublisher.value?.state == .missed)
+        #expect(emittedSignals.map(\.type) == [.timeout])
+        #expect(mediaEngine.disconnectCallIDs == ["call-timeout"])
+        #expect(mediaEngine.cleanupCallIDs.isEmpty)
+    }
+
+    @Test
     func newOutgoingCallBeforeDelayedCleanupCleansPreviousTerminalMedia() async {
         let mediaEngine = MediaEngineSpy()
         let engine = makeEngine(mediaEngine: mediaEngine, cleanupDelay: .seconds(120))
@@ -770,11 +831,14 @@ final class DirectCallEngineTests {
     private func makeEngine(encryptionService: DirectCallEncryptionServiceProtocol? = nil,
                             mediaEngine: DirectCallMediaEngineProtocol? = nil,
                             cleanupDelay: Duration = .milliseconds(20),
+                            incomingRingingTimeout: Duration = .seconds(120),
+                            outgoingRingingTimeout: Duration = .seconds(120),
+                            connectingTimeout: Duration = .seconds(120),
                             now: @escaping () -> Date = Date.init) -> DirectCallEngine {
         DirectCallEngine(ownUserID: ownUserID,
-                         configuration: .init(incomingRingingTimeout: .seconds(120),
-                                              outgoingRingingTimeout: .seconds(120),
-                                              connectingTimeout: .seconds(120),
+                         configuration: .init(incomingRingingTimeout: incomingRingingTimeout,
+                                              outgoingRingingTimeout: outgoingRingingTimeout,
+                                              connectingTimeout: connectingTimeout,
                                               cleanupDelay: cleanupDelay,
                                               processedTerminalEventLimit: 64),
                          now: now,

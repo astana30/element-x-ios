@@ -879,6 +879,11 @@ extension NativeDirectCallRoomCardState {
         case "activeAudio":
             return .activeAudio
         case "failed":
+            if let terminalReason,
+               terminalReason == .outgoingTimeout || terminalReason == .incomingTimeout {
+                return .failed(reason: .callTimedOut)
+            }
+
             return .failed(reason: .init(mediaFailureReason))
         case "ended", "cancelled", "missed":
             return .ended(reason: .init(terminalReason))

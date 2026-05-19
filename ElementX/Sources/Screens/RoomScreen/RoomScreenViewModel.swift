@@ -26,6 +26,7 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
     private let nativeDirectCallRoomCardAppearanceFollowUpDelay: Duration
     private let nativeDirectCallRoomCardAppearanceFollowUpRefreshCount: Int
     private var hasRefreshedNativeDirectCallRoomCardOnAppear = false
+    private var nativeDirectCallRoomCardPendingAction: NativeDirectCallRoomCardAction?
     
     private var initialSelectedPinnedEventID: String?
     private let pinnedEventStringBuilder: RoomEventStringBuilder
@@ -235,6 +236,10 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
             return
         }
 
+        guard nativeDirectCallRoomCardPendingAction == nil else {
+            return
+        }
+
         if action == .refreshStatus {
             refreshNativeDirectCallRoomCard(markAsManualRefresh: true)
             return
@@ -253,6 +258,7 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
         state.nativeDirectCallRoomCard.lastAction = action
         state.nativeDirectCallRoomCard.lastActionOutcome = nil
         state.nativeDirectCallRoomCard.isLoading = true
+        nativeDirectCallRoomCardPendingAction = action
         Task { @MainActor [weak self] in
             guard let self else { return }
 
@@ -263,6 +269,7 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
 
             state.nativeDirectCallRoomCard.isVisible = state.nativeDirectCallRoomCard.state != .hidden
             state.nativeDirectCallRoomCard.isLoading = false
+            nativeDirectCallRoomCardPendingAction = nil
         }
     }
 
@@ -275,6 +282,7 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
         state.nativeDirectCallRoomCard.lastAction = .retry
         state.nativeDirectCallRoomCard.lastActionOutcome = nil
         state.nativeDirectCallRoomCard.isLoading = true
+        nativeDirectCallRoomCardPendingAction = .retry
         Task { @MainActor [weak self] in
             guard let self else { return }
 
@@ -284,6 +292,7 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
             state.nativeDirectCallRoomCard.lastActionOutcome = .retried
             state.nativeDirectCallRoomCard.isVisible = state.nativeDirectCallRoomCard.state != .hidden
             state.nativeDirectCallRoomCard.isLoading = false
+            nativeDirectCallRoomCardPendingAction = nil
         }
     }
 
@@ -303,12 +312,14 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
 
     private func refreshNativeDirectCallRoomCard(markAsManualRefresh: Bool, showsLoadingIndicator: Bool = true) {
         guard let nativeDirectCallRoomStateProvider,
-              nativeDirectCallRoomActionHandler != nil else {
+              nativeDirectCallRoomActionHandler != nil,
+              nativeDirectCallRoomCardPendingAction == nil else {
             return
         }
 
         if showsLoadingIndicator {
             state.nativeDirectCallRoomCard.isLoading = true
+            nativeDirectCallRoomCardPendingAction = .refreshStatus
         }
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -327,6 +338,7 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
             state.nativeDirectCallRoomCard.isVisible = state.nativeDirectCallRoomCard.state != .hidden
             if showsLoadingIndicator {
                 state.nativeDirectCallRoomCard.isLoading = false
+                nativeDirectCallRoomCardPendingAction = nil
             }
         }
     }

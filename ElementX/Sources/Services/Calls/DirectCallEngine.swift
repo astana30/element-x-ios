@@ -295,6 +295,7 @@ final class DirectCallEngine: DirectCallEngineProtocol {
             return .failure(.invalidTransition)
         }
 
+        emitSignal(type: .timeout, from: session)
         transitionSession(to: .missed)
         await disconnectMediaIfNeeded(callID: session.callID)
         scheduleCleanup(for: session.callID)
@@ -704,6 +705,7 @@ final class DirectCallEngine: DirectCallEngineProtocol {
             return
         }
 
+        emitSignal(type: .timeout, from: session)
         transitionSession(to: .failed)
         await disconnectMediaIfNeeded(callID: session.callID)
         scheduleCleanup(for: session.callID)

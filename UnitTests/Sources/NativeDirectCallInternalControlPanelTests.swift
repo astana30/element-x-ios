@@ -189,6 +189,110 @@ final class NativeDirectCallInternalControlPanelTests {
     }
 
     @Test
+    func productCardDoubleStartAudioInvokesHandlerOnceWhilePending() async throws {
+        let provider = DelayedNativeDirectCallRoomCardProviderSpy(states: [.canStart], delay: .milliseconds(40))
+        let viewModel = RoomScreenViewModel.mock(roomProxyMock: JoinedRoomProxyMock(.init()),
+                                                 nativeDirectCallRoomStateProvider: provider,
+                                                 nativeDirectCallRoomActionHandler: provider)
+        self.viewModel = viewModel
+
+        let completed = deferFulfillment(viewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallRoomCard.lastAction == .startAudio &&
+                viewState.nativeDirectCallRoomCard.lastActionOutcome == .started
+        }
+
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.startAudio))
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.startAudio))
+
+        #expect(viewModel.context.viewState.nativeDirectCallRoomCard.isLoading)
+        #expect(!NativeDirectCallRoomCardAction.startAudio.isEnabled(in: .canStart, isLoading: true))
+
+        try await completed.fulfill()
+        #expect(provider.performedActions == [.startAudio])
+    }
+
+    @Test
+    func productCardDoubleAcceptInvokesHandlerOnceWhilePending() async throws {
+        let provider = DelayedNativeDirectCallRoomCardProviderSpy(states: [.incomingRinging], delay: .milliseconds(40))
+        let viewModel = RoomScreenViewModel.mock(roomProxyMock: JoinedRoomProxyMock(.init()),
+                                                 nativeDirectCallRoomStateProvider: provider,
+                                                 nativeDirectCallRoomActionHandler: provider)
+        self.viewModel = viewModel
+
+        let incoming = deferFulfillment(viewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallRoomCard.state == .incomingRinging
+        }
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.refreshStatus))
+        try await incoming.fulfill()
+
+        let completed = deferFulfillment(viewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallRoomCard.lastAction == .accept &&
+                viewState.nativeDirectCallRoomCard.lastActionOutcome == .started
+        }
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.accept))
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.accept))
+
+        #expect(viewModel.context.viewState.nativeDirectCallRoomCard.isLoading)
+        #expect(!NativeDirectCallRoomCardAction.accept.isEnabled(in: .incomingRinging, isLoading: true))
+        #expect(!NativeDirectCallRoomCardAction.declineIncoming.isEnabled(in: .incomingRinging, isLoading: true))
+
+        try await completed.fulfill()
+        #expect(provider.performedActions == [.accept])
+    }
+
+    @Test
+    func productCardDoubleHangUpInvokesHandlerOnceWhilePending() async throws {
+        let provider = DelayedNativeDirectCallRoomCardProviderSpy(states: [.activeAudio], delay: .milliseconds(40))
+        let viewModel = RoomScreenViewModel.mock(roomProxyMock: JoinedRoomProxyMock(.init()),
+                                                 nativeDirectCallRoomStateProvider: provider,
+                                                 nativeDirectCallRoomActionHandler: provider)
+        self.viewModel = viewModel
+
+        let active = deferFulfillment(viewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallRoomCard.state == .activeAudio
+        }
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.refreshStatus))
+        try await active.fulfill()
+
+        let completed = deferFulfillment(viewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallRoomCard.lastAction == .hangUp &&
+                viewState.nativeDirectCallRoomCard.lastActionOutcome == .started
+        }
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.hangUp))
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.hangUp))
+
+        #expect(viewModel.context.viewState.nativeDirectCallRoomCard.isLoading)
+        #expect(!NativeDirectCallRoomCardAction.hangUp.isEnabled(in: .activeAudio, isLoading: true))
+
+        try await completed.fulfill()
+        #expect(provider.performedActions == [.hangUp])
+    }
+
+    @Test
+    func productCardIgnoresRetryDismissAndRefreshWhileActionPending() async throws {
+        let provider = DelayedNativeDirectCallRoomCardProviderSpy(states: [.canStart], delay: .milliseconds(40))
+        let viewModel = RoomScreenViewModel.mock(roomProxyMock: JoinedRoomProxyMock(.init()),
+                                                 nativeDirectCallRoomStateProvider: provider,
+                                                 nativeDirectCallRoomActionHandler: provider)
+        self.viewModel = viewModel
+
+        let completed = deferFulfillment(viewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallRoomCard.lastAction == .startAudio &&
+                viewState.nativeDirectCallRoomCard.lastActionOutcome == .started
+        }
+
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.startAudio))
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.retry))
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.dismissError))
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.refreshStatus))
+
+        try await completed.fulfill()
+
+        #expect(provider.performedActions == [.startAudio])
+        #expect(provider.refreshCount == 0)
+    }
+
+    @Test
     func productCardDeclineAndCancelDoNotUseElementCallRoute() async throws {
         let provider = NativeDirectCallRoomCardProviderSpy()
         let viewModel = RoomScreenViewModel.mock(roomProxyMock: JoinedRoomProxyMock(.init()),
@@ -202,13 +306,17 @@ final class NativeDirectCallInternalControlPanelTests {
             }
             return false
         }
-        let deferred = deferFulfillment(viewModel.context.$viewState) { viewState in
+        let declined = deferFulfillment(viewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallRoomCard.lastAction == .declineIncoming
+        }
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.declineIncoming))
+        try await declined.fulfill()
+
+        let cancelled = deferFulfillment(viewModel.context.$viewState) { viewState in
             viewState.nativeDirectCallRoomCard.lastAction == .cancelOutgoing
         }
-
-        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.declineIncoming))
         viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.cancelOutgoing))
-        try await deferred.fulfill()
+        try await cancelled.fulfill()
         try await unexpectedDisplayCall.fulfill()
 
         #expect(provider.performedActions == [.declineIncoming, .cancelOutgoing])
@@ -385,18 +493,24 @@ final class NativeDirectCallInternalControlPanelTests {
         #expect(NativeDirectCallRoomCardAction.refreshStatus.isEnabled(in: .canStart, isLoading: true))
         #expect(NativeDirectCallRoomCardAction.startAudio.isEnabled(in: .canStart, isLoading: false))
         #expect(!NativeDirectCallRoomCardAction.startAudio.isEnabled(in: .incomingRinging, isLoading: false))
+        #expect(!NativeDirectCallRoomCardAction.startAudio.isEnabled(in: .canStart, isLoading: true))
         #expect(NativeDirectCallRoomCardAction.accept.isEnabled(in: .incomingRinging, isLoading: false))
         #expect(NativeDirectCallRoomCardAction.declineIncoming.isEnabled(in: .incomingRinging, isLoading: false))
+        #expect(!NativeDirectCallRoomCardAction.accept.isEnabled(in: .incomingRinging, isLoading: true))
+        #expect(!NativeDirectCallRoomCardAction.declineIncoming.isEnabled(in: .incomingRinging, isLoading: true))
         #expect(!NativeDirectCallRoomCardAction.hangUp.isEnabled(in: .incomingRinging, isLoading: false))
         #expect(NativeDirectCallRoomCardAction.cancelOutgoing.isEnabled(in: .outgoingRinging, isLoading: false))
         #expect(NativeDirectCallRoomCardAction.cancelOutgoing.isEnabled(in: .connecting, isLoading: false))
+        #expect(!NativeDirectCallRoomCardAction.cancelOutgoing.isEnabled(in: .outgoingRinging, isLoading: true))
         #expect(!NativeDirectCallRoomCardAction.cancelOutgoing.isEnabled(in: .activeAudio, isLoading: false))
         #expect(NativeDirectCallRoomCardAction.hangUp.isEnabled(in: .activeAudio, isLoading: false))
+        #expect(!NativeDirectCallRoomCardAction.hangUp.isEnabled(in: .activeAudio, isLoading: true))
         #expect(NativeDirectCallRoomCardAction.retry.isEnabled(in: .failed(reason: .liveKitNetworkFailed), isLoading: false))
         #expect(NativeDirectCallRoomCardAction.dismissError.isEnabled(in: .failed(reason: .liveKitNetworkFailed), isLoading: false))
+        #expect(!NativeDirectCallRoomCardAction.retry.isEnabled(in: .failed(reason: .liveKitNetworkFailed), isLoading: true))
+        #expect(!NativeDirectCallRoomCardAction.dismissError.isEnabled(in: .failed(reason: .liveKitNetworkFailed), isLoading: true))
         #expect(NativeDirectCallRoomCardAction.dismissError.isEnabled(in: .ended(reason: .cancelled), isLoading: false))
         #expect(!NativeDirectCallRoomCardAction.hangUp.isEnabled(in: .canStart, isLoading: false))
-        #expect(!NativeDirectCallRoomCardAction.startAudio.isEnabled(in: .canStart, isLoading: true))
     }
 
     @Test
@@ -476,9 +590,21 @@ final class NativeDirectCallInternalControlPanelTests {
         #expect(NativeDirectCallRoomCardState.make(isActivationEnabled: true,
                                                    disabledReason: nil,
                                                    productionHasActiveSession: true,
+                                                   sessionState: "failed",
+                                                   mediaFailureReason: .none,
+                                                   terminalReason: .outgoingTimeout) == .failed(reason: .callTimedOut))
+        #expect(NativeDirectCallRoomCardState.make(isActivationEnabled: true,
+                                                   disabledReason: nil,
+                                                   productionHasActiveSession: true,
                                                    sessionState: "ended",
                                                    mediaFailureReason: .none,
                                                    terminalReason: .outgoingTimeout) == .ended(reason: .callTimedOut))
+        #expect(NativeDirectCallRoomCardState.make(isActivationEnabled: true,
+                                                   disabledReason: nil,
+                                                   productionHasActiveSession: true,
+                                                   sessionState: "missed",
+                                                   mediaFailureReason: .none,
+                                                   terminalReason: .incomingTimeout) == .ended(reason: .callTimedOut))
         #expect(NativeDirectCallRoomCardState.make(isActivationEnabled: true,
                                                    disabledReason: nil,
                                                    productionHasActiveSession: true,
@@ -494,6 +620,7 @@ final class NativeDirectCallInternalControlPanelTests {
         #expect(NativeDirectCallRoomCardState.activeAudio.displayText == UntranslatedL10n.screenRoomNativeDirectCallActive)
         #expect(NativeDirectCallRoomCardState.failed(reason: .callServiceUnavailable).displayText == UntranslatedL10n.screenRoomNativeDirectCallServiceUnavailable)
         #expect(NativeDirectCallRoomCardState.failed(reason: .liveKitNetworkFailed).displayText == UntranslatedL10n.screenRoomNativeDirectCallCouldntConnectAudio)
+        #expect(NativeDirectCallRoomCardState.failed(reason: .callTimedOut).displayText == UntranslatedL10n.screenRoomNativeDirectCallEnded)
         #expect(NativeDirectCallRoomCardState.failed(reason: .unverifiedDevice).displayText == UntranslatedL10n.screenRoomNativeDirectCallVerifyBeforeCalling)
         #expect(NativeDirectCallRoomCardState.ended(reason: .declined).displayText == UntranslatedL10n.screenRoomNativeDirectCallDeclined)
         #expect(NativeDirectCallRoomCardState.ended(reason: .cancelled).displayText == UntranslatedL10n.screenRoomNativeDirectCallCancelled)
