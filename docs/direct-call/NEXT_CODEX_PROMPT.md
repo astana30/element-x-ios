@@ -7,11 +7,12 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.17C — private native call room card runtime proof.
+After 2.18C — private native call card manual lifecycle proof.
 
 Current checkpoints:
-- App code: 2.17B `Add private native call room card seam`
-- Runtime proof: 2.17C private native call room card appeared and lifecycle succeeded through runner fallback.
+- App code: 2.18B `Fix private native call card action delivery`
+- Runner fix: 2.18C `Forward product native call UI gate to simulator launch`
+- Runtime proof: 2.18C private native call card manual Start/Accept/Hang up lifecycle passed.
 - Backend: 2.14E `Fix fake backend LiveKit dev token grants`
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`
@@ -24,101 +25,95 @@ Current proven state:
 - Production Matrix SDK key envelope wrapping is integrated through a narrow provider seam.
 - Production activation gate, dry-run, trigger dry-run, start command, receive listener, incoming invite handling, accept command, media failure diagnostics, and hangup command exist on the DEBUG/integration internal command path.
 - Local fake backend plus local LiveKit dev server reached `activeAudio` on both iOS clients through the internal production command lane.
-- Full internal lifecycle proof passed: B listener, A outgoing, B incoming ringing, B accept, A/B active audio, A hangup, A/B idle cleanup.
+- Full internal lifecycle proof passed through runner commands: B listener, A outgoing, B incoming ringing, B accept, A/B active audio, A hangup, A/B idle cleanup.
 - Hidden DEBUG/internal native direct-call room control panel exists and remains hidden by default.
 - Private product-shaped native call room card seam exists and remains hidden by default.
 - The private card uses the separate gate `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`.
 - The diagnostic panel remains gated separately by `NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED=1`.
+- The two-client runner forwards the product UI gate into simulator launch as `SIMCTL_CHILD_NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED`.
 - Existing Element Call phone/video buttons remained visible and unchanged during runtime proof.
 - With `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`, the private native call card appeared in both A/B encrypted DM rooms.
 - Without `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED`, the private native call card was hidden.
 - Card status and runner output were redacted: no credential values, JWTs, keys, raw Matrix content, raw room IDs, or peer IDs were printed.
-- Runner fallback was used because synthetic UI taps were unavailable.
-- Runtime lifecycle through room-scoped production methods succeeded: B listener, A outgoing, B incoming ringing, B accept, A/B active audio, A hangup, and A/B idle.
-- Before hangup, A/B reported active audio, encryption ready, media connect attempted, LiveKit connect attempted, and media failure `none`.
-- After hangup, A/B reported no active session, idle state, media disconnect attempted, media cleanup attempted, and media failure `none`.
+- The private card now performs a safe read-only appearance refresh so the initial state can become `canStart` without manual Refresh.
+- Passive card refresh is side-effect-free and does not start listeners, send Matrix events, request media credentials, connect media, or disable available actions.
+- Manual UI actions were proven:
+  - B production listener was armed.
+  - Manual UI Start audio from A caused B to reach `incomingRinging`.
+  - Manual UI Accept from B caused A/B to reach `activeAudio`.
+  - Manual UI Hang up from A caused A/B to return to idle.
+- A emitted hangup and send succeeded.
+- B received `directCallHangup`.
+- A/B reported production media connect attempted, LiveKit client connect attempted, media disconnect attempted after hangup, media cleanup attempted after hangup, and production media failure `none`.
 - No public UI activation, Element Call route changes, RoomScreen call presentation changes, ElementCallService changes, CallKit, push, or global production activation has been added.
 
-Known UI nuance:
-- The private card initially shows `unavailable(nativeCallsUnavailable)` until refreshed.
-- Live visual refresh/state binding was not verified without synthetic taps.
-- No new visual clipping was observed.
-
 Phase:
-2.17D — private native call card refresh/state binding polish.
+2.18D — private native call card repeated-call and edge-state proof.
 
 Task:
-Polish the private product-shaped native call room card refresh/state binding so runtime state is easier to verify and less dependent on manual Refresh.
-Keep it private and hidden by default.
-Do not replace existing Element Call toolbar buttons.
+Runtime proof first. Do not modify code unless a small UI-only or runner-only issue is found.
+Do not change Element Call route.
 Do not wire CallKit/push.
 Do not globally activate production direct calls.
 
 Goal:
-Make the private card reflect room-scoped production readiness/session state more naturally, while preserving side-effect-free rendering and explicit action side effects.
+Prove the private native call card remains stable across repeated manual call cycles and important edge states in an open encrypted 1:1 room.
 
-Inspect:
-1. `RoomScreen.swift`
-2. `RoomScreenModels.swift`
-3. `RoomScreenViewModel.swift`
-4. `RoomScreenCoordinator.swift`
-5. `RoomFlowCoordinator.swift`
-6. `NativeDirectCallRoomCardState`
-7. `NativeDirectCallRoomCardAction`
-8. `NativeDirectCallRoomStateProviding`
-9. `NativeDirectCallRoomActionHandling`
-10. Existing internal diagnostic control panel state refresh behavior
-11. Production status/dry-run command methods used by the room card provider
+Required env:
+- `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`
+- `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED=1`
+- `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`
+- `NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=http://127.0.0.1:8088`
 
-Questions:
-A. Should the card perform a one-shot safe refresh when it first appears?
-B. Should the card refresh after explicit card actions complete?
-C. Should the card observe an existing room-flow status publisher, or stay pull-based for now?
-D. How can refresh remain side-effect-free and avoid listener/media/Matrix sends?
-E. How should `unavailable(nativeCallsUnavailable)` map when trigger dry-run is ready but no manual Refresh has occurred?
-F. Should the card show a distinct `notRefreshed` or `checking` private state instead of an unavailable reason?
-G. What minimal state/action polish is safe without creating a public product UI?
+Preconditions:
+- Local fake backend running.
+- Local LiveKit dev server running.
+- r1/r2 trusted.
+- A/B launched with env.
+- A/B opened same encrypted DM.
+- Private native call card visible.
 
-Allowed:
-- Add private/internal-only state refinements if needed, such as `notRefreshed` or `checking`.
-- Refresh state on card appearance if the provider exists and product UI gate is enabled, provided the refresh is side-effect-free.
-- Refresh state after explicit Start, Accept, Decline, and Hang up actions complete.
-- Add focused tests for state refresh and action-result mapping.
-- Keep runner command path unchanged unless a small runner-only issue is found.
+Checks:
+1. Repeated lifecycle:
+   - Arm B listener.
+   - Start audio from A using the private card.
+   - Accept on B using the private card.
+   - Confirm A/B `activeAudio`.
+   - Hang up from A using the private card.
+   - Confirm A/B idle.
+   - Repeat the same cycle at least once more without relaunch if feasible.
 
-Hard constraints:
-- Keep card hidden by default.
-- Keep `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1` as the private product card gate.
-- Keep `NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED=1` as the separate diagnostic panel gate.
-- Do not replace existing Element Call phone/video buttons.
-- Do not change `RoomScreenViewAction.displayCall` behavior.
-- Do not change `RoomScreenCoordinator.presentCallScreen` behavior.
-- Do not change `ElementCallService`.
-- Do not use `directOneToOneCallsEnabled` for native production UI.
-- No CallKit or push wiring.
-- No public production activation.
-- No listener start, media connect, Matrix send, key wrapping, or credential request from rendering/status refresh.
-- No credential values, JWTs, keys, SDK envelope contents, raw Matrix content, raw room IDs, or peer IDs in UI/logs/docs.
+2. Edge states:
+   - Start audio is not enabled while already ringing/active.
+   - Accept is enabled only on B while `incomingRinging`.
+   - Hang up is enabled during outgoing ringing, incoming ringing, connecting, or active audio.
+   - Hang up from ringing state clears local/remote state correctly if feasible.
+   - No active session remains after hangup.
+   - Media disconnect/cleanup are attempted after hangup.
+   - Production media failure remains `none` for the happy path.
 
-Tests:
-- Product card remains hidden by default.
-- Product card remains hidden without `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED`.
-- Product card appears with gate/provider and does not require the diagnostic panel gate.
-- Initial card state no longer misleadingly reports unavailable when it is merely not refreshed, or it performs a safe initial refresh.
-- Refresh/status rendering has no side effects.
-- Start/Accept/Decline/Hang up refresh state after the explicit action completes.
-- Native card actions never emit Element Call `displayCall` or call `presentCallScreen`/`ElementCallService`.
-- State/reason text remains redacted and user-safe.
+3. Redaction and separation:
+   - Card status remains user-safe/redacted.
+   - Runner output remains redacted.
+   - Existing Element Call phone/video buttons remain unchanged.
+   - No `displayCall`, `presentCallScreen`, or `ElementCallService` involvement.
+   - No CallKit, push, or global production activation.
 
-Validation:
+Validation if code changes are needed:
 - `git diff --check`
-- SwiftFormat/SwiftLint on changed Swift files
-- Targeted tests:
-  - `NativeDirectCallInternalControlPanelTests`
-  - `RoomFlowCoordinatorTests` if touched
-  - `DirectCallProductionKeyWrappingTests` if touched
-- Release build
-- Forbidden scan for credential/key/raw-content wording in changed lines
+- SwiftFormat/SwiftLint on changed Swift files, or `bash -n` if only scripts change.
+- Targeted tests relevant to touched files.
+- Release build if app source changes.
+- Forbidden scan for credential/key/raw-content wording in changed lines.
 
-Suggested commit:
-Polish private native call card state refresh
+Expected report:
+A. Whether repeated manual lifecycle passed.
+B. Button enablement observations for Start, Accept, and Hang up.
+C. Edge-state results.
+D. Final production-status A/B.
+E. Whether runner fallback was used.
+F. Any UI issue.
+G. Whether code changes were needed.
+
+Suggested commit if docs-only proof is recorded later:
+Record private native call card repeated-call proof

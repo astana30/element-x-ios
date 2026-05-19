@@ -2,15 +2,15 @@
 
 ## Current Phase
 
-After 2.17C — private native call room card runtime proof.
+After 2.18C — private native call card manual lifecycle proof.
 
 ## Latest App Code Checkpoint
 
-2.17B `Add private native call room card seam`
+2.18B `Fix private native call card action delivery`
 
 ## Latest Code Checkpoint
 
-2.17B `Add private native call room card seam`
+2.18C `Forward product native call UI gate to simulator launch`
 
 ## Latest SDK Checkpoint
 
@@ -397,6 +397,24 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - No new visual clipping was observed.
   - Current UI nuance: the card initially shows `unavailable(nativeCallsUnavailable)` until refreshed, and live visual refresh was not verified without synthetic taps.
   - No code changes were needed during the runtime proof.
+- Private native call card refresh and action delivery polish is complete:
+  - The card performs a safe read-only appearance refresh so the initial state can become `canStart` without manual Refresh.
+  - Passive follow-up refreshes do not start listeners, send Matrix events, connect media, request media credentials, or disable available actions.
+  - Card actions report a redacted pending/action outcome path once the ViewModel receives the tap.
+  - Stable accessibility identifiers exist for the private native call card actions.
+  - The two-client runner now forwards `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED` into simulator launch as `SIMCTL_CHILD_NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED`, separate from the internal diagnostic panel gate.
+- Private native call card manual lifecycle proof is recorded:
+  - The private native call card was visible with `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`.
+  - B production listener was armed.
+  - Manual UI Start audio from A caused B to reach `incomingRinging`.
+  - Manual UI Accept from B caused A and B to reach `activeAudio`.
+  - Manual UI Hang up from A caused A and B to return to idle.
+  - A emitted hangup and the send succeeded.
+  - B received `directCallHangup`.
+  - A and B reported production media connect attempted, LiveKit client connect attempted, and production media failure `none`.
+  - A and B reported media disconnect and cleanup attempted after hangup.
+  - Existing Element Call buttons remained untouched.
+  - Scope remained private/internal product UI gate only, with no CallKit, push, or global production activation.
 
 ## Current Blocker
 
@@ -404,14 +422,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Production backend remains a skeleton/local fake proof and is not deployed as a hardened production service.
 - Production rollout and server capability sources remain fail-closed by default.
 - Real production activation still requires hardened backend deployment, capability rollout, endpoint configuration, trusted peer readiness, visible UI design, and later CallKit/push work.
-- The next immediate gap is polishing the private product-shaped room card so refresh/state binding is clearer and less dependent on manual Refresh, without changing the Element Call route or production call core.
+- The next immediate gap is repeated-call and edge-state proof for the private product-shaped room card, without changing the Element Call route or production call core.
 - No public production activation, Element Call route change, CallKit, or push integration exists yet.
 
 ## Next Recommended Phase
 
-`2.17D — private native call card refresh/state binding polish`
+`2.18D — private native call card repeated-call and edge-state proof`
 
-Goal: make the private product-shaped card refresh and state binding easier to verify at runtime while keeping the card private, gated, redacted, and separate from Element Call routing, CallKit/push, public production activation, and global production activation.
+Goal: prove repeated private-card call cycles and edge states while keeping the card private, gated, redacted, and separate from Element Call routing, CallKit/push, public production activation, and global production activation.
 
 ## Do-Not-Touch Constraints
 

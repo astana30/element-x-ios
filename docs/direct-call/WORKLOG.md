@@ -544,3 +544,20 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Noted current UI nuance: the card initially shows `unavailable(nativeCallsUnavailable)` until refreshed, and live visual refresh was not verified without synthetic taps.
 - Confirmed no code changes were needed for the runtime proof.
 - Recommended next phase: `2.17D — private native call card refresh/state binding polish`.
+
+## 2026-05-19 — 2.18C Private Native Call Card Manual Lifecycle Proof
+
+- Recorded manual runtime proof for the private product-shaped native direct-call room card.
+- Confirmed the private native call card was visible with `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`.
+- Confirmed B production listener was armed before the manual start flow.
+- Manual UI Start audio from A caused B to reach `incomingRinging`.
+- Manual UI Accept from B caused A and B to reach `activeAudio`.
+- Manual UI Hang up from A caused A and B to return to idle.
+- Confirmed A emitted hangup and the send succeeded.
+- Confirmed B received `directCallHangup`.
+- Confirmed A and B reported production media connect attempted and LiveKit client connect attempted.
+- Confirmed A and B reported media disconnect and cleanup attempted after hangup.
+- Confirmed A and B reported production media failure `none`.
+- Confirmed existing Element Call buttons remained untouched.
+- Kept scope private/internal product UI gate only: no CallKit, push, global production activation, or Element Call route change.
+- Recommended next phase: `2.18D — private native call card repeated-call and edge-state proof`.
