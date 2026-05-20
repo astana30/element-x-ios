@@ -2,15 +2,15 @@
 
 ## Current Phase
 
-After 2.21C — native call card reducer runtime regression proof.
+After 2.22C — private native call relaunch/listener lifecycle runtime proof.
 
 ## Latest App Code Checkpoint
 
-2.21C `Restore failed native call card retry dismiss mapping`
+2.22B `Harden native call listener lifecycle`
 
 ## Latest Code Checkpoint
 
-2.21C `Restore failed native call card retry dismiss mapping`
+2.22B `Harden native call listener lifecycle`
 
 ## Latest SDK Checkpoint
 
@@ -497,6 +497,16 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - The card returns to the safe Ready to call state after Dismiss.
   - Existing Element Call route remained untouched.
   - No CallKit, push, or global production activation was introduced.
+- Private native call relaunch/listener lifecycle runtime proof is recorded:
+  - Baseline lifecycle status included `productionListenerAvailable=true`, `productionRoomAttached=true`, and `productionSessionRestorationSupported=false`.
+  - A and B had no owner, listener, active session, stale media failure, or raw room/peer IDs in output.
+  - ActiveAudio relaunch proof passed: A/B reached `activeAudio` with encryption ready and media failure `none`, then after app relaunch and reopening the encrypted DM no stale `activeAudio` was restored.
+  - After activeAudio relaunch, A/B reported `productionHasActiveSession=false`, `productionSessionRestorationSupported=false`, and a safe fail-closed state.
+  - Ringing relaunch proof passed: before relaunch A was `outgoingRinging`, B was `incomingRinging`, media connect was not attempted, and media failure was `none`.
+  - After ringing relaunch and reopening the DM, no stale outgoing/incoming session was restored; A/B reported `productionHasActiveSession=false`, `productionSessionState=unavailable`, and media failure `none`.
+  - Room dismiss/reopen proof passed: B listener/owner was armed and idle, then after leaving and reopening the DM B owner/listener reset.
+  - Final A/B status reported `productionListenerAvailable=true`, `productionRoomAttached=true`, `productionSessionRestorationSupported=false`, `productionHasActiveSession=false`, `productionSessionState=unavailable`, and `productionMediaFailureReason=none`.
+  - No UI issue was observed, the existing Element Call route remained untouched, no CallKit/push/video/global production activation was introduced, no code changes were needed, and the worktree stayed clean.
 
 ## Current Blocker
 
@@ -507,14 +517,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Rapid terminal-action restart prevention is fixed and runtime-proven on the current build.
 - Timeout runtime behavior is proven through the private/internal room-scoped path.
 - Typed state/snapshot cleanup is implemented, and the failed-state Retry/Dismiss regression found after that cleanup is fixed and runtime-verified.
-- The next immediate gap is state architecture follow-up/internal usable checkpoint planning before broader internal rollout work.
+- Room/app relaunch and room dismiss/reopen lifecycle behavior is fail-closed and runtime-proven with `productionSessionRestorationSupported=false`.
+- The next immediate gap is a private native audio call internal dogfood readiness review before broader internal rollout work.
 - No public production activation, Element Call route change, CallKit, or push integration exists yet.
 
 ## Next Recommended Phase
 
-`2.21D — private native call UI state architecture follow-up`
+`2.23A — private native audio call internal dogfood readiness review`
 
-Goal: review the typed snapshot/reducer cleanup after runtime regression proof, decide whether any additional state ownership cleanup is required, and prepare the private native call UI for an internal usable checkpoint plan while keeping the card gated, redacted, and separate from Element Call routing, CallKit/push, public production activation, and global production activation.
+Goal: review whether the gated private native audio call path is ready for controlled internal dogfood, define the remaining must-fix items and explicit out-of-scope areas, and keep the card gated, redacted, fail-closed, and separate from Element Call routing, CallKit/push, video, public production activation, and global production activation.
 
 ## Do-Not-Touch Constraints
 

@@ -705,3 +705,22 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Confirmed the existing Element Call route remained untouched.
 - Confirmed no CallKit, push, or global production activation was introduced.
 - Recommended next phase: `2.21D — private native call UI state architecture follow-up`, or `2.22A — internal usable checkpoint plan` if the architecture follow-up finds no additional cleanup needed.
+
+## 2026-05-20 — 2.22C Private Native Call Relaunch/Listener Lifecycle Runtime Proof
+
+- Recorded runtime proof for private native call relaunch and listener lifecycle behavior after 2.22B lifecycle hardening.
+- Baseline lifecycle status included `productionListenerAvailable=true`, `productionRoomAttached=true`, and `productionSessionRestorationSupported=false`.
+- Confirmed A and B had no owner, listener, active session, stale media failure, or raw room/peer IDs in output.
+- ActiveAudio relaunch proof passed: A and B reached `activeAudio` with encryption ready and media failure `none`.
+- After app relaunch and reopening the encrypted DM, no stale `activeAudio` was restored.
+- Confirmed after activeAudio relaunch that `productionHasActiveSession=false`, `productionSessionRestorationSupported=false`, and the state was safe/fail-closed.
+- Ringing relaunch proof passed: before relaunch A reported `outgoingRinging`, B reported `incomingRinging`, media connect was not attempted, and media failure was `none`.
+- After relaunch and reopening the DM, no stale outgoing/incoming session was restored.
+- Confirmed after ringing relaunch that `productionHasActiveSession=false`, `productionSessionState=unavailable`, and media failure was `none`.
+- Room dismiss/reopen proof passed: B listener/owner was armed and idle, then after leaving and reopening the DM the B owner/listener reset.
+- Confirmed final A/B status reported `productionListenerAvailable=true`, `productionRoomAttached=true`, `productionSessionRestorationSupported=false`, `productionHasActiveSession=false`, `productionSessionState=unavailable`, and `productionMediaFailureReason=none`.
+- Confirmed no UI issue was observed.
+- Confirmed the existing Element Call route remained untouched.
+- Confirmed no CallKit, push, video, or global production activation was introduced.
+- Confirmed no code changes were needed and the worktree stayed clean.
+- Recommended next phase: `2.23A — private native audio call internal dogfood readiness review`.
