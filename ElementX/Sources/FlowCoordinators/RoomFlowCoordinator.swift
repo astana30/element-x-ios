@@ -680,12 +680,12 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
             return nil
         }
 
-        return ClosureNativeDirectCallRoomCardProvider(state: { [weak self] in
+        return ClosureNativeDirectCallRoomCardProvider(status: { [weak self] in
             guard let self else {
-                return .unavailable(reason: .nativeCallsUnavailable)
+                return .init(state: .unavailable(reason: .nativeCallsUnavailable))
             }
 
-            return await nativeDirectCallRoomCardState()
+            return await nativeDirectCallRoomCardStatus()
         }, action: { [weak self] action in
             guard let self else {
                 return .blocked(action: action, reason: .nativeCallsUnavailable)
@@ -698,45 +698,45 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
     private func nativeDirectCallRoomCardActionResult(for action: NativeDirectCallRoomCardAction) async -> NativeDirectCallRoomCardActionResult {
         switch action {
         case .refreshStatus:
-            let state = await nativeDirectCallRoomCardState()
+            let status = await nativeDirectCallRoomCardStatus()
             return .init(action: action,
                          outcome: .refreshed,
-                         state: state)
+                         status: status)
         case .startAudio:
             let result = await nativeDirectCallProductionStartOutgoingAudioCall(isProductionStartEnabled: ProcessInfo.isNativeDirectCallProductionStartEnabled)
-            let state = await nativeDirectCallRoomCardState()
+            let status = await nativeDirectCallRoomCardStatus()
             return .init(action: action,
                          outcome: NativeDirectCallRoomCardActionOutcome(result.outcome),
-                         state: state)
+                         status: status)
         case .accept:
             let result = await nativeDirectCallProductionAcceptIncomingCall()
-            let state = await nativeDirectCallRoomCardState()
+            let status = await nativeDirectCallRoomCardStatus()
             return .init(action: action,
                          outcome: NativeDirectCallRoomCardActionOutcome(acceptOutcome: result.outcome),
-                         state: state)
+                         status: status)
         case .declineIncoming:
             let result = await nativeDirectCallProductionHangup()
-            let state = await nativeDirectCallRoomCardState()
+            let status = await nativeDirectCallRoomCardStatus()
             return .init(action: action,
                          outcome: NativeDirectCallRoomCardActionOutcome(declineOutcome: result.outcome),
-                         state: state)
+                         status: status)
         case .cancelOutgoing:
             let result = await nativeDirectCallProductionHangup()
-            let state = await nativeDirectCallRoomCardState()
+            let status = await nativeDirectCallRoomCardStatus()
             return .init(action: action,
                          outcome: NativeDirectCallRoomCardActionOutcome(cancelOutcome: result.outcome),
-                         state: state)
+                         status: status)
         case .hangUp:
             let result = await nativeDirectCallProductionHangup()
-            let state = await nativeDirectCallRoomCardState()
+            let status = await nativeDirectCallRoomCardStatus()
             return .init(action: action,
                          outcome: NativeDirectCallRoomCardActionOutcome(hangUpOutcome: result.outcome),
-                         state: state)
+                         status: status)
         case .retry:
-            let state = await nativeDirectCallRoomCardState()
+            let status = await nativeDirectCallRoomCardStatus()
             return .init(action: action,
                          outcome: .retried,
-                         state: state)
+                         status: status)
         case .dismissError:
             return .init(action: action,
                          outcome: .dismissed,
@@ -744,7 +744,7 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
         }
     }
 
-    private func nativeDirectCallRoomCardState() async -> NativeDirectCallRoomCardState {
+    private func nativeDirectCallRoomCardStatus() async -> NativeDirectCallRoomCardStatus {
         let triggerDiagnostic = await nativeDirectCallProductionTriggerDryRunDiagnostic()
         return .make(triggerDiagnostic: triggerDiagnostic,
                      productionStatus: nativeDirectCallProductionStatus())

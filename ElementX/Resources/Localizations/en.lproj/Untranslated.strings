@@ -49,6 +49,11 @@
 "screen_room_native_direct_call_declined" = "Call declined";
 "screen_room_native_direct_call_ended" = "Call ended";
 "screen_room_native_direct_call_incoming" = "Incoming call";
+"screen_room_native_direct_call_incoming_unavailable" = "Incoming unavailable";
+"screen_room_native_direct_call_listener_not_armed" = "Listener not armed";
+"screen_room_native_direct_call_open_room_required" = "Open room required";
 "screen_room_native_direct_call_ready" = "Ready to call";
+"screen_room_native_direct_call_ready_to_receive" = "Ready to receive";
+"screen_room_native_direct_call_restoration_not_supported" = "Call restoration not supported";
 "screen_room_native_direct_call_service_unavailable" = "Call service unavailable";
 "screen_room_native_direct_call_verify_before_calling" = "Verify this chat before calling";

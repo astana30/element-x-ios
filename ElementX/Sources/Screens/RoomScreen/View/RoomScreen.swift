@@ -283,6 +283,14 @@ struct NativeDirectCallRoomCard: View {
                     .lineLimit(1)
             }
 
+            if let receiverAvailability = state.receiverAvailability {
+                statusDetail(title: "Receive:", value: receiverAvailability.displayText)
+            }
+
+            if let restorationText = state.restorationAvailability?.displayText {
+                statusDetail(title: "Relaunch:", value: restorationText)
+            }
+
             if let lastAction = state.lastAction {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text("Last action:")
@@ -294,6 +302,18 @@ struct NativeDirectCallRoomCard: View {
                         .lineLimit(1)
                 }
             }
+        }
+    }
+
+    private func statusDetail(title: String, value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(title)
+                .font(.compound.bodyXS)
+                .foregroundStyle(.compound.textSecondary)
+            Text(value)
+                .font(.compound.bodyXS)
+                .foregroundStyle(.compound.textPrimary)
+                .lineLimit(1)
         }
     }
 

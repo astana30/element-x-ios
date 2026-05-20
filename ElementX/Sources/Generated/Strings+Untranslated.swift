@@ -70,8 +70,18 @@ internal enum UntranslatedL10n {
   internal static var screenRoomNativeDirectCallEnded: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_ended") }
   /// Incoming call
   internal static var screenRoomNativeDirectCallIncoming: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_incoming") }
+  /// Incoming unavailable
+  internal static var screenRoomNativeDirectCallIncomingUnavailable: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_incoming_unavailable") }
+  /// Listener not armed
+  internal static var screenRoomNativeDirectCallListenerNotArmed: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_listener_not_armed") }
+  /// Open room required
+  internal static var screenRoomNativeDirectCallOpenRoomRequired: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_open_room_required") }
   /// Ready to call
   internal static var screenRoomNativeDirectCallReady: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_ready") }
+  /// Ready to receive
+  internal static var screenRoomNativeDirectCallReadyToReceive: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_ready_to_receive") }
+  /// Call restoration not supported
+  internal static var screenRoomNativeDirectCallRestorationNotSupported: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_restoration_not_supported") }
   /// Call service unavailable
   internal static var screenRoomNativeDirectCallServiceUnavailable: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_service_unavailable") }
   /// Verify this chat before calling

@@ -711,10 +711,107 @@ enum NativeDirectCallRoomCardActionOutcome: String, Equatable, CustomStringConve
     }
 }
 
+enum NativeDirectCallRoomReceiverAvailability: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case openRoomRequired
+    case listenerUnavailable
+    case listenerNotArmed
+    case listenerNotStarted
+    case readyToReceive
+
+    #if DEBUG
+    init(snapshot: NativeDirectCallRoomSnapshot) {
+        if !snapshot.productionRoomAttached {
+            self = .openRoomRequired
+        } else if !snapshot.productionListenerAvailable {
+            self = .listenerUnavailable
+        } else if !snapshot.productionOwnerAvailable {
+            self = .listenerNotArmed
+        } else if !snapshot.productionListenerStarted {
+            self = .listenerNotStarted
+        } else {
+            self = .readyToReceive
+        }
+    }
+    #endif
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum NativeDirectCallRoomRestorationAvailability: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case supported
+    case unsupported
+
+    #if DEBUG
+    init(snapshot: NativeDirectCallRoomSnapshot) {
+        self = snapshot.productionSessionRestorationSupported ? .supported : .unsupported
+    }
+    #endif
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct NativeDirectCallRoomCardStatus: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let state: NativeDirectCallRoomCardState
+    let receiverAvailability: NativeDirectCallRoomReceiverAvailability?
+    let restorationAvailability: NativeDirectCallRoomRestorationAvailability?
+
+    init(state: NativeDirectCallRoomCardState,
+         receiverAvailability: NativeDirectCallRoomReceiverAvailability? = nil,
+         restorationAvailability: NativeDirectCallRoomRestorationAvailability? = nil) {
+        self.state = state
+        self.receiverAvailability = receiverAvailability
+        self.restorationAvailability = restorationAvailability
+    }
+
+    var description: String {
+        [
+            "state: \(state)",
+            "receiverAvailability: \(receiverAvailability?.description ?? "none")",
+            "restorationAvailability: \(restorationAvailability?.description ?? "none")"
+        ].joined(separator: ", ")
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
 struct NativeDirectCallRoomCardActionResult: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     let action: NativeDirectCallRoomCardAction
     let outcome: NativeDirectCallRoomCardActionOutcome
-    let state: NativeDirectCallRoomCardState
+    let status: NativeDirectCallRoomCardStatus
+
+    var state: NativeDirectCallRoomCardState {
+        status.state
+    }
+
+    init(action: NativeDirectCallRoomCardAction,
+         outcome: NativeDirectCallRoomCardActionOutcome,
+         state: NativeDirectCallRoomCardState) {
+        self.init(action: action,
+                  outcome: outcome,
+                  status: .init(state: state))
+    }
+
+    init(action: NativeDirectCallRoomCardAction,
+         outcome: NativeDirectCallRoomCardActionOutcome,
+         status: NativeDirectCallRoomCardStatus) {
+        self.action = action
+        self.outcome = outcome
+        self.status = status
+    }
 
     static func blocked(action: NativeDirectCallRoomCardAction,
                         reason: NativeDirectCallRoomCardUnavailableReason) -> Self {
@@ -733,6 +830,14 @@ struct NativeDirectCallRoomCardActionResult: Equatable, CustomStringConvertible,
 @MainActor
 protocol NativeDirectCallRoomStateProviding: AnyObject {
     func nativeDirectCallRoomCardState() async -> NativeDirectCallRoomCardState
+    func nativeDirectCallRoomCardStatus() async -> NativeDirectCallRoomCardStatus
+}
+
+extension NativeDirectCallRoomStateProviding {
+    func nativeDirectCallRoomCardStatus() async -> NativeDirectCallRoomCardStatus {
+        let state = await nativeDirectCallRoomCardState()
+        return .init(state: state)
+    }
 }
 
 @MainActor
@@ -742,17 +847,31 @@ protocol NativeDirectCallRoomActionHandling: AnyObject {
 
 @MainActor
 final class ClosureNativeDirectCallRoomCardProvider: NativeDirectCallRoomStateProviding, NativeDirectCallRoomActionHandling {
-    private let stateClosure: @MainActor () async -> NativeDirectCallRoomCardState
+    private let statusClosure: @MainActor () async -> NativeDirectCallRoomCardStatus
     private let actionClosure: @MainActor (NativeDirectCallRoomCardAction) async -> NativeDirectCallRoomCardActionResult
 
     init(state: @escaping @MainActor () async -> NativeDirectCallRoomCardState,
          action: @escaping @MainActor (NativeDirectCallRoomCardAction) async -> NativeDirectCallRoomCardActionResult) {
-        stateClosure = state
+        statusClosure = {
+            let state = await state()
+            return .init(state: state)
+        }
+        actionClosure = action
+    }
+
+    init(status: @escaping @MainActor () async -> NativeDirectCallRoomCardStatus,
+         action: @escaping @MainActor (NativeDirectCallRoomCardAction) async -> NativeDirectCallRoomCardActionResult) {
+        statusClosure = status
         actionClosure = action
     }
 
     func nativeDirectCallRoomCardState() async -> NativeDirectCallRoomCardState {
-        await stateClosure()
+        let status = await statusClosure()
+        return status.state
+    }
+
+    func nativeDirectCallRoomCardStatus() async -> NativeDirectCallRoomCardStatus {
+        await statusClosure()
     }
 
     func performNativeDirectCallRoomCardAction(_ action: NativeDirectCallRoomCardAction) async -> NativeDirectCallRoomCardActionResult {
@@ -765,18 +884,24 @@ struct NativeDirectCallRoomCardViewState: Equatable {
     var isLoading: Bool
     var isStartAudioTemporarilyDisabled = false
     var state: NativeDirectCallRoomCardState
+    var receiverAvailability: NativeDirectCallRoomReceiverAvailability?
+    var restorationAvailability: NativeDirectCallRoomRestorationAvailability?
     var lastAction: NativeDirectCallRoomCardAction?
     var lastActionOutcome: NativeDirectCallRoomCardActionOutcome?
 
     static let hidden = Self(isVisible: false,
                              isLoading: false,
                              state: .hidden,
+                             receiverAvailability: nil,
+                             restorationAvailability: nil,
                              lastAction: nil,
                              lastActionOutcome: nil)
 
     static let visible = Self(isVisible: true,
                               isLoading: false,
                               state: .unavailable(reason: .nativeCallsUnavailable),
+                              receiverAvailability: nil,
+                              restorationAvailability: nil,
                               lastAction: nil,
                               lastActionOutcome: nil)
 
@@ -1096,6 +1221,11 @@ struct NativeDirectCallRoomActionAvailability: Equatable {
 struct NativeDirectCallRoomSnapshot: Equatable {
     let isActivationEnabled: Bool
     let disabledReason: DirectCallProductionActivationDisabledReason?
+    let productionOwnerAvailable: Bool
+    let productionListenerAvailable: Bool
+    let productionListenerStarted: Bool
+    let productionRoomAttached: Bool
+    let productionSessionRestorationSupported: Bool
     let productionHasActiveSession: Bool
     let currentSessionState: NativeDirectCallRoomSessionState
     let encryptionState: NativeDirectCallRoomEncryptionState
@@ -1105,6 +1235,11 @@ struct NativeDirectCallRoomSnapshot: Equatable {
 
     init(isActivationEnabled: Bool,
          disabledReason: DirectCallProductionActivationDisabledReason?,
+         productionOwnerAvailable: Bool = false,
+         productionListenerAvailable: Bool = true,
+         productionListenerStarted: Bool = false,
+         productionRoomAttached: Bool = true,
+         productionSessionRestorationSupported: Bool = false,
          productionHasActiveSession: Bool,
          currentSessionState: NativeDirectCallRoomSessionState,
          encryptionState: NativeDirectCallRoomEncryptionState = .none,
@@ -1113,6 +1248,11 @@ struct NativeDirectCallRoomSnapshot: Equatable {
          lastOutcome: NativeDirectCallRoomCardActionOutcome? = nil) {
         self.isActivationEnabled = isActivationEnabled
         self.disabledReason = disabledReason
+        self.productionOwnerAvailable = productionOwnerAvailable
+        self.productionListenerAvailable = productionListenerAvailable
+        self.productionListenerStarted = productionListenerStarted
+        self.productionRoomAttached = productionRoomAttached
+        self.productionSessionRestorationSupported = productionSessionRestorationSupported
         self.productionHasActiveSession = productionHasActiveSession
         self.currentSessionState = currentSessionState
         self.encryptionState = encryptionState
@@ -1126,6 +1266,11 @@ struct NativeDirectCallRoomSnapshot: Equatable {
          lastOutcome: NativeDirectCallRoomCardActionOutcome? = nil) {
         self.init(isActivationEnabled: triggerDiagnostic.isEnabled,
                   disabledReason: triggerDiagnostic.blockedReason,
+                  productionOwnerAvailable: productionStatus.productionOwnerAvailable,
+                  productionListenerAvailable: productionStatus.productionListenerAvailable,
+                  productionListenerStarted: productionStatus.productionListenerStarted,
+                  productionRoomAttached: productionStatus.productionRoomAttached,
+                  productionSessionRestorationSupported: productionStatus.productionSessionRestorationSupported,
                   productionHasActiveSession: productionStatus.productionHasActiveSession,
                   currentSessionState: .init(productionStatusValue: productionStatus.productionSessionState),
                   encryptionState: .init(productionStatusValue: productionStatus.productionEncryptionState),
@@ -1256,32 +1401,49 @@ enum NativeDirectCallUserSafeReasonMapper {
 enum NativeDirectCallRoomCardStateReducer {
     static func reduce(snapshot: NativeDirectCallRoomSnapshot,
                        localState: NativeDirectCallRoomCardLocalState = .init()) -> NativeDirectCallRoomCardViewState {
-        let cardState = cardState(snapshot: snapshot, hidesDismissedError: localState.hidesDismissedError)
-        return .init(isVisible: cardState != .hidden,
+        let status = status(snapshot: snapshot, hidesDismissedError: localState.hidesDismissedError)
+        return .init(isVisible: status.state != .hidden,
                      isLoading: localState.isLoading,
                      isStartAudioTemporarilyDisabled: localState.isStartAudioTemporarilyDisabled,
-                     state: cardState,
+                     state: status.state,
+                     receiverAvailability: status.receiverAvailability,
+                     restorationAvailability: status.restorationAvailability,
                      lastAction: localState.lastAction,
                      lastActionOutcome: localState.lastActionOutcome ?? snapshot.lastOutcome)
     }
 
     static func cardState(snapshot: NativeDirectCallRoomSnapshot,
                           hidesDismissedError: Bool = false) -> NativeDirectCallRoomCardState {
+        status(snapshot: snapshot, hidesDismissedError: hidesDismissedError).state
+    }
+
+    static func status(snapshot: NativeDirectCallRoomSnapshot,
+                       hidesDismissedError: Bool = false) -> NativeDirectCallRoomCardStatus {
+        let receiverAvailability = NativeDirectCallRoomReceiverAvailability(snapshot: snapshot)
+        let restorationAvailability = NativeDirectCallRoomRestorationAvailability(snapshot: snapshot)
         guard snapshot.productionHasActiveSession else {
             let state = inactiveSessionCardState(snapshot: snapshot)
             if hidesDismissedError, state.isFailed || state.isDismissible {
-                return snapshot.isActivationEnabled ? .canStart : .unavailable(reason: NativeDirectCallUserSafeReasonMapper.unavailableReason(snapshot.disabledReason))
+                return .init(state: snapshot.isActivationEnabled ? .canStart : .unavailable(reason: NativeDirectCallUserSafeReasonMapper.unavailableReason(snapshot.disabledReason)),
+                             receiverAvailability: receiverAvailability,
+                             restorationAvailability: restorationAvailability)
             }
 
-            return state
+            return .init(state: state,
+                         receiverAvailability: receiverAvailability,
+                         restorationAvailability: restorationAvailability)
         }
 
         let state = activeSessionCardState(snapshot: snapshot)
         if hidesDismissedError, state.isFailed || state.isDismissible {
-            return snapshot.isActivationEnabled ? .canStart : .unavailable(reason: NativeDirectCallUserSafeReasonMapper.unavailableReason(snapshot.disabledReason))
+            return .init(state: snapshot.isActivationEnabled ? .canStart : .unavailable(reason: NativeDirectCallUserSafeReasonMapper.unavailableReason(snapshot.disabledReason)),
+                         receiverAvailability: receiverAvailability,
+                         restorationAvailability: restorationAvailability)
         }
 
-        return state
+        return .init(state: state,
+                     receiverAvailability: receiverAvailability,
+                     restorationAvailability: restorationAvailability)
     }
 
     private static func inactiveSessionCardState(snapshot: NativeDirectCallRoomSnapshot) -> NativeDirectCallRoomCardState {
@@ -1380,8 +1542,8 @@ extension NativeDirectCallRoomCardActionOutcome {
 extension NativeDirectCallRoomCardState {
     static func make(triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic,
                      productionStatus: NativeDirectCallProductionStatus) -> Self {
-        NativeDirectCallRoomCardStateReducer.cardState(snapshot: .init(triggerDiagnostic: triggerDiagnostic,
-                                                                       productionStatus: productionStatus))
+        NativeDirectCallRoomCardStatus.make(triggerDiagnostic: triggerDiagnostic,
+                                            productionStatus: productionStatus).state
     }
 
     static func make(isActivationEnabled: Bool,
@@ -1397,6 +1559,14 @@ extension NativeDirectCallRoomCardState {
                                                     mediaState: .init(failureReason: mediaFailureReason),
                                                     terminalReason: .init(terminalReason))
         return NativeDirectCallRoomCardStateReducer.cardState(snapshot: snapshot)
+    }
+}
+
+extension NativeDirectCallRoomCardStatus {
+    static func make(triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic,
+                     productionStatus: NativeDirectCallProductionStatus) -> Self {
+        NativeDirectCallRoomCardStateReducer.status(snapshot: .init(triggerDiagnostic: triggerDiagnostic,
+                                                                    productionStatus: productionStatus))
     }
 }
 
@@ -1438,6 +1608,32 @@ extension NativeDirectCallRoomCardState {
             true
         case .hidden, .unavailable, .canStart, .outgoingRinging, .incomingRinging, .connecting, .activeAudio:
             false
+        }
+    }
+}
+
+extension NativeDirectCallRoomReceiverAvailability {
+    var displayText: String {
+        switch self {
+        case .openRoomRequired:
+            UntranslatedL10n.screenRoomNativeDirectCallOpenRoomRequired
+        case .listenerUnavailable:
+            UntranslatedL10n.screenRoomNativeDirectCallIncomingUnavailable
+        case .listenerNotArmed, .listenerNotStarted:
+            UntranslatedL10n.screenRoomNativeDirectCallListenerNotArmed
+        case .readyToReceive:
+            UntranslatedL10n.screenRoomNativeDirectCallReadyToReceive
+        }
+    }
+}
+
+extension NativeDirectCallRoomRestorationAvailability {
+    var displayText: String? {
+        switch self {
+        case .supported:
+            nil
+        case .unsupported:
+            UntranslatedL10n.screenRoomNativeDirectCallRestorationNotSupported
         }
     }
 }

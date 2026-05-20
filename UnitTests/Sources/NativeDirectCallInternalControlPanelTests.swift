@@ -79,6 +79,32 @@ final class NativeDirectCallInternalControlPanelTests {
     }
 
     @Test
+    func productCardRefreshAppliesListenerLifecycleStatus() async throws {
+        let provider = NativeDirectCallRoomCardProviderSpy(statuses: [
+            .init(state: .canStart,
+                  receiverAvailability: .listenerNotArmed,
+                  restorationAvailability: .unsupported)
+        ])
+        let viewModel = RoomScreenViewModel.mock(roomProxyMock: JoinedRoomProxyMock(.init()),
+                                                 nativeDirectCallRoomStateProvider: provider,
+                                                 nativeDirectCallRoomActionHandler: provider)
+        self.viewModel = viewModel
+
+        let deferred = deferFulfillment(viewModel.context.$viewState) { viewState in
+            viewState.nativeDirectCallRoomCard.receiverAvailability == .listenerNotArmed
+        }
+        viewModel.context.send(viewAction: .nativeDirectCallRoomCard(.refreshStatus))
+        try await deferred.fulfill()
+
+        let card = viewModel.context.viewState.nativeDirectCallRoomCard
+        #expect(card.state == .canStart)
+        #expect(card.receiverAvailability == .listenerNotArmed)
+        #expect(card.restorationAvailability == .unsupported)
+        #expect(provider.refreshCount == 1)
+        #expect(provider.performedActions.isEmpty)
+    }
+
+    @Test
     func productCardRunsReadOnlyFollowUpRefreshAfterEarlyUnavailableState() async throws {
         let provider = NativeDirectCallRoomCardProviderSpy(states: [
             .unavailable(reason: .nativeCallsUnavailable),
@@ -738,6 +764,44 @@ final class NativeDirectCallInternalControlPanelTests {
     }
 
     @Test
+    func productCardReducerMapsListenerLifecycleStatus() {
+        let openRoomRequired = Self.reducedCardStatus(listenerAvailable: false,
+                                                      roomAttached: false)
+        #expect(openRoomRequired.state == .canStart)
+        #expect(openRoomRequired.receiverAvailability == .openRoomRequired)
+        #expect(openRoomRequired.restorationAvailability == .unsupported)
+
+        let incomingUnavailable = Self.reducedCardStatus(listenerAvailable: false)
+        #expect(incomingUnavailable.receiverAvailability == .listenerUnavailable)
+
+        let listenerNotArmed = Self.reducedCardStatus(ownerAvailable: false,
+                                                      listenerAvailable: true,
+                                                      listenerStarted: false)
+        #expect(listenerNotArmed.receiverAvailability == .listenerNotArmed)
+
+        let listenerNotStarted = Self.reducedCardStatus(ownerAvailable: true,
+                                                        listenerAvailable: true,
+                                                        listenerStarted: false)
+        #expect(listenerNotStarted.receiverAvailability == .listenerNotStarted)
+
+        let readyToReceive = Self.reducedCardStatus(ownerAvailable: true,
+                                                    listenerAvailable: true,
+                                                    listenerStarted: true)
+        #expect(readyToReceive.receiverAvailability == .readyToReceive)
+    }
+
+    @Test
+    func productCardListenerLifecycleDisplayTextUsesUserSafeCopy() {
+        #expect(NativeDirectCallRoomReceiverAvailability.openRoomRequired.displayText == UntranslatedL10n.screenRoomNativeDirectCallOpenRoomRequired)
+        #expect(NativeDirectCallRoomReceiverAvailability.listenerUnavailable.displayText == UntranslatedL10n.screenRoomNativeDirectCallIncomingUnavailable)
+        #expect(NativeDirectCallRoomReceiverAvailability.listenerNotArmed.displayText == UntranslatedL10n.screenRoomNativeDirectCallListenerNotArmed)
+        #expect(NativeDirectCallRoomReceiverAvailability.listenerNotStarted.displayText == UntranslatedL10n.screenRoomNativeDirectCallListenerNotArmed)
+        #expect(NativeDirectCallRoomReceiverAvailability.readyToReceive.displayText == UntranslatedL10n.screenRoomNativeDirectCallReadyToReceive)
+        #expect(NativeDirectCallRoomRestorationAvailability.unsupported.displayText == UntranslatedL10n.screenRoomNativeDirectCallRestorationNotSupported)
+        #expect(NativeDirectCallRoomRestorationAvailability.supported.displayText == nil)
+    }
+
+    @Test
     func productCardReducerKeepsDismissedErrorLocalToViewState() {
         let snapshot = NativeDirectCallRoomSnapshot(isActivationEnabled: true,
                                                     disabledReason: nil,
@@ -924,8 +988,12 @@ final class NativeDirectCallInternalControlPanelTests {
         let cardActionDescription = NativeDirectCallRoomCardActionResult(action: .startAudio,
                                                                          outcome: .failed,
                                                                          state: .failed(reason: .liveKitNetworkFailed)).description
+        let cardStatusDescription = NativeDirectCallRoomCardStatus(state: .canStart,
+                                                                   receiverAvailability: .readyToReceive,
+                                                                   restorationAvailability: .unsupported).description
         #expect(forbiddenFragments.allSatisfy { !cardStateDescription.contains($0) })
         #expect(forbiddenFragments.allSatisfy { !cardActionDescription.contains($0) })
+        #expect(forbiddenFragments.allSatisfy { !cardStatusDescription.contains($0) })
     }
 
     private static func nativeDirectCallStatus(availability: NativeDirectCallInternalControlAvailability = .canStart,
@@ -961,6 +1029,23 @@ final class NativeDirectCallInternalControlPanelTests {
                                                     mediaState: mediaState,
                                                     terminalReason: terminalReason)
         return NativeDirectCallRoomCardStateReducer.reduce(snapshot: snapshot).state
+    }
+
+    private static func reducedCardStatus(ownerAvailable: Bool = false,
+                                          listenerAvailable: Bool = true,
+                                          listenerStarted: Bool = false,
+                                          roomAttached: Bool = true,
+                                          restorationSupported: Bool = false) -> NativeDirectCallRoomCardStatus {
+        let snapshot = NativeDirectCallRoomSnapshot(isActivationEnabled: true,
+                                                    disabledReason: nil,
+                                                    productionOwnerAvailable: ownerAvailable,
+                                                    productionListenerAvailable: listenerAvailable,
+                                                    productionListenerStarted: listenerStarted,
+                                                    productionRoomAttached: roomAttached,
+                                                    productionSessionRestorationSupported: restorationSupported,
+                                                    productionHasActiveSession: false,
+                                                    currentSessionState: .idle)
+        return NativeDirectCallRoomCardStateReducer.status(snapshot: snapshot)
     }
 }
 
@@ -1027,18 +1112,40 @@ private final class NativeDirectCallRoomCardProviderSpy: NativeDirectCallRoomSta
     private(set) var startAudioCount = 0
     private(set) var performedActions = [NativeDirectCallRoomCardAction]()
     private var states: [NativeDirectCallRoomCardState]
+    private var statuses: [NativeDirectCallRoomCardStatus]?
 
     init(states: [NativeDirectCallRoomCardState] = [.canStart]) {
         self.states = states
+        statuses = nil
+    }
+
+    init(statuses: [NativeDirectCallRoomCardStatus]) {
+        states = statuses.map(\.state)
+        self.statuses = statuses
     }
 
     func nativeDirectCallRoomCardState() async -> NativeDirectCallRoomCardState {
+        await nativeDirectCallRoomCardStatus().state
+    }
+
+    func nativeDirectCallRoomCardStatus() async -> NativeDirectCallRoomCardStatus {
         refreshCount += 1
-        if states.count > 1 {
-            return states.removeFirst()
+        if var statuses {
+            let status: NativeDirectCallRoomCardStatus
+            if statuses.count > 1 {
+                status = statuses.removeFirst()
+            } else {
+                status = statuses.first ?? .init(state: .canStart)
+            }
+            self.statuses = statuses
+            return status
         }
 
-        return states.first ?? .canStart
+        if states.count > 1 {
+            return .init(state: states.removeFirst())
+        }
+
+        return .init(state: states.first ?? .canStart)
     }
 
     func performNativeDirectCallRoomCardAction(_ action: NativeDirectCallRoomCardAction) async -> NativeDirectCallRoomCardActionResult {

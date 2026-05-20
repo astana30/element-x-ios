@@ -275,14 +275,13 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
             guard let self else { return }
 
             let result = await nativeDirectCallRoomActionHandler.performNativeDirectCallRoomCardAction(action)
-            state.nativeDirectCallRoomCard.state = result.state
+            applyNativeDirectCallRoomCardStatus(result.status)
             state.nativeDirectCallRoomCard.lastAction = action
             state.nativeDirectCallRoomCard.lastActionOutcome = result.outcome
             if shouldSuppressStartAudioAfterTerminalAction(action, outcome: result.outcome) {
                 suppressNativeDirectCallRoomCardStartAudio()
             }
 
-            state.nativeDirectCallRoomCard.isVisible = state.nativeDirectCallRoomCard.state != .hidden
             state.nativeDirectCallRoomCard.isLoading = false
             nativeDirectCallRoomCardPendingAction = nil
         }
@@ -301,11 +300,10 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
         Task { @MainActor [weak self] in
             guard let self else { return }
 
-            let refreshedState = await nativeDirectCallRoomStateProvider.nativeDirectCallRoomCardState()
-            state.nativeDirectCallRoomCard.state = refreshedState
+            let refreshedStatus = await nativeDirectCallRoomStateProvider.nativeDirectCallRoomCardStatus()
+            applyNativeDirectCallRoomCardStatus(refreshedStatus)
             state.nativeDirectCallRoomCard.lastAction = .retry
             state.nativeDirectCallRoomCard.lastActionOutcome = .retried
-            state.nativeDirectCallRoomCard.isVisible = state.nativeDirectCallRoomCard.state != .hidden
             state.nativeDirectCallRoomCard.isLoading = false
             nativeDirectCallRoomCardPendingAction = nil
         }
@@ -339,24 +337,30 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
         Task { @MainActor [weak self] in
             guard let self else { return }
 
-            let refreshedState = await nativeDirectCallRoomStateProvider.nativeDirectCallRoomCardState()
+            let refreshedStatus = await nativeDirectCallRoomStateProvider.nativeDirectCallRoomCardStatus()
             guard showsLoadingIndicator || !state.nativeDirectCallRoomCard.isLoading else {
                 return
             }
 
-            state.nativeDirectCallRoomCard.state = refreshedState
+            applyNativeDirectCallRoomCardStatus(refreshedStatus)
             if markAsManualRefresh {
                 state.nativeDirectCallRoomCard.lastAction = .refreshStatus
                 state.nativeDirectCallRoomCard.lastActionOutcome = .refreshed
                 clearNativeDirectCallRoomCardStartAudioSuppression()
             }
 
-            state.nativeDirectCallRoomCard.isVisible = state.nativeDirectCallRoomCard.state != .hidden
             if showsLoadingIndicator {
                 state.nativeDirectCallRoomCard.isLoading = false
                 nativeDirectCallRoomCardPendingAction = nil
             }
         }
+    }
+
+    private func applyNativeDirectCallRoomCardStatus(_ status: NativeDirectCallRoomCardStatus) {
+        state.nativeDirectCallRoomCard.state = status.state
+        state.nativeDirectCallRoomCard.receiverAvailability = status.receiverAvailability
+        state.nativeDirectCallRoomCard.restorationAvailability = status.restorationAvailability
+        state.nativeDirectCallRoomCard.isVisible = status.state != .hidden
     }
 
     private func scheduleNativeDirectCallRoomCardAppearanceFollowUpRefreshes() {
