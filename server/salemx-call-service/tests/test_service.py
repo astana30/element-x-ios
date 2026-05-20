@@ -22,9 +22,14 @@ from salemx_call_service.config import (
     ALLOCATION_STORE_ENV,
     ALLOCATION_STORE_URL_ENV,
     ALLOW_MEMORY_ALLOCATION_STORE_ENV,
+    ALLOW_MEMORY_RATE_LIMITER_ENV,
     ALLOW_INSECURE_LIVEKIT_URL_ENV,
+    RATE_LIMIT_PER_MINUTE_ENV,
+    RATE_LIMIT_STORE_ENV,
+    RATE_LIMIT_STORE_URL_ENV,
     SERVICE_MODE_ENV,
     AllocationStoreKind,
+    RateLimitStoreKind,
     ServiceMode,
     ServicePreflightError,
     service_readiness_from_env,
@@ -43,6 +48,12 @@ from salemx_call_service.local_fake import (
     make_fake_capabilities_payload,
 )
 from salemx_call_service.room_validation import InMemoryRoomValidator, RoomEligibility, SynapseRoomValidator
+from salemx_call_service.rate_limiting import (
+    InMemoryRateLimiter,
+    RateLimiterProtocol,
+    RateLimitKey,
+    SharedRateLimiterSkeleton,
+)
 from salemx_call_service.service import DirectCallTokenService
 from salemx_call_service.synapse_http import SynapseHTTPResponse
 
@@ -76,7 +87,11 @@ class FakeLiveKitTokenIssuer:
 
 
 class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
-    def make_service(self, rooms: dict[str, RoomEligibility] | None = None, issuer: FakeLiveKitTokenIssuer | None = None) -> DirectCallTokenService:
+    def make_service(self,
+                     rooms: dict[str, RoomEligibility] | None = None,
+                     issuer: FakeLiveKitTokenIssuer | None = None,
+                     rate_limiter: RateLimiterProtocol | None = None,
+                     rate_limit_per_minute: int = 30) -> DirectCallTokenService:
         return DirectCallTokenService(
             auth_validator=FakeAuthValidator({
                 "matrix-token-a-sensitive": AuthenticatedUser("@alice:example.test", "DEVICEA"),
@@ -86,8 +101,10 @@ class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
                 "!room:example.test": RoomEligibility(("@alice:example.test", "@bob:example.test"), True),
             }),
             allocation_store=InMemoryAllocationStore(allocation_ttl_seconds=300),
+            rate_limiter=rate_limiter or InMemoryRateLimiter(),
             token_issuer=issuer or FakeLiveKitTokenIssuer(),
             livekit_server_url="wss://livekit.example.test",
+            rate_limit_per_minute=rate_limit_per_minute,
         )
 
     def valid_payload(self, **overrides: object) -> dict[str, object]:
@@ -197,6 +214,64 @@ class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(responses[0].allocation.id, responses[1].allocation.id)
         self.assertEqual(responses[0].livekit.room_name, responses[1].livekit.room_name)
 
+    async def test_under_rate_limit_token_request_succeeds(self) -> None:
+        issuer = FakeLiveKitTokenIssuer()
+        service = self.make_service(issuer=issuer, rate_limit_per_minute=2)
+
+        response = await service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload())
+
+        self.assertEqual(response.allocation.call_id, "call-a")
+        self.assertEqual(len(issuer.issued), 1)
+
+    async def test_over_rate_limit_returns_429(self) -> None:
+        service = self.make_service(rate_limit_per_minute=1)
+
+        await service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload(client_transaction_id="txn-1"))
+        with self.assertRaises(CallServiceError) as context:
+            await service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload(client_transaction_id="txn-2"))
+
+        self.assertEqual(context.exception.status_code, 429)
+        self.assertEqual(context.exception.errcode, "M_DIRECT_CALL_RATE_LIMITED")
+        self.assertIsNotNone(context.exception.retry_after_ms)
+
+    async def test_no_token_is_issued_after_rate_limit_is_exceeded(self) -> None:
+        issuer = FakeLiveKitTokenIssuer()
+        service = self.make_service(issuer=issuer, rate_limit_per_minute=1)
+
+        await service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload(client_transaction_id="txn-1"))
+        with self.assertRaises(CallServiceError):
+            await service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload(client_transaction_id="txn-2"))
+
+        self.assertEqual(len(issuer.issued), 1)
+
+    async def test_rate_limit_store_unavailable_fails_before_token_issue(self) -> None:
+        issuer = FakeLiveKitTokenIssuer()
+        service = self.make_service(
+            issuer=issuer,
+            rate_limiter=SharedRateLimiterSkeleton(RateLimitStoreKind.REDIS.value),
+        )
+
+        with self.assertRaises(CallServiceError) as context:
+            await service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload())
+
+        self.assertEqual(context.exception.status_code, 503)
+        self.assertEqual(context.exception.errcode, "M_DIRECT_CALL_RATE_LIMIT_STORE_UNAVAILABLE")
+        self.assertEqual(len(issuer.issued), 0)
+
+    async def test_rate_limited_logs_do_not_contain_raw_ids_or_tokens(self) -> None:
+        service = self.make_service(rate_limit_per_minute=1)
+
+        await service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload(client_transaction_id="txn-1"))
+        with self.assertLogs("salemx_call_service.service", level="INFO") as logs:
+            with self.assertRaises(CallServiceError):
+                await service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload(client_transaction_id="txn-2"))
+
+        log_output = "\n".join(logs.output)
+        self.assertNotIn("matrix-token-a-sensitive", log_output)
+        self.assertNotIn("!room:example.test", log_output)
+        self.assertNotIn("@alice:example.test", log_output)
+        self.assertNotIn("@bob:example.test", log_output)
+
     async def test_logs_do_not_contain_tokens_or_raw_room_id(self) -> None:
         service = self.make_service()
 
@@ -275,6 +350,42 @@ class AllocationStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(context.exception.errcode, "M_DIRECT_CALL_ALLOCATION_FAILED")
 
 
+class RateLimiterTests(unittest.IsolatedAsyncioTestCase):
+    async def test_memory_rate_limiter_allows_requests_under_limit(self) -> None:
+        limiter = InMemoryRateLimiter()
+        now = datetime(2026, 5, 20, tzinfo=timezone.utc)
+        keys = (RateLimitKey("user:redacted"), RateLimitKey("room:redacted"))
+
+        first = await limiter.check_and_record(keys, limit_per_minute=2, now=now)
+        second = await limiter.check_and_record(keys, limit_per_minute=2, now=now + timedelta(seconds=1))
+
+        self.assertTrue(first.allowed)
+        self.assertTrue(second.allowed)
+
+    async def test_memory_rate_limiter_limits_each_key_without_partial_record(self) -> None:
+        limiter = InMemoryRateLimiter()
+        now = datetime(2026, 5, 20, tzinfo=timezone.utc)
+        user_key = RateLimitKey("user:redacted")
+        room_key = RateLimitKey("room:redacted")
+
+        await limiter.check_and_record((user_key,), limit_per_minute=1, now=now)
+        limited = await limiter.check_and_record((user_key, room_key), limit_per_minute=1, now=now + timedelta(seconds=1))
+        room_only = await limiter.check_and_record((room_key,), limit_per_minute=1, now=now + timedelta(seconds=2))
+
+        self.assertFalse(limited.allowed)
+        self.assertEqual(limited.reason, "rateLimited")
+        self.assertIsNotNone(limited.retry_after_ms)
+        self.assertTrue(room_only.allowed)
+
+    async def test_shared_rate_limiter_skeleton_fails_closed(self) -> None:
+        limiter = SharedRateLimiterSkeleton(RateLimitStoreKind.REDIS.value)
+
+        with self.assertRaises(CallServiceError) as context:
+            await limiter.check_and_record((RateLimitKey("user:redacted"),), limit_per_minute=30)
+
+        self.assertEqual(context.exception.errcode, "M_DIRECT_CALL_RATE_LIMIT_STORE_UNAVAILABLE")
+
+
 class ServicePreflightTests(unittest.TestCase):
     def test_staging_preflight_refuses_memory_allocation_store_by_default(self) -> None:
         env = _staging_env({
@@ -332,6 +443,57 @@ class ServicePreflightTests(unittest.TestCase):
         self.assertFalse(readiness.ready)
         self.assertEqual(readiness.reason, "unsupportedAllocationStore")
         self.assertFalse(readiness.allocation_store_configured)
+
+    def test_staging_preflight_refuses_memory_rate_limiter_by_default(self) -> None:
+        env = _staging_env({
+            RATE_LIMIT_STORE_ENV: RateLimitStoreKind.MEMORY.value,
+            RATE_LIMIT_STORE_URL_ENV: "",
+        })
+
+        readiness = service_readiness_from_env(env)
+
+        self.assertFalse(readiness.ready)
+        self.assertEqual(readiness.reason, "invalidRateLimitConfig")
+        self.assertFalse(readiness.rate_limit_configured)
+        self.assertFalse(readiness.rate_limit_shared)
+
+    def test_staging_preflight_accepts_declared_shared_rate_limiter_shape(self) -> None:
+        secret = "rate-limit-store-password-sensitive"
+        env = _staging_env({
+            RATE_LIMIT_STORE_ENV: RateLimitStoreKind.REDIS.value,
+            RATE_LIMIT_STORE_URL_ENV: f"redis://:{secret}@rate-limit.example.test/0",
+        })
+
+        readiness = validate_service_preflight(env)
+        output = json.dumps(readiness.as_dict(), sort_keys=True)
+
+        self.assertTrue(readiness.ready)
+        self.assertEqual(readiness.reason, "ok")
+        self.assertTrue(readiness.rate_limit_configured)
+        self.assertTrue(readiness.rate_limit_shared)
+        self.assertNotIn(secret, output)
+        self.assertNotIn("rate-limit.example.test", output)
+
+    def test_staging_preflight_refuses_missing_shared_rate_limiter_location(self) -> None:
+        env = _staging_env({
+            RATE_LIMIT_STORE_ENV: RateLimitStoreKind.POSTGRES.value,
+            RATE_LIMIT_STORE_URL_ENV: "",
+        })
+
+        readiness = service_readiness_from_env(env)
+
+        self.assertFalse(readiness.ready)
+        self.assertEqual(readiness.reason, "invalidRateLimitConfig")
+        self.assertFalse(readiness.rate_limit_configured)
+        self.assertTrue(readiness.rate_limit_shared)
+
+    def test_staging_preflight_refuses_invalid_rate_limit_per_minute(self) -> None:
+        env = _staging_env({RATE_LIMIT_PER_MINUTE_ENV: "0"})
+
+        readiness = service_readiness_from_env(env)
+
+        self.assertFalse(readiness.ready)
+        self.assertEqual(readiness.reason, "invalidRateLimitConfig")
 
 
 class LocalFakeCapabilityTests(unittest.IsolatedAsyncioTestCase):
@@ -582,6 +744,16 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(body["livekit"]["room_name"].startswith("salemx-dc-"))
         self.assertEqual(body["livekit"]["server_url"], DEFAULT_FAKE_LIVEKIT_URL)
         self.assertTrue(body["livekit"]["participant_token"])
+
+    async def test_fake_mode_uses_memory_rate_limiter(self) -> None:
+        from salemx_call_service import local_fake
+
+        with patch.dict(os.environ, {
+            local_fake.FAKE_MODE_ENV: "1",
+        }, clear=True):
+            service = local_fake.make_fake_local_service()
+
+        self.assertIsInstance(service.rate_limiter, InMemoryRateLimiter)
 
     async def test_fake_mode_uses_livekit_url_env_when_present(self) -> None:
         from salemx_call_service import local_fake
@@ -853,6 +1025,38 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaisesRegex(RuntimeError, "invalidTokenTTL"):
                 app_module.create_app()
 
+    async def test_staging_mode_refuses_memory_rate_limiter_by_default(self) -> None:
+        app_module = _load_app_module()
+        env = _staging_env({
+            RATE_LIMIT_STORE_ENV: RateLimitStoreKind.MEMORY.value,
+            RATE_LIMIT_STORE_URL_ENV: "",
+        })
+
+        with patch.dict(os.environ, env, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "invalidRateLimitConfig"):
+                app_module.create_app()
+
+    async def test_staging_mode_accepts_declared_shared_rate_limiter_without_exposing_secret(self) -> None:
+        app_module = _load_app_module()
+        rate_limit_secret = "rate-limit-store-password-sensitive"
+        env = _staging_env({
+            RATE_LIMIT_STORE_ENV: RateLimitStoreKind.REDIS.value,
+            RATE_LIMIT_STORE_URL_ENV: f"redis://:{rate_limit_secret}@rate-limit.example.test/0",
+        })
+
+        with patch.dict(os.environ, env, clear=True):
+            app = app_module.create_app()
+
+        status_code, body = await _asgi_get_json(app, app_module.READINESS_PATH)
+        output = json.dumps(body, sort_keys=True)
+
+        self.assertEqual(status_code, 200)
+        self.assertTrue(body["ready"])
+        self.assertTrue(body["rateLimitConfigured"])
+        self.assertTrue(body["rateLimitShared"])
+        self.assertNotIn(rate_limit_secret, output)
+        self.assertNotIn("rate-limit.example.test", output)
+
     async def test_staging_mode_refuses_memory_allocation_store_by_default(self) -> None:
         app_module = _load_app_module()
         env = _staging_env({
@@ -928,11 +1132,13 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
     async def test_health_and_readiness_do_not_expose_secrets(self) -> None:
         app_module = _load_app_module()
         allocation_store_secret = "allocation-store-secret-sensitive"
+        rate_limit_secret = "rate-limit-store-secret-sensitive"
         env = _staging_env({
             FAKE_MODE_ENV: "1",
             "SYNAPSE_ADMIN_TOKEN": "synapse-admin-token-sensitive",
             "LIVEKIT_API_SECRET": "livekit-api-secret-sensitive",
             ALLOCATION_STORE_URL_ENV: f"postgres://user:{allocation_store_secret}@allocation.example.test/db",
+            RATE_LIMIT_STORE_URL_ENV: f"postgres://user:{rate_limit_secret}@rate-limit.example.test/db",
         })
 
         with patch.dict(os.environ, env, clear=True):
@@ -950,6 +1156,8 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("livekit-api-key-sensitive", output)
         self.assertNotIn(allocation_store_secret, output)
         self.assertNotIn("allocation.example.test", output)
+        self.assertNotIn(rate_limit_secret, output)
+        self.assertNotIn("rate-limit.example.test", output)
 
     async def test_default_mode_still_requires_production_config(self) -> None:
         app_module = _load_app_module()
@@ -1049,6 +1257,9 @@ def _staging_env(overrides: dict[str, str] | None = None) -> dict[str, str]:
         "LIVEKIT_API_SECRET": "livekit-api-secret-sensitive",
         ALLOCATION_STORE_ENV: AllocationStoreKind.REDIS.value,
         ALLOCATION_STORE_URL_ENV: "redis://allocation.example.test/0",
+        RATE_LIMIT_STORE_ENV: RateLimitStoreKind.REDIS.value,
+        RATE_LIMIT_STORE_URL_ENV: "redis://rate-limit.example.test/0",
+        RATE_LIMIT_PER_MINUTE_ENV: "30",
     }
     if overrides is not None:
         env.update(overrides)

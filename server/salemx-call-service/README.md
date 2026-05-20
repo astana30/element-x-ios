@@ -47,6 +47,8 @@ LIVEKIT_API_KEY
 LIVEKIT_API_SECRET
 SALEMX_CALL_SERVICE_ALLOCATION_STORE=redis|postgres
 SALEMX_CALL_SERVICE_ALLOCATION_STORE_URL=<shared-store-url>
+SALEMX_CALL_SERVICE_RATE_LIMIT_STORE=redis|postgres
+SALEMX_CALL_SERVICE_RATE_LIMIT_STORE_URL=<shared-rate-limit-store-url>
 ```
 
 Optional environment variables:
@@ -54,12 +56,13 @@ Optional environment variables:
 ```text
 TOKEN_TTL_SECONDS=120
 ALLOCATION_TTL_SECONDS=300
-RATE_LIMIT_PER_MINUTE=30
+SALEMX_CALL_SERVICE_RATE_LIMIT_PER_MINUTE=30
 LOG_LEVEL=INFO
 ```
 
 `SYNAPSE_ADMIN_TOKEN` is intended for membership and room-state lookup only. `LIVEKIT_API_SECRET` stays server-side and must never be sent to clients.
 `SALEMX_CALL_SERVICE_ALLOCATION_STORE_URL` must be supplied through secret-managed deployment config and must not be logged.
+`SALEMX_CALL_SERVICE_RATE_LIMIT_STORE_URL` must also be supplied through secret-managed deployment config and must not be logged.
 
 Staging preflight refuses to start when:
 
@@ -72,9 +75,13 @@ Staging preflight refuses to start when:
 - shared allocation store config is missing;
 - `SALEMX_CALL_SERVICE_ALLOCATION_STORE=memory` is used without an explicit test override;
 - `SALEMX_CALL_SERVICE_ALLOCATION_STORE` is not one of `memory`, `redis`, or `postgres`.
+- rate-limit config is missing or invalid;
+- `SALEMX_CALL_SERVICE_RATE_LIMIT_STORE=memory` is used without an explicit test override;
+- `SALEMX_CALL_SERVICE_RATE_LIMIT_STORE` is not one of `memory`, `redis`, or `postgres`.
 
 For tests only, `SALEMX_CALL_SERVICE_ALLOW_INSECURE_LIVEKIT_URL=1` allows an insecure LiveKit URL. Do not set this in staging.
 For tests only, `SALEMX_CALL_SERVICE_ALLOW_MEMORY_ALLOCATION_STORE=1` allows the in-memory allocation store in staging mode. Do not set this in staging dogfood.
+For tests only, `SALEMX_CALL_SERVICE_ALLOW_MEMORY_RATE_LIMITER=1` allows the in-memory rate limiter in staging mode. Do not set this in staging dogfood.
 
 ## Health and Readiness
 
@@ -99,6 +106,7 @@ Readiness reasons:
 - `missingAllocationStoreConfig`
 - `memoryAllocationStoreForbidden`
 - `unsupportedAllocationStore`
+- `invalidRateLimitConfig`
 - `unsupportedMode`
 
 ## Request
@@ -173,7 +181,7 @@ LIVEKIT_API_SECRET=<local-livekit-api-secret> \
 uvicorn salemx_call_service.app:app --host 127.0.0.1 --port 8088
 ```
 
-Fake mode is off by default, requires `SALEMX_CALL_SERVICE_MODE=local_fake`, and must never be enabled in staging or production. It accepts any non-empty local `Authorization: Bearer ...` value without validating it against Synapse, and never logs the bearer value. Without local LiveKit signing configuration, the fake response is app-shaped but not usable for real LiveKit media.
+Fake mode is off by default, requires `SALEMX_CALL_SERVICE_MODE=local_fake`, and must never be enabled in staging or production. It accepts any non-empty local `Authorization: Bearer ...` value without validating it against Synapse, and never logs the bearer value. Without local LiveKit signing configuration, the fake response is app-shaped but not usable for real LiveKit media. Local fake mode uses in-memory allocation and rate limiting only for local proof.
 
 If `LIVEKIT_URL` is set in fake mode, the fake response uses it as `livekit.server_url`. If it is absent or blank, fake mode falls back to the local smoke placeholder URL.
 
@@ -229,6 +237,7 @@ location = /_matrix/client/unstable/kz.salemx.direct_call/livekit/token {
   Verify these response shapes against the deployed Synapse version before production use.
 - `InMemoryAllocationStore` is suitable only for local fake mode and tests. Staging preflight now rejects memory allocation unless a temporary test override is set.
 - `redis` and `postgres` allocation store modes currently validate configuration shape and install a fail-closed skeleton. A real shared transactional implementation still needs to be connected before staging dogfood can issue tokens successfully.
-- Rate limiting is represented in config but not implemented yet.
-- Staging dogfood remains blocked until real shared allocation storage and rate limiting are implemented, deployed, and smoke-tested.
+- `redis` and `postgres` rate-limit store modes currently validate configuration shape and install a fail-closed skeleton. A real shared rate limiter still needs to be connected before staging dogfood can issue tokens successfully.
+- In-memory rate limiting is suitable only for local fake mode and tests. Staging preflight rejects it unless a temporary test override is set.
+- Staging dogfood remains blocked until real shared allocation storage and real shared rate limiting are implemented, deployed, and smoke-tested.
 - The service issues media transport credentials only. It does not know or transport media E2EE keys.

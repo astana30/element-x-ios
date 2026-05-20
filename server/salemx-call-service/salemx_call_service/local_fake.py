@@ -11,6 +11,7 @@ from .auth import AuthenticatedUser, MatrixAuthValidatorProtocol
 from .dto import TokenRequest
 from .errors import CallServiceError
 from .livekit_tokens import IssuedLiveKitToken, LiveKitGrant, LiveKitJWTTokenIssuer, LiveKitTokenIssuerProtocol
+from .rate_limiting import InMemoryRateLimiter
 from .room_validation import RoomEligibility, RoomValidatorProtocol
 from .service import DirectCallTokenService
 
@@ -75,6 +76,7 @@ def make_fake_local_service() -> DirectCallTokenService:
         auth_validator=FakeLocalAuthValidator(),
         room_validator=FakeLocalRoomValidator(),
         allocation_store=InMemoryAllocationStore(allocation_ttl_seconds=300),
+        rate_limiter=InMemoryRateLimiter(),
         token_issuer=fake_token_issuer(),
         livekit_server_url=fake_livekit_url(),
     )

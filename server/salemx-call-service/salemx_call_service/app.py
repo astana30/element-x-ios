@@ -24,6 +24,7 @@ from .errors import CallServiceError, bad_request
 from .livekit_tokens import LiveKitJWTTokenIssuer
 from .local_fake import make_fake_capabilities_payload, make_fake_local_service
 from .logging_utils import configure_logging
+from .rate_limiting import InMemoryRateLimiter, SharedRateLimiterSkeleton
 from .room_validation import SynapseRoomValidator
 from .service import DirectCallTokenService, error_response
 
@@ -54,6 +55,8 @@ def create_app(config: ServiceConfig | None = None,
             token_ttl_bounded=True,
             allocation_store_configured=True,
             allocation_store_shared=True,
+            rate_limit_configured=True,
+            rate_limit_shared=True,
         )
     else:
         configure_logging(environ.get("LOG_LEVEL", "INFO"))
@@ -71,9 +74,11 @@ def create_app(config: ServiceConfig | None = None,
                     auth_validator=SynapseMatrixAuthValidator(config.synapse_base_url),
                     room_validator=SynapseRoomValidator(config.synapse_base_url, config.synapse_admin_token),
                     allocation_store=_allocation_store_for_config(config),
+                    rate_limiter=_rate_limiter_for_config(config),
                     token_issuer=LiveKitJWTTokenIssuer(config.livekit_api_key, config.livekit_api_secret, config.token_ttl_seconds),
                     livekit_server_url=config.livekit_url,
                     allocation_ttl_seconds=config.allocation_ttl_seconds,
+                    rate_limit_per_minute=config.rate_limit_per_minute,
                 )
         except ServicePreflightError as error:
             readiness = error.readiness
@@ -129,6 +134,12 @@ def _allocation_store_for_config(config: ServiceConfig) -> InMemoryAllocationSto
     if config.allocation_store == "memory":
         return InMemoryAllocationStore(config.allocation_ttl_seconds)
     return SharedAllocationStoreSkeleton(config.allocation_store)
+
+
+def _rate_limiter_for_config(config: ServiceConfig) -> InMemoryRateLimiter | SharedRateLimiterSkeleton:
+    if config.rate_limit_store == "memory":
+        return InMemoryRateLimiter()
+    return SharedRateLimiterSkeleton(config.rate_limit_store)
 
 
 app = create_app()

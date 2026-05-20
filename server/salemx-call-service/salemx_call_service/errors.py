@@ -75,6 +75,14 @@ def rate_limited(retry_after_ms: int) -> CallServiceError:
     )
 
 
+def rate_limit_store_unavailable() -> CallServiceError:
+    return CallServiceError(
+        status_code=503,
+        errcode="M_DIRECT_CALL_RATE_LIMIT_STORE_UNAVAILABLE",
+        error="Direct-call rate limit store is unavailable.",
+    )
+
+
 def allocation_failed() -> CallServiceError:
     return CallServiceError(
         status_code=503,

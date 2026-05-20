@@ -145,9 +145,10 @@ Before any staging dogfood replaces the local fake proof, the backend and deploy
 
 - Real Synapse validation.
 - Real shared call allocation store.
-- Rate limiting.
+- Real shared rate limiter.
 - Explicit staging mode with fake mode disabled and redacted readiness returning `ok`.
 - Allocation readiness with `allocationStoreConfigured=true` and a non-memory shared implementation connected, not just the current fail-closed skeleton.
+- Rate-limit readiness with `rateLimitConfigured=true` and a non-memory shared implementation connected, not just the current fail-closed skeleton.
 - Token TTL and replay protection.
 - TLS-backed LiveKit URL and certificates.
 - Production-safe LiveKit API key management.

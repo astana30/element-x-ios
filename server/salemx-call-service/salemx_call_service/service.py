@@ -9,9 +9,10 @@ from typing import Any
 from .allocation import AllocationKey, AllocationMetadata, AllocationStoreProtocol
 from .auth import MatrixAuthValidatorProtocol, bearer_token_from_authorization, validate_device_binding
 from .dto import AllocationPayload, LiveKitPayload, TokenRequest, TokenResponse
-from .errors import CallServiceError
+from .errors import CallServiceError, rate_limited
 from .livekit_tokens import LiveKitTokenIssuerProtocol
 from .logging_utils import stable_redacted_id
+from .rate_limiting import RateLimiterProtocol, RateLimitKey
 from .room_validation import RoomValidatorProtocol
 
 LOGGER = logging.getLogger(__name__)
@@ -22,15 +23,26 @@ class DirectCallTokenService:
     auth_validator: MatrixAuthValidatorProtocol
     room_validator: RoomValidatorProtocol
     allocation_store: AllocationStoreProtocol
+    rate_limiter: RateLimiterProtocol
     token_issuer: LiveKitTokenIssuerProtocol
     livekit_server_url: str
     allocation_ttl_seconds: int = 300
+    rate_limit_per_minute: int = 30
 
     async def issue_token(self, authorization: str | None, payload: dict[str, Any]) -> TokenResponse:
         bearer_token = bearer_token_from_authorization(authorization)
         token_request = TokenRequest.from_mapping(payload)
         authenticated_user = await self.auth_validator.validate_bearer_token(bearer_token)
         validate_device_binding(token_request.device_id, authenticated_user.device_id)
+
+        rate_limit_decision = await self.rate_limiter.check_and_record(
+            RateLimitKey.keys_for(authenticated_user, token_request),
+            self.rate_limit_per_minute,
+        )
+        if not rate_limit_decision.allowed:
+            retry_after_ms = rate_limit_decision.retry_after_ms or 60000
+            LOGGER.info("direct-call token request rate limited retry_after_ms=%d", retry_after_ms)
+            raise rate_limited(retry_after_ms)
 
         await self.room_validator.validate_direct_call_room(authenticated_user, token_request)
         allocation = await self.allocation_store.create_or_reuse(

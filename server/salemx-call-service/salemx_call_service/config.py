@@ -14,12 +14,20 @@ ALLOW_INSECURE_LIVEKIT_URL_ENV = "SALEMX_CALL_SERVICE_ALLOW_INSECURE_LIVEKIT_URL
 ALLOCATION_STORE_ENV = "SALEMX_CALL_SERVICE_ALLOCATION_STORE"
 ALLOCATION_STORE_URL_ENV = "SALEMX_CALL_SERVICE_ALLOCATION_STORE_URL"
 ALLOW_MEMORY_ALLOCATION_STORE_ENV = "SALEMX_CALL_SERVICE_ALLOW_MEMORY_ALLOCATION_STORE"
+RATE_LIMIT_STORE_ENV = "SALEMX_CALL_SERVICE_RATE_LIMIT_STORE"
+RATE_LIMIT_STORE_URL_ENV = "SALEMX_CALL_SERVICE_RATE_LIMIT_STORE_URL"
+RATE_LIMIT_PER_MINUTE_ENV = "SALEMX_CALL_SERVICE_RATE_LIMIT_PER_MINUTE"
+LEGACY_RATE_LIMIT_PER_MINUTE_ENV = "RATE_LIMIT_PER_MINUTE"
+ALLOW_MEMORY_RATE_LIMITER_ENV = "SALEMX_CALL_SERVICE_ALLOW_MEMORY_RATE_LIMITER"
 
 DEFAULT_SERVICE_MODE = "staging"
 DEFAULT_ALLOCATION_STORE = "memory"
+DEFAULT_RATE_LIMIT_STORE = "memory"
 PLACEHOLDER_LIVEKIT_HOST = "local-smoke.livekit.invalid"
 MIN_TOKEN_TTL_SECONDS = 30
 MAX_TOKEN_TTL_SECONDS = 300
+MIN_RATE_LIMIT_PER_MINUTE = 1
+MAX_RATE_LIMIT_PER_MINUTE = 600
 
 
 class ServiceMode(str, Enum):
@@ -29,6 +37,12 @@ class ServiceMode(str, Enum):
 
 
 class AllocationStoreKind(str, Enum):
+    MEMORY = "memory"
+    REDIS = "redis"
+    POSTGRES = "postgres"
+
+
+class RateLimitStoreKind(str, Enum):
     MEMORY = "memory"
     REDIS = "redis"
     POSTGRES = "postgres"
@@ -45,6 +59,7 @@ class ServicePreflightReason(str, Enum):
     MISSING_ALLOCATION_STORE_CONFIG = "missingAllocationStoreConfig"
     MEMORY_ALLOCATION_STORE_FORBIDDEN = "memoryAllocationStoreForbidden"
     UNSUPPORTED_ALLOCATION_STORE = "unsupportedAllocationStore"
+    INVALID_RATE_LIMIT_CONFIG = "invalidRateLimitConfig"
     UNSUPPORTED_MODE = "unsupportedMode"
 
 
@@ -61,6 +76,8 @@ class ServiceReadiness:
     token_ttl_bounded: bool
     allocation_store_configured: bool
     allocation_store_shared: bool
+    rate_limit_configured: bool
+    rate_limit_shared: bool
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -75,6 +92,8 @@ class ServiceReadiness:
             "tokenTTLBounded": self.token_ttl_bounded,
             "allocationStoreConfigured": self.allocation_store_configured,
             "allocationStoreShared": self.allocation_store_shared,
+            "rateLimitConfigured": self.rate_limit_configured,
+            "rateLimitShared": self.rate_limit_shared,
         }
 
 
@@ -97,6 +116,8 @@ class ServiceConfig:
     log_level: str = "INFO"
     allocation_store: str = DEFAULT_ALLOCATION_STORE
     allocation_store_url: str | None = None
+    rate_limit_store: str = DEFAULT_RATE_LIMIT_STORE
+    rate_limit_store_url: str | None = None
 
     @classmethod
     def from_env(cls) -> "ServiceConfig":
@@ -109,10 +130,12 @@ class ServiceConfig:
             livekit_api_secret=_required_env("LIVEKIT_API_SECRET"),
             token_ttl_seconds=_int_env("TOKEN_TTL_SECONDS", 120),
             allocation_ttl_seconds=_int_env("ALLOCATION_TTL_SECONDS", 300),
-            rate_limit_per_minute=_int_env("RATE_LIMIT_PER_MINUTE", 30),
+            rate_limit_per_minute=_rate_limit_per_minute_env(),
             log_level=environ.get("LOG_LEVEL", "INFO"),
             allocation_store=_env_value(environ, ALLOCATION_STORE_ENV) or DEFAULT_ALLOCATION_STORE,
             allocation_store_url=_env_value(environ, ALLOCATION_STORE_URL_ENV),
+            rate_limit_store=_env_value(environ, RATE_LIMIT_STORE_ENV) or DEFAULT_RATE_LIMIT_STORE,
+            rate_limit_store_url=_env_value(environ, RATE_LIMIT_STORE_URL_ENV),
         )
 
 
@@ -137,6 +160,8 @@ def service_readiness_from_env(env: Mapping[str, str] = environ) -> ServiceReadi
             token_ttl_bounded=True,
             allocation_store_configured=True,
             allocation_store_shared=False,
+            rate_limit_configured=True,
+            rate_limit_shared=False,
         )
 
     if mode != ServiceMode.STAGING.value:
@@ -153,8 +178,12 @@ def service_readiness_from_env(env: Mapping[str, str] = environ) -> ServiceReadi
         token_ttl_value=_env_value(env, "TOKEN_TTL_SECONDS"),
         allocation_store_value=_env_value(env, ALLOCATION_STORE_ENV),
         allocation_store_url=_env_value(env, ALLOCATION_STORE_URL_ENV),
+        rate_limit_store_value=_env_value(env, RATE_LIMIT_STORE_ENV),
+        rate_limit_store_url=_env_value(env, RATE_LIMIT_STORE_URL_ENV),
+        rate_limit_per_minute_value=_rate_limit_per_minute_value(env),
         allow_insecure_livekit_url=_env_value(env, ALLOW_INSECURE_LIVEKIT_URL_ENV) == "1",
         allow_memory_allocation_store=_env_value(env, ALLOW_MEMORY_ALLOCATION_STORE_ENV) == "1",
+        allow_memory_rate_limiter=_env_value(env, ALLOW_MEMORY_RATE_LIMITER_ENV) == "1",
     )
 
 
@@ -175,8 +204,12 @@ def service_readiness_from_config(config: ServiceConfig, env: Mapping[str, str] 
         token_ttl_value=str(config.token_ttl_seconds),
         allocation_store_value=config.allocation_store,
         allocation_store_url=config.allocation_store_url,
+        rate_limit_store_value=config.rate_limit_store,
+        rate_limit_store_url=config.rate_limit_store_url,
+        rate_limit_per_minute_value=str(config.rate_limit_per_minute),
         allow_insecure_livekit_url=_env_value(env, ALLOW_INSECURE_LIVEKIT_URL_ENV) == "1",
         allow_memory_allocation_store=_env_value(env, ALLOW_MEMORY_ALLOCATION_STORE_ENV) == "1",
+        allow_memory_rate_limiter=_env_value(env, ALLOW_MEMORY_RATE_LIMITER_ENV) == "1",
     )
 
 
@@ -197,8 +230,12 @@ def _staging_readiness(mode: str,
                        token_ttl_value: str | None,
                        allocation_store_value: str | None,
                        allocation_store_url: str | None,
+                       rate_limit_store_value: str | None,
+                       rate_limit_store_url: str | None,
+                       rate_limit_per_minute_value: str | None,
                        allow_insecure_livekit_url: bool,
-                       allow_memory_allocation_store: bool) -> ServiceReadiness:
+                       allow_memory_allocation_store: bool,
+                       allow_memory_rate_limiter: bool) -> ServiceReadiness:
     synapse_configured = bool(synapse_base_url and synapse_admin_token)
     livekit_configured = bool(livekit_url and livekit_api_key and livekit_api_secret)
     livekit_url_secure = _is_secure_livekit_url(livekit_url)
@@ -206,6 +243,9 @@ def _staging_readiness(mode: str,
     token_ttl_bounded = _token_ttl_bounded(token_ttl_value)
     allocation_store_configured = _allocation_store_configured(allocation_store_value, allocation_store_url, allow_memory_allocation_store)
     allocation_store_shared = _allocation_store_shared(allocation_store_value)
+    rate_limit_per_minute_bounded = _rate_limit_per_minute_bounded(rate_limit_per_minute_value)
+    rate_limit_configured = _rate_limit_configured(rate_limit_store_value, rate_limit_store_url, allow_memory_rate_limiter)
+    rate_limit_shared = _rate_limit_shared(rate_limit_store_value)
 
     if fake_mode_enabled:
         reason = ServicePreflightReason.FAKE_MODE_FORBIDDEN
@@ -227,6 +267,14 @@ def _staging_readiness(mode: str,
         reason = ServicePreflightReason.MEMORY_ALLOCATION_STORE_FORBIDDEN
     elif not allocation_store_configured:
         reason = ServicePreflightReason.MISSING_ALLOCATION_STORE_CONFIG
+    elif not rate_limit_per_minute_bounded:
+        reason = ServicePreflightReason.INVALID_RATE_LIMIT_CONFIG
+    elif not _rate_limit_store_supported(rate_limit_store_value):
+        reason = ServicePreflightReason.INVALID_RATE_LIMIT_CONFIG
+    elif _rate_limit_is_memory(rate_limit_store_value) and not allow_memory_rate_limiter:
+        reason = ServicePreflightReason.INVALID_RATE_LIMIT_CONFIG
+    elif not rate_limit_configured:
+        reason = ServicePreflightReason.INVALID_RATE_LIMIT_CONFIG
     else:
         reason = ServicePreflightReason.OK
 
@@ -242,6 +290,8 @@ def _staging_readiness(mode: str,
         token_ttl_bounded=token_ttl_bounded,
         allocation_store_configured=allocation_store_configured,
         allocation_store_shared=allocation_store_shared,
+        rate_limit_configured=rate_limit_configured,
+        rate_limit_shared=rate_limit_shared,
     )
 
 
@@ -261,6 +311,8 @@ def _readiness(mode: str,
         token_ttl_bounded=True,
         allocation_store_configured=False,
         allocation_store_shared=False,
+        rate_limit_configured=False,
+        rate_limit_shared=False,
     )
 
 
@@ -318,6 +370,46 @@ def _allocation_store_configured(value: str | None, allocation_store_url: str | 
     if _allocation_store_shared(value):
         return allocation_store_url is not None
     return False
+
+
+def _rate_limit_store_supported(value: str | None) -> bool:
+    return value in {kind.value for kind in RateLimitStoreKind}
+
+
+def _rate_limit_is_memory(value: str | None) -> bool:
+    return value == RateLimitStoreKind.MEMORY.value
+
+
+def _rate_limit_shared(value: str | None) -> bool:
+    return value in {RateLimitStoreKind.REDIS.value, RateLimitStoreKind.POSTGRES.value}
+
+
+def _rate_limit_configured(value: str | None, rate_limit_store_url: str | None, allow_memory_rate_limiter: bool) -> bool:
+    if value is None:
+        return False
+    if _rate_limit_is_memory(value):
+        return allow_memory_rate_limiter
+    if _rate_limit_shared(value):
+        return rate_limit_store_url is not None
+    return False
+
+
+def _rate_limit_per_minute_bounded(value: str | None) -> bool:
+    if value is None:
+        return False
+    try:
+        rate_limit_per_minute = int(value)
+    except ValueError:
+        return False
+    return MIN_RATE_LIMIT_PER_MINUTE <= rate_limit_per_minute <= MAX_RATE_LIMIT_PER_MINUTE
+
+
+def _rate_limit_per_minute_value(env: Mapping[str, str]) -> str | None:
+    return _env_value(env, RATE_LIMIT_PER_MINUTE_ENV) or _env_value(env, LEGACY_RATE_LIMIT_PER_MINUTE_ENV) or "30"
+
+
+def _rate_limit_per_minute_env() -> int:
+    return int(_rate_limit_per_minute_value(environ) or "30")
 
 
 def _required_env(name: str) -> str:
