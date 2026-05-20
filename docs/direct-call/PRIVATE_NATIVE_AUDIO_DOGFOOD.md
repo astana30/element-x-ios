@@ -144,11 +144,12 @@ Only share redacted booleans, enums, user-safe reasons, and non-identifying stat
 Before any staging dogfood replaces the local fake proof, the backend and deployment path need:
 
 - Real Synapse validation.
-- Real shared call allocation store.
-- Real shared rate limiter.
+- Redis-backed shared call allocation store deployed and smoke-tested with HMAC-derived keys.
+- Redis-backed shared rate limiter deployed and smoke-tested with HMAC-derived keys.
 - Explicit staging mode with fake mode disabled and redacted readiness returning `ok`.
-- Allocation readiness with `allocationStoreConfigured=true` and a non-memory shared implementation connected, not just the current fail-closed skeleton.
-- Rate-limit readiness with `rateLimitConfigured=true` and a non-memory shared implementation connected, not just the current fail-closed skeleton.
+- Allocation readiness with `allocationStoreConfigured=true`, `allocationStoreShared=true`, and `allocationStoreConnected=true`.
+- Rate-limit readiness with `rateLimitConfigured=true`, `rateLimitShared=true`, and `rateLimitConnected=true`.
+- Secret-managed `SALEMX_CALL_SERVICE_STORAGE_KEY_SECRET` for Redis key derivation.
 - Token TTL and replay protection.
 - TLS-backed LiveKit URL and certificates.
 - Production-safe LiveKit API key management.

@@ -8,7 +8,7 @@ from typing import Any, Optional
 from fastapi import FastAPI, Header, Request
 from fastapi.responses import JSONResponse
 
-from .allocation import InMemoryAllocationStore, SharedAllocationStoreSkeleton
+from .allocation import InMemoryAllocationStore, RedisAllocationClient, RedisAllocationStore, SharedAllocationStoreSkeleton
 from .auth import SynapseMatrixAuthValidator, bearer_token_from_authorization
 from .config import (
     ServiceConfig,
@@ -25,8 +25,10 @@ from .livekit_tokens import LiveKitJWTTokenIssuer
 from .local_fake import make_fake_capabilities_payload, make_fake_local_service
 from .logging_utils import configure_logging
 from .rate_limiting import InMemoryRateLimiter, SharedRateLimiterSkeleton
+from .rate_limiting import RedisRateLimitClient, RedisRateLimiter
 from .room_validation import SynapseRoomValidator
 from .service import DirectCallTokenService, error_response
+from .storage_keys import StorageKeyHasher
 
 ENDPOINT_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/livekit/token"
 CAPABILITIES_PATH = "/_matrix/client/v3/capabilities"
@@ -53,10 +55,14 @@ def create_app(config: ServiceConfig | None = None,
             livekit_url_secure=True,
             livekit_url_placeholder=False,
             token_ttl_bounded=True,
+            allocation_ttl_bounded=True,
             allocation_store_configured=True,
             allocation_store_shared=True,
+            allocation_store_connected=True,
             rate_limit_configured=True,
             rate_limit_shared=True,
+            rate_limit_connected=True,
+            storage_key_configured=True,
         )
     else:
         configure_logging(environ.get("LOG_LEVEL", "INFO"))
@@ -130,16 +136,34 @@ def create_app(config: ServiceConfig | None = None,
     return app
 
 
-def _allocation_store_for_config(config: ServiceConfig) -> InMemoryAllocationStore | SharedAllocationStoreSkeleton:
+def _allocation_store_for_config(config: ServiceConfig) -> InMemoryAllocationStore | RedisAllocationStore | SharedAllocationStoreSkeleton:
     if config.allocation_store == "memory":
         return InMemoryAllocationStore(config.allocation_ttl_seconds)
+    if config.allocation_store == "redis" and config.allocation_store_url is not None and config.storage_key_secret is not None:
+        return RedisAllocationStore(
+            RedisAllocationClient(_redis_client_from_url(config.allocation_store_url)),
+            StorageKeyHasher(config.storage_key_secret),
+        )
     return SharedAllocationStoreSkeleton(config.allocation_store)
 
 
-def _rate_limiter_for_config(config: ServiceConfig) -> InMemoryRateLimiter | SharedRateLimiterSkeleton:
+def _rate_limiter_for_config(config: ServiceConfig) -> InMemoryRateLimiter | RedisRateLimiter | SharedRateLimiterSkeleton:
     if config.rate_limit_store == "memory":
         return InMemoryRateLimiter()
+    if config.rate_limit_store == "redis" and config.rate_limit_store_url is not None and config.storage_key_secret is not None:
+        return RedisRateLimiter(
+            RedisRateLimitClient(_redis_client_from_url(config.rate_limit_store_url)),
+            StorageKeyHasher(config.storage_key_secret),
+        )
     return SharedRateLimiterSkeleton(config.rate_limit_store)
+
+
+def _redis_client_from_url(redis_url: str) -> object:
+    try:
+        from redis import asyncio as redis_asyncio
+    except ModuleNotFoundError as error:
+        raise RuntimeError("Redis support requires the pinned redis dependency.") from error
+    return redis_asyncio.from_url(redis_url, encoding="utf-8", decode_responses=True)
 
 
 app = create_app()

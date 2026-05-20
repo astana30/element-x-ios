@@ -15,6 +15,7 @@ from salemx_call_service.allocation import (
     AllocationKey,
     AllocationMetadata,
     InMemoryAllocationStore,
+    RedisAllocationStore,
     SharedAllocationStoreSkeleton,
 )
 from salemx_call_service.auth import AuthenticatedUser
@@ -28,6 +29,7 @@ from salemx_call_service.config import (
     RATE_LIMIT_STORE_ENV,
     RATE_LIMIT_STORE_URL_ENV,
     SERVICE_MODE_ENV,
+    STORAGE_KEY_SECRET_ENV,
     AllocationStoreKind,
     RateLimitStoreKind,
     ServiceMode,
@@ -52,9 +54,11 @@ from salemx_call_service.rate_limiting import (
     InMemoryRateLimiter,
     RateLimiterProtocol,
     RateLimitKey,
+    RedisRateLimiter,
     SharedRateLimiterSkeleton,
 )
 from salemx_call_service.service import DirectCallTokenService
+from salemx_call_service.storage_keys import StorageKeyHasher
 from salemx_call_service.synapse_http import SynapseHTTPResponse
 
 TOKEN_ENDPOINT_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/livekit/token"
@@ -84,6 +88,77 @@ class FakeLiveKitTokenIssuer:
             expires_at=datetime.now(timezone.utc) + timedelta(seconds=120),
             grant=grant,
         )
+
+
+class FakeRedisAllocationClient:
+    def __init__(self, fail: bool = False, conflict_miss_count: int = 0) -> None:
+        self.fail = fail
+        self.conflict_miss_count = conflict_miss_count
+        self.values: dict[str, tuple[str, datetime]] = {}
+        self.set_keys: list[str] = []
+        self.set_values: list[str] = []
+
+    async def set_if_absent_with_ttl(self, key: str, value: str, ttl_seconds: int) -> bool:
+        if self.fail:
+            raise RuntimeError("redis unavailable")
+        self._remove_expired()
+        self.set_keys.append(key)
+        self.set_values.append(value)
+        if self.conflict_miss_count > 0:
+            self.conflict_miss_count -= 1
+            return False
+        if key in self.values:
+            return False
+        self.values[key] = (value, datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds))
+        return True
+
+    async def get(self, key: str) -> str | None:
+        if self.fail:
+            raise RuntimeError("redis unavailable")
+        self._remove_expired()
+        value = self.values.get(key)
+        if value is None:
+            return None
+        return value[0]
+
+    def _remove_expired(self) -> None:
+        now = datetime.now(timezone.utc)
+        self.values = {key: value for key, value in self.values.items() if value[1] > now}
+
+
+class FakeRedisRateLimitClient:
+    def __init__(self, fail: bool = False) -> None:
+        self.fail = fail
+        self.records: dict[str, list[int]] = {}
+        self.recorded_keys: list[str] = []
+
+    async def check_and_record(self,
+                               keys: tuple[str, ...],
+                               now_ms: int,
+                               window_ms: int,
+                               limit_per_minute: int,
+                               member: str) -> tuple[bool, int]:
+        if self.fail:
+            raise RuntimeError("redis unavailable")
+
+        window_started_at = now_ms - window_ms
+        for key in keys:
+            self.records[key] = [recorded_at for recorded_at in self.records.get(key, []) if recorded_at > window_started_at]
+
+        retry_after_values: list[int] = []
+        for key in keys:
+            if len(self.records.get(key, [])) < limit_per_minute:
+                continue
+            oldest = min(self.records[key])
+            retry_after_values.append(max(1, oldest + window_ms - now_ms))
+
+        if retry_after_values:
+            return False, max(retry_after_values)
+
+        for key in keys:
+            self.records.setdefault(key, []).append(now_ms)
+            self.recorded_keys.append(key)
+        return True, 0
 
 
 class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
@@ -244,6 +319,21 @@ class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(len(issuer.issued), 1)
 
+    async def test_no_token_is_issued_after_redis_rate_limit_is_exceeded(self) -> None:
+        issuer = FakeLiveKitTokenIssuer()
+        service = self.make_service(
+            issuer=issuer,
+            rate_limiter=RedisRateLimiter(FakeRedisRateLimitClient(), StorageKeyHasher("storage-key-secret")),
+            rate_limit_per_minute=1,
+        )
+
+        await service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload(client_transaction_id="txn-1"))
+        with self.assertRaises(CallServiceError) as context:
+            await service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload(client_transaction_id="txn-2"))
+
+        self.assertEqual(context.exception.errcode, "M_DIRECT_CALL_RATE_LIMITED")
+        self.assertEqual(len(issuer.issued), 1)
+
     async def test_rate_limit_store_unavailable_fails_before_token_issue(self) -> None:
         issuer = FakeLiveKitTokenIssuer()
         service = self.make_service(
@@ -336,6 +426,100 @@ class AllocationStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(outgoing.id, incoming.id)
         self.assertEqual(outgoing.livekit_room_name, incoming.livekit_room_name)
 
+    async def test_redis_store_create_or_reuse_keeps_same_allocation(self) -> None:
+        redis_client = FakeRedisAllocationClient()
+        store = RedisAllocationStore(redis_client, StorageKeyHasher("storage-key-secret"))
+        request = self.token_request()
+        allocation_key = AllocationKey.from_token_request(request)
+        metadata = AllocationMetadata.from_token_request(request)
+
+        first = await store.create_or_reuse(allocation_key, metadata, ttl_seconds=300)
+        second = await store.create_or_reuse(allocation_key, metadata, ttl_seconds=300)
+
+        self.assertEqual(first.id, second.id)
+        self.assertEqual(first.livekit_room_name, second.livekit_room_name)
+        self.assertEqual(await store.get(allocation_key), first)
+
+    async def test_redis_store_caller_and_callee_share_allocation_key(self) -> None:
+        redis_client = FakeRedisAllocationClient()
+        store = RedisAllocationStore(redis_client, StorageKeyHasher("storage-key-secret"))
+        outgoing_request = self.token_request(direction="outgoing", peer_user_id="@bob:example.test")
+        incoming_request = self.token_request(direction="incoming", peer_user_id="@alice:example.test")
+
+        outgoing = await store.create_or_reuse(
+            AllocationKey.from_token_request(outgoing_request),
+            AllocationMetadata.from_token_request(outgoing_request),
+            ttl_seconds=300,
+        )
+        incoming = await store.create_or_reuse(
+            AllocationKey.from_token_request(incoming_request),
+            AllocationMetadata.from_token_request(incoming_request),
+            ttl_seconds=300,
+        )
+
+        self.assertEqual(outgoing.id, incoming.id)
+        self.assertEqual(outgoing.livekit_room_name, incoming.livekit_room_name)
+
+    async def test_redis_store_retries_bounded_race_miss(self) -> None:
+        redis_client = FakeRedisAllocationClient(conflict_miss_count=1)
+        store = RedisAllocationStore(redis_client, StorageKeyHasher("storage-key-secret"), max_create_retries=2)
+        request = self.token_request()
+
+        allocation = await store.create_or_reuse(
+            AllocationKey.from_token_request(request),
+            AllocationMetadata.from_token_request(request),
+            ttl_seconds=300,
+        )
+
+        self.assertTrue(allocation.livekit_room_name.startswith("salemx-dc-"))
+        self.assertEqual(len(redis_client.set_keys), 2)
+
+    async def test_redis_store_replaces_expired_missing_allocation(self) -> None:
+        redis_client = FakeRedisAllocationClient()
+        store = RedisAllocationStore(redis_client, StorageKeyHasher("storage-key-secret"))
+        request = self.token_request()
+        allocation_key = AllocationKey.from_token_request(request)
+        metadata = AllocationMetadata.from_token_request(request)
+
+        first = await store.create_or_reuse(allocation_key, metadata, ttl_seconds=300)
+        stored_key = redis_client.set_keys[0]
+        stored_value = redis_client.values[stored_key][0]
+        redis_client.values[stored_key] = (stored_value, datetime.now(timezone.utc) - timedelta(seconds=1))
+        second = await store.create_or_reuse(allocation_key, metadata, ttl_seconds=300)
+
+        self.assertNotEqual(first.id, second.id)
+        self.assertEqual(await store.get(allocation_key), second)
+
+    async def test_redis_store_failure_maps_to_allocation_failed(self) -> None:
+        redis_client = FakeRedisAllocationClient(fail=True)
+        store = RedisAllocationStore(redis_client, StorageKeyHasher("storage-key-secret"))
+        request = self.token_request()
+
+        with self.assertRaises(CallServiceError) as context:
+            await store.create_or_reuse(
+                AllocationKey.from_token_request(request),
+                AllocationMetadata.from_token_request(request),
+                ttl_seconds=300,
+            )
+
+        self.assertEqual(context.exception.errcode, "M_DIRECT_CALL_ALLOCATION_FAILED")
+
+    async def test_redis_store_keys_and_values_do_not_contain_raw_identifiers(self) -> None:
+        redis_client = FakeRedisAllocationClient()
+        store = RedisAllocationStore(redis_client, StorageKeyHasher("storage-key-secret"))
+        request = self.token_request()
+
+        await store.create_or_reuse(
+            AllocationKey.from_token_request(request),
+            AllocationMetadata.from_token_request(request),
+            ttl_seconds=300,
+        )
+
+        serialized_storage = "\n".join(redis_client.set_keys + redis_client.set_values)
+        self.assertNotIn("!room:example.test", serialized_storage)
+        self.assertNotIn("@alice:example.test", serialized_storage)
+        self.assertNotIn("@bob:example.test", serialized_storage)
+
     async def test_shared_store_skeleton_fails_closed(self) -> None:
         store = SharedAllocationStoreSkeleton(AllocationStoreKind.REDIS.value)
         request = self.token_request()
@@ -377,6 +561,76 @@ class RateLimiterTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(limited.retry_after_ms)
         self.assertTrue(room_only.allowed)
 
+    async def test_redis_rate_limiter_allows_requests_under_limit(self) -> None:
+        redis_client = FakeRedisRateLimitClient()
+        limiter = RedisRateLimiter(redis_client, StorageKeyHasher("storage-key-secret"))
+        now = datetime(2026, 5, 20, tzinfo=timezone.utc)
+
+        first = await limiter.check_and_record((RateLimitKey("user:redacted"),), limit_per_minute=2, now=now)
+        second = await limiter.check_and_record((RateLimitKey("user:redacted"),), limit_per_minute=2, now=now + timedelta(seconds=1))
+
+        self.assertTrue(first.allowed)
+        self.assertTrue(second.allowed)
+
+    async def test_redis_rate_limiter_denies_over_limit_with_retry_after(self) -> None:
+        redis_client = FakeRedisRateLimitClient()
+        limiter = RedisRateLimiter(redis_client, StorageKeyHasher("storage-key-secret"))
+        now = datetime(2026, 5, 20, tzinfo=timezone.utc)
+
+        await limiter.check_and_record((RateLimitKey("user:redacted"),), limit_per_minute=1, now=now)
+        limited = await limiter.check_and_record((RateLimitKey("user:redacted"),), limit_per_minute=1, now=now + timedelta(seconds=1))
+
+        self.assertFalse(limited.allowed)
+        self.assertEqual(limited.reason, "rateLimited")
+        self.assertIsNotNone(limited.retry_after_ms)
+
+    async def test_redis_rate_limiter_does_not_partially_record_multi_key_limit(self) -> None:
+        redis_client = FakeRedisRateLimitClient()
+        limiter = RedisRateLimiter(redis_client, StorageKeyHasher("storage-key-secret"))
+        now = datetime(2026, 5, 20, tzinfo=timezone.utc)
+        user_key = RateLimitKey("user:redacted")
+        room_key = RateLimitKey("room:redacted")
+
+        await limiter.check_and_record((user_key,), limit_per_minute=1, now=now)
+        limited = await limiter.check_and_record((user_key, room_key), limit_per_minute=1, now=now + timedelta(seconds=1))
+        room_only = await limiter.check_and_record((room_key,), limit_per_minute=1, now=now + timedelta(seconds=2))
+
+        self.assertFalse(limited.allowed)
+        self.assertTrue(room_only.allowed)
+
+    async def test_redis_rate_limiter_failure_maps_to_store_unavailable(self) -> None:
+        redis_client = FakeRedisRateLimitClient(fail=True)
+        limiter = RedisRateLimiter(redis_client, StorageKeyHasher("storage-key-secret"))
+
+        with self.assertRaises(CallServiceError) as context:
+            await limiter.check_and_record((RateLimitKey("user:redacted"),), limit_per_minute=30)
+
+        self.assertEqual(context.exception.errcode, "M_DIRECT_CALL_RATE_LIMIT_STORE_UNAVAILABLE")
+
+    async def test_redis_rate_limiter_keys_do_not_contain_raw_identifiers(self) -> None:
+        redis_client = FakeRedisRateLimitClient()
+        limiter = RedisRateLimiter(redis_client, StorageKeyHasher("storage-key-secret"))
+        request = TokenRequest.from_mapping({
+            "version": 1,
+            "call_id": "call-a",
+            "room_id": "!room:example.test",
+            "peer_user_id": "@bob:example.test",
+            "intent": "audio",
+            "direction": "outgoing",
+            "device_id": "DEVICEA",
+        })
+        keys = RateLimitKey.keys_for(AuthenticatedUser("@alice:example.test", "DEVICEA"), request)
+
+        await limiter.check_and_record(keys, limit_per_minute=30)
+
+        serialized_keys = "\n".join(redis_client.recorded_keys)
+        self.assertNotIn("@alice:example.test", serialized_keys)
+        self.assertNotIn("@bob:example.test", serialized_keys)
+        self.assertNotIn("!room:example.test", serialized_keys)
+        self.assertNotIn("DEVICEA", serialized_keys)
+        self.assertNotIn("matrix-token-a-sensitive", serialized_keys)
+        self.assertNotIn("participant-token-sensitive", serialized_keys)
+
     async def test_shared_rate_limiter_skeleton_fails_closed(self) -> None:
         limiter = SharedRateLimiterSkeleton(RateLimitStoreKind.REDIS.value)
 
@@ -402,11 +656,11 @@ class ServicePreflightTests(unittest.TestCase):
         with self.assertRaises(ServicePreflightError):
             validate_service_preflight(env)
 
-    def test_staging_preflight_accepts_declared_shared_store_shape(self) -> None:
+    def test_staging_preflight_accepts_redis_allocation_store_shape(self) -> None:
         secret = "allocation-store-password-sensitive"
         env = _staging_env({
-            ALLOCATION_STORE_ENV: AllocationStoreKind.POSTGRES.value,
-            ALLOCATION_STORE_URL_ENV: f"postgres://user:{secret}@allocation.example.test/db",
+            ALLOCATION_STORE_ENV: AllocationStoreKind.REDIS.value,
+            ALLOCATION_STORE_URL_ENV: f"redis://:{secret}@allocation.example.test/0",
         })
 
         readiness = validate_service_preflight(env)
@@ -416,8 +670,21 @@ class ServicePreflightTests(unittest.TestCase):
         self.assertEqual(readiness.reason, "ok")
         self.assertTrue(readiness.allocation_store_configured)
         self.assertTrue(readiness.allocation_store_shared)
+        self.assertTrue(readiness.allocation_store_connected)
         self.assertNotIn(secret, output)
         self.assertNotIn("allocation.example.test", output)
+
+    def test_staging_preflight_refuses_postgres_allocation_until_implemented(self) -> None:
+        env = _staging_env({
+            ALLOCATION_STORE_ENV: AllocationStoreKind.POSTGRES.value,
+            ALLOCATION_STORE_URL_ENV: "postgres://allocation.example.test/db",
+        })
+
+        readiness = service_readiness_from_env(env)
+
+        self.assertFalse(readiness.ready)
+        self.assertEqual(readiness.reason, "unsupportedAllocationStore")
+        self.assertFalse(readiness.allocation_store_connected)
 
     def test_staging_preflight_refuses_missing_shared_store_location(self) -> None:
         env = _staging_env({
@@ -457,7 +724,7 @@ class ServicePreflightTests(unittest.TestCase):
         self.assertFalse(readiness.rate_limit_configured)
         self.assertFalse(readiness.rate_limit_shared)
 
-    def test_staging_preflight_accepts_declared_shared_rate_limiter_shape(self) -> None:
+    def test_staging_preflight_accepts_redis_rate_limiter_shape(self) -> None:
         secret = "rate-limit-store-password-sensitive"
         env = _staging_env({
             RATE_LIMIT_STORE_ENV: RateLimitStoreKind.REDIS.value,
@@ -471,6 +738,7 @@ class ServicePreflightTests(unittest.TestCase):
         self.assertEqual(readiness.reason, "ok")
         self.assertTrue(readiness.rate_limit_configured)
         self.assertTrue(readiness.rate_limit_shared)
+        self.assertTrue(readiness.rate_limit_connected)
         self.assertNotIn(secret, output)
         self.assertNotIn("rate-limit.example.test", output)
 
@@ -494,6 +762,24 @@ class ServicePreflightTests(unittest.TestCase):
 
         self.assertFalse(readiness.ready)
         self.assertEqual(readiness.reason, "invalidRateLimitConfig")
+
+    def test_staging_preflight_requires_storage_key_secret_for_redis(self) -> None:
+        env = _staging_env({STORAGE_KEY_SECRET_ENV: ""})
+
+        readiness = service_readiness_from_env(env)
+
+        self.assertFalse(readiness.ready)
+        self.assertEqual(readiness.reason, "missingStorageKeySecret")
+        self.assertFalse(readiness.storage_key_configured)
+
+    def test_staging_preflight_refuses_allocation_ttl_shorter_than_token_ttl(self) -> None:
+        env = _staging_env({"TOKEN_TTL_SECONDS": "120", "ALLOCATION_TTL_SECONDS": "60"})
+
+        readiness = service_readiness_from_env(env)
+
+        self.assertFalse(readiness.ready)
+        self.assertEqual(readiness.reason, "invalidTokenTTL")
+        self.assertFalse(readiness.allocation_ttl_bounded)
 
 
 class LocalFakeCapabilityTests(unittest.IsolatedAsyncioTestCase):
@@ -963,6 +1249,41 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(claims["video"]["room"], body["livekit"]["room_name"])
         self.assertTrue(LiveKitJWTTokenIssuerTests.verify_hs256_signature(body["livekit"]["participant_token"], "test-signing-key"))
 
+    async def test_token_endpoint_over_redis_rate_limit_returns_429_without_second_token(self) -> None:
+        try:
+            with patch.dict(os.environ, {SERVICE_MODE_ENV: ServiceMode.LOCAL_FAKE.value}, clear=True):
+                from salemx_call_service.app import ENDPOINT_PATH, create_app
+        except ModuleNotFoundError as error:
+            if error.name == "fastapi":
+                self.skipTest("FastAPI is not installed in this Python environment.")
+            raise
+
+        issuer = FakeLiveKitTokenIssuer()
+        service = DirectCallTokenServiceTests().make_service(
+            issuer=issuer,
+            rate_limiter=RedisRateLimiter(FakeRedisRateLimitClient(), StorageKeyHasher("storage-key-secret")),
+            rate_limit_per_minute=1,
+        )
+        app = create_app(token_service=service)
+        payload = DirectCallTokenServiceTests().valid_payload()
+
+        first_status, first_body = await _asgi_post_json(app, ENDPOINT_PATH, {
+            "authorization": "Bearer matrix-token-a-sensitive",
+            "content-type": "application/json",
+        }, payload | {"client_transaction_id": "txn-route-1"})
+        second_status, second_body = await _asgi_post_json(app, ENDPOINT_PATH, {
+            "authorization": "Bearer matrix-token-a-sensitive",
+            "content-type": "application/json",
+        }, payload | {"client_transaction_id": "txn-route-2"})
+
+        self.assertEqual(first_status, 200)
+        self.assertIn("livekit", first_body)
+        self.assertEqual(second_status, 429)
+        self.assertEqual(second_body["errcode"], "M_DIRECT_CALL_RATE_LIMITED")
+        self.assertIsInstance(second_body["retry_after_ms"], int)
+        self.assertNotIn("participant_token", second_body)
+        self.assertEqual(len(issuer.issued), 1)
+
     async def test_staging_mode_refuses_fake_mode(self) -> None:
         app_module = _load_app_module()
 
@@ -1054,6 +1375,7 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(body["ready"])
         self.assertTrue(body["rateLimitConfigured"])
         self.assertTrue(body["rateLimitShared"])
+        self.assertTrue(body["rateLimitConnected"])
         self.assertNotIn(rate_limit_secret, output)
         self.assertNotIn("rate-limit.example.test", output)
 
@@ -1084,6 +1406,7 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(body["ready"])
         self.assertTrue(body["allocationStoreConfigured"])
         self.assertFalse(body["allocationStoreShared"])
+        self.assertTrue(body["allocationStoreConnected"])
 
     async def test_staging_mode_accepts_declared_shared_allocation_store_without_exposing_secret(self) -> None:
         app_module = _load_app_module()
@@ -1104,8 +1427,28 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["reason"], "ok")
         self.assertTrue(body["allocationStoreConfigured"])
         self.assertTrue(body["allocationStoreShared"])
+        self.assertTrue(body["allocationStoreConnected"])
         self.assertNotIn(allocation_store_secret, output)
         self.assertNotIn("allocation.example.test", output)
+
+    async def test_staging_mode_refuses_postgres_allocation_until_implemented(self) -> None:
+        app_module = _load_app_module()
+        env = _staging_env({
+            ALLOCATION_STORE_ENV: AllocationStoreKind.POSTGRES.value,
+            ALLOCATION_STORE_URL_ENV: "postgres://allocation.example.test/db",
+        })
+
+        with patch.dict(os.environ, env, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "unsupportedAllocationStore"):
+                app_module.create_app()
+
+    async def test_staging_mode_refuses_missing_storage_key_secret_for_redis(self) -> None:
+        app_module = _load_app_module()
+        env = _staging_env({STORAGE_KEY_SECRET_ENV: ""})
+
+        with patch.dict(os.environ, env, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "missingStorageKeySecret"):
+                app_module.create_app()
 
     async def test_staging_mode_refuses_shared_allocation_store_without_location(self) -> None:
         app_module = _load_app_module()
@@ -1133,12 +1476,14 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
         app_module = _load_app_module()
         allocation_store_secret = "allocation-store-secret-sensitive"
         rate_limit_secret = "rate-limit-store-secret-sensitive"
+        storage_key_secret = "storage-key-secret-sensitive"
         env = _staging_env({
             FAKE_MODE_ENV: "1",
             "SYNAPSE_ADMIN_TOKEN": "synapse-admin-token-sensitive",
             "LIVEKIT_API_SECRET": "livekit-api-secret-sensitive",
             ALLOCATION_STORE_URL_ENV: f"postgres://user:{allocation_store_secret}@allocation.example.test/db",
             RATE_LIMIT_STORE_URL_ENV: f"postgres://user:{rate_limit_secret}@rate-limit.example.test/db",
+            STORAGE_KEY_SECRET_ENV: storage_key_secret,
         })
 
         with patch.dict(os.environ, env, clear=True):
@@ -1158,6 +1503,7 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("allocation.example.test", output)
         self.assertNotIn(rate_limit_secret, output)
         self.assertNotIn("rate-limit.example.test", output)
+        self.assertNotIn(storage_key_secret, output)
 
     async def test_default_mode_still_requires_production_config(self) -> None:
         app_module = _load_app_module()
@@ -1260,6 +1606,7 @@ def _staging_env(overrides: dict[str, str] | None = None) -> dict[str, str]:
         RATE_LIMIT_STORE_ENV: RateLimitStoreKind.REDIS.value,
         RATE_LIMIT_STORE_URL_ENV: "redis://rate-limit.example.test/0",
         RATE_LIMIT_PER_MINUTE_ENV: "30",
+        STORAGE_KEY_SECRET_ENV: "storage-key-secret-sensitive",
     }
     if overrides is not None:
         env.update(overrides)

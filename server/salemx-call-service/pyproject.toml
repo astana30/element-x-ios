@@ -5,6 +5,7 @@ description = "SalemX native direct-call LiveKit token service skeleton"
 requires-python = ">=3.9"
 dependencies = [
     "fastapi==0.115.12",
+    "redis==5.0.8",
     "uvicorn[standard]==0.34.2",
 ]
 

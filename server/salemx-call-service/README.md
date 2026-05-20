@@ -45,10 +45,11 @@ SYNAPSE_ADMIN_TOKEN
 LIVEKIT_URL
 LIVEKIT_API_KEY
 LIVEKIT_API_SECRET
-SALEMX_CALL_SERVICE_ALLOCATION_STORE=redis|postgres
+SALEMX_CALL_SERVICE_ALLOCATION_STORE=redis
 SALEMX_CALL_SERVICE_ALLOCATION_STORE_URL=<shared-store-url>
-SALEMX_CALL_SERVICE_RATE_LIMIT_STORE=redis|postgres
+SALEMX_CALL_SERVICE_RATE_LIMIT_STORE=redis
 SALEMX_CALL_SERVICE_RATE_LIMIT_STORE_URL=<shared-rate-limit-store-url>
+SALEMX_CALL_SERVICE_STORAGE_KEY_SECRET=<storage-key-hmac-secret>
 ```
 
 Optional environment variables:
@@ -63,6 +64,7 @@ LOG_LEVEL=INFO
 `SYNAPSE_ADMIN_TOKEN` is intended for membership and room-state lookup only. `LIVEKIT_API_SECRET` stays server-side and must never be sent to clients.
 `SALEMX_CALL_SERVICE_ALLOCATION_STORE_URL` must be supplied through secret-managed deployment config and must not be logged.
 `SALEMX_CALL_SERVICE_RATE_LIMIT_STORE_URL` must also be supplied through secret-managed deployment config and must not be logged.
+`SALEMX_CALL_SERVICE_STORAGE_KEY_SECRET` is used only to derive HMAC-backed Redis keys and must not be logged, returned by readiness, or shared with clients.
 
 Staging preflight refuses to start when:
 
@@ -74,10 +76,12 @@ Staging preflight refuses to start when:
 - `TOKEN_TTL_SECONDS` is outside the bounded staging range.
 - shared allocation store config is missing;
 - `SALEMX_CALL_SERVICE_ALLOCATION_STORE=memory` is used without an explicit test override;
-- `SALEMX_CALL_SERVICE_ALLOCATION_STORE` is not one of `memory`, `redis`, or `postgres`.
+- `SALEMX_CALL_SERVICE_ALLOCATION_STORE` is not `redis` for staging (except memory with an explicit test override);
 - rate-limit config is missing or invalid;
 - `SALEMX_CALL_SERVICE_RATE_LIMIT_STORE=memory` is used without an explicit test override;
-- `SALEMX_CALL_SERVICE_RATE_LIMIT_STORE` is not one of `memory`, `redis`, or `postgres`.
+- `SALEMX_CALL_SERVICE_RATE_LIMIT_STORE` is not `redis` for staging (except memory with an explicit test override);
+- Redis-backed allocation or rate limiting is configured without `SALEMX_CALL_SERVICE_STORAGE_KEY_SECRET`;
+- `ALLOCATION_TTL_SECONDS` is shorter than `TOKEN_TTL_SECONDS`.
 
 For tests only, `SALEMX_CALL_SERVICE_ALLOW_INSECURE_LIVEKIT_URL=1` allows an insecure LiveKit URL. Do not set this in staging.
 For tests only, `SALEMX_CALL_SERVICE_ALLOW_MEMORY_ALLOCATION_STORE=1` allows the in-memory allocation store in staging mode. Do not set this in staging dogfood.
@@ -93,6 +97,7 @@ GET /_matrix/client/unstable/kz.salemx.direct_call/readiness
 ```
 
 The payload reports only mode, readiness, redacted reason, and configuration-presence booleans. It never includes tokens, secrets, URLs, Matrix room IDs, peer IDs, request bodies, or response bodies.
+`allocationStoreConnected` and `rateLimitConnected` mean a non-memory runtime implementation is wired for the selected store kind; they are not a substitute for the required deployed Redis smoke test.
 
 Readiness reasons:
 
@@ -107,7 +112,10 @@ Readiness reasons:
 - `memoryAllocationStoreForbidden`
 - `unsupportedAllocationStore`
 - `invalidRateLimitConfig`
+- `missingStorageKeySecret`
 - `unsupportedMode`
+
+Redis-backed staging storage derives keys with `SALEMX_CALL_SERVICE_STORAGE_KEY_SECRET` and HMAC-SHA256. Redis keys and values must not contain raw Matrix room IDs, peer IDs, user IDs, device IDs, access tokens, LiveKit JWTs, Synapse admin tokens, or LiveKit API secrets.
 
 ## Request
 
@@ -244,8 +252,9 @@ location = /_matrix/client/unstable/kz.salemx.direct_call/livekit/token {
   - `GET /_synapse/admin/v1/rooms/{room_id}/state`
   Verify these response shapes against the deployed Synapse version before production use.
 - `InMemoryAllocationStore` is suitable only for local fake mode and tests. Staging preflight now rejects memory allocation unless a temporary test override is set.
-- `redis` and `postgres` allocation store modes currently validate configuration shape and install a fail-closed skeleton. A real shared transactional implementation still needs to be connected before staging dogfood can issue tokens successfully.
-- `redis` and `postgres` rate-limit store modes currently validate configuration shape and install a fail-closed skeleton. A real shared rate limiter still needs to be connected before staging dogfood can issue tokens successfully.
+- `redis` allocation store mode is wired through a shared store implementation with HMAC-derived keys and atomic `SET NX EX` create-or-reuse behavior. It still needs a real deployed Redis smoke before staging dogfood.
+- `redis` rate-limit store mode is wired through a shared limiter implementation with HMAC-derived keys and an atomic Lua check-and-record operation. It still needs a real deployed Redis smoke before staging dogfood.
+- `postgres` allocation and rate-limit store modes remain unsupported/fail-closed skeletons until a real implementation is added.
 - In-memory rate limiting is suitable only for local fake mode and tests. Staging preflight rejects it unless a temporary test override is set.
-- Staging dogfood remains blocked until real shared allocation storage and real shared rate limiting are implemented, deployed, and smoke-tested.
+- Staging dogfood remains blocked until Redis allocation/rate limiting, Synapse validation, and LiveKit join are deployed and smoke-tested together.
 - The service issues media transport credentials only. It does not know or transport media E2EE keys.
