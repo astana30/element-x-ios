@@ -796,6 +796,517 @@ struct NativeDirectCallRoomCardViewState: Equatable {
 }
 
 #if DEBUG
+enum NativeDirectCallRoomSessionState: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case unavailable
+    case idle
+    case outgoingRinging
+    case incomingRinging
+    case connecting
+    case activeAudio
+    case activeVideo
+    case ending
+    case ended
+    case missed
+    case cancelled
+    case failed
+    case resetting
+    case unknown
+
+    init(productionStatusValue: String) {
+        switch productionStatusValue {
+        case Self.unavailable.rawValue:
+            self = .unavailable
+        case Self.idle.rawValue:
+            self = .idle
+        case Self.outgoingRinging.rawValue:
+            self = .outgoingRinging
+        case Self.incomingRinging.rawValue:
+            self = .incomingRinging
+        case Self.connecting.rawValue:
+            self = .connecting
+        case Self.activeAudio.rawValue:
+            self = .activeAudio
+        case Self.activeVideo.rawValue:
+            self = .activeVideo
+        case Self.ending.rawValue:
+            self = .ending
+        case Self.ended.rawValue:
+            self = .ended
+        case Self.missed.rawValue:
+            self = .missed
+        case Self.cancelled.rawValue:
+            self = .cancelled
+        case Self.failed.rawValue:
+            self = .failed
+        case Self.resetting.rawValue:
+            self = .resetting
+        default:
+            self = .unknown
+        }
+    }
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+
+    var internalControlAvailability: NativeDirectCallInternalControlAvailability {
+        switch self {
+        case .outgoingRinging:
+            return .outgoingRinging
+        case .incomingRinging:
+            return .incomingRinging
+        case .connecting:
+            return .connecting
+        case .activeAudio:
+            return .activeAudio
+        case .activeVideo:
+            return .activeVideo
+        case .failed:
+            return .failed
+        case .ended, .cancelled, .missed:
+            return .ended
+        case .unavailable, .idle, .ending, .resetting, .unknown:
+            return .unavailable
+        }
+    }
+
+    var isInternalControlHangUpEnabled: Bool {
+        switch self {
+        case .outgoingRinging, .incomingRinging, .connecting, .activeAudio, .activeVideo, .ending:
+            true
+        case .unavailable, .idle, .ended, .missed, .cancelled, .failed, .resetting, .unknown:
+            false
+        }
+    }
+}
+
+enum NativeDirectCallRoomEncryptionState: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case none
+    case pending
+    case ready
+    case failed
+    case unknown
+
+    init(productionStatusValue: String) {
+        switch productionStatusValue {
+        case "none":
+            self = .none
+        case "pending":
+            self = .pending
+        case "ready":
+            self = .ready
+        default:
+            if productionStatusValue.hasPrefix("failed") {
+                self = .failed
+            } else {
+                self = .unknown
+            }
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .none:
+            "none"
+        case .pending:
+            "pending"
+        case .ready:
+            "ready"
+        case .failed:
+            "failed"
+        case .unknown:
+            "unknown"
+        }
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum NativeDirectCallRoomMediaState: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case none
+    case failed(DirectCallDiagnosticMediaFailureReason)
+
+    init(failureReason: DirectCallDiagnosticMediaFailureReason) {
+        switch failureReason {
+        case .none:
+            self = .none
+        default:
+            self = .failed(failureReason)
+        }
+    }
+
+    var failureReason: DirectCallDiagnosticMediaFailureReason {
+        switch self {
+        case .none:
+            return .none
+        case .failed(let reason):
+            return reason
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .none:
+            "none"
+        case .failed(let reason):
+            reason.description
+        }
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum NativeDirectCallRoomTerminalReason: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case none
+    case outgoingTimeout
+    case incomingTimeout
+    case connectingFailed
+    case cancelled
+    case hangup
+    case failed
+    case unknown
+
+    init(_ reason: DirectCallDiagnosticTerminalReason?) {
+        switch reason {
+        case .outgoingTimeout:
+            self = .outgoingTimeout
+        case .incomingTimeout:
+            self = .incomingTimeout
+        case .connectingFailed:
+            self = .connectingFailed
+        case .cancelled:
+            self = .cancelled
+        case .hangup:
+            self = .hangup
+        case .failed:
+            self = .failed
+        case .unknown:
+            self = .unknown
+        case .none:
+            self = .none
+        }
+    }
+
+    var diagnosticReason: DirectCallDiagnosticTerminalReason? {
+        switch self {
+        case .none:
+            return nil
+        case .outgoingTimeout:
+            return .outgoingTimeout
+        case .incomingTimeout:
+            return .incomingTimeout
+        case .connectingFailed:
+            return .connectingFailed
+        case .cancelled:
+            return .cancelled
+        case .hangup:
+            return .hangup
+        case .failed:
+            return .failed
+        case .unknown:
+            return .unknown
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .none:
+            "none"
+        case .outgoingTimeout:
+            "outgoingTimeout"
+        case .incomingTimeout:
+            "incomingTimeout"
+        case .connectingFailed:
+            "connectingFailed"
+        case .cancelled:
+            "cancelled"
+        case .hangup:
+            "hangup"
+        case .failed:
+            "failed"
+        case .unknown:
+            "unknown"
+        }
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct NativeDirectCallRoomActionAvailability: Equatable {
+    let canRefreshStatus: Bool
+    let canStartAudio: Bool
+    let canAccept: Bool
+    let canDeclineIncoming: Bool
+    let canCancelOutgoing: Bool
+    let canHangUp: Bool
+    let canRetry: Bool
+    let canDismissError: Bool
+
+    static let unavailable = Self(canRefreshStatus: false,
+                                  canStartAudio: false,
+                                  canAccept: false,
+                                  canDeclineIncoming: false,
+                                  canCancelOutgoing: false,
+                                  canHangUp: false,
+                                  canRetry: false,
+                                  canDismissError: false)
+
+    init(canRefreshStatus: Bool,
+         canStartAudio: Bool,
+         canAccept: Bool,
+         canDeclineIncoming: Bool,
+         canCancelOutgoing: Bool,
+         canHangUp: Bool,
+         canRetry: Bool,
+         canDismissError: Bool) {
+        self.canRefreshStatus = canRefreshStatus
+        self.canStartAudio = canStartAudio
+        self.canAccept = canAccept
+        self.canDeclineIncoming = canDeclineIncoming
+        self.canCancelOutgoing = canCancelOutgoing
+        self.canHangUp = canHangUp
+        self.canRetry = canRetry
+        self.canDismissError = canDismissError
+    }
+
+    init(cardState: NativeDirectCallRoomCardState,
+         isLoading: Bool,
+         isStartAudioTemporarilyDisabled: Bool) {
+        canRefreshStatus = NativeDirectCallRoomCardAction.refreshStatus.isEnabled(in: cardState, isLoading: isLoading)
+        canStartAudio = !isStartAudioTemporarilyDisabled && NativeDirectCallRoomCardAction.startAudio.isEnabled(in: cardState, isLoading: isLoading)
+        canAccept = NativeDirectCallRoomCardAction.accept.isEnabled(in: cardState, isLoading: isLoading)
+        canDeclineIncoming = NativeDirectCallRoomCardAction.declineIncoming.isEnabled(in: cardState, isLoading: isLoading)
+        canCancelOutgoing = NativeDirectCallRoomCardAction.cancelOutgoing.isEnabled(in: cardState, isLoading: isLoading)
+        canHangUp = NativeDirectCallRoomCardAction.hangUp.isEnabled(in: cardState, isLoading: isLoading)
+        canRetry = NativeDirectCallRoomCardAction.retry.isEnabled(in: cardState, isLoading: isLoading)
+        canDismissError = NativeDirectCallRoomCardAction.dismissError.isEnabled(in: cardState, isLoading: isLoading)
+    }
+}
+
+struct NativeDirectCallRoomSnapshot: Equatable {
+    let isActivationEnabled: Bool
+    let disabledReason: DirectCallProductionActivationDisabledReason?
+    let productionHasActiveSession: Bool
+    let currentSessionState: NativeDirectCallRoomSessionState
+    let encryptionState: NativeDirectCallRoomEncryptionState
+    let mediaState: NativeDirectCallRoomMediaState
+    let terminalReason: NativeDirectCallRoomTerminalReason
+    let lastOutcome: NativeDirectCallRoomCardActionOutcome?
+
+    init(isActivationEnabled: Bool,
+         disabledReason: DirectCallProductionActivationDisabledReason?,
+         productionHasActiveSession: Bool,
+         currentSessionState: NativeDirectCallRoomSessionState,
+         encryptionState: NativeDirectCallRoomEncryptionState = .none,
+         mediaState: NativeDirectCallRoomMediaState = .none,
+         terminalReason: NativeDirectCallRoomTerminalReason = .none,
+         lastOutcome: NativeDirectCallRoomCardActionOutcome? = nil) {
+        self.isActivationEnabled = isActivationEnabled
+        self.disabledReason = disabledReason
+        self.productionHasActiveSession = productionHasActiveSession
+        self.currentSessionState = currentSessionState
+        self.encryptionState = encryptionState
+        self.mediaState = mediaState
+        self.terminalReason = terminalReason
+        self.lastOutcome = lastOutcome
+    }
+
+    init(triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic,
+         productionStatus: NativeDirectCallProductionStatus,
+         lastOutcome: NativeDirectCallRoomCardActionOutcome? = nil) {
+        self.init(isActivationEnabled: triggerDiagnostic.isEnabled,
+                  disabledReason: triggerDiagnostic.blockedReason,
+                  productionHasActiveSession: productionStatus.productionHasActiveSession,
+                  currentSessionState: .init(productionStatusValue: productionStatus.productionSessionState),
+                  encryptionState: .init(productionStatusValue: productionStatus.productionEncryptionState),
+                  mediaState: .init(failureReason: productionStatus.productionMediaFailureReason),
+                  terminalReason: .init(productionStatus.productionLastTerminalReason),
+                  lastOutcome: lastOutcome)
+    }
+
+    var actionAvailability: NativeDirectCallRoomActionAvailability {
+        let cardState = NativeDirectCallRoomCardStateReducer.cardState(snapshot: self)
+        return .init(cardState: cardState, isLoading: false, isStartAudioTemporarilyDisabled: false)
+    }
+}
+
+struct NativeDirectCallRoomCardLocalState: Equatable {
+    var isLoading = false
+    var isStartAudioTemporarilyDisabled = false
+    var lastAction: NativeDirectCallRoomCardAction?
+    var lastActionOutcome: NativeDirectCallRoomCardActionOutcome?
+    var hidesDismissedError = false
+
+    init(isLoading: Bool = false,
+         isStartAudioTemporarilyDisabled: Bool = false,
+         lastAction: NativeDirectCallRoomCardAction? = nil,
+         lastActionOutcome: NativeDirectCallRoomCardActionOutcome? = nil,
+         hidesDismissedError: Bool = false) {
+        self.isLoading = isLoading
+        self.isStartAudioTemporarilyDisabled = isStartAudioTemporarilyDisabled
+        self.lastAction = lastAction
+        self.lastActionOutcome = lastActionOutcome
+        self.hidesDismissedError = hidesDismissedError
+    }
+
+    init(viewState: NativeDirectCallRoomCardViewState) {
+        self.init(isLoading: viewState.isLoading,
+                  isStartAudioTemporarilyDisabled: viewState.isStartAudioTemporarilyDisabled,
+                  lastAction: viewState.lastAction,
+                  lastActionOutcome: viewState.lastActionOutcome)
+    }
+}
+
+enum NativeDirectCallUserSafeReasonMapper {
+    static func unavailableReason(_ disabledReason: DirectCallProductionActivationDisabledReason?) -> NativeDirectCallRoomCardUnavailableReason {
+        switch disabledReason {
+        case .serverCapabilityUnavailable,
+             .serverCapabilityDisabled,
+             .unsupportedCapabilityVersion,
+             .unsupportedIntent,
+             .unsupportedMediaTransport,
+             .e2eeNotRequiredByCapability,
+             .unsupportedKeyEnvelope:
+            return .serverUnsupported
+        case .roomNotEncrypted:
+            return .roomNotEncrypted
+        case .roomNotDirect, .roomNotOneToOne:
+            return .roomNotOneToOne
+        case .unverifiedDevice:
+            return .unverifiedDevice
+        case .peerTrustUnavailable,
+             .noEligibleDevice,
+             .crossSigningUnavailable,
+             .peerTrustUnknown:
+            return .peerTrustUnavailable
+        case .appRolloutDisabled,
+             .roomUnavailable,
+             .peerUnavailable,
+             .none:
+            return .nativeCallsUnavailable
+        default:
+            return .callServiceUnavailable
+        }
+    }
+
+    static func failureReason(_ mediaFailureReason: DirectCallDiagnosticMediaFailureReason) -> NativeDirectCallRoomCardFailureReason {
+        switch mediaFailureReason {
+        case .none:
+            return .unknown
+        case .liveKitConnectFailed,
+             .liveKitURLInvalid,
+             .liveKitURLUnreachable,
+             .liveKitNetworkFailed,
+             .liveKitSDKError,
+             .liveKitUnknown:
+            return .liveKitNetworkFailed
+        case .factoryUnavailable,
+             .credentialUnavailable,
+             .e2eeContextUnavailable,
+             .keyBridgeMiss,
+             .mediaFactoryUnavailable,
+             .mediaTokenUnavailable,
+             .tokenEndpointUnavailable,
+             .accessTokenUnavailable,
+             .tokenHTTPUnavailable,
+             .tokenBackendRejected,
+             .tokenResponseInvalid,
+             .mediaE2EEContextUnavailable,
+             .mediaConnectFailed,
+             .mediaSetupUnavailable,
+             .mediaUnsupportedIntent,
+             .invalidSessionState,
+             .liveKitTokenRejected,
+             .liveKitRoomJoinFailed,
+             .liveKitE2EEConfigFailed:
+            return .callServiceUnavailable
+        case .unknown:
+            return .unknown
+        @unknown default:
+            return .callServiceUnavailable
+        }
+    }
+
+    static func failureReason(_ terminalReason: NativeDirectCallRoomTerminalReason) -> NativeDirectCallRoomCardFailureReason {
+        switch terminalReason {
+        case .outgoingTimeout, .incomingTimeout:
+            return .callTimedOut
+        case .connectingFailed:
+            return .liveKitNetworkFailed
+        case .cancelled:
+            return .cancelled
+        case .hangup:
+            return .unknown
+        case .failed, .unknown, .none:
+            return .unknown
+        }
+    }
+}
+
+enum NativeDirectCallRoomCardStateReducer {
+    static func reduce(snapshot: NativeDirectCallRoomSnapshot,
+                       localState: NativeDirectCallRoomCardLocalState = .init()) -> NativeDirectCallRoomCardViewState {
+        let cardState = cardState(snapshot: snapshot, hidesDismissedError: localState.hidesDismissedError)
+        return .init(isVisible: cardState != .hidden,
+                     isLoading: localState.isLoading,
+                     isStartAudioTemporarilyDisabled: localState.isStartAudioTemporarilyDisabled,
+                     state: cardState,
+                     lastAction: localState.lastAction,
+                     lastActionOutcome: localState.lastActionOutcome ?? snapshot.lastOutcome)
+    }
+
+    static func cardState(snapshot: NativeDirectCallRoomSnapshot,
+                          hidesDismissedError: Bool = false) -> NativeDirectCallRoomCardState {
+        guard snapshot.productionHasActiveSession else {
+            if snapshot.isActivationEnabled {
+                return .canStart
+            }
+
+            return .unavailable(reason: NativeDirectCallUserSafeReasonMapper.unavailableReason(snapshot.disabledReason))
+        }
+
+        let state = activeSessionCardState(snapshot: snapshot)
+        if hidesDismissedError, state.isFailed || state.isDismissible {
+            return snapshot.isActivationEnabled ? .canStart : .unavailable(reason: NativeDirectCallUserSafeReasonMapper.unavailableReason(snapshot.disabledReason))
+        }
+
+        return state
+    }
+
+    private static func activeSessionCardState(snapshot: NativeDirectCallRoomSnapshot) -> NativeDirectCallRoomCardState {
+        switch snapshot.currentSessionState {
+        case .outgoingRinging:
+            return .outgoingRinging
+        case .incomingRinging:
+            return .incomingRinging
+        case .connecting:
+            return .connecting
+        case .activeAudio:
+            return .activeAudio
+        case .failed:
+            if snapshot.terminalReason == .outgoingTimeout || snapshot.terminalReason == .incomingTimeout {
+                return .failed(reason: .callTimedOut)
+            }
+
+            return .failed(reason: NativeDirectCallUserSafeReasonMapper.failureReason(snapshot.mediaState.failureReason))
+        case .ended, .cancelled, .missed:
+            return .ended(reason: NativeDirectCallUserSafeReasonMapper.failureReason(snapshot.terminalReason))
+        case .unavailable, .idle, .activeVideo, .ending, .resetting, .unknown:
+            return .unavailable(reason: .unknown)
+        }
+    }
+}
+
 extension NativeDirectCallRoomCardActionOutcome {
     init(_ productionStartOutcome: NativeDirectCallProductionStartOutcome) {
         switch productionStartOutcome {
@@ -856,12 +1367,8 @@ extension NativeDirectCallRoomCardActionOutcome {
 extension NativeDirectCallRoomCardState {
     static func make(triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic,
                      productionStatus: NativeDirectCallProductionStatus) -> Self {
-        make(isActivationEnabled: triggerDiagnostic.isEnabled,
-             disabledReason: triggerDiagnostic.blockedReason,
-             productionHasActiveSession: productionStatus.productionHasActiveSession,
-             sessionState: productionStatus.productionSessionState,
-             mediaFailureReason: productionStatus.productionMediaFailureReason,
-             terminalReason: productionStatus.productionLastTerminalReason)
+        NativeDirectCallRoomCardStateReducer.cardState(snapshot: .init(triggerDiagnostic: triggerDiagnostic,
+                                                                       productionStatus: productionStatus))
     }
 
     static func make(isActivationEnabled: Bool,
@@ -870,35 +1377,13 @@ extension NativeDirectCallRoomCardState {
                      sessionState: String,
                      mediaFailureReason: DirectCallDiagnosticMediaFailureReason,
                      terminalReason: DirectCallDiagnosticTerminalReason?) -> Self {
-        guard productionHasActiveSession else {
-            if isActivationEnabled {
-                return .canStart
-            }
-
-            return .unavailable(reason: .init(disabledReason))
-        }
-
-        switch sessionState {
-        case "outgoingRinging":
-            return .outgoingRinging
-        case "incomingRinging":
-            return .incomingRinging
-        case "connecting":
-            return .connecting
-        case "activeAudio":
-            return .activeAudio
-        case "failed":
-            if let terminalReason,
-               terminalReason == .outgoingTimeout || terminalReason == .incomingTimeout {
-                return .failed(reason: .callTimedOut)
-            }
-
-            return .failed(reason: .init(mediaFailureReason))
-        case "ended", "cancelled", "missed":
-            return .ended(reason: .init(terminalReason))
-        default:
-            return .unavailable(reason: .unknown)
-        }
+        let snapshot = NativeDirectCallRoomSnapshot(isActivationEnabled: isActivationEnabled,
+                                                    disabledReason: disabledReason,
+                                                    productionHasActiveSession: productionHasActiveSession,
+                                                    currentSessionState: .init(productionStatusValue: sessionState),
+                                                    mediaState: .init(failureReason: mediaFailureReason),
+                                                    terminalReason: .init(terminalReason))
+        return NativeDirectCallRoomCardStateReducer.cardState(snapshot: snapshot)
     }
 }
 
@@ -990,82 +1475,17 @@ private extension NativeDirectCallRoomCardFailureReason {
 
 private extension NativeDirectCallRoomCardUnavailableReason {
     init(_ disabledReason: DirectCallProductionActivationDisabledReason?) {
-        switch disabledReason {
-        case .serverCapabilityUnavailable,
-             .serverCapabilityDisabled,
-             .unsupportedCapabilityVersion,
-             .unsupportedIntent,
-             .unsupportedMediaTransport,
-             .e2eeNotRequiredByCapability,
-             .unsupportedKeyEnvelope:
-            self = .serverUnsupported
-        case .roomNotEncrypted:
-            self = .roomNotEncrypted
-        case .roomNotDirect, .roomNotOneToOne:
-            self = .roomNotOneToOne
-        case .unverifiedDevice:
-            self = .unverifiedDevice
-        case .peerTrustUnavailable,
-             .noEligibleDevice,
-             .crossSigningUnavailable,
-             .peerTrustUnknown:
-            self = .peerTrustUnavailable
-        case .appRolloutDisabled,
-             .roomUnavailable,
-             .peerUnavailable,
-             .none:
-            self = .nativeCallsUnavailable
-        default:
-            self = .callServiceUnavailable
-        }
+        self = NativeDirectCallUserSafeReasonMapper.unavailableReason(disabledReason)
     }
 }
 
 private extension NativeDirectCallRoomCardFailureReason {
     init(_ mediaFailureReason: DirectCallDiagnosticMediaFailureReason) {
-        switch mediaFailureReason {
-        case .none:
-            self = .unknown
-        case .liveKitConnectFailed,
-             .liveKitURLInvalid,
-             .liveKitURLUnreachable,
-             .liveKitNetworkFailed,
-             .liveKitSDKError,
-             .liveKitUnknown:
-            self = .liveKitNetworkFailed
-        case .factoryUnavailable,
-             .credentialUnavailable,
-             .e2eeContextUnavailable,
-             .keyBridgeMiss,
-             .mediaFactoryUnavailable,
-             .mediaE2EEContextUnavailable,
-             .mediaConnectFailed,
-             .mediaSetupUnavailable,
-             .mediaUnsupportedIntent,
-             .invalidSessionState,
-             .liveKitRoomJoinFailed,
-             .liveKitE2EEConfigFailed:
-            self = .callServiceUnavailable
-        case .unknown:
-            self = .unknown
-        default:
-            self = .callServiceUnavailable
-        }
+        self = NativeDirectCallUserSafeReasonMapper.failureReason(mediaFailureReason)
     }
 
     init(_ terminalReason: DirectCallDiagnosticTerminalReason?) {
-        switch terminalReason {
-        case .outgoingTimeout, .incomingTimeout:
-            self = .callTimedOut
-        case .connectingFailed:
-            self = .liveKitNetworkFailed
-        case .cancelled:
-            self = .cancelled
-        case .hangup:
-            self = .unknown
-        case .failed, .unknown, .none:
-            self = .unknown
-        }
+        self = NativeDirectCallUserSafeReasonMapper.failureReason(.init(terminalReason))
     }
 }
 
@@ -1075,12 +1495,14 @@ extension NativeDirectCallInternalControlStatus {
                      lastAction: NativeDirectCallInternalControlAction? = nil,
                      lastActionOutcome: String = "none",
                      lastActionReason: String = "none") -> Self {
+        let snapshot = NativeDirectCallRoomSnapshot(triggerDiagnostic: triggerDiagnostic,
+                                                    productionStatus: productionStatus)
         let activationReason = triggerDiagnostic.blockedReason?.description ?? "none"
-        let availability = availability(triggerDiagnostic: triggerDiagnostic, productionStatus: productionStatus)
-        let canArmListener = triggerDiagnostic.isEnabled && (!productionStatus.productionListenerStarted || productionStatus.productionSessionState == "idle")
+        let availability = availability(snapshot: snapshot)
+        let canArmListener = triggerDiagnostic.isEnabled && (!productionStatus.productionListenerStarted || snapshot.currentSessionState == .idle)
         let canStartAudio = triggerDiagnostic.isEnabled && !productionStatus.productionHasActiveSession
-        let canAccept = triggerDiagnostic.isEnabled && productionStatus.productionSessionState == "incomingRinging"
-        let canHangUp = productionStatus.productionHasActiveSession && hangUpEnabledStates.contains(productionStatus.productionSessionState)
+        let canAccept = triggerDiagnostic.isEnabled && snapshot.currentSessionState == .incomingRinging
+        let canHangUp = productionStatus.productionHasActiveSession && snapshot.currentSessionState.isInternalControlHangUpEnabled
 
         return Self(availability: availability,
                     activationReason: activationReason,
@@ -1098,32 +1520,12 @@ extension NativeDirectCallInternalControlStatus {
                     canHangUp: canHangUp)
     }
 
-    private static let hangUpEnabledStates = Set(["outgoingRinging", "incomingRinging", "connecting", "activeAudio", "activeVideo", "ending"])
-
-    private static func availability(triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic,
-                                     productionStatus: NativeDirectCallProductionStatus) -> NativeDirectCallInternalControlAvailability {
-        if productionStatus.productionHasActiveSession {
-            switch productionStatus.productionSessionState {
-            case "outgoingRinging":
-                return .outgoingRinging
-            case "incomingRinging":
-                return .incomingRinging
-            case "connecting":
-                return .connecting
-            case "activeAudio":
-                return .activeAudio
-            case "activeVideo":
-                return .activeVideo
-            case "failed":
-                return .failed
-            case "ended", "cancelled", "missed":
-                return .ended
-            default:
-                return .unavailable
-            }
+    private static func availability(snapshot: NativeDirectCallRoomSnapshot) -> NativeDirectCallInternalControlAvailability {
+        if snapshot.productionHasActiveSession {
+            return snapshot.currentSessionState.internalControlAvailability
         }
 
-        return triggerDiagnostic.isEnabled ? .canStart : .unavailable
+        return snapshot.isActivationEnabled ? .canStart : .unavailable
     }
 }
 #endif

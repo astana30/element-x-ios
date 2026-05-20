@@ -702,6 +702,82 @@ final class NativeDirectCallInternalControlPanelTests {
     }
 
     @Test
+    func productCardReducerMapsTypedSnapshotStates() {
+        #expect(Self.reducedCardState(sessionState: .idle, hasActiveSession: false) == .canStart)
+        #expect(Self.reducedCardState(sessionState: .outgoingRinging) == .outgoingRinging)
+        #expect(Self.reducedCardState(sessionState: .incomingRinging) == .incomingRinging)
+        #expect(Self.reducedCardState(sessionState: .connecting) == .connecting)
+        #expect(Self.reducedCardState(sessionState: .activeAudio,
+                                      mediaState: .failed(.liveKitNetworkFailed)) == .activeAudio)
+        #expect(Self.reducedCardState(sessionState: .failed,
+                                      mediaState: .failed(.tokenHTTPUnavailable)) == .failed(reason: .callServiceUnavailable))
+        #expect(Self.reducedCardState(sessionState: .failed,
+                                      mediaState: .failed(.liveKitNetworkFailed)) == .failed(reason: .liveKitNetworkFailed))
+        #expect(Self.reducedCardState(sessionState: .failed,
+                                      terminalReason: .outgoingTimeout) == .failed(reason: .callTimedOut))
+        #expect(Self.reducedCardState(sessionState: .ended,
+                                      terminalReason: .incomingTimeout) == .ended(reason: .callTimedOut))
+        #expect(Self.reducedCardState(sessionState: .missed,
+                                      terminalReason: .incomingTimeout) == .ended(reason: .callTimedOut))
+    }
+
+    @Test
+    func productCardReducerKeepsDismissedErrorLocalToViewState() {
+        let snapshot = NativeDirectCallRoomSnapshot(isActivationEnabled: true,
+                                                    disabledReason: nil,
+                                                    productionHasActiveSession: true,
+                                                    currentSessionState: .failed,
+                                                    mediaState: .failed(.tokenHTTPUnavailable))
+        let localState = NativeDirectCallRoomCardLocalState(lastAction: .dismissError,
+                                                            lastActionOutcome: .dismissed,
+                                                            hidesDismissedError: true)
+        let reducedState = NativeDirectCallRoomCardStateReducer.reduce(snapshot: snapshot, localState: localState)
+
+        #expect(snapshot.currentSessionState == .failed)
+        #expect(snapshot.mediaState == .failed(.tokenHTTPUnavailable))
+        #expect(reducedState.state == .canStart)
+        #expect(reducedState.lastAction == .dismissError)
+        #expect(reducedState.lastActionOutcome == .dismissed)
+    }
+
+    @Test
+    func productCardActionAvailabilityMatchesPreviousBehavior() {
+        let canStartAvailability = NativeDirectCallRoomSnapshot(isActivationEnabled: true,
+                                                                disabledReason: nil,
+                                                                productionHasActiveSession: false,
+                                                                currentSessionState: .idle).actionAvailability
+        #expect(canStartAvailability.canRefreshStatus)
+        #expect(canStartAvailability.canStartAudio)
+        #expect(!canStartAvailability.canAccept)
+        #expect(!canStartAvailability.canDeclineIncoming)
+        #expect(!canStartAvailability.canCancelOutgoing)
+        #expect(!canStartAvailability.canHangUp)
+        #expect(!canStartAvailability.canRetry)
+        #expect(!canStartAvailability.canDismissError)
+
+        let incomingAvailability = NativeDirectCallRoomSnapshot(isActivationEnabled: true,
+                                                                disabledReason: nil,
+                                                                productionHasActiveSession: true,
+                                                                currentSessionState: .incomingRinging).actionAvailability
+        #expect(incomingAvailability.canAccept)
+        #expect(incomingAvailability.canDeclineIncoming)
+        #expect(!incomingAvailability.canStartAudio)
+        #expect(!incomingAvailability.canHangUp)
+
+        let failedAvailability = NativeDirectCallRoomActionAvailability(cardState: .failed(reason: .liveKitNetworkFailed),
+                                                                        isLoading: false,
+                                                                        isStartAudioTemporarilyDisabled: false)
+        #expect(failedAvailability.canRetry)
+        #expect(failedAvailability.canDismissError)
+        #expect(!failedAvailability.canStartAudio)
+
+        let suppressedAvailability = NativeDirectCallRoomActionAvailability(cardState: .canStart,
+                                                                            isLoading: false,
+                                                                            isStartAudioTemporarilyDisabled: true)
+        #expect(!suppressedAvailability.canStartAudio)
+    }
+
+    @Test
     func productCardStateMappingUsesUserSafeReasons() {
         #expect(NativeDirectCallRoomCardState.make(isActivationEnabled: true,
                                                    disabledReason: nil,
@@ -745,6 +821,12 @@ final class NativeDirectCallInternalControlPanelTests {
                                                    sessionState: "failed",
                                                    mediaFailureReason: .liveKitNetworkFailed,
                                                    terminalReason: nil) == .failed(reason: .liveKitNetworkFailed))
+        #expect(NativeDirectCallRoomCardState.make(isActivationEnabled: true,
+                                                   disabledReason: nil,
+                                                   productionHasActiveSession: true,
+                                                   sessionState: "failed",
+                                                   mediaFailureReason: .tokenHTTPUnavailable,
+                                                   terminalReason: nil) == .failed(reason: .callServiceUnavailable))
         #expect(NativeDirectCallRoomCardState.make(isActivationEnabled: true,
                                                    disabledReason: nil,
                                                    productionHasActiveSession: true,
@@ -829,6 +911,19 @@ final class NativeDirectCallInternalControlPanelTests {
               canStartAudio: canStartAudio,
               canAccept: canAccept,
               canHangUp: canHangUp)
+    }
+
+    private static func reducedCardState(sessionState: NativeDirectCallRoomSessionState,
+                                         hasActiveSession: Bool = true,
+                                         mediaState: NativeDirectCallRoomMediaState = .none,
+                                         terminalReason: NativeDirectCallRoomTerminalReason = .none) -> NativeDirectCallRoomCardState {
+        let snapshot = NativeDirectCallRoomSnapshot(isActivationEnabled: true,
+                                                    disabledReason: nil,
+                                                    productionHasActiveSession: hasActiveSession,
+                                                    currentSessionState: sessionState,
+                                                    mediaState: mediaState,
+                                                    terminalReason: terminalReason)
+        return NativeDirectCallRoomCardStateReducer.reduce(snapshot: snapshot).state
     }
 }
 
