@@ -643,3 +643,25 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Confirmed no CallKit, push, or global production activation was introduced.
 - Confirmed no raw token, JWT, key, envelope, or Matrix content was printed.
 - Recommended next phase: `2.20A — private native call card timeout/rapid-tap hardening`.
+
+## 2026-05-20 — 2.20D Private Native Call Card Rapid Action Runtime Proof
+
+- Recorded runtime proof for rapid private native call card terminal actions after the 2.20C restart-prevention fix.
+- Rapid Hang up proof passed: A and B returned idle with no active session.
+- Confirmed A emitted hangup and B received `directCallHangup`.
+- Confirmed cleanup and disconnect were attempted after rapid Hang up.
+- Confirmed `productionMediaFailureReason=none` after rapid Hang up.
+- Rapid Cancel proof passed: A and B returned idle with no active session.
+- Confirmed A emitted cancel and B received `directCallCancel`.
+- Confirmed `productionMediaFailureReason=none` after rapid Cancel.
+- Rapid Decline proof passed after relaunching B onto the current 2.20C build.
+- Confirmed B emitted reject and A received `directCallReject`.
+- Confirmed A and B returned idle with no active session after rapid Decline.
+- Confirmed `productionMediaFailureReason=none` after rapid Decline.
+- Confirmed no accidental `outgoingRinging` or `incomingRinging` restart occurred on the current build.
+- Explained the earlier failed Decline rerun as B still running the pre-fix app.
+- Confirmed the existing Element Call route remained untouched.
+- Confirmed no CallKit, push, or global production activation was introduced.
+- Confirmed no code changes were needed and the worktree remained clean.
+- Noted setup nuance: after relaunch, B needed the encrypted r1/r2 DM reopened and the production receive listener armed.
+- Recommended next phase: `2.20E — private native call card timeout runtime proof`, or `2.21A — private native call UI internal-hardening plan` if timeout proof is deferred.

@@ -2,15 +2,15 @@
 
 ## Current Phase
 
-After 2.19E — private native call card decline/cancel/retry/dismiss runtime proof.
+After 2.20D — private native call card rapid action runtime proof.
 
 ## Latest App Code Checkpoint
 
-2.19E `Show retry dismiss actions for failed native call card`
+2.20C `Prevent accidental native call restart after hangup`
 
 ## Latest Code Checkpoint
 
-2.18C `Forward product native call UI gate to simulator launch`
+2.20C `Prevent accidental native call restart after hangup`
 
 ## Latest SDK Checkpoint
 
@@ -460,6 +460,17 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - `productionMediaFailureReason` remained `none` for decline/cancel proof paths.
   - Existing Element Call phone/video buttons remained untouched.
   - No CallKit, push, global production activation, or sensitive credential/key/Matrix-content logging was introduced.
+- Private native call card rapid terminal-action proof is recorded:
+  - 2.20C added a post-terminal Start Audio suppression after Hang up, Cancel, and Decline so a rapid second tap cannot immediately restart a call after the card returns to `canStart`.
+  - Rapid Hang up passed: A/B returned idle with no active session, A emitted hangup, B received `directCallHangup`, cleanup/disconnect was attempted, and `productionMediaFailureReason=none`.
+  - Rapid Cancel passed: A/B returned idle with no active session, A emitted cancel, B received `directCallCancel`, and `productionMediaFailureReason=none`.
+  - Rapid Decline passed after relaunching B onto the current 2.20C build: B emitted reject, A received `directCallReject`, A/B returned idle with no active session, and `productionMediaFailureReason=none`.
+  - No accidental `outgoingRinging`/`incomingRinging` restart occurred on the current build.
+  - The earlier failed Decline rerun was explained by B still running the pre-fix app.
+  - Existing Element Call route remained untouched.
+  - No CallKit, push, or global production activation was introduced.
+  - No code changes were needed during the runtime proof and the worktree remained clean.
+  - Setup nuance: after relaunch, B needed the encrypted r1/r2 DM reopened and the receive listener armed.
 
 ## Current Blocker
 
@@ -467,14 +478,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Production backend remains a skeleton/local fake proof and is not deployed as a hardened production service.
 - Production rollout and server capability sources remain fail-closed by default.
 - Real production activation still requires hardened backend deployment, capability rollout, endpoint configuration, trusted peer readiness, visible UI design, and later CallKit/push work.
-- The next immediate gap is private-card timeout and rapid-tap hardening before broader internal usability work.
+- Rapid terminal-action restart prevention is fixed and runtime-proven on the current build.
+- The next immediate gap is timeout runtime proof before broader internal usability work.
 - No public production activation, Element Call route change, CallKit, or push integration exists yet.
 
 ## Next Recommended Phase
 
-`2.20A — private native call card timeout/rapid-tap hardening`
+`2.20E — private native call card timeout runtime proof`
 
-Goal: harden the private/internal product-card action path against call timeouts and repeated rapid taps, while keeping the card gated, redacted, and separate from Element Call routing, CallKit/push, public production activation, and global production activation.
+Goal: prove outgoing and incoming timeout behavior at runtime through the private/internal product-card path, while keeping the card gated, redacted, and separate from Element Call routing, CallKit/push, public production activation, and global production activation.
 
 ## Do-Not-Touch Constraints
 
