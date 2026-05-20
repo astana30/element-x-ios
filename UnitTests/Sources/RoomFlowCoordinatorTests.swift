@@ -553,6 +553,78 @@ final class RoomFlowCoordinatorTests {
     }
 
     @Test
+    func roomFlowDismissStopsAndResetsProductionNativeDirectCallOwner() async throws {
+        let productionOwner = NativeDirectCallRoomFlowOwnerSpy()
+        productionOwner.suspendReset = true
+        productionOwner.startResult = .success(nativeDirectCallComposition())
+        productionOwner.activeSession = directCallSession(direction: .outgoing, state: .activeAudio)
+        let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: enabledProductionActivationDiagnostic())
+
+        setupRoomFlowCoordinator(nativeDirectCallProductionActivationDryRunProviderFactory: { _ in
+            provider
+        }, nativeDirectCallProductionRoomFlowOwnerFactory: { roomProxy in
+            #expect(roomProxy.id == "1")
+            productionOwner.makeCount += 1
+            return .owner(productionOwner)
+        })
+
+        try await process(route: .room(roomID: "1", via: []))
+        let result = await roomFlowCoordinator.nativeDirectCallProductionStartListener()
+
+        #expect(result.didStartListener)
+        #expect(productionOwner.makeCount == 1)
+        #expect(productionOwner.stopCount == 0)
+        #expect(productionOwner.resetCount == 0)
+
+        try await clearRoute(expectedActions: [.finished])
+
+        #expect(productionOwner.stopCount == 1)
+        #expect(productionOwner.resetCount == 1)
+        #expect(productionOwner.resetCompletionCount == 0)
+
+        let status = roomFlowCoordinator.nativeDirectCallProductionStatus()
+        #expect(status.productionRoomAttached == false)
+        #expect(status.productionOwnerAvailable == false)
+        #expect(status.productionListenerAvailable == false)
+        #expect(status.productionListenerStarted == false)
+        #expect(status.productionHasActiveSession == false)
+        #expect(status.productionSessionRestorationSupported == false)
+
+        productionOwner.resumeReset()
+        await Task.yield()
+        #expect(productionOwner.resetCompletionCount == 1)
+    }
+
+    @Test
+    func reopenedRoomDoesNotRestoreStaleProductionNativeDirectCallSession() async throws {
+        let productionOwner = NativeDirectCallRoomFlowOwnerSpy()
+        productionOwner.startResult = .success(nativeDirectCallComposition())
+        productionOwner.activeSession = directCallSession(direction: .outgoing, state: .activeAudio)
+        let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: enabledProductionActivationDiagnostic())
+
+        setupRoomFlowCoordinator(nativeDirectCallProductionActivationDryRunProviderFactory: { _ in
+            provider
+        }, nativeDirectCallProductionRoomFlowOwnerFactory: { _ in
+            .owner(productionOwner)
+        })
+
+        try await process(route: .room(roomID: "1", via: []))
+        _ = await roomFlowCoordinator.nativeDirectCallProductionStartListener()
+        try await clearRoute(expectedActions: [.finished])
+
+        setupRoomFlowCoordinator()
+
+        try await process(route: .room(roomID: "1", via: []))
+        let status = roomFlowCoordinator.nativeDirectCallProductionStatus()
+
+        #expect(status.productionRoomAttached)
+        #expect(status.productionOwnerAvailable == false)
+        #expect(status.productionHasActiveSession == false)
+        #expect(status.productionSessionState == "unavailable")
+        #expect(status.productionSessionRestorationSupported == false)
+    }
+
+    @Test
     func nativeDirectCallProductionActivationDryRunFailsClosedWithoutActiveRoom() async {
         setupRoomFlowCoordinator { _ in
             Issue.record("Native direct-call room-flow owner should not be created without an active room.")
@@ -952,10 +1024,16 @@ final class RoomFlowCoordinatorTests {
         #expect(result.outcome == .started)
         #expect(result.reason == nil)
         #expect(result.status.productionOwnerAvailable)
+        #expect(result.status.productionListenerAvailable)
         #expect(result.status.productionListenerStarted)
+        #expect(result.status.productionRoomAttached)
+        #expect(result.status.productionSessionRestorationSupported == false)
         #expect(result.status.productionHasActiveSession == false)
         #expect(status.productionOwnerAvailable)
+        #expect(status.productionListenerAvailable)
         #expect(status.productionListenerStarted)
+        #expect(status.productionRoomAttached)
+        #expect(status.productionSessionRestorationSupported == false)
         #expect(status.productionHasActiveSession == false)
         #expect(status.productionLastSignalSendAttempted == false)
         #expect(diagnosticStatus.state == .idle)
@@ -1255,7 +1333,10 @@ final class RoomFlowCoordinatorTests {
         let status = roomFlowCoordinator.nativeDirectCallProductionStatus()
 
         #expect(status.productionOwnerAvailable == false)
+        #expect(status.productionListenerAvailable)
         #expect(status.productionListenerStarted == false)
+        #expect(status.productionRoomAttached)
+        #expect(status.productionSessionRestorationSupported == false)
         #expect(status.productionHasActiveSession == false)
         #expect(status.productionSessionState == "unavailable")
         #expect(status.productionLastSignalSendAttempted == false)
@@ -1315,7 +1396,10 @@ final class RoomFlowCoordinatorTests {
 
         #expect(result.didStart)
         #expect(productionStatus.productionOwnerAvailable)
+        #expect(productionStatus.productionListenerAvailable)
         #expect(productionStatus.productionListenerStarted)
+        #expect(productionStatus.productionRoomAttached)
+        #expect(productionStatus.productionSessionRestorationSupported == false)
         #expect(productionStatus.productionHasActiveSession)
         #expect(productionStatus.productionSessionState == "outgoingRinging")
         #expect(productionStatus.productionEncryptionState == "ready")
@@ -2222,7 +2306,10 @@ final class RoomFlowCoordinatorTests {
         #expect(encodedRequest.contains("nativeDirectCallProductionStartListener"))
         #expect(encodedResult.contains("nativeDirectCallProductionStartListenerResult"))
         #expect(encodedResult.contains("started"))
+        #expect(encodedResult.contains("productionListenerAvailable"))
         #expect(encodedResult.contains("productionListenerStarted"))
+        #expect(encodedResult.contains("productionRoomAttached"))
+        #expect(encodedResult.contains("productionSessionRestorationSupported"))
         #expect(encodedResult.contains("productionLastSignalSendAttempted"))
         #expect(encodedResult.contains("productionTimelineUpdateCount"))
         #expect(encodedResult.contains("productionBaselineEstablished"))
@@ -2374,33 +2461,21 @@ final class RoomFlowCoordinatorTests {
         #expect(try JSONDecoder().decode(UITestsSignal.self, from: Data(encodedResult.utf8)) == resultSignal)
         #expect(encodedRequest.contains("nativeDirectCallProductionStatus"))
         #expect(encodedResult.contains("nativeDirectCallProductionStatusResult"))
-        #expect(encodedResult.contains("productionOwnerAvailable"))
-        #expect(encodedResult.contains("productionListenerStarted"))
-        #expect(encodedResult.contains("productionHasActiveSession"))
-        #expect(encodedResult.contains("productionLastSignalSendAttempted"))
-        #expect(encodedResult.contains("productionListenerAttached"))
-        #expect(encodedResult.contains("productionListenerHandleRetained"))
-        #expect(encodedResult.contains("productionTimelineUpdateCount"))
-        #expect(encodedResult.contains("productionTimelineDiffReceivedCount"))
-        #expect(encodedResult.contains("productionDirectCallEventTypeSeenCount"))
-        #expect(encodedResult.contains("productionEnvelopeExtractedCount"))
-        #expect(encodedResult.contains("productionEnvelopeDeliveredToEngineCount"))
-        #expect(encodedResult.contains("productionHistoricalEventIgnoredCount"))
-        #expect(encodedResult.contains("productionLiveEventDeliveredCount"))
-        #expect(encodedResult.contains("productionBaselineEstablished"))
-        #expect(encodedResult.contains("productionLastReceiveEventKind"))
-        #expect(encodedResult.contains("productionLastEnvelopeRejectedReason"))
-        #expect(encodedResult.contains("productionLastReceiveFailureReason"))
-        #expect(encodedResult.contains("productionSendRoomFingerprint"))
-        #expect(encodedResult.contains("productionReceiveRoomFingerprint"))
-        #expect(encodedResult.contains("productionMediaFactoryInjected"))
-        #expect(encodedResult.contains("productionMediaCredentialProviderAvailable"))
-        #expect(encodedResult.contains("productionMediaE2EEProviderAvailable"))
-        #expect(encodedResult.contains("productionMediaKeyHandleAvailable"))
-        #expect(encodedResult.contains("productionMediaKeyBridgeHit"))
-        #expect(encodedResult.contains("productionMediaConnectAttempted"))
-        #expect(encodedResult.contains("productionLiveKitClientConnectAttempted"))
-        #expect(encodedResult.contains("productionMediaFailureReason"))
+        let expectedStatusFields = [
+            "productionOwnerAvailable", "productionListenerAvailable", "productionListenerStarted",
+            "productionRoomAttached", "productionSessionRestorationSupported", "productionHasActiveSession",
+            "productionLastSignalSendAttempted", "productionListenerAttached", "productionListenerHandleRetained",
+            "productionTimelineUpdateCount", "productionTimelineDiffReceivedCount", "productionDirectCallEventTypeSeenCount",
+            "productionEnvelopeExtractedCount", "productionEnvelopeDeliveredToEngineCount", "productionHistoricalEventIgnoredCount",
+            "productionLiveEventDeliveredCount", "productionBaselineEstablished", "productionLastReceiveEventKind",
+            "productionLastEnvelopeRejectedReason", "productionLastReceiveFailureReason", "productionSendRoomFingerprint",
+            "productionReceiveRoomFingerprint", "productionMediaFactoryInjected", "productionMediaCredentialProviderAvailable",
+            "productionMediaE2EEProviderAvailable", "productionMediaKeyHandleAvailable", "productionMediaKeyBridgeHit",
+            "productionMediaConnectAttempted", "productionLiveKitClientConnectAttempted", "productionMediaFailureReason"
+        ]
+        for field in expectedStatusFields {
+            #expect(encodedResult.contains(field))
+        }
         #expect(encodedResult.contains("mediaSetupUnavailable"))
         #expect(encodedResult.contains("send-room-redacted"))
         #expect(encodedResult.contains("receive-room-redacted"))

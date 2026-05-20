@@ -591,7 +591,8 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
     }
 
     func nativeDirectCallProductionStatus() -> NativeDirectCallProductionStatus {
-        .init(owner: nativeDirectCallProductionRoomFlowOwner)
+        .init(owner: nativeDirectCallProductionRoomFlowOwner,
+              roomAttached: roomProxy != nil && stateMachine.state != .complete)
     }
 
     private func makeNativeDirectCallInternalControlProvider() -> NativeDirectCallInternalControlProviding? {
@@ -2850,7 +2851,10 @@ struct NativeDirectCallProductionHangupResult: Equatable, CustomStringConvertibl
 
 struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     let productionOwnerAvailable: Bool
+    let productionListenerAvailable: Bool
     let productionListenerStarted: Bool
+    let productionRoomAttached: Bool
+    let productionSessionRestorationSupported: Bool
     let productionHasActiveSession: Bool
     let productionSessionState: String
     let productionEncryptionState: String
@@ -2890,16 +2894,21 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
     let productionMediaFailureReason: DirectCallDiagnosticMediaFailureReason
 
     @MainActor
-    init(owner: NativeDirectCallRoomFlowOwning?) {
+    init(owner: NativeDirectCallRoomFlowOwning?,
+         roomAttached: Bool? = nil) {
         guard let owner else {
-            self = .unavailable
+            self = .unavailable(roomAttached: roomAttached ?? false)
             return
         }
 
         let activeSession = owner.activeSession
         let diagnosticSnapshot = owner.diagnosticSnapshot
+        let isRoomAttached = roomAttached ?? true
         productionOwnerAvailable = true
+        productionListenerAvailable = isRoomAttached && !owner.isResetting
         productionListenerStarted = owner.isListenerStarted
+        productionRoomAttached = isRoomAttached
+        productionSessionRestorationSupported = false
         productionHasActiveSession = activeSession != nil
         productionSessionState = if owner.isResetting {
             NativeDirectCallRoomDiagnosticStatusState.resetting.description
@@ -2945,48 +2954,58 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
         productionMediaFailureReason = diagnosticSnapshot.mediaFailureReason
     }
 
-    static let unavailable = Self(productionOwnerAvailable: false,
-                                  productionListenerStarted: false,
-                                  productionHasActiveSession: false,
-                                  productionSessionState: NativeDirectCallRoomDiagnosticStatusState.unavailable.description,
-                                  productionEncryptionState: "none",
-                                  productionLastSignalEventEmitted: nil,
-                                  productionLastSignalSendAttempted: false,
-                                  productionLastSignalSendSucceeded: nil,
-                                  productionLastSignalSendFailureReason: nil,
-                                  productionLastTerminalReason: nil,
-                                  productionListenerAttached: false,
-                                  productionListenerHandleRetained: false,
-                                  productionListenerStartCount: 0,
-                                  productionTimelineUpdateCount: 0,
-                                  productionTimelineDiffReceivedCount: 0,
-                                  productionLastTimelineDiffKind: .none,
-                                  productionLastTimelineDiffItemCount: 0,
-                                  productionTimelineEventReceivedCount: 0,
-                                  productionDirectCallEventTypeSeenCount: 0,
-                                  productionEnvelopeExtractedCount: 0,
-                                  productionEnvelopeDeliveredToEngineCount: 0,
-                                  productionHistoricalEventIgnoredCount: 0,
-                                  productionLiveEventDeliveredCount: 0,
-                                  productionBaselineEstablished: false,
-                                  productionLastReceiveEventKind: .none,
-                                  productionLastEnvelopeRejectedReason: .none,
-                                  productionLastReceiveFailureReason: nil,
-                                  productionSendRoomFingerprint: nil,
-                                  productionReceiveRoomFingerprint: nil,
-                                  productionMediaFactoryInjected: false,
-                                  productionMediaCredentialProviderAvailable: false,
-                                  productionMediaE2EEProviderAvailable: false,
-                                  productionMediaKeyHandleAvailable: false,
-                                  productionMediaKeyBridgeHit: false,
-                                  productionMediaConnectAttempted: false,
-                                  productionMediaDisconnectAttempted: false,
-                                  productionMediaCleanupAttempted: false,
-                                  productionLiveKitClientConnectAttempted: false,
-                                  productionMediaFailureReason: .none)
+    static let unavailable = unavailable(roomAttached: false)
+
+    private static func unavailable(roomAttached: Bool) -> Self {
+        Self(productionOwnerAvailable: false,
+             productionListenerAvailable: roomAttached,
+             productionListenerStarted: false,
+             productionRoomAttached: roomAttached,
+             productionSessionRestorationSupported: false,
+             productionHasActiveSession: false,
+             productionSessionState: NativeDirectCallRoomDiagnosticStatusState.unavailable.description,
+             productionEncryptionState: "none",
+             productionLastSignalEventEmitted: nil,
+             productionLastSignalSendAttempted: false,
+             productionLastSignalSendSucceeded: nil,
+             productionLastSignalSendFailureReason: nil,
+             productionLastTerminalReason: nil,
+             productionListenerAttached: false,
+             productionListenerHandleRetained: false,
+             productionListenerStartCount: 0,
+             productionTimelineUpdateCount: 0,
+             productionTimelineDiffReceivedCount: 0,
+             productionLastTimelineDiffKind: .none,
+             productionLastTimelineDiffItemCount: 0,
+             productionTimelineEventReceivedCount: 0,
+             productionDirectCallEventTypeSeenCount: 0,
+             productionEnvelopeExtractedCount: 0,
+             productionEnvelopeDeliveredToEngineCount: 0,
+             productionHistoricalEventIgnoredCount: 0,
+             productionLiveEventDeliveredCount: 0,
+             productionBaselineEstablished: false,
+             productionLastReceiveEventKind: .none,
+             productionLastEnvelopeRejectedReason: .none,
+             productionLastReceiveFailureReason: nil,
+             productionSendRoomFingerprint: nil,
+             productionReceiveRoomFingerprint: nil,
+             productionMediaFactoryInjected: false,
+             productionMediaCredentialProviderAvailable: false,
+             productionMediaE2EEProviderAvailable: false,
+             productionMediaKeyHandleAvailable: false,
+             productionMediaKeyBridgeHit: false,
+             productionMediaConnectAttempted: false,
+             productionMediaDisconnectAttempted: false,
+             productionMediaCleanupAttempted: false,
+             productionLiveKitClientConnectAttempted: false,
+             productionMediaFailureReason: .none)
+    }
 
     private init(productionOwnerAvailable: Bool,
+                 productionListenerAvailable: Bool,
                  productionListenerStarted: Bool,
+                 productionRoomAttached: Bool,
+                 productionSessionRestorationSupported: Bool,
                  productionHasActiveSession: Bool,
                  productionSessionState: String,
                  productionEncryptionState: String,
@@ -3025,7 +3044,10 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
                  productionLiveKitClientConnectAttempted: Bool,
                  productionMediaFailureReason: DirectCallDiagnosticMediaFailureReason) {
         self.productionOwnerAvailable = productionOwnerAvailable
+        self.productionListenerAvailable = productionListenerAvailable
         self.productionListenerStarted = productionListenerStarted
+        self.productionRoomAttached = productionRoomAttached
+        self.productionSessionRestorationSupported = productionSessionRestorationSupported
         self.productionHasActiveSession = productionHasActiveSession
         self.productionSessionState = productionSessionState
         self.productionEncryptionState = productionEncryptionState
@@ -3068,7 +3090,10 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
     var description: String {
         let fields = [
             "productionOwnerAvailable: \(productionOwnerAvailable)",
+            "productionListenerAvailable: \(productionListenerAvailable)",
             "productionListenerStarted: \(productionListenerStarted)",
+            "productionRoomAttached: \(productionRoomAttached)",
+            "productionSessionRestorationSupported: \(productionSessionRestorationSupported)",
             "productionHasActiveSession: \(productionHasActiveSession)",
             "productionSessionState: \(productionSessionState)",
             "productionEncryptionState: \(productionEncryptionState)",

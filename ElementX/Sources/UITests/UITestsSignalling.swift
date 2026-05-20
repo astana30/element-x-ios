@@ -456,7 +456,10 @@ enum UITestsSignal: Codable, Equatable {
 
     struct NativeDirectCallProductionStatusPayload: Codable, Equatable {
         let productionOwnerAvailable: Bool
+        let productionListenerAvailable: Bool
         let productionListenerStarted: Bool
+        let productionRoomAttached: Bool
+        let productionSessionRestorationSupported: Bool
         let productionHasActiveSession: Bool
         let productionSessionState: String
         let productionEncryptionState: String
@@ -496,7 +499,10 @@ enum UITestsSignal: Codable, Equatable {
         let productionMediaFailureReason: DirectCallDiagnosticMediaFailureReason
 
         init(productionOwnerAvailable: Bool,
+             productionListenerAvailable: Bool = false,
              productionListenerStarted: Bool,
+             productionRoomAttached: Bool = false,
+             productionSessionRestorationSupported: Bool = false,
              productionHasActiveSession: Bool,
              productionSessionState: String,
              productionEncryptionState: String,
@@ -535,7 +541,10 @@ enum UITestsSignal: Codable, Equatable {
              productionLiveKitClientConnectAttempted: Bool = false,
              productionMediaFailureReason: DirectCallDiagnosticMediaFailureReason = .none) {
             self.productionOwnerAvailable = productionOwnerAvailable
+            self.productionListenerAvailable = productionListenerAvailable
             self.productionListenerStarted = productionListenerStarted
+            self.productionRoomAttached = productionRoomAttached
+            self.productionSessionRestorationSupported = productionSessionRestorationSupported
             self.productionHasActiveSession = productionHasActiveSession
             self.productionSessionState = UITestsSignalling.sanitizedIdentifier(productionSessionState) ?? "unknown"
             self.productionEncryptionState = UITestsSignalling.sanitizedIdentifier(productionEncryptionState) ?? "unknown"
@@ -1006,7 +1015,10 @@ extension UITestsSignal.NativeDirectCallProductionStartedSessionSummary {
 extension UITestsSignal.NativeDirectCallProductionStatusPayload {
     init(_ status: NativeDirectCallProductionStatus) {
         self.init(productionOwnerAvailable: status.productionOwnerAvailable,
+                  productionListenerAvailable: status.productionListenerAvailable,
                   productionListenerStarted: status.productionListenerStarted,
+                  productionRoomAttached: status.productionRoomAttached,
+                  productionSessionRestorationSupported: status.productionSessionRestorationSupported,
                   productionHasActiveSession: status.productionHasActiveSession,
                   productionSessionState: status.productionSessionState,
                   productionEncryptionState: status.productionEncryptionState,
