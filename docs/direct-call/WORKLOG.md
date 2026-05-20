@@ -691,3 +691,17 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Confirmed the existing Element Call route remained untouched.
 - Confirmed no CallKit, push, or global production activation was introduced.
 - Recommended next phase: `2.21B — private native call UI typed snapshot/reducer cleanup`.
+
+## 2026-05-20 — 2.21C Native Call Card Reducer Runtime Regression Proof
+
+- Recorded runtime regression proof after the private native call card typed reducer cleanup.
+- Found a regression where idle state with retained `tokenHTTPUnavailable` incorrectly showed Ready/canStart instead of `failed(callServiceUnavailable)`.
+- Fixed the reducer mapping in commit `8cdae55d4` (`Restore failed native call card retry dismiss mapping`).
+- Confirmed runtime recheck after the fix:
+  - The failed backend/token state shows Retry and Dismiss.
+  - Retry does not auto-start a call.
+  - Dismiss clears only the local displayed error/outcome.
+  - The card returns to the safe Ready to call state after Dismiss.
+- Confirmed the existing Element Call route remained untouched.
+- Confirmed no CallKit, push, or global production activation was introduced.
+- Recommended next phase: `2.21D — private native call UI state architecture follow-up`, or `2.22A — internal usable checkpoint plan` if the architecture follow-up finds no additional cleanup needed.

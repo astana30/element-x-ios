@@ -2,15 +2,15 @@
 
 ## Current Phase
 
-After 2.20D — private native call card rapid action runtime proof.
+After 2.21C — native call card reducer runtime regression proof.
 
 ## Latest App Code Checkpoint
 
-2.20C `Prevent accidental native call restart after hangup`
+2.21C `Restore failed native call card retry dismiss mapping`
 
 ## Latest Code Checkpoint
 
-2.20C `Prevent accidental native call restart after hangup`
+2.21C `Restore failed native call card retry dismiss mapping`
 
 ## Latest SDK Checkpoint
 
@@ -482,6 +482,21 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Media connect was not attempted for either timeout proof, and `productionMediaFailureReason` remained `none`.
   - Outgoing and incoming timers are both 45 seconds, so caller/callee timeout emission can race; runtime still proved both sides clear safely with user-safe timeout terminal reasons.
   - Existing Element Call route remained untouched, and no CallKit, push, or global production activation was introduced.
+- Private native call UI typed snapshot/reducer cleanup is complete:
+  - The private native call card now maps production status through typed redacted snapshot/reducer seams instead of relying on scattered string comparisons.
+  - User-safe reason mapping is centralized for activation, trust, media, backend, and terminal reasons.
+  - Current call session state remains separate from local card action/dismissal state.
+  - Rendering/status refresh remains side-effect-free.
+  - Existing Element Call phone/video buttons, `displayCall`, `presentCallScreen`, and `ElementCallService` remain untouched.
+- Native call card reducer regression proof is recorded:
+  - After the typed reducer cleanup, a runtime regression was found where idle state with retained `tokenHTTPUnavailable` incorrectly showed Ready/canStart instead of `failed(callServiceUnavailable)`.
+  - Fix commit `8cdae55d4` restores failed-state mapping for idle/no active session plus retained backend/media failure diagnostics.
+  - Runtime recheck confirmed the failed backend/token state shows Retry and Dismiss.
+  - Retry remains read-only and does not auto-start a call.
+  - Dismiss clears only the local displayed error/outcome.
+  - The card returns to the safe Ready to call state after Dismiss.
+  - Existing Element Call route remained untouched.
+  - No CallKit, push, or global production activation was introduced.
 
 ## Current Blocker
 
@@ -490,14 +505,16 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Production rollout and server capability sources remain fail-closed by default.
 - Real production activation still requires hardened backend deployment, capability rollout, endpoint configuration, trusted peer readiness, visible UI design, and later CallKit/push work.
 - Rapid terminal-action restart prevention is fixed and runtime-proven on the current build.
-- Timeout runtime behavior is now proven through the private/internal room-scoped path; the next immediate gap is typed state/snapshot cleanup before broader internal usability work.
+- Timeout runtime behavior is proven through the private/internal room-scoped path.
+- Typed state/snapshot cleanup is implemented, and the failed-state Retry/Dismiss regression found after that cleanup is fixed and runtime-verified.
+- The next immediate gap is state architecture follow-up/internal usable checkpoint planning before broader internal rollout work.
 - No public production activation, Element Call route change, CallKit, or push integration exists yet.
 
 ## Next Recommended Phase
 
-`2.21B — private native call UI typed snapshot/reducer cleanup`
+`2.21D — private native call UI state architecture follow-up`
 
-Goal: reduce duplicated/stringly typed private native-call UI state by introducing a typed redacted room snapshot, card state reducer, and user-safe reason mapper, while keeping the card gated, redacted, and separate from Element Call routing, CallKit/push, public production activation, and global production activation.
+Goal: review the typed snapshot/reducer cleanup after runtime regression proof, decide whether any additional state ownership cleanup is required, and prepare the private native call UI for an internal usable checkpoint plan while keeping the card gated, redacted, and separate from Element Call routing, CallKit/push, public production activation, and global production activation.
 
 ## Do-Not-Touch Constraints
 
