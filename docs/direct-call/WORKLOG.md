@@ -665,3 +665,29 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Confirmed no code changes were needed and the worktree remained clean.
 - Noted setup nuance: after relaunch, B needed the encrypted r1/r2 DM reopened and the production receive listener armed.
 - Recommended next phase: `2.20E — private native call card timeout runtime proof`, or `2.21A — private native call UI internal-hardening plan` if timeout proof is deferred.
+
+## 2026-05-20 — 2.20E Private Native Call Card Timeout Runtime Proof
+
+- Recorded timeout runtime proof through the private native call card / production room-scoped path.
+- Used the real configured ringing timeout of 45 seconds plus a small buffer.
+- Confirmed no timeout hook and no code changes were used.
+- Confirmed the worktree stayed clean during the proof.
+- Outgoing timeout proof passed: A started an outgoing call through the production room-scoped path, A entered `outgoingRinging`, and B entered `incomingRinging`.
+- Confirmed no accept, decline, cancel, or hangup command was sent during the timeout window.
+- After timeout, A returned idle with no active session.
+- Confirmed A emitted `timeout` and the send succeeded.
+- Confirmed A reported terminal reason `outgoingTimeout`.
+- Confirmed B returned idle with no active session after receiving `directCallTimeout`.
+- Confirmed B reported terminal reason `incomingTimeout`.
+- Confirmed media connect was not attempted and `productionMediaFailureReason` remained `none`.
+- Repeated the proof in reverse direction from B to A.
+- Confirmed B entered `outgoingRinging` and A entered `incomingRinging`.
+- After timeout, B returned idle with no active session, emitted `timeout`, and reported terminal reason `outgoingTimeout`.
+- Confirmed A returned idle with no active session, reported terminal reason `incomingTimeout`, and reported no receive failure.
+- Confirmed `productionMediaFailureReason` remained `none` for the reverse timeout proof.
+- Noted that outgoing and incoming timers are both 45 seconds, so caller/callee timeout emission can race.
+- Confirmed runtime still proved both sides clear safely with user-safe timeout terminal reasons.
+- Confirmed no new UI issue was observed.
+- Confirmed the existing Element Call route remained untouched.
+- Confirmed no CallKit, push, or global production activation was introduced.
+- Recommended next phase: `2.21B — private native call UI typed snapshot/reducer cleanup`.

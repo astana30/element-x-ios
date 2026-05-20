@@ -7,11 +7,12 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.20D — private native call card rapid action runtime proof.
+After 2.20E — private native call card timeout runtime proof.
 
 Current checkpoints:
 - App code: 2.20C `Prevent accidental native call restart after hangup`
 - Private card rapid-action proof: 2.20D private native call card rapid Hang up / Cancel / Decline runtime proof passed on the current build.
+- Private card timeout proof: 2.20E private native call card timeout runtime proof passed with the real 45s ringing timeout.
 - Private card UX code: 2.19D `Add private native call card decline cancel retry actions`
 - Backend: 2.14E `Fix fake backend LiveKit dev token grants`
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`
@@ -72,78 +73,82 @@ Current proven state:
   - Rapid Cancel returned A/B idle with no active session; A emitted cancel; B received `directCallCancel`; media failure remained `none`.
   - Rapid Decline passed after relaunching B onto the current 2.20C build; B emitted reject; A received `directCallReject`; A/B returned idle with no active session; media failure remained `none`.
   - No accidental `outgoingRinging` or `incomingRinging` restart occurred on the current build.
-  - The earlier failed Decline rerun was explained by B still running the pre-fix app.
+- 2.20E timeout runtime proof passed:
+  - The proof used the real configured ringing timeout of 45 seconds plus a small buffer.
+  - A outgoing timeout returned A/B idle with no active session.
+  - A emitted `timeout`; B received `directCallTimeout`.
+  - A reported `outgoingTimeout`; B reported `incomingTimeout`.
+  - Reverse-direction timeout returned A/B idle with no active session.
+  - B emitted `timeout`; A reported `incomingTimeout`; no receive failure was reported.
+  - Media connect was not attempted and `productionMediaFailureReason=none`.
+  - Outgoing and incoming timers are both 45 seconds, so caller/callee timeout emission can race; runtime still proved both sides clear safely with user-safe timeout terminal reasons.
 - No public UI activation, Element Call route changes, RoomScreen call presentation changes, ElementCallService changes, CallKit, push, or global production activation has been added.
 
 Phase:
-2.20E — private native call card timeout runtime proof.
+2.21B — private native call UI typed snapshot/reducer cleanup.
 
 Task:
-Runtime/manual proof only. Do not modify code unless a small test-only issue is found.
+Refactor private native call UI state mapping into typed, testable seams without changing runtime behavior.
 Do not change Element Call route.
 Do not wire CallKit/push.
 Do not globally activate production direct calls.
 
 Context:
-2.20C/2.20D proved rapid terminal actions no longer accidentally restart calls on the current build:
-- Rapid Hang up returns A/B idle without a new invite.
-- Rapid Cancel returns A/B idle without a new invite.
-- Rapid Decline returns A/B idle without a new invite after B is relaunched onto the fixed build.
+2.21A inspection found the private card is runtime-proven enough for continued gated internal lab use, but state ownership is too duplicated/stringly typed for broader internal usability:
+- engine session state
+- production status diagnostics
+- private product card state
+- ViewModel local pending/dismissed/cooldown state
+- diagnostic panel state
 
-Goal:
-Verify private native call card timeout behavior at runtime.
-
-Required env:
-- `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`
-- `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED=1`
-- `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`
-- `NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=http://127.0.0.1:8088`
-
-Preconditions:
-- local fake backend running
-- local LiveKit dev server running
-- r1/r2 trusted
-- A/B launched with env
-- A/B opened same encrypted DM
-- Existing Element Call route untouched
-
-Proof 1 — outgoing timeout:
-1. Arm B production listener if needed.
-2. Start from A private card.
-3. Do not accept on B.
-4. Wait for outgoing timeout or use an existing short-timeout/test hook if available.
-5. Confirm:
-   - A returns idle/ended with user-safe timeout terminal reason.
-   - B clears incoming ringing if it was received.
-   - No active session remains on either side.
-   - Any timeout signal is redacted and user-safe.
-   - `productionMediaFailureReason=none` unless a separate media setup was attempted and failed.
-
-Proof 2 — incoming timeout:
-1. Start from A private card.
-2. Wait for B to reach `incomingRinging`.
-3. Do not accept or decline on B.
-4. Wait for incoming timeout or use an existing short-timeout/test hook if available.
-5. Confirm:
-   - B clears incoming session safely.
-   - A observes terminal timeout/ended state if applicable.
-   - A/B return idle or ended with no active session.
-   - Card/user-safe state maps to `callTimedOut` or equivalent.
-
-Report:
-A. Outgoing timeout result.
-B. Incoming timeout result.
-C. Final production-status A/B.
-D. Whether any stale active session remained.
-E. Whether status/card output remained redacted.
-F. Any UI issue.
-G. Whether code changes were needed.
+Goals:
+1. Add a typed redacted room snapshot model, e.g. `NativeDirectCallRoomSnapshot`, as the UI-facing source of truth.
+2. Replace string-based session/encryption mapping with typed redacted enums.
+3. Extract a pure `NativeDirectCallRoomCardStateReducer` from the current card state mapping.
+4. Extract a `NativeDirectCallUserSafeReasonMapper` for activation, trust, media, timeout, terminal, and backend reasons.
+5. Keep current session state separate from last outcome/error state.
+6. Keep dismissed errors as ViewModel-local UI overlay state, not a mutation of call truth.
+7. Keep product actions explicit: start audio, accept, decline incoming, cancel outgoing, hang up, retry, dismiss error.
+8. Preserve existing behavior and runtime gates.
+9. Keep diagnostic panel and runner command paths unchanged unless a purely typed adapter is needed.
 
 Hard constraints:
-- No displayCall/presentCallScreen changes.
-- No ElementCallService changes.
+- No Element Call route changes.
+- No `displayCall` / `presentCallScreen` behavior changes.
+- No `ElementCallService` changes.
+- No `directOneToOneCallsEnabled` usage.
 - No CallKit/push.
 - No global production activation.
 - No raw token/JWT/key/envelope/Matrix content.
 - No raw room ID or peer ID in UI/logs/docs.
 - Do not weaken production E2EE or trust policy.
+
+Tests:
+- Snapshot maps activation enabled + idle to `canStart`.
+- Snapshot maps outgoing/incoming/connecting/active states correctly.
+- Snapshot maps timeout terminal reasons to user-safe `callTimedOut`.
+- Snapshot maps media/backend failures to user-safe failure reasons.
+- Dismissed error state remains local and does not mutate call truth.
+- Retry remains read-only and does not auto-start.
+- Post-terminal Start Audio suppression still prevents accidental restart.
+- Existing Start/Accept/Hang up/Decline/Cancel rows and enablement remain unchanged.
+- Existing Element Call button still emits `displayCall`.
+- Native card actions never emit `displayCall` or `presentCallScreen`.
+- Rendering/status refresh remains side-effect-free.
+- Redaction tests continue to pass.
+
+Validation:
+- git diff --check
+- swiftformat/swiftlint changed Swift files
+- targeted tests:
+  RoomScreenViewModel native card tests
+  NativeDirectCallInternalControlPanelTests
+  RoomFlowCoordinatorTests if touched
+  DirectCallEngineTests if touched
+- Release build
+- forbidden scan
+
+Commit only if tests/build pass.
+
+Suggested commit:
+Extract native call card typed state reducer

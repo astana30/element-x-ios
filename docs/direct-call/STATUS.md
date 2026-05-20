@@ -471,6 +471,17 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - No CallKit, push, or global production activation was introduced.
   - No code changes were needed during the runtime proof and the worktree remained clean.
   - Setup nuance: after relaunch, B needed the encrypted r1/r2 DM reopened and the receive listener armed.
+- Private native call card timeout runtime proof is recorded:
+  - The proof used the real configured ringing timeout of 45 seconds plus a small buffer.
+  - No timeout hook and no code changes were used, and the worktree stayed clean.
+  - Outgoing timeout passed: A started outgoing through the production room-scoped path, A entered `outgoingRinging`, B entered `incomingRinging`, and no accept/decline/cancel/hangup was sent.
+  - After outgoing timeout, A returned idle with no active session, emitted `timeout`, and the send succeeded.
+  - A reported terminal reason `outgoingTimeout`; B returned idle with no active session after receiving `directCallTimeout` and reported terminal reason `incomingTimeout`.
+  - Reverse-direction timeout passed: B entered `outgoingRinging`, A entered `incomingRinging`, then B returned idle after emitting `timeout` with terminal reason `outgoingTimeout`.
+  - A returned idle with no active session, reported terminal reason `incomingTimeout`, and reported no receive failure.
+  - Media connect was not attempted for either timeout proof, and `productionMediaFailureReason` remained `none`.
+  - Outgoing and incoming timers are both 45 seconds, so caller/callee timeout emission can race; runtime still proved both sides clear safely with user-safe timeout terminal reasons.
+  - Existing Element Call route remained untouched, and no CallKit, push, or global production activation was introduced.
 
 ## Current Blocker
 
@@ -479,14 +490,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Production rollout and server capability sources remain fail-closed by default.
 - Real production activation still requires hardened backend deployment, capability rollout, endpoint configuration, trusted peer readiness, visible UI design, and later CallKit/push work.
 - Rapid terminal-action restart prevention is fixed and runtime-proven on the current build.
-- The next immediate gap is timeout runtime proof before broader internal usability work.
+- Timeout runtime behavior is now proven through the private/internal room-scoped path; the next immediate gap is typed state/snapshot cleanup before broader internal usability work.
 - No public production activation, Element Call route change, CallKit, or push integration exists yet.
 
 ## Next Recommended Phase
 
-`2.20E — private native call card timeout runtime proof`
+`2.21B — private native call UI typed snapshot/reducer cleanup`
 
-Goal: prove outgoing and incoming timeout behavior at runtime through the private/internal product-card path, while keeping the card gated, redacted, and separate from Element Call routing, CallKit/push, public production activation, and global production activation.
+Goal: reduce duplicated/stringly typed private native-call UI state by introducing a typed redacted room snapshot, card state reducer, and user-safe reason mapper, while keeping the card gated, redacted, and separate from Element Call routing, CallKit/push, public production activation, and global production activation.
 
 ## Do-Not-Touch Constraints
 
