@@ -1268,11 +1268,12 @@ enum NativeDirectCallRoomCardStateReducer {
     static func cardState(snapshot: NativeDirectCallRoomSnapshot,
                           hidesDismissedError: Bool = false) -> NativeDirectCallRoomCardState {
         guard snapshot.productionHasActiveSession else {
-            if snapshot.isActivationEnabled {
-                return .canStart
+            let state = inactiveSessionCardState(snapshot: snapshot)
+            if hidesDismissedError, state.isFailed || state.isDismissible {
+                return snapshot.isActivationEnabled ? .canStart : .unavailable(reason: NativeDirectCallUserSafeReasonMapper.unavailableReason(snapshot.disabledReason))
             }
 
-            return .unavailable(reason: NativeDirectCallUserSafeReasonMapper.unavailableReason(snapshot.disabledReason))
+            return state
         }
 
         let state = activeSessionCardState(snapshot: snapshot)
@@ -1281,6 +1282,18 @@ enum NativeDirectCallRoomCardStateReducer {
         }
 
         return state
+    }
+
+    private static func inactiveSessionCardState(snapshot: NativeDirectCallRoomSnapshot) -> NativeDirectCallRoomCardState {
+        if case .failed(let reason) = snapshot.mediaState {
+            return .failed(reason: NativeDirectCallUserSafeReasonMapper.failureReason(reason))
+        }
+
+        if snapshot.isActivationEnabled {
+            return .canStart
+        }
+
+        return .unavailable(reason: NativeDirectCallUserSafeReasonMapper.unavailableReason(snapshot.disabledReason))
     }
 
     private static func activeSessionCardState(snapshot: NativeDirectCallRoomSnapshot) -> NativeDirectCallRoomCardState {
