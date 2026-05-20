@@ -209,12 +209,20 @@ Do not paste real Matrix access tokens, LiveKit tokens, or admin tokens into loc
 
 ## Tests
 
-The unit tests use only the Python standard library:
+Full backend validation, including FastAPI/ASGI route tests, requires the pinned backend dependencies:
 
 ```bash
 cd server/salemx-call-service
-python3 -m unittest discover tests
+python3 -m venv /tmp/salemx-call-service-test-venv
+/tmp/salemx-call-service-test-venv/bin/python -m pip install -r requirements.txt
+PYTHONPYCACHEPREFIX=/tmp/salemx-call-service-pycache \
+  /tmp/salemx-call-service-test-venv/bin/python -m unittest discover tests
+PYTHONPYCACHEPREFIX=/tmp/salemx-call-service-pycache \
+  /tmp/salemx-call-service-test-venv/bin/python -m compileall -q salemx_call_service tests
 ```
+
+Running tests with an interpreter that does not have FastAPI installed may skip the FastAPI-dependent app route checks.
+The venv command above is the expected full route-validation path and does not connect to real Synapse or LiveKit.
 
 ## Reverse Proxy Example
 
