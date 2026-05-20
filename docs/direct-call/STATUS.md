@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.22C — private native call relaunch/listener lifecycle runtime proof.
+After 2.23B — private native audio call engineering dogfood runbook.
 
 ## Latest App Code Checkpoint
 
@@ -507,6 +507,12 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Room dismiss/reopen proof passed: B listener/owner was armed and idle, then after leaving and reopening the DM B owner/listener reset.
   - Final A/B status reported `productionListenerAvailable=true`, `productionRoomAttached=true`, `productionSessionRestorationSupported=false`, `productionHasActiveSession=false`, `productionSessionState=unavailable`, and `productionMediaFailureReason=none`.
   - No UI issue was observed, the existing Element Call route remained untouched, no CallKit/push/video/global production activation was introduced, no code changes were needed, and the worktree stayed clean.
+- Private native audio engineering dogfood runbook is recorded:
+  - `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md` defines the strict controlled engineering dogfood scope and guardrails.
+  - Scope is DEBUG/integration only, private native card only, open encrypted direct 1:1 rooms only, foreground only, verified/trusted peers only, and local fake backend plus local LiveKit or a hardened staging equivalent.
+  - Required gates are documented: `IS_RUNNING_INTEGRATION_TESTS=1`, `NATIVE_DIRECT_CALL_DIAGNOSTICS=1`, `NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1`, `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`, `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`, `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED=1`, and `NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=...`.
+  - Allowed flows, known limitations, fail-closed behavior, redaction checklist, rollback steps, explicit non-goals, staging blockers, success criteria, and stop conditions are documented.
+  - The runbook keeps Element Call buttons unchanged and keeps CallKit, push, video, public rollout, Element Call replacement, `AllDevices` fallback, and global production activation out of scope.
 
 ## Current Blocker
 
@@ -518,14 +524,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Timeout runtime behavior is proven through the private/internal room-scoped path.
 - Typed state/snapshot cleanup is implemented, and the failed-state Retry/Dismiss regression found after that cleanup is fixed and runtime-verified.
 - Room/app relaunch and room dismiss/reopen lifecycle behavior is fail-closed and runtime-proven with `productionSessionRestorationSupported=false`.
-- The next immediate gap is a private native audio call internal dogfood readiness review before broader internal rollout work.
+- Controlled engineering dogfood guardrails are documented, but broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
+- The next immediate gap is private native call dogfood listener/status polish so engineering dogfood users can see listener availability and open-room/armed requirements clearly without adding side effects.
 - No public production activation, Element Call route change, CallKit, or push integration exists yet.
 
 ## Next Recommended Phase
 
-`2.23A — private native audio call internal dogfood readiness review`
+`2.23C — private native call dogfood listener/status polish`
 
-Goal: review whether the gated private native audio call path is ready for controlled internal dogfood, define the remaining must-fix items and explicit out-of-scope areas, and keep the card gated, redacted, fail-closed, and separate from Element Call routing, CallKit/push, video, public production activation, and global production activation.
+Goal: polish private-card and redacted status handling for listener availability, room attachment, and explicit receiver arming during controlled engineering dogfood, while keeping rendering side-effect-free and preserving Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope.
 
 ## Do-Not-Touch Constraints
 

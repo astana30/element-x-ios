@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.22C — private native call relaunch/listener lifecycle runtime proof.
+After 2.23B — private native audio call engineering dogfood runbook.
 
 Current checkpoints:
 - App code: 2.22B `Harden native call listener lifecycle` (`16992e5e6`).
@@ -16,6 +16,7 @@ Current checkpoints:
 - Private card timeout proof: 2.20E private native call card timeout runtime proof passed with the real 45s ringing timeout.
 - Private card rapid-action proof: 2.20D private native call card rapid Hang up / Cancel / Decline runtime proof passed on the current build.
 - Private card relaunch/listener lifecycle proof: 2.22C passed after 2.22B lifecycle hardening.
+- Private native audio dogfood guardrails: 2.23B runbook added at `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
 - Backend: 2.14E `Fix fake backend LiveKit dev token grants`.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
@@ -57,48 +58,74 @@ Current proven state:
 - Ringing relaunch proof passed: after A `outgoingRinging` and B `incomingRinging`, relaunching both apps and reopening the encrypted DM did not restore stale outgoing or incoming sessions.
 - Room dismiss/reopen proof passed: an armed idle B listener/owner reset after leaving and reopening the DM.
 - Final lifecycle status after proof: A/B `productionListenerAvailable=true`, `productionRoomAttached=true`, `productionSessionRestorationSupported=false`, `productionHasActiveSession=false`, `productionSessionState=unavailable`, and `productionMediaFailureReason=none`.
+- 2.23A readiness review concluded conditional yes for controlled engineering dogfood only, not broad internal dogfood, product beta, public rollout, or Element Call replacement.
+- 2.23B documents the strict engineering dogfood runbook and guardrails, including scope, gates, setup, allowed flows, limitations, fail-closed behavior, redaction, rollback, non-goals, staging blockers, success criteria, and stop conditions.
 - No public UI activation, Element Call route changes, RoomScreen call presentation changes, ElementCallService changes, CallKit, push, video, or global production activation has been added.
 
+Required dogfood gates:
+- `IS_RUNNING_INTEGRATION_TESTS=1`
+- `NATIVE_DIRECT_CALL_DIAGNOSTICS=1`
+- `NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1`
+- `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`
+- `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`
+- `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED=1` for the current fake-backed proof setup
+- `NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=...`
+
 Phase:
-2.23A — private native audio call internal dogfood readiness review.
+2.23C — private native call dogfood listener/status polish.
 
 Task:
-Inspection/design only. Do not modify code. Do not commit.
+Inspect and, if safe, polish the private native call card/status handling for listener availability and open-room receiver readiness.
+Do not change Element Call route.
+Do not wire CallKit/push.
+Do not add video.
+Do not globally activate production direct calls.
 
-Goal:
-Decide whether the gated private native audio call path is ready for controlled internal dogfood, and identify the remaining must-fix items before any broader internal rollout.
+Context:
+The dogfood runbook allows controlled engineering dogfood only. Receiver availability remains open-room scoped and may require explicit listener arming. The next app-side usability gap is making that requirement obvious and user-safe without starting listeners or triggering call side effects from rendering.
+
+Goals:
+1. Make private-card state clearly communicate when incoming calls require the room to be open and the listener to be armed.
+2. Surface redacted lifecycle fields where useful:
+   - `productionListenerAvailable`
+   - `productionListenerStarted`
+   - `productionOwnerAvailable`
+   - `productionRoomAttached`
+   - `productionSessionRestorationSupported=false`
+3. Keep status rendering side-effect-free:
+   - no listener start
+   - no Matrix send
+   - no LiveKit token request
+   - no media connect
+   - no owner creation unless already part of a safe read-only status path
+4. Preserve explicit user actions for Start, Accept, Decline, Cancel, Hang up, Retry, Dismiss, and any listener arming control already present.
+5. Keep the diagnostic panel and private product card gates separate.
+6. Keep all text user-safe and redacted.
 
 Inspect:
+- docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md
 - docs/direct-call/STATUS.md
 - docs/direct-call/WORKLOG.md
 - RoomScreen.swift
 - RoomScreenModels.swift
 - RoomScreenViewModel.swift
 - RoomFlowCoordinator.swift
-- DirectCallEngine.swift
-- DirectCallModels.swift
-- DirectCallMediaEngineProtocol.swift
-- LiveKitDirectCallMediaEngine.swift
-- production token/backend configuration docs
-- private native call card tests
-- RoomFlowCoordinator lifecycle tests
+- Native direct-call card reducer and snapshot models
+- Native direct-call internal control panel tests
+- RoomFlowCoordinator lifecycle/status tests
 
 Questions:
-1. What is proven enough for controlled internal dogfood behind `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`?
-2. What must still be fixed before dogfood?
-3. What must remain explicitly out of scope?
-4. Are listener lifecycle and session restoration semantics clear enough for internal users?
-5. Are app relaunch, room reopen, repeated call, reverse call, timeout, backend failure, LiveKit failure, and rapid action behaviors sufficiently covered?
-6. What user-facing copy/error states still need product polish before dogfood?
-7. What backend/config hardening remains for a non-local environment?
-8. What tests or runtime proofs should be added before dogfood starts?
-9. What rollback/disable switches should be documented for internal dogfood?
-10. What is the safest next implementation phase after the review?
+1. Does the private card clearly distinguish ready-to-start from receiver-listener readiness?
+2. Does the card explain the open-room/foreground limitation safely enough for controlled dogfood?
+3. Can listener availability be represented without auto-starting the listener?
+4. Should listener arming remain a separate internal control, or should the private card expose a safer explicit Arm receiver action under the product UI gate?
+5. Are lifecycle status fields mapped through typed snapshot/reducer seams instead of stringly logic?
+6. What tests are missing for listener availability and room attachment state?
 
 Hard constraints:
-- Do not modify code.
-- Do not commit.
-- Do not propose replacing Element Call toolbar buttons yet.
+- Do not modify `RoomScreenViewAction.displayCall` behavior.
+- Do not modify `RoomScreenCoordinator.presentCallScreen` behavior.
+- Do not change `ElementCallService`.
 - Do not use `directOneToOneCallsEnabled`.
 - No CallKit/push.
 - No video.
@@ -106,13 +133,31 @@ Hard constraints:
 - No raw token/JWT/key/envelope/Matrix content.
 - No raw room ID or peer ID in UI/logs/docs.
 - Do not weaken production E2EE or trust policy.
+- Do not replace Element Call toolbar buttons.
 
-Expected output:
-A. Files inspected.
-B. Internal dogfood readiness assessment.
-C. Must-fix blockers.
-D. Explicit out-of-scope items.
-E. Risk matrix.
-F. Test/runtime proof gaps.
-G. Rollback/disable plan.
-H. Recommended next implementation phase.
+Tests:
+- Product card remains hidden without `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`.
+- Product card visible state remains side-effect-free.
+- Listener availability/started/room attached/restoration unsupported fields map to user-safe state or copy.
+- No listener starts from rendering/status refresh.
+- No Matrix send from rendering/status refresh.
+- No token request or media connect from rendering/status refresh.
+- Existing Start/Accept/Hang up/Decline/Cancel/Retry/Dismiss behavior remains unchanged.
+- Element Call button still emits `displayCall` unchanged.
+- Native card actions never emit `displayCall` or `presentCallScreen`.
+- Redaction tests cover new listener/status text.
+
+Validation:
+- git diff --check
+- swiftformat/swiftlint changed Swift files
+- targeted tests:
+  RoomScreenViewModel native card tests
+  NativeDirectCallInternalControlPanelTests if affected
+  RoomFlowCoordinatorTests if touched
+- Release build
+- forbidden scan
+
+Commit only if tests/build pass.
+
+Suggested commit:
+Polish native call dogfood listener status

@@ -724,3 +724,17 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Confirmed no CallKit, push, video, or global production activation was introduced.
 - Confirmed no code changes were needed and the worktree stayed clean.
 - Recommended next phase: `2.23A — private native audio call internal dogfood readiness review`.
+
+## 2026-05-20 — 2.23B Private Native Audio Dogfood Runbook
+
+- Added `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md` as the controlled engineering dogfood runbook and guardrail document.
+- Recorded the dogfood decision as conditional engineering-only scope, not broad internal dogfood, product beta, public rollout, or Element Call replacement.
+- Documented the allowed scope: DEBUG/integration only, private native card only, open encrypted direct 1:1 room only, foreground app only, verified/trusted peers only, and local fake backend plus local LiveKit or a hardened staging equivalent.
+- Documented required gates: `IS_RUNNING_INTEGRATION_TESTS=1`, `NATIVE_DIRECT_CALL_DIAGNOSTICS=1`, `NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1`, `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`, `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`, `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED=1`, and `NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=...`.
+- Documented setup for trusted `r1`/`r2` accounts, local fake backend, local LiveKit dev server, A/B launches, encrypted DM opening, and receiver listener arming when required.
+- Documented allowed manual flows: Start/Accept/Hang up, Decline, Cancel, Retry/Dismiss, repeated calls, backend-off recovery, LiveKit-off recovery, and timeout.
+- Documented known limitations: no background incoming, CallKit, push, missed calls, video, call restoration after relaunch, or production-hardened backend proof.
+- Documented fail-closed behavior for backend unavailable, LiveKit unavailable, unverified peer, invalid room, app relaunch during ringing/active calls, and room dismiss/reopen.
+- Documented redaction checklist, rollback steps, explicit non-goals, staging blockers, dogfood success criteria, and stop conditions.
+- Confirmed the runbook keeps existing Element Call buttons unchanged and keeps CallKit, push, video, public rollout, `AllDevices` fallback, and global production activation out of scope.
+- Recommended next phase: `2.23C — private native call dogfood listener/status polish`.
