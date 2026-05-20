@@ -146,6 +146,7 @@ Before any staging dogfood replaces the local fake proof, the backend and deploy
 - Real Synapse validation.
 - Redis-backed shared call allocation store deployed and smoke-tested with HMAC-derived keys. Local Redis container smoke passed in 2.24H, but deployed staging Redis smoke is still required.
 - Redis-backed shared rate limiter deployed and smoke-tested with HMAC-derived keys. Local Redis container smoke passed in 2.24H, but deployed staging Redis smoke is still required.
+- Staging Synapse validation smoke run through `server/salemx-call-service/scripts/staging_synapse_smoke.sh` with operator-local fixtures and redacted output only.
 - Explicit staging mode with fake mode disabled and redacted readiness returning `ok`.
 - Allocation readiness with `allocationStoreConfigured=true`, `allocationStoreShared=true`, and `allocationStoreConnected=true`.
 - Rate-limit readiness with `rateLimitConfigured=true`, `rateLimitShared=true`, and `rateLimitConnected=true`.

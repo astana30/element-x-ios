@@ -260,6 +260,44 @@ docker stop salemx-call-redis-smoke
 
 This local Redis smoke is not staging approval. Staging dogfood still requires deployed Redis smoke, real Synapse validation smoke, and LiveKit join smoke against the staging environment.
 
+## Staging Synapse Validation Smoke Harness
+
+The repository includes a redacted operator-local harness for staging Synapse validation:
+
+```bash
+cp server/salemx-call-service/smoke/staging-synapse-smoke.env.example /tmp/staging-synapse-smoke.env
+$EDITOR /tmp/staging-synapse-smoke.env
+server/salemx-call-service/scripts/staging_synapse_smoke.sh --env-file /tmp/staging-synapse-smoke.env
+```
+
+The env file with real values must stay outside the repo or in an ignored local path. Do not commit real access tokens, room IDs, user IDs, device IDs, Redis URLs with credentials, Synapse admin tokens, LiveKit secrets, or participant tokens.
+
+Required harness variables:
+
+```text
+CALL_SERVICE_BASE_URL
+CALLER_MATRIX_ACCESS_TOKEN
+CALLER_DEVICE_ID
+STAGING_ENCRYPTED_DIRECT_ROOM_ID
+STAGING_PEER_USER_ID
+```
+
+Optional negative-case fixture variables:
+
+```text
+WRONG_DEVICE_ID
+NEGATIVE_UNENCRYPTED_ROOM_ID
+NEGATIVE_NON_1_TO_1_ROOM_ID
+NEGATIVE_PEER_NOT_JOINED_USER_ID
+NEGATIVE_CALLER_NOT_JOINED_ROOM_ID
+```
+
+The harness prints only redacted case summaries: HTTP status, Matrix-style errcode, readiness booleans, token-response shape booleans, and pass/fail/skip. It does not echo request JSON or environment values. Missing optional negative fixtures are reported as skipped.
+
+Use a staging rate limit high enough for the whole smoke burst, or run cases with enough delay for the rate-limit window to clear. Room-validation negative cases run after authenticated rate-limit checks, so an intentionally low staging limit can produce `M_DIRECT_CALL_RATE_LIMITED` before the room-validation assertion is reached.
+
+Staging Synapse validation passes only when readiness is `ok`, the positive encrypted 1:1 token request succeeds, required negative cases fail closed, no token is issued for negative cases, and the harness redaction self-check passes.
+
 ## Reverse Proxy Example
 
 Example Nginx location:

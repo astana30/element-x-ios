@@ -771,3 +771,20 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Documented that this is local Redis smoke only. Deployed staging Redis smoke, real Synapse validation smoke, and LiveKit join smoke remain required before staging dogfood.
 - Confirmed no iOS app behavior, Element Call route, CallKit, push, video, or global production direct-call activation changed.
 - Recommended next phase: `2.24I — staging Synapse validation and LiveKit join smoke plan`.
+
+## 2026-05-20 — 2.24J-prep Staging Synapse Smoke Harness
+
+- Added a redacted operator-local staging Synapse validation smoke harness template.
+- Added `server/salemx-call-service/smoke/staging-synapse-smoke.env.example` with placeholder-only required and optional fixture variables.
+- Added `server/salemx-call-service/scripts/staging_synapse_smoke.sh`.
+- The harness reads environment variables from the operator shell or an optional local env file and never prints env values.
+- The harness reports missing required variable names only, then exits without calling staging if required fixtures are unavailable.
+- The harness runs readiness, positive token request, invalid bearer, and optional negative room/device cases when fixtures are present.
+- Negative fixtures can be omitted; missing optional cases are reported as skipped rather than failing the whole smoke.
+- Output is restricted to HTTP status, errcode, readiness booleans, token response shape booleans, and pass/fail/skip.
+- The harness avoids echoing request JSON and self-checks its redacted report for known fixture values and token-shaped output before printing.
+- Added gitignore coverage for operator-local backend smoke env files while preserving committed `.env.example` templates.
+- Updated backend README and private dogfood docs to reference the harness and reiterate that real env files with credentials must not be committed.
+- No real staging smoke was run in this prep phase.
+- Confirmed no iOS app behavior, Element Call route, CallKit, push, video, or global production direct-call activation changed.
+- Recommended next phase: `2.24J — staging Synapse validation smoke execution` once operator-local fixtures are available.

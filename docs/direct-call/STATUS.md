@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.24H — Redis local integration smoke.
+After 2.24J-prep — staging Synapse smoke env/runbook harness.
 
 ## Latest App Code Checkpoint
 
@@ -541,6 +541,13 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Redis keys and readiness output were checked for redaction and did not contain raw room IDs, peer IDs, user IDs, device IDs, bearer tokens, participant tokens, JWTs, Synapse admin tokens, or LiveKit API secrets.
   - Stopping Redis failed closed with `M_DIRECT_CALL_RATE_LIMIT_STORE_UNAVAILABLE` before token issuance, and the allocation-specific path failed closed with `M_DIRECT_CALL_ALLOCATION_FAILED` before token issuance.
   - This is a local Redis smoke only; deployed staging Redis smoke, real Synapse validation smoke, and LiveKit join smoke remain required before staging dogfood.
+- Staging Synapse validation smoke harness is prepared:
+  - Added an operator-local env template at `server/salemx-call-service/smoke/staging-synapse-smoke.env.example`.
+  - Added `server/salemx-call-service/scripts/staging_synapse_smoke.sh` for redacted readiness, positive token, invalid bearer, wrong-device, and optional negative room-fixture checks.
+  - The harness prints only HTTP status, errcode, readiness booleans, token response shape booleans, and pass/fail/skip.
+  - The harness does not echo request JSON or env values and self-checks the report for known fixture values and token-shaped output before printing.
+  - Operator-local smoke env files are ignored by git.
+  - The harness does not run automatically and no real staging service was called in the prep phase.
 
 ## Current Blocker
 
@@ -554,14 +561,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Room/app relaunch and room dismiss/reopen lifecycle behavior is fail-closed and runtime-proven with `productionSessionRestorationSupported=false`.
 - Controlled engineering dogfood guardrails are documented, but broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
 - Listener availability and open-room/armed requirements are now visible through typed private-card status and runtime diagnostics, with manual visual verification still deferred.
-- The next immediate gap is staging Synapse validation and LiveKit join smoke planning before any wider engineering dogfood environment can replace the local fake setup.
+- The next immediate gap is executing staging Synapse validation smoke with operator-local fixtures before any wider engineering dogfood environment can replace the local fake setup.
 - No public production activation, Element Call route change, CallKit, or push integration exists yet.
 
 ## Next Recommended Phase
 
-`2.24I — staging Synapse validation and LiveKit join smoke plan`
+`2.24J — staging Synapse validation smoke execution`
 
-Goal: design the staging Synapse validation and LiveKit join smoke needed after the local Redis storage smoke, while preserving fail-closed activation, redaction, trusted-device E2EE, Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope.
+Goal: run the staging Synapse validation smoke using the redacted operator-local harness once the endpoint and fixtures are available, while preserving fail-closed activation, redaction, trusted-device E2EE, Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope.
 
 ## Do-Not-Touch Constraints
 

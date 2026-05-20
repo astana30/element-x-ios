@@ -45,6 +45,10 @@ build
 ## Project specific
 test_output
 
+# Operator-local backend smoke fixtures. Only commit *.env.example templates.
+server/salemx-call-service/smoke/*.env
+server/salemx-call-service/smoke/*.local
+
 # Only commit Pkl packages (there may be other caches in here).
 Secrets/vendor/*
 !Secrets/vendor/package-2
