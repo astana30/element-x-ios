@@ -260,6 +260,47 @@ docker stop salemx-call-redis-smoke
 
 This local Redis smoke is not staging approval. Staging dogfood still requires deployed Redis smoke, real Synapse validation smoke, and LiveKit join smoke against the staging environment.
 
+## Staging Deployment Preparation
+
+The repository includes a placeholder-only staging env template:
+
+```bash
+cp server/salemx-call-service/deploy/staging.env.example server/salemx-call-service/deploy/staging.env
+$EDITOR server/salemx-call-service/deploy/staging.env
+```
+
+`server/salemx-call-service/deploy/staging.env` is ignored by git. Keep real Synapse tokens, LiveKit secrets, storage-key secrets, Redis URLs with credentials, Matrix access tokens, room IDs, user IDs, and device IDs out of the repository and out of shared logs.
+
+For a local staging-shaped run against real staging Synapse/LiveKit and Redis, use:
+
+```bash
+docker run -d --rm --name salemx-call-service-staging-redis -p 6380:6379 redis:7-alpine
+server/salemx-call-service/scripts/run_staging_call_service_local.sh \
+  --env-file server/salemx-call-service/deploy/staging.env \
+  --host 127.0.0.1 \
+  --port 8088
+```
+
+The run helper validates guardrails before starting:
+
+- `SALEMX_CALL_SERVICE_MODE=staging`;
+- `SALEMX_CALL_SERVICE_FAKE_MODE=0`;
+- `LIVEKIT_URL` starts with `wss://`;
+- Redis allocation and rate-limit store kinds are `redis`;
+- Redis store URLs, storage-key secret, Synapse config, LiveKit config, TTLs, and rate limit are present;
+- `ALLOCATION_TTL_SECONDS` is not shorter than `TOKEN_TTL_SECONDS`.
+
+The helper prints missing or invalid variable names only and never prints values.
+
+In a second shell, check redacted readiness:
+
+```bash
+server/salemx-call-service/scripts/check_staging_readiness.sh \
+  --env-file server/salemx-call-service/deploy/staging.env
+```
+
+Allowed output is limited to HTTP status, readiness reason, and readiness booleans. Do not paste raw env files or raw service logs into shared threads.
+
 ## Staging Synapse Validation Smoke Harness
 
 The repository includes a redacted operator-local harness for staging Synapse validation:
@@ -297,6 +338,30 @@ The harness prints only redacted case summaries: HTTP status, Matrix-style errco
 Use a staging rate limit high enough for the whole smoke burst, or run cases with enough delay for the rate-limit window to clear. Room-validation negative cases run after authenticated rate-limit checks, so an intentionally low staging limit can produce `M_DIRECT_CALL_RATE_LIMITED` before the room-validation assertion is reached.
 
 Staging Synapse validation passes only when readiness is `ok`, the positive encrypted 1:1 token request succeeds, required negative cases fail closed, no token is issued for negative cases, and the harness redaction self-check passes.
+
+Recommended staging setup order:
+
+1. Copy and fill `deploy/staging.env` locally.
+2. Start Redis or point the env file at an operator-managed staging Redis.
+3. Start the call service with `run_staging_call_service_local.sh`.
+4. Run `check_staging_readiness.sh`.
+5. Copy and fill the smoke env locally:
+
+```bash
+cp server/salemx-call-service/smoke/staging-synapse-smoke.env.example server/salemx-call-service/smoke/staging-synapse-smoke.env
+$EDITOR server/salemx-call-service/smoke/staging-synapse-smoke.env
+```
+
+6. Run `staging_synapse_smoke.sh`.
+7. Share only the redacted script output.
+
+Rollback:
+
+```bash
+docker stop salemx-call-service-staging-redis
+```
+
+Also stop the `uvicorn` process and unset/close any operator-local env files. The iOS private native call path remains gated separately and is not activated by these backend helpers.
 
 ## Reverse Proxy Example
 

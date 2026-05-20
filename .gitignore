@@ -46,6 +46,8 @@ build
 test_output
 
 # Operator-local backend smoke fixtures. Only commit *.env.example templates.
+server/salemx-call-service/deploy/*.env
+server/salemx-call-service/deploy/*.local
 server/salemx-call-service/smoke/*.env
 server/salemx-call-service/smoke/*.local
 

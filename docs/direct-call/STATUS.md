@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.24J-prep — staging Synapse smoke env/runbook harness.
+After 2.24K — staging call service deployment preparation.
 
 ## Latest App Code Checkpoint
 
@@ -548,6 +548,12 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - The harness does not echo request JSON or env values and self-checks the report for known fixture values and token-shaped output before printing.
   - Operator-local smoke env files are ignored by git.
   - The harness does not run automatically and no real staging service was called in the prep phase.
+- Staging call service deployment scaffold is prepared:
+  - Added `server/salemx-call-service/deploy/staging.env.example` with placeholder-only staging service env values.
+  - Added ignored local env coverage for `server/salemx-call-service/deploy/*.env` and `server/salemx-call-service/deploy/*.local`.
+  - Added `server/salemx-call-service/scripts/run_staging_call_service_local.sh` to validate staging env guardrails and start `uvicorn` without printing env values.
+  - Added `server/salemx-call-service/scripts/check_staging_readiness.sh` to query readiness and print only redacted readiness fields.
+  - The deployment scaffold does not include real credentials, does not run automatically, and does not activate any iOS or public/native call route.
 
 ## Current Blocker
 
@@ -561,14 +567,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Room/app relaunch and room dismiss/reopen lifecycle behavior is fail-closed and runtime-proven with `productionSessionRestorationSupported=false`.
 - Controlled engineering dogfood guardrails are documented, but broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
 - Listener availability and open-room/armed requirements are now visible through typed private-card status and runtime diagnostics, with manual visual verification still deferred.
-- The next immediate gap is executing staging Synapse validation smoke with operator-local fixtures before any wider engineering dogfood environment can replace the local fake setup.
+- The next immediate gap is executing staging readiness and Synapse validation smoke with operator-local fixtures before any wider engineering dogfood environment can replace the local fake setup.
 - No public production activation, Element Call route change, CallKit, or push integration exists yet.
 
 ## Next Recommended Phase
 
 `2.24J — staging Synapse validation smoke execution`
 
-Goal: run the staging Synapse validation smoke using the redacted operator-local harness once the endpoint and fixtures are available, while preserving fail-closed activation, redaction, trusted-device E2EE, Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope.
+Goal: start/check the staging call service with the redacted deployment scaffold, then run staging Synapse validation smoke using the operator-local harness once endpoint and fixtures are available, while preserving fail-closed activation, redaction, trusted-device E2EE, Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope.
 
 ## Do-Not-Touch Constraints
 

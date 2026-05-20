@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.24J-prep — staging Synapse smoke env/runbook harness.
+After 2.24K — staging call service deployment preparation.
 
 Current checkpoints:
 - App code: 2.23C `Polish native call listener availability status` (`bb7ae2557`).
@@ -17,12 +17,13 @@ Current checkpoints:
 - FastAPI route test environment: 2.24E `Document call service full test environment` (`073c8da49`).
 - Redis storage skeleton: 2.24G `Add Redis call service storage skeleton` (`98e153b7f`).
 - Redis local integration smoke: 2.24H passed and is documented (`113945266`).
-- Staging Synapse smoke harness: 2.24J-prep added an operator-local env template and redacted smoke script.
+- Staging Synapse smoke harness: 2.24J-prep `Add staging Synapse smoke harness template` (`565699e15`).
+- Staging deployment scaffold: 2.24K prepared helper scripts and placeholder-only env templates.
 - Private native audio dogfood guardrails: `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
-Current proven state:
+Current proven/prepared state:
 - Production native audio call core works through the DEBUG/integration/private product-gated path.
 - Private native call card works behind `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`.
 - Existing Element Call phone/video buttons remain visible and unchanged.
@@ -32,58 +33,59 @@ Current proven state:
 - Listener/owner lifecycle is fail-closed with `productionSessionRestorationSupported=false`.
 - SalemX call service staging guardrails are in place: explicit service mode, fake-mode blocking, redacted readiness, Redis allocation/rate-limit config validation, memory store blocking in staging, and storage-key secret requirement.
 - Redis local smoke passed with a disposable local Redis container and remained fully redacted.
-- `server/salemx-call-service/scripts/staging_synapse_smoke.sh` now provides a redacted operator-local staging Synapse validation harness.
-- `server/salemx-call-service/smoke/staging-synapse-smoke.env.example` documents required and optional fixture variables with placeholders only.
-- Operator-local backend smoke env files are ignored by git.
-- The staging Synapse smoke harness:
-  - reads env from the operator shell or an optional local env file;
-  - prints only missing variable names, never values;
-  - runs readiness, positive token, invalid bearer, wrong-device, and optional negative room-fixture checks;
-  - skips missing optional negative fixtures explicitly;
-  - prints only HTTP status, errcode, readiness booleans, token response shape booleans, and pass/fail/skip;
-  - avoids echoing request JSON;
-  - self-checks the report for known fixture values and token-shaped output before printing.
-- The harness has not been run against real staging yet because operator-local endpoint and fixtures are still required.
+- `server/salemx-call-service/deploy/staging.env.example` now documents placeholder-only staging service env values.
+- Operator-local deploy env files are ignored by git.
+- `server/salemx-call-service/scripts/run_staging_call_service_local.sh` validates staging guardrails and starts `uvicorn` from an operator-local env file without printing env values.
+- `server/salemx-call-service/scripts/check_staging_readiness.sh` queries readiness and prints only redacted readiness fields.
+- `server/salemx-call-service/scripts/staging_synapse_smoke.sh` provides the redacted operator-local staging Synapse validation harness.
+- The staging deployment scaffold has not been run against real staging yet because operator-local endpoint/secrets/fixtures are still required.
 - No public UI activation, Element Call route changes, RoomScreen call presentation changes, existing call-service changes, CallKit, push, video, or global production activation has been added.
 
-Required operator-local harness variables:
-- `CALL_SERVICE_BASE_URL`
-- `CALLER_MATRIX_ACCESS_TOKEN`
-- `CALLER_DEVICE_ID`
-- `STAGING_ENCRYPTED_DIRECT_ROOM_ID`
-- `STAGING_PEER_USER_ID`
+Required operator-local staging service env file:
+- Copy `server/salemx-call-service/deploy/staging.env.example` to `server/salemx-call-service/deploy/staging.env` or another ignored local path.
+- Fill values locally only. Do not commit or paste the real file.
 
-Optional negative fixture variables:
-- `WRONG_DEVICE_ID`
-- `NEGATIVE_UNENCRYPTED_ROOM_ID`
-- `NEGATIVE_NON_1_TO_1_ROOM_ID`
-- `NEGATIVE_PEER_NOT_JOINED_USER_ID`
-- `NEGATIVE_CALLER_NOT_JOINED_ROOM_ID`
+Required operator-local smoke env file:
+- Copy `server/salemx-call-service/smoke/staging-synapse-smoke.env.example` to `server/salemx-call-service/smoke/staging-synapse-smoke.env` or another ignored local path.
+- Fill values locally only. Do not commit or paste the real file.
 
 Phase:
 2.24J — staging Synapse validation smoke execution.
 
 Task:
-Execute staging Synapse validation smoke using the redacted local-only harness. Do not modify code unless a test-only script/doc issue is found. Do not commit unless docs/scripts are changed and validation passes.
+Start/check the staging call service using the deployment scaffold, then execute staging Synapse validation smoke using the redacted local-only harness. Do not modify code unless a test-only script/doc issue is found. Do not commit unless docs/scripts are changed and validation passes.
 
 Context:
-The previous execution attempt was blocked because staging endpoint and test fixtures were unavailable. The prep phase added a safe harness and env template so an operator can provide local fixtures without committing or printing secrets.
+Previous execution attempts were blocked because staging endpoint and test fixtures were unavailable. The prep phases added safe local env templates and helper scripts so an operator can provide local values without committing or printing secrets.
 
 Goal:
-Run staging smoke and report only redacted/pass-fail results.
+Run staging readiness and Synapse validation smoke and report only redacted/pass-fail results.
 
-Recommended command shape:
+Suggested setup commands:
 
 ```bash
-cp server/salemx-call-service/smoke/staging-synapse-smoke.env.example /tmp/staging-synapse-smoke.env
-$EDITOR /tmp/staging-synapse-smoke.env
-server/salemx-call-service/scripts/staging_synapse_smoke.sh --env-file /tmp/staging-synapse-smoke.env
+cp server/salemx-call-service/deploy/staging.env.example server/salemx-call-service/deploy/staging.env
+$EDITOR server/salemx-call-service/deploy/staging.env
+
+docker run -d --rm --name salemx-call-service-staging-redis -p 6380:6379 redis:7-alpine
+
+server/salemx-call-service/scripts/run_staging_call_service_local.sh \
+  --env-file server/salemx-call-service/deploy/staging.env \
+  --host 127.0.0.1 \
+  --port 8088
 ```
 
-If the operator has already exported local env vars, run:
+In a second shell:
 
 ```bash
-server/salemx-call-service/scripts/staging_synapse_smoke.sh
+server/salemx-call-service/scripts/check_staging_readiness.sh \
+  --env-file server/salemx-call-service/deploy/staging.env
+
+cp server/salemx-call-service/smoke/staging-synapse-smoke.env.example server/salemx-call-service/smoke/staging-synapse-smoke.env
+$EDITOR server/salemx-call-service/smoke/staging-synapse-smoke.env
+
+server/salemx-call-service/scripts/staging_synapse_smoke.sh \
+  --env-file server/salemx-call-service/smoke/staging-synapse-smoke.env
 ```
 
 Smoke cases:
@@ -138,18 +140,24 @@ Allowed report fields:
 - Backend redacted reason enums.
 
 Pass criteria:
+- Readiness check passes.
 - Positive case returns `200`.
 - Required negative cases fail closed with expected errcode/status.
 - Optional negative cases pass if fixtures are supplied, otherwise report skipped.
 - No token issued for negative cases.
 - Harness redaction self-check passes.
-- Readiness remains redacted.
 - Staging rate limit is high enough for the smoke burst, or cases are spaced so room-validation negatives are not masked by `M_DIRECT_CALL_RATE_LIMITED`.
 
 If staging data is unavailable:
 - Do not fake success.
 - Report exactly which precondition is missing by variable name only.
 - Keep report redacted.
+
+Rollback:
+- Stop the `uvicorn` process.
+- Stop local Redis if used: `docker stop salemx-call-service-staging-redis`.
+- Do not commit or paste local env files.
+- Keep iOS private native call gates unchanged.
 
 Report:
 A. Readiness result.

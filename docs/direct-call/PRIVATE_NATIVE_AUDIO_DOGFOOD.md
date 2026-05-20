@@ -144,6 +144,7 @@ Only share redacted booleans, enums, user-safe reasons, and non-identifying stat
 Before any staging dogfood replaces the local fake proof, the backend and deployment path need:
 
 - Real Synapse validation.
+- Staging call service env prepared from `server/salemx-call-service/deploy/staging.env.example`, with real values kept only in ignored local files.
 - Redis-backed shared call allocation store deployed and smoke-tested with HMAC-derived keys. Local Redis container smoke passed in 2.24H, but deployed staging Redis smoke is still required.
 - Redis-backed shared rate limiter deployed and smoke-tested with HMAC-derived keys. Local Redis container smoke passed in 2.24H, but deployed staging Redis smoke is still required.
 - Staging Synapse validation smoke run through `server/salemx-call-service/scripts/staging_synapse_smoke.sh` with operator-local fixtures and redacted output only.

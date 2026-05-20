@@ -788,3 +788,18 @@ This file records durable phase-level progress for future Codex and strategy ses
 - No real staging smoke was run in this prep phase.
 - Confirmed no iOS app behavior, Element Call route, CallKit, push, video, or global production direct-call activation changed.
 - Recommended next phase: `2.24J — staging Synapse validation smoke execution` once operator-local fixtures are available.
+
+## 2026-05-20 — 2.24K Staging Call Service Deployment Preparation
+
+- Added staging deployment scaffolding for the SalemX call service without adding real credentials or running staging smoke.
+- Added `server/salemx-call-service/deploy/staging.env.example` with placeholder-only staging service env values.
+- Added gitignore coverage for operator-local `server/salemx-call-service/deploy/*.env` and `server/salemx-call-service/deploy/*.local` files.
+- Added `server/salemx-call-service/scripts/run_staging_call_service_local.sh` to validate staging guardrails and start the call service from an operator-local env file.
+- The run helper checks staging mode, fake mode disabled, `wss://` LiveKit URL, Redis allocation/rate-limit store config, storage-key secret presence, TTL bounds, and rate-limit config, while printing only variable names for missing/invalid values.
+- Added `server/salemx-call-service/scripts/check_staging_readiness.sh` to query readiness and print only redacted readiness fields.
+- Documented the operator workflow: create ignored local env files, start Redis or use managed Redis, start the call service, check readiness, fill the staging Synapse smoke env, then run the redacted Synapse smoke harness.
+- Documented that only redacted helper output may be shared and real env files/logs must not be pasted.
+- Confirmed this scaffold does not include real secrets, raw room IDs, raw user IDs, raw device IDs, or real staging URLs.
+- Confirmed no iOS app behavior, Element Call route, CallKit, push, video, or global production direct-call activation changed.
+- Staging dogfood remains blocked until staging readiness, Synapse validation smoke, and LiveKit token join smoke pass.
+- Recommended next phase: `2.24J — staging Synapse validation smoke execution` when operator-local env values are available.
