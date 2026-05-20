@@ -2,15 +2,19 @@
 
 ## Current Phase
 
-After 2.23B — private native audio call engineering dogfood runbook.
+After 2.23D — listener availability runtime diagnostics proof.
 
 ## Latest App Code Checkpoint
 
-2.22B `Harden native call listener lifecycle`
+2.23C `Polish native call listener availability status`
+
+Commit: `bb7ae2557`
 
 ## Latest Code Checkpoint
 
-2.22B `Harden native call listener lifecycle`
+2.23C `Polish native call listener availability status`
+
+Commit: `bb7ae2557`
 
 ## Latest SDK Checkpoint
 
@@ -513,6 +517,16 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Required gates are documented: `IS_RUNNING_INTEGRATION_TESTS=1`, `NATIVE_DIRECT_CALL_DIAGNOSTICS=1`, `NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1`, `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`, `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`, `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED=1`, and `NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=...`.
   - Allowed flows, known limitations, fail-closed behavior, redaction checklist, rollback steps, explicit non-goals, staging blockers, success criteria, and stop conditions are documented.
   - The runbook keeps Element Call buttons unchanged and keeps CallKit, push, video, public rollout, Element Call replacement, `AllDevices` fallback, and global production activation out of scope.
+- Listener availability status polish and runtime diagnostics proof are recorded:
+  - 2.23C added typed listener/restoration availability status for the private native call card, including listener-not-armed, ready-to-receive, open-room-required, and restoration-unsupported states.
+  - Fresh runtime relaunch showed an attached room with `productionListenerAvailable=true`, `productionOwnerAvailable=false`, and `productionListenerStarted=false`, mapping to listener-not-armed.
+  - The same proof showed no side effects from passive status/rendering: no Matrix send, no media connect, no LiveKit connect, and no active session.
+  - A receiver with `productionRoomAttached=false` mapped to open-room-required until room reattachment.
+  - Explicit listener arm succeeded; A/B then reported owner available, listener available/started, room attached, restoration unsupported, no active session, and media failure `none`.
+  - Incoming after listener arm still worked: A started outgoing, B reached `incomingRinging`, B rejected/declined, A received `directCallReject`, and A/B returned idle with no active session or media failure.
+  - Final diagnostics kept listener available/started, cleanup/disconnect attempted, and media failure `none`.
+  - Limitations: manual visual card text was not verified from the shell, and the literal leave-DM-to-chat-list/reopen gesture was not performed in this proof.
+  - Existing Element Call route remained untouched, no CallKit/push/video/global production activation was introduced, no code changes were needed during the runtime proof, and the worktree stayed clean.
 
 ## Current Blocker
 
@@ -525,14 +539,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Typed state/snapshot cleanup is implemented, and the failed-state Retry/Dismiss regression found after that cleanup is fixed and runtime-verified.
 - Room/app relaunch and room dismiss/reopen lifecycle behavior is fail-closed and runtime-proven with `productionSessionRestorationSupported=false`.
 - Controlled engineering dogfood guardrails are documented, but broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
-- The next immediate gap is private native call dogfood listener/status polish so engineering dogfood users can see listener availability and open-room/armed requirements clearly without adding side effects.
+- Listener availability and open-room/armed requirements are now visible through typed private-card status and runtime diagnostics, with manual visual verification still deferred.
+- The next immediate gap is staging backend and LiveKit hardening planning before any wider engineering dogfood environment can replace the local fake setup.
 - No public production activation, Element Call route change, CallKit, or push integration exists yet.
 
 ## Next Recommended Phase
 
-`2.23C — private native call dogfood listener/status polish`
+`2.24A — staging backend and LiveKit hardening plan`
 
-Goal: polish private-card and redacted status handling for listener availability, room attachment, and explicit receiver arming during controlled engineering dogfood, while keeping rendering side-effect-free and preserving Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope.
+Goal: inspect and design the staging backend/LiveKit hardening path needed to move private native audio call proofing beyond the local fake backend and local LiveKit dev server, while preserving fail-closed activation, redaction, trusted-device E2EE, Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope.
 
 ## Do-Not-Touch Constraints
 

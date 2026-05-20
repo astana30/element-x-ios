@@ -738,3 +738,21 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Documented redaction checklist, rollback steps, explicit non-goals, staging blockers, dogfood success criteria, and stop conditions.
 - Confirmed the runbook keeps existing Element Call buttons unchanged and keeps CallKit, push, video, public rollout, `AllDevices` fallback, and global production activation out of scope.
 - Recommended next phase: `2.23C — private native call dogfood listener/status polish`.
+
+## 2026-05-20 — 2.23D Listener Availability Runtime Diagnostics Proof
+
+- Recorded runtime diagnostics proof for listener availability status after 2.23C.
+- After fresh relaunch, A reported `productionRoomAttached=true`, `productionListenerAvailable=true`, `productionOwnerAvailable=false`, and `productionListenerStarted=false`, mapping to listener-not-armed.
+- Confirmed no passive side effects were observed: no Matrix send, no media connect, no LiveKit connect, and no active session.
+- B initially reported `productionRoomAttached=false`, mapping to open-room-required until room reattachment.
+- Explicit listener arm succeeded.
+- After listener arm, A/B reported `productionOwnerAvailable=true`, `productionListenerAvailable=true`, `productionListenerStarted=true`, `productionRoomAttached=true`, and `productionSessionRestorationSupported=false`.
+- Confirmed A/B had no active session and `productionMediaFailureReason=none` after listener arm.
+- Incoming after listener arm worked: A started outgoing, B reached `incomingRinging`, B rejected/declined, A received `directCallReject`, and A/B returned idle with no active session.
+- Final status showed A/B idle, no active session, listener available/started, A received `directCallReject`, B emitted reject and sent successfully, media cleanup/disconnect attempted, and media failure `none`.
+- Confirmed existing Element Call route remained untouched.
+- Confirmed no CallKit, push, video, or global production activation was introduced.
+- Confirmed no code changes were needed and the worktree stayed clean.
+- Limitations: manual visual card text was not verified from this shell, and the literal leave-DM-to-chat-list/reopen gesture was not performed.
+- Treat this as runtime diagnostics proof, not full visual/manual UI proof.
+- Recommended next phase: `2.24A — staging backend and LiveKit hardening plan`.
