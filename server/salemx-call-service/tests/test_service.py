@@ -12,6 +12,11 @@ from unittest.mock import patch
 
 from salemx_call_service.allocation import Allocation, InMemoryAllocationStore
 from salemx_call_service.auth import AuthenticatedUser
+from salemx_call_service.config import (
+    ALLOW_INSECURE_LIVEKIT_URL_ENV,
+    SERVICE_MODE_ENV,
+    ServiceMode,
+)
 from salemx_call_service.dto import TokenRequest
 from salemx_call_service.errors import CallServiceError
 from salemx_call_service.livekit_tokens import IssuedLiveKitToken, LiveKitGrant, LiveKitJWTTokenIssuer
@@ -206,7 +211,7 @@ class LocalFakeCapabilityTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_fake_mode_registers_local_capabilities_route_only_when_explicitly_enabled(self) -> None:
         try:
-            with patch.dict(os.environ, {FAKE_MODE_ENV: "1"}, clear=True):
+            with patch.dict(os.environ, {SERVICE_MODE_ENV: ServiceMode.LOCAL_FAKE.value, FAKE_MODE_ENV: "1"}, clear=True):
                 from salemx_call_service.app import CAPABILITIES_PATH as app_capabilities_path
                 from salemx_call_service.app import create_app
         except ModuleNotFoundError as error:
@@ -217,7 +222,7 @@ class LocalFakeCapabilityTests(unittest.IsolatedAsyncioTestCase):
         production_like_app = create_app(token_service=DirectCallTokenServiceTests().make_service())
         production_like_paths = {route.path for route in production_like_app.routes}
 
-        with patch.dict(os.environ, {FAKE_MODE_ENV: "1"}, clear=False):
+        with patch.dict(os.environ, {SERVICE_MODE_ENV: ServiceMode.LOCAL_FAKE.value, FAKE_MODE_ENV: "1"}, clear=False):
             fake_app = create_app()
         fake_paths = {route.path for route in fake_app.routes}
 
@@ -608,7 +613,7 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_fake_mode_token_endpoint_returns_200(self) -> None:
         try:
-            with patch.dict(os.environ, {FAKE_MODE_ENV: "1"}, clear=True):
+            with patch.dict(os.environ, {SERVICE_MODE_ENV: ServiceMode.LOCAL_FAKE.value, FAKE_MODE_ENV: "1"}, clear=True):
                 from salemx_call_service.app import ENDPOINT_PATH, create_app
         except ModuleNotFoundError as error:
             if error.name == "fastapi":
@@ -616,6 +621,7 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
             raise
 
         with patch.dict(os.environ, {
+            SERVICE_MODE_ENV: ServiceMode.LOCAL_FAKE.value,
             FAKE_MODE_ENV: "1",
             FAKE_LIVEKIT_URL_ENV: "ws://localhost:7880",
             FAKE_LIVEKIT_API_KEY_ENV: "test-api-key",
@@ -647,18 +653,96 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(claims["video"]["room"], body["livekit"]["room_name"])
         self.assertTrue(LiveKitJWTTokenIssuerTests.verify_hs256_signature(body["livekit"]["participant_token"], "test-signing-key"))
 
+    async def test_staging_mode_refuses_fake_mode(self) -> None:
+        app_module = _load_app_module()
+
+        with patch.dict(os.environ, _staging_env({FAKE_MODE_ENV: "1"}), clear=True):
+            with self.assertRaisesRegex(RuntimeError, "fakeModeForbidden"):
+                app_module.create_app()
+            app = app_module.create_app(strict_startup=False)
+
+        status_code, body = await _asgi_get_json(app, app_module.READINESS_PATH)
+        self.assertEqual(status_code, 503)
+        self.assertFalse(body["ready"])
+        self.assertEqual(body["reason"], "fakeModeForbidden")
+
+    async def test_staging_mode_refuses_missing_synapse_config(self) -> None:
+        app_module = _load_app_module()
+        env = _staging_env({"SYNAPSE_BASE_URL": "", "SYNAPSE_ADMIN_TOKEN": ""})
+
+        with patch.dict(os.environ, env, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "missingSynapseConfig"):
+                app_module.create_app()
+
+    async def test_staging_mode_refuses_missing_livekit_config(self) -> None:
+        app_module = _load_app_module()
+        env = _staging_env({"LIVEKIT_URL": "", "LIVEKIT_API_KEY": "", "LIVEKIT_API_SECRET": ""})
+
+        with patch.dict(os.environ, env, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "missingLiveKitConfig"):
+                app_module.create_app()
+
+    async def test_staging_mode_refuses_insecure_livekit_url_unless_explicitly_allowed(self) -> None:
+        app_module = _load_app_module()
+        env = _staging_env({"LIVEKIT_URL": "ws://livekit.example.test"})
+
+        with patch.dict(os.environ, env, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "insecureLiveKitURL"):
+                app_module.create_app()
+
+        with patch.dict(os.environ, env | {ALLOW_INSECURE_LIVEKIT_URL_ENV: "1"}, clear=True):
+            app = app_module.create_app()
+
+        status_code, body = await _asgi_get_json(app, app_module.READINESS_PATH)
+        self.assertEqual(status_code, 200)
+        self.assertTrue(body["ready"])
+        self.assertEqual(body["reason"], "ok")
+        self.assertFalse(body["liveKitURLSecure"])
+
+    async def test_staging_mode_refuses_placeholder_livekit_url(self) -> None:
+        app_module = _load_app_module()
+        env = _staging_env({"LIVEKIT_URL": "wss://local-smoke.livekit.invalid"})
+
+        with patch.dict(os.environ, env, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "placeholderLiveKitURL"):
+                app_module.create_app()
+
+    async def test_staging_mode_refuses_invalid_token_ttl(self) -> None:
+        app_module = _load_app_module()
+        env = _staging_env({"TOKEN_TTL_SECONDS": "9999"})
+
+        with patch.dict(os.environ, env, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "invalidTokenTTL"):
+                app_module.create_app()
+
+    async def test_health_and_readiness_do_not_expose_secrets(self) -> None:
+        app_module = _load_app_module()
+        env = _staging_env({
+            FAKE_MODE_ENV: "1",
+            "SYNAPSE_ADMIN_TOKEN": "synapse-admin-token-sensitive",
+            "LIVEKIT_API_SECRET": "livekit-api-secret-sensitive",
+        })
+
+        with patch.dict(os.environ, env, clear=True):
+            app = app_module.create_app(strict_startup=False)
+
+        health_status, health_body = await _asgi_get_json(app, app_module.HEALTH_PATH)
+        readiness_status, readiness_body = await _asgi_get_json(app, app_module.READINESS_PATH)
+        output = json.dumps({"health": health_body, "readiness": readiness_body}, sort_keys=True)
+
+        self.assertEqual(health_status, 200)
+        self.assertEqual(readiness_status, 503)
+        self.assertEqual(readiness_body["reason"], "fakeModeForbidden")
+        self.assertNotIn("synapse-admin-token-sensitive", output)
+        self.assertNotIn("livekit-api-secret-sensitive", output)
+        self.assertNotIn("livekit-api-key-sensitive", output)
+
     async def test_default_mode_still_requires_production_config(self) -> None:
-        try:
-            with patch.dict(os.environ, {}, clear=True):
-                from salemx_call_service.app import create_app
-        except ModuleNotFoundError as error:
-            if error.name == "fastapi":
-                self.skipTest("FastAPI is not installed in this Python environment.")
-            raise
+        app_module = _load_app_module()
 
         with patch.dict(os.environ, {}, clear=True):
-            with self.assertRaisesRegex(RuntimeError, "SYNAPSE_BASE_URL"):
-                create_app()
+            with self.assertRaisesRegex(RuntimeError, "missingSynapseConfig"):
+                app_module.create_app()
 
 
 async def _asgi_post_json(app: object, path: str, headers: dict[str, str], payload: dict[str, object]) -> tuple[int, dict[str, object]]:
@@ -694,6 +778,65 @@ async def _asgi_post_json(app: object, path: str, headers: dict[str, str], paylo
     status = next(message["status"] for message in sent_messages if message["type"] == "http.response.start")
     response_body = b"".join(message.get("body", b"") for message in sent_messages if message["type"] == "http.response.body")
     return int(status), json.loads(response_body.decode("utf-8"))
+
+
+async def _asgi_get_json(app: object, path: str) -> tuple[int, dict[str, object]]:
+    sent_messages: list[dict[str, object]] = []
+    received = False
+
+    async def receive() -> dict[str, object]:
+        nonlocal received
+        if received:
+            return {"type": "http.disconnect"}
+        received = True
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message: dict[str, object]) -> None:
+        sent_messages.append(message)
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": path,
+        "raw_path": path.encode("ascii"),
+        "query_string": b"",
+        "headers": [],
+        "client": ("127.0.0.1", 12345),
+        "server": ("testserver", 80),
+    }
+    await app(scope, receive, send)  # type: ignore[operator]
+
+    status = next(message["status"] for message in sent_messages if message["type"] == "http.response.start")
+    response_body = b"".join(message.get("body", b"") for message in sent_messages if message["type"] == "http.response.body")
+    return int(status), json.loads(response_body.decode("utf-8"))
+
+
+def _load_app_module() -> object:
+    try:
+        with patch.dict(os.environ, {SERVICE_MODE_ENV: ServiceMode.LOCAL_FAKE.value}, clear=True):
+            from salemx_call_service import app as app_module
+    except ModuleNotFoundError as error:
+        if error.name == "fastapi":
+            raise unittest.SkipTest("FastAPI is not installed in this Python environment.") from error
+        raise
+    return app_module
+
+
+def _staging_env(overrides: dict[str, str] | None = None) -> dict[str, str]:
+    env = {
+        SERVICE_MODE_ENV: ServiceMode.STAGING.value,
+        "SYNAPSE_BASE_URL": "https://synapse.example.test",
+        "SYNAPSE_ADMIN_TOKEN": "synapse-admin-token-sensitive",
+        "LIVEKIT_URL": "wss://livekit.example.test",
+        "LIVEKIT_API_KEY": "livekit-api-key-sensitive",
+        "LIVEKIT_API_SECRET": "livekit-api-secret-sensitive",
+    }
+    if overrides is not None:
+        env.update(overrides)
+    return env
 
 
 if __name__ == "__main__":

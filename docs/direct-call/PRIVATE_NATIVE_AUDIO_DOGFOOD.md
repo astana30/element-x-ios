@@ -41,6 +41,7 @@ Do not enable public or global production direct calls.
 
 ```sh
 cd server/salemx-call-service
+SALEMX_CALL_SERVICE_MODE=local_fake \
 SALEMX_CALL_SERVICE_FAKE_MODE=1 \
 LIVEKIT_URL=ws://localhost:7880 \
 LIVEKIT_API_KEY=<local-livekit-api-key> \
@@ -145,6 +146,7 @@ Before any staging dogfood replaces the local fake proof, the backend and deploy
 - Real Synapse validation.
 - Shared call allocation store.
 - Rate limiting.
+- Explicit staging mode with fake mode disabled and redacted readiness returning `ok`.
 - Token TTL and replay protection.
 - TLS-backed LiveKit URL and certificates.
 - Production-safe LiveKit API key management.
