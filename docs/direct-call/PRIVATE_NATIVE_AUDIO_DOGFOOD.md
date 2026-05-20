@@ -144,9 +144,10 @@ Only share redacted booleans, enums, user-safe reasons, and non-identifying stat
 Before any staging dogfood replaces the local fake proof, the backend and deployment path need:
 
 - Real Synapse validation.
-- Shared call allocation store.
+- Real shared call allocation store.
 - Rate limiting.
 - Explicit staging mode with fake mode disabled and redacted readiness returning `ok`.
+- Allocation readiness with `allocationStoreConfigured=true` and a non-memory shared implementation connected, not just the current fail-closed skeleton.
 - Token TTL and replay protection.
 - TLS-backed LiveKit URL and certificates.
 - Production-safe LiveKit API key management.

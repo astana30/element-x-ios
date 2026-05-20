@@ -11,8 +11,12 @@ from urllib.parse import urlparse
 SERVICE_MODE_ENV = "SALEMX_CALL_SERVICE_MODE"
 LEGACY_FAKE_MODE_ENV = "SALEMX_CALL_SERVICE_FAKE_MODE"
 ALLOW_INSECURE_LIVEKIT_URL_ENV = "SALEMX_CALL_SERVICE_ALLOW_INSECURE_LIVEKIT_URL"
+ALLOCATION_STORE_ENV = "SALEMX_CALL_SERVICE_ALLOCATION_STORE"
+ALLOCATION_STORE_URL_ENV = "SALEMX_CALL_SERVICE_ALLOCATION_STORE_URL"
+ALLOW_MEMORY_ALLOCATION_STORE_ENV = "SALEMX_CALL_SERVICE_ALLOW_MEMORY_ALLOCATION_STORE"
 
 DEFAULT_SERVICE_MODE = "staging"
+DEFAULT_ALLOCATION_STORE = "memory"
 PLACEHOLDER_LIVEKIT_HOST = "local-smoke.livekit.invalid"
 MIN_TOKEN_TTL_SECONDS = 30
 MAX_TOKEN_TTL_SECONDS = 300
@@ -24,6 +28,12 @@ class ServiceMode(str, Enum):
     PRODUCTION = "production"
 
 
+class AllocationStoreKind(str, Enum):
+    MEMORY = "memory"
+    REDIS = "redis"
+    POSTGRES = "postgres"
+
+
 class ServicePreflightReason(str, Enum):
     OK = "ok"
     FAKE_MODE_FORBIDDEN = "fakeModeForbidden"
@@ -32,6 +42,9 @@ class ServicePreflightReason(str, Enum):
     INSECURE_LIVEKIT_URL = "insecureLiveKitURL"
     PLACEHOLDER_LIVEKIT_URL = "placeholderLiveKitURL"
     INVALID_TOKEN_TTL = "invalidTokenTTL"
+    MISSING_ALLOCATION_STORE_CONFIG = "missingAllocationStoreConfig"
+    MEMORY_ALLOCATION_STORE_FORBIDDEN = "memoryAllocationStoreForbidden"
+    UNSUPPORTED_ALLOCATION_STORE = "unsupportedAllocationStore"
     UNSUPPORTED_MODE = "unsupportedMode"
 
 
@@ -46,6 +59,8 @@ class ServiceReadiness:
     livekit_url_secure: bool
     livekit_url_placeholder: bool
     token_ttl_bounded: bool
+    allocation_store_configured: bool
+    allocation_store_shared: bool
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -58,6 +73,8 @@ class ServiceReadiness:
             "liveKitURLSecure": self.livekit_url_secure,
             "liveKitURLPlaceholder": self.livekit_url_placeholder,
             "tokenTTLBounded": self.token_ttl_bounded,
+            "allocationStoreConfigured": self.allocation_store_configured,
+            "allocationStoreShared": self.allocation_store_shared,
         }
 
 
@@ -78,6 +95,8 @@ class ServiceConfig:
     allocation_ttl_seconds: int = 300
     rate_limit_per_minute: int = 30
     log_level: str = "INFO"
+    allocation_store: str = DEFAULT_ALLOCATION_STORE
+    allocation_store_url: str | None = None
 
     @classmethod
     def from_env(cls) -> "ServiceConfig":
@@ -92,6 +111,8 @@ class ServiceConfig:
             allocation_ttl_seconds=_int_env("ALLOCATION_TTL_SECONDS", 300),
             rate_limit_per_minute=_int_env("RATE_LIMIT_PER_MINUTE", 30),
             log_level=environ.get("LOG_LEVEL", "INFO"),
+            allocation_store=_env_value(environ, ALLOCATION_STORE_ENV) or DEFAULT_ALLOCATION_STORE,
+            allocation_store_url=_env_value(environ, ALLOCATION_STORE_URL_ENV),
         )
 
 
@@ -114,6 +135,8 @@ def service_readiness_from_env(env: Mapping[str, str] = environ) -> ServiceReadi
             livekit_url_secure=_is_secure_livekit_url(_env_value(env, "LIVEKIT_URL")),
             livekit_url_placeholder=_is_placeholder_livekit_url(_env_value(env, "LIVEKIT_URL")),
             token_ttl_bounded=True,
+            allocation_store_configured=True,
+            allocation_store_shared=False,
         )
 
     if mode != ServiceMode.STAGING.value:
@@ -128,7 +151,10 @@ def service_readiness_from_env(env: Mapping[str, str] = environ) -> ServiceReadi
         livekit_api_key=_env_value(env, "LIVEKIT_API_KEY"),
         livekit_api_secret=_env_value(env, "LIVEKIT_API_SECRET"),
         token_ttl_value=_env_value(env, "TOKEN_TTL_SECONDS"),
+        allocation_store_value=_env_value(env, ALLOCATION_STORE_ENV),
+        allocation_store_url=_env_value(env, ALLOCATION_STORE_URL_ENV),
         allow_insecure_livekit_url=_env_value(env, ALLOW_INSECURE_LIVEKIT_URL_ENV) == "1",
+        allow_memory_allocation_store=_env_value(env, ALLOW_MEMORY_ALLOCATION_STORE_ENV) == "1",
     )
 
 
@@ -147,7 +173,10 @@ def service_readiness_from_config(config: ServiceConfig, env: Mapping[str, str] 
         livekit_api_key=config.livekit_api_key,
         livekit_api_secret=config.livekit_api_secret,
         token_ttl_value=str(config.token_ttl_seconds),
+        allocation_store_value=config.allocation_store,
+        allocation_store_url=config.allocation_store_url,
         allow_insecure_livekit_url=_env_value(env, ALLOW_INSECURE_LIVEKIT_URL_ENV) == "1",
+        allow_memory_allocation_store=_env_value(env, ALLOW_MEMORY_ALLOCATION_STORE_ENV) == "1",
     )
 
 
@@ -166,12 +195,17 @@ def _staging_readiness(mode: str,
                        livekit_api_key: str | None,
                        livekit_api_secret: str | None,
                        token_ttl_value: str | None,
-                       allow_insecure_livekit_url: bool) -> ServiceReadiness:
+                       allocation_store_value: str | None,
+                       allocation_store_url: str | None,
+                       allow_insecure_livekit_url: bool,
+                       allow_memory_allocation_store: bool) -> ServiceReadiness:
     synapse_configured = bool(synapse_base_url and synapse_admin_token)
     livekit_configured = bool(livekit_url and livekit_api_key and livekit_api_secret)
     livekit_url_secure = _is_secure_livekit_url(livekit_url)
     livekit_url_placeholder = _is_placeholder_livekit_url(livekit_url)
     token_ttl_bounded = _token_ttl_bounded(token_ttl_value)
+    allocation_store_configured = _allocation_store_configured(allocation_store_value, allocation_store_url, allow_memory_allocation_store)
+    allocation_store_shared = _allocation_store_shared(allocation_store_value)
 
     if fake_mode_enabled:
         reason = ServicePreflightReason.FAKE_MODE_FORBIDDEN
@@ -185,6 +219,14 @@ def _staging_readiness(mode: str,
         reason = ServicePreflightReason.INSECURE_LIVEKIT_URL
     elif not token_ttl_bounded:
         reason = ServicePreflightReason.INVALID_TOKEN_TTL
+    elif allocation_store_value is None:
+        reason = ServicePreflightReason.MISSING_ALLOCATION_STORE_CONFIG
+    elif not _allocation_store_supported(allocation_store_value):
+        reason = ServicePreflightReason.UNSUPPORTED_ALLOCATION_STORE
+    elif _allocation_store_is_memory(allocation_store_value) and not allow_memory_allocation_store:
+        reason = ServicePreflightReason.MEMORY_ALLOCATION_STORE_FORBIDDEN
+    elif not allocation_store_configured:
+        reason = ServicePreflightReason.MISSING_ALLOCATION_STORE_CONFIG
     else:
         reason = ServicePreflightReason.OK
 
@@ -198,6 +240,8 @@ def _staging_readiness(mode: str,
         livekit_url_secure=livekit_url_secure,
         livekit_url_placeholder=livekit_url_placeholder,
         token_ttl_bounded=token_ttl_bounded,
+        allocation_store_configured=allocation_store_configured,
+        allocation_store_shared=allocation_store_shared,
     )
 
 
@@ -215,6 +259,8 @@ def _readiness(mode: str,
         livekit_url_secure=False,
         livekit_url_placeholder=False,
         token_ttl_bounded=True,
+        allocation_store_configured=False,
+        allocation_store_shared=False,
     )
 
 
@@ -250,6 +296,28 @@ def _token_ttl_bounded(value: str | None) -> bool:
     except ValueError:
         return False
     return MIN_TOKEN_TTL_SECONDS <= token_ttl_seconds <= MAX_TOKEN_TTL_SECONDS
+
+
+def _allocation_store_supported(value: str | None) -> bool:
+    return value in {kind.value for kind in AllocationStoreKind}
+
+
+def _allocation_store_is_memory(value: str | None) -> bool:
+    return value == AllocationStoreKind.MEMORY.value
+
+
+def _allocation_store_shared(value: str | None) -> bool:
+    return value in {AllocationStoreKind.REDIS.value, AllocationStoreKind.POSTGRES.value}
+
+
+def _allocation_store_configured(value: str | None, allocation_store_url: str | None, allow_memory_allocation_store: bool) -> bool:
+    if value is None:
+        return False
+    if _allocation_store_is_memory(value):
+        return allow_memory_allocation_store
+    if _allocation_store_shared(value):
+        return allocation_store_url is not None
+    return False
 
 
 def _required_env(name: str) -> str:

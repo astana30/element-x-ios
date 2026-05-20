@@ -10,12 +10,25 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
-from salemx_call_service.allocation import Allocation, InMemoryAllocationStore
+from salemx_call_service.allocation import (
+    Allocation,
+    AllocationKey,
+    AllocationMetadata,
+    InMemoryAllocationStore,
+    SharedAllocationStoreSkeleton,
+)
 from salemx_call_service.auth import AuthenticatedUser
 from salemx_call_service.config import (
+    ALLOCATION_STORE_ENV,
+    ALLOCATION_STORE_URL_ENV,
+    ALLOW_MEMORY_ALLOCATION_STORE_ENV,
     ALLOW_INSECURE_LIVEKIT_URL_ENV,
     SERVICE_MODE_ENV,
+    AllocationStoreKind,
     ServiceMode,
+    ServicePreflightError,
+    service_readiness_from_env,
+    validate_service_preflight,
 )
 from salemx_call_service.dto import TokenRequest
 from salemx_call_service.errors import CallServiceError
@@ -194,6 +207,131 @@ class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("matrix-token-a-sensitive", joined_logs)
         self.assertNotIn("participant-token-sensitive", joined_logs)
         self.assertNotIn("!room:example.test", joined_logs)
+
+
+class AllocationStoreTests(unittest.IsolatedAsyncioTestCase):
+    def token_request(self, direction: str = "outgoing", peer_user_id: str = "@bob:example.test") -> TokenRequest:
+        return TokenRequest.from_mapping({
+            "version": 1,
+            "call_id": "call-a",
+            "room_id": "!room:example.test",
+            "peer_user_id": peer_user_id,
+            "intent": "audio",
+            "direction": direction,
+        })
+
+    async def test_memory_store_create_or_reuse_keeps_same_allocation(self) -> None:
+        store = InMemoryAllocationStore(allocation_ttl_seconds=300)
+        request = self.token_request()
+        allocation_key = AllocationKey.from_token_request(request)
+        metadata = AllocationMetadata.from_token_request(request)
+
+        first = await store.create_or_reuse(allocation_key, metadata, ttl_seconds=300)
+        second = await store.create_or_reuse(allocation_key, metadata, ttl_seconds=300)
+
+        self.assertEqual(first.id, second.id)
+        self.assertEqual(first.livekit_room_name, second.livekit_room_name)
+        self.assertEqual(await store.get(allocation_key), first)
+
+    async def test_memory_store_replaces_expired_allocation(self) -> None:
+        store = InMemoryAllocationStore(allocation_ttl_seconds=0)
+        request = self.token_request()
+
+        first = await store.allocation_for(request)
+        second = await store.allocation_for(request)
+
+        self.assertNotEqual(first.id, second.id)
+
+    async def test_caller_and_callee_share_allocation_key(self) -> None:
+        store = InMemoryAllocationStore(allocation_ttl_seconds=300)
+        outgoing_request = self.token_request(direction="outgoing", peer_user_id="@bob:example.test")
+        incoming_request = self.token_request(direction="incoming", peer_user_id="@alice:example.test")
+
+        outgoing = await store.create_or_reuse(
+            AllocationKey.from_token_request(outgoing_request),
+            AllocationMetadata.from_token_request(outgoing_request),
+            ttl_seconds=300,
+        )
+        incoming = await store.create_or_reuse(
+            AllocationKey.from_token_request(incoming_request),
+            AllocationMetadata.from_token_request(incoming_request),
+            ttl_seconds=300,
+        )
+
+        self.assertEqual(outgoing.id, incoming.id)
+        self.assertEqual(outgoing.livekit_room_name, incoming.livekit_room_name)
+
+    async def test_shared_store_skeleton_fails_closed(self) -> None:
+        store = SharedAllocationStoreSkeleton(AllocationStoreKind.REDIS.value)
+        request = self.token_request()
+
+        with self.assertRaises(CallServiceError) as context:
+            await store.create_or_reuse(
+                AllocationKey.from_token_request(request),
+                AllocationMetadata.from_token_request(request),
+                ttl_seconds=300,
+            )
+
+        self.assertEqual(context.exception.errcode, "M_DIRECT_CALL_ALLOCATION_FAILED")
+
+
+class ServicePreflightTests(unittest.TestCase):
+    def test_staging_preflight_refuses_memory_allocation_store_by_default(self) -> None:
+        env = _staging_env({
+            ALLOCATION_STORE_ENV: AllocationStoreKind.MEMORY.value,
+            ALLOCATION_STORE_URL_ENV: "",
+        })
+
+        readiness = service_readiness_from_env(env)
+
+        self.assertFalse(readiness.ready)
+        self.assertEqual(readiness.reason, "memoryAllocationStoreForbidden")
+        self.assertFalse(readiness.allocation_store_configured)
+        self.assertFalse(readiness.allocation_store_shared)
+        with self.assertRaises(ServicePreflightError):
+            validate_service_preflight(env)
+
+    def test_staging_preflight_accepts_declared_shared_store_shape(self) -> None:
+        secret = "allocation-store-password-sensitive"
+        env = _staging_env({
+            ALLOCATION_STORE_ENV: AllocationStoreKind.POSTGRES.value,
+            ALLOCATION_STORE_URL_ENV: f"postgres://user:{secret}@allocation.example.test/db",
+        })
+
+        readiness = validate_service_preflight(env)
+        output = json.dumps(readiness.as_dict(), sort_keys=True)
+
+        self.assertTrue(readiness.ready)
+        self.assertEqual(readiness.reason, "ok")
+        self.assertTrue(readiness.allocation_store_configured)
+        self.assertTrue(readiness.allocation_store_shared)
+        self.assertNotIn(secret, output)
+        self.assertNotIn("allocation.example.test", output)
+
+    def test_staging_preflight_refuses_missing_shared_store_location(self) -> None:
+        env = _staging_env({
+            ALLOCATION_STORE_ENV: AllocationStoreKind.REDIS.value,
+            ALLOCATION_STORE_URL_ENV: "",
+        })
+
+        readiness = service_readiness_from_env(env)
+
+        self.assertFalse(readiness.ready)
+        self.assertEqual(readiness.reason, "missingAllocationStoreConfig")
+        self.assertFalse(readiness.allocation_store_configured)
+        self.assertTrue(readiness.allocation_store_shared)
+
+    def test_staging_preflight_refuses_unsupported_allocation_store(self) -> None:
+        env = _staging_env({
+            ALLOCATION_STORE_ENV: "filesystem",
+            ALLOCATION_STORE_URL_ENV: "/tmp/store",
+        })
+
+        readiness = service_readiness_from_env(env)
+
+        self.assertFalse(readiness.ready)
+        self.assertEqual(readiness.reason, "unsupportedAllocationStore")
+        self.assertFalse(readiness.allocation_store_configured)
 
 
 class LocalFakeCapabilityTests(unittest.IsolatedAsyncioTestCase):
@@ -715,12 +853,86 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaisesRegex(RuntimeError, "invalidTokenTTL"):
                 app_module.create_app()
 
+    async def test_staging_mode_refuses_memory_allocation_store_by_default(self) -> None:
+        app_module = _load_app_module()
+        env = _staging_env({
+            ALLOCATION_STORE_ENV: AllocationStoreKind.MEMORY.value,
+            ALLOCATION_STORE_URL_ENV: "",
+        })
+
+        with patch.dict(os.environ, env, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "memoryAllocationStoreForbidden"):
+                app_module.create_app()
+
+    async def test_staging_mode_allows_memory_allocation_store_with_explicit_override(self) -> None:
+        app_module = _load_app_module()
+        env = _staging_env({
+            ALLOCATION_STORE_ENV: AllocationStoreKind.MEMORY.value,
+            ALLOCATION_STORE_URL_ENV: "",
+            ALLOW_MEMORY_ALLOCATION_STORE_ENV: "1",
+        })
+
+        with patch.dict(os.environ, env, clear=True):
+            app = app_module.create_app()
+
+        status_code, body = await _asgi_get_json(app, app_module.READINESS_PATH)
+        self.assertEqual(status_code, 200)
+        self.assertTrue(body["ready"])
+        self.assertTrue(body["allocationStoreConfigured"])
+        self.assertFalse(body["allocationStoreShared"])
+
+    async def test_staging_mode_accepts_declared_shared_allocation_store_without_exposing_secret(self) -> None:
+        app_module = _load_app_module()
+        allocation_store_secret = "allocation-store-password-sensitive"
+        env = _staging_env({
+            ALLOCATION_STORE_ENV: AllocationStoreKind.REDIS.value,
+            ALLOCATION_STORE_URL_ENV: f"redis://:{allocation_store_secret}@allocation.example.test/0",
+        })
+
+        with patch.dict(os.environ, env, clear=True):
+            app = app_module.create_app()
+
+        status_code, body = await _asgi_get_json(app, app_module.READINESS_PATH)
+        output = json.dumps(body, sort_keys=True)
+
+        self.assertEqual(status_code, 200)
+        self.assertTrue(body["ready"])
+        self.assertEqual(body["reason"], "ok")
+        self.assertTrue(body["allocationStoreConfigured"])
+        self.assertTrue(body["allocationStoreShared"])
+        self.assertNotIn(allocation_store_secret, output)
+        self.assertNotIn("allocation.example.test", output)
+
+    async def test_staging_mode_refuses_shared_allocation_store_without_location(self) -> None:
+        app_module = _load_app_module()
+        env = _staging_env({
+            ALLOCATION_STORE_ENV: AllocationStoreKind.POSTGRES.value,
+            ALLOCATION_STORE_URL_ENV: "",
+        })
+
+        with patch.dict(os.environ, env, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "missingAllocationStoreConfig"):
+                app_module.create_app()
+
+    async def test_staging_mode_refuses_unsupported_allocation_store(self) -> None:
+        app_module = _load_app_module()
+        env = _staging_env({
+            ALLOCATION_STORE_ENV: "filesystem",
+            ALLOCATION_STORE_URL_ENV: "/tmp/allocation-store",
+        })
+
+        with patch.dict(os.environ, env, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "unsupportedAllocationStore"):
+                app_module.create_app()
+
     async def test_health_and_readiness_do_not_expose_secrets(self) -> None:
         app_module = _load_app_module()
+        allocation_store_secret = "allocation-store-secret-sensitive"
         env = _staging_env({
             FAKE_MODE_ENV: "1",
             "SYNAPSE_ADMIN_TOKEN": "synapse-admin-token-sensitive",
             "LIVEKIT_API_SECRET": "livekit-api-secret-sensitive",
+            ALLOCATION_STORE_URL_ENV: f"postgres://user:{allocation_store_secret}@allocation.example.test/db",
         })
 
         with patch.dict(os.environ, env, clear=True):
@@ -736,6 +948,8 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("synapse-admin-token-sensitive", output)
         self.assertNotIn("livekit-api-secret-sensitive", output)
         self.assertNotIn("livekit-api-key-sensitive", output)
+        self.assertNotIn(allocation_store_secret, output)
+        self.assertNotIn("allocation.example.test", output)
 
     async def test_default_mode_still_requires_production_config(self) -> None:
         app_module = _load_app_module()
@@ -833,6 +1047,8 @@ def _staging_env(overrides: dict[str, str] | None = None) -> dict[str, str]:
         "LIVEKIT_URL": "wss://livekit.example.test",
         "LIVEKIT_API_KEY": "livekit-api-key-sensitive",
         "LIVEKIT_API_SECRET": "livekit-api-secret-sensitive",
+        ALLOCATION_STORE_ENV: AllocationStoreKind.REDIS.value,
+        ALLOCATION_STORE_URL_ENV: "redis://allocation.example.test/0",
     }
     if overrides is not None:
         env.update(overrides)

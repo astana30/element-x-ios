@@ -45,6 +45,8 @@ SYNAPSE_ADMIN_TOKEN
 LIVEKIT_URL
 LIVEKIT_API_KEY
 LIVEKIT_API_SECRET
+SALEMX_CALL_SERVICE_ALLOCATION_STORE=redis|postgres
+SALEMX_CALL_SERVICE_ALLOCATION_STORE_URL=<shared-store-url>
 ```
 
 Optional environment variables:
@@ -57,6 +59,7 @@ LOG_LEVEL=INFO
 ```
 
 `SYNAPSE_ADMIN_TOKEN` is intended for membership and room-state lookup only. `LIVEKIT_API_SECRET` stays server-side and must never be sent to clients.
+`SALEMX_CALL_SERVICE_ALLOCATION_STORE_URL` must be supplied through secret-managed deployment config and must not be logged.
 
 Staging preflight refuses to start when:
 
@@ -66,8 +69,12 @@ Staging preflight refuses to start when:
 - `LIVEKIT_URL` is not `wss://...`;
 - `LIVEKIT_URL` points at the local smoke placeholder;
 - `TOKEN_TTL_SECONDS` is outside the bounded staging range.
+- shared allocation store config is missing;
+- `SALEMX_CALL_SERVICE_ALLOCATION_STORE=memory` is used without an explicit test override;
+- `SALEMX_CALL_SERVICE_ALLOCATION_STORE` is not one of `memory`, `redis`, or `postgres`.
 
 For tests only, `SALEMX_CALL_SERVICE_ALLOW_INSECURE_LIVEKIT_URL=1` allows an insecure LiveKit URL. Do not set this in staging.
+For tests only, `SALEMX_CALL_SERVICE_ALLOW_MEMORY_ALLOCATION_STORE=1` allows the in-memory allocation store in staging mode. Do not set this in staging dogfood.
 
 ## Health and Readiness
 
@@ -89,6 +96,9 @@ Readiness reasons:
 - `insecureLiveKitURL`
 - `placeholderLiveKitURL`
 - `invalidTokenTTL`
+- `missingAllocationStoreConfig`
+- `memoryAllocationStoreForbidden`
+- `unsupportedAllocationStore`
 - `unsupportedMode`
 
 ## Request
@@ -217,7 +227,8 @@ location = /_matrix/client/unstable/kz.salemx.direct_call/livekit/token {
   - `GET /_synapse/admin/v1/rooms/{room_id}/members`
   - `GET /_synapse/admin/v1/rooms/{room_id}/state`
   Verify these response shapes against the deployed Synapse version before production use.
-- `InMemoryAllocationStore` is suitable only for the skeleton and tests. Production should use a shared transactional store.
+- `InMemoryAllocationStore` is suitable only for local fake mode and tests. Staging preflight now rejects memory allocation unless a temporary test override is set.
+- `redis` and `postgres` allocation store modes currently validate configuration shape and install a fail-closed skeleton. A real shared transactional implementation still needs to be connected before staging dogfood can issue tokens successfully.
 - Rate limiting is represented in config but not implemented yet.
-- Staging dogfood remains blocked until shared allocation storage and rate limiting are implemented and deployed.
+- Staging dogfood remains blocked until real shared allocation storage and rate limiting are implemented, deployed, and smoke-tested.
 - The service issues media transport credentials only. It does not know or transport media E2EE keys.

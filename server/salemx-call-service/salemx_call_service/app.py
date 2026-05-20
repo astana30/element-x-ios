@@ -8,7 +8,7 @@ from typing import Any, Optional
 from fastapi import FastAPI, Header, Request
 from fastapi.responses import JSONResponse
 
-from .allocation import InMemoryAllocationStore
+from .allocation import InMemoryAllocationStore, SharedAllocationStoreSkeleton
 from .auth import SynapseMatrixAuthValidator, bearer_token_from_authorization
 from .config import (
     ServiceConfig,
@@ -52,6 +52,8 @@ def create_app(config: ServiceConfig | None = None,
             livekit_url_secure=True,
             livekit_url_placeholder=False,
             token_ttl_bounded=True,
+            allocation_store_configured=True,
+            allocation_store_shared=True,
         )
     else:
         configure_logging(environ.get("LOG_LEVEL", "INFO"))
@@ -68,9 +70,10 @@ def create_app(config: ServiceConfig | None = None,
                 service = DirectCallTokenService(
                     auth_validator=SynapseMatrixAuthValidator(config.synapse_base_url),
                     room_validator=SynapseRoomValidator(config.synapse_base_url, config.synapse_admin_token),
-                    allocation_store=InMemoryAllocationStore(config.allocation_ttl_seconds),
+                    allocation_store=_allocation_store_for_config(config),
                     token_issuer=LiveKitJWTTokenIssuer(config.livekit_api_key, config.livekit_api_secret, config.token_ttl_seconds),
                     livekit_server_url=config.livekit_url,
+                    allocation_ttl_seconds=config.allocation_ttl_seconds,
                 )
         except ServicePreflightError as error:
             readiness = error.readiness
@@ -120,6 +123,12 @@ def create_app(config: ServiceConfig | None = None,
                 return JSONResponse(status_code=status_code, content=body)
 
     return app
+
+
+def _allocation_store_for_config(config: ServiceConfig) -> InMemoryAllocationStore | SharedAllocationStoreSkeleton:
+    if config.allocation_store == "memory":
+        return InMemoryAllocationStore(config.allocation_ttl_seconds)
+    return SharedAllocationStoreSkeleton(config.allocation_store)
 
 
 app = create_app()

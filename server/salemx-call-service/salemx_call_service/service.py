@@ -6,7 +6,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from .allocation import AllocationStoreProtocol
+from .allocation import AllocationKey, AllocationMetadata, AllocationStoreProtocol
 from .auth import MatrixAuthValidatorProtocol, bearer_token_from_authorization, validate_device_binding
 from .dto import AllocationPayload, LiveKitPayload, TokenRequest, TokenResponse
 from .errors import CallServiceError
@@ -24,6 +24,7 @@ class DirectCallTokenService:
     allocation_store: AllocationStoreProtocol
     token_issuer: LiveKitTokenIssuerProtocol
     livekit_server_url: str
+    allocation_ttl_seconds: int = 300
 
     async def issue_token(self, authorization: str | None, payload: dict[str, Any]) -> TokenResponse:
         bearer_token = bearer_token_from_authorization(authorization)
@@ -32,7 +33,11 @@ class DirectCallTokenService:
         validate_device_binding(token_request.device_id, authenticated_user.device_id)
 
         await self.room_validator.validate_direct_call_room(authenticated_user, token_request)
-        allocation = await self.allocation_store.allocation_for(token_request)
+        allocation = await self.allocation_store.create_or_reuse(
+            AllocationKey.from_token_request(token_request),
+            AllocationMetadata.from_token_request(token_request),
+            self.allocation_ttl_seconds,
+        )
         issued_token = await self.token_issuer.issue_token(authenticated_user, token_request, allocation)
 
         LOGGER.info(
