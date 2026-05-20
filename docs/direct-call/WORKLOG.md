@@ -756,3 +756,18 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Limitations: manual visual card text was not verified from this shell, and the literal leave-DM-to-chat-list/reopen gesture was not performed.
 - Treat this as runtime diagnostics proof, not full visual/manual UI proof.
 - Recommended next phase: `2.24A — staging backend and LiveKit hardening plan`.
+
+## 2026-05-20 — 2.24H Redis Local Integration Smoke
+
+- Ran local Redis integration smoke for the SalemX call service Redis allocation store and Redis rate limiter.
+- Started a disposable `redis:7-alpine` container on local port `6380` and verified it responded to `PING`.
+- Used the pinned backend test environment and ASGI route harness with mocked Synapse validation; no real external Synapse credentials were used.
+- Redacted staging readiness returned `ready=true`, `reason=ok`, `allocationStoreConfigured=true`, `allocationStoreShared=true`, `allocationStoreConnected=true`, `rateLimitConfigured=true`, `rateLimitShared=true`, `rateLimitConnected=true`, and `storageKeyConfigured=true`.
+- Allocation smoke passed: first request returned `200`, repeat request returned `200`, incoming/callee request returned `200`, repeat requests reused the same allocation and LiveKit room, and caller/callee directions converged on the same LiveKit room.
+- Rate-limit smoke passed: under-limit request returned `200`, over-limit request returned `429` with `M_DIRECT_CALL_RATE_LIMITED` and `retry_after_ms`, and no second token was issued after the limit was exceeded.
+- Redaction verification passed: Redis keys/readiness output did not contain raw room IDs, peer IDs, user IDs, device IDs, bearer tokens, LiveKit participant tokens, JWTs, Synapse admin tokens, or LiveKit API secrets.
+- Fail-closed smoke passed after stopping Redis: the rate-limit path returned `503` with `M_DIRECT_CALL_RATE_LIMIT_STORE_UNAVAILABLE` before token issuance, and the allocation-specific path returned `503` with `M_DIRECT_CALL_ALLOCATION_FAILED` before token issuance.
+- Cleaned up the disposable Redis container; only the existing local LiveKit dev container remained running.
+- Documented that this is local Redis smoke only. Deployed staging Redis smoke, real Synapse validation smoke, and LiveKit join smoke remain required before staging dogfood.
+- Confirmed no iOS app behavior, Element Call route, CallKit, push, video, or global production direct-call activation changed.
+- Recommended next phase: `2.24I — staging Synapse validation and LiveKit join smoke plan`.

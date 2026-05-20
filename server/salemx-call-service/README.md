@@ -232,6 +232,34 @@ PYTHONPYCACHEPREFIX=/tmp/salemx-call-service-pycache \
 Running tests with an interpreter that does not have FastAPI installed may skip the FastAPI-dependent app route checks.
 The venv command above is the expected full route-validation path and does not connect to real Synapse or LiveKit.
 
+## Local Redis Integration Smoke
+
+After Redis allocation and rate-limit wiring changes, run a local Redis smoke before attempting any staging deployment. Use a disposable Redis container and a throwaway local storage key secret only.
+
+Example container setup:
+
+```bash
+docker run -d --rm --name salemx-call-redis-smoke -p 6380:6379 redis:7-alpine
+docker exec salemx-call-redis-smoke redis-cli ping
+```
+
+The 2.24H local smoke used the pinned backend test environment and ASGI route harness with mocked Synapse validation. It verified:
+
+- redacted staging readiness returned `ready=true`, `reason=ok`, `allocationStoreConfigured=true`, `allocationStoreShared=true`, `allocationStoreConnected=true`, `rateLimitConfigured=true`, `rateLimitShared=true`, `rateLimitConnected=true`, and `storageKeyConfigured=true`;
+- Redis allocation create/reuse returned `200` and reused the same allocation and LiveKit room for repeat requests;
+- caller/callee directions converged on the same LiveKit room;
+- Redis rate limiting allowed the under-limit request, returned `429` with `M_DIRECT_CALL_RATE_LIMITED` and `retry_after_ms` over limit, and did not issue a second token;
+- Redis keys/readiness output did not contain raw room IDs, peer IDs, user IDs, device IDs, bearer tokens, LiveKit participant tokens, JWTs, Synapse admin tokens, or LiveKit API secrets;
+- stopping Redis failed closed with `M_DIRECT_CALL_RATE_LIMIT_STORE_UNAVAILABLE` before token issuance, and the allocation-specific path failed closed with `M_DIRECT_CALL_ALLOCATION_FAILED` before token issuance.
+
+Clean up the disposable container after the smoke:
+
+```bash
+docker stop salemx-call-redis-smoke
+```
+
+This local Redis smoke is not staging approval. Staging dogfood still requires deployed Redis smoke, real Synapse validation smoke, and LiveKit join smoke against the staging environment.
+
 ## Reverse Proxy Example
 
 Example Nginx location:
@@ -252,8 +280,8 @@ location = /_matrix/client/unstable/kz.salemx.direct_call/livekit/token {
   - `GET /_synapse/admin/v1/rooms/{room_id}/state`
   Verify these response shapes against the deployed Synapse version before production use.
 - `InMemoryAllocationStore` is suitable only for local fake mode and tests. Staging preflight now rejects memory allocation unless a temporary test override is set.
-- `redis` allocation store mode is wired through a shared store implementation with HMAC-derived keys and atomic `SET NX EX` create-or-reuse behavior. It still needs a real deployed Redis smoke before staging dogfood.
-- `redis` rate-limit store mode is wired through a shared limiter implementation with HMAC-derived keys and an atomic Lua check-and-record operation. It still needs a real deployed Redis smoke before staging dogfood.
+- `redis` allocation store mode is wired through a shared store implementation with HMAC-derived keys and atomic `SET NX EX` create-or-reuse behavior. Local Redis container smoke passed; deployed staging Redis smoke is still required before staging dogfood.
+- `redis` rate-limit store mode is wired through a shared limiter implementation with HMAC-derived keys and an atomic Lua check-and-record operation. Local Redis container smoke passed; deployed staging Redis smoke is still required before staging dogfood.
 - `postgres` allocation and rate-limit store modes remain unsupported/fail-closed skeletons until a real implementation is added.
 - In-memory rate limiting is suitable only for local fake mode and tests. Staging preflight rejects it unless a temporary test override is set.
 - Staging dogfood remains blocked until Redis allocation/rate limiting, Synapse validation, and LiveKit join are deployed and smoke-tested together.

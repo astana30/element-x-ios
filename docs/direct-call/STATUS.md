@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.23D — listener availability runtime diagnostics proof.
+After 2.24H — Redis local integration smoke.
 
 ## Latest App Code Checkpoint
 
@@ -10,11 +10,11 @@ After 2.23D — listener availability runtime diagnostics proof.
 
 Commit: `bb7ae2557`
 
-## Latest Code Checkpoint
+## Latest Backend Code Checkpoint
 
-2.23C `Polish native call listener availability status`
+2.24G `Add Redis call service storage skeleton`
 
-Commit: `bb7ae2557`
+Commit: `98e153b7f`
 
 ## Latest SDK Checkpoint
 
@@ -527,6 +527,20 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Final diagnostics kept listener available/started, cleanup/disconnect attempted, and media failure `none`.
   - Limitations: manual visual card text was not verified from the shell, and the literal leave-DM-to-chat-list/reopen gesture was not performed in this proof.
   - Existing Element Call route remained untouched, no CallKit/push/video/global production activation was introduced, no code changes were needed during the runtime proof, and the worktree stayed clean.
+- Backend staging guardrails and Redis storage skeleton are complete:
+  - 2.24B added explicit service modes, staging fail-closed preflight, fake-mode blocking in staging, and redacted health/readiness.
+  - 2.24C added allocation store guardrails and blocked memory allocation in staging unless a test-only override is set.
+  - 2.24D added rate-limit guardrails and blocked memory rate limiting in staging unless a test-only override is set.
+  - 2.24E documented and ran the full FastAPI route-test environment.
+  - 2.24G added HMAC-derived Redis allocation keys, Redis allocation create-or-reuse with `SET NX EX`, Redis rate limiting through atomic Lua check-and-record, and Redis readiness wiring.
+- Redis local integration smoke is recorded:
+  - A disposable `redis:7-alpine` container was started on local port `6380` and cleaned up after the smoke.
+  - Redacted staging readiness returned `ready=true`, `reason=ok`, Redis allocation/rate-limit configured/shared/connected booleans true, and storage-key configured true.
+  - Allocation create/reuse returned `200`, repeated requests reused the same allocation and LiveKit room, and caller/callee directions converged on the same LiveKit room.
+  - Rate limiting returned `200` under limit, then `429` with `M_DIRECT_CALL_RATE_LIMITED` and `retry_after_ms` over limit, with no second token issued.
+  - Redis keys and readiness output were checked for redaction and did not contain raw room IDs, peer IDs, user IDs, device IDs, bearer tokens, participant tokens, JWTs, Synapse admin tokens, or LiveKit API secrets.
+  - Stopping Redis failed closed with `M_DIRECT_CALL_RATE_LIMIT_STORE_UNAVAILABLE` before token issuance, and the allocation-specific path failed closed with `M_DIRECT_CALL_ALLOCATION_FAILED` before token issuance.
+  - This is a local Redis smoke only; deployed staging Redis smoke, real Synapse validation smoke, and LiveKit join smoke remain required before staging dogfood.
 
 ## Current Blocker
 
@@ -540,14 +554,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Room/app relaunch and room dismiss/reopen lifecycle behavior is fail-closed and runtime-proven with `productionSessionRestorationSupported=false`.
 - Controlled engineering dogfood guardrails are documented, but broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
 - Listener availability and open-room/armed requirements are now visible through typed private-card status and runtime diagnostics, with manual visual verification still deferred.
-- The next immediate gap is staging backend and LiveKit hardening planning before any wider engineering dogfood environment can replace the local fake setup.
+- The next immediate gap is staging Synapse validation and LiveKit join smoke planning before any wider engineering dogfood environment can replace the local fake setup.
 - No public production activation, Element Call route change, CallKit, or push integration exists yet.
 
 ## Next Recommended Phase
 
-`2.24A — staging backend and LiveKit hardening plan`
+`2.24I — staging Synapse validation and LiveKit join smoke plan`
 
-Goal: inspect and design the staging backend/LiveKit hardening path needed to move private native audio call proofing beyond the local fake backend and local LiveKit dev server, while preserving fail-closed activation, redaction, trusted-device E2EE, Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope.
+Goal: design the staging Synapse validation and LiveKit join smoke needed after the local Redis storage smoke, while preserving fail-closed activation, redaction, trusted-device E2EE, Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope.
 
 ## Do-Not-Touch Constraints
 

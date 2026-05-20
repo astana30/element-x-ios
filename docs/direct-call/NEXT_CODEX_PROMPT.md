@@ -7,15 +7,17 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.23D — listener availability runtime diagnostics proof.
+After 2.24H — Redis local integration smoke.
 
 Current checkpoints:
 - App code: 2.23C `Polish native call listener availability status` (`bb7ae2557`).
-- Listener availability diagnostics proof: 2.23D passed through redacted production status/runtime diagnostics.
-- Private native audio dogfood guardrails: 2.23B runbook added at `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
-- Listener lifecycle hardening: 2.22B `Harden native call listener lifecycle` (`16992e5e6`).
-- Private card reducer regression fix: 2.21C `Restore failed native call card retry dismiss mapping` (`8cdae55d4`).
-- Backend: 2.14E `Fix fake backend LiveKit dev token grants`.
+- Backend staging preflight guardrails: 2.24B `Add call service staging preflight guardrails` (`c32f89fcc`).
+- Allocation store guardrails: 2.24C `Add call service allocation store guardrails` (`69b56992a`).
+- Rate limiting guardrails: 2.24D `Add call service rate limiting guardrails` (`ee7ea06ae`).
+- FastAPI route test environment: 2.24E `Document call service full test environment` (`073c8da49`).
+- Redis storage skeleton: 2.24G `Add Redis call service storage skeleton` (`98e153b7f`).
+- Redis local integration smoke: 2.24H passed and is documented.
+- Private native audio dogfood guardrails: `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -26,25 +28,17 @@ Current proven state:
 - Manual private-card actions were proven: Start audio, Accept, Hang up, Decline incoming, Cancel outgoing, Retry, and Dismiss.
 - Repeated calls, reverse-direction calls, backend-off recovery, LiveKit-off recovery, stale media failure cleanup, rapid terminal actions, timeout, and relaunch fail-closed behavior are runtime-proven.
 - Production Matrix SDK key envelope wrapping is integrated through a narrow provider seam and preserves `OnlyTrustedDevices` policy.
-- Local fake backend plus local LiveKit dev server reached `activeAudio` on both iOS clients through private card and runner-backed flows.
 - Listener/owner lifecycle is fail-closed with `productionSessionRestorationSupported=false`.
-- 2.23C added typed listener/restoration availability status for the private native call card:
-  - listener-not-armed
-  - ready-to-receive
-  - open-room-required
-  - restoration-unsupported
-- 2.23D runtime diagnostics proof confirmed:
-  - Fresh relaunch on an attached room reported listener available, owner unavailable, listener not started, and no active session, mapping to listener-not-armed.
-  - Passive status/rendering had no side effects: no Matrix send, no media connect, no LiveKit connect, and no active session.
-  - A receiver with room not attached mapped to open-room-required until room reattachment.
-  - Explicit listener arm succeeded and reported owner available, listener available/started, room attached, restoration unsupported, no active session, and media failure `none`.
-  - Incoming after listener arm worked: A started outgoing, B reached `incomingRinging`, B rejected/declined, A received `directCallReject`, and A/B returned idle with no active session or media failure.
-- 2.23D limitations:
-  - Manual visual card text was not verified from the shell.
-  - The literal leave-DM-to-chat-list/reopen gesture was not performed in that proof.
-  - Treat 2.23D as runtime diagnostics proof, not full visual/manual UI proof.
-- Card status and runner output remain redacted: no credential values, JWTs, keys, raw Matrix content, raw room IDs, or peer IDs are printed.
-- No public UI activation, Element Call route changes, RoomScreen call presentation changes, ElementCallService changes, CallKit, push, video, or global production activation has been added.
+- SalemX call service staging guardrails are in place: explicit service mode, fake-mode blocking, redacted readiness, Redis allocation/rate-limit config validation, memory store blocking in staging, and storage-key secret requirement.
+- Redis local smoke passed with a disposable local Redis container:
+  - readiness reported Redis allocation/rate-limit configured/shared/connected booleans true and `reason=ok`;
+  - allocation create/reuse returned `200` and caller/callee directions converged on the same LiveKit room;
+  - rate limiting returned `200` under limit and `429 M_DIRECT_CALL_RATE_LIMITED` with `retry_after_ms` over limit;
+  - no second token was issued after the rate limit was exceeded;
+  - Redis keys/readiness output remained redacted;
+  - stopped Redis failed closed with rate-limit store unavailable and allocation failed errors before token issuance.
+- Redis local smoke is not staging approval. Deployed Redis smoke, real Synapse validation smoke, and LiveKit join smoke remain required before staging dogfood.
+- No public UI activation, Element Call route changes, RoomScreen call presentation changes, existing call-service changes, CallKit, push, video, or global production activation has been added.
 
 Required dogfood gates:
 - `IS_RUNNING_INTEGRATION_TESTS=1`
@@ -56,66 +50,59 @@ Required dogfood gates:
 - `NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=...`
 
 Phase:
-2.24A — staging backend and LiveKit hardening plan.
+2.24I — staging Synapse validation and LiveKit join smoke plan.
 
 Task:
 Inspection/design only. Do not modify code. Do not commit.
 
 Context:
-Private native audio calls are conditionally ready for controlled engineering proofing only under strict gates. The iOS private-card path is strongly proven with local fake backend and local LiveKit dev server, but the backend/LiveKit stack is not staging-hardened. The next step is to define what must be true before replacing the local fake setup with a controlled staging equivalent.
+Local Redis integration smoke now covers Redis allocation and Redis rate limiting against a real local Redis container. The backend is still not approved for staging dogfood because real deployed Redis, Synapse validation, and LiveKit join smoke have not been completed.
 
 Goal:
-Design the staging backend and LiveKit hardening plan for private native audio call engineering dogfood, without changing app code or weakening fail-closed activation.
+Design the safest staging smoke path for Synapse validation and LiveKit join, building on the Redis guardrails and local Redis proof without changing iOS behavior or weakening fail-closed activation.
 
 Inspect:
-- docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md
-- docs/direct-call/STATUS.md
-- docs/direct-call/WORKLOG.md
-- server/salemx-call-service/README.md
-- server/salemx-call-service/salemx_call_service/
-- server/salemx-call-service/tests/
-- docs/direct-call/LOCAL_BACKEND_SMOKE.md
-- Direct-call production token client/configuration code if needed
-- LiveKit token DTO/client/transport code if needed
+- `server/salemx-call-service/README.md`
+- `server/salemx-call-service/salemx_call_service/config.py`
+- `server/salemx-call-service/salemx_call_service/app.py`
+- `server/salemx-call-service/salemx_call_service/service.py`
+- `server/salemx-call-service/salemx_call_service/room_validation.py`
+- `server/salemx-call-service/salemx_call_service/livekit_tokens.py`
+- `server/salemx-call-service/salemx_call_service/allocation.py`
+- `server/salemx-call-service/salemx_call_service/rate_limiting.py`
+- `server/salemx-call-service/tests/`
+- `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`
+- `docs/direct-call/STATUS.md`
+- `docs/direct-call/WORKLOG.md`
 
 Questions:
-1. What backend pieces are still local-fake-only?
-2. What is required for a staging token endpoint?
-3. What Synapse authentication and room validation behavior must be real before staging dogfood?
-4. What shared allocation/session store is needed beyond local process memory?
-5. What LiveKit staging deployment requirements remain:
-   - TLS/WSS URL
-   - API key/secret handling
-   - room grants
-   - token TTL
-   - TURN/network reachability
-   - E2EE compatibility
-6. What rate limiting, replay protection, and audit logging are required?
-7. What redacted diagnostics should staging expose for token/backend/LiveKit failures?
-8. What operational runbook is needed for rollback and incident handling?
-9. What must remain out of scope for staging dogfood?
-10. What is the safest next implementation phase?
+1. What exact staging Synapse validation smoke is needed before dogfood?
+2. What Matrix users/rooms/devices can be used without exposing raw identifiers in logs/docs?
+3. What staging LiveKit join smoke proves token compatibility without printing JWTs or API secrets?
+4. How should deployed Redis readiness and Redis key redaction be checked in staging?
+5. What request/response/log captures are allowed and what must be redacted?
+6. What rollback should operators perform if staging Synapse, Redis, or LiveKit fails?
+7. What should remain blocked after the smoke?
+8. What should be the next implementation or operations phase?
 
 Hard constraints:
 - Do not modify code.
 - Do not commit.
-- Do not propose public rollout.
-- Do not propose replacing Element Call toolbar buttons.
-- No CallKit/push/background incoming yet.
-- No video yet.
+- Do not use real credentials in prompts, docs, or logs.
+- Do not print Matrix access tokens, LiveKit JWTs, Synapse admin tokens, LiveKit API secrets, Redis URLs with credentials, raw room IDs, raw peer/user IDs, device IDs, or Matrix event bodies.
+- Do not weaken Synapse authentication or room validation.
 - Do not weaken `OnlyTrustedDevices`.
-- No `AllDevices` fallback.
-- No global production activation.
-- No raw token/JWT/key/envelope/Matrix content.
-- No raw room ID or peer ID in UI/logs/docs.
-- No endpoint secrets or LiveKit API secrets in docs.
+- No fallback from trusted-device media-key policy.
+- Do not change iOS app behavior.
+- Do not change Element Call route.
+- No CallKit, push, video, public rollout, or global production activation.
 
 Expected output:
 A. Files inspected.
-B. Current backend/LiveKit readiness assessment.
-C. Staging backend requirements.
-D. Staging LiveKit requirements.
-E. Security/privacy guardrails.
-F. Operational runbook gaps.
-G. Risk matrix.
-H. Recommended next implementation phase.
+B. Staging Synapse validation smoke plan.
+C. Staging LiveKit join smoke plan.
+D. Deployed Redis smoke plan.
+E. Redaction/observability checklist.
+F. Rollback plan.
+G. Remaining blockers.
+H. Recommended next phase.
