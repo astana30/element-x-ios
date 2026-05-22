@@ -17,6 +17,17 @@ The 2.25F staging iOS smoke passed after backend commit `33e95e7b1` added server
 - The previous `liveKitURLUnreachable` / service-not-found-like blocker is resolved by server-side LiveKit room pre-create.
 - No iOS app code, Element Call route, CallKit, push, video, shared LiveKit config, or global production activation changed.
 
+The 2.26C controlled engineering dogfood matrix passed through the redacted diagnostics runner on the real staging media/token/LiveKit path:
+
+- Preflight passed with call-service readiness `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit/storage booleans true, and `liveKitRoomProvisioningConfigured=true`.
+- A/B trust passed with `ownSessionVerified=true`, `crossSigningReady=true`, `peerTrustReady=true`, and `peerTrustReadiness=peerTrustReady`.
+- Happy path, reverse direction, repeated calls, decline incoming, cancel outgoing, timeout, backend-off fail-closed, backend recovery, relaunch during active, relaunch during ringing, and listener-not-armed cases passed.
+- LiveKit-off fail-closed was not run because the staging LiveKit instance is shared and stopping it could risk other users.
+- Final A/B status had no active session and no media failure.
+- Element Call route remained untouched and no code changed.
+
+Important caveat: the 2.26C runner path required the existing DEBUG rollout/capability shim gate to avoid `appRolloutDisabled`. Media, token issuance, and LiveKit were real staging, but this is not yet a clean product-card-only dogfood proof.
+
 ## Allowed Scope
 
 - Named engineering operators only.
@@ -45,7 +56,7 @@ export NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=<staging-call-service-base-u
 
 Use the staging call-service base URL for `NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL`; in the current local-run staging setup this is the local loopback service endpoint. Do not set public or global production direct-call activation.
 
-`NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED=1` belongs to the older local fake proof path. Leave it unset for real staging media dogfood unless the session is explicitly testing fake dry-run behavior.
+`NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED=1` belongs to the older fake rollout/capability proof path. The 2.26C diagnostic matrix still required this DEBUG-only shim to avoid `appRolloutDisabled`, while using the real staging token and LiveKit path. Do not claim product-card-only dogfood until this activation-gate mismatch is cleaned up or explicitly re-documented.
 
 ## Operational Preflight
 
@@ -84,6 +95,23 @@ Run each row with redacted output only. Record pass/fail plus the allowed fields
 | Relaunch during ringing | Relaunch one side while ringing | No stale ringing/active session restored |
 | Relaunch during active | Relaunch one side while active | No stale active session restored |
 | Listener not armed / room not open | Start without receiver listener availability | Fail closed or no incoming presentation; no stale session |
+
+## 2.26C Matrix Result
+
+| Case | Result | Redacted reason |
+| --- | --- | --- |
+| Happy path A -> B | Pass | A/B `activeAudio`, hangup -> `idle`, media failure `none` |
+| Reverse B -> A | Pass | A/B `activeAudio`, hangup -> `idle`, media failure `none` |
+| Repeated calls | Pass | Two clean calls, no stale active session |
+| Decline incoming | Pass | A/B `idle`, terminal `cancelled`, media failure `none` |
+| Cancel outgoing | Pass | A/B safe `idle` / `unavailable`, terminal `cancelled`, media failure `none` |
+| Timeout | Pass | A/B `idle`, terminal `outgoingTimeout` / `incomingTimeout` |
+| Backend-off fail closed | Pass | `tokenHTTPUnavailable`, no LiveKit connect, cleanup/disconnect true |
+| Backend recovery | Pass | Recovered to A/B `activeAudio`, then `idle` |
+| LiveKit-off fail closed | Not run | Shared staging LiveKit; stopping it could risk other users |
+| Relaunch during active | Pass | No stale active session after relaunch |
+| Relaunch during ringing | Pass | No stale ringing/active session after relaunch |
+| Listener not armed | Pass | B had no active session; A cancel cleaned up safely |
 
 ## Reporting Format
 
@@ -168,7 +196,7 @@ These block broader internal dogfood and production, but not the controlled engi
 - No video.
 - Receiver listener remains foreground/open-room scoped.
 - Session restoration is unsupported by design.
-- Dogfood still needs repeated staging session matrix coverage beyond the 2.25F happy path.
+- Clean product-card-only dogfood remains blocked by the activation-gate mismatch that required the DEBUG rollout/capability shim during 2.26C.
 - Operational ownership and monitoring must be explicit for any longer dogfood window.
 - Secret rotation and incident response must remain ready before each session.
 

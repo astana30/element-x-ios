@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.26B — controlled staging dogfood checklist updated.
+After 2.26C — controlled staging dogfood matrix recorded.
 
 ## Latest App Code Checkpoint
 
@@ -52,6 +52,16 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Verified/trusted peers only.
   - Existing Element Call toolbar path remains unchanged and available as fallback.
   - Broad internal dogfood, public rollout, CallKit, push, video, and global production activation remain out of scope.
+- Controlled engineering dogfood matrix passed on the staging path:
+  - Preflight passed with readiness `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit/storage booleans true, and LiveKit room provisioning true.
+  - A/B trust passed with `ownSessionVerified=true`, `crossSigningReady=true`, `peerTrustReady=true`, and `peerTrustReadiness=peerTrustReady`.
+  - Happy path A -> B and reverse B -> A reached `productionSessionState=activeAudio`, then hangup returned A/B to `productionSessionState=idle` with `productionMediaFailureReason=none`.
+  - Repeated calls, decline incoming, cancel outgoing, timeout, backend-off fail-closed, backend recovery, relaunch during active, relaunch during ringing, and listener-not-armed cases passed.
+  - Backend-off failed closed with `tokenHTTPUnavailable`, no LiveKit client connect, and cleanup/disconnect attempted.
+  - LiveKit-off fail-closed was not run because shared staging LiveKit should not be stopped during this dogfood session.
+  - Final A/B status had no active session and no media failure.
+  - Element Call route remained untouched and no code changed.
+  - Caveat: the 2.26C runner path required the existing DEBUG rollout/capability shim gate to avoid `appRolloutDisabled`; media, token issuance, and LiveKit were real staging, but this is not yet a clean product-card-only dogfood proof.
 - Two-client Matrix signalling proof passed.
 - Diagnostic LiveKit media proof reached active.
 - Production token DTOs, client, and transport seams exist.
@@ -574,24 +584,20 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Current Blocker
 
-- The internal DEBUG/integration command path and hidden internal room panel can now complete start, accept, active audio, hangup, and cleanup with the local fake backend and local LiveKit dev server, but this is not product activation.
-- Production backend remains a skeleton/local fake proof and is not deployed as a hardened production service.
+- Controlled engineering diagnostic dogfood may continue on staging, but product-card-only dogfood is not yet proven because the 2.26C runner path required the existing DEBUG rollout/capability shim gate to avoid `appRolloutDisabled`.
 - Production rollout and server capability sources remain fail-closed by default.
-- Real production activation still requires hardened backend deployment, capability rollout, endpoint configuration, trusted peer readiness, visible UI design, and later CallKit/push work.
-- Rapid terminal-action restart prevention is fixed and runtime-proven on the current build.
-- Timeout runtime behavior is proven through the private/internal room-scoped path.
-- Typed state/snapshot cleanup is implemented, and the failed-state Retry/Dismiss regression found after that cleanup is fixed and runtime-verified.
-- Room/app relaunch and room dismiss/reopen lifecycle behavior is fail-closed and runtime-proven with `productionSessionRestorationSupported=false`.
-- Controlled engineering dogfood guardrails are documented, but broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
-- Listener availability and open-room/armed requirements are now visible through typed private-card status and runtime diagnostics, with manual visual verification still deferred.
-- The next immediate gap is executing staging readiness and Synapse validation smoke with operator-local fixtures before any wider engineering dogfood environment can replace the local fake setup.
+- Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
+- CallKit, push/background incoming, missed calls, video, session restoration, and global production activation remain out of scope.
+- Receiver listener behavior remains foreground/open-room scoped.
+- Operational ownership, monitoring, redaction checks, and secret-rotation readiness must remain explicit for any longer dogfood window.
+- LiveKit-off fail-closed on shared staging was not run because stopping shared staging LiveKit could risk other users.
 - No public production activation, Element Call route change, CallKit, or push integration exists yet.
 
 ## Next Recommended Phase
 
-`2.24J — staging Synapse validation smoke execution`
+`2.26D — native direct-call activation gate cleanup / product-card-only dogfood readiness`
 
-Goal: start/check the staging call service with the redacted deployment scaffold, then run staging Synapse validation smoke using the operator-local harness once endpoint and fixtures are available, while preserving fail-closed activation, redaction, trusted-device E2EE, Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope.
+Goal: remove or explicitly document the DEBUG rollout/capability shim dependency for staging dogfood so the private product card can be verified against the real staging token and LiveKit path without claiming broad production activation. Preserve fail-closed activation, trusted-device E2EE, redaction, Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope.
 
 ## Do-Not-Touch Constraints
 

@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Recorded the controlled engineering dogfood matrix result on the staging media/token/LiveKit path.
 - Updated the controlled engineering dogfood runbook and staging session matrix after the 2.25F activeAudio pass.
 - Proved staging iOS private native audio can reach active audio through the product-gated private card.
 - Added server-side LiveKit room pre-create in SalemX call-service before participant token issuance.
@@ -20,6 +21,21 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-22 — 2.26C Controlled Staging Dogfood Matrix
+
+- Ran the controlled engineering dogfood matrix on the staging path with redacted output only.
+- Preflight passed with call-service readiness `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit/storage booleans true, and LiveKit room provisioning true.
+- A/B trust passed with `ownSessionVerified=true`, `crossSigningReady=true`, `peerTrustReady=true`, and `peerTrustReadiness=peerTrustReady`.
+- Happy path A -> B, reverse B -> A, and repeated calls reached `productionSessionState=activeAudio`, then returned A/B to `productionSessionState=idle` with `productionMediaFailureReason=none`.
+- Decline incoming, cancel outgoing, and timeout all cleared safely with terminal reasons `cancelled`, `outgoingTimeout`, or `incomingTimeout`.
+- Backend-off failed closed with `tokenHTTPUnavailable`, no LiveKit client connect, and cleanup/disconnect attempted; backend recovery reached `activeAudio` again.
+- Relaunch during active and relaunch during ringing restored no stale active or ringing session.
+- Listener-not-armed behavior was safe: B had no active session and A cancel cleaned up safely.
+- LiveKit-off fail-closed was not run because shared staging LiveKit should not be stopped during this session.
+- Element Call route remained untouched and no code changed.
+- Caveat: the runner path required the existing DEBUG rollout/capability shim gate to avoid `appRolloutDisabled`; media, token issuance, and LiveKit were real staging, but this is not yet a clean product-card-only dogfood proof.
+- Recommended next phase: `2.26D — native direct-call activation gate cleanup / product-card-only dogfood readiness`.
 
 ## 2026-05-22 — 2.26B Controlled Staging Dogfood Checklist
 

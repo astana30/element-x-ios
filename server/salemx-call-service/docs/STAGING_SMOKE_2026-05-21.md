@@ -16,6 +16,7 @@ No tokens, JWTs, passwords, shared secrets, authorization header values, or Live
 | Call-service token POST | `200` |
 | LiveKit participant token | Issued, redacted |
 | iOS private native audio staging smoke | `activeAudio`, then `idle` after hangup |
+| Controlled engineering dogfood matrix | Passed, with caveat below |
 
 ## Root Cause
 
@@ -41,6 +42,9 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - Hangup returned both sides to idle, with media disconnect and cleanup attempted.
 - The previous service-not-found-like LiveKit blocker is resolved by server-side LiveKit room pre-create in the call-service.
 - No iOS app code, Element Call route, CallKit, push, video, or global production activation changed.
+- The 2.26C controlled engineering dogfood matrix passed happy path, reverse direction, repeated calls, decline, cancel, timeout, backend-off fail-closed, backend recovery, relaunch fail-closed, and listener-not-armed cases on the real staging media/token/LiveKit path.
+- LiveKit-off fail-closed was not run because the staging LiveKit instance is shared.
+- The 2.26C runner path required the existing DEBUG rollout/capability shim gate to avoid `appRolloutDisabled`; do not claim clean product-card-only dogfood until that activation-gate mismatch is cleaned up or explicitly documented.
 
 ## Next Step
 
@@ -54,4 +58,4 @@ Controlled engineering dogfood may begin on the staging path under the private n
 - Element Call toolbar path unchanged and available as fallback;
 - no CallKit, push, video, broad internal rollout, public rollout, or global production activation.
 
-Next, run the controlled dogfood session matrix and keep output redacted.
+Next, run `2.26D — native direct-call activation gate cleanup / product-card-only dogfood readiness` while keeping controlled diagnostic dogfood narrow and redacted.
