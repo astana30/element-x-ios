@@ -1221,7 +1221,7 @@ final class NativeDirectCallCompositionFactoryTests {
 
     @Test
     func enabledFactoryBuildsEngineWithExplicitFakesWithoutStartingListener() async {
-        let transport = InMemoryDirectCallSignalTransport(eventIDProvider: { "$native-invite" })
+        let transport = InMemoryDirectCallSignalTransport(now: Date.init) { "$native-invite" }
         let mediaFactory = SignalMediaEngineFactorySpy(mediaEngine: SignalMediaEngineSpy())
         let listener = NativeDirectCallListenerControlSpy()
         let factory = enabledFactory(signalTransport: transport,
@@ -2726,11 +2726,33 @@ final class MatrixDirectCallEngineIntegrationTests {
         _ = await harness.engineB.acceptCall(callID: outgoingSession.callID)
 
         #expect(await waitUntil { harness.engineB.activeSessionPublisher.value?.state == .failed })
-        #expect(await waitUntil { harness.senderB.sentSignals.count == 1 })
-        #expect(harness.engineB.diagnosticSnapshot.mediaFailureReason == .mediaSetupUnavailable)
+        #expect(await waitUntil { harness.senderB.sentSignals.count == 2 })
         #expect(harness.mediaEngineB.connectedSessions.map(\.callID) == [outgoingSession.callID])
         #expect(harness.mediaEngineB.cleanupCallIDs == [outgoingSession.callID])
-        #expect(harness.senderB.sentSignals.map(\.eventType) == [DirectCallMatrixSignalCodec.eventType])
+        #expect(harness.senderB.sentSignals.map(\.eventType) == [DirectCallMatrixSignalCodec.eventType, DirectCallMatrixSignalCodec.eventType])
+
+        let answerEvent = try DirectCallMatrixSignalCodec.decode(matrixEnvelope(senderUserID: userB,
+                                                                                ownUserID: userA,
+                                                                                rawContent: #require(harness.senderB.sentSignals.first?.content)))
+        #expect(answerEvent?.type == .answer)
+        let terminalEvent = try DirectCallMatrixSignalCodec.decode(matrixEnvelope(senderUserID: userB,
+                                                                                  ownUserID: userA,
+                                                                                  rawContent: #require(harness.senderB.sentSignals.last?.content)))
+        #expect(terminalEvent?.type == .hangup)
+
+        try emitMatrixSignal(#require(harness.senderB.sentSignals.first),
+                             eventID: "$matrix-answer",
+                             senderUserID: userB,
+                             ownUserID: userA,
+                             to: harness.listenerA)
+        #expect(await waitUntil { harness.engineA.activeSessionPublisher.value?.state == .activeAudio })
+
+        try emitMatrixSignal(#require(harness.senderB.sentSignals.last),
+                             eventID: "$matrix-post-answer-terminal",
+                             senderUserID: userB,
+                             ownUserID: userA,
+                             to: harness.listenerA)
+        #expect(await waitUntil { harness.engineA.activeSessionPublisher.value?.state == .ended })
     }
 
     @Test

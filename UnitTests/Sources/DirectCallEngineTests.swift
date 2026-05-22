@@ -568,6 +568,135 @@ final class DirectCallEngineTests {
     }
 
     @Test
+    func calleeMediaConnectFailureAfterAnswerEmitsTerminalAndCleansUp() async {
+        let mediaEngine = MediaEngineSpy(connectResult: .failure(.tokenBackendRejected))
+        let engine = makeEngine(mediaEngine: mediaEngine)
+        var emittedSignals = [DirectCallOutgoingSignal]()
+        let cancellable = engine.actionsPublisher.sink { action in
+            guard case .emitSignal(let signal) = action else {
+                return
+            }
+            emittedSignals.append(signal)
+        }
+        defer { cancellable.cancel() }
+
+        _ = await engine.receiveIncomingCall(event: .init(eventID: "$invite",
+                                                          roomID: roomID,
+                                                          senderID: peerUserID,
+                                                          callID: "call-a",
+                                                          type: .invite,
+                                                          intent: .audio,
+                                                          timestamp: .now,
+                                                          keyExchange: keyExchange(callID: "call-a")))
+
+        let result = await engine.acceptCall(callID: "call-a")
+
+        #expect(result == .failure(.mediaConnectionFailed(.tokenBackendRejected)))
+        #expect(engine.activeSessionPublisher.value?.state == .failed)
+        #expect(emittedSignals.map(\.type) == [.answer, .hangup])
+        #expect(mediaEngine.cleanupCallIDs == ["call-a"])
+    }
+
+    @Test
+    func callerMediaConnectFailureAfterRemoteAnswerDoesNotEmitPostAnswerTerminal() async {
+        let mediaEngine = MediaEngineSpy(connectResult: .failure(.tokenBackendRejected))
+        let engine = makeEngine(mediaEngine: mediaEngine)
+        var emittedSignals = [DirectCallOutgoingSignal]()
+        let cancellable = engine.actionsPublisher.sink { action in
+            guard case .emitSignal(let signal) = action else {
+                return
+            }
+            emittedSignals.append(signal)
+        }
+        defer { cancellable.cancel() }
+
+        let startResult = await engine.startOutgoingAudioCall(peer: peerUserID, roomID: roomID)
+        guard case .success(let startedSession) = startResult else {
+            Issue.record("Expected outgoing call start to succeed.")
+            return
+        }
+
+        let result = await engine.receiveIncomingCall(event: .init(eventID: "$answer",
+                                                                   roomID: roomID,
+                                                                   senderID: peerUserID,
+                                                                   callID: startedSession.callID,
+                                                                   type: .answer,
+                                                                   intent: nil,
+                                                                   timestamp: .now))
+
+        #expect(result == .failure(.mediaConnectionFailed(.tokenBackendRejected)))
+        #expect(engine.activeSessionPublisher.value?.state == .failed)
+        #expect(emittedSignals.map(\.type) == [.invite])
+        #expect(mediaEngine.cleanupCallIDs == [startedSession.callID])
+    }
+
+    @Test
+    func duplicatePostAnswerMediaFailureDoesNotEmitDuplicateTerminal() async {
+        let mediaEngine = MediaEngineSpy(connectResult: .failure(.tokenBackendRejected))
+        let engine = makeEngine(mediaEngine: mediaEngine)
+        var emittedSignals = [DirectCallOutgoingSignal]()
+        let cancellable = engine.actionsPublisher.sink { action in
+            guard case .emitSignal(let signal) = action else {
+                return
+            }
+            emittedSignals.append(signal)
+        }
+        defer { cancellable.cancel() }
+
+        _ = await engine.receiveIncomingCall(event: .init(eventID: "$invite",
+                                                          roomID: roomID,
+                                                          senderID: peerUserID,
+                                                          callID: "call-a",
+                                                          type: .invite,
+                                                          intent: .audio,
+                                                          timestamp: .now,
+                                                          keyExchange: keyExchange(callID: "call-a")))
+
+        _ = await engine.acceptCall(callID: "call-a")
+        _ = await engine.markEncryptionEstablished(callID: "call-a", keyHandle: .init(callID: "call-a", keyID: "key-a"))
+        _ = await engine.acceptCall(callID: "call-a")
+
+        #expect(emittedSignals.map(\.type) == [.answer, .hangup])
+        #expect(mediaEngine.cleanupCallIDs == ["call-a"])
+    }
+
+    @Test
+    func manualHangupRacingPostAnswerMediaFailureDeduplicatesTerminal() async {
+        let mediaEngine = DelayedMediaEngineSpy()
+        let engine = makeEngine(mediaEngine: mediaEngine, cleanupDelay: .seconds(120))
+        var emittedSignals = [DirectCallOutgoingSignal]()
+        let cancellable = engine.actionsPublisher.sink { action in
+            guard case .emitSignal(let signal) = action else {
+                return
+            }
+            emittedSignals.append(signal)
+        }
+        defer { cancellable.cancel() }
+
+        _ = await engine.receiveIncomingCall(event: .init(eventID: "$invite",
+                                                          roomID: roomID,
+                                                          senderID: peerUserID,
+                                                          callID: "call-a",
+                                                          type: .invite,
+                                                          intent: .audio,
+                                                          timestamp: .now,
+                                                          keyExchange: keyExchange(callID: "call-a")))
+
+        let acceptTask = Task {
+            await engine.acceptCall(callID: "call-a")
+        }
+        #expect(await waitUntil { mediaEngine.connectedSessions.map(\.callID) == ["call-a"] })
+
+        _ = await engine.hangupActiveCall(callID: "call-a")
+        mediaEngine.complete(with: .failure(.tokenBackendRejected))
+        _ = await acceptTask.value
+
+        #expect(engine.activeSessionPublisher.value?.state == .ended)
+        #expect(emittedSignals.map(\.type) == [.answer, .hangup])
+        #expect(mediaEngine.cleanupCallIDs.isEmpty)
+    }
+
+    @Test
     func wrongKeyHandleDoesNotConnectMedia() async {
         let mediaEngine = MediaEngineSpy()
         let engine = makeEngine(mediaEngine: mediaEngine)
@@ -894,6 +1023,19 @@ final class DirectCallEngineTests {
     private func startConnectedAudioCall(engine: DirectCallEngine) async -> DirectCallSession? {
         await startOutgoingAndReceiveAnswer(engine: engine)
     }
+
+    private func waitUntil(timeout: Duration = .seconds(2),
+                           checkInterval: Duration = .milliseconds(20),
+                           condition: @MainActor () -> Bool) async -> Bool {
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            if condition() {
+                return true
+            }
+            try? await Task.sleep(for: checkInterval)
+        }
+        return condition()
+    }
 }
 
 @MainActor
@@ -993,6 +1135,62 @@ private final class MediaEngineSpy: DirectCallMediaEngineProtocol {
         connectedSessions.append(session)
         connectedKeyHandles.append(keyHandle)
         return connectResult
+    }
+
+    func setMicrophoneEnabled(_ isEnabled: Bool, callID: String) async -> Result<DirectCallMediaState, DirectCallMediaError> {
+        .success(mediaStateSubject.value)
+    }
+
+    func setRemoteAudioPlaybackEnabled(_ isEnabled: Bool, callID: String) async -> Result<DirectCallMediaState, DirectCallMediaError> {
+        .success(mediaStateSubject.value)
+    }
+
+    func setSpeakerEnabled(_ isEnabled: Bool, callID: String) async -> Result<DirectCallMediaState, DirectCallMediaError> {
+        .success(mediaStateSubject.value)
+    }
+
+    func disconnect(callID: String) async {
+        disconnectCallIDs.append(callID)
+    }
+
+    func cleanup(callID: String) async {
+        cleanupCallIDs.append(callID)
+    }
+}
+
+@MainActor
+private final class DelayedMediaEngineSpy: DirectCallMediaEngineProtocol {
+    private let mediaStateSubject = CurrentValueSubject<DirectCallMediaState, Never>(.idle)
+    private var continuation: CheckedContinuation<Result<DirectCallMediaState, DirectCallMediaError>, Never>?
+
+    private(set) var connectedSessions = [DirectCallSession]()
+    private(set) var connectedKeyHandles = [DirectCallMediaKeyHandle]()
+    private(set) var disconnectCallIDs = [String]()
+    private(set) var cleanupCallIDs = [String]()
+
+    var mediaStatePublisher: CurrentValuePublisher<DirectCallMediaState, Never> {
+        mediaStateSubject.asCurrentValuePublisher()
+    }
+
+    func prepareAudioSession(for session: DirectCallSession) async -> Result<DirectCallMediaState, DirectCallMediaError> {
+        .success(.init(callID: session.callID,
+                       phase: .preparingAudio,
+                       isMicrophoneEnabled: false,
+                       isSpeakerEnabled: false,
+                       isE2EEReady: session.encryptionState == .ready))
+    }
+
+    func connectAudio(for session: DirectCallSession, keyHandle: DirectCallMediaKeyHandle) async -> Result<DirectCallMediaState, DirectCallMediaError> {
+        connectedSessions.append(session)
+        connectedKeyHandles.append(keyHandle)
+        return await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+    }
+
+    func complete(with result: Result<DirectCallMediaState, DirectCallMediaError>) {
+        continuation?.resume(returning: result)
+        continuation = nil
     }
 
     func setMicrophoneEnabled(_ isEnabled: Bool, callID: String) async -> Result<DirectCallMediaState, DirectCallMediaError> {

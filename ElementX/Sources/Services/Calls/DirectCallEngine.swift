@@ -36,6 +36,8 @@ final class DirectCallEngine: DirectCallEngineProtocol {
     private var keyClearedCallIDs = Set<String>()
     private var mediaDisconnectedCallIDs = Set<String>()
     private var mediaCleanedCallIDs = Set<String>()
+    private var answerEmittedCallIDs = Set<String>()
+    private var postAnswerMediaFailureTerminalEmittedCallIDs = Set<String>()
 
     private var activeSessionSubject = CurrentValueSubject<DirectCallSession?, Never>(nil)
     private let actionsSubject = PassthroughSubject<DirectCallEngineAction, Never>()
@@ -109,6 +111,7 @@ final class DirectCallEngine: DirectCallEngineProtocol {
 
         transitionSession(to: .connecting)
         emitSignal(type: .answer, from: session)
+        answerEmittedCallIDs.insert(session.callID)
         scheduleConnectingTimeout(for: session.callID)
 
         session = activeSessionSubject.value ?? session
@@ -231,9 +234,7 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         }
 
         guard session.intent == .audio else {
-            transitionSession(to: .failed)
-            await cleanupMediaIfNeeded(callID: session.callID)
-            scheduleCleanup(for: session.callID)
+            await failMediaConnectionIfActive(for: session)
             return .failure(.mediaConnectionFailed(.unsupportedIntent))
         }
 
@@ -246,9 +247,7 @@ final class DirectCallEngine: DirectCallEngineProtocol {
             }
             return .success(activeSession)
         case .failure(let error):
-            transitionSession(to: .failed)
-            await cleanupMediaIfNeeded(callID: session.callID)
-            scheduleCleanup(for: session.callID)
+            await failMediaConnectionIfActive(for: session)
             guard activeSessionSubject.value != nil else {
                 return .failure(.mediaConnectionFailed(error))
             }
@@ -314,6 +313,8 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         clearPerCallKeyIfNeeded(callID: callID)
         await cleanupMediaIfNeeded(callID: callID)
         mediaKeyHandlesByCallID.removeValue(forKey: callID)
+        answerEmittedCallIDs.remove(callID)
+        postAnswerMediaFailureTerminalEmittedCallIDs.remove(callID)
         cancelAllTasks()
         activeSessionSubject.send(nil)
         actionsSubject.send(.sessionCleared(callID: session.callID, roomID: session.roomID))
@@ -574,6 +575,32 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         await disconnectMediaIfNeeded(callID: session.callID)
         scheduleCleanup(for: session.callID)
         return .success(activeSessionSubject.value)
+    }
+
+    private func failMediaConnectionIfActive(for session: DirectCallSession) async {
+        guard let activeSession = activeSessionSubject.value,
+              activeSession.callID == session.callID,
+              !activeSession.state.isTerminal else {
+            return
+        }
+
+        let shouldEmitPostAnswerTerminal = shouldEmitPostAnswerMediaFailureTerminal(callID: session.callID)
+        transitionSession(to: .failed)
+        await cleanupMediaIfNeeded(callID: session.callID)
+
+        if shouldEmitPostAnswerTerminal {
+            emitSignal(type: .hangup, from: session)
+        }
+
+        scheduleCleanup(for: session.callID)
+    }
+
+    private func shouldEmitPostAnswerMediaFailureTerminal(callID: String) -> Bool {
+        guard answerEmittedCallIDs.contains(callID) else {
+            return false
+        }
+
+        return postAnswerMediaFailureTerminalEmittedCallIDs.insert(callID).inserted
     }
 
     private func expectedPeer(for roomID: String) -> String? {
