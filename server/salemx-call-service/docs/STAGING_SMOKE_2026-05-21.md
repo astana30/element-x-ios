@@ -15,6 +15,7 @@ No tokens, JWTs, passwords, shared secrets, authorization header values, or Live
 | Synapse Admin `/state` | `200` |
 | Call-service token POST | `200` |
 | LiveKit participant token | Issued, redacted |
+| iOS private native audio staging smoke | `activeAudio`, then `idle` after hangup |
 
 ## Root Cause
 
@@ -36,7 +37,11 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - `server/salemx-call-service/smoke/staging-synapse-smoke.env` is covered by gitignore and should remain mode `600` whenever present.
 - The smoke verified the positive private native audio path only.
 - No LiveKit, Nginx, firewall, Synapse config, SQLite, TURN, or `macaroon_secret_key` changes were required for this fix.
+- App-side staging smoke after backend room pre-create reached active audio with encryption ready, media connect attempted, LiveKit client connect attempted, and media failure `none`.
+- Hangup returned both sides to idle, with media disconnect and cleanup attempted.
+- The previous service-not-found-like LiveKit blocker is resolved by server-side LiveKit room pre-create in the call-service.
+- No iOS app code, Element Call route, CallKit, push, video, or global production activation changed.
 
 ## Next Step
 
-Run app-side smoke for SalemX private native audio calls using the staging call-service and `wss://rtc.mertis.kz`.
+Continue with gated app-side staging dogfood hardening and keep output redacted.

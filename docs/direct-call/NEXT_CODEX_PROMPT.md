@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.25E — call-service LiveKit room pre-create implementation.
+After 2.25F — staging iOS activeAudio smoke passed.
 
 Current checkpoints:
 - App code: 2.23C `Polish native call listener availability status` (`bb7ae2557`).
@@ -20,6 +20,7 @@ Current checkpoints:
 - Staging Synapse smoke harness: 2.24J-prep `Add staging Synapse smoke harness template` (`565699e15`).
 - Staging deployment scaffold: 2.24K prepared helper scripts and placeholder-only env templates.
 - Call-service LiveKit room pre-create: 2.25E implemented server-side RoomService `CreateRoom` before participant token issuance.
+- Staging iOS activeAudio smoke: 2.25F passed after room pre-create.
 - Private native audio dogfood guardrails: `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
@@ -39,7 +40,8 @@ Current proven/prepared state:
 - `server/salemx-call-service/scripts/run_staging_call_service_local.sh` validates staging guardrails and starts `uvicorn` from an operator-local env file without printing env values.
 - `server/salemx-call-service/scripts/check_staging_readiness.sh` queries readiness and prints only redacted readiness fields.
 - `server/salemx-call-service/scripts/staging_synapse_smoke.sh` provides the redacted operator-local staging Synapse validation harness.
-- Staging Synapse/LiveKit setup has passed readiness and signalling smoke, but iOS active audio still needs to be re-run after the room pre-create implementation.
+- Staging Synapse/LiveKit setup has passed readiness, signalling, media connect, active audio, and hangup cleanup smoke through the private native audio card.
+- The previous `liveKitURLUnreachable` / service-not-found-like blocker is resolved by server-side LiveKit room pre-create.
 - No public UI activation, Element Call route changes, RoomScreen call presentation changes, existing call-service changes, CallKit, push, video, or global production activation has been added.
 
 Required operator-local staging service env file:
@@ -51,64 +53,28 @@ Required operator-local smoke env file:
 - Fill values locally only. Do not commit or paste the real file.
 
 Phase:
-2.25F — iOS staging smoke after LiveKit room pre-create.
+2.25G — post-smoke staging dogfood hardening.
 
 Task:
-Restart the local staging call-service with the latest room pre-create implementation, then re-run the redacted A/B private native audio staging smoke. Do not modify iOS behavior unless a small diagnostics-only issue is found. Do not change Element Call, CallKit, push, video, shared LiveKit config, or global production activation.
+Review the successful staging activeAudio smoke and plan the next gated dogfood hardening step. Do not modify iOS behavior unless explicitly requested. Do not change Element Call, CallKit, push, video, shared LiveKit config, or global production activation.
 
 Context:
-Previous iOS staging smoke reached signalling and LiveKit client connect, but LiveKit returned service-not-found-like behavior because the call-service allocated a room name without pre-creating the room. The backend now pre-creates the allocated room server-side before issuing participant tokens.
+The A/B staging iOS smoke after backend commit `33e95e7b1` reached active audio and returned to idle after hangup. A/B encryption was ready, media connect and LiveKit client connect were attempted, and media failure remained `none`. Hangup cleared active session state and attempted media disconnect/cleanup.
 
 Goal:
-Prove A start -> B incoming -> B accept -> A/B activeAudio -> hangup -> idle against staging, with redacted output only.
+Choose the next minimal, gated staging dogfood step from the proven activeAudio baseline while preserving redaction and existing Element Call behavior.
 
-Suggested setup commands:
+Recent 2.25F proof:
 
-```bash
-cp server/salemx-call-service/deploy/staging.env.example server/salemx-call-service/deploy/staging.env
-$EDITOR server/salemx-call-service/deploy/staging.env
-
-docker run -d --rm --name salemx-call-service-staging-redis -p 6380:6379 redis:7-alpine
-
-server/salemx-call-service/scripts/run_staging_call_service_local.sh \
-  --env-file server/salemx-call-service/deploy/staging.env \
-  --host 127.0.0.1 \
-  --port 8088
-```
-
-In a second shell:
-
-```bash
-server/salemx-call-service/scripts/check_staging_readiness.sh \
-  --env-file server/salemx-call-service/deploy/staging.env
-```
-
-Smoke cases:
-1. Readiness:
-   - expect `ready=true`, `reason=ok`
-   - allocation/rate-limit configured/shared/connected true
-   - `storageKeyConfigured=true`
-   - `liveKitRoomProvisioningConfigured=true`
-2. A/B app launch:
-   - use `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`
-   - use staging token base URL on `127.0.0.1:8088`
-   - keep internal UI diagnostics off unless needed
-3. Trust:
-   - A/B own session verified
-   - A/B cross-signing ready
-   - peer trust ready
-4. Room/card readiness:
-   - encrypted direct 1:1 DM open on both simulators
-   - production room attached on A/B
-   - no stale active session
-5. Lifecycle:
-   - A starts private native audio
-   - B reaches incoming ringing
-   - B accepts
-   - A/B reach active audio
-   - media failure remains none
-   - hangup returns A/B to idle
-   - cleanup/disconnect attempted
+- A/B diagnostic launch succeeded.
+- A/B reached `productionSessionState=activeAudio`.
+- A/B had `productionEncryptionState=ready`.
+- A/B had media connect and LiveKit client connect attempted.
+- A/B had `productionMediaFailureReason=none`.
+- Hangup returned A/B to `productionSessionState=idle`.
+- A/B had media disconnect and cleanup attempted.
+- No iOS app code changed.
+- Element Call route remained untouched.
 
 Hard redaction rules:
 - Never print Matrix access tokens.
@@ -131,13 +97,9 @@ Allowed report fields:
 - Media failure enum.
 
 Pass criteria:
-- Readiness check passes.
-- Trust ready.
-- A/B room attached.
-- A start creates outgoing/incoming.
-- B accept reaches active audio on both sides.
-- Media failure is none.
-- Hangup returns both sides to idle.
+- Any next smoke or hardening step remains behind existing private product UI/debug gates.
+- Element Call buttons and route remain unchanged.
+- No CallKit, push, video, or global production activation is added.
 - No token/JWT/secret/raw ID leakage.
 
 If staging data is unavailable:
@@ -152,14 +114,11 @@ Rollback:
 - Keep iOS private native call gates unchanged.
 
 Report:
-A. Readiness result.
-B. Trust result.
-C. Room/card readiness.
-D. A/B lifecycle result.
-E. Final production-status A/B.
-F. Any backend/LiveKit/iOS issue.
-G. Whether code/docs changed.
-H. Whether staging iOS smoke passed or remains blocked.
+A. Chosen next dogfood hardening step.
+B. Why it is minimal and gated.
+C. Files to inspect or change, if any.
+D. Validation plan.
+E. Whether code/docs changed.
 
 Suggested commit only if docs/scripts changed:
-Document staging iOS smoke after room pre-create
+Document next staging dogfood step

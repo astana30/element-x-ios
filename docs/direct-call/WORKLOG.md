@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Proved staging iOS private native audio can reach active audio through the product-gated private card.
 - Added server-side LiveKit room pre-create in SalemX call-service before participant token issuance.
 - Added Matrix SDK-backed custom content accessor for direct-call message-like events.
 - Added and pinned the SDK custom timeline filter so the native direct-call receive path can observe the custom message-like signal event without changing the visible RoomScreen timeline.
@@ -19,6 +20,16 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
 
+## 2026-05-22 — 2.25F Staging iOS ActiveAudio Smoke
+
+- Re-ran the A/B iOS private native audio staging smoke after backend commit `33e95e7b1`.
+- Confirmed A/B diagnostic launch succeeded with the staging token base URL and private product UI gate.
+- Confirmed A/B reached `productionSessionState=activeAudio` with `productionEncryptionState=ready`.
+- Confirmed A/B attempted media connect and LiveKit client connect, with `productionMediaFailureReason=none`.
+- Confirmed hangup returned A/B to `productionSessionState=idle`, cleared active sessions, and attempted media disconnect and cleanup.
+- Confirmed the previous `liveKitURLUnreachable` / service-not-found-like blocker is resolved by server-side LiveKit room pre-create.
+- No iOS app code, Element Call route, CallKit, push, video, shared LiveKit config, or global production activation changed.
+
 ## 2026-05-22 — 2.25E Call-Service LiveKit Room Pre-Create
 
 - Added a `LiveKitRoomProvisionerProtocol` boundary and a production/staging RoomService implementation for `CreateRoom`.
@@ -27,7 +38,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Treated LiveKit already-exists responses as success so caller/callee reuse and concurrent retries converge on the allocated room.
 - Added local fake/no-op provisioning and focused backend tests for success, ordering, failure, idempotency, rate-limit ordering, readiness redaction, and RoomService request shape.
 - Did not change iOS behavior, Element Call routes, CallKit, push, video, shared LiveKit config, or global production activation.
-- Staging iOS smoke still needs re-run to prove the private card reaches active audio against the pre-create path.
+- Staging iOS smoke later proved the private card reaches active audio against the pre-create path.
 
 ## 2026-05-12 — 2.10M Production E2EE Key Wrapping Seam Inspection
 

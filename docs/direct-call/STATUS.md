@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.25E — call-service LiveKit room pre-create implementation.
+After 2.25F — staging iOS activeAudio smoke passed.
 
 ## Latest App Code Checkpoint
 
@@ -12,9 +12,9 @@ Commit: `bb7ae2557`
 
 ## Latest Backend Code Checkpoint
 
-2.24G `Add Redis call service storage skeleton`
+2.25E `Precreate LiveKit room before issuing token`
 
-Commit: `98e153b7f`
+Commit: `33e95e7b1`
 
 ## Latest SDK Checkpoint
 
@@ -36,6 +36,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 ## Proven Checkpoints
 
 - SalemX call-service now pre-creates allocated LiveKit rooms through server-side RoomService `CreateRoom` before issuing participant tokens. Participant tokens remain scoped to room join/publish/subscribe, and room provision failures return a safe fail-closed error without issuing a token.
+- Staging iOS private native audio smoke passed after LiveKit room pre-create:
+  - A/B reached `productionSessionState=activeAudio`.
+  - A/B had `productionEncryptionState=ready`.
+  - A/B had media connect and LiveKit client connect attempted.
+  - A/B reported `productionMediaFailureReason=none`.
+  - Hangup returned both sides to idle with media disconnect and cleanup attempted.
+  - The previous `liveKitURLUnreachable` / service-not-found-like blocker is resolved by server-side LiveKit room pre-create.
+  - No iOS app code, Element Call route, CallKit, push, video, or global production activation changed.
 - Two-client Matrix signalling proof passed.
 - Diagnostic LiveKit media proof reached active.
 - Production token DTOs, client, and transport seams exist.
