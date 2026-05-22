@@ -744,10 +744,27 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
         }
     }
 
-    private func nativeDirectCallRoomCardStatus() async -> NativeDirectCallRoomCardStatus {
+    func nativeDirectCallRoomCardStatus() async -> NativeDirectCallRoomCardStatus {
         let triggerDiagnostic = await nativeDirectCallProductionTriggerDryRunDiagnostic()
+        await startNativeDirectCallRoomCardListenerIfNeeded(triggerDiagnostic: triggerDiagnostic)
         return .make(triggerDiagnostic: triggerDiagnostic,
                      productionStatus: nativeDirectCallProductionStatus())
+    }
+
+    private func startNativeDirectCallRoomCardListenerIfNeeded(triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic) async {
+        guard triggerDiagnostic.isEnabled else {
+            return
+        }
+
+        if let activeSession = nativeDirectCallProductionRoomFlowOwner?.activeSession, !activeSession.state.isTerminal {
+            return
+        }
+
+        guard nativeDirectCallProductionRoomFlowOwner?.isListenerStarted != true else {
+            return
+        }
+
+        _ = await nativeDirectCallProductionStartListener()
     }
     #endif
     

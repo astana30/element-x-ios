@@ -1131,6 +1131,53 @@ final class RoomFlowCoordinatorTests {
     }
 
     @Test
+    func nativeDirectCallRoomCardStatusStartsListenerWhenActivationEnabled() async throws {
+        let productionOwner = NativeDirectCallRoomFlowOwnerSpy()
+        productionOwner.startResult = .success(nativeDirectCallComposition())
+        let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: enabledProductionActivationDiagnostic())
+        setupRoomFlowCoordinator(nativeDirectCallProductionActivationDryRunProviderFactory: { _ in provider },
+                                 nativeDirectCallProductionRoomFlowOwnerFactory: { _ in .owner(productionOwner) })
+
+        try await process(route: .room(roomID: "1", via: []))
+        let cardStatus = await roomFlowCoordinator.nativeDirectCallRoomCardStatus()
+        let productionStatus = roomFlowCoordinator.nativeDirectCallProductionStatus()
+
+        #expect(cardStatus.state == .canStart)
+        #expect(productionStatus.productionOwnerAvailable)
+        #expect(productionStatus.productionListenerStarted)
+        #expect(productionStatus.productionHasActiveSession == false)
+        #expect(productionStatus.productionLastSignalSendAttempted == false)
+        #expect(productionStatus.productionMediaConnectAttempted == false)
+        #expect(productionOwner.startCount == 1)
+        #expect(productionOwner.outgoingCount == 0)
+    }
+
+    @Test
+    func nativeDirectCallRoomCardStatusDoesNotStartListenerWhenActivationDisabled() async throws {
+        let productionOwner = NativeDirectCallRoomFlowOwnerSpy()
+        let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: .disabled(.appRolloutDisabled))
+        var productionOwnerFactoryCallCount = 0
+        setupRoomFlowCoordinator(nativeDirectCallProductionActivationDryRunProviderFactory: { _ in provider },
+                                 nativeDirectCallProductionRoomFlowOwnerFactory: { _ in
+                                     productionOwnerFactoryCallCount += 1
+                                     return .owner(productionOwner)
+                                 })
+
+        try await process(route: .room(roomID: "1", via: []))
+        let cardStatus = await roomFlowCoordinator.nativeDirectCallRoomCardStatus()
+        let productionStatus = roomFlowCoordinator.nativeDirectCallProductionStatus()
+
+        #expect(cardStatus.state == .unavailable(reason: .nativeCallsUnavailable))
+        #expect(productionStatus.productionOwnerAvailable == false)
+        #expect(productionStatus.productionListenerStarted == false)
+        #expect(productionStatus.productionLastSignalSendAttempted == false)
+        #expect(productionStatus.productionMediaConnectAttempted == false)
+        #expect(productionOwnerFactoryCallCount == 0)
+        #expect(productionOwner.startCount == 0)
+        #expect(productionOwner.outgoingCount == 0)
+    }
+
+    @Test
     func nativeDirectCallProductionAcceptBlocksWhenOwnerUnavailable() async throws {
         let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: enabledProductionActivationDiagnostic())
         setupRoomFlowCoordinator { roomProxy in
