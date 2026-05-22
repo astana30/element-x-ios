@@ -44,7 +44,7 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - No iOS app code, Element Call route, CallKit, push, video, or global production activation changed.
 - The 2.26C controlled engineering dogfood matrix passed happy path, reverse direction, repeated calls, decline, cancel, timeout, backend-off fail-closed, backend recovery, relaunch fail-closed, and listener-not-armed cases on the real staging media/token/LiveKit path.
 - LiveKit-off fail-closed was not run because the staging LiveKit instance is shared.
-- The 2.26C runner path required the existing DEBUG rollout/capability shim gate to avoid `appRolloutDisabled`; do not claim clean product-card-only dogfood until that activation-gate mismatch is cleaned up or explicitly documented.
+- The 2.26D app-side cleanup replaces the older DEBUG rollout/capability shim with the explicit `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` gate; do not claim clean product-card-only dogfood until a fresh staging smoke proves the card under that gate.
 
 ## Next Step
 
@@ -58,4 +58,4 @@ Controlled engineering dogfood may begin on the staging path under the private n
 - Element Call toolbar path unchanged and available as fallback;
 - no CallKit, push, video, broad internal rollout, public rollout, or global production activation.
 
-Next, run `2.26D — native direct-call activation gate cleanup / product-card-only dogfood readiness` while keeping controlled diagnostic dogfood narrow and redacted.
+Next, run `2.26E — product-card-only staging dogfood smoke under explicit private dogfood gate` while keeping controlled dogfood narrow and redacted.

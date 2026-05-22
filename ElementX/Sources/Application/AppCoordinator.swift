@@ -1361,7 +1361,7 @@ extension AppCoordinator {
                                                                        environment: [String: String] = ProcessInfo.processInfo.environment) -> NativeDirectCallProductionActivationDryRunProviding {
         let roomEligibility = DirectCallProductionRoomEligibility(roomProxy: roomProxy)
         let homeserverBaseURL = URL(string: homeserver)
-        guard ProcessInfo.isNativeDirectCallProductionDryRunFakeEnabled(environment: environment) else {
+        guard ProcessInfo.isNativeDirectCallPrivateDogfoodEnabled(environment: environment) else {
             return NativeDirectCallProductionActivationDryRunProvider(activationDryRunDiagnostics: DirectCallProductionActivationDecisionService(),
                                                                       homeserverBaseURL: homeserverBaseURL,
                                                                       roomEligibility: roomEligibility)
@@ -1369,8 +1369,8 @@ extension AppCoordinator {
 
         let tokenEndpointBaseURL = nativeDirectCallProductionTokenEndpointBaseURL(homeserver: homeserver,
                                                                                   environment: environment)
-        let decisionService = DirectCallProductionActivationDecisionService(rolloutProvider: NativeDirectCallProductionDryRunFakeRolloutProvider(),
-                                                                            capabilityProvider: NativeDirectCallProductionDryRunFakeCapabilityProvider(),
+        let decisionService = DirectCallProductionActivationDecisionService(rolloutProvider: NativeDirectCallPrivateDogfoodRolloutProvider(),
+                                                                            capabilityProvider: NativeDirectCallPrivateDogfoodCapabilityProvider(),
                                                                             dependencyProvider: makeNativeDirectCallProductionDependencyProvider(clientProxy: clientProxy,
                                                                                                                                                  tokenEndpointBaseURL: tokenEndpointBaseURL),
                                                                             peerTrustReadinessProvider: makeNativeDirectCallProductionPeerTrustReadinessProvider(roomProxy: roomProxy,
@@ -1425,7 +1425,7 @@ extension AppCoordinator {
                                                                          tokenEndpointBaseURL: URL?) -> NativeDirectCallProductionDependencyProviding {
         guard let clientProxy,
               let tokenEndpointBaseURL else {
-            return NativeDirectCallProductionDryRunFakeDependencyProvider()
+            return NativeDirectCallPrivateDogfoodFailClosedDependencyProvider()
         }
 
         let configuration = DirectCallProductionConfiguration(isEnabled: true,
@@ -1597,14 +1597,14 @@ extension AppCoordinator {
 
 #if DEBUG
 @MainActor
-private final class NativeDirectCallProductionDryRunFakeRolloutProvider: DirectCallProductionRolloutProviding {
+private final class NativeDirectCallPrivateDogfoodRolloutProvider: DirectCallProductionRolloutProviding {
     func directCallProductionConfiguration() -> DirectCallProductionConfiguration {
         .init(isEnabled: true)
     }
 }
 
 @MainActor
-private final class NativeDirectCallProductionDryRunFakeCapabilityProvider: DirectCallProductionCapabilityProviding {
+private final class NativeDirectCallPrivateDogfoodCapabilityProvider: DirectCallProductionCapabilityProviding {
     func directCallProductionServerCapability() async -> DirectCallProductionCapabilityDiscoveryResult {
         .available(.init(isEnabled: true,
                          intents: [DirectCallIntent.audio.rawValue]))
@@ -1612,16 +1612,16 @@ private final class NativeDirectCallProductionDryRunFakeCapabilityProvider: Dire
 }
 
 @MainActor
-private final class NativeDirectCallProductionDryRunFakeDependencyProvider: NativeDirectCallProductionDependencyProviding {
+private final class NativeDirectCallPrivateDogfoodFailClosedDependencyProvider: NativeDirectCallProductionDependencyProviding {
     func nativeDirectCallProductionDependencies() -> NativeDirectCallProductionDependencies {
-        .init(encryptionService: NativeDirectCallProductionDryRunFakeEncryptionService(),
-              mediaEngineFactory: NativeDirectCallProductionDryRunFakeMediaEngineFactory(),
+        .init(encryptionService: NativeDirectCallPrivateDogfoodFailClosedEncryptionService(),
+              mediaEngineFactory: NativeDirectCallPrivateDogfoodFailClosedMediaEngineFactory(),
               keyWrapperSource: .explicitWrapper)
     }
 }
 
 @MainActor
-private final class NativeDirectCallProductionDryRunFakeEncryptionService: DirectCallEncryptionServiceProtocol {
+private final class NativeDirectCallPrivateDogfoodFailClosedEncryptionService: DirectCallEncryptionServiceProtocol {
     func generatePerCallKey(callID: String, roomID: String, peerUserID: String) async -> Result<DirectCallGeneratedKeyExchange, DirectCallEncryptionFailureReason> {
         .failure(.e2eeUnavailable)
     }
@@ -1634,7 +1634,7 @@ private final class NativeDirectCallProductionDryRunFakeEncryptionService: Direc
 }
 
 @MainActor
-private final class NativeDirectCallProductionDryRunFakeMediaEngineFactory: DirectCallMediaEngineFactoryProtocol {
+private final class NativeDirectCallPrivateDogfoodFailClosedMediaEngineFactory: DirectCallMediaEngineFactoryProtocol {
     func makeMediaEngine() -> Result<any DirectCallMediaEngineProtocol, DirectCallMediaError> {
         .failure(.mediaSetupUnavailable)
     }

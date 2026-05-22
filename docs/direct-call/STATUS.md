@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.26C — controlled staging dogfood matrix recorded.
+After 2.26D — private dogfood activation gate clarified.
 
 ## Latest App Code Checkpoint
 
@@ -61,7 +61,13 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - LiveKit-off fail-closed was not run because shared staging LiveKit should not be stopped during this dogfood session.
   - Final A/B status had no active session and no media failure.
   - Element Call route remained untouched and no code changed.
-  - Caveat: the 2.26C runner path required the existing DEBUG rollout/capability shim gate to avoid `appRolloutDisabled`; media, token issuance, and LiveKit were real staging, but this is not yet a clean product-card-only dogfood proof.
+  - Caveat: the 2.26C runner path used the older DEBUG rollout/capability shim naming. 2.26D replaces that with the explicit DEBUG/integration-only `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` gate, but product-card-only dogfood still needs a fresh staging proof under the new gate.
+- Private dogfood activation is explicit and fail-closed by default:
+  - `appRolloutDisabled` is produced by the production activation decision when `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` is absent.
+  - `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1` can show the private card, and `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1` can allow start actions, but neither gate enables rollout/capability readiness by itself.
+  - The private dogfood gate is DEBUG/integration-only and requires `IS_RUNNING_INTEGRATION_TESTS=1`, `NATIVE_DIRECT_CALL_DIAGNOSTICS=1`, and `NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1`.
+  - The old `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` name no longer enables the app-side activation model.
+  - Product card and diagnostic runner use the same room-flow production activation/start decision, so the next proof can focus on product-card interaction under the explicit gate.
 - Two-client Matrix signalling proof passed.
 - Diagnostic LiveKit media proof reached active.
 - Production token DTOs, client, and transport seams exist.
@@ -126,12 +132,12 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Default `DirectCallProductionConfiguration` remains disabled.
   - The dry-run proof verifies no key generation, key consume, key cleanup, or media engine construction occurs.
   - Production direct calls remain disabled by default; no visible UI, Element Call route, CallKit, push, listener start, media connect, or Matrix send behavior changed.
-- Runtime fake-enabled production activation dry-run harness is complete:
-  - `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED=1` is recognized only in DEBUG when the integration diagnostic command gates are also enabled.
-  - The AppCoordinator dry-run provider factory can swap the production dry-run decision service to fake rollout, fake server capability, and fake dependency readiness inputs for the dry-run command only.
-  - The fake dependencies are fail-closed if accidentally invoked and are used only to make dependency readiness true for the dry-run model.
-  - The two-client diagnostic runner passes the fake dry-run flag to app launches through `SIMCTL_CHILD_NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED`.
-  - Unit tests prove default runtime dry-run remains disabled and fake-enabled dry-run can return `enabled=true` for an eligible encrypted direct 1:1 room.
+- Runtime private dogfood production activation harness is complete:
+  - `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` is recognized only in DEBUG when the integration diagnostic command gates are also enabled.
+  - The AppCoordinator dry-run provider factory can swap the production dry-run decision service to private dogfood rollout, private dogfood server capability, and production dependency readiness inputs for the dry-run/start model.
+  - Fallback private dogfood dependencies are fail-closed if accidentally invoked and exist only to keep missing app dependencies from becoming public activation.
+  - The two-client diagnostic runner passes the private dogfood flag to app launches through `SIMCTL_CHILD_NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED`.
+  - Unit tests prove default runtime activation remains disabled, product UI/start gates alone do not enable dogfood activation, the legacy fake flag is ignored, and private dogfood activation can return `enabled=true` for an eligible encrypted direct 1:1 room.
   - No real production call activation, listener start, media engine construction, Matrix send, visible UI, Element Call route, CallKit, or push behavior changed.
   - Focused app unit tests and Release build pass after the injection seam.
 - Runtime fake-enabled production activation dry-run proof is recorded:
@@ -541,7 +547,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Private native audio engineering dogfood runbook is recorded:
   - `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md` defines the strict controlled engineering dogfood scope and guardrails.
   - Scope is DEBUG/integration only, private native card only, open encrypted direct 1:1 rooms only, foreground only, verified/trusted peers only, and local fake backend plus local LiveKit or a hardened staging equivalent.
-  - Required gates are documented: `IS_RUNNING_INTEGRATION_TESTS=1`, `NATIVE_DIRECT_CALL_DIAGNOSTICS=1`, `NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1`, `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`, `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`, `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED=1`, and `NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=...`.
+  - Required gates are documented: `IS_RUNNING_INTEGRATION_TESTS=1`, `NATIVE_DIRECT_CALL_DIAGNOSTICS=1`, `NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1`, `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`, `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`, and `NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=...`.
   - Allowed flows, known limitations, fail-closed behavior, redaction checklist, rollback steps, explicit non-goals, staging blockers, success criteria, and stop conditions are documented.
   - The runbook keeps Element Call buttons unchanged and keeps CallKit, push, video, public rollout, Element Call replacement, `AllDevices` fallback, and global production activation out of scope.
 - Listener availability status polish and runtime diagnostics proof are recorded:
@@ -584,7 +590,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Current Blocker
 
-- Controlled engineering diagnostic dogfood may continue on staging, but product-card-only dogfood is not yet proven because the 2.26C runner path required the existing DEBUG rollout/capability shim gate to avoid `appRolloutDisabled`.
+- Controlled engineering diagnostic dogfood may continue on staging under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, but product-card-only dogfood is not yet re-proven after the activation-gate cleanup.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
 - CallKit, push/background incoming, missed calls, video, session restoration, and global production activation remain out of scope.
@@ -595,9 +601,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.26D — native direct-call activation gate cleanup / product-card-only dogfood readiness`
+`2.26E — product-card-only staging dogfood smoke under explicit private dogfood gate`
 
-Goal: remove or explicitly document the DEBUG rollout/capability shim dependency for staging dogfood so the private product card can be verified against the real staging token and LiveKit path without claiming broad production activation. Preserve fail-closed activation, trusted-device E2EE, redaction, Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope.
+Goal: rerun the controlled staging happy path and selected matrix rows from the private product card with `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, real staging token issuance, and staging LiveKit, then record whether product-card-only dogfood can be claimed. Preserve fail-closed activation, trusted-device E2EE, redaction, Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope.
 
 ## Do-Not-Touch Constraints
 

@@ -93,8 +93,8 @@ Optional environment:
   NATIVE_DIRECT_CALL_LIVEKIT_TOKEN_B
                                   Required only when diagnostic LiveKit is enabled; never printed.
   NATIVE_DIRECT_CALL_LIVEKIT_ROOM Optional diagnostic LiveKit room name; never printed.
-  NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED
-                                  Optional. Set to 1 to make production-activation-dry-run use fake DEBUG-only enabled inputs.
+  NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED
+                                  Optional. Set to 1 to enable the DEBUG/integration-only private dogfood activation model.
   NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED
                                   Optional. Set to 1 to allow the DEBUG-only production-start-outgoing command.
   NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL
@@ -191,10 +191,10 @@ log_livekit_environment_summary() {
     else
         log "LiveKit diagnostics: disabled"
     fi
-    if [[ "${NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED:-}" == "1" ]]; then
-        log "Production activation dry-run fake inputs: enabled"
+    if [[ "${NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED:-}" == "1" ]]; then
+        log "Private dogfood activation: enabled"
     else
-        log "Production activation dry-run fake inputs: disabled"
+        log "Private dogfood activation: disabled"
     fi
     if [[ "${NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED:-}" == "1" ]]; then
         log "Production start command: enabled"
@@ -1253,7 +1253,7 @@ launch_client_with_environment() {
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_LIVEKIT_TOKEN_A="${NATIVE_DIRECT_CALL_LIVEKIT_TOKEN_A:-}" \
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_LIVEKIT_TOKEN_B="${NATIVE_DIRECT_CALL_LIVEKIT_TOKEN_B:-}" \
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_LIVEKIT_ROOM="${NATIVE_DIRECT_CALL_LIVEKIT_ROOM:-}" \
-        SIMCTL_CHILD_NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED="${NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED:-}" \
+        SIMCTL_CHILD_NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED="${NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED:-}" \
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED="${NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED:-}" \
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL="${NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL:-}" \
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED="${NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED:-}" \

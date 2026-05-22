@@ -126,9 +126,9 @@ extension ProcessInfo {
         #endif
     }
 
-    static var isNativeDirectCallProductionDryRunFakeEnabled: Bool {
+    static var isNativeDirectCallPrivateDogfoodEnabled: Bool {
         #if DEBUG
-        isNativeDirectCallProductionDryRunFakeEnabled(environment: processInfo.environment)
+        isNativeDirectCallPrivateDogfoodEnabled(environment: processInfo.environment)
         #else
         false
         #endif
@@ -191,9 +191,9 @@ extension ProcessInfo {
             environment["NATIVE_DIRECT_CALL_DIAGNOSTIC_LIVEKIT"] == "1"
     }
 
-    static func isNativeDirectCallProductionDryRunFakeEnabled(environment: [String: String]) -> Bool {
+    static func isNativeDirectCallPrivateDogfoodEnabled(environment: [String: String]) -> Bool {
         isNativeDirectCallDiagnosticIntegrationCommandsEnabled(environment: environment) &&
-            environment["NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED"] == "1"
+            environment["NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED"] == "1"
     }
 
     static func isNativeDirectCallProductionStartEnabled(environment: [String: String]) -> Bool {

@@ -26,7 +26,7 @@ The 2.26C controlled engineering dogfood matrix passed through the redacted diag
 - Final A/B status had no active session and no media failure.
 - Element Call route remained untouched and no code changed.
 
-Important caveat: the 2.26C runner path required the existing DEBUG rollout/capability shim gate to avoid `appRolloutDisabled`. Media, token issuance, and LiveKit were real staging, but this is not yet a clean product-card-only dogfood proof.
+The 2.26D activation cleanup replaced the older DEBUG fake rollout/capability shim with an explicit private dogfood gate, `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`. Product-card-only dogfood still needs a fresh staging smoke under this explicit gate before it can be claimed cleanly.
 
 ## Allowed Scope
 
@@ -50,13 +50,14 @@ export IS_RUNNING_INTEGRATION_TESTS=1
 export NATIVE_DIRECT_CALL_DIAGNOSTICS=1
 export NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1
 export NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1
+export NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1
 export NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1
 export NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=<staging-call-service-base-url>
 ```
 
 Use the staging call-service base URL for `NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL`; in the current local-run staging setup this is the local loopback service endpoint. Do not set public or global production direct-call activation.
 
-`NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED=1` belongs to the older fake rollout/capability proof path. The 2.26C diagnostic matrix still required this DEBUG-only shim to avoid `appRolloutDisabled`, while using the real staging token and LiveKit path. Do not claim product-card-only dogfood until this activation-gate mismatch is cleaned up or explicitly re-documented.
+`NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` is DEBUG/integration-only and requires the diagnostic command gates above. `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1` shows the private card, and `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1` allows start actions, but neither gate enables the production activation decision by itself. Do not use the old `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` name for new dogfood sessions.
 
 ## Operational Preflight
 
@@ -163,7 +164,7 @@ Stop dogfood immediately if any of the following occurs:
 
 ## Rollback
 
-1. Unset `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED`.
+1. Unset `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED`, `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED`, and `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED`.
 2. Relaunch the apps.
 3. Stop the local staging call-service if the session uses a local service process.
 4. Stop local Redis if the session uses a disposable local Redis container.
@@ -196,7 +197,7 @@ These block broader internal dogfood and production, but not the controlled engi
 - No video.
 - Receiver listener remains foreground/open-room scoped.
 - Session restoration is unsupported by design.
-- Clean product-card-only dogfood remains blocked by the activation-gate mismatch that required the DEBUG rollout/capability shim during 2.26C.
+- Clean product-card-only dogfood remains pending until the staging matrix is rerun through the private card with `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`.
 - Operational ownership and monitoring must be explicit for any longer dogfood window.
 - Secret rotation and incident response must remain ready before each session.
 

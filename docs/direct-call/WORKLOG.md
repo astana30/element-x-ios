@@ -5,6 +5,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 ## Milestones
 
 - Recorded the controlled engineering dogfood matrix result on the staging media/token/LiveKit path.
+- Replaced the unclear DEBUG fake rollout/capability shim with an explicit private dogfood activation gate.
 - Updated the controlled engineering dogfood runbook and staging session matrix after the 2.25F activeAudio pass.
 - Proved staging iOS private native audio can reach active audio through the product-gated private card.
 - Added server-side LiveKit room pre-create in SalemX call-service before participant token issuance.
@@ -21,6 +22,17 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-22 — 2.26D Private Dogfood Activation Gate Cleanup
+
+- Replaced the app-side `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` activation shim with the explicit `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` gate.
+- Kept the new gate DEBUG/integration-only; it requires `IS_RUNNING_INTEGRATION_TESTS=1`, `NATIVE_DIRECT_CALL_DIAGNOSTICS=1`, and `NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1`.
+- Confirmed `appRolloutDisabled` is still the default activation result when the private dogfood gate is absent.
+- Confirmed `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1` and `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1` do not enable rollout/capability readiness by themselves.
+- Updated the two-client diagnostic runner to pass `SIMCTL_CHILD_NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED` to simulator launches.
+- Kept Element Call routing, CallKit, push, video, trust policy, and global production activation unchanged.
+- Updated the dogfood runbook/status docs to require the explicit private dogfood gate and to keep product-card-only dogfood pending until a fresh staging smoke proves it under the new gate.
+- Recommended next phase: `2.26E — product-card-only staging dogfood smoke under explicit private dogfood gate`.
 
 ## 2026-05-22 — 2.26C Controlled Staging Dogfood Matrix
 

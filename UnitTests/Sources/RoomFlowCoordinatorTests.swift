@@ -701,7 +701,7 @@ final class RoomFlowCoordinatorTests {
     }
 
     @Test
-    func nativeDirectCallProductionActivationDryRunRuntimeFakeIsDisabledByDefault() async {
+    func nativeDirectCallProductionActivationDryRunPrivateDogfoodIsDisabledByDefault() async {
         let roomProxy = makeEligibleNativeDirectCallRoomProxy()
         let provider = AppCoordinator.makeNativeDirectCallProductionActivationDryRunProvider(roomProxy: roomProxy,
                                                                                              homeserver: "https://matrix.example.test",
@@ -718,13 +718,13 @@ final class RoomFlowCoordinatorTests {
     }
 
     @Test
-    func nativeDirectCallProductionActivationDryRunRuntimeFakeCanEnableEligibleRoomWithoutStartingCalls() async {
+    func nativeDirectCallProductionActivationDryRunPrivateDogfoodCanEnableEligibleRoomWithoutStartingCalls() async {
         let roomProxy = makeEligibleNativeDirectCallRoomProxy()
         let clientProxy = makeVerifiedPeerClientProxy()
         let provider = AppCoordinator.makeNativeDirectCallProductionActivationDryRunProvider(roomProxy: roomProxy,
                                                                                              homeserver: "https://matrix.example.test",
                                                                                              clientProxy: clientProxy,
-                                                                                             environment: makeProductionDryRunFakeEnabledEnvironment())
+                                                                                             environment: makePrivateDogfoodEnabledEnvironment())
 
         let diagnostic = await provider.nativeDirectCallProductionActivationDryRunDiagnostic()
 
@@ -740,11 +740,36 @@ final class RoomFlowCoordinatorTests {
     }
 
     @Test
-    func nativeDirectCallProductionActivationDryRunRuntimeFakeFailsClosedWithoutPeerTrust() async {
+    func nativeDirectCallProductionActivationDryRunProductAndStartGatesDoNotEnablePrivateDogfood() async {
+        var environment = makeIntegrationCommandsEnabledEnvironment()
+        environment["NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED"] = "1"
+        environment["NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED"] = "1"
+        environment["NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL"] = "http://127.0.0.1:8088"
+        let roomProxy = makeEligibleNativeDirectCallRoomProxy()
+        let clientProxy = makeVerifiedPeerClientProxy()
+        let provider = AppCoordinator.makeNativeDirectCallProductionActivationDryRunProvider(roomProxy: roomProxy,
+                                                                                             homeserver: "https://matrix.example.test",
+                                                                                             clientProxy: clientProxy,
+                                                                                             environment: environment)
+
+        let diagnostic = await provider.nativeDirectCallProductionActivationDryRunDiagnostic()
+
+        #expect(ProcessInfo.isNativeDirectCallProductUIEnabled(environment: environment))
+        #expect(ProcessInfo.isNativeDirectCallProductionStartEnabled(environment: environment))
+        #expect(ProcessInfo.isNativeDirectCallPrivateDogfoodEnabled(environment: environment) == false)
+        #expect(diagnostic.isEnabled == false)
+        #expect(diagnostic.disabledReason == .appRolloutDisabled)
+        #expect(diagnostic.isCapabilityPresent == false)
+        #expect(diagnostic.areDependenciesReady == false)
+        #expect(diagnostic.isRoomEligible)
+    }
+
+    @Test
+    func nativeDirectCallProductionActivationDryRunPrivateDogfoodFailsClosedWithoutPeerTrust() async {
         let roomProxy = makeEligibleNativeDirectCallRoomProxy()
         let provider = AppCoordinator.makeNativeDirectCallProductionActivationDryRunProvider(roomProxy: roomProxy,
                                                                                              homeserver: "https://matrix.example.test",
-                                                                                             environment: makeProductionDryRunFakeEnabledEnvironment())
+                                                                                             environment: makePrivateDogfoodEnabledEnvironment())
 
         let diagnostic = await provider.nativeDirectCallProductionActivationDryRunDiagnostic()
 
@@ -2538,13 +2563,7 @@ final class RoomFlowCoordinatorTests {
         ]
 
         for environment in disabledEnvironments {
-            #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationHarnessEnabled(environment: environment) == false)
-            #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationCommandsEnabled(environment: environment) == false)
-            #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationEncryptionEnabled(environment: environment) == false)
-            #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationLiveKitEnabled(environment: environment) == false)
-            #expect(ProcessInfo.isNativeDirectCallProductionDryRunFakeEnabled(environment: environment) == false)
-            #expect(ProcessInfo.isNativeDirectCallProductionStartEnabled(environment: environment) == false)
-            #expect(ProcessInfo.isNativeDirectCallInternalUIEnabled(environment: environment) == false)
+            expectNativeDirectCallIntegrationHarnessDisabled(environment)
         }
 
         let harnessOnlyEnvironment = [
@@ -2552,31 +2571,24 @@ final class RoomFlowCoordinatorTests {
             "NATIVE_DIRECT_CALL_DIAGNOSTICS": "1"
         ]
         #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationHarnessEnabled(environment: harnessOnlyEnvironment) == true)
-        #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationCommandsEnabled(environment: harnessOnlyEnvironment) == false)
-        #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationEncryptionEnabled(environment: harnessOnlyEnvironment) == false)
-        #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationLiveKitEnabled(environment: harnessOnlyEnvironment) == false)
-        #expect(ProcessInfo.isNativeDirectCallProductionDryRunFakeEnabled(environment: harnessOnlyEnvironment) == false)
-        #expect(ProcessInfo.isNativeDirectCallProductionStartEnabled(environment: harnessOnlyEnvironment) == false)
-        #expect(ProcessInfo.isNativeDirectCallInternalUIEnabled(environment: harnessOnlyEnvironment) == false)
+        expectNativeDirectCallIntegrationCommandsDisabled(harnessOnlyEnvironment)
 
-        let commandsEnabledEnvironment = [
-            "IS_RUNNING_INTEGRATION_TESTS": "1",
-            "NATIVE_DIRECT_CALL_DIAGNOSTICS": "1",
-            "NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED": "1"
-        ]
+        let commandsEnabledEnvironment = makeIntegrationCommandsEnabledEnvironment()
         #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationHarnessEnabled(environment: commandsEnabledEnvironment) == true)
         #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationCommandsEnabled(environment: commandsEnabledEnvironment) == true)
-        #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationEncryptionEnabled(environment: commandsEnabledEnvironment) == false)
-        #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationLiveKitEnabled(environment: commandsEnabledEnvironment) == false)
-        #expect(ProcessInfo.isNativeDirectCallProductionDryRunFakeEnabled(environment: commandsEnabledEnvironment) == false)
-        #expect(ProcessInfo.isNativeDirectCallProductionStartEnabled(environment: commandsEnabledEnvironment) == false)
-        #expect(ProcessInfo.isNativeDirectCallInternalUIEnabled(environment: commandsEnabledEnvironment) == false)
+        expectNativeDirectCallIntegrationOptionGatesDisabled(commandsEnabledEnvironment)
 
-        var fakeDryRunEnvironment = commandsEnabledEnvironment
-        fakeDryRunEnvironment["NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED"] = "1"
-        #expect(ProcessInfo.isNativeDirectCallProductionDryRunFakeEnabled(environment: fakeDryRunEnvironment) == true)
-        #expect(ProcessInfo.isNativeDirectCallProductionStartEnabled(environment: fakeDryRunEnvironment) == false)
-        #expect(ProcessInfo.isNativeDirectCallInternalUIEnabled(environment: fakeDryRunEnvironment) == false)
+        var privateDogfoodEnvironment = commandsEnabledEnvironment
+        privateDogfoodEnvironment["NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED"] = "1"
+        #expect(ProcessInfo.isNativeDirectCallPrivateDogfoodEnabled(environment: privateDogfoodEnvironment) == true)
+        #expect(ProcessInfo.isNativeDirectCallProductionStartEnabled(environment: privateDogfoodEnvironment) == false)
+        #expect(ProcessInfo.isNativeDirectCallInternalUIEnabled(environment: privateDogfoodEnvironment) == false)
+
+        var legacyFakeGateEnvironment = commandsEnabledEnvironment
+        legacyFakeGateEnvironment["NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED"] = "1"
+        #expect(ProcessInfo.isNativeDirectCallPrivateDogfoodEnabled(environment: legacyFakeGateEnvironment) == false)
+        #expect(ProcessInfo.isNativeDirectCallProductionStartEnabled(environment: legacyFakeGateEnvironment) == false)
+        #expect(ProcessInfo.isNativeDirectCallInternalUIEnabled(environment: legacyFakeGateEnvironment) == false)
 
         var productionStartEnvironment = commandsEnabledEnvironment
         productionStartEnvironment["NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED"] = "1"
@@ -2665,7 +2677,7 @@ final class RoomFlowCoordinatorTests {
         let disabledOverrideEnvironment = [
             "NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL": "http://127.0.0.1:8088"
         ]
-        var enabledOverrideEnvironment = makeProductionDryRunFakeEnabledEnvironment()
+        var enabledOverrideEnvironment = makePrivateDogfoodEnabledEnvironment()
         enabledOverrideEnvironment["NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL"] = "http://127.0.0.1:8088"
 
         #expect(AppCoordinator.nativeDirectCallProductionTokenEndpointBaseURL(homeserver: "https://matrix.example.test",
@@ -2679,7 +2691,7 @@ final class RoomFlowCoordinatorTests {
         let roomProxy = makeEligibleNativeDirectCallRoomProxy()
         let clientProxy = makeVerifiedPeerClientProxy()
         clientProxy.homeserver = "https://matrix.example.test"
-        var environment = makeProductionDryRunFakeEnabledEnvironment()
+        var environment = makePrivateDogfoodEnabledEnvironment()
         environment["NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL"] = "file:///tmp/salemx-call-service"
 
         let result = AppCoordinator.makeNativeDirectCallProductionRoomFlowOwner(roomProxy: roomProxy,
@@ -2797,13 +2809,36 @@ final class RoomFlowCoordinatorTests {
                                   members: [.mockMe, .mockBob]))
     }
 
-    private func makeProductionDryRunFakeEnabledEnvironment() -> [String: String] {
+    private func expectNativeDirectCallIntegrationHarnessDisabled(_ environment: [String: String]) {
+        #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationHarnessEnabled(environment: environment) == false)
+        expectNativeDirectCallIntegrationCommandsDisabled(environment)
+    }
+
+    private func expectNativeDirectCallIntegrationCommandsDisabled(_ environment: [String: String]) {
+        #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationCommandsEnabled(environment: environment) == false)
+        expectNativeDirectCallIntegrationOptionGatesDisabled(environment)
+    }
+
+    private func expectNativeDirectCallIntegrationOptionGatesDisabled(_ environment: [String: String]) {
+        #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationEncryptionEnabled(environment: environment) == false)
+        #expect(ProcessInfo.isNativeDirectCallDiagnosticIntegrationLiveKitEnabled(environment: environment) == false)
+        #expect(ProcessInfo.isNativeDirectCallPrivateDogfoodEnabled(environment: environment) == false)
+        #expect(ProcessInfo.isNativeDirectCallProductionStartEnabled(environment: environment) == false)
+        #expect(ProcessInfo.isNativeDirectCallInternalUIEnabled(environment: environment) == false)
+    }
+
+    private func makeIntegrationCommandsEnabledEnvironment() -> [String: String] {
         [
             "IS_RUNNING_INTEGRATION_TESTS": "1",
             "NATIVE_DIRECT_CALL_DIAGNOSTICS": "1",
-            "NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED": "1",
-            "NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED": "1"
+            "NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED": "1"
         ]
+    }
+
+    private func makePrivateDogfoodEnabledEnvironment() -> [String: String] {
+        var environment = makeIntegrationCommandsEnabledEnvironment()
+        environment["NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED"] = "1"
+        return environment
     }
 
     private func enabledProductionActivationDiagnostic() -> DirectCallProductionActivationDryRunDiagnostic {

@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.26C — controlled staging dogfood matrix recorded.
+After 2.26D — private dogfood activation gate clarified.
 
 Current checkpoints:
 - App code: 2.23C `Polish native call listener availability status` (`bb7ae2557`).
@@ -23,6 +23,7 @@ Current checkpoints:
 - Staging iOS activeAudio smoke: 2.25F passed after room pre-create.
 - Controlled dogfood runbook: 2.26B updated gates, preflight, rollback, redaction, and session matrix.
 - Controlled dogfood matrix: 2.26C passed on the staging media/token/LiveKit path, with caveat below.
+- Private dogfood activation gate cleanup: 2.26D replaced the older fake rollout/capability shim with `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`.
 - Private native audio dogfood guardrails: `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
@@ -42,7 +43,10 @@ Current proven/prepared state:
   - Relaunch during active and relaunch during ringing restored no stale active or ringing session.
   - Listener-not-armed behavior was safe: B had no active session and A cancel cleaned up safely.
   - LiveKit-off fail-closed was not run because shared staging LiveKit should not be stopped during this session.
-- The 2.26C runner path required the existing DEBUG rollout/capability shim gate to avoid `appRolloutDisabled`. Media, token issuance, and LiveKit were real staging, but this is not yet a clean product-card-only dogfood proof.
+- The 2.26D cleanup made activation explicit: `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` is DEBUG/integration-only, requires the diagnostic command gates, and is separate from the product UI and production start gates.
+- Product UI/start gates alone do not enable activation and still return `appRolloutDisabled`.
+- The legacy `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` name no longer enables the app-side activation model.
+- Media, token issuance, and LiveKit were real staging in 2.26C, but clean product-card-only dogfood still needs a fresh staging proof under the new explicit gate.
 - Controlled engineering diagnostic dogfood may continue for named engineers on staging only.
 - Broad internal dogfood, public beta, public rollout, Element Call replacement, CallKit, push/background incoming, missed calls, video, session restoration, and global production activation remain blocked.
 - Production Matrix SDK key envelope wrapping is integrated through a narrow provider seam and preserves `OnlyTrustedDevices` policy.
@@ -58,16 +62,16 @@ Required operator-local smoke env file:
 - Fill values locally only. Do not commit or paste the real file.
 
 Phase:
-2.26D — native direct-call activation gate cleanup / product-card-only dogfood readiness.
+2.26E — product-card-only staging dogfood smoke under explicit private dogfood gate.
 
 Task:
-Inspect and clean up the staging activation gate path so controlled dogfood can move from diagnostic-runner activation to a clean private product-card-only proof. Do not globally activate production direct calls. Do not change Element Call routing. Do not add CallKit, push, missed calls, video, or session restoration.
+Run a controlled product-card-only staging smoke with the explicit private dogfood activation gate. Do not globally activate production direct calls. Do not change Element Call routing. Do not add CallKit, push, missed calls, video, or session restoration.
 
 Context:
-2.26C proved the staging media/token/LiveKit path across the controlled dogfood matrix. However, the runner path required the DEBUG rollout/capability shim gate to avoid `appRolloutDisabled`. That means controlled engineering diagnostic dogfood may continue, but broader/product-card-only claims should pause until this mismatch is fixed or explicitly documented.
+2.26C proved the staging media/token/LiveKit path across the controlled dogfood matrix. 2.26D replaced the unclear DEBUG fake rollout/capability shim with `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, while preserving fail-closed defaults and keeping product UI/start gates separate.
 
 Goal:
-Decide and implement the smallest safe staging-only activation cleanup that lets the private product card use real staging token and LiveKit plumbing without depending on misleading fake rollout/capability naming, while preserving fail-closed behavior and redaction.
+Verify the private product card can start, accept, reach active audio, and hang up on the real staging token/LiveKit path with `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, without relying on the legacy fake-shim name or diagnostic fallback actions.
 
 Hard constraints:
 - No raw tokens, JWTs, keys, Matrix access tokens, Synapse admin tokens, room IDs, user IDs, peer IDs, device IDs, Redis credentials, Matrix event bodies, or full request/response bodies in output or docs.
@@ -77,24 +81,24 @@ Hard constraints:
 - Do not touch shared LiveKit server config unless separately approved.
 - Keep env files ignored and local-only.
 
-Inspection targets:
-- `ElementX/Sources/Application/AppCoordinator.swift`
-- `ElementX/Sources/Other/Extensions/ProcessInfo.swift`
-- `ElementX/Sources/Services/Calls/DirectCallMediaEngineProtocol.swift`
-- `ElementX/Sources/Services/Calls/DirectCallMediaEngineFactory.swift`
-- `ElementX/Sources/FlowCoordinators/RoomFlowCoordinator.swift`
-- `ElementX/Sources/Screens/RoomScreen/RoomScreenModels.swift`
-- `Tools/Scripts/run_native_direct_call_diagnostic_two_client.sh`
-- `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`
-- `docs/direct-call/STATUS.md`
-- `docs/direct-call/WORKLOG.md`
+Required gates:
+- `IS_RUNNING_INTEGRATION_TESTS=1`
+- `NATIVE_DIRECT_CALL_DIAGNOSTICS=1`
+- `NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1`
+- `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`
+- `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`
+- `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`
+- `NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=<staging call-service>`
 
-Questions to answer:
-A. Which exact gate currently requires the DEBUG rollout/capability shim during staging dogfood?
-B. Is the shim only naming/diagnostic plumbing, or does it affect runtime behavior beyond capability/rollout readiness?
-C. What is the smallest staging-only replacement that keeps production fail-closed?
-D. What tests prove default production remains disabled and staging dogfood remains explicit?
-E. What manual or runner smoke should prove product-card-only readiness after cleanup?
+Required proof:
+A. Readiness and trust are ready.
+B. Private card is visible in the encrypted direct 1:1 room.
+C. A taps Start audio from the product card.
+D. B taps Accept from the product card.
+E. A/B reach `productionSessionState=activeAudio` with `productionMediaFailureReason=none`.
+F. Hangup returns A/B to idle with cleanup/disconnect attempted.
+G. No diagnostic fallback action is used except redacted status polling.
+H. Element Call route remains untouched.
 
 Validation:
 - Focused Swift tests for any changed gate/config code.
@@ -103,4 +107,4 @@ Validation:
 - Docs updated only if needed, with no secrets or raw IDs.
 
 Suggested commit if code/docs change:
-Clean up native audio staging activation gate
+Record product-card-only staging dogfood smoke
