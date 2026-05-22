@@ -19,6 +19,7 @@ No tokens, JWTs, passwords, shared secrets, authorization header values, or Live
 | Controlled engineering dogfood matrix | Passed |
 | Product-card-only staging smoke | Passed under explicit private dogfood gate |
 | Controlled engineering pilot checkpoint | Allowed, conditional, staging-only |
+| Repeated-call split-brain regression proof | Passed |
 
 ## Root Cause
 
@@ -51,6 +52,9 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - The old `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` name was explicitly unset and not used during the 2.26E proof.
 - Commit `07256bf0a` fixed the receiver listener preparation gap by preparing/arming the listener from card status only when private dogfood activation is already enabled. That preparation does not start outgoing calls, request tokens, send Matrix events, or connect media.
 - The 2.27A checkpoint allows only a narrow controlled engineering dogfood pilot: named operators, DEBUG/integration builds, staging call-service and LiveKit, foreground/open encrypted direct 1:1 rooms, verified/trusted peers, private native audio card, and Element Call fallback available.
+- Commit `38fa26586` fixed the post-answer callee media/token failure split-brain risk by sending a safe terminal path to the caller.
+- The 2.27E runtime proof passed: two repeated A -> B calls reached active audio and returned idle, a forced callee post-answer `tokenHTTPUnavailable` failure did not leave the caller active, and a recovery call reached active audio again after restoring the normal staging URL.
+- Controlled engineering dogfood may resume under the same narrow staging-only constraints.
 
 ## Next Step
 
@@ -64,4 +68,4 @@ Controlled engineering dogfood may begin on the staging path under the private n
 - Element Call toolbar path unchanged and available as fallback;
 - no CallKit, push, video, broad internal rollout, public rollout, or global production activation.
 
-Next, run `2.27B — controlled engineering dogfood pilot execution report` while keeping controlled dogfood narrow and redacted.
+Next, run `2.27F — controlled dogfood pilot matrix rerun after split-brain fix` while keeping controlled dogfood narrow and redacted.

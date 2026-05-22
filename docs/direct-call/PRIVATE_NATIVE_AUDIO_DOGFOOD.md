@@ -45,6 +45,16 @@ The 2.26E product-card-only staging smoke passed under that explicit gate:
 - Commit `07256bf0a` fixed the receiver listener preparation gap by arming the listener from card status only when private dogfood activation is already enabled.
 - Listener preparation remains side-effect-limited: it does not start outgoing calls, request tokens, send Matrix events, or connect media.
 
+The 2.27D/2.27E repeated-call split-brain regression is fixed and runtime-proven:
+
+- Commit `38fa26586` made callee post-answer media/token setup failure send a safe terminal signal to the caller before local cleanup.
+- Two normal repeated A -> B calls reached `productionSessionState=activeAudio`, then hangup returned A/B to `productionSessionState=idle` with `productionMediaFailureReason=none`.
+- A forced callee post-answer failure made B fail closed with `tokenHTTPUnavailable`.
+- A received the terminal path and did not remain `activeAudio`.
+- A/B ended idle with no active session.
+- After restoring B to the normal staging URL, a recovery call reached A/B `activeAudio`, then hangup returned A/B to idle with cleanup/disconnect attempted and media failure `none`.
+- Element Call route remained untouched and no code changed during the runtime proof.
+
 ## 2.27A Pilot Checkpoint
 
 Controlled engineering dogfood pilot is allowed, conditional, and narrow.
@@ -166,6 +176,18 @@ Run each row with redacted output only. Record pass/fail plus the allowed fields
 | Element Call separation | Pass | Existing Element Call route untouched |
 | Listener preparation safety | Pass | No auto-start without the private dogfood gate; no token request, Matrix send, outgoing start, or media connect from preparation |
 
+## 2.27E Split-Brain Regression Result
+
+| Check | Result | Redacted reason |
+| --- | --- | --- |
+| Preflight | Pass | readiness `ready=true`, `reason=ok`, Redis/storage booleans true, LiveKit room provisioning true, A/B trust ready |
+| Required gates | Pass | Product UI, private dogfood, production start, and staging token base were set; legacy fake/dry-run gate unset |
+| Repeated call 1 | Pass | A -> B reached `activeAudio`, hangup -> A/B `idle`, media failure `none` |
+| Repeated call 2 | Pass | A -> B reached `activeAudio`, hangup -> A/B `idle`, no stale active session |
+| Forced callee post-answer failure | Pass | B failed closed with `tokenHTTPUnavailable`; A received terminal path and did not remain `activeAudio` |
+| Recovery | Pass | Restored normal staging URL; recovery call reached A/B `activeAudio`, then hangup -> A/B `idle` |
+| Element Call separation | Pass | Existing Element Call route untouched |
+
 ## Reporting Format
 
 Reports must be pass/fail only with redacted status fields. Allowed fields:
@@ -278,7 +300,7 @@ These block broader internal dogfood and production, but not the controlled engi
 - No video.
 - Receiver listener remains foreground/open-room scoped.
 - Session restoration is unsupported by design.
-- The product-card-only happy path is proven under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`; broader or longer dogfood must follow the 2.27A pilot checkpoint and have explicit operator ownership.
+- The product-card-only happy path and split-brain regression proof are proven under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`; broader or longer dogfood must follow the 2.27A pilot checkpoint and have explicit operator ownership.
 - Operational ownership and monitoring must be explicit for any longer dogfood window.
 - Secret rotation and incident response must remain ready before each session.
 

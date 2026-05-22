@@ -2,13 +2,13 @@
 
 ## Current Phase
 
-After 2.27A — controlled engineering dogfood pilot checkpoint recorded.
+After 2.27E — repeated-call split-brain regression runtime proof passed.
 
 ## Latest App Code Checkpoint
 
-2.26E `Enable private dogfood card listener preparation`
+2.27D `Fail closed caller when callee media setup fails after answer`
 
-Commit: `07256bf0a`
+Commit: `38fa26586`
 
 ## Latest Backend Code Checkpoint
 
@@ -81,6 +81,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Required client preflight includes A/B trust ready, encrypted 1:1 DM open on both clients, listener/card available, and no stale active session.
   - Reports must stay pass/fail and redacted, limited to readiness/trust booleans, `productionSessionState`, `productionMediaFailureReason`, terminal reason enum, and cleanup/disconnect booleans.
   - Element Call remains the fallback path and must be smoked as unchanged during pilot sessions.
+- Repeated-call split-brain regression runtime proof passed after the 2.27D post-answer failure fix:
+  - Commit `38fa26586` made callee post-answer media/token setup failure emit a safe terminal signal to the caller before local cleanup.
+  - Preflight passed with readiness `ready=true`, `reason=ok`, Redis allocation/rate-limit/storage booleans true, LiveKit room provisioning true, and A/B trust ready.
+  - Required private dogfood gates were used, and the legacy fake/dry-run gate was unset.
+  - Two normal repeated A -> B calls reached `productionSessionState=activeAudio`, then hangup returned A/B to `productionSessionState=idle` with `productionMediaFailureReason=none`.
+  - A forced callee post-answer failure was simulated safely by launching B with an unavailable local token backend; B failed closed with `tokenHTTPUnavailable`.
+  - A received the terminal path and did not remain `activeAudio`; A/B ended idle with no active session.
+  - After restoring B to the normal staging URL, a recovery call reached A/B `activeAudio`, then hangup returned A/B to idle with cleanup/disconnect attempted and media failure `none`.
+  - Element Call route remained untouched and no code changes were needed during the runtime proof.
 - Private dogfood activation is explicit and fail-closed by default:
   - `appRolloutDisabled` is produced by the production activation decision when `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` is absent.
   - `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1` can show the private card, and `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1` can allow start actions, but neither gate enables rollout/capability readiness by itself.
@@ -609,8 +618,8 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Current Gate
 
-- Controlled engineering dogfood pilot may continue on staging under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, including the product-card-only happy path that passed in 2.26E.
-- Pilot sessions must follow the 2.27A checkpoint in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
+- Controlled engineering dogfood pilot may continue on staging under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, including the product-card-only happy path and repeated-call split-brain regression proof.
+- Pilot sessions must follow the 2.27A checkpoint in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md` plus the 2.27E split-brain regression guardrail.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
 - CallKit, push/background incoming, missed calls, video, session restoration, and global production activation remain out of scope.
@@ -621,9 +630,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.27B — controlled engineering dogfood pilot execution report`
+`2.27F — controlled dogfood pilot matrix rerun after split-brain fix`
 
-Goal: run a narrow named-engineer pilot session using the 2.27A checkpoint, record pass/fail results only, verify Element Call fallback remains unchanged, and decide whether controlled engineering dogfood can continue or should pause. Keep the pilot foreground/open-room, DEBUG/integration-only, encrypted direct 1:1, verified-peer, and staging-only. Preserve fail-closed activation, trusted-device E2EE, redaction, Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope.
+Goal: rerun the controlled dogfood pilot matrix after the 2.27D split-brain fix and 2.27E runtime proof, record pass/fail results only, verify repeated calls no longer leave caller/callee split state, and verify Element Call fallback remains unchanged. Keep the pilot foreground/open-room, DEBUG/integration-only, encrypted direct 1:1, verified-peer, and staging-only. Preserve fail-closed activation, trusted-device E2EE, redaction, Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope.
 
 ## Do-Not-Touch Constraints
 

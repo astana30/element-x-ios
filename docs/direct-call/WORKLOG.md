@@ -5,6 +5,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 ## Milestones
 
 - Recorded the controlled engineering dogfood matrix result on the staging media/token/LiveKit path.
+- Recorded the repeated-call split-brain regression runtime proof after the post-answer callee media failure fix.
 - Added the final controlled engineering dogfood pilot checkpoint.
 - Recorded the product-card-only staging smoke under the explicit private dogfood gate.
 - Replaced the unclear DEBUG fake rollout/capability shim with an explicit private dogfood activation gate.
@@ -24,6 +25,19 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-22 — 2.27E Repeated-Call Split-Brain Regression Runtime Proof
+
+- Recorded the runtime proof after commit `38fa26586` fixed post-answer callee media failure propagation.
+- Preflight passed with readiness `ready=true`, `reason=ok`, Redis allocation/rate-limit/storage booleans true, LiveKit room provisioning true, and A/B trust ready.
+- Used the required private dogfood gates: product UI, private dogfood, production start, and staging token base URL.
+- Kept the legacy fake/dry-run gate unset.
+- Proved two normal repeated A -> B calls reached `productionSessionState=activeAudio`, then hangup returned A/B to `productionSessionState=idle` with `productionMediaFailureReason=none`.
+- Forced a safe callee post-answer token/backend failure by launching B with an unavailable local token backend.
+- Confirmed B failed closed with `tokenHTTPUnavailable`, A received the terminal path, A did not remain `activeAudio`, and A/B ended idle with no active session.
+- Restored B to the normal staging URL and confirmed a recovery call reached A/B `activeAudio`, then hangup returned A/B to idle with cleanup/disconnect attempted and media failure `none`.
+- Confirmed Element Call route remained untouched and no code changes were needed during the runtime proof.
+- Recommended next phase: `2.27F — controlled dogfood pilot matrix rerun after split-brain fix`.
 
 ## 2026-05-22 — 2.27A Controlled Engineering Dogfood Pilot Checkpoint
 
