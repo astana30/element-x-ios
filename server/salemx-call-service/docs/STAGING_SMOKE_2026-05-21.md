@@ -20,6 +20,7 @@ No tokens, JWTs, passwords, shared secrets, authorization header values, or Live
 | Product-card-only staging smoke | Passed under explicit private dogfood gate |
 | Controlled engineering pilot checkpoint | Allowed, conditional, staging-only |
 | Repeated-call split-brain regression proof | Passed |
+| Controlled dogfood pilot matrix rerun | Passed |
 
 ## Root Cause
 
@@ -54,11 +55,15 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - The 2.27A checkpoint allows only a narrow controlled engineering dogfood pilot: named operators, DEBUG/integration builds, staging call-service and LiveKit, foreground/open encrypted direct 1:1 rooms, verified/trusted peers, private native audio card, and Element Call fallback available.
 - Commit `38fa26586` fixed the post-answer callee media/token failure split-brain risk by sending a safe terminal path to the caller.
 - The 2.27E runtime proof passed: two repeated A -> B calls reached active audio and returned idle, a forced callee post-answer `tokenHTTPUnavailable` failure did not leave the caller active, and a recovery call reached active audio again after restoring the normal staging URL.
-- Controlled engineering dogfood may resume under the same narrow staging-only constraints.
+- The 2.27F controlled dogfood pilot matrix rerun passed after the split-brain fix, including happy path, reverse, repeated calls, decline, cancel, timeout, backend-off fail-closed, backend recovery, relaunch fail-closed, and listener/open-room unavailable behavior.
+- Backend-off immediate accept with the local staging call-service down failed closed with `connectingFailed`, `tokenHTTPUnavailable`, and no LiveKit client connect.
+- LiveKit-off remained not run because shared staging LiveKit should not be stopped during this dogfood pass.
+- Runner commands were used for matrix control/status, so 2.27F is not a claim that every matrix case was manually product-card-only. Product-card-only happy path remains separately proven by 2.26E.
+- Controlled engineering dogfood may continue under the same narrow staging-only constraints.
 
 ## Next Step
 
-Controlled engineering dogfood may begin on the staging path under the private native audio runbook constraints:
+Controlled engineering dogfood may continue on the staging path under the private native audio runbook constraints:
 
 - named engineering operators only;
 - DEBUG/integration builds only;
@@ -68,4 +73,4 @@ Controlled engineering dogfood may begin on the staging path under the private n
 - Element Call toolbar path unchanged and available as fallback;
 - no CallKit, push, video, broad internal rollout, public rollout, or global production activation.
 
-Next, run `2.27F — controlled dogfood pilot matrix rerun after split-brain fix` while keeping controlled dogfood narrow and redacted.
+Next, run `2.28A — controlled dogfood operational hardening and pilot monitoring` while keeping controlled dogfood narrow and redacted.

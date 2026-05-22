@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.27E — repeated-call split-brain regression runtime proof passed.
+After 2.27F — controlled dogfood pilot matrix rerun passed.
 
 Current checkpoints:
 - App split-brain fix: 2.27D `Fail closed caller when callee media setup fails after answer` (`38fa26586`).
@@ -19,16 +19,16 @@ Current checkpoints:
 - Controlled dogfood matrix: 2.26C passed on the staging media/token/LiveKit path.
 - Controlled engineering dogfood pilot checkpoint: 2.27A recorded in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
 - Repeated-call split-brain regression runtime proof: 2.27E passed after the 2.27D fix.
+- Controlled dogfood pilot matrix rerun: 2.27F passed after the split-brain fix.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
 Current proven/prepared state:
 - Product-card-only staging happy path passed under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`.
 - Without `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, activation remains blocked with `appRolloutDisabled`, with no Matrix send, token/media path, or LiveKit client connect.
-- The legacy `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` name was explicitly unset and not used for the product-card-only proof or 2.27E runtime proof.
-- Manual private-card Start, Accept, and Hang up passed on staging: A/B reached `productionSessionState=activeAudio`, then hangup returned A/B to `productionSessionState=idle` with `productionMediaFailureReason=none`.
+- The legacy `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` name was explicitly unset and not used for the product-card-only proof, 2.27E runtime proof, or 2.27F matrix rerun.
+- Manual private-card Start, Accept, and Hang up passed on staging in 2.26E: A/B reached `productionSessionState=activeAudio`, then hangup returned A/B to `productionSessionState=idle` with `productionMediaFailureReason=none`.
 - Receiver listener preparation is limited to private-card status after activation is already enabled; it does not start outgoing calls, request tokens, send Matrix events, or connect media.
-- 2.26C controlled matrix passed happy path, reverse direction, repeated calls, decline, cancel, timeout, backend-off fail-closed, backend recovery, relaunch fail-closed, and listener-not-armed behavior.
 - 2.27D fixed the split-brain state where callee could emit answer, fail media/token setup, and leave caller active.
 - 2.27E runtime proof passed:
   - preflight readiness/trust passed;
@@ -37,12 +37,19 @@ Current proven/prepared state:
   - A received the terminal path and did not remain `activeAudio`;
   - recovery after restoring B to the normal staging URL reached A/B `activeAudio`, then hangup returned A/B to `idle`;
   - Element Call route remained untouched and no code changed during the runtime proof.
-- LiveKit-off fail-closed remains not run because the staging LiveKit instance is shared.
+- 2.27F controlled dogfood matrix rerun passed:
+  - preflight readiness/trust passed;
+  - happy path, reverse direction, repeated calls, decline, cancel, timeout, backend-off, backend recovery, relaunch active, relaunch ringing, and listener/open-room unavailable cases passed;
+  - backend-off immediate accept failed closed with `connectingFailed`, `tokenHTTPUnavailable`, and no LiveKit client connect;
+  - LiveKit-off was not run because the staging LiveKit instance is shared;
+  - runner commands were used for matrix control/status, so this is not a claim that every matrix case was manually product-card-only;
+  - final A/B status was idle/no active session with media failure `none`;
+  - Element Call route remained untouched and no code changed during the runtime proof.
 - Element Call route remains unchanged and must stay available as fallback.
 - No CallKit, push/background incoming, missed calls, video, session restoration, broad internal rollout, public rollout, production activation, or global activation exists.
 
-Pilot approval:
-- Controlled engineering dogfood pilot may continue, conditional, and narrow.
+Pilot decision:
+- Controlled engineering dogfood may continue on the narrow staging path.
 - This is not broad internal dogfood, product beta, public rollout, production activation, or Element Call replacement.
 
 Required pilot scope:
@@ -52,6 +59,7 @@ Required pilot scope:
 - Foreground/open encrypted direct 1:1 rooms only.
 - Verified/trusted peers only.
 - Private native audio card only.
+- Runner-assisted matrix checks are allowed when explicitly reported.
 - Audio only.
 - Existing Element Call route remains visible and available as fallback.
 
@@ -63,7 +71,7 @@ Required gates:
 - `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`
 - `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`
 - `NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=<staging call-service>`
-- Do not set `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` for staging product-card-only pilot proof.
+- Do not set `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` for staging pilot proof.
 
 Required backend preflight:
 - readiness `ready=true`
@@ -82,27 +90,25 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.27F — controlled dogfood pilot matrix rerun after split-brain fix.
+2.28A — controlled dogfood operational hardening and pilot monitoring.
 
 Task:
-Rerun the controlled engineering dogfood pilot matrix after the 2.27D split-brain fix and 2.27E runtime proof. Do not modify app code or backend code unless a real runtime bug is found and explicitly approved. Do not change Element Call route. Do not wire CallKit, push, missed calls, video, session restoration, or global production activation.
+Create or update docs only for operational hardening of the controlled private native audio dogfood pilot. Do not modify app code. Do not modify backend code unless docs/scripts only are explicitly requested. Do not change Element Call route. Do not wire CallKit, push, missed calls, video, session restoration, or global production activation.
 
-Pilot matrix:
-- Happy path A -> B
-- Reverse direction B -> A
-- Repeated calls
-- Decline incoming
-- Cancel outgoing
-- Timeout
-- Backend-off recovery, if safe for the local staging setup
-- Relaunch fail-closed
-- Listener not armed / room not open behavior
-- Element Call fallback smoke
+Goal:
+Prepare the operating model for longer controlled pilot windows now that 2.27F passed. Define exactly how named engineers start, monitor, stop, report, and roll back dogfood sessions while preserving redaction and fail-closed behavior.
 
-Regression focus:
-- Repeated calls must not leave caller/callee split state.
-- If a callee post-answer token/media failure occurs, caller must receive a terminal path and must not remain `activeAudio`.
-- If the failure does not reproduce, normal repeated calls must still pass cleanly.
+Required updates:
+- Operator ownership and session sign-off checklist.
+- Pre-session backend/client readiness checklist.
+- Redacted monitoring checklist during sessions.
+- Allowed report fields and forbidden output.
+- Failure triage matrix for token/backend, LiveKit/media, trust, signalling, relaunch, timeout, stale-session, and Element Call fallback issues.
+- Stop criteria and escalation path.
+- Secret-leak response and rotation triggers.
+- Rollback commands/procedure for local staging call-service, app relaunch, and gates.
+- Clear distinction between product-card-only happy path proof and runner-assisted matrix coverage.
+- Remaining blockers for broader internal dogfood and production.
 
 Reporting format:
 - Pass/fail/not-run only.
@@ -120,29 +126,11 @@ Stop immediately if:
 - Media failure is not fail-closed or leaves stale state.
 - Caller remains `activeAudio` after callee has failed closed.
 
-Rollback:
-- Unset product/private dogfood/start gates.
-- Relaunch apps.
-- Stop local staging call-service if local.
-- Keep Element Call as fallback.
-- Rotate secrets if leakage is suspected.
-
-Expected output:
-A. Pilot preflight result.
-B. Pilot matrix result table.
-C. Split-brain regression result.
-D. Final A/B redacted status.
-E. Element Call fallback result.
-F. Any runtime bug.
-G. Whether fallback runner commands were used.
-H. Whether code/docs changed.
-I. Decision: continue controlled pilot / pause.
-
-Validation if docs change:
+Validation:
 - `git diff --check`.
 - Docs-only diff.
 - Docs secret scan.
 - Direct-call forbidden scan.
 
-Suggested commit if docs change:
-Record controlled dogfood rerun after split-brain fix
+Suggested commit:
+Add controlled dogfood operational hardening guide

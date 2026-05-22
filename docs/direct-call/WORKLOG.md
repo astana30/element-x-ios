@@ -5,6 +5,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 ## Milestones
 
 - Recorded the controlled engineering dogfood matrix result on the staging media/token/LiveKit path.
+- Recorded the controlled dogfood pilot matrix rerun after the split-brain fix.
 - Recorded the repeated-call split-brain regression runtime proof after the post-answer callee media failure fix.
 - Added the final controlled engineering dogfood pilot checkpoint.
 - Recorded the product-card-only staging smoke under the explicit private dogfood gate.
@@ -25,6 +26,25 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-22 — 2.27F Controlled Dogfood Pilot Matrix Rerun
+
+- Recorded the controlled engineering dogfood pilot matrix rerun after the 2.27D split-brain fix and 2.27E runtime proof.
+- Preflight passed with readiness `ready=true`, `reason=ok`, Redis allocation/rate-limit/storage booleans true, LiveKit room provisioning true, and A/B trust ready.
+- Used the required private dogfood gates and kept the legacy fake/dry-run gate unset.
+- Happy path A -> B and reverse B -> A reached `productionSessionState=activeAudio`, then hangup returned A/B to `productionSessionState=idle` with `productionMediaFailureReason=none`.
+- Two repeated A -> B calls reached active audio and returned idle with no stale session and no split-brain.
+- Decline, cancel, and timeout returned A/B to idle with terminal `cancelled`, `outgoingTimeout`, or `incomingTimeout` as expected.
+- Backend-off immediate accept with the local staging call-service down failed closed with `connectingFailed`, `tokenHTTPUnavailable`, and no LiveKit client connect.
+- Backend recovery reached A/B active audio and then idle after hangup.
+- Relaunch during active audio and ringing restored no stale active/ringing session and no unexpected media path.
+- Listener/open-room unavailable behavior remained safe with no active session and no unexpected media/token path.
+- LiveKit-off was not run because the staging LiveKit instance is shared.
+- Runner commands were used for matrix control/status; this is acceptable for controlled engineering dogfood matrix coverage, but it is not a claim that every matrix case was manually product-card-only.
+- Product-card-only happy path remains separately proven by 2.26E.
+- Confirmed Element Call route remained untouched, no code/docs changed during the runtime proof, and the worktree stayed clean.
+- Dogfood decision: continue controlled engineering dogfood on the narrow staging path.
+- Recommended next phase: `2.28A — controlled dogfood operational hardening and pilot monitoring`.
 
 ## 2026-05-22 — 2.27E Repeated-Call Split-Brain Regression Runtime Proof
 

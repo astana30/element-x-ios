@@ -55,6 +55,16 @@ The 2.27D/2.27E repeated-call split-brain regression is fixed and runtime-proven
 - After restoring B to the normal staging URL, a recovery call reached A/B `activeAudio`, then hangup returned A/B to idle with cleanup/disconnect attempted and media failure `none`.
 - Element Call route remained untouched and no code changed during the runtime proof.
 
+The 2.27F controlled dogfood pilot matrix rerun passed after the split-brain fix:
+
+- Preflight passed with readiness `ready=true`, `reason=ok`, Redis allocation/rate-limit/storage booleans true, LiveKit room provisioning true, and A/B trust ready.
+- Happy path, reverse direction, repeated calls, decline, cancel, timeout, backend-off fail-closed, backend recovery, relaunch during active, relaunch during ringing, and listener/open-room unavailable cases passed.
+- Backend-off immediate accept with the local staging call-service down failed closed with `connectingFailed`, `tokenHTTPUnavailable`, and no LiveKit client connect.
+- LiveKit-off was not run because the staging LiveKit instance is shared and stopping it could affect other users.
+- Runner commands were used for matrix control/status, so this is not a claim that every matrix case was manually product-card-only.
+- Product-card-only happy path remains separately proven by 2.26E.
+- Element Call route remained untouched and no code changed during the runtime proof.
+
 ## 2.27A Pilot Checkpoint
 
 Controlled engineering dogfood pilot is allowed, conditional, and narrow.
@@ -188,6 +198,28 @@ Run each row with redacted output only. Record pass/fail plus the allowed fields
 | Recovery | Pass | Restored normal staging URL; recovery call reached A/B `activeAudio`, then hangup -> A/B `idle` |
 | Element Call separation | Pass | Existing Element Call route untouched |
 
+## 2.27F Controlled Matrix Rerun Result
+
+| Check | Result | Redacted reason |
+| --- | --- | --- |
+| Preflight | Pass | readiness `ready=true`, `reason=ok`, Redis/storage booleans true, LiveKit room provisioning true, A/B trust ready |
+| Required gates | Pass | Product UI, private dogfood, production start, and staging token base were set; legacy fake/dry-run gate unset |
+| Happy path A -> B | Pass | A/B `activeAudio` -> hangup -> `idle`, media failure `none` |
+| Reverse B -> A | Pass | A/B `activeAudio` -> hangup -> `idle`, media failure `none` |
+| Repeated call 1 | Pass | A/B `activeAudio` -> `idle`, no stale session |
+| Repeated call 2 | Pass | A/B `activeAudio` -> `idle`, no split-brain |
+| Decline | Pass | A/B `idle`, terminal `cancelled`, caller received reject |
+| Cancel | Pass | A/B `idle`, terminal `cancelled`, callee received cancel |
+| Timeout | Pass | A/B `idle`, terminal `outgoingTimeout` / `incomingTimeout` |
+| Backend-off | Pass | Immediate accept with backend down failed closed: `connectingFailed`, `tokenHTTPUnavailable`, no LiveKit connect |
+| Backend recovery | Pass | Restored backend; A/B `activeAudio`, then `idle` |
+| Relaunch active | Pass | Relaunch during `activeAudio` left no active session restored |
+| Relaunch ringing | Pass | Relaunch during ringing left A/B `idle`, no media path |
+| Listener/open-room unavailable | Pass | No active session and no unexpected media/token path |
+| LiveKit-off | Not run | Shared staging LiveKit; stopping it could affect other users |
+
+2.27F used runner commands for matrix control/status. This is acceptable for controlled engineering dogfood matrix coverage, but it is not a claim that every matrix case was manually product-card-only.
+
 ## Reporting Format
 
 Reports must be pass/fail only with redacted status fields. Allowed fields:
@@ -300,7 +332,7 @@ These block broader internal dogfood and production, but not the controlled engi
 - No video.
 - Receiver listener remains foreground/open-room scoped.
 - Session restoration is unsupported by design.
-- The product-card-only happy path and split-brain regression proof are proven under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`; broader or longer dogfood must follow the 2.27A pilot checkpoint and have explicit operator ownership.
+- The product-card-only happy path, split-brain regression proof, and controlled matrix rerun are proven under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`; broader or longer dogfood must follow the 2.27A pilot checkpoint and have explicit operator ownership.
 - Operational ownership and monitoring must be explicit for any longer dogfood window.
 - Secret rotation and incident response must remain ready before each session.
 
