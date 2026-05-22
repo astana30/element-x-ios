@@ -264,9 +264,124 @@ Never capture or share:
 - raw user IDs;
 - raw peer IDs;
 - raw device IDs;
+- LiveKit room names;
 - Redis URLs with credentials;
 - Matrix event bodies;
 - full backend request or response bodies.
+
+### 2.29E Redacted Monitoring Contract
+
+This contract is the only approved monitoring/status shape for controlled native-audio dogfood. It covers manual pilot notes, runner output, screenshots, bug reports, copied logs, and any summary pasted into chat or docs.
+
+The contract is intentionally low-cardinality. It may describe what happened, but it must not identify the Matrix room, participants, devices, LiveKit room, credentials, request payload, Matrix event body, or backend response body.
+
+#### App And Card Status
+
+Allowed app/card fields:
+
+- redacted card state enum: `hidden`, `unavailable`, `canStart`, `outgoingRinging`, `incomingRinging`, `connecting`, `activeAudio`, `failed`, `ended`;
+- unavailable reason enum;
+- failure reason enum;
+- receiver availability enum;
+- restoration availability enum;
+- action availability booleans;
+- loading boolean;
+- user-safe card copy from the UI, when it does not contain identifiers.
+
+Do not report card internals that are only useful for debugging the implementation, including raw last-action traces, raw action reasons, backend request payloads, Matrix event content, endpoint values, or any room/user/device identifier. If a screenshot is used, crop or redact anything outside the private native card that could identify the room or participants.
+
+#### Runner And Production Status
+
+Allowed runner/status fields:
+
+- `productionSessionState`;
+- `productionHasActiveSession`;
+- `productionEncryptionState`;
+- `productionMediaFailureReason`;
+- `productionLastTerminalReason`;
+- `productionMediaConnectAttempted`;
+- `productionLiveKitClientConnectAttempted`;
+- `productionMediaDisconnectAttempted`;
+- `productionMediaCleanupAttempted`;
+- `productionRoomAttached`;
+- `productionListenerAvailable`;
+- `productionListenerStarted`;
+- `productionSessionRestorationSupported`;
+- activation enabled boolean and disabled reason enum;
+- pass/fail/not-run result per matrix row.
+
+Runner output must not include raw room IDs, user IDs, peer IDs, device IDs, Matrix event bodies, LiveKit room names, tokens, JWTs, keys, backend response bodies, or credentialed endpoint values. If a runner command prints anything outside the fields above, stop and redact before sharing.
+
+#### Backend Readiness
+
+Allowed call-service readiness fields:
+
+- HTTP status;
+- `ready`;
+- `reason`;
+- `allocationStoreConfigured`;
+- `allocationStoreShared`;
+- `allocationStoreConnected`;
+- `rateLimitConfigured`;
+- `rateLimitShared`;
+- `rateLimitConnected`;
+- `storageKeyConfigured`;
+- `liveKitRoomProvisioningConfigured`.
+
+The readiness payload must not be expanded with URLs, Redis keys, raw Matrix identifiers, LiveKit room names, tokens, secrets, request bodies, response bodies, or credential values.
+
+#### Backend Errors
+
+Allowed backend failure reporting:
+
+- HTTP status class or exact status;
+- Matrix-style safe `errcode`;
+- safe `retry_after_ms` presence/number for rate limiting;
+- safe reason enum such as rate limited, allocation unavailable, room provisioning unavailable, unauthorized, forbidden, or invalid request;
+- whether token issuance was blocked before a participant token was returned.
+
+Do not paste full backend JSON if it contains request echo, identifiers, endpoint values, or token-shaped fields. Do not paste Authorization headers, Synapse admin tokens, Matrix access tokens, participant tokens, LiveKit API keys/secrets, Redis URLs, or LiveKit room names.
+
+#### LiveKit And Media State
+
+Allowed LiveKit/media reporting:
+
+- media failure enum;
+- LiveKit client connect attempted boolean;
+- media connect attempted boolean;
+- cleanup/disconnect attempted booleans;
+- fail-closed result;
+- shared LiveKit-off status as `not-run` with a safe reason.
+
+Do not report participant JWTs, LiveKit API key/secret values, LiveKit room names, SDP, ICE candidates, media keys, server logs containing credentials, or full WebSocket/request/response bodies.
+
+#### Too Diagnostic For Pilot Reports
+
+These existing fields may help local engineering debugging, but they are too diagnostic for normal pilot reports unless they are already reduced to a safe enum/boolean:
+
+- raw action reason strings;
+- raw last-action traces;
+- raw backend request/response bodies;
+- endpoint URLs beyond a non-sensitive service label;
+- token response shape dumps;
+- decoded JWT claims;
+- Redis allocation keys or values;
+- LiveKit RoomService room names;
+- Matrix event envelopes or encrypted payload bodies.
+
+Use the smallest safe enum instead. For example, report `tokenHTTPUnavailable`, `liveKitNetworkFailed`, `connectingFailed`, `outgoingTimeout`, `incomingTimeout`, `cancelled`, `appRolloutDisabled`, or `none`.
+
+#### Guard Tests And Scans
+
+Before sharing or committing pilot material, run the applicable guards:
+
+- `git diff --check`;
+- docs-only diff review for docs changes;
+- docs secret scan for token/JWT/key/secret-looking literals;
+- `Tools/Scripts/verify_direct_call_forbidden_scan.sh`;
+- targeted card/status tests when code changes affect the redacted contract.
+
+Any monitoring expansion must add tests proving rendering/status refresh remains side-effect-free: no Matrix send, no token request, no media connect, and no LiveKit connect from rendering or status display.
 
 ### Failure Triage
 
@@ -287,6 +402,7 @@ Never capture or share:
 Stop the pilot immediately if:
 
 - any forbidden secret, token, key, raw identifier, or Matrix event body appears in output, screenshot, logs, docs, or chat;
+- any LiveKit room name appears in output, screenshot, logs, docs, or chat;
 - a call starts without the required gates;
 - Element Call route behavior changes;
 - an untrusted peer or device can connect;
@@ -339,9 +455,13 @@ Final:
 - A state:
 - B state:
 - media failure:
+- terminal reason:
+- media connect attempted:
+- LiveKit connect attempted:
 - cleanup/disconnect:
 - runtime bug:
 - runner-assisted checks used:
+- redaction issue: yes/no
 - decision: continue/pause
 ```
 
@@ -584,6 +704,9 @@ Reports must be pass/fail only with redacted status fields. Allowed fields:
 
 - readiness booleans;
 - trust booleans;
+- redacted card state/reason enums;
+- listener availability booleans/enums;
+- activation reason enum;
 - `productionSessionState`;
 - `productionMediaFailureReason`;
 - terminal reason enum;
@@ -615,6 +738,7 @@ Before sharing logs, screenshots, runner output, or bug reports, verify they con
 - Raw user IDs.
 - Raw peer IDs.
 - Raw device IDs.
+- LiveKit room names.
 - Endpoint credentials.
 - LiveKit API secrets.
 - Redis URLs with credentials.
@@ -635,9 +759,9 @@ During each pilot session, monitor only redacted surfaces:
 - terminal reason enum;
 - cleanup and disconnect booleans.
 
-Do not capture raw backend request bodies, full response bodies, Matrix event bodies, bearer tokens, LiveKit participant tokens, JWTs, raw room IDs, raw user IDs, raw peer IDs, raw device IDs, Redis URLs with credentials, or LiveKit API secrets.
+Do not capture raw backend request bodies, full response bodies, Matrix event bodies, bearer tokens, LiveKit participant tokens, JWTs, raw room IDs, raw user IDs, raw peer IDs, raw device IDs, LiveKit room names, Redis URLs with credentials, or LiveKit API secrets.
 
-Rotate affected credentials if any secret, token, JWT, key, credentialed endpoint, or raw identifier appears in shared output, screenshots, logs, shell history, or docs. Pause the pilot until the leak source is removed and redaction is re-verified.
+Rotate affected credentials if any secret, token, JWT, key, credentialed endpoint, raw identifier, or LiveKit room name appears in shared output, screenshots, logs, shell history, or docs. Pause the pilot until the leak source is removed and redaction is re-verified.
 
 ## Stop Conditions
 

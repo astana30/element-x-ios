@@ -25,6 +25,8 @@ No tokens, JWTs, passwords, shared secrets, authorization header values, or Live
 | Controlled dogfood pilot session 1 | Passed |
 | Controlled dogfood pilot session 2 | Passed |
 | Broader internal dogfood hardening plan | Recorded |
+| Native card failure-copy hardening | Recorded |
+| Redacted pilot monitoring contract | Recorded |
 
 ## Root Cause
 
@@ -74,6 +76,8 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - Backend-off recovery was not repeated during session 2 because the local staging call-service stayed up for the manual pilot; backend-off remains covered by the 2.27F matrix.
 - No rollback was needed, no stop criteria triggered, no runtime bug was observed, no redaction issue was found, and Element Call remained untouched.
 - The 2.29B hardening plan keeps broader internal dogfood and non-engineering users blocked. It requires a fail-closed internal rollout or allowlist model, non-engineering-safe UX, redacted telemetry, owned staging operations, support/rollback, security review, and multi-operator/device soak before any future narrow non-engineering internal pilot.
+- Commit `71056f143` hardened private native audio card failure copy and added a DEBUG-only redacted card status contract for the current engineering dogfood scope.
+- The 2.29E runbook update defines the approved redacted monitoring/status contract for app/card, runner, backend readiness, backend errors, and LiveKit/media state. Raw identifiers, secrets, tokens, Matrix event bodies, full request/response bodies, Redis credential URLs, and LiveKit room names remain forbidden in pilot reports.
 - Controlled engineering dogfood may continue under the same narrow staging-only constraints.
 
 ## Next Step
@@ -88,4 +92,4 @@ Controlled engineering dogfood may continue on the staging path under the privat
 - Element Call toolbar path unchanged and available as fallback;
 - no CallKit, push, video, broad internal rollout, public rollout, or global production activation.
 
-Next, continue with `2.29C — native audio internal pilot rollout and UX hardening design` while keeping controlled dogfood narrow and redacted.
+Next, continue with `2.30A — fail-closed internal pilot rollout and allowlist design` while keeping controlled dogfood narrow and redacted.

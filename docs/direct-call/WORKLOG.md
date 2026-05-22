@@ -4,6 +4,8 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Documented the redacted pilot monitoring/status contract.
+- Hardened private native audio card failure copy and DEBUG-only redacted card status.
 - Recorded the controlled engineering dogfood matrix result on the staging media/token/LiveKit path.
 - Recorded the broader internal dogfood hardening plan.
 - Recorded controlled engineering dogfood pilot session 2.
@@ -30,6 +32,25 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-22 — 2.29E Redacted Pilot Monitoring Contract
+
+- Documented the controlled dogfood monitoring contract for app/card status, runner output, backend readiness, backend errors, and LiveKit/media state.
+- Allowed only low-cardinality booleans/enums: readiness, trust, card state/reasons, listener/restoration availability, action availability, activation reason, session state, terminal reason, media failure, media/LiveKit connect attempts, cleanup/disconnect attempts, and pass/fail/not-run.
+- Marked diagnostic-only fields as too sensitive for normal pilot reports, including raw last-action traces, backend request/response bodies, decoded token/JWT details, Redis allocation keys/values, LiveKit room names, and Matrix event envelopes.
+- Added LiveKit room names to forbidden pilot output because they may be correlatable.
+- Updated the pilot report template with terminal reason, media/LiveKit connect attempts, and redaction issue status.
+- Kept broader internal dogfood and non-engineering users blocked.
+- Recommended next phase: `2.30A — fail-closed internal pilot rollout and allowlist design`.
+
+## 2026-05-22 — 2.29D Native Audio Card Failure Copy Hardening
+
+- Hardened private native audio room-card copy for backend unavailable, LiveKit/audio unavailable, trust unavailable, invalid room, listener/open-room required, timeout, cancel, decline, ended, and unknown failure states.
+- Added a DEBUG-only redacted card status contract that exposes state/reason enums, listener/restoration enums, loading/action booleans, and no raw identifiers, tokens, URLs, Matrix event bodies, or LiveKit room names.
+- Removed raw last-action status text from the product card UI and kept it out of normal pilot reporting.
+- Added product-card previews for main states and focused tests covering safe copy, redacted status, and side-effect-free rendering/status refresh.
+- Confirmed the change did not broaden activation, replace Element Call, add CallKit/push/video, or enable global production direct calls.
+- Commit: `71056f143`.
 
 ## 2026-05-22 — 2.29B Broader Internal Dogfood Hardening Plan
 

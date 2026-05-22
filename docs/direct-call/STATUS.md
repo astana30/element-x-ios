@@ -2,13 +2,13 @@
 
 ## Current Phase
 
-After 2.29B — broader internal dogfood hardening plan recorded.
+After 2.29E — redacted pilot monitoring contract documented.
 
 ## Latest App Code Checkpoint
 
-2.27D `Fail closed caller when callee media setup fails after answer`
+2.29D `Harden native audio card failure copy`
 
-Commit: `38fa26586`
+Commit: `71056f143`
 
 ## Latest Backend Code Checkpoint
 
@@ -133,6 +133,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Smallest safe expansion remains more named engineering operators/devices on the same staging, foreground/open-room, verified-peer, private-card-only path.
   - Required hardening areas are activation/rollout model, UX/failure copy, incoming behavior and foreground limitation, monitoring/telemetry redaction, backend/staging operations, support/rollback, security review, and soak testing.
   - A future narrow non-engineering internal pilot requires a fail-closed internal rollout/allowlist model, non-engineering-safe UX, redacted telemetry, owned staging operations, Element Call fallback smoke, security review, and multi-operator/device soak.
+- Native audio card UX/failure copy and monitoring status are hardened for the current engineering dogfood scope:
+  - Private card failure states now map backend, LiveKit/audio, trust, invalid-room, listener/open-room, timeout, cancel, decline, ended, and unknown failures to user-safe copy.
+  - A DEBUG-only redacted card status contract exposes only state/reason enums, listener/restoration enums, loading/action booleans, and no raw identifiers, tokens, URLs, Matrix event bodies, or LiveKit room names.
+  - Product card rendering remains side-effect-free: rendering/status display does not send Matrix events, request tokens, connect media, or connect LiveKit.
+  - This does not broaden activation; the private dogfood gate remains DEBUG/integration-only, and broad internal/non-engineering dogfood remains blocked.
+- Redacted pilot monitoring contract is documented:
+  - Allowed app/card, runner, backend readiness, backend error, and LiveKit/media fields are enumerated.
+  - Raw Matrix access tokens, Synapse admin tokens, LiveKit API secrets, participant JWTs/tokens, media keys, raw room/user/peer/device IDs, Matrix event bodies, full request/response bodies, Redis credential URLs, and LiveKit room names remain forbidden.
+  - Pilot reports remain pass/fail/not-run with readiness/trust booleans, session/terminal/media enums, cleanup/disconnect booleans, activation reason enum, and non-identifying timestamps/session numbers only.
 - Private dogfood activation is explicit and fail-closed by default:
   - `appRolloutDisabled` is produced by the production activation decision when `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` is absent.
   - `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1` can show the private card, and `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1` can allow start actions, but neither gate enables rollout/capability readiness by itself.

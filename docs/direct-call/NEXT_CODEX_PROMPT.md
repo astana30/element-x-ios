@@ -7,9 +7,10 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.29B — broader internal dogfood hardening plan recorded.
+After 2.29E — redacted pilot monitoring contract documented.
 
 Current checkpoints:
+- App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
 - App split-brain fix: 2.27D `Fail closed caller when callee media setup fails after answer` (`38fa26586`).
 - App activation gate cleanup: 2.26D `Clarify native call private dogfood activation gate` (`76f2064ca`).
 - App listener preparation: 2.26E `Enable private dogfood card listener preparation` (`07256bf0a`).
@@ -19,6 +20,7 @@ Current checkpoints:
 - Controlled dogfood pilot session 1: 2.28B recorded in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
 - Controlled dogfood pilot session 2: 2.28C recorded in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
 - Broader internal dogfood hardening plan: 2.29B recorded in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
+- Redacted pilot monitoring contract: 2.29E recorded in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -80,6 +82,12 @@ Current proven/prepared state:
   - controlled engineering dogfood may continue and slightly expand only to more named engineering operators/devices on the same staging path;
   - the future non-engineering internal pilot remains blocked until activation/rollout, UX/failure copy, incoming behavior, monitoring/telemetry, backend/staging operations, support/rollback, security review, and soak testing are hardened;
   - public rollout, production activation, Element Call replacement, CallKit, push/background incoming, missed calls, video, and session restoration remain out of scope.
+- 2.29D/2.29E hardening:
+  - private native card failure copy now maps backend, LiveKit/audio, trust, invalid-room, listener/open-room, timeout, cancel, decline, ended, and unknown failures to user-safe text;
+  - DEBUG-only card redacted status exposes state/reason enums, listener/restoration enums, loading/action booleans, and no raw identifiers or credential-bearing values;
+  - rendering/status display remains side-effect-free: no Matrix send, no token request, no media connect, and no LiveKit connect;
+  - the dogfood runbook now defines the exact redacted monitoring contract for app/card status, runner output, backend readiness, backend errors, and LiveKit/media state;
+  - LiveKit room names are treated as forbidden pilot report output because they may be correlatable.
 - Element Call route remains unchanged and must stay available as fallback.
 - No CallKit, push/background incoming, missed calls, video, session restoration, broad internal rollout, public rollout, production activation, or global activation exists.
 
@@ -127,35 +135,40 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.29C — native audio internal pilot rollout and UX hardening design.
+2.30A — fail-closed internal pilot rollout and allowlist design.
 
 Task:
-Design the fail-closed rollout/allowlist model and non-engineering-safe UX/failure-state plan required before any future narrow non-engineering internal pilot. Do not enable broader dogfood. Do not modify app/backend code unless explicitly requested after the design is reviewed. Do not change Element Call route. Do not wire CallKit, push, missed calls, video, session restoration, or global production activation.
+Design the fail-closed internal pilot rollout/allowlist model required before any future narrow non-engineering internal pilot. Do not enable broader dogfood. Do not implement app/backend code unless explicitly requested after the design is reviewed. Do not change Element Call route. Do not wire CallKit, push, missed calls, video, session restoration, or global production activation.
 
 Goal:
-Turn the 2.29B hardening plan into concrete implementation proposals, test requirements, and rollout guardrails while keeping the current dogfood engineering-only.
+Turn the remaining 2.29B hardening plan into concrete rollout/allowlist proposals, test requirements, and rollout guardrails while keeping the current dogfood engineering-only. Build on the 2.29D user-safe card copy and the 2.29E redacted monitoring contract.
 
 Required design output:
 A. Files inspected.
 B. Proposed fail-closed internal rollout/allowlist model.
-C. UX/failure states to add before non-engineering users.
-D. Monitoring/telemetry redaction plan.
+C. Required server capability or allowlist inputs.
+D. Required client-side gate model and default/release behavior.
 E. Backend/staging operational requirements.
 F. Support and rollback workflow.
 G. Security review checklist.
 H. Soak/test matrix before non-engineering users.
 I. Explicit out-of-scope list.
-J. Recommended implementation order.
+J. Required tests and runtime proofs.
+K. Recommended implementation order.
 
 Allowed report fields:
 - readiness booleans;
 - trust booleans;
+- redacted card state/reason enums;
+- listener availability booleans/enums;
+- activation reason enum;
 - `productionSessionState`;
 - `productionMediaFailureReason`;
 - terminal reason enum;
+- media/LiveKit connect attempted booleans;
 - cleanup/disconnect booleans;
 - pass/fail/not-run;
-- safe owner/session labels without raw identifiers.
+- timestamp/session number if non-identifying.
 
 Forbidden output:
 - raw tokens;
@@ -170,12 +183,13 @@ Forbidden output:
 - raw user IDs;
 - raw peer IDs;
 - raw device IDs;
+- LiveKit room names;
 - Redis URLs with credentials;
 - Matrix event bodies;
 - full request or response bodies.
 
 Stop immediately if:
-- any raw secret, token, JWT, key, room ID, user ID, peer ID, device ID, endpoint credential, or Matrix event body appears in output;
+- any raw secret, token, JWT, key, room ID, user ID, peer ID, device ID, LiveKit room name, endpoint credential, or Matrix event body appears in output;
 - a call starts without required gates;
 - Element Call route behavior changes;
 - an untrusted peer or device can connect;
@@ -191,4 +205,4 @@ Validation if docs change:
 - Direct-call forbidden scan.
 
 Suggested commit if docs change:
-Document internal pilot rollout and UX hardening design
+Document internal pilot allowlist design
