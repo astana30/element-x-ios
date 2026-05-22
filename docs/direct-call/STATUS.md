@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.26E — product-card-only staging smoke passed under explicit private dogfood gate.
+After 2.27A — controlled engineering dogfood pilot checkpoint recorded.
 
 ## Latest App Code Checkpoint
 
@@ -72,6 +72,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Element Call route remained untouched, with no CallKit, push, video, or global production activation.
   - Runtime issue fixed in `07256bf0a`: the private product card now prepares/arms the receiver listener from card status only when private dogfood activation is already enabled.
   - Listener preparation remains side-effect-limited: it does not start outgoing calls, request tokens, send Matrix events, or connect media.
+- Controlled engineering dogfood pilot checkpoint is recorded:
+  - Pilot is allowed only for named engineering operators on the staging path.
+  - Required scope remains DEBUG/integration builds, foreground/open encrypted direct 1:1 rooms, verified/trusted peers, private native audio card, staging call-service, and staging LiveKit.
+  - Required gates remain `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`, `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`, and the staging token base URL, with the diagnostic command gates for the DEBUG/integration harness.
+  - The legacy fake/dry-run gate must remain unset for staging product-card-only proof and pilot sessions.
+  - Required backend preflight includes `ready=true`, `reason=ok`, Redis allocation/rate-limit connectivity, storage key configured, LiveKit room provisioning configured, and Synapse validation smoke accepted or passing.
+  - Required client preflight includes A/B trust ready, encrypted 1:1 DM open on both clients, listener/card available, and no stale active session.
+  - Reports must stay pass/fail and redacted, limited to readiness/trust booleans, `productionSessionState`, `productionMediaFailureReason`, terminal reason enum, and cleanup/disconnect booleans.
+  - Element Call remains the fallback path and must be smoked as unchanged during pilot sessions.
 - Private dogfood activation is explicit and fail-closed by default:
   - `appRolloutDisabled` is produced by the production activation decision when `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` is absent.
   - `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1` can show the private card, and `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1` can allow start actions, but neither gate enables rollout/capability readiness by itself.
@@ -598,9 +607,10 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Added `server/salemx-call-service/scripts/check_staging_readiness.sh` to query readiness and print only redacted readiness fields.
   - The deployment scaffold does not include real credentials, does not run automatically, and does not activate any iOS or public/native call route.
 
-## Current Blocker
+## Current Gate
 
-- Controlled engineering dogfood may continue on staging under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, including the product-card-only happy path that passed in 2.26E.
+- Controlled engineering dogfood pilot may continue on staging under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, including the product-card-only happy path that passed in 2.26E.
+- Pilot sessions must follow the 2.27A checkpoint in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
 - CallKit, push/background incoming, missed calls, video, session restoration, and global production activation remain out of scope.
@@ -611,9 +621,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.27A — controlled engineering dogfood pilot runbook/final checkpoint`
+`2.27B — controlled engineering dogfood pilot execution report`
 
-Goal: define the final operator checklist for a narrow named-engineer pilot using the proven staging product-card-only happy path and the earlier controlled matrix. Keep the pilot foreground/open-room, DEBUG/integration-only, encrypted direct 1:1, verified-peer, and staging-only. Preserve fail-closed activation, trusted-device E2EE, redaction, Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope.
+Goal: run a narrow named-engineer pilot session using the 2.27A checkpoint, record pass/fail results only, verify Element Call fallback remains unchanged, and decide whether controlled engineering dogfood can continue or should pause. Keep the pilot foreground/open-room, DEBUG/integration-only, encrypted direct 1:1, verified-peer, and staging-only. Preserve fail-closed activation, trusted-device E2EE, redaction, Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope.
 
 ## Do-Not-Touch Constraints
 

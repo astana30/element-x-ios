@@ -18,6 +18,7 @@ No tokens, JWTs, passwords, shared secrets, authorization header values, or Live
 | iOS private native audio staging smoke | `activeAudio`, then `idle` after hangup |
 | Controlled engineering dogfood matrix | Passed |
 | Product-card-only staging smoke | Passed under explicit private dogfood gate |
+| Controlled engineering pilot checkpoint | Allowed, conditional, staging-only |
 
 ## Root Cause
 
@@ -49,6 +50,7 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - The 2.26E product-card-only staging smoke proved the private card under that explicit gate: without the gate activation stayed blocked with `appRolloutDisabled`, and with the gate A Start -> B incoming -> B Accept -> A/B active audio -> hangup -> A/B idle passed with media failure `none`.
 - The old `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` name was explicitly unset and not used during the 2.26E proof.
 - Commit `07256bf0a` fixed the receiver listener preparation gap by preparing/arming the listener from card status only when private dogfood activation is already enabled. That preparation does not start outgoing calls, request tokens, send Matrix events, or connect media.
+- The 2.27A checkpoint allows only a narrow controlled engineering dogfood pilot: named operators, DEBUG/integration builds, staging call-service and LiveKit, foreground/open encrypted direct 1:1 rooms, verified/trusted peers, private native audio card, and Element Call fallback available.
 
 ## Next Step
 
@@ -62,4 +64,4 @@ Controlled engineering dogfood may begin on the staging path under the private n
 - Element Call toolbar path unchanged and available as fallback;
 - no CallKit, push, video, broad internal rollout, public rollout, or global production activation.
 
-Next, run `2.27A — controlled engineering dogfood pilot runbook/final checkpoint` while keeping controlled dogfood narrow and redacted.
+Next, run `2.27B — controlled engineering dogfood pilot execution report` while keeping controlled dogfood narrow and redacted.

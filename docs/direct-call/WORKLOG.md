@@ -5,6 +5,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 ## Milestones
 
 - Recorded the controlled engineering dogfood matrix result on the staging media/token/LiveKit path.
+- Added the final controlled engineering dogfood pilot checkpoint.
 - Recorded the product-card-only staging smoke under the explicit private dogfood gate.
 - Replaced the unclear DEBUG fake rollout/capability shim with an explicit private dogfood activation gate.
 - Updated the controlled engineering dogfood runbook and staging session matrix after the 2.25F activeAudio pass.
@@ -23,6 +24,19 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-22 — 2.27A Controlled Engineering Dogfood Pilot Checkpoint
+
+- Recorded the final pilot readiness decision: controlled engineering dogfood pilot is allowed, conditional, and narrow.
+- Kept the approval limited to named engineering operators, DEBUG/integration builds, staging call-service, staging LiveKit, foreground/open encrypted direct 1:1 rooms, verified/trusted peers, private native audio card, and audio only.
+- Kept broad internal dogfood, product beta, public rollout, production activation, Element Call replacement, CallKit, push/background incoming, missed calls, video, and session restoration blocked.
+- Clarified the proof chain: 2.25F staging active audio, 2.26C controlled matrix, 2.26D explicit private dogfood gate in `76f2064ca`, and 2.26E product-card-only smoke plus listener preparation in `07256bf0a`.
+- Documented that the old `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` name must remain unset for staging product-card-only proof and pilot sessions.
+- Added pilot requirements for backend readiness, Redis allocation/rate-limit connectivity, storage-key configuration, LiveKit room provisioning, Synapse validation smoke, A/B trust, encrypted 1:1 room availability, listener/card availability, and no stale active session.
+- Added Element Call fallback smoke to the pilot matrix.
+- Tightened pilot reporting to pass/fail and redacted status fields only.
+- Added explicit stop and rollback criteria for leakage, missing gates, Element Call route changes, untrusted peer/device connection, stale active session survival, invalid token issuance, and non-fail-closed media failures.
+- Recommended next phase: `2.27B — controlled engineering dogfood pilot execution report`.
 
 ## 2026-05-22 — 2.26E Product-Card-Only Staging Smoke
 

@@ -45,6 +45,22 @@ The 2.26E product-card-only staging smoke passed under that explicit gate:
 - Commit `07256bf0a` fixed the receiver listener preparation gap by arming the listener from card status only when private dogfood activation is already enabled.
 - Listener preparation remains side-effect-limited: it does not start outgoing calls, request tokens, send Matrix events, or connect media.
 
+## 2.27A Pilot Checkpoint
+
+Controlled engineering dogfood pilot is allowed, conditional, and narrow.
+
+This approval is only for named engineering operators on the staging path with the explicit gates below. It is not broad internal dogfood, product beta, public rollout, production activation, or replacement of the existing Element Call route.
+
+The checkpoint depends on the full proof chain:
+
+- 2.25F proved staging active audio after call-service LiveKit room pre-create.
+- 2.26C proved the redacted controlled matrix on the real staging media/token/LiveKit path.
+- 2.26D commit `76f2064ca` made private dogfood activation explicit through `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`.
+- 2.26E commit `07256bf0a` prepared the receiver listener from private-card status only after activation is already enabled.
+- 2.26E product-card-only smoke proved manual private-card Start, Accept, and Hang up on staging without the legacy fake/dry-run gate.
+
+Before every pilot session, an operator must name the participating engineers, confirm the staging backend and client preflight below, keep Element Call available as fallback, and collect only the redacted reporting fields listed in this runbook.
+
 ## Allowed Scope
 
 - Named engineering operators only.
@@ -57,6 +73,8 @@ The 2.26E product-card-only staging smoke passed under that explicit gate:
 - Receiver listener must be available or explicitly armed.
 - Existing Element Call phone/video buttons remain visible, unchanged, and available as the rollback call path.
 - Audio only.
+
+Anything outside this scope is not approved by this checkpoint.
 
 ## Required Gates
 
@@ -76,6 +94,8 @@ Use the staging call-service base URL for `NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_B
 
 `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` is DEBUG/integration-only and requires the diagnostic command gates above. `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1` shows the private card, and `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1` allows start actions, but neither gate enables the production activation decision by itself. Do not use the old `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` name for new dogfood sessions.
 
+The old fake/dry-run gate must remain unset for staging product-card-only proof and pilot sessions.
+
 ## Operational Preflight
 
 Complete this checklist before every dogfood session:
@@ -85,13 +105,14 @@ Complete this checklist before every dogfood session:
 - Redis rate-limit store is configured, shared, and connected.
 - `storageKeyConfigured=true`.
 - `liveKitRoomProvisioningConfigured=true`.
-- Synapse validation smoke is available and passing.
+- Synapse validation smoke is available and passing, or the session is blocked until it is explicitly accepted as a prerequisite by the operator.
 - Token TTL and allocation TTL remain bounded.
 - Staging env files are ignored by git and mode `600`.
 - A/B app launch succeeds through the diagnostic runner.
 - A/B trust diagnostics are ready.
 - The encrypted direct 1:1 DM is open on both clients.
 - Receiver listener is available or armed.
+- No stale active native direct-call session is present.
 - Existing Element Call toolbar path is visible and available as fallback.
 
 ## Session Matrix
@@ -113,6 +134,7 @@ Run each row with redacted output only. Record pass/fail plus the allowed fields
 | Relaunch during ringing | Relaunch one side while ringing | No stale ringing/active session restored |
 | Relaunch during active | Relaunch one side while active | No stale active session restored |
 | Listener not armed / room not open | Start without receiver listener availability | Fail closed or no incoming presentation; no stale session |
+| Element Call fallback smoke | Use the existing Element Call route outside native-card actions | Existing route remains available and unchanged |
 
 ## 2.26C Matrix Result
 
@@ -160,6 +182,15 @@ Reports must be pass/fail only with redacted status fields. Allowed fields:
 
 Do not include raw request or response bodies.
 
+A pilot report should include only:
+
+- pass/fail per matrix row;
+- redacted preflight booleans;
+- redacted final A/B status;
+- whether any fallback runner command was used;
+- whether Element Call remained available as fallback;
+- whether the session should continue or pause.
+
 ## Redaction Checklist
 
 Before sharing logs, screenshots, runner output, or bug reports, verify they contain none of the following:
@@ -179,6 +210,23 @@ Before sharing logs, screenshots, runner output, or bug reports, verify they con
 
 Only share redacted booleans, enums, user-safe reasons, and non-identifying status fields.
 
+## Monitoring And Secret Rotation
+
+During each pilot session, monitor only redacted surfaces:
+
+- call-service readiness booleans and reason;
+- Redis allocation/rate-limit connected booleans;
+- LiveKit room provisioning configured boolean;
+- client trust booleans;
+- `productionSessionState`;
+- `productionMediaFailureReason`;
+- terminal reason enum;
+- cleanup and disconnect booleans.
+
+Do not capture raw backend request bodies, full response bodies, Matrix event bodies, bearer tokens, LiveKit participant tokens, JWTs, raw room IDs, raw user IDs, raw peer IDs, raw device IDs, Redis URLs with credentials, or LiveKit API secrets.
+
+Rotate affected credentials if any secret, token, JWT, key, credentialed endpoint, or raw identifier appears in shared output, screenshots, logs, shell history, or docs. Pause the pilot until the leak source is removed and redaction is re-verified.
+
 ## Stop Conditions
 
 Stop dogfood immediately if any of the following occurs:
@@ -191,6 +239,7 @@ Stop dogfood immediately if any of the following occurs:
 - A stale active session survives cleanup or relaunch.
 - Backend returns a token for an invalid room, peer, trust, or membership condition.
 - Media connects without encryption readiness.
+- A media failure is not fail-closed or leaves a stale active session.
 
 ## Rollback
 
@@ -202,6 +251,8 @@ Stop dogfood immediately if any of the following occurs:
 6. Collect only redacted `production-status` output for debugging.
 7. Rotate affected secrets if leakage is suspected.
 8. Do not preserve raw backend request bodies, bearer tokens, LiveKit participant tokens, Matrix event content, room IDs, user IDs, peer IDs, or device IDs.
+
+Rollback is complete only when the app relaunches without the private card path active, native direct-call status is idle/no active session, and Element Call remains available.
 
 ## Explicit Non-Goals
 
@@ -227,7 +278,7 @@ These block broader internal dogfood and production, but not the controlled engi
 - No video.
 - Receiver listener remains foreground/open-room scoped.
 - Session restoration is unsupported by design.
-- The product-card-only happy path is proven under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`; broader or longer dogfood still needs the 2.27A pilot checkpoint and explicit operator ownership.
+- The product-card-only happy path is proven under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`; broader or longer dogfood must follow the 2.27A pilot checkpoint and have explicit operator ownership.
 - Operational ownership and monitoring must be explicit for any longer dogfood window.
 - Secret rotation and incident response must remain ready before each session.
 
