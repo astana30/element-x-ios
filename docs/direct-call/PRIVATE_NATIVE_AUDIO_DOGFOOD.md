@@ -469,6 +469,33 @@ Runner use in this pilot was limited to launch, readiness/trust/status polling, 
 
 No rollback was needed, no stop criteria triggered, no runtime bug was observed, and no redaction or secret-leakage issue was found. Final A/B status was idle/no active session with media failure `none`. Controlled engineering dogfood may continue on the same narrow staging path.
 
+## 2.28C Pilot Session 2 Result
+
+Session recorded: 2026-05-22, Asia/Almaty.
+
+Operators and client devices are recorded only as redacted A/B engineering participants. The session used DEBUG/integration builds, the staging call-service, staging LiveKit, foreground/open encrypted direct 1:1 room context, verified/trusted peers, and the private native audio card. Element Call remained available as fallback and was not changed.
+
+| Check | Result | Redacted reason |
+| --- | --- | --- |
+| Backend preflight | Pass | readiness `ready=true`, `reason=ok`, Redis/storage booleans true, LiveKit room provisioning true |
+| Client preflight | Pass | A/B launched, A/B trust ready, listener armed, private card available, no stale active session |
+| Required gates | Pass | Product UI, private dogfood, production start, and staging token base were set; legacy fake/dry-run gate unset |
+| Happy path A -> B | Pass | Manual private-card Start/Accept/Hang up; A/B `activeAudio` -> `idle`, media failure `none` |
+| Reverse B -> A | Pass | Manual private-card Start/Accept/Hang up; A/B `activeAudio` -> `idle`, media failure `none` |
+| Repeated call 1 | Pass | Manual private-card call returned A/B to `idle`, no stale session |
+| Repeated call 2 | Pass | Manual private-card call returned A/B to `idle`, no stale session, no split-brain |
+| Decline | Pass | A/B `idle`, terminal `cancelled`, caller received reject |
+| Cancel | Pass | A/B `idle`, terminal `cancelled`, callee received cancel |
+| Relaunch fail-closed | Pass | Relaunch from active session restored no active session and no media path |
+| Timeout | Not run | Optional in session 2; covered by session 1 and the 2.27F matrix |
+| Backend-off recovery | Not run | Local staging call-service stayed up for the manual pilot; backend-off remains covered by the 2.27F matrix |
+| LiveKit-off | Not run | Shared staging LiveKit; stopping it could affect other users |
+| Element Call fallback | Pass | Existing Element Call route remained untouched and available as fallback |
+
+Runner use in this pilot was limited to launch, readiness/trust/status polling, and relaunch. Start, Accept, Cancel, and Hang up were manual private-card actions.
+
+No rollback was needed, no stop criteria triggered, no runtime bug was observed, and no redaction or secret-leakage issue was found. Final A/B status was idle/no active session with media failure `none`. Final readiness remained `ready=true`, `reason=ok`. Controlled engineering dogfood may continue on the same narrow staging path.
+
 ## Reporting Format
 
 Reports must be pass/fail only with redacted status fields. Allowed fields:

@@ -23,6 +23,7 @@ No tokens, JWTs, passwords, shared secrets, authorization header values, or Live
 | Controlled dogfood pilot matrix rerun | Passed |
 | Dogfood operations checklist | Recorded |
 | Controlled dogfood pilot session 1 | Passed |
+| Controlled dogfood pilot session 2 | Passed |
 
 ## Root Cause
 
@@ -67,6 +68,10 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - Runner use in session 1 was limited to launch, readiness/trust/status polling, and relaunch. Start, Accept, Decline, Cancel, and Hang up were manual private-card actions.
 - Backend-off recovery was not repeated during session 1 because the local staging call-service stayed up for the manual pilot; backend-off remains covered by the 2.27F matrix.
 - No rollback was needed, no stop criteria triggered, no runtime bug was observed, no redaction issue was found, and Element Call remained untouched.
+- The 2.28C controlled dogfood pilot session 2 passed under the same narrow staging constraints. Manual private-card happy path, reverse, repeated calls, decline, cancel, and relaunch fail-closed checks passed with redacted status only.
+- Timeout was not repeated in session 2 because it is already covered by session 1 and the 2.27F matrix.
+- Backend-off recovery was not repeated during session 2 because the local staging call-service stayed up for the manual pilot; backend-off remains covered by the 2.27F matrix.
+- No rollback was needed, no stop criteria triggered, no runtime bug was observed, no redaction issue was found, and Element Call remained untouched.
 - Controlled engineering dogfood may continue under the same narrow staging-only constraints.
 
 ## Next Step
@@ -81,4 +86,4 @@ Controlled engineering dogfood may continue on the staging path under the privat
 - Element Call toolbar path unchanged and available as fallback;
 - no CallKit, push, video, broad internal rollout, public rollout, or global production activation.
 
-Next, continue with `2.28C — controlled dogfood pilot session 2 / monitoring follow-up` while keeping controlled dogfood narrow and redacted.
+Next, continue with `2.28D — controlled dogfood pilot session 3 / longer monitoring follow-up` while keeping controlled dogfood narrow and redacted.

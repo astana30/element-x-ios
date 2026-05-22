@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.28B — controlled dogfood pilot session 1 recorded.
+After 2.28C — controlled dogfood pilot session 2 recorded.
 
 Current checkpoints:
 - App split-brain fix: 2.27D `Fail closed caller when callee media setup fails after answer` (`38fa26586`).
@@ -17,6 +17,7 @@ Current checkpoints:
 - Call-service LiveKit room pre-create: 2.25E implemented server-side RoomService `CreateRoom` before participant token issuance (`33e95e7b1`).
 - Controlled dogfood operations checklist: 2.28A recorded in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
 - Controlled dogfood pilot session 1: 2.28B recorded in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
+- Controlled dogfood pilot session 2: 2.28C recorded in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -58,6 +59,18 @@ Current proven/prepared state:
   - manual private-card happy path A -> B, reverse B -> A, and repeated call reached `activeAudio`, then returned A/B to `idle` with media failure `none`;
   - manual private-card decline, cancel, timeout, and relaunch fail-closed cases returned A/B to safe idle/no-active-session state;
   - backend-off recovery was not repeated in this manual pilot because the local staging call-service stayed up for the session;
+  - LiveKit-off was not run because the staging LiveKit instance is shared;
+  - runner use was limited to launch, readiness/trust/status polling, and relaunch;
+  - no rollback was needed, no stop criteria triggered, no runtime bug was observed, no redaction issue was found, and Element Call remained untouched.
+- 2.28C controlled dogfood pilot session 2 passed:
+  - preflight readiness/trust passed;
+  - required private dogfood gates were used, and the legacy fake/dry-run gate was unset;
+  - manual private-card happy path A -> B and reverse B -> A reached `activeAudio`, then returned A/B to `idle` with media failure `none`;
+  - two back-to-back repeated A -> B calls reached active audio and returned idle with no stale session and no split-brain;
+  - decline and cancel returned A/B idle with terminal `cancelled`;
+  - relaunch from an active session restored no active session and no media path;
+  - timeout was not repeated because it is already covered by session 1 and the 2.27F matrix;
+  - backend-off recovery was not repeated because the local staging call-service stayed up for the session;
   - LiveKit-off was not run because the staging LiveKit instance is shared;
   - runner use was limited to launch, readiness/trust/status polling, and relaunch;
   - no rollback was needed, no stop criteria triggered, no runtime bug was observed, no redaction issue was found, and Element Call remained untouched.
@@ -106,7 +119,7 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.28C — controlled dogfood pilot session 2 / monitoring follow-up.
+2.28D — controlled dogfood pilot session 3 / longer monitoring follow-up.
 
 Task:
 Run or record the next controlled engineering dogfood pilot session or longer monitored window using the 2.28A operations checklist. Do not modify app code or backend code unless a real runtime bug is found and explicitly approved. Do not change Element Call route. Do not wire CallKit, push, missed calls, video, session restoration, or global production activation.
@@ -172,4 +185,4 @@ Validation if docs change:
 - Direct-call forbidden scan.
 
 Suggested commit if docs change:
-Record native audio dogfood pilot session 2
+Record native audio dogfood pilot session 3

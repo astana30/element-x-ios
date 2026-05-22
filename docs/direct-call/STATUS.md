@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.28B — controlled dogfood pilot session 1 recorded.
+After 2.28C — controlled dogfood pilot session 2 recorded.
 
 ## Latest App Code Checkpoint
 
@@ -113,6 +113,17 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Required private dogfood gates were used, and the legacy fake/dry-run gate was unset.
   - Manual private-card happy path A -> B, reverse B -> A, and repeated call reached `productionSessionState=activeAudio`, then returned A/B to `productionSessionState=idle` with `productionMediaFailureReason=none`.
   - Manual private-card decline, cancel, timeout, and relaunch fail-closed cases returned A/B to a safe idle/no-active-session state.
+  - Backend-off recovery was not repeated in this manual pilot because the local staging call-service stayed up for the session; backend-off remains covered by the 2.27F matrix.
+  - LiveKit-off was not run because the staging LiveKit instance is shared.
+  - Runner use was limited to launch, readiness/trust/status polling, and relaunch.
+  - No stop criteria triggered, no rollback was needed, no runtime bug was observed, no redaction issue was found, and Element Call remained untouched.
+- Controlled engineering dogfood pilot session 2 is recorded:
+  - Preflight passed with readiness `ready=true`, `reason=ok`, Redis allocation/rate-limit/storage booleans true, LiveKit room provisioning true, and A/B trust ready.
+  - Required private dogfood gates were used, and the legacy fake/dry-run gate was unset.
+  - Manual private-card happy path A -> B and reverse B -> A reached `productionSessionState=activeAudio`, then returned A/B to `productionSessionState=idle` with `productionMediaFailureReason=none`.
+  - Two back-to-back repeated A -> B calls reached active audio and returned idle with no stale session and no split-brain.
+  - Decline and cancel cleared A/B to idle with terminal `cancelled`; relaunch from an active session restored no active session and no media path.
+  - Timeout was not repeated in session 2 because it is already covered by session 1 and the 2.27F matrix.
   - Backend-off recovery was not repeated in this manual pilot because the local staging call-service stayed up for the session; backend-off remains covered by the 2.27F matrix.
   - LiveKit-off was not run because the staging LiveKit instance is shared.
   - Runner use was limited to launch, readiness/trust/status polling, and relaunch.
@@ -645,7 +656,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Current Gate
 
-- Controlled engineering dogfood pilot may continue on staging under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, including the product-card-only happy path, repeated-call split-brain regression proof, 2.27F controlled matrix rerun, and 2.28B pilot session 1.
+- Controlled engineering dogfood pilot may continue on staging under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, including the product-card-only happy path, repeated-call split-brain regression proof, 2.27F controlled matrix rerun, and 2.28B/2.28C pilot sessions.
 - Pilot sessions must follow the 2.27A checkpoint and 2.28A operations checklist in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
@@ -657,9 +668,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.28C — controlled dogfood pilot session 2 / monitoring follow-up`
+`2.28D — controlled dogfood pilot session 3 / longer monitoring follow-up`
 
-Goal: continue the narrow controlled engineering pilot with another monitored session or a longer window under the 2.28A operations checklist. Keep reporting redacted, preserve the product-card-only manual path where practical, keep runner use explicit when used for status/control, and continue to treat backend-off/LiveKit-off checks as opt-in safety cases. Preserve fail-closed activation, trusted-device E2EE, redaction, Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope.
+Goal: continue the narrow controlled engineering pilot with another monitored session or a longer supervised window under the 2.28A operations checklist. Keep reporting redacted, preserve the product-card-only manual path where practical, keep runner use explicit when used for status/control, and continue to treat backend-off/LiveKit-off checks as opt-in safety cases. Preserve fail-closed activation, trusted-device E2EE, redaction, Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope.
 
 ## Do-Not-Touch Constraints
 

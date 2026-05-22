@@ -5,6 +5,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 ## Milestones
 
 - Recorded the controlled engineering dogfood matrix result on the staging media/token/LiveKit path.
+- Recorded controlled engineering dogfood pilot session 2.
 - Recorded controlled engineering dogfood pilot session 1.
 - Added the controlled dogfood operations and monitoring checklist.
 - Recorded the controlled dogfood pilot matrix rerun after the split-brain fix.
@@ -28,6 +29,23 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-22 — 2.28C Controlled Dogfood Pilot Session 2
+
+- Recorded the second controlled engineering dogfood pilot session under the 2.28A operations checklist.
+- Preflight passed with readiness `ready=true`, `reason=ok`, Redis allocation/rate-limit/storage booleans true, LiveKit room provisioning true, A/B launched, and A/B trust ready.
+- Used the required private dogfood gates and kept the legacy fake/dry-run gate unset.
+- Ran manual private-card happy path A -> B and reverse B -> A; each reached `productionSessionState=activeAudio` and returned A/B to `productionSessionState=idle` with `productionMediaFailureReason=none`.
+- Ran two back-to-back repeated A -> B calls; both reached active audio and returned idle with no stale session and no split-brain.
+- Ran decline and cancel; both returned A/B to idle with terminal `cancelled`.
+- Ran relaunch fail-closed from an active session; relaunch restored no active session and no media path.
+- Timeout was not repeated in session 2 because it is already covered by session 1 and the 2.27F matrix.
+- Backend-off recovery was not repeated in this manual pilot because the local staging call-service stayed up for the session; backend-off remains covered by the 2.27F matrix.
+- LiveKit-off was not run because the staging LiveKit instance is shared.
+- Runner use was limited to launch, readiness/trust/status polling, and relaunch.
+- No rollback was needed, no stop criteria triggered, no runtime bug was observed, no redaction issue was found, and Element Call remained untouched.
+- Dogfood decision: continue controlled engineering dogfood on the narrow staging path.
+- Recommended next phase: `2.28D — controlled dogfood pilot session 3 / longer monitoring follow-up`.
 
 ## 2026-05-22 — 2.28B Controlled Dogfood Pilot Session 1
 
