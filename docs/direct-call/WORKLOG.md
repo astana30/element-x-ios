@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Updated the controlled engineering dogfood runbook and staging session matrix after the 2.25F activeAudio pass.
 - Proved staging iOS private native audio can reach active audio through the product-gated private card.
 - Added server-side LiveKit room pre-create in SalemX call-service before participant token issuance.
 - Added Matrix SDK-backed custom content accessor for direct-call message-like events.
@@ -19,6 +20,14 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-22 — 2.26B Controlled Staging Dogfood Checklist
+
+- Updated the private native audio dogfood runbook from local-fake proof wording to the current staging path truth.
+- Recorded the conditional yes for named-engineer, DEBUG/integration, foreground/open-room, encrypted 1:1, verified-peer staging dogfood.
+- Added the required staging gates, operational preflight checklist, redacted reporting format, stop conditions, rollback path, and dogfood session matrix.
+- Kept broader dogfood blockers explicit: no CallKit, push/background incoming, missed calls, video, session restoration, broad internal rollout, public rollout, or Element Call replacement.
+- Confirmed the runbook keeps Element Call as the fallback path and keeps token/JWT/secret/raw ID redaction mandatory.
 
 ## 2026-05-22 — 2.25F Staging iOS ActiveAudio Smoke
 

@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.25F — staging iOS activeAudio smoke passed.
+After 2.26B — controlled staging dogfood checklist updated.
 
 ## Latest App Code Checkpoint
 
@@ -44,6 +44,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Hangup returned both sides to idle with media disconnect and cleanup attempted.
   - The previous `liveKitURLUnreachable` / service-not-found-like blocker is resolved by server-side LiveKit room pre-create.
   - No iOS app code, Element Call route, CallKit, push, video, or global production activation changed.
+- Controlled engineering dogfood is conditionally allowed on the staging path:
+  - Named engineering operators only.
+  - DEBUG/integration builds only.
+  - Private native call card only.
+  - Foreground/open-room encrypted direct 1:1 sessions only.
+  - Verified/trusted peers only.
+  - Existing Element Call toolbar path remains unchanged and available as fallback.
+  - Broad internal dogfood, public rollout, CallKit, push, video, and global production activation remain out of scope.
 - Two-client Matrix signalling proof passed.
 - Diagnostic LiveKit media proof reached active.
 - Production token DTOs, client, and transport seams exist.

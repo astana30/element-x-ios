@@ -267,7 +267,7 @@ Clean up the disposable container after the smoke:
 docker stop salemx-call-redis-smoke
 ```
 
-This local Redis smoke is not staging approval. Staging dogfood still requires deployed Redis smoke, real Synapse validation smoke, and LiveKit join smoke against the staging environment.
+This local Redis smoke is not staging approval by itself. Controlled staging dogfood now requires the full operational preflight from the private native audio dogfood runbook, including redacted readiness, Redis allocation/rate-limit connectivity, real Synapse validation, LiveKit room provisioning, and the staging active-audio path.
 
 ## Staging Deployment Preparation
 

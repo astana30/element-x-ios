@@ -2,16 +2,31 @@
 
 This runbook defines the only approved scope for controlled engineering dogfood of the private native audio call path.
 
-The current decision is conditional yes for tightly controlled engineering dogfood only. This is not approved for broad internal dogfood, product beta, public rollout, or replacement of the existing Element Call buttons.
+The current decision is yes, conditional, for tightly controlled engineering dogfood on the staging path. This is not approved for broad internal dogfood, product beta, public rollout, or replacement of the existing Element Call buttons.
 
-## Scope
+## Current Proof
 
+The 2.25F staging iOS smoke passed after backend commit `33e95e7b1` added server-side LiveKit room pre-create before participant token issuance.
+
+- A/B reached `productionSessionState=activeAudio`.
+- A/B had `productionEncryptionState=ready`.
+- A/B had media connect and LiveKit client connect attempted.
+- A/B had `productionMediaFailureReason=none`.
+- Hangup returned A/B to `productionSessionState=idle`.
+- A/B had media disconnect and cleanup attempted.
+- The previous `liveKitURLUnreachable` / service-not-found-like blocker is resolved by server-side LiveKit room pre-create.
+- No iOS app code, Element Call route, CallKit, push, video, shared LiveKit config, or global production activation changed.
+
+## Allowed Scope
+
+- Named engineering operators only.
 - DEBUG/integration builds only.
+- Staging call-service and staging LiveKit path only.
 - Private native call room card only.
-- Open encrypted direct 1:1 rooms only.
 - Foreground app only.
+- Open encrypted direct 1:1 rooms only.
 - Verified/trusted peer devices only.
-- Local fake backend plus local LiveKit dev server, or a hardened staging equivalent with the same redaction and fail-closed guarantees.
+- Receiver listener must be available or explicitly armed.
 - Existing Element Call phone/video buttons remain visible, unchanged, and available as the rollback call path.
 - Audio only.
 
@@ -25,80 +40,66 @@ export NATIVE_DIRECT_CALL_DIAGNOSTICS=1
 export NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1
 export NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1
 export NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1
-export NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED=1
-export NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=http://127.0.0.1:8088
+export NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=<staging-call-service-base-url>
 ```
 
-`NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED=1` is required for the current fake-backed proof setup. Remove it only when a hardened staging capability and dependency path replaces the local fake proof.
+Use the staging call-service base URL for `NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL`; in the current local-run staging setup this is the local loopback service endpoint. Do not set public or global production direct-call activation.
 
-Do not enable public or global production direct calls.
+`NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED=1` belongs to the older local fake proof path. Leave it unset for real staging media dogfood unless the session is explicitly testing fake dry-run behavior.
 
-## Setup
+## Operational Preflight
 
-1. Use trusted `r1` and `r2` engineering test accounts.
-2. Verify the two devices/users trust each other before testing native calls.
-3. Start the local fake call service with placeholder local credentials only:
+Complete this checklist before every dogfood session:
 
-```sh
-cd server/salemx-call-service
-SALEMX_CALL_SERVICE_MODE=local_fake \
-SALEMX_CALL_SERVICE_FAKE_MODE=1 \
-LIVEKIT_URL=ws://localhost:7880 \
-LIVEKIT_API_KEY=<local-livekit-api-key> \
-LIVEKIT_API_SECRET=<local-livekit-api-secret> \
-python3 -m uvicorn salemx_call_service.app:app --host 127.0.0.1 --port 8088
-```
+- Staging call-service readiness is `ready=true`, `reason=ok`.
+- Redis allocation store is configured, shared, and connected.
+- Redis rate-limit store is configured, shared, and connected.
+- `storageKeyConfigured=true`.
+- `liveKitRoomProvisioningConfigured=true`.
+- Synapse validation smoke is available and passing.
+- Token TTL and allocation TTL remain bounded.
+- Staging env files are ignored by git and mode `600`.
+- A/B app launch succeeds through the diagnostic runner.
+- A/B trust diagnostics are ready.
+- The encrypted direct 1:1 DM is open on both clients.
+- Receiver listener is available or armed.
+- Existing Element Call toolbar path is visible and available as fallback.
 
-4. Start a local LiveKit dev server:
+## Session Matrix
 
-```sh
-docker run --rm \
-  -p 7880:7880 \
-  -p 7881:7881 \
-  -p 7882:7882/udp \
-  livekit/livekit-server \
-  --dev \
-  --bind 0.0.0.0
-```
+Run each row with redacted output only. Record pass/fail plus the allowed fields listed below.
 
-5. Launch A/B with the required gates.
-6. Open the same encrypted direct 1:1 room on both clients.
-7. Arm the receiver listener from the private card or the approved DEBUG/integration command path if required.
-8. Confirm readiness through redacted status only before starting manual proof flows.
+| Case | Flow | Expected |
+| --- | --- | --- |
+| Happy path | A start -> B accept -> active audio -> hangup | A/B active audio, then idle; media failure `none` |
+| Reverse direction | B start -> A accept -> active audio -> hangup | A/B active audio, then idle; media failure `none` |
+| Repeated calls | Complete two calls in the same room after cleanup | Second call starts cleanly; no stale active session |
+| Decline incoming | A start -> B decline | A/B clear to idle; no media connect leak |
+| Cancel outgoing | A start -> A cancel before accept | A/B clear to idle; no media connect leak |
+| Timeout | Start without accept until timeout | A/B clear to idle with terminal timeout reason |
+| Backend-off fail closed | Stop or block local staging call-service, then start | User-safe token/service failure; no participant token issued |
+| Backend recovery | Restore call-service, repeat happy path | Active audio can be reached again |
+| LiveKit-off fail closed | Stop/block LiveKit path for a controlled session | User-safe media failure; no stale active session |
+| LiveKit recovery | Restore LiveKit path, repeat happy path | Active audio can be reached again |
+| Relaunch during ringing | Relaunch one side while ringing | No stale ringing/active session restored |
+| Relaunch during active | Relaunch one side while active | No stale active session restored |
+| Listener not armed / room not open | Start without receiver listener availability | Fail closed or no incoming presentation; no stale session |
 
-## Allowed Manual Flows
+## Reporting Format
 
-- Start audio, Accept, Hang up.
-- Decline incoming.
-- Cancel outgoing.
-- Retry after a failed state.
-- Dismiss local error state.
-- Repeated calls after cleanup.
-- Reverse-direction calls.
-- Backend-off failure and recovery.
-- LiveKit-off failure and recovery.
-- Outgoing and incoming timeout.
+Reports must be pass/fail only with redacted status fields. Allowed fields:
 
-## Known Limitations
+- readiness booleans;
+- trust booleans;
+- `productionSessionState`;
+- `productionMediaFailureReason`;
+- terminal reason enum;
+- media connect attempted boolean;
+- LiveKit client connect attempted boolean;
+- cleanup attempted boolean;
+- disconnect attempted boolean.
 
-- No background incoming calls.
-- No CallKit.
-- No push.
-- No missed calls.
-- No video.
-- No call restoration after app relaunch.
-- Receiver listener availability is open-room scoped and may require explicit arming.
-- Current backend proof uses local fake mode and is not production-hardened.
-- Existing Element Call remains the only non-dogfood call path.
-
-## Fail-Closed Expectations
-
-- Backend unavailable must fail closed with a user-safe call service or token HTTP failure.
-- LiveKit unavailable must fail closed with a user-safe audio connection failure.
-- Unverified peer devices must block before media-key wrapping.
-- Invalid rooms must remain unavailable.
-- App relaunch during ringing or active calls must not restore stale sessions.
-- Room dismiss/reopen must not preserve stale production owner, listener, media, or active session state.
+Do not include raw request or response bodies.
 
 ## Redaction Checklist
 
@@ -109,60 +110,69 @@ Before sharing logs, screenshots, runner output, or bug reports, verify they con
 - Raw media keys.
 - Raw Matrix event content.
 - Raw room IDs.
+- Raw user IDs.
 - Raw peer IDs.
+- Raw device IDs.
 - Endpoint credentials.
 - LiveKit API secrets.
+- Redis URLs with credentials.
 - Matrix encrypted payload bodies.
 
 Only share redacted booleans, enums, user-safe reasons, and non-identifying status fields.
 
+## Stop Conditions
+
+Stop dogfood immediately if any of the following occurs:
+
+- A raw token, JWT, key, room ID, user ID, peer ID, device ID, endpoint credential, or Matrix event body appears in UI, logs, runner output, docs, or screenshots.
+- Element Call buttons or route behavior changes.
+- A call starts without the required gates.
+- A call starts in an invalid room.
+- An untrusted peer or device connects.
+- A stale active session survives cleanup or relaunch.
+- Backend returns a token for an invalid room, peer, trust, or membership condition.
+- Media connects without encryption readiness.
+
 ## Rollback
 
 1. Unset `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED`.
-2. Relaunch the app.
-3. Keep using the existing Element Call buttons.
-4. Stop the local fake backend if it is no longer needed.
-5. Stop the local LiveKit dev server if it is no longer needed.
+2. Relaunch the apps.
+3. Stop the local staging call-service if the session uses a local service process.
+4. Stop local Redis if the session uses a disposable local Redis container.
+5. Keep using the existing Element Call toolbar path.
 6. Collect only redacted `production-status` output for debugging.
-7. Do not preserve raw backend request bodies, bearer tokens, LiveKit participant tokens, or Matrix event content.
+7. Rotate affected secrets if leakage is suspected.
+8. Do not preserve raw backend request bodies, bearer tokens, LiveKit participant tokens, Matrix event content, room IDs, user IDs, peer IDs, or device IDs.
 
 ## Explicit Non-Goals
 
+- Broad internal dogfood.
 - Public rollout.
 - Product beta.
 - Replacing the Element Call toolbar buttons.
 - CallKit.
 - Push or background incoming calls.
-- Video.
 - Missed calls.
+- Video.
 - Production `AllDevices` trust fallback.
 - Weakening `OnlyTrustedDevices` media-key wrapping.
 - Public/global production activation.
 
-## Staging Blockers
+## Remaining Blockers
 
-Before any staging dogfood replaces the local fake proof, the backend and deployment path need:
+These block broader internal dogfood and production, but not the controlled engineering dogfood scope above:
 
-- Real Synapse validation.
-- Staging call service env prepared from `server/salemx-call-service/deploy/staging.env.example`, with real values kept only in ignored local files.
-- Redis-backed shared call allocation store deployed and smoke-tested with HMAC-derived keys. Local Redis container smoke passed in 2.24H, but deployed staging Redis smoke is still required.
-- Redis-backed shared rate limiter deployed and smoke-tested with HMAC-derived keys. Local Redis container smoke passed in 2.24H, but deployed staging Redis smoke is still required.
-- Staging Synapse validation smoke run through `server/salemx-call-service/scripts/staging_synapse_smoke.sh` with operator-local fixtures and redacted output only.
-- Explicit staging mode with fake mode disabled and redacted readiness returning `ok`.
-- Allocation readiness with `allocationStoreConfigured=true`, `allocationStoreShared=true`, and `allocationStoreConnected=true`.
-- Rate-limit readiness with `rateLimitConfigured=true`, `rateLimitShared=true`, and `rateLimitConnected=true`.
-- Secret-managed `SALEMX_CALL_SERVICE_STORAGE_KEY_SECRET` for Redis key derivation.
-- LiveKit room pre-create validated against staging. The call service now has a server-side RoomService `CreateRoom` path, but staging iOS dogfood remains blocked until this path is smoke-tested and the private card reaches active audio.
-- Token TTL and replay protection.
-- TLS-backed LiveKit URL and certificates.
-- Production-safe LiveKit API key management.
-- Operational monitoring.
-- Redacted incident/debug collection.
-- Rollback plan.
-- Capability rollout plan.
-- Explicit owner for backend uptime during dogfood windows.
+- No CallKit.
+- No push or background incoming calls.
+- No missed calls.
+- No video.
+- Receiver listener remains foreground/open-room scoped.
+- Session restoration is unsupported by design.
+- Dogfood still needs repeated staging session matrix coverage beyond the 2.25F happy path.
+- Operational ownership and monitoring must be explicit for any longer dogfood window.
+- Secret rotation and incident response must remain ready before each session.
 
-## Dogfood Session Success Criteria
+## Success Criteria
 
 - The private card appears only with `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`.
 - The diagnostic panel remains separately gated.
@@ -172,19 +182,7 @@ Before any staging dogfood replaces the local fake proof, the backend and deploy
 - Retry does not auto-start.
 - Dismiss is local-only.
 - Backend and LiveKit failures return user-safe errors.
-- Recovery after backend and LiveKit restart reaches active audio again.
+- Recovery after backend and LiveKit restoration reaches active audio again.
 - Timeout clears both sides.
 - Relaunch during ringing or active calls fails closed with no stale active session.
 - Output remains redacted.
-
-## Stop Conditions
-
-Stop dogfood immediately if any of the following occurs:
-
-- A raw token, JWT, media key, Matrix event body, room ID, peer ID, or endpoint secret appears in UI, logs, runner output, or docs.
-- Element Call buttons change behavior.
-- A call starts without the product UI gate.
-- A call starts in an invalid room or with untrusted peer readiness.
-- A relaunch restores stale active or ringing call state.
-- Backend or LiveKit failure leaves a stale active session.
-- Media connects without encrypted key readiness.

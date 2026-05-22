@@ -44,4 +44,14 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 
 ## Next Step
 
-Continue with gated app-side staging dogfood hardening and keep output redacted.
+Controlled engineering dogfood may begin on the staging path under the private native audio runbook constraints:
+
+- named engineering operators only;
+- DEBUG/integration builds only;
+- foreground/open-room encrypted direct 1:1 sessions only;
+- verified/trusted peers only;
+- private native audio card only;
+- Element Call toolbar path unchanged and available as fallback;
+- no CallKit, push, video, broad internal rollout, public rollout, or global production activation.
+
+Next, run the controlled dogfood session matrix and keep output redacted.

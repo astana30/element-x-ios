@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.25F — staging iOS activeAudio smoke passed.
+After 2.26B — controlled staging dogfood checklist updated.
 
 Current checkpoints:
 - App code: 2.23C `Polish native call listener availability status` (`bb7ae2557`).
@@ -21,6 +21,7 @@ Current checkpoints:
 - Staging deployment scaffold: 2.24K prepared helper scripts and placeholder-only env templates.
 - Call-service LiveKit room pre-create: 2.25E implemented server-side RoomService `CreateRoom` before participant token issuance.
 - Staging iOS activeAudio smoke: 2.25F passed after room pre-create.
+- Controlled dogfood runbook: 2.26B updated gates, preflight, rollback, redaction, and session matrix.
 - Private native audio dogfood guardrails: `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
@@ -42,6 +43,7 @@ Current proven/prepared state:
 - `server/salemx-call-service/scripts/staging_synapse_smoke.sh` provides the redacted operator-local staging Synapse validation harness.
 - Staging Synapse/LiveKit setup has passed readiness, signalling, media connect, active audio, and hangup cleanup smoke through the private native audio card.
 - The previous `liveKitURLUnreachable` / service-not-found-like blocker is resolved by server-side LiveKit room pre-create.
+- Controlled engineering dogfood is conditionally allowed for named engineers on the staging path only.
 - No public UI activation, Element Call route changes, RoomScreen call presentation changes, existing call-service changes, CallKit, push, video, or global production activation has been added.
 
 Required operator-local staging service env file:
@@ -53,16 +55,16 @@ Required operator-local smoke env file:
 - Fill values locally only. Do not commit or paste the real file.
 
 Phase:
-2.25G — post-smoke staging dogfood hardening.
+2.26C — controlled staging dogfood session matrix execution.
 
 Task:
-Review the successful staging activeAudio smoke and plan the next gated dogfood hardening step. Do not modify iOS behavior unless explicitly requested. Do not change Element Call, CallKit, push, video, shared LiveKit config, or global production activation.
+Run the controlled staging dogfood session matrix from `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md` and record redacted pass/fail results. Do not modify iOS behavior unless a small diagnostics-only issue is found. Do not change Element Call, CallKit, push, video, shared LiveKit config, or global production activation.
 
 Context:
-The A/B staging iOS smoke after backend commit `33e95e7b1` reached active audio and returned to idle after hangup. A/B encryption was ready, media connect and LiveKit client connect were attempted, and media failure remained `none`. Hangup cleared active session state and attempted media disconnect/cleanup.
+The A/B staging iOS smoke after backend commit `33e95e7b1` reached active audio and returned to idle after hangup. 2.26B updated the dogfood runbook with the conditional yes, required gates, operational preflight, session matrix, redaction format, stop conditions, and rollback path.
 
 Goal:
-Choose the next minimal, gated staging dogfood step from the proven activeAudio baseline while preserving redaction and existing Element Call behavior.
+Execute the first controlled engineering dogfood matrix on the staging path while preserving redaction and existing Element Call behavior.
 
 Recent 2.25F proof:
 
@@ -75,6 +77,7 @@ Recent 2.25F proof:
 - A/B had media disconnect and cleanup attempted.
 - No iOS app code changed.
 - Element Call route remained untouched.
+- Dogfood runbook now allows only named-engineer, DEBUG/integration, staging, foreground/open-room, encrypted 1:1, verified-peer sessions.
 
 Hard redaction rules:
 - Never print Matrix access tokens.
@@ -97,7 +100,9 @@ Allowed report fields:
 - Media failure enum.
 
 Pass criteria:
-- Any next smoke or hardening step remains behind existing private product UI/debug gates.
+- Each attempted matrix case reports pass/fail only with allowed redacted fields.
+- The happy path and reverse direction reach active audio and return to idle.
+- Failure cases fail closed without stale active sessions.
 - Element Call buttons and route remain unchanged.
 - No CallKit, push, video, or global production activation is added.
 - No token/JWT/secret/raw ID leakage.
@@ -114,11 +119,13 @@ Rollback:
 - Keep iOS private native call gates unchanged.
 
 Report:
-A. Chosen next dogfood hardening step.
-B. Why it is minimal and gated.
-C. Files to inspect or change, if any.
-D. Validation plan.
-E. Whether code/docs changed.
+A. Operational preflight result.
+B. Session matrix pass/fail table.
+C. Stop/rollback triggers encountered, if any.
+D. Redaction self-check.
+E. Element Call fallback status.
+F. Whether code/docs changed.
+G. Whether controlled staging dogfood remains allowed.
 
 Suggested commit only if docs/scripts changed:
-Document next staging dogfood step
+Record controlled staging dogfood matrix
