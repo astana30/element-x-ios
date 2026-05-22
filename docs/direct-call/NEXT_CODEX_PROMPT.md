@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.28A — controlled dogfood operations checklist recorded.
+After 2.28B — controlled dogfood pilot session 1 recorded.
 
 Current checkpoints:
 - App split-brain fix: 2.27D `Fail closed caller when callee media setup fails after answer` (`38fa26586`).
@@ -15,18 +15,15 @@ Current checkpoints:
 - App listener preparation: 2.26E `Enable private dogfood card listener preparation` (`07256bf0a`).
 - Product-card-only staging smoke documentation: 2.26E `Record product-card-only staging smoke` (`01e8dc1cb`).
 - Call-service LiveKit room pre-create: 2.25E implemented server-side RoomService `CreateRoom` before participant token issuance (`33e95e7b1`).
-- Staging iOS activeAudio smoke: 2.25F passed after room pre-create.
-- Controlled dogfood pilot checkpoint: 2.27A recorded in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
-- Repeated-call split-brain regression runtime proof: 2.27E passed after the 2.27D fix.
-- Controlled dogfood pilot matrix rerun: 2.27F passed after the split-brain fix.
 - Controlled dogfood operations checklist: 2.28A recorded in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
+- Controlled dogfood pilot session 1: 2.28B recorded in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
 Current proven/prepared state:
 - Product-card-only staging happy path passed under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`.
 - Without `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, activation remains blocked with `appRolloutDisabled`, with no Matrix send, token/media path, or LiveKit client connect.
-- The legacy `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` name was explicitly unset and not used for staging pilot proof.
+- The legacy `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` name was explicitly unset and is not used for staging pilot proof.
 - Manual private-card Start, Accept, and Hang up passed on staging in 2.26E: A/B reached `productionSessionState=activeAudio`, then hangup returned A/B to `productionSessionState=idle` with `productionMediaFailureReason=none`.
 - Receiver listener preparation is limited to private-card status after activation is already enabled; it does not start outgoing calls, request tokens, send Matrix events, or connect media.
 - 2.27D fixed the split-brain state where callee could emit answer, fail media/token setup, and leave caller active.
@@ -55,6 +52,15 @@ Current proven/prepared state:
   - stop criteria and rollback;
   - post-session report template;
   - security cleanup for temporary SSH keys, disposable reports, password rotation, and ignored env files.
+- 2.28B controlled dogfood pilot session 1 passed:
+  - preflight readiness/trust passed;
+  - required private dogfood gates were used, and the legacy fake/dry-run gate was unset;
+  - manual private-card happy path A -> B, reverse B -> A, and repeated call reached `activeAudio`, then returned A/B to `idle` with media failure `none`;
+  - manual private-card decline, cancel, timeout, and relaunch fail-closed cases returned A/B to safe idle/no-active-session state;
+  - backend-off recovery was not repeated in this manual pilot because the local staging call-service stayed up for the session;
+  - LiveKit-off was not run because the staging LiveKit instance is shared;
+  - runner use was limited to launch, readiness/trust/status polling, and relaunch;
+  - no rollback was needed, no stop criteria triggered, no runtime bug was observed, no redaction issue was found, and Element Call remained untouched.
 - Element Call route remains unchanged and must stay available as fallback.
 - No CallKit, push/background incoming, missed calls, video, session restoration, broad internal rollout, public rollout, production activation, or global activation exists.
 
@@ -69,7 +75,7 @@ Required pilot scope:
 - Foreground/open encrypted direct 1:1 rooms only.
 - Verified/trusted peers only.
 - Private native audio card only.
-- Runner-assisted matrix checks are allowed when explicitly reported.
+- Runner-assisted checks are allowed when explicitly reported.
 - Audio only.
 - Existing Element Call route remains visible and available as fallback.
 
@@ -100,13 +106,13 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.28B — monitored controlled dogfood pilot window.
+2.28C — controlled dogfood pilot session 2 / monitoring follow-up.
 
 Task:
-Run or record a monitored controlled engineering dogfood pilot window using the 2.28A operations checklist. Do not modify app code or backend code unless a real runtime bug is found and explicitly approved. Do not change Element Call route. Do not wire CallKit, push, missed calls, video, session restoration, or global production activation.
+Run or record the next controlled engineering dogfood pilot session or longer monitored window using the 2.28A operations checklist. Do not modify app code or backend code unless a real runtime bug is found and explicitly approved. Do not change Element Call route. Do not wire CallKit, push, missed calls, video, session restoration, or global production activation.
 
 Goal:
-Exercise a longer controlled pilot window with explicit operator ownership, redacted monitoring, and post-session cleanup. Decide whether controlled engineering dogfood may continue, needs narrower constraints, or should pause.
+Continue the controlled pilot with explicit operator ownership, redacted monitoring, and post-session cleanup. Preserve product-card-only manual coverage where practical, and report any runner-assisted checks explicitly.
 
 Required report:
 A. Operator sign-off summary, redacted.
@@ -166,4 +172,4 @@ Validation if docs change:
 - Direct-call forbidden scan.
 
 Suggested commit if docs change:
-Record monitored dogfood pilot window
+Record native audio dogfood pilot session 2

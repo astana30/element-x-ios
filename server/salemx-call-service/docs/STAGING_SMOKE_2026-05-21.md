@@ -22,6 +22,7 @@ No tokens, JWTs, passwords, shared secrets, authorization header values, or Live
 | Repeated-call split-brain regression proof | Passed |
 | Controlled dogfood pilot matrix rerun | Passed |
 | Dogfood operations checklist | Recorded |
+| Controlled dogfood pilot session 1 | Passed |
 
 ## Root Cause
 
@@ -62,6 +63,10 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - Runner commands were used for matrix control/status, so 2.27F is not a claim that every matrix case was manually product-card-only. Product-card-only happy path remains separately proven by 2.26E.
 - The 2.28A operations checklist documents named operator sign-off, local staging call-service start/stop, readiness checks, Redis checks, A/B gate/trust checks, redacted monitoring, forbidden outputs, stop criteria, rollback, post-session reporting, and security cleanup.
 - Security cleanup includes removing temporary SSH keys, rotating any password shared during diagnostics, keeping ignored env files untracked and mode `600`, and preserving Element Call fallback.
+- The 2.28B controlled dogfood pilot session 1 passed under the same narrow staging constraints. Manual private-card happy path, reverse, repeated call, decline, cancel, timeout, and relaunch fail-closed checks passed with redacted status only.
+- Runner use in session 1 was limited to launch, readiness/trust/status polling, and relaunch. Start, Accept, Decline, Cancel, and Hang up were manual private-card actions.
+- Backend-off recovery was not repeated during session 1 because the local staging call-service stayed up for the manual pilot; backend-off remains covered by the 2.27F matrix.
+- No rollback was needed, no stop criteria triggered, no runtime bug was observed, no redaction issue was found, and Element Call remained untouched.
 - Controlled engineering dogfood may continue under the same narrow staging-only constraints.
 
 ## Next Step
@@ -76,4 +81,4 @@ Controlled engineering dogfood may continue on the staging path under the privat
 - Element Call toolbar path unchanged and available as fallback;
 - no CallKit, push, video, broad internal rollout, public rollout, or global production activation.
 
-Next, run `2.28B — monitored controlled dogfood pilot window` while keeping controlled dogfood narrow and redacted.
+Next, continue with `2.28C — controlled dogfood pilot session 2 / monitoring follow-up` while keeping controlled dogfood narrow and redacted.
