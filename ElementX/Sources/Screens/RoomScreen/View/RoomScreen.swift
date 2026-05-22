@@ -241,6 +241,7 @@ struct NativeDirectCallRoomCard: View {
             .overlay(alignment: .top) {
                 Divider()
             }
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("nativeDirectCallRoomCard")
             .task {
                 send(.nativeDirectCallRoomCardAppeared)
@@ -250,11 +251,11 @@ struct NativeDirectCallRoomCard: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            Text("Private native audio")
+            Text(UntranslatedL10n.screenRoomNativeDirectCallTitle)
                 .font(.compound.bodySMSemibold)
                 .foregroundStyle(.compound.textPrimary)
 
-            Text("Internal")
+            Text(UntranslatedL10n.screenRoomNativeDirectCallPilotBadge)
                 .font(.compound.bodyXS)
                 .foregroundStyle(.compound.textSecondary)
                 .padding(.horizontal, 6)
@@ -272,48 +273,44 @@ struct NativeDirectCallRoomCard: View {
     }
 
     private var statusLine: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text("State:")
-                    .font(.compound.bodyXS)
-                    .foregroundStyle(.compound.textSecondary)
+        VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(state.state.displayText)
                     .font(.compound.bodyXS)
                     .foregroundStyle(.compound.textPrimary)
-                    .lineLimit(1)
+                    .lineLimit(2)
+
+                if let detailText = state.state.detailText {
+                    Text(detailText)
+                        .font(.compound.bodyXS)
+                        .foregroundStyle(.compound.textSecondary)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             if let receiverAvailability = state.receiverAvailability {
-                statusDetail(title: "Receive:", value: receiverAvailability.displayText)
+                statusDetail(title: UntranslatedL10n.screenRoomNativeDirectCallIncomingLabel,
+                             value: receiverAvailability.displayText)
             }
 
             if let restorationText = state.restorationAvailability?.displayText {
-                statusDetail(title: "Relaunch:", value: restorationText)
-            }
-
-            if let lastAction = state.lastAction {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text("Last action:")
-                        .font(.compound.bodyXS)
-                        .foregroundStyle(.compound.textSecondary)
-                    Text("\(lastAction.description):\(state.lastActionOutcome?.description ?? "pending")")
-                        .font(.compound.bodyXS)
-                        .foregroundStyle(.compound.textPrimary)
-                        .lineLimit(1)
-                }
+                statusDetail(title: UntranslatedL10n.screenRoomNativeDirectCallRelaunchLabel,
+                             value: restorationText)
             }
         }
+        .accessibilityLabel(state.accessibilitySummary)
     }
 
     private func statusDetail(title: String, value: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(title)
+            Text("\(title):")
                 .font(.compound.bodyXS)
                 .foregroundStyle(.compound.textSecondary)
             Text(value)
                 .font(.compound.bodyXS)
                 .foregroundStyle(.compound.textPrimary)
-                .lineLimit(1)
+                .lineLimit(2)
         }
     }
 
@@ -344,6 +341,48 @@ struct NativeDirectCallRoomCard: View {
         .frame(maxWidth: .infinity)
         .disabled(!isEnabled)
         .accessibilityIdentifier(cardAction.accessibilityIdentifier)
+    }
+}
+
+struct NativeDirectCallRoomCard_Previews: PreviewProvider {
+    static var previews: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                previewCard(state: .canStart,
+                            receiverAvailability: .readyToReceive)
+                previewCard(state: .incomingRinging,
+                            receiverAvailability: .readyToReceive)
+                previewCard(state: .outgoingRinging,
+                            receiverAvailability: .readyToReceive)
+                previewCard(state: .activeAudio,
+                            receiverAvailability: .readyToReceive)
+                previewCard(state: .failed(reason: .callServiceUnavailable),
+                            receiverAvailability: .readyToReceive)
+                previewCard(state: .failed(reason: .liveKitNetworkFailed),
+                            receiverAvailability: .readyToReceive)
+                previewCard(state: .unavailable(reason: .peerTrustUnavailable),
+                            receiverAvailability: .readyToReceive)
+                previewCard(state: .canStart,
+                            receiverAvailability: .openRoomRequired,
+                            restorationAvailability: .unsupported)
+                previewCard(state: .ended(reason: .callTimedOut),
+                            receiverAvailability: .readyToReceive)
+            }
+        }
+        .background(Color.compound.bgCanvasDefault)
+        .previewDisplayName("Native direct call card")
+    }
+
+    private static func previewCard(state: NativeDirectCallRoomCardState,
+                                    receiverAvailability: NativeDirectCallRoomReceiverAvailability?,
+                                    restorationAvailability: NativeDirectCallRoomRestorationAvailability? = nil) -> some View {
+        NativeDirectCallRoomCard(state: .init(isVisible: true,
+                                              isLoading: false,
+                                              state: state,
+                                              receiverAvailability: receiverAvailability,
+                                              restorationAvailability: restorationAvailability,
+                                              lastAction: nil,
+                                              lastActionOutcome: nil)) { _ in }
     }
 }
 

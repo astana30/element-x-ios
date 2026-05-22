@@ -514,7 +514,7 @@ struct NativeDirectCallInternalControlPanelState: Equatable {
     static let visible = Self(isVisible: true, isLoading: false, status: .notRefreshed)
 }
 
-enum NativeDirectCallRoomCardUnavailableReason: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+enum NativeDirectCallRoomCardUnavailableReason: String, CaseIterable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     case nativeCallsUnavailable
     case serverUnsupported
     case roomNotEncrypted
@@ -535,7 +535,7 @@ enum NativeDirectCallRoomCardUnavailableReason: String, Equatable, CustomStringC
     }
 }
 
-enum NativeDirectCallRoomCardFailureReason: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+enum NativeDirectCallRoomCardFailureReason: String, CaseIterable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     case nativeCallsUnavailable
     case serverUnsupported
     case roomNotEncrypted
@@ -788,6 +788,109 @@ struct NativeDirectCallRoomCardStatus: Equatable, CustomStringConvertible, Custo
     }
 }
 
+#if DEBUG
+enum NativeDirectCallRoomCardRedactedState: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case hidden
+    case unavailable
+    case canStart
+    case outgoingRinging
+    case incomingRinging
+    case connecting
+    case activeAudio
+    case failed
+    case ended
+
+    init(_ state: NativeDirectCallRoomCardState) {
+        switch state {
+        case .hidden:
+            self = .hidden
+        case .unavailable:
+            self = .unavailable
+        case .canStart:
+            self = .canStart
+        case .outgoingRinging:
+            self = .outgoingRinging
+        case .incomingRinging:
+            self = .incomingRinging
+        case .connecting:
+            self = .connecting
+        case .activeAudio:
+            self = .activeAudio
+        case .failed:
+            self = .failed
+        case .ended:
+            self = .ended
+        }
+    }
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct NativeDirectCallRoomCardRedactedStatus: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let state: NativeDirectCallRoomCardRedactedState
+    let unavailableReason: NativeDirectCallRoomCardUnavailableReason?
+    let failureReason: NativeDirectCallRoomCardFailureReason?
+    let receiverAvailability: NativeDirectCallRoomReceiverAvailability?
+    let restorationAvailability: NativeDirectCallRoomRestorationAvailability?
+    let isLoading: Bool
+    let actions: NativeDirectCallRoomActionAvailability
+
+    init(state: NativeDirectCallRoomCardState,
+         receiverAvailability: NativeDirectCallRoomReceiverAvailability?,
+         restorationAvailability: NativeDirectCallRoomRestorationAvailability?,
+         isLoading: Bool,
+         isStartAudioTemporarilyDisabled: Bool) {
+        self.state = NativeDirectCallRoomCardRedactedState(state)
+        switch state {
+        case .unavailable(let reason):
+            unavailableReason = reason
+            failureReason = nil
+        case .failed(let reason), .ended(let reason):
+            unavailableReason = nil
+            failureReason = reason
+        case .hidden, .canStart, .outgoingRinging, .incomingRinging, .connecting, .activeAudio:
+            unavailableReason = nil
+            failureReason = nil
+        }
+        self.receiverAvailability = receiverAvailability
+        self.restorationAvailability = restorationAvailability
+        self.isLoading = isLoading
+        actions = .init(cardState: state,
+                        isLoading: isLoading,
+                        isStartAudioTemporarilyDisabled: isStartAudioTemporarilyDisabled)
+    }
+
+    var description: String {
+        [
+            "state: \(state)",
+            "unavailableReason: \(unavailableReason?.description ?? "none")",
+            "failureReason: \(failureReason?.description ?? "none")",
+            "receiverAvailability: \(receiverAvailability?.description ?? "none")",
+            "restorationAvailability: \(restorationAvailability?.description ?? "none")",
+            "isLoading: \(isLoading)",
+            "canRefreshStatus: \(actions.canRefreshStatus)",
+            "canStartAudio: \(actions.canStartAudio)",
+            "canAccept: \(actions.canAccept)",
+            "canDeclineIncoming: \(actions.canDeclineIncoming)",
+            "canCancelOutgoing: \(actions.canCancelOutgoing)",
+            "canHangUp: \(actions.canHangUp)",
+            "canRetry: \(actions.canRetry)",
+            "canDismissError: \(actions.canDismissError)"
+        ].joined(separator: ", ")
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+#endif
+
 struct NativeDirectCallRoomCardActionResult: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     let action: NativeDirectCallRoomCardAction
     let outcome: NativeDirectCallRoomCardActionOutcome
@@ -916,6 +1019,25 @@ struct NativeDirectCallRoomCardViewState: Equatable {
         }
 
         return action.isEnabled(in: state, isLoading: isLoading)
+    }
+
+    var redactedStatus: NativeDirectCallRoomCardRedactedStatus {
+        .init(state: state,
+              receiverAvailability: receiverAvailability,
+              restorationAvailability: restorationAvailability,
+              isLoading: isLoading,
+              isStartAudioTemporarilyDisabled: isStartAudioTemporarilyDisabled)
+    }
+
+    var accessibilitySummary: String {
+        [
+            UntranslatedL10n.screenRoomNativeDirectCallTitle,
+            state.displayText,
+            state.detailText,
+            receiverAvailability?.displayText,
+            restorationAvailability?.displayText
+        ].compactMap { $0 }
+            .joined(separator: ". ")
     }
     #endif
 }
@@ -1215,6 +1337,16 @@ struct NativeDirectCallRoomActionAvailability: Equatable {
         canHangUp = NativeDirectCallRoomCardAction.hangUp.isEnabled(in: cardState, isLoading: isLoading)
         canRetry = NativeDirectCallRoomCardAction.retry.isEnabled(in: cardState, isLoading: isLoading)
         canDismissError = NativeDirectCallRoomCardAction.dismissError.isEnabled(in: cardState, isLoading: isLoading)
+    }
+}
+
+extension NativeDirectCallRoomCardStatus {
+    var redactedStatus: NativeDirectCallRoomCardRedactedStatus {
+        .init(state: state,
+              receiverAvailability: receiverAvailability,
+              restorationAvailability: restorationAvailability,
+              isLoading: false,
+              isStartAudioTemporarilyDisabled: false)
     }
 }
 
@@ -1590,7 +1722,38 @@ extension NativeDirectCallRoomCardState {
         case .failed(let reason):
             reason.displayText
         case .ended(let reason):
-            reason.displayText
+            if reason == .unknown {
+                UntranslatedL10n.screenRoomNativeDirectCallEnded
+            } else {
+                reason.displayText
+            }
+        }
+    }
+
+    var detailText: String? {
+        switch self {
+        case .hidden:
+            nil
+        case .unavailable(let reason):
+            reason.detailText
+        case .canStart:
+            UntranslatedL10n.screenRoomNativeDirectCallReadyDetail
+        case .outgoingRinging:
+            UntranslatedL10n.screenRoomNativeDirectCallCallingDetail
+        case .incomingRinging:
+            UntranslatedL10n.screenRoomNativeDirectCallIncomingDetail
+        case .connecting:
+            UntranslatedL10n.screenRoomNativeDirectCallConnectingDetail
+        case .activeAudio:
+            UntranslatedL10n.screenRoomNativeDirectCallActiveDetail
+        case .failed(let reason):
+            reason.detailText
+        case .ended(let reason):
+            if reason == .unknown {
+                UntranslatedL10n.screenRoomNativeDirectCallEndedDetail
+            } else {
+                reason.detailText
+            }
         }
     }
 
@@ -1644,16 +1807,40 @@ private extension NativeDirectCallRoomCardUnavailableReason {
         case .unverifiedDevice, .peerTrustUnavailable:
             UntranslatedL10n.screenRoomNativeDirectCallVerifyBeforeCalling
         case .liveKitNetworkFailed:
-            UntranslatedL10n.screenRoomNativeDirectCallCouldntConnectAudio
+            UntranslatedL10n.screenRoomNativeDirectCallAudioUnavailable
         case .callTimedOut:
-            UntranslatedL10n.screenRoomNativeDirectCallEnded
-        case .nativeCallsUnavailable,
-             .serverUnsupported,
-             .roomNotEncrypted,
-             .roomNotOneToOne,
-             .callServiceUnavailable,
-             .unknown:
-            UntranslatedL10n.screenRoomNativeDirectCallServiceUnavailable
+            UntranslatedL10n.screenRoomNativeDirectCallTimedOut
+        case .roomNotEncrypted:
+            UntranslatedL10n.screenRoomNativeDirectCallRoomNotEncrypted
+        case .roomNotOneToOne:
+            UntranslatedL10n.screenRoomNativeDirectCallRoomNotOneToOne
+        case .callServiceUnavailable:
+            UntranslatedL10n.screenRoomNativeDirectCallBackendUnavailable
+        case .nativeCallsUnavailable, .serverUnsupported:
+            UntranslatedL10n.screenRoomNativeDirectCallNotAvailableHere
+        case .unknown:
+            UntranslatedL10n.screenRoomNativeDirectCallUnknownFailure
+        }
+    }
+
+    var detailText: String {
+        switch self {
+        case .unverifiedDevice, .peerTrustUnavailable:
+            UntranslatedL10n.screenRoomNativeDirectCallVerifyBeforeCallingDetail
+        case .liveKitNetworkFailed:
+            UntranslatedL10n.screenRoomNativeDirectCallAudioUnavailableDetail
+        case .callTimedOut:
+            UntranslatedL10n.screenRoomNativeDirectCallTimedOutDetail
+        case .roomNotEncrypted:
+            UntranslatedL10n.screenRoomNativeDirectCallRoomNotEncryptedDetail
+        case .roomNotOneToOne:
+            UntranslatedL10n.screenRoomNativeDirectCallRoomNotOneToOneDetail
+        case .callServiceUnavailable:
+            UntranslatedL10n.screenRoomNativeDirectCallBackendUnavailableDetail
+        case .nativeCallsUnavailable, .serverUnsupported:
+            UntranslatedL10n.screenRoomNativeDirectCallNotAvailableHereDetail
+        case .unknown:
+            UntranslatedL10n.screenRoomNativeDirectCallUnknownFailureDetail
         }
     }
 }
@@ -1664,20 +1851,48 @@ private extension NativeDirectCallRoomCardFailureReason {
         case .unverifiedDevice, .peerTrustUnavailable:
             UntranslatedL10n.screenRoomNativeDirectCallVerifyBeforeCalling
         case .liveKitNetworkFailed:
-            UntranslatedL10n.screenRoomNativeDirectCallCouldntConnectAudio
+            UntranslatedL10n.screenRoomNativeDirectCallAudioUnavailable
         case .callTimedOut:
-            UntranslatedL10n.screenRoomNativeDirectCallEnded
+            UntranslatedL10n.screenRoomNativeDirectCallTimedOut
         case .declined:
             UntranslatedL10n.screenRoomNativeDirectCallDeclined
         case .cancelled:
             UntranslatedL10n.screenRoomNativeDirectCallCancelled
-        case .nativeCallsUnavailable,
-             .serverUnsupported,
-             .roomNotEncrypted,
-             .roomNotOneToOne,
-             .callServiceUnavailable,
-             .unknown:
-            UntranslatedL10n.screenRoomNativeDirectCallServiceUnavailable
+        case .roomNotEncrypted:
+            UntranslatedL10n.screenRoomNativeDirectCallRoomNotEncrypted
+        case .roomNotOneToOne:
+            UntranslatedL10n.screenRoomNativeDirectCallRoomNotOneToOne
+        case .callServiceUnavailable:
+            UntranslatedL10n.screenRoomNativeDirectCallBackendUnavailable
+        case .nativeCallsUnavailable, .serverUnsupported:
+            UntranslatedL10n.screenRoomNativeDirectCallNotAvailableHere
+        case .unknown:
+            UntranslatedL10n.screenRoomNativeDirectCallUnknownFailure
+        }
+    }
+
+    var detailText: String {
+        switch self {
+        case .unverifiedDevice, .peerTrustUnavailable:
+            UntranslatedL10n.screenRoomNativeDirectCallVerifyBeforeCallingDetail
+        case .liveKitNetworkFailed:
+            UntranslatedL10n.screenRoomNativeDirectCallAudioUnavailableDetail
+        case .callTimedOut:
+            UntranslatedL10n.screenRoomNativeDirectCallTimedOutDetail
+        case .declined:
+            UntranslatedL10n.screenRoomNativeDirectCallDeclinedDetail
+        case .cancelled:
+            UntranslatedL10n.screenRoomNativeDirectCallCancelledDetail
+        case .roomNotEncrypted:
+            UntranslatedL10n.screenRoomNativeDirectCallRoomNotEncryptedDetail
+        case .roomNotOneToOne:
+            UntranslatedL10n.screenRoomNativeDirectCallRoomNotOneToOneDetail
+        case .callServiceUnavailable:
+            UntranslatedL10n.screenRoomNativeDirectCallBackendUnavailableDetail
+        case .nativeCallsUnavailable, .serverUnsupported:
+            UntranslatedL10n.screenRoomNativeDirectCallNotAvailableHereDetail
+        case .unknown:
+            UntranslatedL10n.screenRoomNativeDirectCallUnknownFailureDetail
         }
     }
 }

@@ -959,12 +959,91 @@ final class NativeDirectCallInternalControlPanelTests {
         #expect(NativeDirectCallRoomCardState.incomingRinging.displayText == UntranslatedL10n.screenRoomNativeDirectCallIncoming)
         #expect(NativeDirectCallRoomCardState.outgoingRinging.displayText == UntranslatedL10n.screenRoomNativeDirectCallCalling)
         #expect(NativeDirectCallRoomCardState.activeAudio.displayText == UntranslatedL10n.screenRoomNativeDirectCallActive)
-        #expect(NativeDirectCallRoomCardState.failed(reason: .callServiceUnavailable).displayText == UntranslatedL10n.screenRoomNativeDirectCallServiceUnavailable)
-        #expect(NativeDirectCallRoomCardState.failed(reason: .liveKitNetworkFailed).displayText == UntranslatedL10n.screenRoomNativeDirectCallCouldntConnectAudio)
-        #expect(NativeDirectCallRoomCardState.failed(reason: .callTimedOut).displayText == UntranslatedL10n.screenRoomNativeDirectCallEnded)
+        #expect(NativeDirectCallRoomCardState.failed(reason: .callServiceUnavailable).displayText == UntranslatedL10n.screenRoomNativeDirectCallBackendUnavailable)
+        #expect(NativeDirectCallRoomCardState.failed(reason: .liveKitNetworkFailed).displayText == UntranslatedL10n.screenRoomNativeDirectCallAudioUnavailable)
+        #expect(NativeDirectCallRoomCardState.failed(reason: .callTimedOut).displayText == UntranslatedL10n.screenRoomNativeDirectCallTimedOut)
         #expect(NativeDirectCallRoomCardState.failed(reason: .unverifiedDevice).displayText == UntranslatedL10n.screenRoomNativeDirectCallVerifyBeforeCalling)
+        #expect(NativeDirectCallRoomCardState.failed(reason: .roomNotEncrypted).displayText == UntranslatedL10n.screenRoomNativeDirectCallRoomNotEncrypted)
+        #expect(NativeDirectCallRoomCardState.failed(reason: .roomNotOneToOne).displayText == UntranslatedL10n.screenRoomNativeDirectCallRoomNotOneToOne)
         #expect(NativeDirectCallRoomCardState.ended(reason: .declined).displayText == UntranslatedL10n.screenRoomNativeDirectCallDeclined)
         #expect(NativeDirectCallRoomCardState.ended(reason: .cancelled).displayText == UntranslatedL10n.screenRoomNativeDirectCallCancelled)
+        #expect(NativeDirectCallRoomCardState.ended(reason: .unknown).displayText == UntranslatedL10n.screenRoomNativeDirectCallEnded)
+    }
+
+    @Test
+    func productCardStateDetailTextUsesUserSafeCopy() {
+        #expect(NativeDirectCallRoomCardState.canStart.detailText == UntranslatedL10n.screenRoomNativeDirectCallReadyDetail)
+        #expect(NativeDirectCallRoomCardState.incomingRinging.detailText == UntranslatedL10n.screenRoomNativeDirectCallIncomingDetail)
+        #expect(NativeDirectCallRoomCardState.outgoingRinging.detailText == UntranslatedL10n.screenRoomNativeDirectCallCallingDetail)
+        #expect(NativeDirectCallRoomCardState.connecting.detailText == UntranslatedL10n.screenRoomNativeDirectCallConnectingDetail)
+        #expect(NativeDirectCallRoomCardState.activeAudio.detailText == UntranslatedL10n.screenRoomNativeDirectCallActiveDetail)
+        #expect(NativeDirectCallRoomCardState.failed(reason: .callServiceUnavailable).detailText == UntranslatedL10n.screenRoomNativeDirectCallBackendUnavailableDetail)
+        #expect(NativeDirectCallRoomCardState.failed(reason: .liveKitNetworkFailed).detailText == UntranslatedL10n.screenRoomNativeDirectCallAudioUnavailableDetail)
+        #expect(NativeDirectCallRoomCardState.failed(reason: .callTimedOut).detailText == UntranslatedL10n.screenRoomNativeDirectCallTimedOutDetail)
+        #expect(NativeDirectCallRoomCardState.failed(reason: .unverifiedDevice).detailText == UntranslatedL10n.screenRoomNativeDirectCallVerifyBeforeCallingDetail)
+        #expect(NativeDirectCallRoomCardState.failed(reason: .roomNotEncrypted).detailText == UntranslatedL10n.screenRoomNativeDirectCallRoomNotEncryptedDetail)
+        #expect(NativeDirectCallRoomCardState.failed(reason: .roomNotOneToOne).detailText == UntranslatedL10n.screenRoomNativeDirectCallRoomNotOneToOneDetail)
+        #expect(NativeDirectCallRoomCardState.ended(reason: .declined).detailText == UntranslatedL10n.screenRoomNativeDirectCallDeclinedDetail)
+        #expect(NativeDirectCallRoomCardState.ended(reason: .cancelled).detailText == UntranslatedL10n.screenRoomNativeDirectCallCancelledDetail)
+        #expect(NativeDirectCallRoomCardState.ended(reason: .unknown).detailText == UntranslatedL10n.screenRoomNativeDirectCallEndedDetail)
+    }
+
+    @Test
+    func productCardAllReasonsHaveSafeCopy() {
+        for reason in NativeDirectCallRoomCardUnavailableReason.allCases {
+            let state = NativeDirectCallRoomCardState.unavailable(reason: reason)
+            #expect(!state.displayText.isEmpty)
+            #expect(state.detailText?.isEmpty == false)
+            #expect(Self.forbiddenNativeDirectCallFragments.allSatisfy { !state.displayText.contains($0) })
+            #expect(Self.forbiddenNativeDirectCallFragments.allSatisfy { state.detailText?.contains($0) == false })
+        }
+
+        for reason in NativeDirectCallRoomCardFailureReason.allCases {
+            let failedState = NativeDirectCallRoomCardState.failed(reason: reason)
+            let endedState = NativeDirectCallRoomCardState.ended(reason: reason)
+            #expect(!failedState.displayText.isEmpty)
+            #expect(failedState.detailText?.isEmpty == false)
+            #expect(!endedState.displayText.isEmpty)
+            #expect(endedState.detailText?.isEmpty == false)
+            #expect(Self.forbiddenNativeDirectCallFragments.allSatisfy { !failedState.displayText.contains($0) })
+            #expect(Self.forbiddenNativeDirectCallFragments.allSatisfy { failedState.detailText?.contains($0) == false })
+            #expect(Self.forbiddenNativeDirectCallFragments.allSatisfy { !endedState.displayText.contains($0) })
+            #expect(Self.forbiddenNativeDirectCallFragments.allSatisfy { endedState.detailText?.contains($0) == false })
+        }
+    }
+
+    @Test
+    func productCardRedactedStatusUsesOnlySafeEnumsAndBooleans() {
+        let viewState = NativeDirectCallRoomCardViewState(isVisible: true,
+                                                          isLoading: false,
+                                                          state: .failed(reason: .liveKitNetworkFailed),
+                                                          receiverAvailability: .readyToReceive,
+                                                          restorationAvailability: .unsupported,
+                                                          lastAction: .startAudio,
+                                                          lastActionOutcome: .failed)
+        let redactedStatus = viewState.redactedStatus
+        let redactedSnapshotStatus = NativeDirectCallRoomCardStatus(state: .unavailable(reason: .roomNotEncrypted),
+                                                                    receiverAvailability: .openRoomRequired,
+                                                                    restorationAvailability: .unsupported).redactedStatus
+
+        #expect(redactedStatus.state == .failed)
+        #expect(redactedStatus.unavailableReason == nil)
+        #expect(redactedStatus.failureReason == .liveKitNetworkFailed)
+        #expect(redactedStatus.receiverAvailability == .readyToReceive)
+        #expect(redactedStatus.restorationAvailability == .unsupported)
+        #expect(redactedStatus.actions.canRetry)
+        #expect(redactedStatus.actions.canDismissError)
+        #expect(!redactedStatus.actions.canStartAudio)
+
+        let description = redactedStatus.description
+        #expect(description.contains("state: failed"))
+        #expect(description.contains("failureReason: liveKitNetworkFailed"))
+        #expect(description.contains("canRetry: true"))
+        #expect(Self.forbiddenNativeDirectCallFragments.allSatisfy { !description.contains($0) })
+        #expect(redactedSnapshotStatus.state == .unavailable)
+        #expect(redactedSnapshotStatus.unavailableReason == .roomNotEncrypted)
+        #expect(redactedSnapshotStatus.failureReason == nil)
+        #expect(redactedSnapshotStatus.receiverAvailability == .openRoomRequired)
     }
 
     @Test
@@ -974,15 +1053,7 @@ final class NativeDirectCallInternalControlPanelTests {
                                                  canAccept: false,
                                                  canHangUp: false)
         let description = status.description
-        let forbiddenFragments = [
-            "participant" + "_" + "tok" + "en",
-            "encrypted" + "_payload",
-            "raw " + "key",
-            "access" + "_" + "tok" + "en",
-            "ey" + "J"
-        ]
-
-        #expect(forbiddenFragments.allSatisfy { !description.contains($0) })
+        #expect(Self.forbiddenNativeDirectCallFragments.allSatisfy { !description.contains($0) })
 
         let cardStateDescription = NativeDirectCallRoomCardState.failed(reason: .liveKitNetworkFailed).description
         let cardActionDescription = NativeDirectCallRoomCardActionResult(action: .startAudio,
@@ -991,10 +1062,22 @@ final class NativeDirectCallInternalControlPanelTests {
         let cardStatusDescription = NativeDirectCallRoomCardStatus(state: .canStart,
                                                                    receiverAvailability: .readyToReceive,
                                                                    restorationAvailability: .unsupported).description
-        #expect(forbiddenFragments.allSatisfy { !cardStateDescription.contains($0) })
-        #expect(forbiddenFragments.allSatisfy { !cardActionDescription.contains($0) })
-        #expect(forbiddenFragments.allSatisfy { !cardStatusDescription.contains($0) })
+        #expect(Self.forbiddenNativeDirectCallFragments.allSatisfy { !cardStateDescription.contains($0) })
+        #expect(Self.forbiddenNativeDirectCallFragments.allSatisfy { !cardActionDescription.contains($0) })
+        #expect(Self.forbiddenNativeDirectCallFragments.allSatisfy { !cardStatusDescription.contains($0) })
     }
+
+    private static let forbiddenNativeDirectCallFragments = [
+        "participant" + "_" + "tok" + "en",
+        "encrypted" + "_payload",
+        "raw " + "key",
+        "access" + "_" + "tok" + "en",
+        "ey" + "J",
+        "room" + "_" + "id",
+        "user" + "_" + "id",
+        "device" + "_" + "id",
+        "Bearer"
+    ]
 
     private static func nativeDirectCallStatus(availability: NativeDirectCallInternalControlAvailability = .canStart,
                                                sessionState: String = "idle",
