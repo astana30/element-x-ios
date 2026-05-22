@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Added server-side LiveKit room pre-create in SalemX call-service before participant token issuance.
 - Added Matrix SDK-backed custom content accessor for direct-call message-like events.
 - Added and pinned the SDK custom timeline filter so the native direct-call receive path can observe the custom message-like signal event without changing the visible RoomScreen timeline.
 - Hardened receive semantics so historical timeline reset/backlog direct-call events are ignored and only live post-baseline events are delivered to the engine.
@@ -17,6 +18,16 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-22 — 2.25E Call-Service LiveKit Room Pre-Create
+
+- Added a `LiveKitRoomProvisionerProtocol` boundary and a production/staging RoomService implementation for `CreateRoom`.
+- Kept participant tokens narrow: `roomJoin`, publish, and subscribe only, with no `roomAdmin` or participant `roomCreate` grant.
+- Wired room pre-create after Redis allocation and before token issuance so failure returns `M_DIRECT_CALL_LIVEKIT_ROOM_UNAVAILABLE` and no participant token is issued.
+- Treated LiveKit already-exists responses as success so caller/callee reuse and concurrent retries converge on the allocated room.
+- Added local fake/no-op provisioning and focused backend tests for success, ordering, failure, idempotency, rate-limit ordering, readiness redaction, and RoomService request shape.
+- Did not change iOS behavior, Element Call routes, CallKit, push, video, shared LiveKit config, or global production activation.
+- Staging iOS smoke still needs re-run to prove the private card reaches active audio against the pre-create path.
 
 ## 2026-05-12 — 2.10M Production E2EE Key Wrapping Seam Inspection
 

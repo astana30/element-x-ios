@@ -21,6 +21,7 @@ from .config import (
     validate_service_preflight,
 )
 from .errors import CallServiceError, bad_request
+from .livekit_rooms import DEFAULT_ROOM_DEPARTURE_TIMEOUT_SECONDS, LiveKitRoomServiceProvisioner
 from .livekit_tokens import LiveKitJWTTokenIssuer
 from .local_fake import make_fake_capabilities_payload, make_fake_local_service
 from .logging_utils import configure_logging
@@ -54,6 +55,7 @@ def create_app(config: ServiceConfig | None = None,
             livekit_configured=True,
             livekit_url_secure=True,
             livekit_url_placeholder=False,
+            livekit_room_provisioning_configured=True,
             token_ttl_bounded=True,
             allocation_ttl_bounded=True,
             allocation_store_configured=True,
@@ -81,6 +83,13 @@ def create_app(config: ServiceConfig | None = None,
                     room_validator=SynapseRoomValidator(config.synapse_base_url, config.synapse_admin_token),
                     allocation_store=_allocation_store_for_config(config),
                     rate_limiter=_rate_limiter_for_config(config),
+                    room_provisioner=LiveKitRoomServiceProvisioner(
+                        config.livekit_url,
+                        config.livekit_api_key,
+                        config.livekit_api_secret,
+                        empty_timeout_seconds=config.allocation_ttl_seconds,
+                        departure_timeout_seconds=DEFAULT_ROOM_DEPARTURE_TIMEOUT_SECONDS,
+                    ),
                     token_issuer=LiveKitJWTTokenIssuer(config.livekit_api_key, config.livekit_api_secret, config.token_ttl_seconds),
                     livekit_server_url=config.livekit_url,
                     allocation_ttl_seconds=config.allocation_ttl_seconds,

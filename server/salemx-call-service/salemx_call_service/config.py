@@ -75,6 +75,7 @@ class ServiceReadiness:
     livekit_configured: bool
     livekit_url_secure: bool
     livekit_url_placeholder: bool
+    livekit_room_provisioning_configured: bool
     token_ttl_bounded: bool
     allocation_ttl_bounded: bool
     allocation_store_configured: bool
@@ -95,6 +96,7 @@ class ServiceReadiness:
             "liveKitConfigured": self.livekit_configured,
             "liveKitURLSecure": self.livekit_url_secure,
             "liveKitURLPlaceholder": self.livekit_url_placeholder,
+            "liveKitRoomProvisioningConfigured": self.livekit_room_provisioning_configured,
             "tokenTTLBounded": self.token_ttl_bounded,
             "allocationTTLBounded": self.allocation_ttl_bounded,
             "allocationStoreConfigured": self.allocation_store_configured,
@@ -169,6 +171,7 @@ def service_readiness_from_env(env: Mapping[str, str] = environ) -> ServiceReadi
             livekit_configured=_configured(env, "LIVEKIT_URL"),
             livekit_url_secure=_is_secure_livekit_url(_env_value(env, "LIVEKIT_URL")),
             livekit_url_placeholder=_is_placeholder_livekit_url(_env_value(env, "LIVEKIT_URL")),
+            livekit_room_provisioning_configured=True,
             token_ttl_bounded=True,
             allocation_ttl_bounded=True,
             allocation_store_configured=True,
@@ -262,6 +265,7 @@ def _staging_readiness(mode: str,
     livekit_configured = bool(livekit_url and livekit_api_key and livekit_api_secret)
     livekit_url_secure = _is_secure_livekit_url(livekit_url)
     livekit_url_placeholder = _is_placeholder_livekit_url(livekit_url)
+    livekit_room_provisioning_configured = livekit_configured
     token_ttl_bounded = _token_ttl_bounded(token_ttl_value)
     allocation_ttl_bounded = _allocation_ttl_bounded(allocation_ttl_value, token_ttl_value)
     allocation_store_configured = _allocation_store_configured(allocation_store_value, allocation_store_url, allow_memory_allocation_store)
@@ -325,6 +329,7 @@ def _staging_readiness(mode: str,
         livekit_configured=livekit_configured,
         livekit_url_secure=livekit_url_secure,
         livekit_url_placeholder=livekit_url_placeholder,
+        livekit_room_provisioning_configured=livekit_room_provisioning_configured,
         token_ttl_bounded=token_ttl_bounded,
         allocation_ttl_bounded=allocation_ttl_bounded,
         allocation_store_configured=allocation_store_configured,
@@ -350,6 +355,7 @@ def _readiness(mode: str,
         livekit_configured=False,
         livekit_url_secure=False,
         livekit_url_placeholder=False,
+        livekit_room_provisioning_configured=False,
         token_ttl_bounded=True,
         allocation_ttl_bounded=True,
         allocation_store_configured=False,

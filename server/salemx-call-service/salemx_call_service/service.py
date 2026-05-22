@@ -10,6 +10,7 @@ from .allocation import AllocationKey, AllocationMetadata, AllocationStoreProtoc
 from .auth import MatrixAuthValidatorProtocol, bearer_token_from_authorization, validate_device_binding
 from .dto import AllocationPayload, LiveKitPayload, TokenRequest, TokenResponse
 from .errors import CallServiceError, rate_limited
+from .livekit_rooms import LiveKitRoomProvisionerProtocol
 from .livekit_tokens import LiveKitTokenIssuerProtocol
 from .logging_utils import stable_redacted_id
 from .rate_limiting import RateLimiterProtocol, RateLimitKey
@@ -24,6 +25,7 @@ class DirectCallTokenService:
     room_validator: RoomValidatorProtocol
     allocation_store: AllocationStoreProtocol
     rate_limiter: RateLimiterProtocol
+    room_provisioner: LiveKitRoomProvisionerProtocol
     token_issuer: LiveKitTokenIssuerProtocol
     livekit_server_url: str
     allocation_ttl_seconds: int = 300
@@ -34,6 +36,7 @@ class DirectCallTokenService:
         token_request = TokenRequest.from_mapping(payload)
         authenticated_user = await self.auth_validator.validate_bearer_token(bearer_token)
         validate_device_binding(token_request.device_id, authenticated_user.device_id)
+        await self.room_validator.validate_direct_call_room(authenticated_user, token_request)
 
         rate_limit_decision = await self.rate_limiter.check_and_record(
             RateLimitKey.keys_for(authenticated_user, token_request),
@@ -44,12 +47,12 @@ class DirectCallTokenService:
             LOGGER.info("direct-call token request rate limited retry_after_ms=%d", retry_after_ms)
             raise rate_limited(retry_after_ms)
 
-        await self.room_validator.validate_direct_call_room(authenticated_user, token_request)
         allocation = await self.allocation_store.create_or_reuse(
             AllocationKey.from_token_request(token_request),
             AllocationMetadata.from_token_request(token_request),
             self.allocation_ttl_seconds,
         )
+        await self.room_provisioner.ensure_room(allocation.livekit_room_name)
         issued_token = await self.token_issuer.issue_token(authenticated_user, token_request, allocation)
 
         LOGGER.info(

@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.24K — staging call service deployment preparation.
+After 2.25E — call-service LiveKit room pre-create implementation.
 
 ## Latest App Code Checkpoint
 
@@ -35,6 +35,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- SalemX call-service now pre-creates allocated LiveKit rooms through server-side RoomService `CreateRoom` before issuing participant tokens. Participant tokens remain scoped to room join/publish/subscribe, and room provision failures return a safe fail-closed error without issuing a token.
 - Two-client Matrix signalling proof passed.
 - Diagnostic LiveKit media proof reached active.
 - Production token DTOs, client, and transport seams exist.

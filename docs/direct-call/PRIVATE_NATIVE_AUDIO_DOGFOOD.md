@@ -152,6 +152,7 @@ Before any staging dogfood replaces the local fake proof, the backend and deploy
 - Allocation readiness with `allocationStoreConfigured=true`, `allocationStoreShared=true`, and `allocationStoreConnected=true`.
 - Rate-limit readiness with `rateLimitConfigured=true`, `rateLimitShared=true`, and `rateLimitConnected=true`.
 - Secret-managed `SALEMX_CALL_SERVICE_STORAGE_KEY_SECRET` for Redis key derivation.
+- LiveKit room pre-create validated against staging. The call service now has a server-side RoomService `CreateRoom` path, but staging iOS dogfood remains blocked until this path is smoke-tested and the private card reaches active audio.
 - Token TTL and replay protection.
 - TLS-backed LiveKit URL and certificates.
 - Production-safe LiveKit API key management.

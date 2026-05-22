@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.24K — staging call service deployment preparation.
+After 2.25E — call-service LiveKit room pre-create implementation.
 
 Current checkpoints:
 - App code: 2.23C `Polish native call listener availability status` (`bb7ae2557`).
@@ -19,6 +19,7 @@ Current checkpoints:
 - Redis local integration smoke: 2.24H passed and is documented (`113945266`).
 - Staging Synapse smoke harness: 2.24J-prep `Add staging Synapse smoke harness template` (`565699e15`).
 - Staging deployment scaffold: 2.24K prepared helper scripts and placeholder-only env templates.
+- Call-service LiveKit room pre-create: 2.25E implemented server-side RoomService `CreateRoom` before participant token issuance.
 - Private native audio dogfood guardrails: `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
@@ -38,7 +39,7 @@ Current proven/prepared state:
 - `server/salemx-call-service/scripts/run_staging_call_service_local.sh` validates staging guardrails and starts `uvicorn` from an operator-local env file without printing env values.
 - `server/salemx-call-service/scripts/check_staging_readiness.sh` queries readiness and prints only redacted readiness fields.
 - `server/salemx-call-service/scripts/staging_synapse_smoke.sh` provides the redacted operator-local staging Synapse validation harness.
-- The staging deployment scaffold has not been run against real staging yet because operator-local endpoint/secrets/fixtures are still required.
+- Staging Synapse/LiveKit setup has passed readiness and signalling smoke, but iOS active audio still needs to be re-run after the room pre-create implementation.
 - No public UI activation, Element Call route changes, RoomScreen call presentation changes, existing call-service changes, CallKit, push, video, or global production activation has been added.
 
 Required operator-local staging service env file:
@@ -50,16 +51,16 @@ Required operator-local smoke env file:
 - Fill values locally only. Do not commit or paste the real file.
 
 Phase:
-2.24J — staging Synapse validation smoke execution.
+2.25F — iOS staging smoke after LiveKit room pre-create.
 
 Task:
-Start/check the staging call service using the deployment scaffold, then execute staging Synapse validation smoke using the redacted local-only harness. Do not modify code unless a test-only script/doc issue is found. Do not commit unless docs/scripts are changed and validation passes.
+Restart the local staging call-service with the latest room pre-create implementation, then re-run the redacted A/B private native audio staging smoke. Do not modify iOS behavior unless a small diagnostics-only issue is found. Do not change Element Call, CallKit, push, video, shared LiveKit config, or global production activation.
 
 Context:
-Previous execution attempts were blocked because staging endpoint and test fixtures were unavailable. The prep phases added safe local env templates and helper scripts so an operator can provide local values without committing or printing secrets.
+Previous iOS staging smoke reached signalling and LiveKit client connect, but LiveKit returned service-not-found-like behavior because the call-service allocated a room name without pre-creating the room. The backend now pre-creates the allocated room server-side before issuing participant tokens.
 
 Goal:
-Run staging readiness and Synapse validation smoke and report only redacted/pass-fail results.
+Prove A start -> B incoming -> B accept -> A/B activeAudio -> hangup -> idle against staging, with redacted output only.
 
 Suggested setup commands:
 
@@ -80,12 +81,6 @@ In a second shell:
 ```bash
 server/salemx-call-service/scripts/check_staging_readiness.sh \
   --env-file server/salemx-call-service/deploy/staging.env
-
-cp server/salemx-call-service/smoke/staging-synapse-smoke.env.example server/salemx-call-service/smoke/staging-synapse-smoke.env
-$EDITOR server/salemx-call-service/smoke/staging-synapse-smoke.env
-
-server/salemx-call-service/scripts/staging_synapse_smoke.sh \
-  --env-file server/salemx-call-service/smoke/staging-synapse-smoke.env
 ```
 
 Smoke cases:
@@ -93,31 +88,27 @@ Smoke cases:
    - expect `ready=true`, `reason=ok`
    - allocation/rate-limit configured/shared/connected true
    - `storageKeyConfigured=true`
-2. Positive token request:
-   - valid caller bearer
-   - matching device ID
-   - encrypted direct 1:1 room
-   - caller joined
-   - peer joined
-   - expect HTTP `200`
-3. Invalid bearer:
-   - expect `401 M_UNKNOWN_TOKEN`
-   - no token issued
-4. Wrong device ID when fixture is present:
-   - expect `403 M_FORBIDDEN`
-   - no token issued
-5. Room not encrypted when fixture is present:
-   - expect `403 M_ROOM_NOT_ENCRYPTED`
-   - no token issued
-6. Non-1:1 room when fixture is present:
-   - expect `403 M_DIRECT_CALL_NOT_1_TO_1`
-   - no token issued
-7. Peer not joined / peer mismatch when fixture is present:
-   - expect `403 M_DIRECT_CALL_PEER_MISMATCH`
-   - no token issued
-8. Caller not joined when fixture is present:
-   - expect `403 M_NOT_JOINED`
-   - no token issued
+   - `liveKitRoomProvisioningConfigured=true`
+2. A/B app launch:
+   - use `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`
+   - use staging token base URL on `127.0.0.1:8088`
+   - keep internal UI diagnostics off unless needed
+3. Trust:
+   - A/B own session verified
+   - A/B cross-signing ready
+   - peer trust ready
+4. Room/card readiness:
+   - encrypted direct 1:1 DM open on both simulators
+   - production room attached on A/B
+   - no stale active session
+5. Lifecycle:
+   - A starts private native audio
+   - B reaches incoming ringing
+   - B accepts
+   - A/B reach active audio
+   - media failure remains none
+   - hangup returns A/B to idle
+   - cleanup/disconnect attempted
 
 Hard redaction rules:
 - Never print Matrix access tokens.
@@ -133,20 +124,21 @@ Hard redaction rules:
 
 Allowed report fields:
 - HTTP status.
-- Matrix-style errcode.
 - Readiness booleans.
-- Pass/fail/skip per case.
+- A/B lifecycle enums.
 - Redacted token response shape booleans.
 - Backend redacted reason enums.
+- Media failure enum.
 
 Pass criteria:
 - Readiness check passes.
-- Positive case returns `200`.
-- Required negative cases fail closed with expected errcode/status.
-- Optional negative cases pass if fixtures are supplied, otherwise report skipped.
-- No token issued for negative cases.
-- Harness redaction self-check passes.
-- Staging rate limit is high enough for the smoke burst, or cases are spaced so room-validation negatives are not masked by `M_DIRECT_CALL_RATE_LIMITED`.
+- Trust ready.
+- A/B room attached.
+- A start creates outgoing/incoming.
+- B accept reaches active audio on both sides.
+- Media failure is none.
+- Hangup returns both sides to idle.
+- No token/JWT/secret/raw ID leakage.
 
 If staging data is unavailable:
 - Do not fake success.
@@ -161,12 +153,13 @@ Rollback:
 
 Report:
 A. Readiness result.
-B. Positive case result.
-C. Negative case matrix.
-D. Harness redaction self-check result.
-E. Any deviations.
-F. Whether code/docs changed.
-G. Whether staging Synapse validation is pass/fail/blocked.
+B. Trust result.
+C. Room/card readiness.
+D. A/B lifecycle result.
+E. Final production-status A/B.
+F. Any backend/LiveKit/iOS issue.
+G. Whether code/docs changed.
+H. Whether staging iOS smoke passed or remains blocked.
 
 Suggested commit only if docs/scripts changed:
-Document staging Synapse validation smoke result
+Document staging iOS smoke after room pre-create

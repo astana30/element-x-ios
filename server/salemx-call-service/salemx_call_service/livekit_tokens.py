@@ -83,7 +83,7 @@ class LiveKitJWTTokenIssuer:
         if self._include_issued_at:
             claims["iat"] = int(now.timestamp())
 
-        token = _encode_hs256_jwt(claims, self._api_secret)
+        token = encode_livekit_jwt(claims, self._api_secret)
         return IssuedLiveKitToken(participant_token=token, expires_at=expires_at, grant=grant)
 
     def _participant_identity(self, allocation: Allocation, authenticated_user: AuthenticatedUser, token_request: TokenRequest) -> str:
@@ -100,7 +100,7 @@ def _base64url(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
 
 
-def _encode_hs256_jwt(claims: dict[str, object], secret: bytes) -> str:
+def encode_livekit_jwt(claims: dict[str, object], secret: bytes) -> str:
     header = {"alg": "HS256", "typ": "JWT"}
     header_part = _base64url(json.dumps(header, separators=(",", ":"), sort_keys=True).encode("utf-8"))
     claims_part = _base64url(json.dumps(claims, separators=(",", ":"), sort_keys=True).encode("utf-8"))

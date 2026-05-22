@@ -161,6 +161,15 @@ Redis-backed staging storage derives keys with `SALEMX_CALL_SERVICE_STORAGE_KEY_
 }
 ```
 
+If the allocated LiveKit room cannot be prepared, the service fails closed before issuing a participant token:
+
+```json
+{
+  "errcode": "M_DIRECT_CALL_LIVEKIT_ROOM_UNAVAILABLE",
+  "error": "Unable to prepare media room."
+}
+```
+
 ## Local Run
 
 Create an isolated Python environment, install requirements, and run Uvicorn:
@@ -291,6 +300,14 @@ The run helper validates guardrails before starting:
 - `ALLOCATION_TTL_SECONDS` is not shorter than `TOKEN_TTL_SECONDS`.
 
 The helper prints missing or invalid variable names only and never prints values.
+
+## LiveKit Room Provisioning
+
+In staging mode, the service pre-creates the allocated LiveKit room before issuing a participant token. This uses the LiveKit RoomService `CreateRoom` API with a short-lived server-side token carrying only `roomCreate`; participant tokens remain scoped to `roomJoin`, publish, and subscribe for one allocated room.
+
+The provisioner derives the RoomService URL from `LIVEKIT_URL`, converting `wss://` to `https://` for the server API. It treats LiveKit already-exists responses as success so caller/callee requests and concurrent retries converge on the Redis allocation. If room creation fails, the request returns `M_DIRECT_CALL_LIVEKIT_ROOM_UNAVAILABLE` and no participant token is issued.
+
+Readiness exposes only the redacted boolean `liveKitRoomProvisioningConfigured`; it never exposes the LiveKit API key, API secret, participant tokens, room names, or endpoint credentials.
 
 In a second shell, check redacted readiness:
 

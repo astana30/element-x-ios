@@ -89,3 +89,11 @@ def allocation_failed() -> CallServiceError:
         errcode="M_DIRECT_CALL_ALLOCATION_FAILED",
         error="Unable to allocate media room.",
     )
+
+
+def livekit_room_unavailable() -> CallServiceError:
+    return CallServiceError(
+        status_code=503,
+        errcode="M_DIRECT_CALL_LIVEKIT_ROOM_UNAVAILABLE",
+        error="Unable to prepare media room.",
+    )

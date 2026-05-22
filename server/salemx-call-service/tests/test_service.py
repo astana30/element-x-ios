@@ -38,7 +38,11 @@ from salemx_call_service.config import (
     validate_service_preflight,
 )
 from salemx_call_service.dto import TokenRequest
-from salemx_call_service.errors import CallServiceError
+from salemx_call_service.errors import CallServiceError, livekit_room_unavailable
+from salemx_call_service.livekit_rooms import (
+    LiveKitRoomServiceHTTPResponse,
+    LiveKitRoomServiceProvisioner,
+)
 from salemx_call_service.livekit_tokens import IssuedLiveKitToken, LiveKitGrant, LiveKitJWTTokenIssuer
 from salemx_call_service.local_fake import (
     DEFAULT_FAKE_LIVEKIT_URL,
@@ -77,17 +81,48 @@ class FakeAuthValidator:
 
 
 class FakeLiveKitTokenIssuer:
-    def __init__(self) -> None:
+    def __init__(self, events: list[str] | None = None) -> None:
         self.issued: list[tuple[AuthenticatedUser, TokenRequest, Allocation, LiveKitGrant]] = []
+        self.events = events
 
     async def issue_token(self, authenticated_user: AuthenticatedUser, token_request: TokenRequest, allocation: Allocation) -> IssuedLiveKitToken:
         grant = LiveKitGrant(room_join=True, room=allocation.livekit_room_name, can_publish=True, can_subscribe=True, can_publish_data=False)
         self.issued.append((authenticated_user, token_request, allocation, grant))
+        if self.events is not None:
+            self.events.append("issue-token")
         return IssuedLiveKitToken(
             participant_token="participant-token-sensitive",
             expires_at=datetime.now(timezone.utc) + timedelta(seconds=120),
             grant=grant,
         )
+
+
+class FakeLiveKitRoomProvisioner:
+    def __init__(self, fail: bool = False, events: list[str] | None = None) -> None:
+        self.fail = fail
+        self.events = events
+        self.ensured_rooms: list[str] = []
+
+    async def ensure_room(self, room_name: str) -> None:
+        self.ensured_rooms.append(room_name)
+        if self.events is not None:
+            self.events.append("ensure-room")
+        if self.fail:
+            raise livekit_room_unavailable()
+
+
+class FakeLiveKitRoomServiceHTTPClient:
+    def __init__(self, response: LiveKitRoomServiceHTTPResponse) -> None:
+        self.response = response
+        self.requests: list[tuple[str, str, dict[str, object], float]] = []
+
+    def create_room(self,
+                    endpoint_url: str,
+                    authorization: str,
+                    payload: dict[str, object],
+                    timeout_seconds: float) -> LiveKitRoomServiceHTTPResponse:
+        self.requests.append((endpoint_url, authorization, payload, timeout_seconds))
+        return self.response
 
 
 class FakeRedisAllocationClient:
@@ -165,6 +200,7 @@ class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
     def make_service(self,
                      rooms: dict[str, RoomEligibility] | None = None,
                      issuer: FakeLiveKitTokenIssuer | None = None,
+                     provisioner: FakeLiveKitRoomProvisioner | None = None,
                      rate_limiter: RateLimiterProtocol | None = None,
                      rate_limit_per_minute: int = 30) -> DirectCallTokenService:
         return DirectCallTokenService(
@@ -177,6 +213,7 @@ class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
             }),
             allocation_store=InMemoryAllocationStore(allocation_ttl_seconds=300),
             rate_limiter=rate_limiter or InMemoryRateLimiter(),
+            room_provisioner=provisioner or FakeLiveKitRoomProvisioner(),
             token_issuer=issuer or FakeLiveKitTokenIssuer(),
             livekit_server_url="wss://livekit.example.test",
             rate_limit_per_minute=rate_limit_per_minute,
@@ -248,7 +285,8 @@ class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_valid_outgoing_creates_opaque_allocation(self) -> None:
         issuer = FakeLiveKitTokenIssuer()
-        service = self.make_service(issuer=issuer)
+        provisioner = FakeLiveKitRoomProvisioner()
+        service = self.make_service(issuer=issuer, provisioner=provisioner)
 
         response = await service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload())
         body = response.as_dict()
@@ -265,9 +303,36 @@ class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(issuer.issued[0][3].can_publish)
         self.assertTrue(issuer.issued[0][3].can_subscribe)
         self.assertFalse(issuer.issued[0][3].can_publish_data)
+        self.assertEqual(provisioner.ensured_rooms, [body["livekit"]["room_name"]])
+
+    async def test_livekit_room_is_ensured_after_allocation_before_token_issue(self) -> None:
+        events: list[str] = []
+        issuer = FakeLiveKitTokenIssuer(events=events)
+        provisioner = FakeLiveKitRoomProvisioner(events=events)
+        service = self.make_service(issuer=issuer, provisioner=provisioner)
+
+        response = await service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload())
+
+        self.assertEqual(events, ["ensure-room", "issue-token"])
+        self.assertEqual(provisioner.ensured_rooms, [response.livekit.room_name])
+        self.assertEqual(issuer.issued[0][2].livekit_room_name, response.livekit.room_name)
+
+    async def test_livekit_room_provision_failure_fails_closed_without_token(self) -> None:
+        issuer = FakeLiveKitTokenIssuer()
+        provisioner = FakeLiveKitRoomProvisioner(fail=True)
+        service = self.make_service(issuer=issuer, provisioner=provisioner)
+
+        with self.assertRaises(CallServiceError) as context:
+            await service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload())
+
+        self.assertEqual(context.exception.status_code, 503)
+        self.assertEqual(context.exception.errcode, "M_DIRECT_CALL_LIVEKIT_ROOM_UNAVAILABLE")
+        self.assertEqual(len(provisioner.ensured_rooms), 1)
+        self.assertEqual(len(issuer.issued), 0)
 
     async def test_valid_incoming_reuses_allocation(self) -> None:
-        service = self.make_service()
+        provisioner = FakeLiveKitRoomProvisioner()
+        service = self.make_service(provisioner=provisioner)
 
         outgoing = await service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload())
         incoming = await service.issue_token(
@@ -277,9 +342,11 @@ class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(outgoing.allocation.id, incoming.allocation.id)
         self.assertEqual(outgoing.livekit.room_name, incoming.livekit.room_name)
+        self.assertEqual(provisioner.ensured_rooms, [outgoing.livekit.room_name, incoming.livekit.room_name])
 
     async def test_concurrent_same_call_reuses_allocation(self) -> None:
-        service = self.make_service()
+        provisioner = FakeLiveKitRoomProvisioner()
+        service = self.make_service(provisioner=provisioner)
 
         responses = await asyncio.gather(
             service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload(client_transaction_id="txn-1")),
@@ -288,6 +355,8 @@ class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(responses[0].allocation.id, responses[1].allocation.id)
         self.assertEqual(responses[0].livekit.room_name, responses[1].livekit.room_name)
+        self.assertEqual(len(provisioner.ensured_rooms), 2)
+        self.assertEqual(set(provisioner.ensured_rooms), {responses[0].livekit.room_name})
 
     async def test_under_rate_limit_token_request_succeeds(self) -> None:
         issuer = FakeLiveKitTokenIssuer()
@@ -311,18 +380,22 @@ class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_no_token_is_issued_after_rate_limit_is_exceeded(self) -> None:
         issuer = FakeLiveKitTokenIssuer()
-        service = self.make_service(issuer=issuer, rate_limit_per_minute=1)
+        provisioner = FakeLiveKitRoomProvisioner()
+        service = self.make_service(issuer=issuer, provisioner=provisioner, rate_limit_per_minute=1)
 
         await service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload(client_transaction_id="txn-1"))
         with self.assertRaises(CallServiceError):
             await service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload(client_transaction_id="txn-2"))
 
         self.assertEqual(len(issuer.issued), 1)
+        self.assertEqual(len(provisioner.ensured_rooms), 1)
 
     async def test_no_token_is_issued_after_redis_rate_limit_is_exceeded(self) -> None:
         issuer = FakeLiveKitTokenIssuer()
+        provisioner = FakeLiveKitRoomProvisioner()
         service = self.make_service(
             issuer=issuer,
+            provisioner=provisioner,
             rate_limiter=RedisRateLimiter(FakeRedisRateLimitClient(), StorageKeyHasher("storage-key-secret")),
             rate_limit_per_minute=1,
         )
@@ -333,11 +406,14 @@ class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(context.exception.errcode, "M_DIRECT_CALL_RATE_LIMITED")
         self.assertEqual(len(issuer.issued), 1)
+        self.assertEqual(len(provisioner.ensured_rooms), 1)
 
     async def test_rate_limit_store_unavailable_fails_before_token_issue(self) -> None:
         issuer = FakeLiveKitTokenIssuer()
+        provisioner = FakeLiveKitRoomProvisioner()
         service = self.make_service(
             issuer=issuer,
+            provisioner=provisioner,
             rate_limiter=SharedRateLimiterSkeleton(RateLimitStoreKind.REDIS.value),
         )
 
@@ -347,6 +423,7 @@ class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(context.exception.status_code, 503)
         self.assertEqual(context.exception.errcode, "M_DIRECT_CALL_RATE_LIMIT_STORE_UNAVAILABLE")
         self.assertEqual(len(issuer.issued), 0)
+        self.assertEqual(len(provisioner.ensured_rooms), 0)
 
     async def test_rate_limited_logs_do_not_contain_raw_ids_or_tokens(self) -> None:
         service = self.make_service(rate_limit_per_minute=1)
@@ -358,6 +435,27 @@ class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
 
         log_output = "\n".join(logs.output)
         self.assertNotIn("matrix-token-a-sensitive", log_output)
+        self.assertNotIn("@alice:example.test", log_output)
+        self.assertNotIn("@bob:example.test", log_output)
+        self.assertNotIn("!room:example.test", log_output)
+
+    async def test_livekit_room_provision_failure_logs_are_redacted(self) -> None:
+        http_client = FakeLiveKitRoomServiceHTTPClient(LiveKitRoomServiceHTTPResponse(500, '{"code":"internal"}'))
+        provisioner = LiveKitRoomServiceProvisioner(
+            "wss://livekit.example.test",
+            "test-api-key",
+            "test-signing-key",
+            http_client=http_client,
+        )
+
+        with self.assertLogs("salemx_call_service.livekit_rooms", level="WARNING") as logs:
+            with self.assertRaises(CallServiceError):
+                await provisioner.ensure_room("salemx-dc-room-sensitive")
+
+        log_output = "\n".join(logs.output)
+        self.assertNotIn("test-signing-key", log_output)
+        self.assertNotIn("test-api-key", log_output)
+        self.assertNotIn("salemx-dc-room-sensitive", log_output)
         self.assertNotIn("!room:example.test", log_output)
         self.assertNotIn("@alice:example.test", log_output)
         self.assertNotIn("@bob:example.test", log_output)
@@ -668,6 +766,7 @@ class ServicePreflightTests(unittest.TestCase):
 
         self.assertTrue(readiness.ready)
         self.assertEqual(readiness.reason, "ok")
+        self.assertTrue(readiness.livekit_room_provisioning_configured)
         self.assertTrue(readiness.allocation_store_configured)
         self.assertTrue(readiness.allocation_store_shared)
         self.assertTrue(readiness.allocation_store_connected)
@@ -736,6 +835,7 @@ class ServicePreflightTests(unittest.TestCase):
 
         self.assertTrue(readiness.ready)
         self.assertEqual(readiness.reason, "ok")
+        self.assertTrue(readiness.as_dict()["liveKitRoomProvisioningConfigured"])
         self.assertTrue(readiness.rate_limit_configured)
         self.assertTrue(readiness.rate_limit_shared)
         self.assertTrue(readiness.rate_limit_connected)
@@ -814,6 +914,63 @@ class LocalFakeCapabilityTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertNotIn(app_capabilities_path, production_like_paths)
         self.assertIn(app_capabilities_path, fake_paths)
+
+
+class LiveKitRoomServiceProvisionerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_create_room_uses_room_service_endpoint_and_room_create_grant(self) -> None:
+        http_client = FakeLiveKitRoomServiceHTTPClient(LiveKitRoomServiceHTTPResponse(200, '{"name":"redacted"}'))
+        provisioner = LiveKitRoomServiceProvisioner(
+            "wss://livekit.example.test",
+            "test-api-key",
+            "test-signing-key",
+            empty_timeout_seconds=180,
+            departure_timeout_seconds=15,
+            http_client=http_client,
+        )
+
+        await provisioner.ensure_room("salemx-dc-allocation-a")
+
+        self.assertEqual(len(http_client.requests), 1)
+        endpoint_url, authorization, payload, timeout_seconds = http_client.requests[0]
+        self.assertEqual(endpoint_url, "https://livekit.example.test/twirp/livekit.RoomService/CreateRoom")
+        self.assertEqual(payload["name"], "salemx-dc-allocation-a")
+        self.assertEqual(payload["empty_timeout"], 180)
+        self.assertEqual(payload["departure_timeout"], 15)
+        self.assertGreater(timeout_seconds, 0)
+        self.assertTrue(authorization.startswith("Bearer "))
+        claims = LiveKitJWTTokenIssuerTests.decode_unverified_claims(authorization.removeprefix("Bearer "))
+        self.assertEqual(claims["iss"], "test-api-key")
+        self.assertTrue(claims["video"]["roomCreate"])
+        self.assertNotIn("roomAdmin", claims["video"])
+        self.assertNotIn("roomJoin", claims["video"])
+
+    async def test_already_exists_response_is_success(self) -> None:
+        http_client = FakeLiveKitRoomServiceHTTPClient(LiveKitRoomServiceHTTPResponse(409, '{"code":"already_exists"}'))
+        provisioner = LiveKitRoomServiceProvisioner(
+            "wss://livekit.example.test",
+            "test-api-key",
+            "test-signing-key",
+            http_client=http_client,
+        )
+
+        await provisioner.ensure_room("salemx-dc-existing")
+
+        self.assertEqual(len(http_client.requests), 1)
+
+    async def test_create_room_failure_raises_safe_error(self) -> None:
+        http_client = FakeLiveKitRoomServiceHTTPClient(LiveKitRoomServiceHTTPResponse(503, '{"code":"unavailable"}'))
+        provisioner = LiveKitRoomServiceProvisioner(
+            "wss://livekit.example.test",
+            "test-api-key",
+            "test-signing-key",
+            http_client=http_client,
+        )
+
+        with self.assertRaises(CallServiceError) as context:
+            await provisioner.ensure_room("salemx-dc-unavailable")
+
+        self.assertEqual(context.exception.errcode, "M_DIRECT_CALL_LIVEKIT_ROOM_UNAVAILABLE")
+        self.assertNotIn("salemx-dc-unavailable", context.exception.error)
 
 
 class LiveKitJWTTokenIssuerTests(unittest.IsolatedAsyncioTestCase):
