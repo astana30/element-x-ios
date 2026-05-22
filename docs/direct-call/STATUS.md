@@ -2,13 +2,13 @@
 
 ## Current Phase
 
-After 2.26D — private dogfood activation gate clarified.
+After 2.26E — product-card-only staging smoke passed under explicit private dogfood gate.
 
 ## Latest App Code Checkpoint
 
-2.23C `Polish native call listener availability status`
+2.26E `Enable private dogfood card listener preparation`
 
-Commit: `bb7ae2557`
+Commit: `07256bf0a`
 
 ## Latest Backend Code Checkpoint
 
@@ -61,13 +61,23 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - LiveKit-off fail-closed was not run because shared staging LiveKit should not be stopped during this dogfood session.
   - Final A/B status had no active session and no media failure.
   - Element Call route remained untouched and no code changed.
-  - Caveat: the 2.26C runner path used the older DEBUG rollout/capability shim naming. 2.26D replaces that with the explicit DEBUG/integration-only `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` gate, but product-card-only dogfood still needs a fresh staging proof under the new gate.
+- Product-card-only staging smoke passed under the explicit private dogfood gate:
+  - Without `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, activation remained blocked with `appRolloutDisabled`.
+  - The no-gate run produced no Matrix send, no token/media path, and no LiveKit client connect.
+  - With `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, activation was enabled with dependencies ready, peer trust ready, and key wrapper available.
+  - The legacy `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` name was explicitly unset and was not used.
+  - A started from the private product card, B reached incoming ringing, B accepted from the private product card, A/B reached `productionSessionState=activeAudio`, hangup returned A/B to `productionSessionState=idle`, and `productionMediaFailureReason=none`.
+  - Encryption was ready, media connect and LiveKit client connect were attempted, and cleanup/disconnect ran after hangup.
+  - Diagnostic runner use was limited to launch, status, activation, and trust polling; Start, Accept, and Hang up were manual private-card actions.
+  - Element Call route remained untouched, with no CallKit, push, video, or global production activation.
+  - Runtime issue fixed in `07256bf0a`: the private product card now prepares/arms the receiver listener from card status only when private dogfood activation is already enabled.
+  - Listener preparation remains side-effect-limited: it does not start outgoing calls, request tokens, send Matrix events, or connect media.
 - Private dogfood activation is explicit and fail-closed by default:
   - `appRolloutDisabled` is produced by the production activation decision when `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` is absent.
   - `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1` can show the private card, and `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1` can allow start actions, but neither gate enables rollout/capability readiness by itself.
   - The private dogfood gate is DEBUG/integration-only and requires `IS_RUNNING_INTEGRATION_TESTS=1`, `NATIVE_DIRECT_CALL_DIAGNOSTICS=1`, and `NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1`.
   - The old `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` name no longer enables the app-side activation model.
-  - Product card and diagnostic runner use the same room-flow production activation/start decision, so the next proof can focus on product-card interaction under the explicit gate.
+  - Product card and diagnostic runner use the same room-flow production activation/start decision.
 - Two-client Matrix signalling proof passed.
 - Diagnostic LiveKit media proof reached active.
 - Production token DTOs, client, and transport seams exist.
@@ -590,7 +600,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Current Blocker
 
-- Controlled engineering diagnostic dogfood may continue on staging under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, but product-card-only dogfood is not yet re-proven after the activation-gate cleanup.
+- Controlled engineering dogfood may continue on staging under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, including the product-card-only happy path that passed in 2.26E.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
 - CallKit, push/background incoming, missed calls, video, session restoration, and global production activation remain out of scope.
@@ -601,9 +611,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.26E — product-card-only staging dogfood smoke under explicit private dogfood gate`
+`2.27A — controlled engineering dogfood pilot runbook/final checkpoint`
 
-Goal: rerun the controlled staging happy path and selected matrix rows from the private product card with `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, real staging token issuance, and staging LiveKit, then record whether product-card-only dogfood can be claimed. Preserve fail-closed activation, trusted-device E2EE, redaction, Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope.
+Goal: define the final operator checklist for a narrow named-engineer pilot using the proven staging product-card-only happy path and the earlier controlled matrix. Keep the pilot foreground/open-room, DEBUG/integration-only, encrypted direct 1:1, verified-peer, and staging-only. Preserve fail-closed activation, trusted-device E2EE, redaction, Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope.
 
 ## Do-Not-Touch Constraints
 

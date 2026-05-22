@@ -16,7 +16,8 @@ No tokens, JWTs, passwords, shared secrets, authorization header values, or Live
 | Call-service token POST | `200` |
 | LiveKit participant token | Issued, redacted |
 | iOS private native audio staging smoke | `activeAudio`, then `idle` after hangup |
-| Controlled engineering dogfood matrix | Passed, with caveat below |
+| Controlled engineering dogfood matrix | Passed |
+| Product-card-only staging smoke | Passed under explicit private dogfood gate |
 
 ## Root Cause
 
@@ -44,7 +45,10 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - No iOS app code, Element Call route, CallKit, push, video, or global production activation changed.
 - The 2.26C controlled engineering dogfood matrix passed happy path, reverse direction, repeated calls, decline, cancel, timeout, backend-off fail-closed, backend recovery, relaunch fail-closed, and listener-not-armed cases on the real staging media/token/LiveKit path.
 - LiveKit-off fail-closed was not run because the staging LiveKit instance is shared.
-- The 2.26D app-side cleanup replaces the older DEBUG rollout/capability shim with the explicit `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` gate; do not claim clean product-card-only dogfood until a fresh staging smoke proves the card under that gate.
+- The 2.26D app-side cleanup replaces the older DEBUG rollout/capability shim with the explicit `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` gate.
+- The 2.26E product-card-only staging smoke proved the private card under that explicit gate: without the gate activation stayed blocked with `appRolloutDisabled`, and with the gate A Start -> B incoming -> B Accept -> A/B active audio -> hangup -> A/B idle passed with media failure `none`.
+- The old `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` name was explicitly unset and not used during the 2.26E proof.
+- Commit `07256bf0a` fixed the receiver listener preparation gap by preparing/arming the listener from card status only when private dogfood activation is already enabled. That preparation does not start outgoing calls, request tokens, send Matrix events, or connect media.
 
 ## Next Step
 
@@ -58,4 +62,4 @@ Controlled engineering dogfood may begin on the staging path under the private n
 - Element Call toolbar path unchanged and available as fallback;
 - no CallKit, push, video, broad internal rollout, public rollout, or global production activation.
 
-Next, run `2.26E — product-card-only staging dogfood smoke under explicit private dogfood gate` while keeping controlled dogfood narrow and redacted.
+Next, run `2.27A — controlled engineering dogfood pilot runbook/final checkpoint` while keeping controlled dogfood narrow and redacted.

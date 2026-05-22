@@ -26,7 +26,24 @@ The 2.26C controlled engineering dogfood matrix passed through the redacted diag
 - Final A/B status had no active session and no media failure.
 - Element Call route remained untouched and no code changed.
 
-The 2.26D activation cleanup replaced the older DEBUG fake rollout/capability shim with an explicit private dogfood gate, `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`. Product-card-only dogfood still needs a fresh staging smoke under this explicit gate before it can be claimed cleanly.
+The 2.26D activation cleanup replaced the older DEBUG fake rollout/capability shim with an explicit private dogfood gate, `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`.
+
+The 2.26E product-card-only staging smoke passed under that explicit gate:
+
+- Without `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, activation stayed blocked with `appRolloutDisabled`.
+- The blocked run performed no Matrix send, no token/media path, and no LiveKit client connect.
+- With `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, activation was enabled with dependencies ready, peer trust ready, and key wrapper available.
+- The legacy `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` name was explicitly unset and was not used.
+- A started from the private product card.
+- B reached incoming ringing.
+- B accepted from the private product card.
+- A/B reached `productionSessionState=activeAudio`.
+- Hangup returned A/B to `productionSessionState=idle`.
+- Encryption was ready, media connect and LiveKit client connect were attempted, and `productionMediaFailureReason=none`.
+- Diagnostic runner use was limited to launch, redacted status, activation, and trust polling.
+- Element Call route remained untouched, with no CallKit, push, video, or global production activation.
+- Commit `07256bf0a` fixed the receiver listener preparation gap by arming the listener from card status only when private dogfood activation is already enabled.
+- Listener preparation remains side-effect-limited: it does not start outgoing calls, request tokens, send Matrix events, or connect media.
 
 ## Allowed Scope
 
@@ -114,6 +131,19 @@ Run each row with redacted output only. Record pass/fail plus the allowed fields
 | Relaunch during ringing | Pass | No stale ringing/active session after relaunch |
 | Listener not armed | Pass | B had no active session; A cancel cleaned up safely |
 
+## 2.26E Product-Card-Only Result
+
+| Check | Result | Redacted reason |
+| --- | --- | --- |
+| No private dogfood gate | Pass | `appRolloutDisabled`; no Matrix send, token/media path, or LiveKit connect |
+| Private dogfood gate | Pass | Activation enabled; dependencies ready; peer trust ready; key wrapper available |
+| Legacy fake gate | Pass | Explicitly unset and not used |
+| Product-card happy path | Pass | A Start -> B incoming -> B Accept -> A/B `activeAudio` -> hangup -> A/B `idle` |
+| Media state | Pass | Encryption ready; media and LiveKit connect attempted; media failure `none` |
+| Runner fallback | Pass | Only launch/status/activation/trust polling; no fallback Start/Accept/Hang up |
+| Element Call separation | Pass | Existing Element Call route untouched |
+| Listener preparation safety | Pass | No auto-start without the private dogfood gate; no token request, Matrix send, outgoing start, or media connect from preparation |
+
 ## Reporting Format
 
 Reports must be pass/fail only with redacted status fields. Allowed fields:
@@ -197,7 +227,7 @@ These block broader internal dogfood and production, but not the controlled engi
 - No video.
 - Receiver listener remains foreground/open-room scoped.
 - Session restoration is unsupported by design.
-- Clean product-card-only dogfood remains pending until the staging matrix is rerun through the private card with `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`.
+- The product-card-only happy path is proven under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`; broader or longer dogfood still needs the 2.27A pilot checkpoint and explicit operator ownership.
 - Operational ownership and monitoring must be explicit for any longer dogfood window.
 - Secret rotation and incident response must remain ready before each session.
 

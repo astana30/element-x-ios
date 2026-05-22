@@ -400,9 +400,9 @@ location = /_matrix/client/unstable/kz.salemx.direct_call/livekit/token {
   - `GET /_synapse/admin/v1/rooms/{room_id}/state`
   Verify these response shapes against the deployed Synapse version before production use.
 - `InMemoryAllocationStore` is suitable only for local fake mode and tests. Staging preflight now rejects memory allocation unless a temporary test override is set.
-- `redis` allocation store mode is wired through a shared store implementation with HMAC-derived keys and atomic `SET NX EX` create-or-reuse behavior. Local Redis container smoke passed; deployed staging Redis smoke is still required before staging dogfood.
-- `redis` rate-limit store mode is wired through a shared limiter implementation with HMAC-derived keys and an atomic Lua check-and-record operation. Local Redis container smoke passed; deployed staging Redis smoke is still required before staging dogfood.
+- `redis` allocation store mode is wired through a shared store implementation with HMAC-derived keys and atomic `SET NX EX` create-or-reuse behavior. Local Redis container smoke passed, and the controlled staging dogfood preflight later reported Redis allocation connectivity ready.
+- `redis` rate-limit store mode is wired through a shared limiter implementation with HMAC-derived keys and an atomic Lua check-and-record operation. Local Redis container smoke passed, and the controlled staging dogfood preflight later reported Redis rate-limit connectivity ready.
 - `postgres` allocation and rate-limit store modes remain unsupported/fail-closed skeletons until a real implementation is added.
 - In-memory rate limiting is suitable only for local fake mode and tests. Staging preflight rejects it unless a temporary test override is set.
-- Staging dogfood remains blocked until Redis allocation/rate limiting, Synapse validation, and LiveKit join are deployed and smoke-tested together.
+- Controlled staging dogfood is allowed only under the private native audio runbook gates after redacted readiness, Redis allocation/rate-limit connectivity, Synapse validation, LiveKit room provisioning, and product-card-only active-audio smoke have passed. This is not broad internal dogfood or production approval.
 - The service issues media transport credentials only. It does not know or transport media E2EE keys.

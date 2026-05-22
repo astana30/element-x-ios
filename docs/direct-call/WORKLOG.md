@@ -5,6 +5,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 ## Milestones
 
 - Recorded the controlled engineering dogfood matrix result on the staging media/token/LiveKit path.
+- Recorded the product-card-only staging smoke under the explicit private dogfood gate.
 - Replaced the unclear DEBUG fake rollout/capability shim with an explicit private dogfood activation gate.
 - Updated the controlled engineering dogfood runbook and staging session matrix after the 2.25F activeAudio pass.
 - Proved staging iOS private native audio can reach active audio through the product-gated private card.
@@ -23,6 +24,21 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
 
+## 2026-05-22 — 2.26E Product-Card-Only Staging Smoke
+
+- Ran the private product-card-only staging happy path under the explicit DEBUG/integration-only `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` gate.
+- Confirmed the old `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` name was explicitly unset and not used.
+- Confirmed activation stayed blocked with `appRolloutDisabled` when the private dogfood gate was absent, with no Matrix send, token/media path, or LiveKit client connect.
+- Confirmed activation enabled with dependencies ready, peer trust ready, and key wrapper available when the private dogfood gate was present.
+- Proved A Start from the private card -> B incoming ringing -> B Accept from the private card -> A/B `activeAudio` -> hangup -> A/B `idle`.
+- Confirmed encryption ready, media connect attempted, LiveKit client connect attempted, and `productionMediaFailureReason=none`.
+- Used the runner only for launch, status, activation, and trust polling; Start, Accept, and Hang up were manual product-card taps.
+- Fixed the receiver listener preparation gap in commit `07256bf0a`: card status now prepares/arms the listener only when private dogfood activation is already enabled.
+- Confirmed listener preparation does not start outgoing calls, request tokens, send Matrix events, or connect media, and does not run without the private dogfood gate.
+- Kept Element Call route, CallKit, push, video, and global production activation unchanged.
+- Validation passed: `RoomFlowCoordinatorTests` 92 tests, `NativeDirectCallInternalControlPanelTests` 34 tests, Release build, SwiftFormat/SwiftLint with existing file-length warnings only, `git diff --check`, and direct-call forbidden scan.
+- Recommended next phase: `2.27A — controlled engineering dogfood pilot runbook/final checkpoint`.
+
 ## 2026-05-22 — 2.26D Private Dogfood Activation Gate Cleanup
 
 - Replaced the app-side `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` activation shim with the explicit `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` gate.
@@ -31,8 +47,8 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Confirmed `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1` and `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1` do not enable rollout/capability readiness by themselves.
 - Updated the two-client diagnostic runner to pass `SIMCTL_CHILD_NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED` to simulator launches.
 - Kept Element Call routing, CallKit, push, video, trust policy, and global production activation unchanged.
-- Updated the dogfood runbook/status docs to require the explicit private dogfood gate and to keep product-card-only dogfood pending until a fresh staging smoke proves it under the new gate.
-- Recommended next phase: `2.26E — product-card-only staging dogfood smoke under explicit private dogfood gate`.
+- Updated the dogfood runbook/status docs to require the explicit private dogfood gate; the product-card-only proof was completed later in 2.26E.
+- Recommended the then-next phase: `2.26E — product-card-only staging dogfood smoke under explicit private dogfood gate`.
 
 ## 2026-05-22 — 2.26C Controlled Staging Dogfood Matrix
 
