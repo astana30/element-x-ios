@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.28C — controlled dogfood pilot session 2 recorded.
+After 2.29B — broader internal dogfood hardening plan recorded.
 
 Current checkpoints:
 - App split-brain fix: 2.27D `Fail closed caller when callee media setup fails after answer` (`38fa26586`).
@@ -18,6 +18,7 @@ Current checkpoints:
 - Controlled dogfood operations checklist: 2.28A recorded in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
 - Controlled dogfood pilot session 1: 2.28B recorded in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
 - Controlled dogfood pilot session 2: 2.28C recorded in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
+- Broader internal dogfood hardening plan: 2.29B recorded in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -74,11 +75,18 @@ Current proven/prepared state:
   - LiveKit-off was not run because the staging LiveKit instance is shared;
   - runner use was limited to launch, readiness/trust/status polling, and relaunch;
   - no rollback was needed, no stop criteria triggered, no runtime bug was observed, no redaction issue was found, and Element Call remained untouched.
+- 2.29A/2.29B decision:
+  - two successful controlled engineering sessions are not enough for broader internal dogfood or non-engineering users;
+  - controlled engineering dogfood may continue and slightly expand only to more named engineering operators/devices on the same staging path;
+  - the future non-engineering internal pilot remains blocked until activation/rollout, UX/failure copy, incoming behavior, monitoring/telemetry, backend/staging operations, support/rollback, security review, and soak testing are hardened;
+  - public rollout, production activation, Element Call replacement, CallKit, push/background incoming, missed calls, video, and session restoration remain out of scope.
 - Element Call route remains unchanged and must stay available as fallback.
 - No CallKit, push/background incoming, missed calls, video, session restoration, broad internal rollout, public rollout, production activation, or global activation exists.
 
 Pilot decision:
 - Controlled engineering dogfood may continue on the narrow staging path under the 2.28A operations checklist.
+- A small expansion to more named engineering operators/devices is allowed under the same constraints.
+- Broader internal dogfood and non-engineering users remain blocked until the 2.29B hardening checklist is complete.
 - This is not broad internal dogfood, product beta, public rollout, production activation, or Element Call replacement.
 
 Required pilot scope:
@@ -119,27 +127,25 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.28D — controlled dogfood pilot session 3 / longer monitoring follow-up.
+2.29C — native audio internal pilot rollout and UX hardening design.
 
 Task:
-Run or record the next controlled engineering dogfood pilot session or longer monitored window using the 2.28A operations checklist. Do not modify app code or backend code unless a real runtime bug is found and explicitly approved. Do not change Element Call route. Do not wire CallKit, push, missed calls, video, session restoration, or global production activation.
+Design the fail-closed rollout/allowlist model and non-engineering-safe UX/failure-state plan required before any future narrow non-engineering internal pilot. Do not enable broader dogfood. Do not modify app/backend code unless explicitly requested after the design is reviewed. Do not change Element Call route. Do not wire CallKit, push, missed calls, video, session restoration, or global production activation.
 
 Goal:
-Continue the controlled pilot with explicit operator ownership, redacted monitoring, and post-session cleanup. Preserve product-card-only manual coverage where practical, and report any runner-assisted checks explicitly.
+Turn the 2.29B hardening plan into concrete implementation proposals, test requirements, and rollout guardrails while keeping the current dogfood engineering-only.
 
-Required report:
-A. Operator sign-off summary, redacted.
-B. Backend readiness result.
-C. Redis/readiness result.
-D. A/B gate and trust result.
-E. Pilot cases run and pass/fail/not-run table.
-F. Redacted monitoring observations.
-G. Any stop criteria triggered.
-H. Rollback or cleanup performed.
-I. Security cleanup result.
-J. Element Call fallback status.
-K. Runtime bug, if any.
-L. Decision: continue / continue with constraints / pause.
+Required design output:
+A. Files inspected.
+B. Proposed fail-closed internal rollout/allowlist model.
+C. UX/failure states to add before non-engineering users.
+D. Monitoring/telemetry redaction plan.
+E. Backend/staging operational requirements.
+F. Support and rollback workflow.
+G. Security review checklist.
+H. Soak/test matrix before non-engineering users.
+I. Explicit out-of-scope list.
+J. Recommended implementation order.
 
 Allowed report fields:
 - readiness booleans;
@@ -185,4 +191,4 @@ Validation if docs change:
 - Direct-call forbidden scan.
 
 Suggested commit if docs change:
-Record native audio dogfood pilot session 3
+Document internal pilot rollout and UX hardening design

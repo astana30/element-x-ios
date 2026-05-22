@@ -496,6 +496,88 @@ Runner use in this pilot was limited to launch, readiness/trust/status polling, 
 
 No rollback was needed, no stop criteria triggered, no runtime bug was observed, and no redaction or secret-leakage issue was found. Final A/B status was idle/no active session with media failure `none`. Final readiness remained `ready=true`, `reason=ok`. Controlled engineering dogfood may continue on the same narrow staging path.
 
+## 2.29B Broader Internal Dogfood Hardening Plan
+
+The current decision remains engineering-only. The 2.28B and 2.28C sessions prove repeatability on the narrow staging path, but they do not approve broader internal dogfood or any non-engineering user pilot.
+
+The smallest safe expansion before non-engineering users is still limited to named engineering operators, more engineering devices/pairs, the staging call-service, staging LiveKit, foreground/open encrypted direct 1:1 rooms, verified/trusted peers, private native audio card only, Element Call fallback visible, and redacted reporting.
+
+Before a future narrow non-engineering internal pilot, complete the following hardening areas.
+
+### Activation And Rollout Model
+
+- Replace DEBUG/integration-only activation with an explicit internal-pilot rollout model that is still fail-closed by default.
+- Add a server-side allowlist or capability source for named internal pilot accounts/devices.
+- Keep product UI, start permission, rollout eligibility, dependency readiness, room eligibility, and trust eligibility as separate gates.
+- Keep public/global production activation impossible until a separate release decision.
+- Do not reuse the existing Element Call feature flag as the native dogfood rollout gate.
+
+### UX And Failure Copy
+
+- Replace engineering-only status dependence with user-safe in-app states for unavailable, connecting, failed, timed out, cancelled, declined, and recovered calls.
+- Make backend/token unavailable, LiveKit/media unavailable, untrusted peer/device, and invalid room conditions understandable without exposing internal details.
+- Make the foreground/open-room limitation visible before users rely on it.
+- Add clear recovery actions: retry, fall back to Element Call, or dismiss.
+- Keep raw IDs, tokens, Matrix event bodies, and backend response bodies out of UI and logs.
+
+### Incoming Behavior And Foreground Limitation
+
+- Keep non-engineering pilots blocked until incoming behavior is intentionally scoped.
+- If foreground/open-room remains the pilot limitation, explain it in-product and in the pilot instructions.
+- Treat CallKit, push/background incoming, missed calls, and session restoration as future blockers, not part of this hardening phase.
+- Verify listener not armed, app relaunch, room switch, and timeout behavior remain fail-closed.
+
+### Monitoring And Telemetry Redaction
+
+- Replace runner-only observability with redacted app/backend telemetry suitable for a pilot owner.
+- Allow only readiness booleans, trust booleans, terminal reason enums, media failure enums, cleanup/disconnect booleans, and aggregate counters.
+- Add leak checks for tokens, JWTs, keys, room IDs, user IDs, peer IDs, device IDs, Matrix event bodies, and credentialed URLs before sharing reports.
+- Preserve a redacted incident template for pilot reports.
+
+### Backend And Staging Operations
+
+- Give staging call-service an explicit owner, supervisor, start/stop path, and readiness dashboard/check.
+- Keep Redis allocation/rate-limit health visible through redacted readiness only.
+- Keep LiveKit room provisioning readiness visible without exposing keys, room names, or participant tokens.
+- Decide whether a dedicated SalemX staging LiveKit instance is required before non-engineering users so LiveKit-off and failure-recovery tests can run without affecting shared users.
+- Keep Synapse validation smoke available before each pilot window.
+
+### Support And Rollback
+
+- Define who can start, pause, and stop the pilot.
+- Keep Element Call as the immediate fallback path and smoke it as unchanged.
+- Provide non-engineering-safe rollback instructions: disable the native card gate, relaunch, use Element Call, and report only redacted status.
+- Define escalation and incident ownership for failed calls, stale sessions, suspected leakage, and backend readiness failure.
+
+### Security Review
+
+- Review token issuance, room validation, Redis keying, rate limits, LiveKit room provisioning, and access-token handling before non-engineering users.
+- Confirm trusted-device and E2EE behavior are not weakened.
+- Confirm no secret, token, JWT, key, envelope plaintext, raw Matrix content, raw room ID, raw user ID, raw peer ID, or raw device ID appears in UI, logs, docs, screenshots, or reports.
+- Keep ignored env files untracked and mode `600`.
+- Define credential rotation triggers and owners.
+
+### Soak Testing
+
+- Run more engineering sessions across more devices, networks, app relaunch timings, and repeated-call windows.
+- Include happy path, reverse, repeated calls, decline, cancel, timeout, backend-off recovery when safe, relaunch fail-closed, listener unavailable, and Element Call fallback checks.
+- Record pass/fail/not-run only with redacted reason enums.
+- Non-engineering pilot remains blocked until the soak has no stale active sessions, no split-brain, no redaction issues, and no unexplained media failures.
+
+### Minimum Acceptance Checklist For Narrow Non-Engineering Internal Pilot
+
+- Explicit internal-pilot rollout or allowlist model exists and is fail-closed by default.
+- Non-engineering-safe UX exists for all expected failure states.
+- Foreground/open-room limitation is documented and visible, or CallKit/push/background incoming is separately implemented and approved.
+- Redacted telemetry/reporting replaces runner-only diagnostics for pilot monitoring.
+- Staging call-service has an owned supervisor/start/stop path and readiness checks.
+- Redis, Synapse validation, LiveKit room provisioning, and staging LiveKit health are checked before each session.
+- Element Call fallback remains visible, unchanged, and smoke-tested.
+- Security review passes for token issuance, room validation, E2EE/trust, logs, env files, and redaction.
+- Soak matrix passes across multiple named engineering operators/devices without stale active sessions, split-brain, untrusted peer/device connection, or secret/raw ID leakage.
+
+Until every item above is complete, broader internal dogfood and non-engineering pilot remain blocked.
+
 ## Reporting Format
 
 Reports must be pass/fail only with redacted status fields. Allowed fields:

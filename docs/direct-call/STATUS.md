@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.28C — controlled dogfood pilot session 2 recorded.
+After 2.29B — broader internal dogfood hardening plan recorded.
 
 ## Latest App Code Checkpoint
 
@@ -128,6 +128,11 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - LiveKit-off was not run because the staging LiveKit instance is shared.
   - Runner use was limited to launch, readiness/trust/status polling, and relaunch.
   - No stop criteria triggered, no rollback was needed, no runtime bug was observed, no redaction issue was found, and Element Call remained untouched.
+- Broader internal dogfood hardening plan is recorded:
+  - Decision remains engineering-only; two passed controlled sessions do not approve broader internal dogfood or non-engineering users.
+  - Smallest safe expansion remains more named engineering operators/devices on the same staging, foreground/open-room, verified-peer, private-card-only path.
+  - Required hardening areas are activation/rollout model, UX/failure copy, incoming behavior and foreground limitation, monitoring/telemetry redaction, backend/staging operations, support/rollback, security review, and soak testing.
+  - A future narrow non-engineering internal pilot requires a fail-closed internal rollout/allowlist model, non-engineering-safe UX, redacted telemetry, owned staging operations, Element Call fallback smoke, security review, and multi-operator/device soak.
 - Private dogfood activation is explicit and fail-closed by default:
   - `appRolloutDisabled` is produced by the production activation decision when `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` is absent.
   - `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1` can show the private card, and `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1` can allow start actions, but neither gate enables rollout/capability readiness by itself.
@@ -660,6 +665,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Pilot sessions must follow the 2.27A checkpoint and 2.28A operations checklist in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
+- Non-engineering internal dogfood remains blocked until the 2.29B hardening checklist is complete.
 - CallKit, push/background incoming, missed calls, video, session restoration, and global production activation remain out of scope.
 - Receiver listener behavior remains foreground/open-room scoped.
 - Operational ownership, monitoring, redaction checks, and secret-rotation readiness must remain explicit for any longer dogfood window.
@@ -668,9 +674,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.28D — controlled dogfood pilot session 3 / longer monitoring follow-up`
+`2.29C — native audio internal pilot rollout and UX hardening design`
 
-Goal: continue the narrow controlled engineering pilot with another monitored session or a longer supervised window under the 2.28A operations checklist. Keep reporting redacted, preserve the product-card-only manual path where practical, keep runner use explicit when used for status/control, and continue to treat backend-off/LiveKit-off checks as opt-in safety cases. Preserve fail-closed activation, trusted-device E2EE, redaction, Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope.
+Goal: design the fail-closed internal rollout/allowlist model and non-engineering-safe UX/failure states needed before any narrow non-engineering internal pilot. Keep controlled engineering dogfood active only under the current staging runbook. Preserve trusted-device E2EE, redaction, Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope unless explicitly scoped later.
 
 ## Do-Not-Touch Constraints
 

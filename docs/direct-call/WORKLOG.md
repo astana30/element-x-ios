@@ -5,6 +5,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 ## Milestones
 
 - Recorded the controlled engineering dogfood matrix result on the staging media/token/LiveKit path.
+- Recorded the broader internal dogfood hardening plan.
 - Recorded controlled engineering dogfood pilot session 2.
 - Recorded controlled engineering dogfood pilot session 1.
 - Added the controlled dogfood operations and monitoring checklist.
@@ -29,6 +30,17 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-22 — 2.29B Broader Internal Dogfood Hardening Plan
+
+- Recorded the decision that two successful controlled engineering dogfood sessions are not enough for broader internal dogfood or non-engineering users.
+- Kept controlled engineering dogfood allowed only on the narrow staging path with named engineering operators, DEBUG/integration builds, foreground/open encrypted direct 1:1 rooms, verified/trusted peers, private native audio card, and Element Call fallback.
+- Defined the smallest safe expansion as more named engineering operators/devices on the same staging path, with redacted reporting and explicit session ownership.
+- Added hardening areas required before any future narrow non-engineering internal pilot: activation/rollout model, UX and failure copy, incoming behavior and foreground limitation, monitoring and telemetry redaction, backend/staging operations, support/rollback, security review, and soak testing.
+- Required a fail-closed internal rollout or allowlist model before non-engineering users.
+- Required non-engineering-safe UX for unavailable, connecting, failed, timed out, cancelled, declined, and recovered calls.
+- Kept CallKit, push/background incoming, missed calls, video, session restoration, Element Call replacement, public rollout, production rollout, and global production activation out of scope.
+- Recommended next phase: `2.29C — native audio internal pilot rollout and UX hardening design`.
 
 ## 2026-05-22 — 2.28C Controlled Dogfood Pilot Session 2
 
