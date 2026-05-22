@@ -5,6 +5,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 ## Milestones
 
 - Recorded the controlled engineering dogfood matrix result on the staging media/token/LiveKit path.
+- Added the controlled dogfood operations and monitoring checklist.
 - Recorded the controlled dogfood pilot matrix rerun after the split-brain fix.
 - Recorded the repeated-call split-brain regression runtime proof after the post-answer callee media failure fix.
 - Added the final controlled engineering dogfood pilot checkpoint.
@@ -26,6 +27,20 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-22 — 2.28A Controlled Dogfood Operational Hardening
+
+- Added a controlled dogfood operations checklist to the private native audio dogfood runbook.
+- Required every pilot window to have a named operator, named participants, staging call-service owner, shared LiveKit owner/skip confirmation, planned start/stop time, Element Call fallback confirmation, and explicit no-broad-rollout scope.
+- Documented local staging call-service start and stop procedure using the operator-local env file without printing env values.
+- Documented readiness checks for call-service, Redis allocation store, Redis rate-limit store, storage key, and LiveKit room provisioning.
+- Documented A/B client gate checks, trust readiness checks, private card availability, no stale active session, and Element Call fallback visibility.
+- Tightened redacted monitoring to readiness booleans, trust booleans, `productionSessionState`, `productionMediaFailureReason`, terminal reason enum, and cleanup/disconnect booleans.
+- Added a failure triage matrix covering readiness, Redis, token/backend, LiveKit/media, trust, signalling, relaunch, split-brain, and Element Call fallback issues.
+- Added stop criteria, rollback procedure, and a post-session report template.
+- Added security cleanup guidance for temporary SSH keys, disposable `/tmp/salemx-*.json` reports, password rotation if shared during diagnostics, ignored env file tracking/mode checks, and no env/log/tmp/backup/token/JWT/secret commits.
+- Kept the distinction explicit: 2.26E is the product-card-only happy path proof; 2.27F is runner-assisted controlled matrix coverage.
+- Recommended next phase: `2.28B — monitored controlled dogfood pilot window`.
 
 ## 2026-05-22 — 2.27F Controlled Dogfood Pilot Matrix Rerun
 

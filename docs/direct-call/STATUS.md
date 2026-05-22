@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.27F — controlled dogfood pilot matrix rerun passed.
+After 2.28A — controlled dogfood operations checklist recorded.
 
 ## Latest App Code Checkpoint
 
@@ -103,6 +103,11 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - LiveKit-off was not run because the staging LiveKit instance is shared.
   - Runner commands were used for matrix control/status; this is a controlled engineering dogfood matrix result, not a claim that every matrix case was manually product-card-only.
   - Final A/B status was idle/no active session with media failure `none`; Element Call route remained untouched and no code/docs changed during the runtime proof.
+- Controlled dogfood operations checklist is recorded:
+  - Every pilot window now requires a named operator, named participants, explicit staging call-service ownership, shared LiveKit ownership/skip confirmation, planned start/stop time, Element Call fallback confirmation, and no broad rollout scope.
+  - The runbook documents local staging call-service start/stop, readiness checks, Redis readiness booleans, A/B gate checks, trust readiness, allowed redacted status fields, forbidden outputs, stop criteria, rollback, post-session report format, and security cleanup.
+  - Security cleanup includes removing temporary SSH keys, removing disposable `/tmp/salemx-*.json` reports, rotating any password shared during diagnostics, and verifying ignored staging env files remain untracked and mode `600`.
+  - The distinction remains explicit: 2.26E proved product-card-only happy path, while 2.27F is runner-assisted controlled matrix coverage.
 - Private dogfood activation is explicit and fail-closed by default:
   - `appRolloutDisabled` is produced by the production activation decision when `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` is absent.
   - `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1` can show the private card, and `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1` can allow start actions, but neither gate enables rollout/capability readiness by itself.
@@ -632,7 +637,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 ## Current Gate
 
 - Controlled engineering dogfood pilot may continue on staging under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, including the product-card-only happy path, repeated-call split-brain regression proof, and 2.27F controlled matrix rerun.
-- Pilot sessions must follow the 2.27A checkpoint in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md` plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
+- Pilot sessions must follow the 2.27A checkpoint and 2.28A operations checklist in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
 - CallKit, push/background incoming, missed calls, video, session restoration, and global production activation remain out of scope.
@@ -643,9 +648,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.28A — controlled dogfood operational hardening and pilot monitoring`
+`2.28B — monitored controlled dogfood pilot window`
 
-Goal: harden the controlled dogfood operating model before longer pilot windows. Define operator ownership, session start/stop checklist, redacted monitoring, backend readiness checks, failure triage, secret-rotation triggers, and report format. Keep the pilot foreground/open-room, DEBUG/integration-only, encrypted direct 1:1, verified-peer, runner-assisted where needed, and staging-only. Preserve fail-closed activation, trusted-device E2EE, redaction, Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope.
+Goal: run a monitored controlled dogfood pilot window using the 2.28A operations checklist. Record operator sign-off, readiness, redacted monitoring, pass/fail cases, stop/rollback checks, and post-session cleanup. Keep the pilot foreground/open-room, DEBUG/integration-only, encrypted direct 1:1, verified-peer, runner-assisted where needed, and staging-only. Preserve fail-closed activation, trusted-device E2EE, redaction, Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope.
 
 ## Do-Not-Touch Constraints
 
