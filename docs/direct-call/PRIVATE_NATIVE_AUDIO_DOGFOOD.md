@@ -385,7 +385,7 @@ Any monitoring expansion must add tests proving rendering/status refresh remains
 
 ### 2.30B Internal Pilot Eligibility Contract Skeleton
 
-The native-audio internal pilot eligibility contract now exists as a typed, redacted skeleton. It is not backed by a production allowlist yet and does not approve non-engineering users.
+The native-audio internal pilot eligibility contract now exists as a typed, redacted app skeleton and a disabled-by-default call-service endpoint skeleton. It does not approve non-engineering users.
 
 Eligibility states:
 
@@ -417,18 +417,29 @@ The redacted payload shape may carry only enums and booleans:
   "room_eligible": true,
   "trust_ready": true,
   "service_available": true,
+  "capability_present": true,
   "client_supported": true
 }
 ```
 
 The payload must never include raw Matrix user IDs, peer IDs, room IDs, device IDs, Matrix event bodies, LiveKit room names, endpoint credentials, tokens, JWTs, keys, secrets, or backend request/response echoes.
 
-The current default provider returns disabled/fail-closed. Account and peer not-eligible states map to existing safe private-card unavailable copy. This contract is only preparation for a future internal pilot; it does not call a backend eligibility endpoint from rendering, does not request tokens, does not connect media, does not connect LiveKit, and does not enable non-engineering dogfood.
+The current app default provider returns disabled/fail-closed. Account and peer not-eligible states map to existing safe private-card unavailable copy.
+
+The call-service endpoint is:
+
+```text
+POST /_matrix/client/unstable/kz.salemx.direct_call/eligibility
+```
+
+It validates Matrix bearer auth, optional device binding, and encrypted direct 1:1 room structure before evaluating the eligibility policy. Backend eligibility is disabled by default; static allowlist mode requires both caller and peer accounts when explicitly enabled by local deployment config. The LiveKit token endpoint also reuses this policy before rate limiting, allocation, LiveKit room pre-create, or participant token issuance.
+
+This contract is only preparation for a future internal pilot; the app does not call a backend eligibility endpoint from rendering, does not request tokens, does not connect media, does not connect LiveKit, and does not enable non-engineering dogfood.
 
 Before any future narrow non-engineering internal pilot, the eligibility contract still needs:
 
-- server-side allowlist or capability backing;
-- backend token endpoint enforcement for caller, peer, room, membership, and trust;
+- runtime proof of the server-side allowlist endpoint under named internal-pilot fixtures;
+- client-side consumption of the backend eligibility endpoint without rendering side effects;
 - redacted readiness/monitoring coverage;
 - support and rollback workflow;
 - runtime proof across named pilot accounts/devices;

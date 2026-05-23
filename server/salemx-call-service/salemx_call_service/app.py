@@ -20,6 +20,7 @@ from .config import (
     service_readiness_from_config,
     validate_service_preflight,
 )
+from .eligibility import DisabledNativeAudioEligibilityPolicy, StaticAllowlistNativeAudioEligibilityPolicy
 from .errors import CallServiceError, bad_request
 from .livekit_rooms import DEFAULT_ROOM_DEPARTURE_TIMEOUT_SECONDS, LiveKitRoomServiceProvisioner
 from .livekit_tokens import LiveKitJWTTokenIssuer
@@ -32,6 +33,7 @@ from .service import DirectCallTokenService, error_response
 from .storage_keys import StorageKeyHasher
 
 ENDPOINT_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/livekit/token"
+ELIGIBILITY_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/eligibility"
 CAPABILITIES_PATH = "/_matrix/client/v3/capabilities"
 HEALTH_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/health"
 READINESS_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/readiness"
@@ -65,6 +67,8 @@ def create_app(config: ServiceConfig | None = None,
             rate_limit_shared=True,
             rate_limit_connected=True,
             storage_key_configured=True,
+            native_audio_eligibility_configured=True,
+            native_audio_eligibility_allowlist_configured=True,
         )
     else:
         configure_logging(environ.get("LOG_LEVEL", "INFO"))
@@ -94,6 +98,7 @@ def create_app(config: ServiceConfig | None = None,
                     livekit_server_url=config.livekit_url,
                     allocation_ttl_seconds=config.allocation_ttl_seconds,
                     rate_limit_per_minute=config.rate_limit_per_minute,
+                    eligibility_policy=_eligibility_policy_for_config(config),
                 )
         except ServicePreflightError as error:
             readiness = error.readiness
@@ -122,6 +127,22 @@ def create_app(config: ServiceConfig | None = None,
             if not isinstance(payload, dict):
                 raise bad_request(error="Request body must be a JSON object.")
             response = await service.issue_token(authorization, payload)
+            return JSONResponse(status_code=200, content=response.as_dict())
+        except CallServiceError as error:
+            status_code, body = error_response(error)
+            return JSONResponse(status_code=status_code, content=body)
+
+    @app.post(ELIGIBILITY_PATH)
+    async def native_audio_eligibility(request: Request, authorization: Optional[str] = Header(default=None)) -> JSONResponse:
+        try:
+            if service is None:
+                raise CallServiceError(status_code=503,
+                                       errcode="M_DIRECT_CALL_SERVICE_UNAVAILABLE",
+                                       error="Direct-call service is not ready.")
+            payload: Any = await request.json()
+            if not isinstance(payload, dict):
+                raise bad_request(error="Request body must be a JSON object.")
+            response = await service.evaluate_eligibility(authorization, payload)
             return JSONResponse(status_code=200, content=response.as_dict())
         except CallServiceError as error:
             status_code, body = error_response(error)
@@ -165,6 +186,17 @@ def _rate_limiter_for_config(config: ServiceConfig) -> InMemoryRateLimiter | Red
             StorageKeyHasher(config.storage_key_secret),
         )
     return SharedRateLimiterSkeleton(config.rate_limit_store)
+
+
+def _eligibility_policy_for_config(
+    config: ServiceConfig,
+) -> DisabledNativeAudioEligibilityPolicy | StaticAllowlistNativeAudioEligibilityPolicy:
+    if not config.native_audio_eligibility_enabled:
+        return DisabledNativeAudioEligibilityPolicy()
+    return StaticAllowlistNativeAudioEligibilityPolicy(
+        allowed_user_ids=config.native_audio_eligibility_allowed_users,
+        allowed_homeservers=config.native_audio_eligibility_allowed_homeservers,
+    )
 
 
 def _redis_client_from_url(redis_url: str) -> object:

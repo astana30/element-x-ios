@@ -20,6 +20,9 @@ RATE_LIMIT_PER_MINUTE_ENV = "SALEMX_CALL_SERVICE_RATE_LIMIT_PER_MINUTE"
 LEGACY_RATE_LIMIT_PER_MINUTE_ENV = "RATE_LIMIT_PER_MINUTE"
 ALLOW_MEMORY_RATE_LIMITER_ENV = "SALEMX_CALL_SERVICE_ALLOW_MEMORY_RATE_LIMITER"
 STORAGE_KEY_SECRET_ENV = "SALEMX_CALL_SERVICE_STORAGE_KEY_SECRET"
+NATIVE_AUDIO_ELIGIBILITY_ENABLED_ENV = "SALEMX_NATIVE_AUDIO_ELIGIBILITY_ENABLED"
+NATIVE_AUDIO_ELIGIBILITY_ALLOWED_USERS_ENV = "SALEMX_NATIVE_AUDIO_ELIGIBILITY_ALLOWED_USERS"
+NATIVE_AUDIO_ELIGIBILITY_ALLOWED_HOMESERVERS_ENV = "SALEMX_NATIVE_AUDIO_ELIGIBILITY_ALLOWED_HOMESERVERS"
 
 DEFAULT_SERVICE_MODE = "staging"
 DEFAULT_ALLOCATION_STORE = "memory"
@@ -85,6 +88,8 @@ class ServiceReadiness:
     rate_limit_shared: bool
     rate_limit_connected: bool
     storage_key_configured: bool
+    native_audio_eligibility_configured: bool
+    native_audio_eligibility_allowlist_configured: bool
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -106,6 +111,8 @@ class ServiceReadiness:
             "rateLimitShared": self.rate_limit_shared,
             "rateLimitConnected": self.rate_limit_connected,
             "storageKeyConfigured": self.storage_key_configured,
+            "nativeAudioEligibilityConfigured": self.native_audio_eligibility_configured,
+            "nativeAudioEligibilityAllowlistConfigured": self.native_audio_eligibility_allowlist_configured,
         }
 
 
@@ -131,6 +138,9 @@ class ServiceConfig:
     rate_limit_store: str = DEFAULT_RATE_LIMIT_STORE
     rate_limit_store_url: str | None = None
     storage_key_secret: str | None = None
+    native_audio_eligibility_enabled: bool = False
+    native_audio_eligibility_allowed_users: tuple[str, ...] = ()
+    native_audio_eligibility_allowed_homeservers: tuple[str, ...] = ()
 
     @classmethod
     def from_env(cls) -> "ServiceConfig":
@@ -150,6 +160,9 @@ class ServiceConfig:
             rate_limit_store=_env_value(environ, RATE_LIMIT_STORE_ENV) or DEFAULT_RATE_LIMIT_STORE,
             rate_limit_store_url=_env_value(environ, RATE_LIMIT_STORE_URL_ENV),
             storage_key_secret=_env_value(environ, STORAGE_KEY_SECRET_ENV),
+            native_audio_eligibility_enabled=_env_value(environ, NATIVE_AUDIO_ELIGIBILITY_ENABLED_ENV) == "1",
+            native_audio_eligibility_allowed_users=_csv_env(NATIVE_AUDIO_ELIGIBILITY_ALLOWED_USERS_ENV),
+            native_audio_eligibility_allowed_homeservers=_csv_env(NATIVE_AUDIO_ELIGIBILITY_ALLOWED_HOMESERVERS_ENV),
         )
 
 
@@ -181,6 +194,8 @@ def service_readiness_from_env(env: Mapping[str, str] = environ) -> ServiceReadi
             rate_limit_shared=False,
             rate_limit_connected=True,
             storage_key_configured=False,
+            native_audio_eligibility_configured=True,
+            native_audio_eligibility_allowlist_configured=True,
         )
 
     if mode != ServiceMode.STAGING.value:
@@ -202,6 +217,9 @@ def service_readiness_from_env(env: Mapping[str, str] = environ) -> ServiceReadi
         rate_limit_store_url=_env_value(env, RATE_LIMIT_STORE_URL_ENV),
         rate_limit_per_minute_value=_rate_limit_per_minute_value(env),
         storage_key_secret=_env_value(env, STORAGE_KEY_SECRET_ENV),
+        native_audio_eligibility_enabled=_env_value(env, NATIVE_AUDIO_ELIGIBILITY_ENABLED_ENV) == "1",
+        native_audio_eligibility_allowed_users=_csv_value(_env_value(env, NATIVE_AUDIO_ELIGIBILITY_ALLOWED_USERS_ENV)),
+        native_audio_eligibility_allowed_homeservers=_csv_value(_env_value(env, NATIVE_AUDIO_ELIGIBILITY_ALLOWED_HOMESERVERS_ENV)),
         allow_insecure_livekit_url=_env_value(env, ALLOW_INSECURE_LIVEKIT_URL_ENV) == "1",
         allow_memory_allocation_store=_env_value(env, ALLOW_MEMORY_ALLOCATION_STORE_ENV) == "1",
         allow_memory_rate_limiter=_env_value(env, ALLOW_MEMORY_RATE_LIMITER_ENV) == "1",
@@ -230,6 +248,9 @@ def service_readiness_from_config(config: ServiceConfig, env: Mapping[str, str] 
         rate_limit_store_url=config.rate_limit_store_url,
         rate_limit_per_minute_value=str(config.rate_limit_per_minute),
         storage_key_secret=config.storage_key_secret,
+        native_audio_eligibility_enabled=config.native_audio_eligibility_enabled,
+        native_audio_eligibility_allowed_users=config.native_audio_eligibility_allowed_users,
+        native_audio_eligibility_allowed_homeservers=config.native_audio_eligibility_allowed_homeservers,
         allow_insecure_livekit_url=_env_value(env, ALLOW_INSECURE_LIVEKIT_URL_ENV) == "1",
         allow_memory_allocation_store=_env_value(env, ALLOW_MEMORY_ALLOCATION_STORE_ENV) == "1",
         allow_memory_rate_limiter=_env_value(env, ALLOW_MEMORY_RATE_LIMITER_ENV) == "1",
@@ -258,6 +279,9 @@ def _staging_readiness(mode: str,
                        rate_limit_store_url: str | None,
                        rate_limit_per_minute_value: str | None,
                        storage_key_secret: str | None,
+                       native_audio_eligibility_enabled: bool,
+                       native_audio_eligibility_allowed_users: tuple[str, ...],
+                       native_audio_eligibility_allowed_homeservers: tuple[str, ...],
                        allow_insecure_livekit_url: bool,
                        allow_memory_allocation_store: bool,
                        allow_memory_rate_limiter: bool) -> ServiceReadiness:
@@ -279,6 +303,11 @@ def _staging_readiness(mode: str,
         allocation_store_value,
         rate_limit_store_value,
         storage_key_secret,
+    )
+    native_audio_eligibility_configured = native_audio_eligibility_enabled
+    native_audio_eligibility_allowlist_configured = (
+        native_audio_eligibility_enabled
+        and len(native_audio_eligibility_allowed_users) > 0
     )
 
     if fake_mode_enabled:
@@ -339,6 +368,8 @@ def _staging_readiness(mode: str,
         rate_limit_shared=rate_limit_shared,
         rate_limit_connected=rate_limit_connected,
         storage_key_configured=storage_key_configured,
+        native_audio_eligibility_configured=native_audio_eligibility_configured,
+        native_audio_eligibility_allowlist_configured=native_audio_eligibility_allowlist_configured,
     )
 
 
@@ -365,6 +396,8 @@ def _readiness(mode: str,
         rate_limit_shared=False,
         rate_limit_connected=False,
         storage_key_configured=False,
+        native_audio_eligibility_configured=False,
+        native_audio_eligibility_allowlist_configured=False,
     )
 
 
@@ -378,6 +411,16 @@ def _env_value(env: Mapping[str, str], name: str) -> str | None:
         return None
     value = value.strip()
     return value or None
+
+
+def _csv_env(name: str) -> tuple[str, ...]:
+    return _csv_value(_env_value(environ, name))
+
+
+def _csv_value(value: str | None) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    return tuple(item.strip() for item in value.split(",") if item.strip())
 
 
 def _is_secure_livekit_url(livekit_url: str | None) -> bool:

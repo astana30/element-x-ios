@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.30C — eligibility contract runtime/no-activation proof recorded.
+After 2.30E — call-service native audio eligibility endpoint skeleton.
 
 ## Latest App Code Checkpoint
 
@@ -10,9 +10,7 @@ After 2.30C — eligibility contract runtime/no-activation proof recorded.
 
 ## Latest Backend Code Checkpoint
 
-2.25E `Precreate LiveKit room before issuing token`
-
-Commit: `33e95e7b1`
+2.30E `Add native audio eligibility endpoint skeleton`
 
 ## Latest SDK Checkpoint
 
@@ -154,6 +152,13 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - The runner-assisted A -> B happy path reached `productionSessionState=activeAudio` on both sides with `productionEncryptionState=ready`, media connect attempted, LiveKit client connect attempted, and `productionMediaFailureReason=none`.
   - Hangup returned A/B to `productionSessionState=idle` with no active session and media failure `none`.
   - The legacy fake/dry-run gate remained unset; Element Call route remained untouched.
+- Call-service native audio eligibility endpoint skeleton is added:
+  - `POST /_matrix/client/unstable/kz.salemx.direct_call/eligibility` validates Matrix bearer auth, optional device binding, and encrypted direct 1:1 room structure before returning a redacted enum/boolean eligibility response.
+  - Native audio eligibility remains disabled by default. The static allowlist skeleton requires both caller and peer accounts when explicitly enabled by local deployment config.
+  - Readiness now exposes only redacted eligibility booleans: `nativeAudioEligibilityConfigured` and `nativeAudioEligibilityAllowlistConfigured`.
+  - The LiveKit token endpoint reuses the same eligibility policy before rate limiting, allocation, LiveKit room pre-create, or participant token issuance.
+  - Eligibility rejection fails closed with no token, no allocation, and no LiveKit room pre-create.
+  - This does not wire iOS non-engineering activation; controlled engineering dogfood remains on the explicit DEBUG/integration private dogfood gate.
 - Private dogfood activation is explicit and fail-closed by default:
   - `appRolloutDisabled` is produced by the production activation decision when `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` is absent.
   - `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1` can show the private card, and `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1` can allow start actions, but neither gate enables rollout/capability readiness by itself.
@@ -695,9 +700,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.30D — backend internal pilot allowlist provider design`
+`2.30F — native audio eligibility endpoint runtime/no-activation proof`
 
-Goal: design and prepare the server-side allowlist/capability backing for the new fail-closed internal pilot eligibility contract. Keep non-engineering pilot disabled until the backend provider, client dry-run consumption, redacted telemetry, support workflow, and runtime proof are complete. Preserve trusted-device E2EE, redaction, Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope unless explicitly scoped later.
+Goal: prove the new backend eligibility endpoint remains fail-closed by default, returns only redacted enum/boolean payloads, blocks token issuance before rate limit/allocation/LiveKit room pre-create when eligibility is unavailable, and does not broaden iOS activation. Keep non-engineering pilot disabled until the backend allowlist path, client consumption, redacted telemetry, support workflow, and runtime proof are complete.
 
 ## Do-Not-Touch Constraints
 

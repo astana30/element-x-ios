@@ -9,6 +9,7 @@ from typing import Any
 from .allocation import InMemoryAllocationStore
 from .auth import AuthenticatedUser, MatrixAuthValidatorProtocol
 from .dto import TokenRequest
+from .eligibility import AlwaysEligibleNativeAudioEligibilityPolicy
 from .errors import CallServiceError
 from .livekit_rooms import NoopLiveKitRoomProvisioner
 from .livekit_tokens import IssuedLiveKitToken, LiveKitGrant, LiveKitJWTTokenIssuer, LiveKitTokenIssuerProtocol
@@ -81,6 +82,7 @@ def make_fake_local_service() -> DirectCallTokenService:
         room_provisioner=NoopLiveKitRoomProvisioner(),
         token_issuer=fake_token_issuer(),
         livekit_server_url=fake_livekit_url(),
+        eligibility_policy=AlwaysEligibleNativeAudioEligibilityPolicy(),
     )
 
 

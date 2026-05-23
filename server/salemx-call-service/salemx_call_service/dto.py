@@ -74,6 +74,45 @@ class TokenRequest:
 
 
 @dataclass(frozen=True)
+class EligibilityRequest:
+    version: int
+    room_id: str
+    peer_user_id: str
+    intent: str
+    device_id: str | None = None
+
+    @classmethod
+    def from_mapping(cls, payload: dict[str, Any]) -> "EligibilityRequest":
+        version = payload.get("version")
+        if version != 1:
+            raise bad_request(errcode="M_UNRECOGNIZED", error="Unsupported direct-call eligibility request version.")
+
+        intent = _required_string(payload, "intent")
+        if intent != "audio":
+            raise unsupported_intent()
+
+        return cls(
+            version=version,
+            room_id=_required_string(payload, "room_id"),
+            peer_user_id=_required_string(payload, "peer_user_id"),
+            intent=intent,
+            device_id=_optional_string(payload, "device_id"),
+        )
+
+    def as_room_validation_request(self) -> TokenRequest:
+        return TokenRequest(
+            version=self.version,
+            call_id="eligibility",
+            room_id=self.room_id,
+            peer_user_id=self.peer_user_id,
+            intent=self.intent,
+            direction="outgoing",
+            device_id=self.device_id,
+            client_transaction_id=None,
+        )
+
+
+@dataclass(frozen=True)
 class LiveKitPayload:
     server_url: str
     room_name: str

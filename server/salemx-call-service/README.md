@@ -59,6 +59,9 @@ TOKEN_TTL_SECONDS=120
 ALLOCATION_TTL_SECONDS=300
 SALEMX_CALL_SERVICE_RATE_LIMIT_PER_MINUTE=30
 LOG_LEVEL=INFO
+SALEMX_NATIVE_AUDIO_ELIGIBILITY_ENABLED=0
+SALEMX_NATIVE_AUDIO_ELIGIBILITY_ALLOWED_USERS=<comma-separated-user-allowlist>
+SALEMX_NATIVE_AUDIO_ELIGIBILITY_ALLOWED_HOMESERVERS=<comma-separated-server-allowlist>
 ```
 
 `SYNAPSE_ADMIN_TOKEN` is intended for membership and room-state lookup only. `LIVEKIT_API_SECRET` stays server-side and must never be sent to clients.
@@ -86,6 +89,7 @@ Staging preflight refuses to start when:
 For tests only, `SALEMX_CALL_SERVICE_ALLOW_INSECURE_LIVEKIT_URL=1` allows an insecure LiveKit URL. Do not set this in staging.
 For tests only, `SALEMX_CALL_SERVICE_ALLOW_MEMORY_ALLOCATION_STORE=1` allows the in-memory allocation store in staging mode. Do not set this in staging dogfood.
 For tests only, `SALEMX_CALL_SERVICE_ALLOW_MEMORY_RATE_LIMITER=1` allows the in-memory rate limiter in staging mode. Do not set this in staging dogfood.
+Native audio internal-pilot eligibility is disabled by default. If `SALEMX_NATIVE_AUDIO_ELIGIBILITY_ENABLED=1` is set, the static allowlist skeleton requires both caller and peer accounts to be present in `SALEMX_NATIVE_AUDIO_ELIGIBILITY_ALLOWED_USERS`. `SALEMX_NATIVE_AUDIO_ELIGIBILITY_ALLOWED_HOMESERVERS` optionally narrows the account allowlist to specific homeservers. These allowlist values are local deployment config and must not be printed in logs, readiness output, docs, or reports.
 
 ## Health and Readiness
 
@@ -119,9 +123,15 @@ Redis-backed staging storage derives keys with `SALEMX_CALL_SERVICE_STORAGE_KEY_
 
 ## Internal Pilot Eligibility Contract
 
-The app now has a fail-closed internal pilot eligibility contract skeleton. The call-service does not yet expose this endpoint for non-engineering pilot use, and non-engineering dogfood remains blocked until a server-side allowlist/capability provider is implemented and runtime-proven.
+The app has a fail-closed internal pilot eligibility contract skeleton, and the call-service now exposes a disabled-by-default backend skeleton for future internal-pilot eligibility:
 
-Future eligibility responses must be redacted and limited to enums and booleans:
+```text
+POST /_matrix/client/unstable/kz.salemx.direct_call/eligibility
+```
+
+The endpoint validates the caller Matrix bearer token, checks optional device binding, validates the encrypted direct 1:1 room through the same Synapse room validator used by token issuance, and then evaluates the native audio eligibility policy. The default policy is fail-closed. The static allowlist skeleton is enabled only by explicit local deployment config.
+
+Eligibility responses are redacted and limited to enums and booleans:
 
 ```json
 {
@@ -132,6 +142,7 @@ Future eligibility responses must be redacted and limited to enums and booleans:
   "room_eligible": true,
   "trust_ready": true,
   "service_available": true,
+  "capability_present": true,
   "client_supported": true
 }
 ```
@@ -140,9 +151,6 @@ Allowed `state` values:
 
 - `eligible`
 - `unavailable`
-- `disabled`
-- `unsupported`
-- `failClosed`
 
 Allowed `reason` values:
 
@@ -155,7 +163,11 @@ Allowed `reason` values:
 - `unsupportedClient`
 - `unknown`
 
-The eligibility response must never include raw Matrix user IDs, peer IDs, room IDs, device IDs, Matrix event bodies, LiveKit room names, endpoint credentials, tokens, JWTs, keys, secrets, Redis keys, or backend request/response echoes. The token endpoint remains the final enforcement boundary and must still validate caller, peer, room membership, encryption, and trust before issuing a participant token.
+The eligibility response must never include raw Matrix user IDs, peer IDs, room IDs, device IDs, Matrix event bodies, LiveKit room names, endpoint credentials, tokens, JWTs, keys, secrets, Redis keys, or backend request/response echoes.
+
+The token endpoint reuses the same eligibility policy before rate limiting, allocation, LiveKit room pre-create, or token issuance. If eligibility is unavailable or not eligible, the service fails closed with a safe Matrix-style error and does not allocate a room or issue a participant token.
+
+This endpoint does not enable non-engineering dogfood by itself. iOS non-engineering activation is still not wired, engineering dogfood remains on the explicit DEBUG/integration private dogfood gate, and the token endpoint remains the final enforcement boundary.
 
 ## Request
 

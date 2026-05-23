@@ -66,6 +66,14 @@ def not_one_to_one() -> CallServiceError:
     )
 
 
+def native_audio_not_eligible() -> CallServiceError:
+    return CallServiceError(
+        status_code=403,
+        errcode="M_DIRECT_CALL_NOT_ELIGIBLE",
+        error="Native audio calls are not available.",
+    )
+
+
 def rate_limited(retry_after_ms: int) -> CallServiceError:
     return CallServiceError(
         status_code=429,

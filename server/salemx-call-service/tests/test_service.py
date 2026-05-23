@@ -25,6 +25,9 @@ from salemx_call_service.config import (
     ALLOW_MEMORY_ALLOCATION_STORE_ENV,
     ALLOW_MEMORY_RATE_LIMITER_ENV,
     ALLOW_INSECURE_LIVEKIT_URL_ENV,
+    NATIVE_AUDIO_ELIGIBILITY_ALLOWED_HOMESERVERS_ENV,
+    NATIVE_AUDIO_ELIGIBILITY_ALLOWED_USERS_ENV,
+    NATIVE_AUDIO_ELIGIBILITY_ENABLED_ENV,
     RATE_LIMIT_PER_MINUTE_ENV,
     RATE_LIMIT_STORE_ENV,
     RATE_LIMIT_STORE_URL_ENV,
@@ -38,6 +41,12 @@ from salemx_call_service.config import (
     validate_service_preflight,
 )
 from salemx_call_service.dto import TokenRequest
+from salemx_call_service.eligibility import (
+    AlwaysEligibleNativeAudioEligibilityPolicy,
+    DisabledNativeAudioEligibilityPolicy,
+    NativeAudioEligibilityPolicyProtocol,
+    StaticAllowlistNativeAudioEligibilityPolicy,
+)
 from salemx_call_service.errors import CallServiceError, livekit_room_unavailable
 from salemx_call_service.livekit_rooms import (
     LiveKitRoomServiceHTTPResponse,
@@ -196,13 +205,27 @@ class FakeRedisRateLimitClient:
         return True, 0
 
 
+class RecordingRateLimiter(InMemoryRateLimiter):
+    def __init__(self, events: list[str]) -> None:
+        super().__init__()
+        self._events = events
+
+    async def check_and_record(self,
+                               keys: tuple[RateLimitKey, ...],
+                               limit_per_minute: int,
+                               now: datetime | None = None) -> object:
+        self._events.append("rate-limit")
+        return await super().check_and_record(keys, limit_per_minute, now)
+
+
 class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
     def make_service(self,
                      rooms: dict[str, RoomEligibility] | None = None,
                      issuer: FakeLiveKitTokenIssuer | None = None,
                      provisioner: FakeLiveKitRoomProvisioner | None = None,
                      rate_limiter: RateLimiterProtocol | None = None,
-                     rate_limit_per_minute: int = 30) -> DirectCallTokenService:
+                     rate_limit_per_minute: int = 30,
+                     eligibility_policy: NativeAudioEligibilityPolicyProtocol | None = None) -> DirectCallTokenService:
         return DirectCallTokenService(
             auth_validator=FakeAuthValidator({
                 "matrix-token-a-sensitive": AuthenticatedUser("@alice:example.test", "DEVICEA"),
@@ -217,6 +240,7 @@ class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
             token_issuer=issuer or FakeLiveKitTokenIssuer(),
             livekit_server_url="wss://livekit.example.test",
             rate_limit_per_minute=rate_limit_per_minute,
+            eligibility_policy=eligibility_policy or AlwaysEligibleNativeAudioEligibilityPolicy(),
         )
 
     def valid_payload(self, **overrides: object) -> dict[str, object]:
@@ -470,6 +494,143 @@ class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("matrix-token-a-sensitive", joined_logs)
         self.assertNotIn("participant-token-sensitive", joined_logs)
         self.assertNotIn("!room:example.test", joined_logs)
+
+    async def test_default_eligibility_policy_fails_closed_without_token(self) -> None:
+        issuer = FakeLiveKitTokenIssuer()
+        provisioner = FakeLiveKitRoomProvisioner()
+        service = self.make_service(
+            issuer=issuer,
+            provisioner=provisioner,
+            eligibility_policy=DisabledNativeAudioEligibilityPolicy(),
+        )
+
+        with self.assertRaises(CallServiceError) as context:
+            await service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload())
+
+        self.assertEqual(context.exception.status_code, 403)
+        self.assertEqual(context.exception.errcode, "M_DIRECT_CALL_NOT_ELIGIBLE")
+        self.assertEqual(len(issuer.issued), 0)
+        self.assertEqual(provisioner.ensured_rooms, [])
+
+    async def test_eligibility_rejection_happens_before_rate_limit_allocation_or_room_creation(self) -> None:
+        events: list[str] = []
+        issuer = FakeLiveKitTokenIssuer(events=events)
+        provisioner = FakeLiveKitRoomProvisioner(events=events)
+        service = self.make_service(
+            issuer=issuer,
+            provisioner=provisioner,
+            rate_limiter=RecordingRateLimiter(events),
+            eligibility_policy=StaticAllowlistNativeAudioEligibilityPolicy(allowed_user_ids=("@bob:example.test",)),
+        )
+
+        with self.assertRaises(CallServiceError) as context:
+            await service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload())
+
+        self.assertEqual(context.exception.errcode, "M_DIRECT_CALL_NOT_ELIGIBLE")
+        self.assertEqual(events, [])
+        self.assertEqual(len(issuer.issued), 0)
+        self.assertEqual(provisioner.ensured_rooms, [])
+
+    async def test_eligibility_endpoint_default_disabled_is_redacted(self) -> None:
+        service = self.make_service(eligibility_policy=DisabledNativeAudioEligibilityPolicy())
+
+        result = await service.evaluate_eligibility("Bearer matrix-token-a-sensitive", {
+            "version": 1,
+            "room_id": "!room:example.test",
+            "peer_user_id": "@bob:example.test",
+            "intent": "audio",
+            "device_id": "DEVICEA",
+        })
+        body = result.as_dict()
+        output = json.dumps(body, sort_keys=True)
+
+        self.assertEqual(body["state"], "unavailable")
+        self.assertEqual(body["reason"], "capabilityMissing")
+        self.assertFalse(body["capability_present"])
+        self.assertNotIn("!room:example.test", output)
+        self.assertNotIn("@alice:example.test", output)
+        self.assertNotIn("@bob:example.test", output)
+        self.assertNotIn("DEVICEA", output)
+
+    async def test_eligibility_caller_not_allowlisted_returns_account_not_eligible(self) -> None:
+        service = self.make_service(eligibility_policy=StaticAllowlistNativeAudioEligibilityPolicy(
+            allowed_user_ids=("@bob:example.test",),
+            allowed_homeservers=("example.test",),
+        ))
+
+        result = await service.evaluate_eligibility("Bearer matrix-token-a-sensitive", {
+            "version": 1,
+            "room_id": "!room:example.test",
+            "peer_user_id": "@bob:example.test",
+            "intent": "audio",
+            "device_id": "DEVICEA",
+        })
+
+        self.assertEqual(result.as_dict()["state"], "unavailable")
+        self.assertEqual(result.as_dict()["reason"], "accountNotEligible")
+        self.assertFalse(result.account_eligible)
+        self.assertTrue(result.peer_eligible)
+
+    async def test_eligibility_peer_not_allowlisted_returns_peer_not_eligible(self) -> None:
+        service = self.make_service(eligibility_policy=StaticAllowlistNativeAudioEligibilityPolicy(
+            allowed_user_ids=("@alice:example.test",),
+            allowed_homeservers=("example.test",),
+        ))
+
+        result = await service.evaluate_eligibility("Bearer matrix-token-a-sensitive", {
+            "version": 1,
+            "room_id": "!room:example.test",
+            "peer_user_id": "@bob:example.test",
+            "intent": "audio",
+            "device_id": "DEVICEA",
+        })
+
+        self.assertEqual(result.as_dict()["state"], "unavailable")
+        self.assertEqual(result.as_dict()["reason"], "peerNotEligible")
+        self.assertTrue(result.account_eligible)
+        self.assertFalse(result.peer_eligible)
+
+    async def test_eligibility_both_allowlisted_valid_room_returns_eligible(self) -> None:
+        service = self.make_service(eligibility_policy=StaticAllowlistNativeAudioEligibilityPolicy(
+            allowed_user_ids=("@alice:example.test", "@bob:example.test"),
+            allowed_homeservers=("example.test",),
+        ))
+
+        result = await service.evaluate_eligibility("Bearer matrix-token-a-sensitive", {
+            "version": 1,
+            "room_id": "!room:example.test",
+            "peer_user_id": "@bob:example.test",
+            "intent": "audio",
+            "device_id": "DEVICEA",
+        })
+
+        body = result.as_dict()
+        self.assertEqual(body["state"], "eligible")
+        self.assertIsNone(body["reason"])
+        self.assertTrue(body["account_eligible"])
+        self.assertTrue(body["peer_eligible"])
+        self.assertTrue(body["room_eligible"])
+        self.assertIsNone(body["trust_ready"])
+
+    async def test_eligibility_invalid_room_returns_room_not_eligible(self) -> None:
+        service = self.make_service(
+            rooms={"!room:example.test": RoomEligibility(("@alice:example.test", "@bob:example.test"), False)},
+            eligibility_policy=StaticAllowlistNativeAudioEligibilityPolicy(
+                allowed_user_ids=("@alice:example.test", "@bob:example.test"),
+            ),
+        )
+
+        result = await service.evaluate_eligibility("Bearer matrix-token-a-sensitive", {
+            "version": 1,
+            "room_id": "!room:example.test",
+            "peer_user_id": "@bob:example.test",
+            "intent": "audio",
+            "device_id": "DEVICEA",
+        })
+
+        self.assertEqual(result.as_dict()["state"], "unavailable")
+        self.assertEqual(result.as_dict()["reason"], "roomNotEligible")
+        self.assertFalse(result.room_eligible)
 
 
 class AllocationStoreTests(unittest.IsolatedAsyncioTestCase):
@@ -880,6 +1041,31 @@ class ServicePreflightTests(unittest.TestCase):
         self.assertFalse(readiness.ready)
         self.assertEqual(readiness.reason, "invalidTokenTTL")
         self.assertFalse(readiness.allocation_ttl_bounded)
+
+    def test_staging_preflight_reports_native_audio_eligibility_disabled_by_default(self) -> None:
+        readiness = service_readiness_from_env(_staging_env())
+        body = readiness.as_dict()
+
+        self.assertTrue(readiness.ready)
+        self.assertFalse(body["nativeAudioEligibilityConfigured"])
+        self.assertFalse(body["nativeAudioEligibilityAllowlistConfigured"])
+
+    def test_staging_preflight_reports_native_audio_eligibility_without_values(self) -> None:
+        env = _staging_env({
+            NATIVE_AUDIO_ELIGIBILITY_ENABLED_ENV: "1",
+            NATIVE_AUDIO_ELIGIBILITY_ALLOWED_USERS_ENV: "@alice:example.test,@bob:example.test",
+            NATIVE_AUDIO_ELIGIBILITY_ALLOWED_HOMESERVERS_ENV: "example.test",
+        })
+
+        readiness = service_readiness_from_env(env)
+        output = json.dumps(readiness.as_dict(), sort_keys=True)
+
+        self.assertTrue(readiness.ready)
+        self.assertTrue(readiness.as_dict()["nativeAudioEligibilityConfigured"])
+        self.assertTrue(readiness.as_dict()["nativeAudioEligibilityAllowlistConfigured"])
+        self.assertNotIn("@alice:example.test", output)
+        self.assertNotIn("@bob:example.test", output)
+        self.assertNotIn("example.test", output)
 
 
 class LocalFakeCapabilityTests(unittest.IsolatedAsyncioTestCase):
@@ -1440,6 +1626,76 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(second_body["retry_after_ms"], int)
         self.assertNotIn("participant_token", second_body)
         self.assertEqual(len(issuer.issued), 1)
+
+    async def test_eligibility_endpoint_returns_redacted_unavailable_response(self) -> None:
+        try:
+            with patch.dict(os.environ, {SERVICE_MODE_ENV: ServiceMode.LOCAL_FAKE.value}, clear=True):
+                from salemx_call_service.app import ELIGIBILITY_PATH, create_app
+        except ModuleNotFoundError as error:
+            if error.name == "fastapi":
+                self.skipTest("FastAPI is not installed in this Python environment.")
+            raise
+
+        service = DirectCallTokenServiceTests().make_service(
+            eligibility_policy=StaticAllowlistNativeAudioEligibilityPolicy(allowed_user_ids=("@bob:example.test",)),
+        )
+        app = create_app(token_service=service)
+
+        status, body = await _asgi_post_json(app, ELIGIBILITY_PATH, {
+            "authorization": "Bearer matrix-token-a-sensitive",
+            "content-type": "application/json",
+        }, {
+            "version": 1,
+            "room_id": "!room:example.test",
+            "peer_user_id": "@bob:example.test",
+            "intent": "audio",
+            "device_id": "DEVICEA",
+        })
+        output = json.dumps(body, sort_keys=True)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["state"], "unavailable")
+        self.assertEqual(body["reason"], "accountNotEligible")
+        self.assertIn("account_eligible", body)
+        self.assertNotIn("!room:example.test", output)
+        self.assertNotIn("@alice:example.test", output)
+        self.assertNotIn("@bob:example.test", output)
+        self.assertNotIn("DEVICEA", output)
+        self.assertNotIn("participant_token", output)
+
+    async def test_eligibility_endpoint_returns_eligible_when_allowlisted(self) -> None:
+        try:
+            with patch.dict(os.environ, {SERVICE_MODE_ENV: ServiceMode.LOCAL_FAKE.value}, clear=True):
+                from salemx_call_service.app import ELIGIBILITY_PATH, create_app
+        except ModuleNotFoundError as error:
+            if error.name == "fastapi":
+                self.skipTest("FastAPI is not installed in this Python environment.")
+            raise
+
+        service = DirectCallTokenServiceTests().make_service(
+            eligibility_policy=StaticAllowlistNativeAudioEligibilityPolicy(
+                allowed_user_ids=("@alice:example.test", "@bob:example.test"),
+            ),
+        )
+        app = create_app(token_service=service)
+
+        status, body = await _asgi_post_json(app, ELIGIBILITY_PATH, {
+            "authorization": "Bearer matrix-token-a-sensitive",
+            "content-type": "application/json",
+        }, {
+            "version": 1,
+            "room_id": "!room:example.test",
+            "peer_user_id": "@bob:example.test",
+            "intent": "audio",
+            "device_id": "DEVICEA",
+        })
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["state"], "eligible")
+        self.assertIsNone(body["reason"])
+        self.assertTrue(body["account_eligible"])
+        self.assertTrue(body["peer_eligible"])
+        self.assertTrue(body["room_eligible"])
 
     async def test_staging_mode_refuses_fake_mode(self) -> None:
         app_module = _load_app_module()

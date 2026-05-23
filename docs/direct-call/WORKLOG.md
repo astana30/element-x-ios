@@ -1038,3 +1038,18 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Confirmed no iOS app behavior, Element Call route, CallKit, push, video, or global production direct-call activation changed.
 - Staging dogfood remains blocked until staging readiness, Synapse validation smoke, and LiveKit token join smoke pass.
 - Recommended next phase: `2.24J — staging Synapse validation smoke execution` when operator-local env values are available.
+
+## 2026-05-23 — 2.30E Call-Service Native Audio Eligibility Endpoint Skeleton
+
+- Added a backend-first native audio eligibility policy boundary to `salemx-call-service`.
+- Added a disabled-by-default eligibility policy and an explicit static allowlist skeleton. Static allowlist mode requires both caller and peer accounts when enabled by local deployment config.
+- Added `POST /_matrix/client/unstable/kz.salemx.direct_call/eligibility`.
+- The endpoint validates Matrix bearer auth, optional device binding, and encrypted direct 1:1 room structure before returning redacted eligibility.
+- Eligibility responses are limited to `state`, `reason`, and enum/boolean fields for account, peer, room, trust, service, capability, and client support.
+- Added redacted readiness booleans: `nativeAudioEligibilityConfigured` and `nativeAudioEligibilityAllowlistConfigured`.
+- Reused the eligibility policy in the LiveKit token endpoint before rate limiting, allocation, LiveKit room pre-create, or participant token issuance.
+- Eligibility rejection now fails closed without allocation, LiveKit room pre-create, or token issuance.
+- Local fake and existing backend proof paths use an explicit always-eligible test/fake policy; staging/internal pilot remains explicit and fail-closed by default.
+- Updated backend tests for default fail-closed eligibility, caller/peer allowlist outcomes, valid eligible outcome, invalid room outcome, redacted endpoint response, readiness redaction, and token endpoint enforcement order.
+- Updated server and dogfood docs. This does not wire iOS non-engineering activation, does not change Element Call, and does not add CallKit, push, video, or global activation.
+- Recommended next phase: `2.30F — native audio eligibility endpoint runtime/no-activation proof`.

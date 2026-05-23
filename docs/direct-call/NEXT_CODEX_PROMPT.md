@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.30C — eligibility contract runtime/no-activation proof recorded.
+After 2.30E — call-service native audio eligibility endpoint skeleton.
 
 Current checkpoints:
 - App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
@@ -23,6 +23,7 @@ Current checkpoints:
 - Redacted pilot monitoring contract: 2.29E recorded in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
 - Internal pilot eligibility contract skeleton: 2.30B added typed fail-closed app models, a redacted payload shape, safe card-copy mapping for account/peer ineligibility, and docs.
 - Eligibility runtime/no-activation proof: 2.30C confirmed product UI/start gates without private dogfood still fail closed, and controlled engineering dogfood still reaches active audio under explicit private dogfood gates.
+- Backend eligibility endpoint skeleton: 2.30E added the disabled-by-default call-service `/eligibility` endpoint, static allowlist policy skeleton, redacted readiness booleans, and token endpoint enforcement before rate limit/allocation/LiveKit room pre-create/token issuance.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -104,6 +105,14 @@ Current proven/prepared state:
   - with the private dogfood gate restored, A/B trust and activation were ready;
   - runner-assisted A -> B reached A/B `activeAudio`, then hangup returned A/B to `idle` with media failure `none`;
   - the legacy fake/dry-run gate remained unset and Element Call remained untouched.
+- 2.30E backend eligibility endpoint skeleton:
+  - `POST /_matrix/client/unstable/kz.salemx.direct_call/eligibility` validates Matrix bearer auth, optional device binding, and encrypted direct 1:1 room structure before evaluating eligibility;
+  - the default backend eligibility policy is fail-closed;
+  - static allowlist mode requires both caller and peer accounts when explicitly enabled by local deployment config;
+  - responses are limited to `state`, `reason`, and redacted booleans such as account, peer, room, trust, service, capability, and client support;
+  - readiness exposes `nativeAudioEligibilityConfigured` and `nativeAudioEligibilityAllowlistConfigured` only;
+  - token issuance reuses the same policy before rate limiting, allocation, LiveKit room pre-create, or participant token issuance;
+  - this does not wire iOS non-engineering activation.
 - Element Call route remains unchanged and must stay available as fallback.
 - No CallKit, push/background incoming, missed calls, video, session restoration, broad internal rollout, public rollout, production activation, or global activation exists.
 
@@ -151,26 +160,24 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.30D — backend internal pilot allowlist provider design.
+2.30F — native audio eligibility endpoint runtime/no-activation proof.
 
 Task:
-Design the backend allowlist/capability provider that will eventually back the 2.30B fail-closed internal pilot eligibility contract. Inspection/design first. Do not enable broader dogfood. Do not activate non-engineering users. Do not change Element Call route. Do not wire CallKit, push, missed calls, video, session restoration, or global production activation.
+Run or record a focused runtime proof for the call-service native audio eligibility endpoint skeleton. Do not wire iOS non-engineering activation. Do not enable broader dogfood. Do not change Element Call route. Do not wire CallKit, push, missed calls, video, session restoration, or global production activation.
 
 Goal:
-Define the server-side source of truth, allowlist storage, redacted response shape, readiness fields, and enforcement boundaries needed before implementing a narrow internal pilot eligibility provider. Build on the 2.30B enum/boolean-only contract and keep the current dogfood engineering-only.
+Prove that backend eligibility is fail-closed by default, redacted, and enforced by the token endpoint before rate limit/allocation/LiveKit room pre-create/token issuance. Confirm controlled engineering dogfood remains separate under the explicit private dogfood gate.
 
-Required design output:
-A. Files inspected.
-B. Proposed backend allowlist source of truth.
-C. Storage model and redaction requirements.
-D. Eligibility endpoint/capability response shape.
-E. Readiness and monitoring fields.
-F. Token endpoint enforcement boundaries.
-G. Failure and fail-closed behavior.
-H. Security review checklist.
-I. Required backend/client tests.
-J. Runtime proof required before non-engineering users.
-K. Recommended implementation order.
+Required checks:
+A. Backend readiness redacted booleans, including native audio eligibility booleans.
+B. `/eligibility` default disabled response: unavailable/fail-closed, no raw IDs or secrets.
+C. Token endpoint default disabled rejection: no participant token, no allocation, no LiveKit room pre-create.
+D. Explicit allowlist test config: allowlisted caller+peer returns eligible.
+E. Peer/caller not allowlisted returns safe account/peer unavailable reason.
+F. Invalid room/encryption/member case returns safe room unavailable reason or safe token rejection.
+G. Confirm iOS non-engineering activation remains unwired and private dogfood gate remains DEBUG/integration-only.
+H. Confirm Element Call route untouched.
+I. Report whether code changed.
 
 Allowed report fields:
 - readiness booleans;
@@ -221,4 +228,4 @@ Validation if docs change:
 - Direct-call forbidden scan.
 
 Suggested commit if docs change:
-Design backend internal pilot allowlist provider
+Record native audio eligibility endpoint proof
