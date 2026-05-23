@@ -28,6 +28,7 @@ No tokens, JWTs, passwords, shared secrets, authorization header values, or Live
 | Native card failure-copy hardening | Recorded |
 | Redacted pilot monitoring contract | Recorded |
 | Backend eligibility endpoint skeleton | Added, disabled by default |
+| Eligibility endpoint local route smoke | Passed |
 
 ## Root Cause
 
@@ -82,6 +83,8 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - The 2.30E call-service eligibility endpoint skeleton adds `POST /_matrix/client/unstable/kz.salemx.direct_call/eligibility`, disabled by default, with redacted enum/boolean responses only.
 - The token endpoint now reuses backend eligibility before rate limiting, allocation, LiveKit room pre-create, or participant token issuance. Eligibility rejection fails closed without allocating a media room or issuing a token.
 - This does not wire iOS non-engineering activation; controlled engineering dogfood remains on the explicit DEBUG/integration private dogfood gate.
+- The 2.30F local route smoke passed: default `/eligibility` failed closed with `capabilityMissing`, default token endpoint enforcement returned `M_DIRECT_CALL_NOT_ELIGIBLE` without allocation, room pre-create, or token issuance, allowlisted local fixture reached eligible, and negative route cases returned safe enums/errors.
+- The 2.30F smoke output remained redacted and did not print raw tokens, JWTs, secrets, raw identifiers, Redis credential URLs, or LiveKit room names.
 - Controlled engineering dogfood may continue under the same narrow staging-only constraints.
 
 ## Next Step
@@ -96,4 +99,4 @@ Controlled engineering dogfood may continue on the staging path under the privat
 - Element Call toolbar path unchanged and available as fallback;
 - no CallKit, push, video, broad internal rollout, public rollout, or global production activation.
 
-Next, continue with `2.30F — native audio eligibility endpoint runtime/no-activation proof` while keeping controlled dogfood narrow and redacted.
+Next, continue with `2.30G — native audio eligibility endpoint staging proof plan` while keeping controlled dogfood narrow and redacted.

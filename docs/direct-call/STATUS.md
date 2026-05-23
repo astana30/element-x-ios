@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.30E — call-service native audio eligibility endpoint skeleton.
+After 2.30F — eligibility endpoint local route smoke.
 
 ## Latest App Code Checkpoint
 
@@ -159,6 +159,13 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - The LiveKit token endpoint reuses the same eligibility policy before rate limiting, allocation, LiveKit room pre-create, or participant token issuance.
   - Eligibility rejection fails closed with no token, no allocation, and no LiveKit room pre-create.
   - This does not wire iOS non-engineering activation; controlled engineering dogfood remains on the explicit DEBUG/integration private dogfood gate.
+- Native audio eligibility endpoint local route smoke passed:
+  - Readiness returned `ready=true`, `reason=ok`, and included `nativeAudioEligibilityConfigured` plus `nativeAudioEligibilityAllowlistConfigured`.
+  - Default fail-closed `/eligibility` returned `state=unavailable`, `reason=capabilityMissing`, and `capability_present=false`.
+  - Default token endpoint enforcement returned `403` with `M_DIRECT_CALL_NOT_ELIGIBLE`, no allocation, no LiveKit room pre-create, and no participant token issuance.
+  - Explicit allowlisted local fixture returned `/eligibility` `state=eligible`, `reason=null`; the token path proceeded with allocation, one LiveKit room pre-create, and token issuance, with token output redacted.
+  - Negative cases passed: caller not allowlisted -> `accountNotEligible`, peer not allowlisted -> `peerNotEligible`, invalid room -> `roomNotEligible`, malformed request -> `400`, unsupported intent -> `M_DIRECT_CALL_UNSUPPORTED_INTENT`.
+  - Smoke output stayed redacted: no raw tokens, JWTs, secrets, room IDs, user IDs, peer IDs, device IDs, Redis credential URLs, or LiveKit room names were printed.
 - Private dogfood activation is explicit and fail-closed by default:
   - `appRolloutDisabled` is produced by the production activation decision when `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` is absent.
   - `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1` can show the private card, and `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1` can allow start actions, but neither gate enables rollout/capability readiness by itself.
@@ -700,9 +707,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.30F — native audio eligibility endpoint runtime/no-activation proof`
+`2.30G — native audio eligibility endpoint staging proof plan`
 
-Goal: prove the new backend eligibility endpoint remains fail-closed by default, returns only redacted enum/boolean payloads, blocks token issuance before rate limit/allocation/LiveKit room pre-create when eligibility is unavailable, and does not broaden iOS activation. Keep non-engineering pilot disabled until the backend allowlist path, client consumption, redacted telemetry, support workflow, and runtime proof are complete.
+Goal: prepare the staging proof for the backend eligibility endpoint without enabling non-engineering users. Verify default fail-closed behavior, explicit operator-local allowlist behavior, token endpoint enforcement, redacted readiness/reporting, and no iOS activation broadening before any client-side server-backed eligibility consumption is implemented.
 
 ## Do-Not-Touch Constraints
 

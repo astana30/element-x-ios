@@ -436,6 +436,20 @@ It validates Matrix bearer auth, optional device binding, and encrypted direct 1
 
 This contract is only preparation for a future internal pilot; the app does not call a backend eligibility endpoint from rendering, does not request tokens, does not connect media, does not connect LiveKit, and does not enable non-engineering dogfood.
 
+### 2.30F Eligibility Endpoint Local Route Smoke
+
+The local route smoke for the backend eligibility endpoint passed with redacted output only:
+
+- readiness returned `ready=true`, `reason=ok`, and included the native audio eligibility readiness booleans;
+- default `/eligibility` returned `state=unavailable`, `reason=capabilityMissing`, and `capability_present=false`;
+- default token endpoint enforcement returned `403` with `M_DIRECT_CALL_NOT_ELIGIBLE`;
+- default token endpoint enforcement performed no allocation, no LiveKit room pre-create, and no participant token issuance;
+- explicit allowlisted local fixture returned `/eligibility` `state=eligible`, `reason=null`, then allowed token path progression with token output redacted;
+- caller-not-allowlisted, peer-not-allowlisted, invalid-room, malformed-request, and unsupported-intent cases returned safe status/enums;
+- no raw tokens, JWTs, secrets, room IDs, user IDs, peer IDs, device IDs, Redis credential URLs, or LiveKit room names were printed.
+
+This smoke does not enable non-engineering users. Client-side consumption of the backend eligibility endpoint remains unwired.
+
 Before any future narrow non-engineering internal pilot, the eligibility contract still needs:
 
 - runtime proof of the server-side allowlist endpoint under named internal-pilot fixtures;

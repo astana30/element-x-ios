@@ -1053,3 +1053,16 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Updated backend tests for default fail-closed eligibility, caller/peer allowlist outcomes, valid eligible outcome, invalid room outcome, redacted endpoint response, readiness redaction, and token endpoint enforcement order.
 - Updated server and dogfood docs. This does not wire iOS non-engineering activation, does not change Element Call, and does not add CallKit, push, video, or global activation.
 - Recommended next phase: `2.30F — native audio eligibility endpoint runtime/no-activation proof`.
+
+## 2026-05-23 — 2.30F Eligibility Endpoint Local Route Smoke
+
+- Ran a local in-memory FastAPI/ASGI route smoke for the native audio eligibility endpoint and token endpoint enforcement.
+- Readiness returned `ready=true`, `reason=ok`, and included the redacted native audio eligibility readiness booleans.
+- Default fail-closed `/eligibility` returned `state=unavailable`, `reason=capabilityMissing`, and `capability_present=false`.
+- Default token endpoint enforcement returned `403` with `M_DIRECT_CALL_NOT_ELIGIBLE`; no allocation, LiveKit room pre-create, or participant token issuance occurred.
+- Explicit allowlisted local fixture returned `/eligibility` `state=eligible`, `reason=null`; the token path proceeded with allocation, one LiveKit room pre-create, and token issuance, with token output redacted.
+- Negative route cases passed for caller not allowlisted, peer not allowlisted, invalid room, malformed request, and unsupported intent.
+- Smoke output stayed redacted: no raw tokens, JWTs, secrets, room IDs, user IDs, peer IDs, device IDs, Redis credential URLs, or LiveKit room names were printed.
+- Ran backend tests with FastAPI route tests enabled, compileall, `git diff --check`, docs secret scan, and the direct-call forbidden scan.
+- No app code or backend code changed during the smoke. This does not wire iOS non-engineering activation, does not change Element Call, and does not add CallKit, push, video, or global activation.
+- Recommended next phase: `2.30G — native audio eligibility endpoint staging proof plan`.
