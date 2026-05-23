@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.29E — redacted pilot monitoring contract documented.
+After 2.30B — internal pilot eligibility contract skeleton added.
 
 Current checkpoints:
 - App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
@@ -21,6 +21,7 @@ Current checkpoints:
 - Controlled dogfood pilot session 2: 2.28C recorded in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
 - Broader internal dogfood hardening plan: 2.29B recorded in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
 - Redacted pilot monitoring contract: 2.29E recorded in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
+- Internal pilot eligibility contract skeleton: 2.30B added typed fail-closed app models, a redacted payload shape, safe card-copy mapping for account/peer ineligibility, and docs.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -88,6 +89,13 @@ Current proven/prepared state:
   - rendering/status display remains side-effect-free: no Matrix send, no token request, no media connect, and no LiveKit connect;
   - the dogfood runbook now defines the exact redacted monitoring contract for app/card status, runner output, backend readiness, backend errors, and LiveKit/media state;
   - LiveKit room names are treated as forbidden pilot report output because they may be correlatable.
+- 2.30B eligibility contract skeleton:
+  - `NativeDirectCallInternalPilotEligibility` supports `eligible`, `unavailable(reason)`, `disabled`, `unsupported`, and `failClosed`;
+  - unavailable reasons are limited to `accountNotEligible`, `peerNotEligible`, `roomNotEligible`, `trustNotReady`, `serviceUnavailable`, `capabilityMissing`, `unsupportedClient`, and `unknown`;
+  - payload shape is redacted and enum/boolean-only;
+  - default provider returns disabled/fail-closed;
+  - account and peer not-eligible states map to safe private-card unavailable copy;
+  - non-engineering pilot remains blocked until server-side allowlist/capability backing and runtime proof exist.
 - Element Call route remains unchanged and must stay available as fallback.
 - No CallKit, push/background incoming, missed calls, video, session restoration, broad internal rollout, public rollout, production activation, or global activation exists.
 
@@ -135,25 +143,25 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.30A — fail-closed internal pilot rollout and allowlist design.
+2.30C — backend internal pilot allowlist provider design.
 
 Task:
-Design the fail-closed internal pilot rollout/allowlist model required before any future narrow non-engineering internal pilot. Do not enable broader dogfood. Do not implement app/backend code unless explicitly requested after the design is reviewed. Do not change Element Call route. Do not wire CallKit, push, missed calls, video, session restoration, or global production activation.
+Design the backend allowlist/capability provider that will eventually back the 2.30B fail-closed internal pilot eligibility contract. Inspection/design first. Do not enable broader dogfood. Do not activate non-engineering users. Do not change Element Call route. Do not wire CallKit, push, missed calls, video, session restoration, or global production activation.
 
 Goal:
-Turn the remaining 2.29B hardening plan into concrete rollout/allowlist proposals, test requirements, and rollout guardrails while keeping the current dogfood engineering-only. Build on the 2.29D user-safe card copy and the 2.29E redacted monitoring contract.
+Define the server-side source of truth, allowlist storage, redacted response shape, readiness fields, and enforcement boundaries needed before implementing a narrow internal pilot eligibility provider. Build on the 2.30B enum/boolean-only contract and keep the current dogfood engineering-only.
 
 Required design output:
 A. Files inspected.
-B. Proposed fail-closed internal rollout/allowlist model.
-C. Required server capability or allowlist inputs.
-D. Required client-side gate model and default/release behavior.
-E. Backend/staging operational requirements.
-F. Support and rollback workflow.
-G. Security review checklist.
-H. Soak/test matrix before non-engineering users.
-I. Explicit out-of-scope list.
-J. Required tests and runtime proofs.
+B. Proposed backend allowlist source of truth.
+C. Storage model and redaction requirements.
+D. Eligibility endpoint/capability response shape.
+E. Readiness and monitoring fields.
+F. Token endpoint enforcement boundaries.
+G. Failure and fail-closed behavior.
+H. Security review checklist.
+I. Required backend/client tests.
+J. Runtime proof required before non-engineering users.
 K. Recommended implementation order.
 
 Allowed report fields:
@@ -205,4 +213,4 @@ Validation if docs change:
 - Direct-call forbidden scan.
 
 Suggested commit if docs change:
-Document internal pilot allowlist design
+Design backend internal pilot allowlist provider

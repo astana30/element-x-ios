@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Added the fail-closed internal pilot eligibility contract skeleton.
 - Documented the redacted pilot monitoring/status contract.
 - Hardened private native audio card failure copy and DEBUG-only redacted card status.
 - Recorded the controlled engineering dogfood matrix result on the staging media/token/LiveKit path.
@@ -32,6 +33,20 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-23 — 2.30B Internal Pilot Eligibility Contract Skeleton
+
+- Added a fail-closed internal pilot eligibility contract skeleton for future native-audio rollout work.
+- Added `NativeDirectCallInternalPilotEligibility` with `eligible`, `unavailable(reason)`, `disabled`, `unsupported`, and `failClosed` states.
+- Added user-safe unavailable reasons: `accountNotEligible`, `peerNotEligible`, `roomNotEligible`, `trustNotReady`, `serviceUnavailable`, `capabilityMissing`, `unsupportedClient`, and `unknown`.
+- Added a redacted payload shape that carries only enums and booleans for account, peer, room, trust, service, and client support readiness.
+- Added a default fail-closed provider that returns disabled.
+- Mapped account and peer not-eligible states to existing safe private-card unavailable copy without exposing identifiers.
+- Confirmed the skeleton does not enable non-engineering dogfood, does not reuse `directOneToOneCallsEnabled`, and does not change Element Call, CallKit, push, video, or global production activation.
+- Documented the backend eligibility response shape and reiterated that the token endpoint remains the final enforcement boundary.
+- Regenerated `SalemX.xcodeproj` to include the new eligibility test suite.
+- Validation passed: SwiftFormat/SwiftLint on changed Swift files, targeted native-call unit tests, Release build with existing warnings only, `git diff --check`, docs secret scan, and the direct-call forbidden scan.
+- Recommended next phase: `2.30C — backend internal pilot allowlist provider design`.
 
 ## 2026-05-22 — 2.29E Redacted Pilot Monitoring Contract
 

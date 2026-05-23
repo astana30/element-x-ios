@@ -516,6 +516,8 @@ struct NativeDirectCallInternalControlPanelState: Equatable {
 
 enum NativeDirectCallRoomCardUnavailableReason: String, CaseIterable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     case nativeCallsUnavailable
+    case accountNotEligible
+    case peerNotEligible
     case serverUnsupported
     case roomNotEncrypted
     case roomNotOneToOne
@@ -1476,6 +1478,25 @@ enum NativeDirectCallUserSafeReasonMapper {
         }
     }
 
+    static func unavailableReason(_ internalPilotReason: NativeDirectCallInternalPilotUnavailableReason) -> NativeDirectCallRoomCardUnavailableReason {
+        switch internalPilotReason {
+        case .accountNotEligible:
+            return .accountNotEligible
+        case .peerNotEligible:
+            return .peerNotEligible
+        case .roomNotEligible:
+            return .roomNotOneToOne
+        case .trustNotReady:
+            return .peerTrustUnavailable
+        case .serviceUnavailable:
+            return .callServiceUnavailable
+        case .capabilityMissing, .unsupportedClient:
+            return .serverUnsupported
+        case .unknown:
+            return .unknown
+        }
+    }
+
     static func failureReason(_ mediaFailureReason: DirectCallDiagnosticMediaFailureReason) -> NativeDirectCallRoomCardFailureReason {
         switch mediaFailureReason {
         case .none:
@@ -1816,7 +1837,7 @@ private extension NativeDirectCallRoomCardUnavailableReason {
             UntranslatedL10n.screenRoomNativeDirectCallRoomNotOneToOne
         case .callServiceUnavailable:
             UntranslatedL10n.screenRoomNativeDirectCallBackendUnavailable
-        case .nativeCallsUnavailable, .serverUnsupported:
+        case .nativeCallsUnavailable, .accountNotEligible, .peerNotEligible, .serverUnsupported:
             UntranslatedL10n.screenRoomNativeDirectCallNotAvailableHere
         case .unknown:
             UntranslatedL10n.screenRoomNativeDirectCallUnknownFailure
@@ -1837,7 +1858,7 @@ private extension NativeDirectCallRoomCardUnavailableReason {
             UntranslatedL10n.screenRoomNativeDirectCallRoomNotOneToOneDetail
         case .callServiceUnavailable:
             UntranslatedL10n.screenRoomNativeDirectCallBackendUnavailableDetail
-        case .nativeCallsUnavailable, .serverUnsupported:
+        case .nativeCallsUnavailable, .accountNotEligible, .peerNotEligible, .serverUnsupported:
             UntranslatedL10n.screenRoomNativeDirectCallNotAvailableHereDetail
         case .unknown:
             UntranslatedL10n.screenRoomNativeDirectCallUnknownFailureDetail

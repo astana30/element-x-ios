@@ -383,6 +383,57 @@ Before sharing or committing pilot material, run the applicable guards:
 
 Any monitoring expansion must add tests proving rendering/status refresh remains side-effect-free: no Matrix send, no token request, no media connect, and no LiveKit connect from rendering or status display.
 
+### 2.30B Internal Pilot Eligibility Contract Skeleton
+
+The native-audio internal pilot eligibility contract now exists as a typed, redacted skeleton. It is not backed by a production allowlist yet and does not approve non-engineering users.
+
+Eligibility states:
+
+- `eligible`;
+- `unavailable(reason)`;
+- `disabled`;
+- `unsupported`;
+- `failClosed`.
+
+Unavailable reasons:
+
+- `accountNotEligible`;
+- `peerNotEligible`;
+- `roomNotEligible`;
+- `trustNotReady`;
+- `serviceUnavailable`;
+- `capabilityMissing`;
+- `unsupportedClient`;
+- `unknown`.
+
+The redacted payload shape may carry only enums and booleans:
+
+```json
+{
+  "state": "unavailable",
+  "reason": "accountNotEligible",
+  "account_eligible": false,
+  "peer_eligible": true,
+  "room_eligible": true,
+  "trust_ready": true,
+  "service_available": true,
+  "client_supported": true
+}
+```
+
+The payload must never include raw Matrix user IDs, peer IDs, room IDs, device IDs, Matrix event bodies, LiveKit room names, endpoint credentials, tokens, JWTs, keys, secrets, or backend request/response echoes.
+
+The current default provider returns disabled/fail-closed. Account and peer not-eligible states map to existing safe private-card unavailable copy. This contract is only preparation for a future internal pilot; it does not call a backend eligibility endpoint from rendering, does not request tokens, does not connect media, does not connect LiveKit, and does not enable non-engineering dogfood.
+
+Before any future narrow non-engineering internal pilot, the eligibility contract still needs:
+
+- server-side allowlist or capability backing;
+- backend token endpoint enforcement for caller, peer, room, membership, and trust;
+- redacted readiness/monitoring coverage;
+- support and rollback workflow;
+- runtime proof across named pilot accounts/devices;
+- security review confirming no raw identifiers or secrets are collected or reported.
+
 ### Failure Triage
 
 | Symptom | Allowed report | First action |

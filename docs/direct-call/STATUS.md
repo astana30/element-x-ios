@@ -2,13 +2,11 @@
 
 ## Current Phase
 
-After 2.29E — redacted pilot monitoring contract documented.
+After 2.30B — fail-closed internal pilot eligibility contract skeleton added.
 
 ## Latest App Code Checkpoint
 
-2.29D `Harden native audio card failure copy`
-
-Commit: `71056f143`
+2.30B `Add native audio eligibility contract skeleton`
 
 ## Latest Backend Code Checkpoint
 
@@ -142,6 +140,13 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Allowed app/card, runner, backend readiness, backend error, and LiveKit/media fields are enumerated.
   - Raw Matrix access tokens, Synapse admin tokens, LiveKit API secrets, participant JWTs/tokens, media keys, raw room/user/peer/device IDs, Matrix event bodies, full request/response bodies, Redis credential URLs, and LiveKit room names remain forbidden.
   - Pilot reports remain pass/fail/not-run with readiness/trust booleans, session/terminal/media enums, cleanup/disconnect booleans, activation reason enum, and non-identifying timestamps/session numbers only.
+- Native audio internal pilot eligibility contract skeleton is added:
+  - `NativeDirectCallInternalPilotEligibility` models `eligible`, `unavailable(reason)`, `disabled`, `unsupported`, and `failClosed`.
+  - User-safe unavailable reasons are limited to `accountNotEligible`, `peerNotEligible`, `roomNotEligible`, `trustNotReady`, `serviceUnavailable`, `capabilityMissing`, `unsupportedClient`, and `unknown`.
+  - The payload shape carries only enums and booleans such as account, peer, room, trust, service, and client support readiness.
+  - The default provider is fail-closed and returns disabled.
+  - Account and peer not-eligible states map to existing safe private-card unavailable copy without exposing identifiers.
+  - The skeleton is not wired to enable non-engineering dogfood; server allowlist/capability backing and runtime proof are still required.
 - Private dogfood activation is explicit and fail-closed by default:
   - `appRolloutDisabled` is produced by the production activation decision when `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` is absent.
   - `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1` can show the private card, and `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1` can allow start actions, but neither gate enables rollout/capability readiness by itself.
@@ -683,9 +688,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.29C — native audio internal pilot rollout and UX hardening design`
+`2.30C — backend internal pilot allowlist provider design`
 
-Goal: design the fail-closed internal rollout/allowlist model and non-engineering-safe UX/failure states needed before any narrow non-engineering internal pilot. Keep controlled engineering dogfood active only under the current staging runbook. Preserve trusted-device E2EE, redaction, Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope unless explicitly scoped later.
+Goal: design and prepare the server-side allowlist/capability backing for the new fail-closed internal pilot eligibility contract. Keep non-engineering pilot disabled until the backend provider, client dry-run consumption, redacted telemetry, support workflow, and runtime proof are complete. Preserve trusted-device E2EE, redaction, Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope unless explicitly scoped later.
 
 ## Do-Not-Touch Constraints
 

@@ -661,6 +661,192 @@ struct DirectCallProductionCapabilityPayloadDecoder: CustomStringConvertible, Cu
     }
 }
 
+enum NativeDirectCallInternalPilotUnavailableReason: String, Codable, CaseIterable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case accountNotEligible
+    case peerNotEligible
+    case roomNotEligible
+    case trustNotReady
+    case serviceUnavailable
+    case capabilityMissing
+    case unsupportedClient
+    case unknown
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum NativeDirectCallInternalPilotEligibility: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case eligible
+    case unavailable(reason: NativeDirectCallInternalPilotUnavailableReason)
+    case disabled
+    case unsupported
+    case failClosed
+
+    var isEligible: Bool {
+        self == .eligible
+    }
+
+    var description: String {
+        switch self {
+        case .eligible:
+            "eligible"
+        case .unavailable(let reason):
+            "unavailable(\(reason))"
+        case .disabled:
+            "disabled"
+        case .unsupported:
+            "unsupported"
+        case .failClosed:
+            "failClosed"
+        }
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct NativeDirectCallInternalPilotEligibilityPayload: Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let state: State
+    let reason: NativeDirectCallInternalPilotUnavailableReason?
+    let accountEligible: Bool?
+    let peerEligible: Bool?
+    let roomEligible: Bool?
+    let trustReady: Bool?
+    let serviceAvailable: Bool?
+    let clientSupported: Bool?
+
+    init(state: State,
+         reason: NativeDirectCallInternalPilotUnavailableReason? = nil,
+         accountEligible: Bool? = nil,
+         peerEligible: Bool? = nil,
+         roomEligible: Bool? = nil,
+         trustReady: Bool? = nil,
+         serviceAvailable: Bool? = nil,
+         clientSupported: Bool? = nil) {
+        self.state = state
+        self.reason = reason
+        self.accountEligible = accountEligible
+        self.peerEligible = peerEligible
+        self.roomEligible = roomEligible
+        self.trustReady = trustReady
+        self.serviceAvailable = serviceAvailable
+        self.clientSupported = clientSupported
+    }
+
+    var eligibility: NativeDirectCallInternalPilotEligibility {
+        switch state {
+        case .eligible:
+            .eligible
+        case .unavailable:
+            .unavailable(reason: reason ?? .unknown)
+        case .disabled:
+            .disabled
+        case .unsupported:
+            .unsupported
+        case .failClosed:
+            .failClosed
+        }
+    }
+
+    var description: String {
+        "NativeDirectCallInternalPilotEligibilityPayload(" + [
+            "state: \(state)",
+            "reason: \(reason?.description ?? "none")",
+            "accountEligible: \(redactedBoolean(accountEligible))",
+            "peerEligible: \(redactedBoolean(peerEligible))",
+            "roomEligible: \(redactedBoolean(roomEligible))",
+            "trustReady: \(redactedBoolean(trustReady))",
+            "serviceAvailable: \(redactedBoolean(serviceAvailable))",
+            "clientSupported: \(redactedBoolean(clientSupported))"
+        ].joined(separator: ", ") + ")"
+    }
+
+    var debugDescription: String {
+        description
+    }
+
+    private func redactedBoolean(_ value: Bool?) -> String {
+        value.map { String($0) } ?? "unknown"
+    }
+
+    enum State: String, Codable, CaseIterable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+        case eligible
+        case unavailable
+        case disabled
+        case unsupported
+        case failClosed
+
+        var description: String {
+            rawValue
+        }
+
+        var debugDescription: String {
+            description
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case state
+        case reason
+        case accountEligible = "account_eligible"
+        case peerEligible = "peer_eligible"
+        case roomEligible = "room_eligible"
+        case trustReady = "trust_ready"
+        case serviceAvailable = "service_available"
+        case clientSupported = "client_supported"
+    }
+}
+
+struct NativeDirectCallInternalPilotEligibilityPayloadDecoder: CustomStringConvertible, CustomDebugStringConvertible {
+    private let decoder: JSONDecoder
+
+    init(decoder: JSONDecoder = JSONDecoder()) {
+        self.decoder = decoder
+    }
+
+    func decodeEligibility(from data: Data) -> NativeDirectCallInternalPilotEligibility {
+        guard let payload = try? decoder.decode(NativeDirectCallInternalPilotEligibilityPayload.self, from: data) else {
+            return .failClosed
+        }
+
+        return payload.eligibility
+    }
+
+    var description: String {
+        "NativeDirectCallInternalPilotEligibilityPayloadDecoder(redacted: true)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+@MainActor
+protocol NativeDirectCallInternalPilotEligibilityProviding {
+    func nativeDirectCallInternalPilotEligibility() async -> NativeDirectCallInternalPilotEligibility
+}
+
+@MainActor
+final class FailClosedNativeDirectCallInternalPilotEligibilityProvider: NativeDirectCallInternalPilotEligibilityProviding, CustomStringConvertible, CustomDebugStringConvertible {
+    func nativeDirectCallInternalPilotEligibility() async -> NativeDirectCallInternalPilotEligibility {
+        .disabled
+    }
+
+    nonisolated var description: String {
+        "FailClosedNativeDirectCallInternalPilotEligibilityProvider(isEligible: false)"
+    }
+
+    nonisolated var debugDescription: String {
+        description
+    }
+}
+
 private struct DirectCallProductionCapabilitiesResponse: Decodable {
     let nativeDirectCallCapability: DirectCallProductionServerCapability?
     let hasCapabilitiesContainer: Bool

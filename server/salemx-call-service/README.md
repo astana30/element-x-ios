@@ -117,6 +117,46 @@ Readiness reasons:
 
 Redis-backed staging storage derives keys with `SALEMX_CALL_SERVICE_STORAGE_KEY_SECRET` and HMAC-SHA256. Redis keys and values must not contain raw Matrix room IDs, peer IDs, user IDs, device IDs, access tokens, LiveKit JWTs, Synapse admin tokens, or LiveKit API secrets.
 
+## Internal Pilot Eligibility Contract
+
+The app now has a fail-closed internal pilot eligibility contract skeleton. The call-service does not yet expose this endpoint for non-engineering pilot use, and non-engineering dogfood remains blocked until a server-side allowlist/capability provider is implemented and runtime-proven.
+
+Future eligibility responses must be redacted and limited to enums and booleans:
+
+```json
+{
+  "state": "unavailable",
+  "reason": "accountNotEligible",
+  "account_eligible": false,
+  "peer_eligible": true,
+  "room_eligible": true,
+  "trust_ready": true,
+  "service_available": true,
+  "client_supported": true
+}
+```
+
+Allowed `state` values:
+
+- `eligible`
+- `unavailable`
+- `disabled`
+- `unsupported`
+- `failClosed`
+
+Allowed `reason` values:
+
+- `accountNotEligible`
+- `peerNotEligible`
+- `roomNotEligible`
+- `trustNotReady`
+- `serviceUnavailable`
+- `capabilityMissing`
+- `unsupportedClient`
+- `unknown`
+
+The eligibility response must never include raw Matrix user IDs, peer IDs, room IDs, device IDs, Matrix event bodies, LiveKit room names, endpoint credentials, tokens, JWTs, keys, secrets, Redis keys, or backend request/response echoes. The token endpoint remains the final enforcement boundary and must still validate caller, peer, room membership, encryption, and trust before issuing a participant token.
+
 ## Request
 
 ```json
