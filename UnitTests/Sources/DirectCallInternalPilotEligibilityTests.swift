@@ -329,6 +329,25 @@ final class DirectCallInternalPilotEligibilityTests {
         #expect(ProcessInfo.isNativeDirectCallProductUIEnabled(environment: productOnlyEnvironment))
         #expect(ProcessInfo.isNativeDirectCallPrivateDogfoodEnabled(environment: productOnlyEnvironment) == false)
         #expect(ProcessInfo.isNativeDirectCallProductionStartEnabled(environment: productOnlyEnvironment) == false)
+        #expect(ProcessInfo.isNativeDirectCallEligibilityStatusEnabled(environment: productOnlyEnvironment) == false)
+    }
+
+    @Test
+    func eligibilityStatusGateRequiresDebugIntegrationHarnessAndDoesNotEnableDogfood() {
+        let statusWithoutHarness = [
+            "NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED": "1"
+        ]
+        let statusWithHarness = [
+            "IS_RUNNING_INTEGRATION_TESTS": "1",
+            "NATIVE_DIRECT_CALL_DIAGNOSTICS": "1",
+            "NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED": "1",
+            "NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED": "1"
+        ]
+
+        #expect(ProcessInfo.isNativeDirectCallEligibilityStatusEnabled(environment: statusWithoutHarness) == false)
+        #expect(ProcessInfo.isNativeDirectCallEligibilityStatusEnabled(environment: statusWithHarness))
+        #expect(ProcessInfo.isNativeDirectCallPrivateDogfoodEnabled(environment: statusWithHarness) == false)
+        #expect(ProcessInfo.isNativeDirectCallProductionStartEnabled(environment: statusWithHarness) == false)
     }
 
     @Test
@@ -351,6 +370,50 @@ final class DirectCallInternalPilotEligibilityTests {
         #expect(ProcessInfo.isNativeDirectCallProductionStartEnabled(environment: dogfoodWithHarness))
     }
     #endif
+
+    @Test
+    func eligibilityStatusCacheUsesRedactedKeysAndSeparateTTLs() {
+        var now = Date(timeIntervalSince1970: 100)
+        let cache = NativeDirectCallEligibilityStatusCache(positiveTTL: 60,
+                                                           negativeTTL: 20) { now }
+        let request = makeEligibilityRequest()
+        let key = NativeDirectCallEligibilityStatusCacheKey(request: request)
+
+        cache.store(.eligible, for: request)
+        now = Date(timeIntervalSince1970: 150)
+        #expect(cache.eligibility(for: request) == .eligible)
+        now = Date(timeIntervalSince1970: 161)
+        #expect(cache.eligibility(for: request) == nil)
+
+        now = Date(timeIntervalSince1970: 200)
+        cache.store(.unavailable(reason: .accountNotEligible), for: request)
+        now = Date(timeIntervalSince1970: 219)
+        #expect(cache.eligibility(for: request) == .unavailable(reason: .accountNotEligible))
+        now = Date(timeIntervalSince1970: 221)
+        #expect(cache.eligibility(for: request) == nil)
+        #expect(String(describing: key).contains(roomID) == false)
+        #expect(String(describing: key).contains(peerUserID) == false)
+        #expect(String(describing: key).contains(deviceID) == false)
+    }
+
+    @Test
+    func eligibilityStatusCacheInvalidatesAndClearsEntries() {
+        let cache = NativeDirectCallEligibilityStatusCache()
+        let request = makeEligibilityRequest()
+        let otherRequest = NativeDirectCallInternalPilotEligibilityRequest(roomID: "!other:example.test",
+                                                                           peerUserID: "@other:example.test",
+                                                                           deviceID: "OTHER",
+                                                                           intent: .audio)
+
+        cache.store(.eligible, for: request)
+        cache.store(.unavailable(reason: .peerNotEligible), for: otherRequest)
+        cache.invalidate(for: request)
+        #expect(cache.eligibility(for: request) == nil)
+        #expect(cache.eligibility(for: otherRequest) == .unavailable(reason: .peerNotEligible))
+
+        cache.removeAll()
+        #expect(cache.eligibility(for: otherRequest) == nil)
+    }
 
     private let roomID = "!room:example.test"
     private let peerUserID = "@bob:example.test"

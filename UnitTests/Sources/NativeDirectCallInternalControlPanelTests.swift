@@ -1231,6 +1231,10 @@ private final class NativeDirectCallRoomCardProviderSpy: NativeDirectCallRoomSta
         return .init(state: states.first ?? .canStart)
     }
 
+    func nativeDirectCallRoomCardStatus(refreshMode: NativeDirectCallRoomCardStatusRefreshMode) async -> NativeDirectCallRoomCardStatus {
+        await nativeDirectCallRoomCardStatus()
+    }
+
     func performNativeDirectCallRoomCardAction(_ action: NativeDirectCallRoomCardAction) async -> NativeDirectCallRoomCardActionResult {
         performedActions.append(action)
         if action == .startAudio {

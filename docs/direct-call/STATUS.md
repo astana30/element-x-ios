@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-After 2.30I — iOS eligibility provider fail-closed runtime proof.
+After 2.31B — side-effect-safe eligibility status cache skeleton.
 
 ## Latest App Code Checkpoint
 
-2.30H `Add iOS native audio eligibility provider skeleton`
+2.31B `Add native audio eligibility status cache`
 
 ## Latest Backend Code Checkpoint
 
@@ -182,6 +182,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - With the explicit private dogfood gate restored, readiness passed, A/B trust was ready, A/B activation was enabled, and the runner-assisted A -> B happy path reached `activeAudio`.
   - Hangup returned A/B to `idle` with no active session, cleanup/disconnect attempted, and media failure `none`.
   - The legacy fake/dry-run gate remained unset, Element Call route remained untouched, and no code changes were needed during the runtime proof.
+- Native audio eligibility status cache skeleton is added:
+  - A new DEBUG/integration-only status gate, `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1`, allows room-card status to evaluate the backend eligibility provider for display/preflight only.
+  - The gate is disabled by default, requires the diagnostic integration command harness, and does not enable private dogfood activation, production start, or non-engineering rollout.
+  - Eligibility status is cached in memory only at room-flow scope, with separate positive and negative TTLs, redacted cache-key descriptions, manual refresh bypass, and cache clearing on room-flow setup.
+  - Card-status merge is fail-closed and status-only: backend eligible never changes an unavailable card to `canStart`, local room/trust failures remain authoritative, and private dogfood activation remains unchanged.
+  - Status refresh may only call `/eligibility`; rendering/status display still must not send Matrix events, request LiveKit tokens, allocate/pre-create rooms, connect media, connect LiveKit, or start outgoing calls.
+  - Token-backend rejection invalidates the local eligibility status cache when the status path is wired.
+  - This does not wire non-engineering internal pilot activation; the token endpoint remains the final enforcement boundary.
 - Private dogfood activation is explicit and fail-closed by default:
   - `appRolloutDisabled` is produced by the production activation decision when `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` is absent.
   - `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1` can show the private card, and `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1` can allow start actions, but neither gate enables rollout/capability readiness by itself.
@@ -723,9 +731,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.30J — server-backed eligibility integration boundary design`
+`2.31C — eligibility status cache no-activation runtime proof`
 
-Goal: design the smallest fail-closed way to wire the iOS eligibility provider into a future internal-pilot readiness surface without enabling non-engineering activation, issuing tokens, sending Matrix events, or connecting media from rendering/status refresh.
+Goal: prove the new status-only eligibility cache remains disabled by default, product UI/start gates still fail closed without private dogfood activation, eligibility status refresh performs no Matrix/token/media/LiveKit side effects, and controlled engineering dogfood still reaches active audio under the explicit private dogfood gate.
 
 ## Do-Not-Touch Constraints
 

@@ -30,6 +30,7 @@ No tokens, JWTs, passwords, shared secrets, authorization header values, or Live
 | Backend eligibility endpoint skeleton | Added, disabled by default |
 | Eligibility endpoint local route smoke | Passed |
 | iOS eligibility provider no-activation proof | Passed |
+| iOS eligibility status cache skeleton | Added, disabled by default |
 
 ## Root Cause
 
@@ -91,6 +92,7 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - The 2.30I runtime proof passed: product UI/start gates without the private dogfood gate stayed blocked with `appRolloutDisabled` and had no Matrix send, token request, media connect, LiveKit client connect, or active session.
 - With the explicit private dogfood gate restored, A/B trust and activation were ready, A/B reached active audio on staging, and hangup returned both sides to idle with media failure `none`.
 - The 2.30I proof confirmed the iOS provider skeleton remains unwired for non-engineering activation; `directOneToOneCallsEnabled` remains separate from native audio activation.
+- The 2.31B app status-cache skeleton adds `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1` as a DEBUG/integration-only status/preflight gate. It is off by default, does not enable native audio, keeps backend eligible insufficient to start, keeps private dogfood activation unchanged, and limits refresh side effects to `/eligibility` only.
 - Controlled engineering dogfood may continue under the same narrow staging-only constraints.
 
 ## Next Step
@@ -105,4 +107,4 @@ Controlled engineering dogfood may continue on the staging path under the privat
 - Element Call toolbar path unchanged and available as fallback;
 - no CallKit, push, video, broad internal rollout, public rollout, or global production activation.
 
-Next, continue with `2.30J — server-backed eligibility integration boundary design` while keeping controlled dogfood narrow and redacted.
+Next, continue with `2.31C — eligibility status cache no-activation runtime proof` while keeping controlled dogfood narrow and redacted.

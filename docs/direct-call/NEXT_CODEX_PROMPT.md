@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.30I — iOS eligibility provider fail-closed runtime proof.
+After 2.31B — side-effect-safe eligibility status cache skeleton.
 
 Current checkpoints:
 - App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
@@ -27,6 +27,7 @@ Current checkpoints:
 - Eligibility endpoint local route smoke: 2.30F proved default fail-closed `/eligibility`, token endpoint enforcement before allocation/pre-create/token issuance, explicit allowlisted positive route behavior, negative route cases, and redacted output.
 - iOS eligibility provider skeleton: 2.30H added a redacted request DTO, optional `capability_present` / `capabilityPresent` response decoding, and an HTTP provider skeleton for the backend `/eligibility` endpoint without wiring non-engineering activation.
 - iOS eligibility provider no-activation proof: 2.30I proved product UI/start gates without the private dogfood gate remain blocked with `appRolloutDisabled`, the iOS provider skeleton remains unwired for non-engineering activation, and controlled engineering dogfood still reaches active audio under the explicit private dogfood gate.
+- Eligibility status cache skeleton: 2.31B added a disabled-by-default DEBUG/integration status gate, room-flow scoped in-memory cache, safe card-status merge, manual refresh bypass, and tests proving backend eligibility status does not activate native audio.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -140,6 +141,14 @@ Current proven/prepared state:
   - with the explicit private dogfood gate restored, A/B trust and activation were ready;
   - runner-assisted A -> B reached A/B `activeAudio`, then hangup returned A/B to `idle` with media failure `none`;
   - the legacy fake/dry-run gate remained unset and Element Call remained untouched.
+- 2.31B eligibility status cache skeleton:
+  - `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1` is a DEBUG/integration-only status/preflight gate and is off by default;
+  - the gate does not enable private dogfood activation, production start, or non-engineering rollout;
+  - eligibility status refresh is allowed to call only backend `/eligibility`;
+  - room-card status merge is fail-closed: backend eligible never changes the card to `canStart`, backend ineligible maps only to safe unavailable copy, and local room/trust failures remain authoritative;
+  - private dogfood activation remains unchanged and is not blocked by eligibility status;
+  - card appear/status refresh can reuse cache, while manual Refresh/Retry bypasses it;
+  - status refresh/rendering still must not send Matrix events, request tokens, allocate/pre-create rooms, connect media, connect LiveKit, or start outgoing calls.
 - Element Call route remains unchanged and must stay available as fallback.
 - No CallKit, push/background incoming, missed calls, video, session restoration, broad internal rollout, public rollout, production activation, or global activation exists.
 
@@ -187,35 +196,27 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.30J — server-backed eligibility integration boundary design.
+2.31C — eligibility status cache no-activation runtime proof.
 
 Task:
-Design the smallest fail-closed iOS integration boundary for consuming server-backed native audio eligibility in a future narrow internal pilot. Inspection/design only. Do not modify code. Do not commit.
+Runtime proof that the side-effect-safe eligibility status cache remains fail-closed by default and does not broaden native audio activation. Do not modify code unless a real runtime bug is found and explicitly approved.
 
 Goal:
-Define how iOS can later surface server-backed eligibility without enabling non-engineering activation, requesting tokens, sending Matrix events, connecting media, or connecting LiveKit from rendering/status refresh.
+Verify that default/product-UI-only launches remain blocked, the status gate does not activate native audio, eligibility status refresh has no Matrix/token/media/LiveKit side effects, and controlled engineering dogfood still reaches active audio under the explicit private dogfood gate.
 
 Inspect:
-- `ElementX/Sources/Services/Calls/DirectCallMediaEngineProtocol.swift`
-- `ElementX/Sources/Screens/RoomScreen/RoomScreenModels.swift`
-- `ElementX/Sources/Screens/RoomScreen/RoomScreenViewModel.swift`
-- `ElementX/Sources/FlowCoordinators/RoomFlowCoordinator.swift`
-- `ElementX/Sources/Application/ProcessInfo.swift`
-- `ElementX/Sources/Application/Settings/AppSettings.swift`
-- `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`
-- `docs/direct-call/STATUS.md`
-- `server/salemx-call-service/README.md`
+Use the existing redacted runner/status tooling and the 2.28A operations checklist. Do not print raw tokens, JWTs, secrets, room IDs, user IDs, peer IDs, device IDs, media keys, event bodies, Redis URLs, or LiveKit room names.
 
 Required output:
-A. Files inspected.
-B. Recommended integration boundary.
-C. Eligibility refresh trigger/caching rules.
-D. Merge rules with product UI, private dogfood, room eligibility, trust readiness, and token endpoint enforcement.
-E. Fail-closed behavior for missing/unreachable/malformed eligibility.
-F. User-safe unavailable states.
-G. Required tests.
-H. Required runtime proof.
-I. Recommended next implementation phase.
+A. Default fail-closed result.
+B. Product UI/start gates without private dogfood result.
+C. Eligibility status gate no-activation result.
+D. Side-effect check.
+E. Engineering dogfood happy path result.
+F. Final A/B status.
+G. Any regression.
+H. Whether code changed.
+I. Recommended next phase.
 
 Allowed report fields:
 - readiness booleans;
@@ -266,4 +267,4 @@ Validation if docs change:
 - Direct-call forbidden scan.
 
 Suggested commit if docs change:
-Document iOS eligibility integration boundary
+Record eligibility status cache no-activation proof

@@ -1095,3 +1095,17 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Hangup returned A/B to `idle` with no active session, cleanup/disconnect attempted, and media failure `none`.
 - The legacy fake/dry-run gate remained unset, Element Call route remained untouched, no redaction issue was observed, and no code changes were needed.
 - Recommended next phase: `2.30J — server-backed eligibility integration boundary design`.
+
+## 2026-05-23 — 2.31B Side-Effect-Safe Eligibility Status Cache Skeleton
+
+- Added a disabled-by-default DEBUG/integration gate, `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1`, for eligibility status display/preflight only.
+- Added a room-flow scoped in-memory eligibility status cache with short positive and negative TTLs, redacted cache-key descriptions, manual refresh bypass, and cache clearing on room-flow setup.
+- Merged backend eligibility into private native audio room-card status only when the base card is already unavailable.
+- Kept backend `eligible` status insufficient to enable native audio; product UI/start gates still do not activate without `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`.
+- Kept local room/trust failures authoritative over backend eligibility.
+- Kept the private dogfood activation path unchanged; status eligibility does not block or alter a card that is already enabled by private dogfood activation.
+- Added token-backend-rejection cache invalidation for the status path when wired.
+- Updated room-card status refresh so manual Refresh/Retry bypasses the eligibility cache while automatic status refreshes can reuse it.
+- Added tests for the new status gate, no-activation behavior, safe copy mapping, local-failure precedence, cache reuse/manual bypass, private dogfood compatibility, redacted cache keys, and cache invalidation/clearing.
+- This does not enable non-engineering internal pilot activation, does not change Element Call, and does not add CallKit, push, video, or global activation.
+- Recommended next phase: `2.31C — eligibility status cache no-activation runtime proof`.

@@ -790,6 +790,11 @@ struct NativeDirectCallRoomCardStatus: Equatable, CustomStringConvertible, Custo
     }
 }
 
+enum NativeDirectCallRoomCardStatusRefreshMode: Equatable {
+    case cached
+    case bypassCache
+}
+
 #if DEBUG
 enum NativeDirectCallRoomCardRedactedState: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     case hidden
@@ -936,10 +941,15 @@ struct NativeDirectCallRoomCardActionResult: Equatable, CustomStringConvertible,
 protocol NativeDirectCallRoomStateProviding: AnyObject {
     func nativeDirectCallRoomCardState() async -> NativeDirectCallRoomCardState
     func nativeDirectCallRoomCardStatus() async -> NativeDirectCallRoomCardStatus
+    func nativeDirectCallRoomCardStatus(refreshMode: NativeDirectCallRoomCardStatusRefreshMode) async -> NativeDirectCallRoomCardStatus
 }
 
 extension NativeDirectCallRoomStateProviding {
     func nativeDirectCallRoomCardStatus() async -> NativeDirectCallRoomCardStatus {
+        await nativeDirectCallRoomCardStatus(refreshMode: .cached)
+    }
+
+    func nativeDirectCallRoomCardStatus(refreshMode: NativeDirectCallRoomCardStatusRefreshMode) async -> NativeDirectCallRoomCardStatus {
         let state = await nativeDirectCallRoomCardState()
         return .init(state: state)
     }
@@ -952,12 +962,12 @@ protocol NativeDirectCallRoomActionHandling: AnyObject {
 
 @MainActor
 final class ClosureNativeDirectCallRoomCardProvider: NativeDirectCallRoomStateProviding, NativeDirectCallRoomActionHandling {
-    private let statusClosure: @MainActor () async -> NativeDirectCallRoomCardStatus
+    private let statusClosure: @MainActor (NativeDirectCallRoomCardStatusRefreshMode) async -> NativeDirectCallRoomCardStatus
     private let actionClosure: @MainActor (NativeDirectCallRoomCardAction) async -> NativeDirectCallRoomCardActionResult
 
     init(state: @escaping @MainActor () async -> NativeDirectCallRoomCardState,
          action: @escaping @MainActor (NativeDirectCallRoomCardAction) async -> NativeDirectCallRoomCardActionResult) {
-        statusClosure = {
+        statusClosure = { _ in
             let state = await state()
             return .init(state: state)
         }
@@ -966,17 +976,23 @@ final class ClosureNativeDirectCallRoomCardProvider: NativeDirectCallRoomStatePr
 
     init(status: @escaping @MainActor () async -> NativeDirectCallRoomCardStatus,
          action: @escaping @MainActor (NativeDirectCallRoomCardAction) async -> NativeDirectCallRoomCardActionResult) {
+        statusClosure = { _ in await status() }
+        actionClosure = action
+    }
+
+    init(status: @escaping @MainActor (NativeDirectCallRoomCardStatusRefreshMode) async -> NativeDirectCallRoomCardStatus,
+         action: @escaping @MainActor (NativeDirectCallRoomCardAction) async -> NativeDirectCallRoomCardActionResult) {
         statusClosure = status
         actionClosure = action
     }
 
     func nativeDirectCallRoomCardState() async -> NativeDirectCallRoomCardState {
-        let status = await statusClosure()
+        let status = await statusClosure(.cached)
         return status.state
     }
 
-    func nativeDirectCallRoomCardStatus() async -> NativeDirectCallRoomCardStatus {
-        await statusClosure()
+    func nativeDirectCallRoomCardStatus(refreshMode: NativeDirectCallRoomCardStatusRefreshMode) async -> NativeDirectCallRoomCardStatus {
+        await statusClosure(refreshMode)
     }
 
     func performNativeDirectCallRoomCardAction(_ action: NativeDirectCallRoomCardAction) async -> NativeDirectCallRoomCardActionResult {
@@ -1720,6 +1736,55 @@ extension NativeDirectCallRoomCardStatus {
                      productionStatus: NativeDirectCallProductionStatus) -> Self {
         NativeDirectCallRoomCardStateReducer.status(snapshot: .init(triggerDiagnostic: triggerDiagnostic,
                                                                     productionStatus: productionStatus))
+    }
+
+    func merging(internalPilotEligibility eligibility: NativeDirectCallInternalPilotEligibility) -> Self {
+        guard case .unavailable(let currentReason) = state else {
+            return self
+        }
+
+        guard !currentReason.isLocalRoomOrTrustFailure else {
+            return self
+        }
+
+        let mergedReason: NativeDirectCallRoomCardUnavailableReason
+        switch eligibility {
+        case .eligible:
+            return self
+        case .unavailable(let reason):
+            mergedReason = NativeDirectCallUserSafeReasonMapper.unavailableReason(reason)
+        case .disabled:
+            mergedReason = .nativeCallsUnavailable
+        case .unsupported:
+            mergedReason = .serverUnsupported
+        case .failClosed:
+            mergedReason = .unknown
+        }
+
+        return .init(state: .unavailable(reason: mergedReason),
+                     receiverAvailability: receiverAvailability,
+                     restorationAvailability: restorationAvailability)
+    }
+}
+
+private extension NativeDirectCallRoomCardUnavailableReason {
+    var isLocalRoomOrTrustFailure: Bool {
+        switch self {
+        case .roomNotEncrypted,
+             .roomNotOneToOne,
+             .unverifiedDevice,
+             .peerTrustUnavailable:
+            return true
+        case .nativeCallsUnavailable,
+             .accountNotEligible,
+             .peerNotEligible,
+             .serverUnsupported,
+             .callServiceUnavailable,
+             .liveKitNetworkFailed,
+             .callTimedOut,
+             .unknown:
+            return false
+        }
     }
 }
 

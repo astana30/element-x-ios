@@ -894,6 +894,77 @@ struct NativeDirectCallInternalPilotEligibilityRequest: Encodable, Equatable, Cu
     }
 }
 
+struct NativeDirectCallEligibilityStatusCacheKey: Hashable, CustomStringConvertible, CustomDebugStringConvertible {
+    private let roomID: String
+    private let peerUserID: String
+    private let deviceID: String?
+    private let intent: String
+
+    init(request: NativeDirectCallInternalPilotEligibilityRequest) {
+        roomID = request.roomID
+        peerUserID = request.peerUserID
+        deviceID = request.deviceID
+        intent = request.intent.rawValue
+    }
+
+    var description: String {
+        "NativeDirectCallEligibilityStatusCacheKey(roomID: <redacted>, peerUserID: <redacted>, deviceID: <redacted>, intent: \(intent))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+final class NativeDirectCallEligibilityStatusCache {
+    private struct Entry {
+        let eligibility: NativeDirectCallInternalPilotEligibility
+        let expiresAt: Date
+    }
+
+    private let positiveTTL: TimeInterval
+    private let negativeTTL: TimeInterval
+    private let now: () -> Date
+    private var entries = [NativeDirectCallEligibilityStatusCacheKey: Entry]()
+
+    init(positiveTTL: TimeInterval = 60,
+         negativeTTL: TimeInterval = 20,
+         now: @escaping () -> Date = Date.init) {
+        self.positiveTTL = positiveTTL
+        self.negativeTTL = negativeTTL
+        self.now = now
+    }
+
+    func eligibility(for request: NativeDirectCallInternalPilotEligibilityRequest) -> NativeDirectCallInternalPilotEligibility? {
+        let key = NativeDirectCallEligibilityStatusCacheKey(request: request)
+        guard let entry = entries[key] else {
+            return nil
+        }
+
+        guard entry.expiresAt > now() else {
+            entries[key] = nil
+            return nil
+        }
+
+        return entry.eligibility
+    }
+
+    func store(_ eligibility: NativeDirectCallInternalPilotEligibility,
+               for request: NativeDirectCallInternalPilotEligibilityRequest) {
+        let ttl = eligibility.isEligible ? positiveTTL : negativeTTL
+        let key = NativeDirectCallEligibilityStatusCacheKey(request: request)
+        entries[key] = Entry(eligibility: eligibility, expiresAt: now().addingTimeInterval(ttl))
+    }
+
+    func invalidate(for request: NativeDirectCallInternalPilotEligibilityRequest) {
+        entries[NativeDirectCallEligibilityStatusCacheKey(request: request)] = nil
+    }
+
+    func removeAll() {
+        entries.removeAll()
+    }
+}
+
 struct NativeDirectCallInternalPilotEligibilityPayloadDecoder: CustomStringConvertible, CustomDebugStringConvertible {
     private let decoder: JSONDecoder
 

@@ -465,10 +465,29 @@ The iOS app now has a backend `/eligibility` provider skeleton for future intern
 
 This skeleton is preparation only. Controlled engineering dogfood remains on the explicit DEBUG/integration private dogfood gate, and the token endpoint remains the final enforcement boundary.
 
+### 2.31B Eligibility Status Cache Skeleton
+
+The iOS app now has a side-effect-safe eligibility status cache skeleton for room-card preflight display. It is not a rollout gate and it does not approve non-engineering users.
+
+- The optional status gate is `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1`.
+- The status gate is DEBUG/integration-only and requires the same diagnostic command harness as the private dogfood gates.
+- The gate is off by default and does not enable private dogfood activation, production start, or non-engineering internal pilot activation.
+- Eligibility status is cached in memory at room-flow scope only; it is not persisted.
+- Positive eligibility uses a short cache TTL, negative/network/fail-closed eligibility uses a shorter cache TTL, and manual Refresh/Retry bypasses the cache.
+- Cache keys may contain raw IDs internally for local lookup only, but descriptions/debug output redact room, peer, and device identifiers.
+- Backend `eligible` alone never changes the card to `canStart`; product UI/start gates remain insufficient without the explicit private dogfood activation gate.
+- Local room and trust failures remain authoritative over backend eligibility.
+- When the card is already enabled by private dogfood activation, eligibility status does not block or change that path.
+- Token-backend rejection invalidates the local eligibility status cache when that status path is wired.
+
+Eligibility status refresh may only call the backend `/eligibility` endpoint. It must not send Matrix events, request participant tokens, allocate or pre-create LiveKit rooms, connect media, connect LiveKit, start outgoing calls, or arm the listener unless the existing private dogfood activation path already allows listener preparation.
+
+This is still preparation for a future internal pilot. Non-engineering dogfood remains blocked until server-side allowlist fixtures, client-side eligibility consumption, runtime no-activation proof, redacted monitoring, support/rollback, and security review are complete.
+
 Before any future narrow non-engineering internal pilot, the eligibility contract still needs:
 
 - runtime proof of the server-side allowlist endpoint under named internal-pilot fixtures;
-- runtime proof that client-side consumption of the backend eligibility endpoint remains fail-closed and side-effect-free;
+- runtime proof that client-side eligibility status consumption remains fail-closed and side-effect-free;
 - redacted readiness/monitoring coverage;
 - support and rollback workflow;
 - runtime proof across named pilot accounts/devices;

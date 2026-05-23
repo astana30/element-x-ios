@@ -300,7 +300,7 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
         Task { @MainActor [weak self] in
             guard let self else { return }
 
-            let refreshedStatus = await nativeDirectCallRoomStateProvider.nativeDirectCallRoomCardStatus()
+            let refreshedStatus = await nativeDirectCallRoomStateProvider.nativeDirectCallRoomCardStatus(refreshMode: .bypassCache)
             applyNativeDirectCallRoomCardStatus(refreshedStatus)
             state.nativeDirectCallRoomCard.lastAction = .retry
             state.nativeDirectCallRoomCard.lastActionOutcome = .retried
@@ -337,7 +337,8 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
         Task { @MainActor [weak self] in
             guard let self else { return }
 
-            let refreshedStatus = await nativeDirectCallRoomStateProvider.nativeDirectCallRoomCardStatus()
+            let refreshMode: NativeDirectCallRoomCardStatusRefreshMode = markAsManualRefresh ? .bypassCache : .cached
+            let refreshedStatus = await nativeDirectCallRoomStateProvider.nativeDirectCallRoomCardStatus(refreshMode: refreshMode)
             guard showsLoadingIndicator || !state.nativeDirectCallRoomCard.isLoading else {
                 return
             }
