@@ -1080,3 +1080,18 @@ This file records durable phase-level progress for future Codex and strategy ses
 - This skeleton is not wired into non-engineering activation; controlled engineering dogfood remains on `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` under DEBUG/integration.
 - Confirmed no Element Call route, CallKit, push, video, or global production activation changes are part of this phase.
 - Recommended next phase: `2.30I — iOS eligibility provider fail-closed runtime proof`.
+
+## 2026-05-23 — 2.30I iOS Eligibility Provider Fail-Closed Runtime Proof
+
+- Ran the runtime no-activation proof after the iOS native audio eligibility provider skeleton.
+- Confirmed staging call-service readiness returned `ready=true`, `reason=ok`, and Redis/storage readiness booleans true.
+- Launched A/B with product UI and production start gates enabled, but without `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`.
+- Confirmed the attached encrypted direct 1:1 room stayed blocked with `appRolloutDisabled`.
+- Confirmed the no-private-dogfood run had no Matrix send, no token request, no media connect, no LiveKit client connect, and no active session.
+- Confirmed the eligibility provider skeleton remains unwired for non-engineering activation; app-side provider usage is limited to provider/types and tests.
+- Confirmed `directOneToOneCallsEnabled` remains separate from native audio activation and does not enable the native eligibility path.
+- Relaunched with the explicit private dogfood gate, verified A/B trust ready, and confirmed A/B activation enabled with dependencies ready and endpoint accepted.
+- Ran a runner-assisted A -> B happy path on staging: B reached `incomingRinging`, B accepted, and A/B reached `activeAudio` with media failure `none`.
+- Hangup returned A/B to `idle` with no active session, cleanup/disconnect attempted, and media failure `none`.
+- The legacy fake/dry-run gate remained unset, Element Call route remained untouched, no redaction issue was observed, and no code changes were needed.
+- Recommended next phase: `2.30J — server-backed eligibility integration boundary design`.

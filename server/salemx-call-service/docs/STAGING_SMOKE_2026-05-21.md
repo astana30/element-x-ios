@@ -29,6 +29,7 @@ No tokens, JWTs, passwords, shared secrets, authorization header values, or Live
 | Redacted pilot monitoring contract | Recorded |
 | Backend eligibility endpoint skeleton | Added, disabled by default |
 | Eligibility endpoint local route smoke | Passed |
+| iOS eligibility provider no-activation proof | Passed |
 
 ## Root Cause
 
@@ -87,6 +88,9 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - The 2.30F smoke output remained redacted and did not print raw tokens, JWTs, secrets, raw identifiers, Redis credential URLs, or LiveKit room names.
 - The 2.30H iOS provider skeleton added a redacted app-side request DTO, optional `capability_present` / `capabilityPresent` response decoding, and an HTTP provider for `/eligibility`.
 - The iOS provider skeleton is not wired into non-engineering activation and does not change token issuance, media connection, LiveKit connection, Element Call, CallKit, push, video, or global production activation.
+- The 2.30I runtime proof passed: product UI/start gates without the private dogfood gate stayed blocked with `appRolloutDisabled` and had no Matrix send, token request, media connect, LiveKit client connect, or active session.
+- With the explicit private dogfood gate restored, A/B trust and activation were ready, A/B reached active audio on staging, and hangup returned both sides to idle with media failure `none`.
+- The 2.30I proof confirmed the iOS provider skeleton remains unwired for non-engineering activation; `directOneToOneCallsEnabled` remains separate from native audio activation.
 - Controlled engineering dogfood may continue under the same narrow staging-only constraints.
 
 ## Next Step
@@ -101,4 +105,4 @@ Controlled engineering dogfood may continue on the staging path under the privat
 - Element Call toolbar path unchanged and available as fallback;
 - no CallKit, push, video, broad internal rollout, public rollout, or global production activation.
 
-Next, continue with `2.30I — iOS eligibility provider fail-closed runtime proof` while keeping controlled dogfood narrow and redacted.
+Next, continue with `2.30J — server-backed eligibility integration boundary design` while keeping controlled dogfood narrow and redacted.

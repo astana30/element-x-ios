@@ -635,6 +635,23 @@ Run each row with redacted output only. Record pass/fail plus the allowed fields
 
 This proof confirms the 2.30B eligibility contract skeleton does not broaden activation. Non-engineering dogfood remains blocked until server-side allowlist/capability backing, token endpoint enforcement, and runtime proof for named pilot accounts/devices exist.
 
+## 2.30I iOS Eligibility Provider No-Activation Proof
+
+| Check | Result | Redacted reason |
+| --- | --- | --- |
+| Backend readiness | Pass | readiness `ready=true`, `reason=ok`, Redis/storage booleans true |
+| Product UI/start gates without private dogfood | Pass | Attached encrypted direct 1:1 room stayed blocked with `appRolloutDisabled` |
+| No private dogfood side effects | Pass | No Matrix send, no token request, no media connect, no LiveKit connect, no active session |
+| Eligibility provider integration boundary | Pass | Provider skeleton remains unwired for non-engineering activation; no eligibility status/rendering path starts token/media work |
+| `directOneToOneCallsEnabled` separation | Pass | Existing Element Call setting remains separate and does not enable native audio eligibility |
+| Private dogfood activation | Pass | A/B activation enabled with dependencies ready, endpoint accepted, and A/B trust ready |
+| Engineering happy path | Pass | Runner-assisted A -> B reached A/B `activeAudio`, media failure `none` |
+| Hangup/final state | Pass | A/B returned to `idle`, no active session, cleanup/disconnect attempted, media failure `none` |
+| Legacy fake gate | Pass | Explicitly unset and not used |
+| Element Call separation | Pass | Existing Element Call route untouched; native commands did not use the Element Call presentation path |
+
+This proof confirms the 2.30H iOS provider skeleton stays side-effect-safe and fail-closed unless the existing DEBUG/integration private dogfood gate is explicitly enabled. Non-engineering dogfood remains blocked until a separate server-backed eligibility integration phase is designed, implemented, and runtime-proven.
+
 ## 2.27E Split-Brain Regression Result
 
 | Check | Result | Redacted reason |

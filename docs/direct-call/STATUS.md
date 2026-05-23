@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.30H — iOS native audio eligibility provider skeleton.
+After 2.30I — iOS eligibility provider fail-closed runtime proof.
 
 ## Latest App Code Checkpoint
 
@@ -174,6 +174,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - The default provider remains disabled/fail-closed.
   - This provider is not wired into non-engineering activation; controlled engineering dogfood remains on the explicit DEBUG/integration private dogfood gate.
   - Element Call route, CallKit, push, video, and global production activation remain unchanged.
+- iOS native audio eligibility provider no-activation runtime proof passed:
+  - Without `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, product UI/start gates stayed blocked with `appRolloutDisabled` in an attached encrypted direct 1:1 room.
+  - The no-private-dogfood run had no Matrix send, no token request, no media connect, no LiveKit client connect, and no active session.
+  - The provider skeleton remains unwired for non-engineering activation; source inspection found app-side provider usage only in the provider/types and test boundary.
+  - `directOneToOneCallsEnabled` remains separate from native audio activation and does not enable the native eligibility path.
+  - With the explicit private dogfood gate restored, readiness passed, A/B trust was ready, A/B activation was enabled, and the runner-assisted A -> B happy path reached `activeAudio`.
+  - Hangup returned A/B to `idle` with no active session, cleanup/disconnect attempted, and media failure `none`.
+  - The legacy fake/dry-run gate remained unset, Element Call route remained untouched, and no code changes were needed during the runtime proof.
 - Private dogfood activation is explicit and fail-closed by default:
   - `appRolloutDisabled` is produced by the production activation decision when `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` is absent.
   - `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1` can show the private card, and `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1` can allow start actions, but neither gate enables rollout/capability readiness by itself.
@@ -715,9 +723,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.30I — iOS eligibility provider fail-closed runtime proof`
+`2.30J — server-backed eligibility integration boundary design`
 
-Goal: prove the new iOS eligibility provider skeleton remains unwired for non-engineering activation, keeps product UI/start gates fail-closed without the private dogfood gate, and does not request tokens, send Matrix events, connect media, or connect LiveKit from eligibility/status refresh paths.
+Goal: design the smallest fail-closed way to wire the iOS eligibility provider into a future internal-pilot readiness surface without enabling non-engineering activation, issuing tokens, sending Matrix events, or connecting media from rendering/status refresh.
 
 ## Do-Not-Touch Constraints
 
