@@ -580,6 +580,21 @@ Run each row with redacted output only. Record pass/fail plus the allowed fields
 | Element Call separation | Pass | Existing Element Call route untouched |
 | Listener preparation safety | Pass | No auto-start without the private dogfood gate; no token request, Matrix send, outgoing start, or media connect from preparation |
 
+## 2.30C Eligibility Runtime/No-Activation Proof
+
+| Check | Result | Redacted reason |
+| --- | --- | --- |
+| Backend readiness | Pass | readiness `ready=true`, `reason=ok`, Redis/storage booleans true |
+| Product UI gate alone | Pass | Attached encrypted direct 1:1 room stayed blocked with `appRolloutDisabled` |
+| No private dogfood side effects | Pass | No Matrix send, no token request, no media connect, no LiveKit connect, no active session |
+| Private dogfood activation | Pass | A/B activation enabled with dependencies ready, endpoint accepted, and A/B trust ready |
+| Engineering happy path | Pass | Runner-assisted A -> B reached A/B `activeAudio`, media failure `none` |
+| Hangup/final state | Pass | A/B returned to `idle`, no active session, cleanup/disconnect attempted, media failure `none` |
+| Legacy fake gate | Pass | Explicitly unset and not used |
+| Element Call separation | Pass | Existing Element Call route untouched; no Element Call presentation path used for native actions |
+
+This proof confirms the 2.30B eligibility contract skeleton does not broaden activation. Non-engineering dogfood remains blocked until server-side allowlist/capability backing, token endpoint enforcement, and runtime proof for named pilot accounts/devices exist.
+
 ## 2.27E Split-Brain Regression Result
 
 | Check | Result | Redacted reason |

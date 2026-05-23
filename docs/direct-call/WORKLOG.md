@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Recorded the eligibility contract runtime/no-activation proof.
 - Added the fail-closed internal pilot eligibility contract skeleton.
 - Documented the redacted pilot monitoring/status contract.
 - Hardened private native audio card failure copy and DEBUG-only redacted card status.
@@ -33,6 +34,19 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-23 — 2.30C Eligibility Contract Runtime/No-Activation Proof
+
+- Ran the runtime proof after `db5c4fd72` to confirm the new eligibility contract skeleton remains fail-closed by default.
+- Confirmed local staging call-service readiness returned `ready=true`, `reason=ok`, and Redis allocation/rate-limit/storage booleans true.
+- Launched A/B with product UI and production start gates enabled but without the private dogfood gate.
+- Confirmed an attached encrypted direct 1:1 room stayed blocked with `appRolloutDisabled`.
+- Confirmed the no-private-dogfood run had no Matrix send, no token request, no media connect, no LiveKit client connect, and no active session.
+- Relaunched A/B with `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, kept the legacy fake/dry-run gate unset, and confirmed A/B trust ready plus activation enabled.
+- Ran a runner-assisted A -> B happy path: A started, B reached incoming ringing, B accepted, and A/B reached `activeAudio` with encryption ready, media connect attempted, LiveKit client connect attempted, and media failure `none`.
+- Hangup returned A/B to idle/no active session with cleanup/disconnect attempted and media failure `none`.
+- Element Call route remained untouched; no code changed during the runtime proof.
+- Recommended next phase: `2.30D — backend internal pilot allowlist provider design` for server-side allowlist/capability backing before any non-engineering users.
 
 ## 2026-05-23 — 2.30B Internal Pilot Eligibility Contract Skeleton
 

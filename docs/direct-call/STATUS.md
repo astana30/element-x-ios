@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.30B — fail-closed internal pilot eligibility contract skeleton added.
+After 2.30C — eligibility contract runtime/no-activation proof recorded.
 
 ## Latest App Code Checkpoint
 
@@ -147,6 +147,13 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - The default provider is fail-closed and returns disabled.
   - Account and peer not-eligible states map to existing safe private-card unavailable copy without exposing identifiers.
   - The skeleton is not wired to enable non-engineering dogfood; server allowlist/capability backing and runtime proof are still required.
+- Native audio eligibility runtime/no-activation proof passed:
+  - With `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1` and `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`, but without `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, an attached encrypted direct 1:1 room stayed blocked with `appRolloutDisabled`.
+  - The no-private-dogfood run had no Matrix send, no token request, no media connect, no LiveKit client connect, and no active session.
+  - With the explicit private dogfood gate restored, backend readiness passed with `ready=true`, `reason=ok`, Redis allocation/rate-limit/storage booleans true, A/B trust ready, and A/B activation enabled.
+  - The runner-assisted A -> B happy path reached `productionSessionState=activeAudio` on both sides with `productionEncryptionState=ready`, media connect attempted, LiveKit client connect attempted, and `productionMediaFailureReason=none`.
+  - Hangup returned A/B to `productionSessionState=idle` with no active session and media failure `none`.
+  - The legacy fake/dry-run gate remained unset; Element Call route remained untouched.
 - Private dogfood activation is explicit and fail-closed by default:
   - `appRolloutDisabled` is produced by the production activation decision when `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` is absent.
   - `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1` can show the private card, and `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1` can allow start actions, but neither gate enables rollout/capability readiness by itself.
@@ -688,7 +695,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.30C — backend internal pilot allowlist provider design`
+`2.30D — backend internal pilot allowlist provider design`
 
 Goal: design and prepare the server-side allowlist/capability backing for the new fail-closed internal pilot eligibility contract. Keep non-engineering pilot disabled until the backend provider, client dry-run consumption, redacted telemetry, support workflow, and runtime proof are complete. Preserve trusted-device E2EE, redaction, Element Call routing, CallKit/push, video, public production activation, and global production activation as out of scope unless explicitly scoped later.
 

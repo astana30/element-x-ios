@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.30B — internal pilot eligibility contract skeleton added.
+After 2.30C — eligibility contract runtime/no-activation proof recorded.
 
 Current checkpoints:
 - App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
@@ -22,6 +22,7 @@ Current checkpoints:
 - Broader internal dogfood hardening plan: 2.29B recorded in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
 - Redacted pilot monitoring contract: 2.29E recorded in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`.
 - Internal pilot eligibility contract skeleton: 2.30B added typed fail-closed app models, a redacted payload shape, safe card-copy mapping for account/peer ineligibility, and docs.
+- Eligibility runtime/no-activation proof: 2.30C confirmed product UI/start gates without private dogfood still fail closed, and controlled engineering dogfood still reaches active audio under explicit private dogfood gates.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -96,6 +97,13 @@ Current proven/prepared state:
   - default provider returns disabled/fail-closed;
   - account and peer not-eligible states map to safe private-card unavailable copy;
   - non-engineering pilot remains blocked until server-side allowlist/capability backing and runtime proof exist.
+- 2.30C runtime/no-activation proof:
+  - backend readiness passed with `ready=true`, `reason=ok`, and Redis/storage booleans true;
+  - with product UI/start gates but without the private dogfood gate, an attached encrypted direct 1:1 room stayed blocked with `appRolloutDisabled`;
+  - the no-private-dogfood run had no Matrix send, no token request, no media connect, no LiveKit client connect, and no active session;
+  - with the private dogfood gate restored, A/B trust and activation were ready;
+  - runner-assisted A -> B reached A/B `activeAudio`, then hangup returned A/B to `idle` with media failure `none`;
+  - the legacy fake/dry-run gate remained unset and Element Call remained untouched.
 - Element Call route remains unchanged and must stay available as fallback.
 - No CallKit, push/background incoming, missed calls, video, session restoration, broad internal rollout, public rollout, production activation, or global activation exists.
 
@@ -143,7 +151,7 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.30C — backend internal pilot allowlist provider design.
+2.30D — backend internal pilot allowlist provider design.
 
 Task:
 Design the backend allowlist/capability provider that will eventually back the 2.30B fail-closed internal pilot eligibility contract. Inspection/design first. Do not enable broader dogfood. Do not activate non-engineering users. Do not change Element Call route. Do not wire CallKit, push, missed calls, video, session restoration, or global production activation.
