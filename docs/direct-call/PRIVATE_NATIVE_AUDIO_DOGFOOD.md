@@ -450,10 +450,25 @@ The local route smoke for the backend eligibility endpoint passed with redacted 
 
 This smoke does not enable non-engineering users. Client-side consumption of the backend eligibility endpoint remains unwired.
 
+### 2.30H iOS Eligibility Provider Skeleton
+
+The iOS app now has a backend `/eligibility` provider skeleton for future internal-pilot work, but it is not wired into non-engineering activation.
+
+- The request DTO carries only the backend-required fields at the HTTP boundary: version, room, peer, optional device, and `audio` intent.
+- DTO descriptions and debug output redact room, peer, and device identifiers.
+- The HTTP provider uses the existing redacted direct-call HTTP transport and Matrix bearer access-token provider.
+- Responses decode only state/reason enums and booleans, including optional `capability_present` / `capabilityPresent`.
+- Missing auth/config/transport, network errors, 5xx responses, malformed JSON, unknown enums, and unsupported intents fail closed.
+- `404` maps to `capabilityMissing`; auth failures and 5xx map to `serviceUnavailable`.
+- The default provider remains disabled/fail-closed.
+- The provider does not send Matrix events, request LiveKit participant tokens, connect media, connect LiveKit, start outgoing calls, or arm non-engineering activation.
+
+This skeleton is preparation only. Controlled engineering dogfood remains on the explicit DEBUG/integration private dogfood gate, and the token endpoint remains the final enforcement boundary.
+
 Before any future narrow non-engineering internal pilot, the eligibility contract still needs:
 
 - runtime proof of the server-side allowlist endpoint under named internal-pilot fixtures;
-- client-side consumption of the backend eligibility endpoint without rendering side effects;
+- runtime proof that client-side consumption of the backend eligibility endpoint remains fail-closed and side-effect-free;
 - redacted readiness/monitoring coverage;
 - support and rollback workflow;
 - runtime proof across named pilot accounts/devices;

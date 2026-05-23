@@ -310,6 +310,7 @@ protocol DirectCallMatrixAccessTokenProviding {
 
 struct DirectCallProductionConfiguration: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     static let tokenEndpointPath = "/_matrix/client/unstable/kz.salemx.direct_call/livekit/token"
+    static let eligibilityEndpointPath = "/_matrix/client/unstable/kz.salemx.direct_call/eligibility"
 
     let isEnabled: Bool
     let tokenEndpointBaseURL: URL?
@@ -332,12 +333,21 @@ struct DirectCallProductionConfiguration: Equatable, CustomStringConvertible, Cu
         .init(tokenEndpointURL: tokenEndpointURL)
     }
 
+    var eligibilityEndpointURL: URL? {
+        guard isEnabled,
+              let tokenEndpointBaseURL else {
+            return nil
+        }
+
+        return Self.makeEndpointURL(from: tokenEndpointBaseURL, endpointPath: Self.eligibilityEndpointPath)
+    }
+
     var isConfigured: Bool {
         tokenEndpointURL != nil
     }
 
     var description: String {
-        "DirectCallProductionConfiguration(isEnabled: \(isEnabled), tokenEndpointBaseURL: <redacted>, tokenEndpointPath: \(Self.tokenEndpointPath), isConfigured: \(isConfigured))"
+        "DirectCallProductionConfiguration(isEnabled: \(isEnabled), tokenEndpointBaseURL: <redacted>, tokenEndpointPath: \(Self.tokenEndpointPath), eligibilityEndpointPath: \(Self.eligibilityEndpointPath), isConfigured: \(isConfigured))"
     }
 
     var debugDescription: String {
@@ -345,6 +355,10 @@ struct DirectCallProductionConfiguration: Equatable, CustomStringConvertible, Cu
     }
 
     private static func makeTokenEndpointURL(from baseURL: URL) -> URL? {
+        makeEndpointURL(from: baseURL, endpointPath: tokenEndpointPath)
+    }
+
+    private static func makeEndpointURL(from baseURL: URL, endpointPath: String) -> URL? {
         guard let scheme = baseURL.scheme?.lowercased(),
               ["http", "https"].contains(scheme),
               baseURL.host?.isEmpty == false,
@@ -353,7 +367,7 @@ struct DirectCallProductionConfiguration: Equatable, CustomStringConvertible, Cu
         }
 
         let basePath = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        components.path = "/" + ([basePath, tokenEndpointPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))]
+        components.path = "/" + ([basePath, endpointPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))]
             .filter { !$0.isEmpty }
             .joined(separator: "/"))
         components.query = nil
@@ -719,6 +733,7 @@ struct NativeDirectCallInternalPilotEligibilityPayload: Codable, Equatable, Cust
     let roomEligible: Bool?
     let trustReady: Bool?
     let serviceAvailable: Bool?
+    let capabilityPresent: Bool?
     let clientSupported: Bool?
 
     init(state: State,
@@ -728,6 +743,7 @@ struct NativeDirectCallInternalPilotEligibilityPayload: Codable, Equatable, Cust
          roomEligible: Bool? = nil,
          trustReady: Bool? = nil,
          serviceAvailable: Bool? = nil,
+         capabilityPresent: Bool? = nil,
          clientSupported: Bool? = nil) {
         self.state = state
         self.reason = reason
@@ -736,7 +752,34 @@ struct NativeDirectCallInternalPilotEligibilityPayload: Codable, Equatable, Cust
         self.roomEligible = roomEligible
         self.trustReady = trustReady
         self.serviceAvailable = serviceAvailable
+        self.capabilityPresent = capabilityPresent
         self.clientSupported = clientSupported
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        state = try container.decode(State.self, forKey: .state)
+        reason = try container.decodeIfPresent(NativeDirectCallInternalPilotUnavailableReason.self, forKey: .reason)
+        accountEligible = try container.decodeIfPresent(Bool.self, forKey: .accountEligible)
+        peerEligible = try container.decodeIfPresent(Bool.self, forKey: .peerEligible)
+        roomEligible = try container.decodeIfPresent(Bool.self, forKey: .roomEligible)
+        trustReady = try container.decodeIfPresent(Bool.self, forKey: .trustReady)
+        serviceAvailable = try container.decodeIfPresent(Bool.self, forKey: .serviceAvailable)
+        capabilityPresent = try container.decodeIfPresent(Bool.self, forKey: .capabilityPresent) ?? container.decodeIfPresent(Bool.self, forKey: .capabilityPresentCamel)
+        clientSupported = try container.decodeIfPresent(Bool.self, forKey: .clientSupported)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(state, forKey: .state)
+        try container.encodeIfPresent(reason, forKey: .reason)
+        try container.encodeIfPresent(accountEligible, forKey: .accountEligible)
+        try container.encodeIfPresent(peerEligible, forKey: .peerEligible)
+        try container.encodeIfPresent(roomEligible, forKey: .roomEligible)
+        try container.encodeIfPresent(trustReady, forKey: .trustReady)
+        try container.encodeIfPresent(serviceAvailable, forKey: .serviceAvailable)
+        try container.encodeIfPresent(capabilityPresent, forKey: .capabilityPresent)
+        try container.encodeIfPresent(clientSupported, forKey: .clientSupported)
     }
 
     var eligibility: NativeDirectCallInternalPilotEligibility {
@@ -763,6 +806,7 @@ struct NativeDirectCallInternalPilotEligibilityPayload: Codable, Equatable, Cust
             "roomEligible: \(redactedBoolean(roomEligible))",
             "trustReady: \(redactedBoolean(trustReady))",
             "serviceAvailable: \(redactedBoolean(serviceAvailable))",
+            "capabilityPresent: \(redactedBoolean(capabilityPresent))",
             "clientSupported: \(redactedBoolean(clientSupported))"
         ].joined(separator: ", ") + ")"
     }
@@ -799,7 +843,54 @@ struct NativeDirectCallInternalPilotEligibilityPayload: Codable, Equatable, Cust
         case roomEligible = "room_eligible"
         case trustReady = "trust_ready"
         case serviceAvailable = "service_available"
+        case capabilityPresent = "capability_present"
+        case capabilityPresentCamel = "capabilityPresent"
         case clientSupported = "client_supported"
+    }
+}
+
+struct NativeDirectCallInternalPilotEligibilityRequest: Encodable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let version: Int
+    let roomID: String
+    let peerUserID: String
+    let deviceID: String?
+    let intent: DirectCallIntent
+
+    init(version: Int = 1,
+         roomID: String,
+         peerUserID: String,
+         deviceID: String? = nil,
+         intent: DirectCallIntent = .audio) {
+        self.version = version
+        self.roomID = roomID
+        self.peerUserID = peerUserID
+        self.deviceID = deviceID
+        self.intent = intent
+    }
+
+    var description: String {
+        "NativeDirectCallInternalPilotEligibilityRequest(version: \(version), roomID: <redacted>, peerUserID: <redacted>, deviceID: <redacted>, intent: \(intent.rawValue))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(version, forKey: .version)
+        try container.encode(roomID, forKey: .roomID)
+        try container.encode(peerUserID, forKey: .peerUserID)
+        try container.encodeIfPresent(deviceID, forKey: .deviceID)
+        try container.encode(intent.rawValue, forKey: .intent)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case version
+        case roomID = "room_id"
+        case peerUserID = "peer_user_id"
+        case deviceID = "device_id"
+        case intent
     }
 }
 
@@ -829,12 +920,12 @@ struct NativeDirectCallInternalPilotEligibilityPayloadDecoder: CustomStringConve
 
 @MainActor
 protocol NativeDirectCallInternalPilotEligibilityProviding {
-    func nativeDirectCallInternalPilotEligibility() async -> NativeDirectCallInternalPilotEligibility
+    func nativeDirectCallInternalPilotEligibility(for request: NativeDirectCallInternalPilotEligibilityRequest) async -> NativeDirectCallInternalPilotEligibility
 }
 
 @MainActor
 final class FailClosedNativeDirectCallInternalPilotEligibilityProvider: NativeDirectCallInternalPilotEligibilityProviding, CustomStringConvertible, CustomDebugStringConvertible {
-    func nativeDirectCallInternalPilotEligibility() async -> NativeDirectCallInternalPilotEligibility {
+    func nativeDirectCallInternalPilotEligibility(for request: NativeDirectCallInternalPilotEligibilityRequest) async -> NativeDirectCallInternalPilotEligibility {
         .disabled
     }
 
@@ -844,6 +935,97 @@ final class FailClosedNativeDirectCallInternalPilotEligibilityProvider: NativeDi
 
     nonisolated var debugDescription: String {
         description
+    }
+}
+
+@MainActor
+final class HTTPNativeDirectCallInternalPilotEligibilityProvider: NativeDirectCallInternalPilotEligibilityProviding, CustomStringConvertible, CustomDebugStringConvertible {
+    private let endpointURL: URL?
+    private let httpTransport: DirectCallHTTPTransportProtocol?
+    private let accessTokenProvider: DirectCallMatrixAccessTokenProviding?
+    private let jsonEncoder: JSONEncoder
+    private let payloadDecoder: NativeDirectCallInternalPilotEligibilityPayloadDecoder
+
+    init(endpointURL: URL? = nil,
+         httpTransport: DirectCallHTTPTransportProtocol? = nil,
+         accessTokenProvider: DirectCallMatrixAccessTokenProviding? = nil,
+         jsonEncoder: JSONEncoder = JSONEncoder(),
+         payloadDecoder: NativeDirectCallInternalPilotEligibilityPayloadDecoder = .init()) {
+        self.endpointURL = endpointURL
+        self.httpTransport = httpTransport
+        self.accessTokenProvider = accessTokenProvider
+        self.jsonEncoder = jsonEncoder
+        self.payloadDecoder = payloadDecoder
+    }
+
+    convenience init(endpointBaseURL: URL?,
+                     httpTransport: DirectCallHTTPTransportProtocol? = nil,
+                     accessTokenProvider: DirectCallMatrixAccessTokenProviding? = nil,
+                     jsonEncoder: JSONEncoder = JSONEncoder(),
+                     payloadDecoder: NativeDirectCallInternalPilotEligibilityPayloadDecoder = .init()) {
+        self.init(endpointURL: DirectCallProductionConfiguration(isEnabled: true, tokenEndpointBaseURL: endpointBaseURL).eligibilityEndpointURL,
+                  httpTransport: httpTransport,
+                  accessTokenProvider: accessTokenProvider,
+                  jsonEncoder: jsonEncoder,
+                  payloadDecoder: payloadDecoder)
+    }
+
+    func nativeDirectCallInternalPilotEligibility(for request: NativeDirectCallInternalPilotEligibilityRequest) async -> NativeDirectCallInternalPilotEligibility {
+        guard request.intent == .audio else {
+            return .unsupported
+        }
+
+        guard let endpointURL,
+              let httpTransport,
+              let accessTokenProvider,
+              let accessToken = await accessTokenProvider.matrixAccessToken(),
+              !accessToken.isEmpty else {
+            return .failClosed
+        }
+
+        let requestData: Data
+        do {
+            requestData = try jsonEncoder.encode(request)
+        } catch {
+            return .failClosed
+        }
+
+        let transportRequest = DirectCallHTTPTransportRequest.postJSON(to: endpointURL,
+                                                                       bearerAccessToken: accessToken,
+                                                                       body: requestData)
+        switch await httpTransport.send(transportRequest) {
+        case .success(let response):
+            return decode(response)
+        case .failure:
+            return .unavailable(reason: .serviceUnavailable)
+        }
+    }
+
+    nonisolated var description: String {
+        "HTTPNativeDirectCallInternalPilotEligibilityProvider(endpointURL: <redacted>)"
+    }
+
+    nonisolated var debugDescription: String {
+        description
+    }
+
+    private func decode(_ response: DirectCallHTTPTransportResponse) -> NativeDirectCallInternalPilotEligibility {
+        guard (200..<300).contains(response.statusCode) else {
+            return failureEligibility(for: response.statusCode)
+        }
+
+        return payloadDecoder.decodeEligibility(from: response.data)
+    }
+
+    private func failureEligibility(for statusCode: Int) -> NativeDirectCallInternalPilotEligibility {
+        switch statusCode {
+        case 404:
+            .unavailable(reason: .capabilityMissing)
+        case 401, 403, 500...599:
+            .unavailable(reason: .serviceUnavailable)
+        default:
+            .failClosed
+        }
     }
 }
 

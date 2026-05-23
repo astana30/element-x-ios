@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Added the iOS native audio eligibility provider skeleton for the backend `/eligibility` endpoint.
 - Recorded the eligibility contract runtime/no-activation proof.
 - Added the fail-closed internal pilot eligibility contract skeleton.
 - Documented the redacted pilot monitoring/status contract.
@@ -1066,3 +1067,16 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Ran backend tests with FastAPI route tests enabled, compileall, `git diff --check`, docs secret scan, and the direct-call forbidden scan.
 - No app code or backend code changed during the smoke. This does not wire iOS non-engineering activation, does not change Element Call, and does not add CallKit, push, video, or global activation.
 - Recommended next phase: `2.30G — native audio eligibility endpoint staging proof plan`.
+
+## 2026-05-23 — 2.30H iOS Native Audio Eligibility Provider Skeleton
+
+- Added an iOS request DTO for the backend native-audio `/eligibility` endpoint.
+- Kept DTO descriptions and debug output redacted for room, peer, and device identifiers.
+- Extended the redacted eligibility response payload to decode optional `capability_present` / `capabilityPresent`.
+- Added an HTTP eligibility provider that uses the existing Matrix bearer access-token provider and redacted direct-call HTTP transport.
+- Mapped missing config/auth/transport, malformed payloads, unknown enums, unsupported intents, and non-success HTTP statuses to fail-closed or user-safe unavailable states.
+- Kept the default eligibility provider disabled/fail-closed.
+- Added tests for request encoding, redaction, eligible and unavailable responses, `capability_present`, missing access token, HTTP/network failure mapping, malformed payloads, unsupported intent, `directOneToOneCallsEnabled`, and existing private dogfood gates.
+- This skeleton is not wired into non-engineering activation; controlled engineering dogfood remains on `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` under DEBUG/integration.
+- Confirmed no Element Call route, CallKit, push, video, or global production activation changes are part of this phase.
+- Recommended next phase: `2.30I — iOS eligibility provider fail-closed runtime proof`.

@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.30F — eligibility endpoint local route smoke.
+After 2.30H — iOS native audio eligibility provider skeleton.
 
 Current checkpoints:
 - App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
@@ -25,6 +25,7 @@ Current checkpoints:
 - Eligibility runtime/no-activation proof: 2.30C confirmed product UI/start gates without private dogfood still fail closed, and controlled engineering dogfood still reaches active audio under explicit private dogfood gates.
 - Backend eligibility endpoint skeleton: 2.30E added the disabled-by-default call-service `/eligibility` endpoint, static allowlist policy skeleton, redacted readiness booleans, and token endpoint enforcement before rate limit/allocation/LiveKit room pre-create/token issuance.
 - Eligibility endpoint local route smoke: 2.30F proved default fail-closed `/eligibility`, token endpoint enforcement before allocation/pre-create/token issuance, explicit allowlisted positive route behavior, negative route cases, and redacted output.
+- iOS eligibility provider skeleton: 2.30H added a redacted request DTO, optional `capability_present` / `capabilityPresent` response decoding, and an HTTP provider skeleton for the backend `/eligibility` endpoint without wiring non-engineering activation.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -121,6 +122,14 @@ Current proven/prepared state:
   - explicit allowlisted local fixture returned `/eligibility` `state=eligible`, `reason=null`, and allowed the token path to proceed with token output redacted;
   - negative cases passed for caller not allowlisted, peer not allowlisted, invalid room, malformed request, and unsupported intent;
   - smoke output remained redacted, with no raw tokens, JWTs, secrets, room IDs, user IDs, peer IDs, device IDs, Redis credential URLs, or LiveKit room names printed.
+- 2.30H iOS eligibility provider skeleton:
+  - added `NativeDirectCallInternalPilotEligibilityRequest` for the backend `/eligibility` endpoint;
+  - request descriptions and debug output redact room, peer, and device identifiers;
+  - response decoding supports optional `capability_present` / `capabilityPresent`;
+  - `HTTPNativeDirectCallInternalPilotEligibilityProvider` uses the existing Matrix bearer access-token provider and redacted direct-call HTTP transport;
+  - missing config/auth/transport, network failures, 5xx, malformed JSON, unknown enums, and unsupported intents fail closed or map to safe unavailable states;
+  - the default provider remains disabled/fail-closed;
+  - this is not wired into non-engineering activation.
 - Element Call route remains unchanged and must stay available as fallback.
 - No CallKit, push/background incoming, missed calls, video, session restoration, broad internal rollout, public rollout, production activation, or global activation exists.
 
@@ -168,24 +177,23 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.30G — native audio eligibility endpoint staging proof plan.
+2.30I — iOS eligibility provider fail-closed runtime proof.
 
 Task:
-Plan the staging proof for the call-service native audio eligibility endpoint without enabling non-engineering users. Inspection/design/docs only unless explicitly approved. Do not wire iOS non-engineering activation. Do not enable broader dogfood. Do not change Element Call route. Do not wire CallKit, push, missed calls, video, session restoration, or global production activation.
+Run a runtime/no-activation proof for the iOS native audio eligibility provider skeleton. Do not enable non-engineering activation. Do not change Element Call route. Do not wire CallKit, push, missed calls, video, session restoration, or global production activation.
 
 Goal:
-Define the safest operator-local staging proof for backend eligibility: default fail-closed behavior, explicit allowlist config, token endpoint enforcement, redacted readiness/reporting, rollback, and no client activation broadening.
+Prove the iOS provider skeleton remains side-effect-safe and unwired for non-engineering activation while controlled engineering dogfood still works under the explicit private dogfood gate.
 
 Required output:
-A. Files/config docs inspected.
-B. Staging proof prerequisites.
-C. Operator-local env variables and rollback plan, with no secret values.
-D. Redacted smoke matrix for `/eligibility`.
-E. Token endpoint enforcement smoke matrix.
-F. Readiness/monitoring fields.
-G. Redaction checks and forbidden output list.
-H. Stop criteria.
-I. Exact next implementation or runtime phase.
+A. Default/no-private-dogfood fail-closed result.
+B. Product UI/start gates without private dogfood result.
+C. Eligibility provider side-effect check.
+D. Controlled engineering dogfood happy-path regression result.
+E. Final A/B status.
+F. Element Call route status.
+G. Whether code changed.
+H. Exact next implementation or runtime phase.
 
 Allowed report fields:
 - readiness booleans;
@@ -236,4 +244,4 @@ Validation if docs change:
 - Direct-call forbidden scan.
 
 Suggested commit if docs change:
-Plan native audio eligibility staging proof
+Record iOS eligibility provider fail-closed proof
