@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.34B — engineering expansion soak session 1.
+After 2.34C — engineering expansion soak session 2.
 
 Current checkpoints:
 - App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
@@ -36,6 +36,7 @@ Current checkpoints:
 - Engineering expansion session 1 rerun: 2.33E passed the first expanded engineering-only pilot window after the timeout cleanup fix.
 - Engineering expansion soak plan: 2.34A defines a 3-session engineering-only soak before any broader readiness review.
 - Engineering expansion soak session 1: 2.34B passed as the first clean soak session.
+- Engineering expansion soak session 2: 2.34C passed as the second clean soak session.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -245,6 +246,17 @@ Current proven/prepared state:
   - LiveKit-off was not run because shared staging LiveKit must not be stopped without owner approval;
   - final A/B status was idle/no active session with media failure `none`, cleanup/disconnect attempted on both sides, no rollback, no stop criteria, no redaction issue, and Element Call route untouched;
   - soak progress is 1 of 3 clean sessions.
+- 2.34C engineering expansion soak session 2:
+  - session used redacted A/B engineering labels only, staging call-service, staging LiveKit, required DEBUG/integration gates, eligibility status gate, private dogfood gate, production start gate, and staging token base URL;
+  - the legacy fake/dry-run gate stayed unset;
+  - preflight passed with readiness `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, native audio eligibility/allowlist configured, A/B trust ready, activation enabled, and baseline A/B idle/no active session;
+  - runner-assisted A -> B happy path, B -> A reverse path, and repeated A -> B calls x2 reached A/B `activeAudio`, then hangup returned A/B idle/no active session with media failure `none`;
+  - decline, cancel, timeout, relaunch-ringing, listener-unavailable/open-room edge, and post-listener recovery passed;
+  - timeout reported A `outgoingTimeout` and B `incomingTimeout`; both sides returned idle/no active session with media failure `none`;
+  - backend-off recovery was not run because the local staging call-service stayed up for the session;
+  - LiveKit-off was not run because shared staging LiveKit must not be stopped without owner approval;
+  - final A/B status was idle/no active session with media failure `none`, cleanup/disconnect attempted on both sides, no rollback, no stop criteria, no redaction issue, and Element Call route untouched;
+  - soak progress is 2 of 3 clean sessions.
 - Element Call route remains unchanged and must stay available as fallback.
 - No CallKit, push/background incoming, missed calls, video, session restoration, broad internal rollout, public rollout, production activation, or global activation exists.
 
@@ -297,13 +309,13 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.34C — engineering expansion soak session 2.
+2.34D — engineering expansion soak session 3.
 
 Task:
-Run or record the second engineering expansion soak session under the 2.34A plan. Do not modify code unless a real runtime bug is found and explicitly approved. Do not enable non-engineering activation.
+Run or record the third engineering expansion soak session under the 2.34A plan. Do not modify code unless a real runtime bug is found and explicitly approved. Do not enable non-engineering activation.
 
 Goal:
-Continue the 3-session engineering-only soak before any broader readiness review, using labelled engineering participants/devices under the strict cap: up to 4 named engineering operators, up to 8 named devices, predeclared pairs only, and one active 1:1 native audio call at a time.
+Complete the 3-session engineering-only soak before any broader readiness review, using labelled engineering participants/devices under the strict cap: up to 4 named engineering operators, up to 8 named devices, predeclared pairs only, and one active 1:1 native audio call at a time.
 
 Inspect:
 Use the 2.33B runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, the existing redacted runner/status tooling, and the 2.28A operations checklist. Do not print raw tokens, JWTs, secrets, room IDs, user IDs, peer IDs, device IDs, media keys, event bodies, Redis URLs, or LiveKit room names.
@@ -392,4 +404,4 @@ Validation if docs change:
 - Direct-call forbidden scan.
 
 Suggested commit if docs change:
-Record engineering expansion soak session 2
+Record engineering expansion soak session 3
