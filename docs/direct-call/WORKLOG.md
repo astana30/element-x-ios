@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Added the engineering expansion operations handoff and monitoring baseline.
 - Completed the 3-session engineering expansion soak.
 - Recorded engineering expansion soak session 3.
 - Recorded engineering expansion soak session 2.
@@ -47,6 +48,18 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-24 — 2.35B Engineering Expansion Operations Handoff
+
+- Added a docs-only operations handoff for continuing narrow engineering expansion without per-session Codex supervision.
+- Kept the scope unchanged: up to 4 named engineering operators, up to 8 named devices, predeclared pairs only, staging-only, one active 1:1 native audio call at a time, private native audio card only, foreground/open encrypted direct 1:1 rooms only, verified/trusted peers only, Element Call fallback visible/unchanged, and redacted reporting only.
+- Added explicit operator-owned roles: session owner, backend readiness watcher, client operators, redaction reviewer, stop authority, and rollback owner.
+- Re-stated required preflight: readiness `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, native audio eligibility/allowlist configured when used, A/B trust ready, encrypted 1:1 DM open, no stale active session, Element Call fallback visible, and legacy fake/dry-run gate unset.
+- Re-stated required gates, including DEBUG/integration diagnostics, product UI, eligibility status, private dogfood, production start, and staging token base URL.
+- Added a monitoring baseline limited to readiness booleans, trust booleans, `productionSessionState`, `productionMediaFailureReason`, terminal reason enum, cleanup/disconnect booleans, pass/fail/not-run, and redacted backend reason enums.
+- Added stop criteria, rollback, redacted report intake, validation expectations, periodic cadence, and expansion decision rules.
+- Non-engineering internal dogfood, broad internal rollout, production/public rollout, Element Call replacement, CallKit, push/background incoming, missed calls, video, session restoration, and global activation remain blocked.
+- Recommended next phase: `2.35C — operator-owned engineering expansion session report`.
 
 ## 2026-05-24 — 2.34D Engineering Expansion Soak Session 3
 

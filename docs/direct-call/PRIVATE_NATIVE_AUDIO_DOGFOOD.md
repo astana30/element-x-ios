@@ -1348,6 +1348,199 @@ Dogfood decision: the engineering-only soak can continue only under the same nar
 
 Next phase should use `2.35A — post-soak engineering expansion readiness review`.
 
+## 2.35B Engineering Expansion Operations Handoff
+
+The 3-session engineering expansion soak completed cleanly, so narrow engineering dogfood can continue without per-session Codex supervision only when a named engineering operator owns the session and this handoff checklist is followed. This is still staging-only engineering dogfood, not non-engineering internal dogfood, product beta, public rollout, production activation, or Element Call replacement.
+
+### Current Allowed Scope
+
+- Up to 4 named engineering operators.
+- Up to 8 named devices.
+- Predeclared pair labels only.
+- Staging call-service and staging LiveKit only.
+- Private native audio card only.
+- Foreground/open encrypted direct 1:1 rooms only.
+- Verified/trusted peers only.
+- One active 1:1 native audio call at a time.
+- Element Call fallback visible and unchanged.
+- Redacted reporting only.
+- No non-engineering users.
+- No unmanaged devices.
+
+### Operator-Owned Session Checklist
+
+Use labels only. Do not record raw Matrix user IDs, room IDs, peer IDs, device IDs, tokens, JWTs, secrets, LiveKit room names, Matrix event bodies, full request/response bodies, or Redis credential URLs.
+
+| Role | Required owner | Responsibility |
+| --- | --- | --- |
+| Session owner | `<Operator label>` | Confirms scope, gates, pair labels, one-call-at-a-time rule, and final decision |
+| Backend readiness watcher | `<Operator label>` | Checks call-service readiness before the session and watches for readiness failures during the session |
+| Client operator A/B | `<Operator labels>` | Runs private-card actions only inside predeclared encrypted 1:1 rooms |
+| Redaction reviewer | `<Reviewer label>` | Reviews report text before it is committed or pasted into shared channels |
+| Stop authority | `<Operator label>` | Can stop the session immediately when any stop criterion is met |
+| Rollback owner | `<Operator label>` | Unsets gates, relaunches apps, stops session-local services, and records rollback outcome |
+
+### Pre-Session Checklist
+
+Backend:
+
+- readiness `ready=true`;
+- readiness `reason=ok`;
+- Redis allocation store connected;
+- Redis rate-limit store connected;
+- `storageKeyConfigured=true`;
+- `liveKitRoomProvisioningConfigured=true`;
+- native audio eligibility and allowlist configured when used;
+- Synapse validation smoke passing or explicitly accepted as a blocking prerequisite.
+
+Clients:
+
+- A/B app launch ready;
+- A/B trust ready;
+- encrypted direct 1:1 DM open on both clients;
+- private native audio card visible;
+- no stale active or ringing native session;
+- Element Call fallback visible;
+- old fake/dry-run gate unset.
+
+### Required Gates
+
+Every engineering expansion session must set:
+
+```sh
+export IS_RUNNING_INTEGRATION_TESTS=1
+export NATIVE_DIRECT_CALL_DIAGNOSTICS=1
+export NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1
+export NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1
+export NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1
+export NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1
+export NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1
+export NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=<staging-call-service-base-url>
+```
+
+`NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` must remain unset.
+
+### Monitoring Baseline
+
+Reports may include only:
+
+- readiness booleans and safe readiness `reason`;
+- trust readiness booleans;
+- `productionSessionState`;
+- `productionMediaFailureReason`;
+- terminal reason enum;
+- cleanup/disconnect attempted booleans;
+- pass/fail/not-run;
+- redacted backend reason enums.
+
+Reports must not include:
+
+- Matrix access tokens;
+- Synapse admin token;
+- LiveKit API secret;
+- participant JWT/token;
+- raw room IDs;
+- raw user, peer, or device IDs;
+- LiveKit room names;
+- media keys;
+- Matrix event bodies;
+- Redis credentials;
+- full request/response bodies.
+
+### Stop Criteria
+
+Stop immediately if:
+
+- any raw secret, token, JWT, key, ID, LiveKit room name, Matrix event body, full request/response body, credentialed endpoint, or Redis credential URL appears in output, logs, screenshots, docs, chat, or reports;
+- a call starts without the required gates;
+- Element Call route behavior changes;
+- an untrusted peer or device can connect;
+- stale active or ringing state survives cleanup or relaunch;
+- backend issues a token for invalid room, peer, trust, or membership;
+- media failure does not fail closed;
+- split-brain reappears;
+- readiness is not `ready=true` / `reason=ok` before the session.
+
+### Rollback
+
+1. Unset `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED`, `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED`, `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED`, and `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED`.
+2. Relaunch the apps.
+3. Verify native direct-call status is idle/no active session.
+4. Stop the local staging call-service if the session used a session-local service process.
+5. Keep Element Call as the fallback route.
+6. Rotate affected credentials if any leakage is suspected.
+7. Mark the session paused, not failed, when rollback completed cleanly and no product bug was proven.
+
+### Redacted Report Intake
+
+Record clean engineering sessions in this document and summarize them in `docs/direct-call/STATUS.md` / `docs/direct-call/WORKLOG.md` when they change the project decision. Keep reports docs-only unless an approved runtime bug fix is required.
+
+```text
+Engineering expansion session:
+- session date/time:
+- operator labels:
+- device labels:
+- pair labels:
+- session owner:
+- backend readiness watcher:
+- redaction reviewer:
+- required gates: pass/fail
+- old fake/dry-run gate unset: pass/fail
+- backend readiness: pass/fail
+- Redis allocation/rate-limit: pass/fail
+- LiveKit room provisioning: pass/fail
+- eligibility/allowlist configured: pass/fail/not-used
+- A/B trust: pass/fail
+- Element Call fallback visible: pass/fail
+
+Matrix:
+- A -> B happy path:
+- B -> A reverse:
+- repeated calls x2:
+- decline:
+- cancel:
+- timeout:
+- relaunch fail-closed:
+- listener/open-room unavailable:
+- Element Call fallback:
+- backend-off/recovery:
+- LiveKit-off:
+
+Final:
+- final session state:
+- media failure:
+- terminal reason:
+- cleanup/disconnect:
+- runtime bug:
+- redaction issue:
+- rollback used:
+- stop criteria triggered:
+- decision: continue/pause
+```
+
+Before committing a clean session report:
+
+- confirm the diff is docs-only;
+- run `git diff --check`;
+- run a docs secret scan;
+- run the direct-call forbidden scan;
+- verify no forbidden raw IDs, tokens, secrets, LiveKit room names, Redis credentials, Matrix event bodies, or full request/response bodies appear in the diff.
+
+### Periodic Cadence
+
+- Run at least one redacted engineering session weekly while the expansion remains active.
+- Rerun the full matrix after native-call state-machine changes.
+- Rerun the full matrix after backend token, eligibility, Redis readiness, allocation, rate-limit, or LiveKit room-provisioning changes.
+- Rerun the full matrix after LiveKit staging config, proxy, TLS, or shared infrastructure changes that could affect media connect.
+- Run a shorter A -> B / B -> A / repeated-call smoke after routine app rebuilds when no direct-call code changed.
+
+### Expansion Decision Rule
+
+- Continue engineering expansion if sessions remain clean and stop criteria do not trigger.
+- Pause immediately if any stop criterion triggers.
+- Keep the current cap unless a separate readiness review approves a change.
+- Non-engineering internal dogfood remains blocked until a separate readiness review approves server-backed activation, support ownership, user-safe UX, monitoring, and rollback.
+
 ### Remaining Blockers After Expansion
 
 Even if the expanded engineering pilot passes, the following remain blocked:

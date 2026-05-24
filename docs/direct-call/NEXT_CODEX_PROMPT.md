@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.34D — engineering expansion soak session 3.
+After 2.35B — engineering expansion operations handoff and monitoring baseline.
 
 Current checkpoints:
 - App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
@@ -38,6 +38,7 @@ Current checkpoints:
 - Engineering expansion soak session 1: 2.34B passed as the first clean soak session.
 - Engineering expansion soak session 2: 2.34C passed as the second clean soak session.
 - Engineering expansion soak session 3: 2.34D passed as the third clean soak session; the planned 3-session engineering-only soak is complete.
+- Engineering expansion operations handoff: 2.35B documents named operator ownership, backend readiness watching, redacted report intake, stop/rollback ownership, monitoring baseline, periodic cadence, and decision rules for continuing engineering sessions without per-session Codex supervision.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -269,6 +270,13 @@ Current proven/prepared state:
   - LiveKit-off was not run because shared staging LiveKit must not be stopped without owner approval;
   - final A/B status was idle/no active session with media failure `none`, cleanup/disconnect attempted on both sides, no rollback, no stop criteria, no redaction issue, and Element Call route untouched;
   - soak progress is 3 of 3 clean sessions; the planned engineering-only soak is complete.
+- 2.35B engineering expansion operations handoff:
+  - narrow engineering expansion may continue without per-session Codex supervision only when a named session owner follows the handoff;
+  - required roles are session owner, backend readiness watcher, client operators, redaction reviewer, stop authority, and rollback owner;
+  - allowed scope remains capped at up to 4 named engineering operators, up to 8 named devices, predeclared pairs only, staging-only, one active 1:1 call at a time, private native audio card only, foreground/open encrypted direct 1:1 rooms only, verified/trusted peers only, Element Call fallback visible/unchanged, and redacted reporting only;
+  - monitoring output remains limited to readiness booleans, trust booleans, `productionSessionState`, `productionMediaFailureReason`, terminal reason enum, cleanup/disconnect booleans, pass/fail/not-run, and redacted backend reason enums;
+  - clean sessions follow a docs-only redacted report path with `git diff --check`, docs secret scan, direct-call forbidden scan, and redaction review before commit;
+  - Codex/engineering review remains required for runtime bugs, stop criteria, scope expansion, non-engineering access, config changes, rollout changes, or activation changes.
 - Element Call route remains unchanged and must stay available as fallback.
 - No CallKit, push/background incoming, missed calls, video, session restoration, broad internal rollout, public rollout, production activation, or global activation exists.
 
@@ -321,26 +329,82 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.35A — post-soak engineering expansion readiness review.
+2.35C — operator-owned engineering expansion session report.
 
 Task:
-Inspection/decision review only. Do not modify code. Do not commit.
+Run or record the first operator-owned engineering expansion session using the 2.35B handoff. Do not modify code unless a real runtime bug is found and explicitly approved. Do not enable non-engineering activation.
 
 Goal:
-Decide whether the completed 3-session engineering-only soak allows the narrow engineering expansion to continue, whether any scope can safely change, and what still blocks non-engineering internal dogfood.
+Confirm that named engineers can continue the narrow staging expansion using the operations handoff without per-session Codex supervision, while preserving redacted reporting and all stop/rollback rules.
 
-Inspect:
-Use the 2.33B runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, the existing redacted runner/status tooling, and the 2.28A operations checklist. Do not print raw tokens, JWTs, secrets, room IDs, user IDs, peer IDs, device IDs, media keys, event bodies, Redis URLs, or LiveKit room names.
+Required scope:
+- named engineering operators only;
+- up to 4 engineering operators and up to 8 named devices;
+- predeclared pair labels only;
+- staging call-service and staging LiveKit only;
+- private native audio card only;
+- foreground/open encrypted direct 1:1 rooms only;
+- verified/trusted peers only;
+- one active 1:1 native audio call at a time;
+- Element Call fallback visible and unchanged;
+- redacted reporting only;
+- legacy fake/dry-run gate unset.
+
+Required roles:
+- session owner;
+- backend readiness watcher;
+- client operators;
+- redaction reviewer;
+- stop authority;
+- rollback owner.
+
+Required gates:
+- `IS_RUNNING_INTEGRATION_TESTS=1`;
+- `NATIVE_DIRECT_CALL_DIAGNOSTICS=1`;
+- `NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1`;
+- `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`;
+- `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1`;
+- `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`;
+- `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`;
+- `NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=<staging call-service>`.
+
+Required preflight:
+- readiness `ready=true`;
+- readiness `reason=ok`;
+- Redis allocation/rate-limit connected;
+- storage key configured;
+- LiveKit room provisioning configured;
+- eligibility/allowlist configured if used;
+- A/B trust ready;
+- encrypted direct 1:1 DM open;
+- no stale active session;
+- Element Call fallback visible.
+
+Suggested matrix:
+- A -> B happy path;
+- B -> A reverse path;
+- repeated calls x2;
+- decline;
+- cancel;
+- timeout;
+- relaunch fail-closed;
+- listener/open-room unavailable;
+- Element Call fallback;
+- backend-off/recovery only if safe;
+- LiveKit-off not run unless explicitly approved by the shared staging LiveKit owner.
 
 Required output:
-A. Files inspected.
-B. Completed soak summary.
-C. Readiness decision for continued engineering expansion.
-D. Maximum safe scope, if any.
-E. Required gates/preflight that remain mandatory.
-F. Stop/rollback criteria that remain mandatory.
-G. Remaining blockers for non-engineering internal dogfood.
-H. Recommended next phase.
+A. Session date/time.
+B. Operator/device labels only.
+C. Roles filled with labels only.
+D. Preflight result.
+E. Matrix result table.
+F. Final A/B state.
+G. Runtime bugs or stop criteria.
+H. Rollback used or not.
+I. Element Call fallback status.
+J. Redaction review result.
+K. Decision: continue / pause.
 
 Allowed report fields:
 - readiness booleans;
@@ -391,4 +455,4 @@ Validation if docs change:
 - Direct-call forbidden scan.
 
 Suggested commit if docs change:
-Document post-soak engineering expansion review
+Record operator-owned engineering expansion session

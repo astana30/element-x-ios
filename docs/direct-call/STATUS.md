@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.34D — engineering expansion soak session 3.
+After 2.35B — engineering expansion operations handoff and monitoring baseline.
 
 ## Latest App Code Checkpoint
 
@@ -283,6 +283,12 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Backend-off recovery was not run because the local staging call-service stayed up for the session. LiveKit-off was not run because shared staging LiveKit must not be stopped without owner approval.
   - Final A/B status was idle/no active session with media failure `none`, cleanup/disconnect attempted on both sides, no rollback, no stop criteria, no redaction issue, and Element Call route untouched.
   - The planned 3-session engineering expansion soak is complete.
+- Engineering expansion operations handoff is recorded:
+  - Narrow engineering dogfood may continue without per-session Codex supervision only when named operators follow the handoff checklist.
+  - Required ownership is explicit: session owner, backend readiness watcher, client operators, redaction reviewer, stop authority, and rollback owner.
+  - The same staging-only cap remains: up to 4 named engineering operators, up to 8 named devices, predeclared pairs only, one active 1:1 native audio call at a time, private native audio card only, verified/trusted peers only, and redacted reporting only.
+  - Monitoring baseline remains limited to readiness booleans, trust booleans, `productionSessionState`, `productionMediaFailureReason`, terminal reason enum, cleanup/disconnect booleans, pass/fail/not-run, and redacted backend reason enums.
+  - Clean sessions follow a docs-only report path with redaction review and validation before commit.
 - Call-service Redis readiness is hardened:
   - Redis-backed staging readiness now performs bounded live Redis pings at startup and on each readiness request for both allocation and rate-limit stores.
   - `allocationStoreConnected` and `rateLimitConnected` now reflect live Redis connectivity for Redis stores, not only config shape or implementation presence.
@@ -824,8 +830,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 ## Current Gate
 
 - Controlled engineering dogfood pilot may continue on staging under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, including the product-card-only happy path, repeated-call split-brain regression proof, 2.27F controlled matrix rerun, 2.28B/2.28C pilot sessions, the 2.32C eligibility status soak, the 2.33D timeout cleanup proof, and the 2.33E engineering expansion pilot session 1 rerun.
-- A narrow engineering expansion soak may continue under the 2.33B runbook and 2.34A soak plan: up to 4 named engineering operators, up to 8 named devices, predeclared pairs only, one active 1:1 native audio call at a time, three clean sessions before readiness review, and redacted reporting only.
-- Soak progress: sessions 1, 2, and 3 of 3 are clean; the planned engineering expansion soak is complete and ready for readiness review.
+- A narrow engineering expansion may continue under the 2.33B runbook, 2.34A soak plan, and 2.35B operations handoff: up to 4 named engineering operators, up to 8 named devices, predeclared pairs only, one active 1:1 native audio call at a time, named session ownership, named redaction review, and redacted reporting only.
+- Soak progress: sessions 1, 2, and 3 of 3 are clean; the planned engineering expansion soak is complete, the post-soak readiness review allowed continued engineering expansion, and the operations handoff is recorded.
+- Per-session Codex supervision is no longer required for clean engineering sessions, but Codex/engineering review remains required for bugs, stop criteria, scope changes, rollout changes, non-engineering access, or config changes.
 - Pilot sessions must follow the 2.27A checkpoint, 2.28A operations checklist, and 2.33B expansion runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
@@ -838,9 +845,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.35A — post-soak engineering expansion readiness review`
+`2.35C — operator-owned engineering expansion session report`
 
-Goal: inspect the completed 3-session engineering-only soak, decide whether the narrow engineering expansion may continue or expand under the same staging constraints, and keep non-engineering internal dogfood plus production/public rollout blocked unless every remaining safeguard is explicitly satisfied.
+Goal: run or record the first operator-owned engineering expansion session under the 2.35B handoff, without per-session Codex supervision during execution, then commit only a redacted docs report if the session is clean.
 
 ## Do-Not-Touch Constraints
 
