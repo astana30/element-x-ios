@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Recorded the internal pilot activation skeleton no-activation runtime proof.
 - Added the native audio internal pilot activation provider skeleton.
 - Recorded the first operator-owned engineering expansion session.
 - Added the engineering expansion operations handoff and monitoring baseline.
@@ -61,6 +62,21 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Engineering private dogfood remains on `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` under DEBUG/integration gates.
 - Non-engineering internal dogfood, broad internal rollout, production/public rollout, Element Call replacement, CallKit, push/background incoming, missed calls, video, session restoration, and global activation remain blocked.
 - Recommended next phase: `2.36D — internal pilot activation skeleton no-activation proof`.
+
+## 2026-05-25 — 2.36D Internal Pilot Activation Skeleton No-Activation Proof
+
+- Ran the runtime no-activation proof for commit `3b0e6b5db`.
+- Readiness passed with `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, and native audio eligibility/allowlist configured.
+- Launched A/B with product UI and eligibility status enabled while keeping `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED` unset.
+- Confirmed activation stayed blocked and side-effect-free. With the encrypted direct 1:1 room open, the activation and trigger reason was `appRolloutDisabled`.
+- Relaunched with product UI, eligibility status, and production start enabled while keeping private dogfood unset; Start stayed blocked with `appRolloutDisabled`.
+- Confirmed the no-private-dogfood runs had no Matrix send, no token request, no media connect, no LiveKit client connect, no active session, and media failure `none`.
+- Did not toggle `directOneToOneCallsEnabled` at runtime because there is no safe runner hook for it without changing Element Call settings. The 2.36C targeted tests cover this separation, and Element Call was not touched during the runtime proof.
+- Relaunched with private dogfood restored and the legacy fake/dry-run gate unset. A -> B reached `activeAudio` with encryption ready, media connect attempted, LiveKit client connect attempted, and media failure `none`.
+- Hangup returned A/B to idle with no active session, cleanup/disconnect attempted, and media failure `none`.
+- Runner-assisted production status/control was used for this proof. A legacy diagnostic wait-status poll did not observe production incoming state and was not used as a pass criterion; production accept/status showed the happy path correctly.
+- No code changed, no redaction issue was observed, no runtime regression was found, and Element Call route stayed untouched.
+- Recommended next phase: `2.36E — server-backed internal pilot activation integration plan`.
 
 ## 2026-05-24 — 2.35B Engineering Expansion Operations Handoff
 

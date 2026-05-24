@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.36C — internal pilot activation provider skeleton.
+After 2.36D — internal pilot activation skeleton no-activation proof.
 
 Current checkpoints:
 - App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
@@ -41,6 +41,7 @@ Current checkpoints:
 - Engineering expansion operations handoff: 2.35B documents named operator ownership, backend readiness watching, redacted report intake, stop/rollback ownership, monitoring baseline, periodic cadence, and decision rules for continuing engineering sessions without per-session Codex supervision.
 - Operator-owned engineering expansion session 1: 2.35C passed under the 2.35B handoff with redacted Operator A/B and Device A1/B1 labels, readiness/trust/activation preflight, happy path, reverse, repeated calls x2, decline, cancel, timeout, relaunch-ringing, listener/open-room unavailable, and post-listener recovery.
 - Internal pilot activation provider skeleton: 2.36C added a disabled-by-default native-audio-specific activation model/provider boundary. The default provider fails closed, the status-only provider never returns `activationAllowed`, backend eligible alone remains insufficient, product UI alone remains insufficient, and non-engineering internal dogfood remains disabled.
+- Internal pilot activation no-activation proof: 2.36D proved product UI, eligibility status, and production start gates without private dogfood stay blocked with `appRolloutDisabled`, no Matrix/token/media/LiveKit side effects, and no active session; private engineering dogfood still reaches active audio and returns idle.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -296,6 +297,14 @@ Current proven/prepared state:
   - backend eligible alone, product UI alone, eligibility status alone, and `directOneToOneCallsEnabled` do not activate native audio;
   - engineering private dogfood remains on `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` under DEBUG/integration gates;
   - non-engineering internal dogfood remains blocked.
+- 2.36D internal pilot activation skeleton runtime proof:
+  - readiness passed with `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, and native audio eligibility/allowlist configured;
+  - product UI and eligibility status enabled without private dogfood stayed blocked;
+  - product UI, eligibility status, and production start enabled without private dogfood still blocked Start with `appRolloutDisabled`;
+  - no Matrix send, token request, media connect, LiveKit client connect, or active session occurred in the no-private-dogfood runs;
+  - `directOneToOneCallsEnabled` was not toggled at runtime because there is no safe runner hook without changing Element Call settings; the 2.36C tests cover that separation;
+  - restoring private dogfood allowed A -> B `activeAudio`, then hangup returned A/B to idle with cleanup/disconnect attempted and media failure `none`;
+  - no code changed, no redaction issue was observed, and Element Call stayed untouched.
 - Element Call route remains unchanged and must stay available as fallback.
 - No CallKit, push/background incoming, missed calls, video, session restoration, broad internal rollout, public rollout, production activation, or global activation exists.
 
@@ -348,29 +357,44 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.36D — internal pilot activation skeleton no-activation proof.
+2.36E — server-backed internal pilot activation integration plan.
 
 Task:
-Verify that the 2.36C internal pilot activation provider skeleton remains fail-closed by default and does not accidentally enable non-engineering native audio. Do not modify code unless a real runtime bug is found and explicitly approved. Do not enable non-engineering activation.
+Inspection/design only. Do not modify code. Do not commit. Define the next safe integration boundary for the server-backed internal pilot activation stack after the 2.36C skeleton and 2.36D no-activation proof.
 
 Goal:
-Prove that product UI, eligibility status, backend eligible status, and the new activation skeleton do not enable Start/Accept without the existing private dogfood engineering gate, and confirm the private engineering dogfood path still works.
+Choose the smallest implementation step that moves toward future narrow non-engineering internal pilot activation without enabling it yet, while preserving engineering private dogfood and token endpoint authority.
 
-Proofs:
-- launch with product UI and eligibility status gates only, private dogfood unset, and confirm activation remains blocked with no Matrix send, token request, media connect, LiveKit connect, or active session;
-- if a local allowlisted backend eligibility fixture is available, confirm backend eligible status still does not enable Start/Accept without private dogfood;
-- confirm `directOneToOneCallsEnabled` does not enable native audio;
-- restore private dogfood gates and run A -> B happy path to `activeAudio`, then hangup to idle;
-- confirm Element Call route remains visible/unchanged.
+Inspect:
+- `ElementX/Sources/Services/Calls/DirectCallMediaEngineProtocol.swift`;
+- `ElementX/Sources/Screens/RoomScreen/RoomScreenModels.swift`;
+- `ElementX/Sources/FlowCoordinators/RoomFlowCoordinator.swift`;
+- `ElementX/Sources/Other/Extensions/ProcessInfo.swift`;
+- `ElementX/Sources/Application/Settings/AppSettings.swift`;
+- `server/salemx-call-service/salemx_call_service/eligibility.py`;
+- `server/salemx-call-service/salemx_call_service/service.py`;
+- `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`;
+- `docs/direct-call/STATUS.md`;
+- `docs/direct-call/WORKLOG.md`.
+
+Questions:
+- Should the next step be status-only card copy integration, remote rollout source plumbing, server allowlist capability discovery, or activation-decision test scaffolding?
+- Which AND-gates must exist before any future Start/Accept activation path?
+- How should engineering private dogfood bypass/coexist with future internal pilot activation?
+- What remains DEBUG/integration-only?
+- What backend readiness/eligibility fields can be consumed without raw identifiers or side effects?
+- What tests are required before any activation wiring?
+- What runtime proof is required after the next implementation step?
 
 Required output:
-A. No-activation result without private dogfood gate.
-B. Backend eligible/status-only result if run.
-C. `directOneToOneCallsEnabled` separation result.
-D. Private dogfood happy path result.
-E. Final A/B state.
-F. Runtime regression, if any.
-G. Whether code changed.
+A. Files inspected.
+B. Recommended next implementation boundary.
+C. Required AND-gates.
+D. Engineering dogfood compatibility.
+E. Fail-closed/default behavior.
+F. Required tests.
+G. Required runtime proof.
+H. Out-of-scope items.
 
 Allowed report fields:
 - readiness booleans;
@@ -421,4 +445,4 @@ Validation if docs change:
 - Direct-call forbidden scan.
 
 Suggested commit if docs change:
-Record internal pilot activation no-activation proof
+Document internal pilot activation integration plan

@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-After 2.36C — internal pilot activation provider skeleton.
+After 2.36D — internal pilot activation skeleton no-activation proof.
 
 ## Latest App Code Checkpoint
 
-2.33D `Clear active session after direct call timeout`
+2.36C `Add native audio internal pilot activation skeleton`
 
 ## Latest Backend Code Checkpoint
 
@@ -121,6 +121,16 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Backend eligible alone, product UI alone, and eligibility status alone still do not activate native audio.
   - `directOneToOneCallsEnabled` remains unrelated to native audio activation.
   - Non-engineering internal dogfood is still not enabled.
+- Native audio internal pilot activation no-activation runtime proof passed:
+  - Session timestamp: 2026-05-25 00:26 +05.
+  - Call-service readiness was `200`, `ready=true`, `reason=ok`, with Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, and native audio eligibility/allowlist configured.
+  - With product UI and eligibility status enabled but private dogfood unset, activation stayed blocked. With the encrypted direct 1:1 room open, the reason was `appRolloutDisabled`.
+  - With production start enabled and private dogfood still unset, Start stayed blocked with `appRolloutDisabled`.
+  - The no-private-dogfood runs had no Matrix send, no token request, no media connect, no LiveKit client connect, and no active session.
+  - `directOneToOneCallsEnabled` separation was not toggled at runtime because no safe runner hook exists without changing Element Call settings; the 2.36C targeted tests cover the separation, and Element Call route behavior was not touched during the proof.
+  - With private dogfood restored, A -> B reached `productionSessionState=activeAudio` with media failure `none`, media connect attempted, and LiveKit client connect attempted.
+  - Hangup returned A/B to `productionSessionState=idle` with no active session, cleanup/disconnect attempted, and media failure `none`.
+  - The legacy fake/dry-run gate remained unset, no code changed, no redaction issue was observed, and Element Call remained untouched.
 - Controlled engineering dogfood pilot session 1 is recorded:
   - Preflight passed with readiness `ready=true`, `reason=ok`, Redis allocation/rate-limit/storage booleans true, LiveKit room provisioning true, and A/B trust ready.
   - Required private dogfood gates were used, and the legacy fake/dry-run gate was unset.
@@ -862,9 +872,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.36D — internal pilot activation skeleton no-activation proof`
+`2.36E — server-backed internal pilot activation integration plan`
 
-Goal: prove at runtime that the internal pilot activation skeleton remains disabled/fail-closed by default, does not make backend eligible or product UI sufficient to Start/Accept, and does not disturb the existing private engineering dogfood path.
+Goal: define the next implementation boundary for using the server-backed eligibility/activation stack without enabling non-engineering access, preserving token endpoint authority and keeping broad/internal/public rollout blocked.
 
 ## Do-Not-Touch Constraints
 

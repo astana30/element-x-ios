@@ -1372,6 +1372,37 @@ Current safety posture:
 
 This phase is a typed skeleton for a future server-backed activation implementation. It does not approve non-engineering users, broad internal rollout, production/public rollout, Element Call replacement, CallKit, push/background incoming, missed calls, video, session restoration, or global activation.
 
+## 2.36D Internal Pilot Activation Skeleton No-Activation Proof
+
+Runtime proof timestamp: 2026-05-25 00:26 +05.
+
+Preflight passed:
+
+- call-service readiness `200`, `ready=true`, `reason=ok`;
+- Redis allocation/rate-limit connected;
+- storage key configured;
+- LiveKit room provisioning configured;
+- native audio eligibility and allowlist configured;
+- legacy fake/dry-run gate unset.
+
+No-activation proof:
+
+- With product UI and eligibility status enabled, and `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED` unset, activation stayed blocked.
+- With the encrypted direct 1:1 room open, activation/trigger dry-run returned `appRolloutDisabled`.
+- Adding `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1` while keeping private dogfood unset still blocked Start with `appRolloutDisabled`.
+- The no-private-dogfood runs had no Matrix send, no token request, no media connect, no LiveKit client connect, no active session, and media failure `none`.
+- `directOneToOneCallsEnabled` was not toggled at runtime because there is no safe runner hook for it without changing Element Call settings. The committed 2.36C tests cover that separation, and Element Call was not touched during this proof.
+
+Private engineering dogfood compatibility proof:
+
+- With `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` restored, A activation was enabled with dependencies ready, room eligible, endpoint accepted, peer trust ready, and key wrapper available.
+- A -> B reached `productionSessionState=activeAudio` with encryption ready, media connect attempted, LiveKit client connect attempted, and `productionMediaFailureReason=none`.
+- Hangup returned A/B to `productionSessionState=idle` with no active session, cleanup/disconnect attempted, and media failure `none`.
+
+Element Call remained visible/available as fallback and the native path did not use the Element Call route. No app/backend code changed, no redaction issue was observed, and no runtime regression was found.
+
+Next phase should use `2.36E — server-backed internal pilot activation integration plan`.
+
 ## 2.35B Engineering Expansion Operations Handoff
 
 The 3-session engineering expansion soak completed cleanly, so narrow engineering dogfood can continue without per-session Codex supervision only when a named engineering operator owns the session and this handoff checklist is followed. This is still staging-only engineering dogfood, not non-engineering internal dogfood, product beta, public rollout, production activation, or Element Call replacement.
