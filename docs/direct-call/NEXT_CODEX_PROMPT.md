@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.35B — engineering expansion operations handoff and monitoring baseline.
+After 2.35C — operator-owned engineering expansion session 1.
 
 Current checkpoints:
 - App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
@@ -39,6 +39,7 @@ Current checkpoints:
 - Engineering expansion soak session 2: 2.34C passed as the second clean soak session.
 - Engineering expansion soak session 3: 2.34D passed as the third clean soak session; the planned 3-session engineering-only soak is complete.
 - Engineering expansion operations handoff: 2.35B documents named operator ownership, backend readiness watching, redacted report intake, stop/rollback ownership, monitoring baseline, periodic cadence, and decision rules for continuing engineering sessions without per-session Codex supervision.
+- Operator-owned engineering expansion session 1: 2.35C passed under the 2.35B handoff with redacted Operator A/B and Device A1/B1 labels, readiness/trust/activation preflight, happy path, reverse, repeated calls x2, decline, cancel, timeout, relaunch-ringing, listener/open-room unavailable, and post-listener recovery.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -277,6 +278,15 @@ Current proven/prepared state:
   - monitoring output remains limited to readiness booleans, trust booleans, `productionSessionState`, `productionMediaFailureReason`, terminal reason enum, cleanup/disconnect booleans, pass/fail/not-run, and redacted backend reason enums;
   - clean sessions follow a docs-only redacted report path with `git diff --check`, docs secret scan, direct-call forbidden scan, and redaction review before commit;
   - Codex/engineering review remains required for runtime bugs, stop criteria, scope expansion, non-engineering access, config changes, rollout changes, or activation changes.
+- 2.35C operator-owned engineering expansion session 1:
+  - session used redacted Operator A/B and Device A1/B1 labels only;
+  - preflight passed with readiness `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, native audio eligibility/allowlist configured, A/B trust ready, activation enabled, and baseline A/B idle/no active session;
+  - runner/status-assisted A -> B happy path, B -> A reverse path, and repeated A -> B calls x2 reached A/B `activeAudio`, then hangup returned A/B idle/no active session with media failure `none`;
+  - decline, cancel, timeout, relaunch-ringing, listener-unavailable/open-room edge, and post-listener recovery passed;
+  - timeout reported A `outgoingTimeout` and B `incomingTimeout`;
+  - backend-off recovery was not run because the local staging call-service stayed up for the session;
+  - LiveKit-off was not run because shared staging LiveKit must not be stopped without owner approval;
+  - final A/B status was idle/no active session with media failure `none`, cleanup/disconnect attempted on both sides, no rollback, no stop criteria, no redaction issue, and Element Call route untouched.
 - Element Call route remains unchanged and must stay available as fallback.
 - No CallKit, push/background incoming, missed calls, video, session restoration, broad internal rollout, public rollout, production activation, or global activation exists.
 
@@ -329,13 +339,13 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.35C — operator-owned engineering expansion session report.
+2.35D — operator-owned engineering expansion session 2.
 
 Task:
-Run or record the first operator-owned engineering expansion session using the 2.35B handoff. Do not modify code unless a real runtime bug is found and explicitly approved. Do not enable non-engineering activation.
+Run or record the second operator-owned engineering expansion session using the 2.35B handoff. Do not modify code unless a real runtime bug is found and explicitly approved. Do not enable non-engineering activation.
 
 Goal:
-Confirm that named engineers can continue the narrow staging expansion using the operations handoff without per-session Codex supervision, while preserving redacted reporting and all stop/rollback rules.
+Confirm that the operator-owned cadence remains repeatable under the narrow staging expansion handoff, while preserving redacted reporting and all stop/rollback rules.
 
 Required scope:
 - named engineering operators only;
@@ -455,4 +465,4 @@ Validation if docs change:
 - Direct-call forbidden scan.
 
 Suggested commit if docs change:
-Record operator-owned engineering expansion session
+Record operator-owned engineering expansion session 2

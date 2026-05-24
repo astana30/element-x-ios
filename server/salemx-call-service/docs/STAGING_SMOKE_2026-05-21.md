@@ -36,6 +36,7 @@ No tokens, JWTs, passwords, shared secrets, authorization header values, or Live
 | Narrow engineering expansion runbook | Added |
 | Timeout terminal cleanup fix | Passed |
 | Engineering expansion operations handoff | Recorded |
+| Operator-owned engineering expansion session 1 | Passed |
 
 ## Root Cause
 
@@ -108,6 +109,7 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - The 2.33D timeout cleanup fix resolved the paused expansion blocker where timeout terminal reasons were set but active session ownership lingered until explicit cleanup. After `1d9218057`, A/B returned to idle with `productionHasActiveSession=false`, cleanup/disconnect attempted, and media failure `none`; a next call after timeout reached active audio and returned idle after hangup.
 - The 2.33E engineering expansion pilot session 1 rerun passed after the timeout cleanup fix. Happy path, reverse, repeated calls x2, decline, cancel, timeout, relaunch-ringing, and listener-unavailable/open-room edge all returned to idle/no active session with media failure `none` where applicable. Timeout reported A `outgoingTimeout` and B `incomingTimeout` with `productionHasActiveSession=false`. Backend-off was not run because the local staging call-service stayed up, and LiveKit-off was not run because shared staging LiveKit requires owner approval before disruption.
 - The 2.34B/2.34C/2.34D engineering expansion soak sessions completed cleanly under the same narrow staging scope. The 2.35B operations handoff now documents named operator ownership, backend readiness watching, redacted report intake, stop authority, rollback ownership, periodic cadence, and the monitoring baseline for continuing engineering sessions without per-session Codex supervision.
+- The 2.35C operator-owned engineering expansion session passed under the 2.35B handoff with redacted Operator A/B and Device A1/B1 labels only. Preflight passed, happy path, reverse, repeated calls x2, decline, cancel, timeout, relaunch-ringing, listener/open-room unavailable, and post-listener recovery passed, final A/B state was idle/no active session with media failure `none`, and Element Call stayed untouched.
 - Controlled engineering dogfood may continue under the same narrow staging-only constraints.
 
 ## Next Step

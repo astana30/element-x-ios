@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Recorded the first operator-owned engineering expansion session.
 - Added the engineering expansion operations handoff and monitoring baseline.
 - Completed the 3-session engineering expansion soak.
 - Recorded engineering expansion soak session 3.
@@ -60,6 +61,22 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added stop criteria, rollback, redacted report intake, validation expectations, periodic cadence, and expansion decision rules.
 - Non-engineering internal dogfood, broad internal rollout, production/public rollout, Element Call replacement, CallKit, push/background incoming, missed calls, video, session restoration, and global activation remain blocked.
 - Recommended next phase: `2.35C — operator-owned engineering expansion session report`.
+
+## 2026-05-24 — 2.35C Operator-Owned Engineering Expansion Session 1
+
+- Ran the first operator-owned engineering expansion session under the 2.35B operations handoff.
+- Session used redacted Operator A/B and Device A1/B1 labels only, staging call-service, staging LiveKit, DEBUG/integration diagnostics, product UI, eligibility status, private dogfood, production start, and staging token base URL gates. The legacy fake/dry-run gate stayed unset.
+- Preflight passed: readiness returned `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, native audio eligibility/allowlist configured, A/B trust ready, activation enabled, and baseline A/B idle/no active session.
+- Runner/status-assisted happy path A -> B, reverse B -> A, and repeated A -> B calls x2 reached A/B `activeAudio`; hangup returned A/B to idle/no active session with media failure `none`.
+- Decline and cancel returned A/B to idle/no active session.
+- Timeout passed with A terminal `outgoingTimeout`, B terminal `incomingTimeout`, and no stale active session.
+- Relaunch during ringing returned A/B to idle/no active session.
+- Listener-unavailable/open-room edge passed by stopping B before A started: A timed out fail-closed with `outgoingTimeout` and no active session; post-listener recovery reached A/B `activeAudio`, then returned idle/no active session with media failure `none`.
+- Backend-off recovery was not run because the local staging call-service stayed up for the session. LiveKit-off was not run because shared staging LiveKit must not be stopped without owner approval.
+- Element Call fallback stayed visible/unchanged; the native session did not invoke or change the Element Call route.
+- Final A/B status was idle/no active session with media failure `none`, cleanup/disconnect attempted on both sides, no rollback used, no stop criteria triggered, no redaction issue observed, and no app/backend code changed.
+- Dogfood decision: continue engineering-only staging expansion under the 2.35B handoff. Non-engineering internal dogfood, broad internal rollout, production/public rollout, Element Call replacement, CallKit, push/background incoming, missed calls, video, session restoration, and global activation remain blocked.
+- Recommended next phase: `2.35D — operator-owned engineering expansion session 2`.
 
 ## 2026-05-24 — 2.34D Engineering Expansion Soak Session 3
 
