@@ -1109,3 +1109,18 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added tests for the new status gate, no-activation behavior, safe copy mapping, local-failure precedence, cache reuse/manual bypass, private dogfood compatibility, redacted cache keys, and cache invalidation/clearing.
 - This does not enable non-engineering internal pilot activation, does not change Element Call, and does not add CallKit, push, video, or global activation.
 - Recommended next phase: `2.31C — eligibility status cache no-activation runtime proof`.
+
+## 2026-05-24 — 2.31C Eligibility Status Cache No-Activation Runtime Proof
+
+- Ran the runtime proof for the side-effect-safe eligibility status cache.
+- Confirmed call-service readiness returned `ready=true`, `reason=ok`, Redis allocation/rate-limit connectivity, storage key configured, LiveKit room provisioning configured, and native audio eligibility plus allowlist configured.
+- Confirmed `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1` with product UI enabled, but without the private dogfood gate, stayed blocked with `appRolloutDisabled`.
+- Confirmed product UI, production start, and eligibility status gates together still do not activate native audio without `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`.
+- Confirmed the no-private-dogfood runs had no Matrix send, no token request, no media connect, no LiveKit client connect, and no active session.
+- Diagnosed a temporary happy-path blocker as Redis rate-limit store unavailability: the token endpoint failed closed with `M_DIRECT_CALL_RATE_LIMIT_STORE_UNAVAILABLE` / `503` until Redis connectivity was restored.
+- After Redis recovery, relaunched with product UI, private dogfood, production start, eligibility status, and staging token base URL gates.
+- Verified A/B trust ready, activation enabled, A outgoing ringing, B incoming ringing, B accept, and A/B `activeAudio` with media failure `none`.
+- Verified media connect and LiveKit client connect were attempted on both sides.
+- Hangup returned A/B to `idle` with no active session, cleanup/disconnect attempted, and media failure `none`.
+- The legacy fake/dry-run gate remained unset, Element Call route remained untouched, no redaction issue was observed, and no code changes were needed.
+- Recommended next phase: `2.31D — eligibility status cache controlled engineering soak`.

@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.31B — side-effect-safe eligibility status cache skeleton.
+After 2.31C — eligibility status cache no-activation runtime proof.
 
 Current checkpoints:
 - App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
@@ -149,6 +149,15 @@ Current proven/prepared state:
   - private dogfood activation remains unchanged and is not blocked by eligibility status;
   - card appear/status refresh can reuse cache, while manual Refresh/Retry bypasses it;
   - status refresh/rendering still must not send Matrix events, request tokens, allocate/pre-create rooms, connect media, connect LiveKit, or start outgoing calls.
+- 2.31C eligibility status cache no-activation proof:
+  - readiness passed with `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, and native audio eligibility plus allowlist configured;
+  - with product UI and eligibility status gates enabled, but without the private dogfood gate, an attached encrypted direct 1:1 room stayed blocked with `appRolloutDisabled`;
+  - with product UI, production start, and eligibility status gates enabled, but without the private dogfood gate, `production-start-outgoing` stayed blocked with `appRolloutDisabled`;
+  - the no-private-dogfood runs had no Matrix send, no token request, no media connect, no LiveKit client connect, and no active session;
+  - a temporary happy-path blocker was diagnosed as Redis rate-limit store unavailability (`M_DIRECT_CALL_RATE_LIMIT_STORE_UNAVAILABLE` / `503`) and recovered by restoring Redis connectivity;
+  - with the explicit private dogfood gate restored, A/B trust and activation were ready;
+  - runner-assisted A -> B reached A/B `activeAudio`, media/LiveKit connect were attempted on both sides, media failure stayed `none`, and hangup returned A/B to `idle`;
+  - the legacy fake/dry-run gate remained unset and Element Call remained untouched.
 - Element Call route remains unchanged and must stay available as fallback.
 - No CallKit, push/background incoming, missed calls, video, session restoration, broad internal rollout, public rollout, production activation, or global activation exists.
 
@@ -196,27 +205,27 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.31C — eligibility status cache no-activation runtime proof.
+2.31D — eligibility status cache controlled engineering soak.
 
 Task:
-Runtime proof that the side-effect-safe eligibility status cache remains fail-closed by default and does not broaden native audio activation. Do not modify code unless a real runtime bug is found and explicitly approved.
+Run a short controlled engineering soak with the side-effect-safe eligibility status cache enabled. Do not modify code unless a real runtime bug is found and explicitly approved.
 
 Goal:
-Verify that default/product-UI-only launches remain blocked, the status gate does not activate native audio, eligibility status refresh has no Matrix/token/media/LiveKit side effects, and controlled engineering dogfood still reaches active audio under the explicit private dogfood gate.
+Verify that controlled engineering dogfood remains stable with `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1` enabled, while preserving the 2.31C no-activation guarantees and redacted reporting contract.
 
 Inspect:
 Use the existing redacted runner/status tooling and the 2.28A operations checklist. Do not print raw tokens, JWTs, secrets, room IDs, user IDs, peer IDs, device IDs, media keys, event bodies, Redis URLs, or LiveKit room names.
 
 Required output:
-A. Default fail-closed result.
-B. Product UI/start gates without private dogfood result.
-C. Eligibility status gate no-activation result.
-D. Side-effect check.
-E. Engineering dogfood happy path result.
-F. Final A/B status.
-G. Any regression.
+A. Backend readiness result.
+B. A/B gate and trust preflight.
+C. Soak matrix result table.
+D. Final A/B status.
+E. Any runtime regression.
+F. Any redaction or monitoring issue.
+G. Element Call route status.
 H. Whether code changed.
-I. Recommended next phase.
+I. Dogfood decision and recommended next phase.
 
 Allowed report fields:
 - readiness booleans;
@@ -267,4 +276,4 @@ Validation if docs change:
 - Direct-call forbidden scan.
 
 Suggested commit if docs change:
-Record eligibility status cache no-activation proof
+Record eligibility status cache soak result

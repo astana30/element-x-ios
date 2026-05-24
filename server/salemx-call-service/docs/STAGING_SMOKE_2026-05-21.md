@@ -31,6 +31,7 @@ No tokens, JWTs, passwords, shared secrets, authorization header values, or Live
 | Eligibility endpoint local route smoke | Passed |
 | iOS eligibility provider no-activation proof | Passed |
 | iOS eligibility status cache skeleton | Added, disabled by default |
+| iOS eligibility status cache no-activation proof | Passed |
 
 ## Root Cause
 
@@ -93,6 +94,9 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - With the explicit private dogfood gate restored, A/B trust and activation were ready, A/B reached active audio on staging, and hangup returned both sides to idle with media failure `none`.
 - The 2.30I proof confirmed the iOS provider skeleton remains unwired for non-engineering activation; `directOneToOneCallsEnabled` remains separate from native audio activation.
 - The 2.31B app status-cache skeleton adds `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1` as a DEBUG/integration-only status/preflight gate. It is off by default, does not enable native audio, keeps backend eligible insufficient to start, keeps private dogfood activation unchanged, and limits refresh side effects to `/eligibility` only.
+- The 2.31C runtime proof passed: product UI/production start/eligibility status gates without the private dogfood gate stayed blocked with `appRolloutDisabled` and had no Matrix send, token request, media connect, LiveKit client connect, or active session.
+- During 2.31C, a temporary token-path blocker was diagnosed as Redis rate-limit store unavailability (`M_DIRECT_CALL_RATE_LIMIT_STORE_UNAVAILABLE` / `503`) and recovered by restoring Redis connectivity.
+- With Redis restored and the explicit private dogfood gate enabled, A/B trust and activation were ready, A/B reached active audio on staging, media/LiveKit connect were attempted, and hangup returned both sides to idle with media failure `none`.
 - Controlled engineering dogfood may continue under the same narrow staging-only constraints.
 
 ## Next Step
@@ -107,4 +111,4 @@ Controlled engineering dogfood may continue on the staging path under the privat
 - Element Call toolbar path unchanged and available as fallback;
 - no CallKit, push, video, broad internal rollout, public rollout, or global production activation.
 
-Next, continue with `2.31C — eligibility status cache no-activation runtime proof` while keeping controlled dogfood narrow and redacted.
+Next, continue with `2.31D — eligibility status cache controlled engineering soak` while keeping controlled dogfood narrow and redacted.

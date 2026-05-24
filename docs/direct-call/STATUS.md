@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.31B — side-effect-safe eligibility status cache skeleton.
+After 2.31C — eligibility status cache no-activation runtime proof.
 
 ## Latest App Code Checkpoint
 
@@ -190,6 +190,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Status refresh may only call `/eligibility`; rendering/status display still must not send Matrix events, request LiveKit tokens, allocate/pre-create rooms, connect media, connect LiveKit, or start outgoing calls.
   - Token-backend rejection invalidates the local eligibility status cache when the status path is wired.
   - This does not wire non-engineering internal pilot activation; the token endpoint remains the final enforcement boundary.
+- Native audio eligibility status cache no-activation runtime proof passed:
+  - Readiness passed with `ready=true`, `reason=ok`, Redis allocation/rate-limit connectivity, storage key configured, LiveKit room provisioning configured, and native audio eligibility plus allowlist configured.
+  - With product UI and eligibility status gates enabled, but without `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, an attached encrypted direct 1:1 room stayed blocked with `appRolloutDisabled`.
+  - With product UI, production start, and eligibility status gates enabled, but without the private dogfood gate, `production-start-outgoing` remained blocked with `appRolloutDisabled`.
+  - The no-private-dogfood runs had no Matrix send, no token request, no media connect, no LiveKit client connect, and no active session.
+  - A temporary blocker was diagnosed as Redis rate-limit store unavailability: token issuance failed closed with `M_DIRECT_CALL_RATE_LIMIT_STORE_UNAVAILABLE` / `503` until Redis connectivity was restored.
+  - After Redis recovery, with the explicit private dogfood gate restored, A/B trust and activation were ready, A reached outgoing ringing, B reached incoming ringing, B accepted, and A/B reached `activeAudio`.
+  - A/B had media connect and LiveKit client connect attempted, `productionMediaFailureReason=none`, and hangup returned A/B to `idle` with cleanup/disconnect attempted.
+  - The legacy fake/dry-run gate remained unset, Element Call route remained untouched, and no code changes were needed during the runtime proof.
 - Private dogfood activation is explicit and fail-closed by default:
   - `appRolloutDisabled` is produced by the production activation decision when `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` is absent.
   - `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1` can show the private card, and `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1` can allow start actions, but neither gate enables rollout/capability readiness by itself.
@@ -731,9 +740,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.31C — eligibility status cache no-activation runtime proof`
+`2.31D — eligibility status cache controlled engineering soak`
 
-Goal: prove the new status-only eligibility cache remains disabled by default, product UI/start gates still fail closed without private dogfood activation, eligibility status refresh performs no Matrix/token/media/LiveKit side effects, and controlled engineering dogfood still reaches active audio under the explicit private dogfood gate.
+Goal: run a short controlled engineering soak with `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1` enabled, keep private dogfood gates explicit, record redacted pass/fail only, and verify no status-cache regressions, no stale sessions, no redaction leaks, and no Element Call route changes.
 
 ## Do-Not-Touch Constraints
 

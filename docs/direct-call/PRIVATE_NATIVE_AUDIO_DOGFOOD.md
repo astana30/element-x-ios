@@ -671,6 +671,24 @@ This proof confirms the 2.30B eligibility contract skeleton does not broaden act
 
 This proof confirms the 2.30H iOS provider skeleton stays side-effect-safe and fail-closed unless the existing DEBUG/integration private dogfood gate is explicitly enabled. Non-engineering dogfood remains blocked until a separate server-backed eligibility integration phase is designed, implemented, and runtime-proven.
 
+## 2.31C Eligibility Status Cache No-Activation Proof
+
+| Check | Result | Redacted reason |
+| --- | --- | --- |
+| Backend readiness | Pass | readiness `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, eligibility configured |
+| Eligibility status gate without private dogfood | Pass | Attached encrypted direct 1:1 room stayed blocked with `appRolloutDisabled` |
+| Product UI/start/status gates without private dogfood | Pass | `production-start-outgoing` stayed blocked with `appRolloutDisabled` |
+| No private dogfood side effects | Pass | No Matrix send, no token request, no media connect, no LiveKit connect, no active session |
+| Temporary backend blocker | Recovered | Token endpoint failed closed with `M_DIRECT_CALL_RATE_LIMIT_STORE_UNAVAILABLE` / `503` until Redis rate-limit connectivity was restored |
+| Private dogfood activation | Pass | A/B activation enabled with dependencies ready, endpoint accepted, and A/B trust ready |
+| Engineering happy path | Pass | Runner-assisted A -> B reached A/B `activeAudio`, media failure `none` |
+| Media path | Pass | Media connect and LiveKit client connect attempted on both sides |
+| Hangup/final state | Pass | A/B returned to `idle`, no active session, cleanup/disconnect attempted, media failure `none` |
+| Legacy fake gate | Pass | Explicitly unset and not used |
+| Element Call separation | Pass | Existing Element Call route untouched; native actions did not use the Element Call presentation path |
+
+This proof confirms the 2.31B eligibility status cache remains status-only and fail-closed unless the existing DEBUG/integration private dogfood gate is explicitly enabled. Non-engineering dogfood remains blocked; eligibility status display is still not a rollout approval path.
+
 ## 2.27E Split-Brain Regression Result
 
 | Check | Result | Redacted reason |
