@@ -733,6 +733,229 @@ This proof confirms eligibility status remains status/copy-only and still does n
 
 This soak confirms the eligibility status gate can remain enabled during controlled engineering dogfood use without destabilising the staging native-audio path. It does not broaden activation: non-engineering dogfood remains blocked, and the explicit DEBUG/integration private dogfood gate is still required.
 
+## 2.33B Narrow Engineering Expansion Pilot Runbook
+
+The 2.33A readiness review allows a narrow engineering expansion pilot. This is still staging-only, conditional, and engineering-only. It is not broad internal dogfood, non-engineering dogfood, product beta, public rollout, production activation, or Element Call replacement.
+
+### Expansion Scope
+
+- Up to 4 named engineering operators.
+- Up to 8 named engineering devices.
+- Predeclared accounts/devices only.
+- Staging call-service and staging LiveKit only.
+- Private native audio card only.
+- Foreground/open encrypted direct 1:1 rooms only.
+- Verified/trusted peers only.
+- One active 1:1 native audio call at a time during the first expanded window.
+- Existing Element Call route must stay visible, unchanged, and available as fallback.
+- No non-engineering users.
+- No unmanaged devices.
+
+### Ownership Window
+
+Record the following internally before launch, using labels only:
+
+| Field | Value |
+| --- | --- |
+| Pilot window | `<date/time range>` |
+| Pilot operator | `<Operator Lead>` |
+| Backup operator | `<Operator Backup>` |
+| Staging call-service owner | `<Service Owner>` |
+| Staging LiveKit owner | `<LiveKit Owner or shared/not-stopped>` |
+| Redaction reviewer | `<Reviewer>` |
+| Rollback owner | `<Rollback Owner>` |
+| Element Call fallback smoke owner | `<Fallback Owner>` |
+
+Do not record raw Matrix user IDs, room IDs, peer IDs, device IDs, tokens, JWTs, secrets, LiveKit room names, Matrix event bodies, or Redis credential URLs in this matrix.
+
+### Participant And Device Matrix Template
+
+Use labels only. Keep raw account and device identifiers in operator-local secure notes if needed; do not paste them into docs, chat, screenshots, runner output, or reports.
+
+| Operator label | Account role label | Device label | Trust ready | Allowed pair labels | Notes |
+| --- | --- | --- | --- | --- | --- |
+| Operator A | Caller/Callee A | Device A1 | true/false | A-B, A-C | Redacted |
+| Operator B | Caller/Callee B | Device B1 | true/false | A-B, B-C | Redacted |
+| Operator C | Caller/Callee C | Device C1 | true/false | A-C, B-C | Redacted |
+| Operator D | Caller/Callee D | Device D1 | true/false | A-D, C-D | Redacted |
+
+Every listed device must pass trust readiness before it participates. If a device is not trusted, remove it from the allowed pairings for that window.
+
+### Pair Matrix Template
+
+Run the required smoke matrix once for each newly introduced pair before that pair is considered part of the expanded engineering pilot.
+
+| Pair label | Caller direction | Reverse direction | Repeated x2 | Decline | Cancel | Timeout | Relaunch fail-closed | Listener/open-room | Element Call fallback | Backend-off/recovery | LiveKit-off |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| A-B | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | not-run unless approved |
+| A-C | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | not-run unless approved |
+| B-C | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | not-run unless approved |
+| C-D | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | pass/fail/not-run | not-run unless approved |
+
+### Required Gates
+
+Every expanded engineering pilot launch must set:
+
+```sh
+export IS_RUNNING_INTEGRATION_TESTS=1
+export NATIVE_DIRECT_CALL_DIAGNOSTICS=1
+export NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1
+export NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1
+export NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1
+export NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1
+export NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1
+export NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=<staging-call-service-base-url>
+```
+
+`NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` must remain unset for the expanded staging pilot.
+
+### Backend Preflight
+
+Before each expanded window and before each recovery retry:
+
+- readiness `ready=true`;
+- readiness `reason=ok`;
+- Redis allocation store connected;
+- Redis rate-limit store connected;
+- `storageKeyConfigured=true`;
+- `liveKitRoomProvisioningConfigured=true`;
+- native audio eligibility and allowlist configured when the status/allowlist path is used;
+- Synapse validation smoke passing or explicitly accepted as a blocking prerequisite.
+
+If readiness reports `allocationStoreUnavailable`, `rateLimitStoreUnavailable`, or any disconnected Redis boolean, do not start calls.
+
+### Client Preflight
+
+Before each pair runs:
+
+- app launch ready for both sides;
+- trust ready for both sides;
+- encrypted direct 1:1 DM open on both sides;
+- private native audio card visible;
+- no stale active or ringing native session;
+- receiver listener/card available;
+- Element Call fallback visible and unchanged.
+
+### Required Smoke Matrix Per New Pair
+
+For each new pair, run:
+
+- A -> B happy path: Start, Accept, `activeAudio`, Hang up, idle.
+- B -> A reverse path: Start, Accept, `activeAudio`, Hang up, idle.
+- Repeated calls x2 with no stale session and no split-brain.
+- Decline incoming.
+- Cancel outgoing.
+- Timeout if practical.
+- Relaunch fail-closed during ringing or active, whichever is practical for the window.
+- Listener/open-room unavailable behavior.
+- Element Call fallback smoke.
+- Backend-off/recovery only when safe for the local staging setup.
+- LiveKit-off remains not-run unless the LiveKit owner explicitly approves a disruption window.
+
+### Redacted Reporting Format
+
+Report only:
+
+- pass/fail/not-run;
+- readiness booleans and safe `reason`;
+- trust booleans;
+- redacted card state/reason enums;
+- activation reason enum;
+- `productionSessionState`;
+- `productionMediaFailureReason`;
+- terminal reason enum;
+- media/LiveKit connect attempted booleans;
+- cleanup/disconnect attempted booleans;
+- Element Call fallback pass/fail.
+
+Do not report raw Matrix access tokens, Synapse admin tokens, LiveKit API secrets, participant tokens/JWTs, media keys, raw room IDs, raw user IDs, raw peer IDs, raw device IDs, LiveKit room names, Redis URLs with credentials, Matrix event bodies, or full backend request/response bodies.
+
+### Expansion Stop Criteria
+
+Stop the expanded pilot immediately if:
+
+- any forbidden secret, token, JWT, key, raw identifier, LiveKit room name, credentialed endpoint, or Matrix event body appears in output, screenshots, logs, docs, chat, or reports;
+- a call starts without the required gates;
+- Element Call route behavior changes;
+- an untrusted peer or device can connect;
+- stale active or ringing state survives cleanup or relaunch;
+- backend issues a token for invalid room, peer, trust, or membership;
+- media failure does not fail closed;
+- split-brain reappears;
+- Redis readiness fails or the call-service reports disconnected allocation/rate-limit stores;
+- shared staging LiveKit, Matrix, Redis, Nginx, firewall, or production services would need to be changed to continue.
+
+### Expansion Rollback
+
+1. Unset `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED`, `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED`, `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED`, and `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED`.
+2. Relaunch the apps.
+3. Verify native direct-call status is idle/no active session.
+4. Stop the local staging call-service if the window used a local service process.
+5. Keep Element Call as the fallback route.
+6. Remove expanded allowlist entries from local operator env when the window ends, if they were added only for the window.
+7. Preserve only redacted pass/fail status in reports.
+8. Rotate affected credentials if any leakage is suspected.
+
+Rollback is complete only when no private native session is active, the private dogfood path is disabled, and Element Call remains available.
+
+### Expanded Pilot Report Template
+
+```text
+Pilot window:
+- session label:
+- operator labels:
+- device labels:
+- pair labels:
+- build type: DEBUG/integration
+- staging call-service readiness: pass/fail
+- Redis allocation/rate-limit: pass/fail
+- LiveKit room provisioning: pass/fail
+- eligibility/allowlist configured: pass/fail/not-used
+- A/B trust: pass/fail
+- required gates: pass/fail
+- old fake/dry-run gate unset: pass/fail
+
+Pair matrix:
+- pair:
+- happy path:
+- reverse:
+- repeated x2:
+- decline:
+- cancel:
+- timeout:
+- relaunch fail-closed:
+- listener/open-room unavailable:
+- Element Call fallback:
+- backend-off/recovery:
+- LiveKit-off:
+
+Final:
+- final session state:
+- media failure:
+- terminal reason:
+- cleanup/disconnect:
+- runtime bug:
+- redaction issue:
+- rollback used:
+- decision: continue/pause
+```
+
+### Remaining Blockers After Expansion
+
+Even if the expanded engineering pilot passes, the following remain blocked:
+
+- non-engineering users;
+- broad internal rollout;
+- production/public rollout;
+- Element Call replacement;
+- CallKit;
+- push/background incoming;
+- missed calls;
+- video;
+- session restoration;
+- foreground/open-room listener limitation removal;
+- global production activation.
+
 ## 2.31F Redis Readiness Recovery Smoke
 
 | Check | Result | Redacted reason |

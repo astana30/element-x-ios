@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.32C — eligibility status controlled engineering soak.
+After 2.33B — narrow engineering expansion pilot runbook.
 
 Current checkpoints:
 - App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
@@ -31,6 +31,7 @@ Current checkpoints:
 - Eligibility status cache skeleton: 2.31B added a disabled-by-default DEBUG/integration status gate, room-flow scoped in-memory cache, safe card-status merge, manual refresh bypass, and tests proving backend eligibility status does not activate native audio.
 - Eligibility status integration polish: 2.32B redacts LiveKit room names from token response descriptions, forwards the eligibility status gate through the two-client runner, and proved status-only/no-activation behavior plus the private dogfood happy path.
 - Eligibility status controlled soak: 2.32C kept the eligibility status gate enabled during runner-assisted happy path, reverse, repeated, decline, cancel, timeout, and relaunch-ringing cases.
+- Narrow engineering expansion runbook: 2.33B defines the engineering-only expansion cap, ownership window, participant/device matrix, pair matrix, required gates, preflight, stop criteria, rollback, and redacted report template.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -194,22 +195,34 @@ Current proven/prepared state:
   - relaunch during ringing restored no active session; post-relaunch status was `unavailable` until the encrypted 1:1 room is re-opened, matching the current foreground/open-room limitation;
   - runner output did not include LiveKit room names;
   - Element Call route remained untouched and no code changed during the soak.
+- 2.33B narrow engineering expansion runbook:
+  - a narrow engineering-only expansion is allowed, still staging-only and conditional;
+  - maximum safe next step is up to 4 named engineering operators and up to 8 named devices;
+  - the first expanded window allows one active 1:1 native audio call at a time;
+  - participant/device and pair matrices use labels only, with no raw user IDs, room IDs, peer IDs, device IDs, tokens, JWTs, secrets, Redis credential URLs, Matrix event bodies, or LiveKit room names;
+  - every new pair must run happy path, reverse, repeated x2, decline, cancel, timeout if practical, relaunch fail-closed, listener/open-room unavailable, Element Call fallback, and backend-off/recovery only when safe;
+  - LiveKit-off remains not-run unless the shared staging LiveKit owner explicitly approves a disruption window;
+  - non-engineering users, broad internal rollout, production/public rollout, Element Call replacement, CallKit, push/background incoming, missed calls, video, session restoration, and global activation remain blocked.
 - Element Call route remains unchanged and must stay available as fallback.
 - No CallKit, push/background incoming, missed calls, video, session restoration, broad internal rollout, public rollout, production activation, or global activation exists.
 
 Pilot decision:
 - Controlled engineering dogfood may continue on the narrow staging path under the 2.28A operations checklist.
-- A small expansion to more named engineering operators/devices is allowed under the same constraints.
+- A small expansion to more named engineering operators/devices is allowed under the 2.33B runbook constraints.
+- The first expanded window is capped at up to 4 named engineering operators, up to 8 named devices, predeclared pairs only, and one active 1:1 native audio call at a time.
 - Broader internal dogfood and non-engineering users remain blocked until the 2.29B hardening checklist is complete.
 - This is not broad internal dogfood, product beta, public rollout, production activation, or Element Call replacement.
 
 Required pilot scope:
 - Named engineering operators only.
+- Up to 4 engineering operators and up to 8 named devices for the first expansion.
+- Predeclared accounts/devices and pair labels only.
 - DEBUG/integration builds only.
 - Staging call-service and staging LiveKit only.
 - Foreground/open encrypted direct 1:1 rooms only.
 - Verified/trusted peers only.
 - Private native audio card only.
+- One active 1:1 native audio call at a time during the first expanded window.
 - Runner-assisted checks are allowed when explicitly reported.
 - Audio only.
 - Existing Element Call route remains visible and available as fallback.
@@ -219,6 +232,7 @@ Required gates:
 - `NATIVE_DIRECT_CALL_DIAGNOSTICS=1`
 - `NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1`
 - `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`
+- `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1`
 - `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`
 - `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`
 - `NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=<staging call-service>`
@@ -241,26 +255,51 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.32D — eligibility status negative-case runtime fixture proof.
+2.33C — narrow engineering expansion pilot session 1.
 
 Task:
-Run a focused runtime fixture proof for backend eligibility negative states against the private native audio card status path. Do not enable non-engineering activation. Do not modify code unless a real runtime bug is found and explicitly approved.
+Run the first narrow engineering expansion pilot window from the 2.33B runbook. Do not modify code unless a real runtime bug is found and explicitly approved. Do not enable non-engineering activation.
 
 Goal:
-Verify that `accountNotEligible`, `peerNotEligible`, `roomNotEligible`, `capabilityMissing`, `serviceUnavailable`, and malformed/fail-closed backend eligibility results map to safe card status/copy without activating native audio or leaking sensitive data.
+Verify that the staging native audio path remains stable when expanded to labelled engineering participants/devices under the strict cap: up to 4 named engineering operators, up to 8 named devices, predeclared pairs only, and one active 1:1 native audio call at a time.
 
 Inspect:
-Use the existing redacted runner/status tooling and the 2.28A operations checklist. Do not print raw tokens, JWTs, secrets, room IDs, user IDs, peer IDs, device IDs, media keys, event bodies, Redis URLs, or LiveKit room names.
+Use the 2.33B runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, the existing redacted runner/status tooling, and the 2.28A operations checklist. Do not print raw tokens, JWTs, secrets, room IDs, user IDs, peer IDs, device IDs, media keys, event bodies, Redis URLs, or LiveKit room names.
+
+Required setup:
+- label-only ownership window;
+- label-only participant/device matrix;
+- label-only pair matrix;
+- DEBUG/integration builds only;
+- staging call-service and staging LiveKit only;
+- required gates set, including `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1`;
+- legacy fake/dry-run gate unset;
+- Element Call fallback visible and unchanged.
+
+Required per-pair matrix:
+- happy path A -> B;
+- reverse B -> A;
+- repeated calls x2;
+- decline incoming;
+- cancel outgoing;
+- timeout if practical;
+- relaunch fail-closed during ringing or active;
+- listener/open-room unavailable behavior;
+- Element Call fallback smoke;
+- backend-off/recovery only if safe;
+- LiveKit-off not run unless explicitly approved by the shared staging LiveKit owner.
 
 Required output:
-A. Fixture setup, redacted.
-B. Negative eligibility result table.
-C. Backend eligible-but-no-private-dogfood result.
-D. Side-effect check.
-E. Redaction check.
-F. Element Call route status.
-G. Whether code changed.
-H. Recommended next phase.
+A. Pilot window and participant/device matrix, redacted labels only.
+B. Backend and client preflight result.
+C. Pair matrix result table.
+D. Final redacted status for each pair.
+E. Runtime bugs or stop criteria.
+F. Rollback used, if any.
+G. Redaction check.
+H. Element Call route status.
+I. Dogfood decision: continue / pause.
+J. Whether code changed.
 
 Allowed report fields:
 - readiness booleans;
@@ -311,4 +350,4 @@ Validation if docs change:
 - Direct-call forbidden scan.
 
 Suggested commit if docs change:
-Record eligibility status negative-case proof
+Record engineering expansion pilot session 1

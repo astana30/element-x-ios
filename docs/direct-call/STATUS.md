@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.32C — eligibility status controlled engineering soak.
+After 2.33B — narrow engineering expansion pilot runbook.
 
 ## Latest App Code Checkpoint
 
@@ -221,6 +221,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Final readiness remained `ready=true`, `reason=ok`.
   - Runner output did not include LiveKit room names, and Element Call route remained untouched.
   - No code changed during the soak.
+- Narrow engineering expansion pilot runbook is recorded:
+  - 2.33A allows a small engineering-only expansion, still staging-only and conditional.
+  - The maximum safe next step is up to 4 named engineering operators and up to 8 named devices.
+  - The first expanded window remains one active 1:1 native audio call at a time.
+  - Participant/device and pair matrices use labels only and must not include raw user IDs, room IDs, peer IDs, device IDs, tokens, JWTs, secrets, Redis credential URLs, Matrix event bodies, or LiveKit room names.
+  - Required gates include product UI, eligibility status, private dogfood, production start, staging token base URL, and the DEBUG/integration diagnostics gates; the legacy fake/dry-run gate remains unset.
+  - Every new pair must run happy path, reverse, repeated x2, decline, cancel, timeout if practical, relaunch fail-closed, listener/open-room unavailable, Element Call fallback, and backend-off/recovery only when safe.
+  - LiveKit-off remains not-run unless the shared staging LiveKit owner explicitly approves a disruption window.
+  - Non-engineering internal dogfood, broad internal rollout, production/public rollout, Element Call replacement, CallKit, push/background incoming, missed calls, video, session restoration, and global activation remain blocked.
 - Call-service Redis readiness is hardened:
   - Redis-backed staging readiness now performs bounded live Redis pings at startup and on each readiness request for both allocation and rate-limit stores.
   - `allocationStoreConnected` and `rateLimitConnected` now reflect live Redis connectivity for Redis stores, not only config shape or implementation presence.
@@ -761,8 +770,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Current Gate
 
-- Controlled engineering dogfood pilot may continue on staging under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, including the product-card-only happy path, repeated-call split-brain regression proof, 2.27F controlled matrix rerun, and 2.28B/2.28C pilot sessions.
-- Pilot sessions must follow the 2.27A checkpoint and 2.28A operations checklist in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
+- Controlled engineering dogfood pilot may continue on staging under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, including the product-card-only happy path, repeated-call split-brain regression proof, 2.27F controlled matrix rerun, 2.28B/2.28C pilot sessions, and the 2.32C eligibility status soak.
+- A narrow engineering expansion pilot may run under the 2.33B runbook: up to 4 named engineering operators, up to 8 named devices, predeclared pairs only, one active 1:1 native audio call at a time for the first expanded window, and redacted reporting only.
+- Pilot sessions must follow the 2.27A checkpoint, 2.28A operations checklist, and 2.33B expansion runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
 - Non-engineering internal dogfood remains blocked until the 2.29B hardening checklist is complete.
@@ -774,9 +784,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.31D — eligibility status cache controlled engineering soak`
+`2.33C — narrow engineering expansion pilot session 1`
 
-Goal: run a short controlled engineering soak with `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1` enabled, keep private dogfood gates explicit, record redacted pass/fail only, and verify no status-cache regressions, no stale sessions, no redaction leaks, and no Element Call route changes.
+Goal: run the first expanded engineering-only pilot window from the 2.33B runbook, with labelled participants/devices only, one active 1:1 native audio call at a time, required staging gates, per-pair smoke matrix, redacted reporting, and no Element Call route changes.
 
 ## Do-Not-Touch Constraints
 

@@ -32,6 +32,8 @@ No tokens, JWTs, passwords, shared secrets, authorization header values, or Live
 | iOS eligibility provider no-activation proof | Passed |
 | iOS eligibility status cache skeleton | Added, disabled by default |
 | iOS eligibility status cache no-activation proof | Passed |
+| Eligibility status controlled engineering soak | Passed |
+| Narrow engineering expansion runbook | Added |
 
 ## Root Cause
 
@@ -99,6 +101,8 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - With Redis restored and the explicit private dogfood gate enabled, A/B trust and activation were ready, A/B reached active audio on staging, media/LiveKit connect were attempted, and hangup returned both sides to idle with media failure `none`.
 - 2.31D hardened call-service readiness so Redis-backed staging `allocationStoreConnected` and `rateLimitConnected` require bounded live Redis pings. Redis allocation failure now reports `allocationStoreUnavailable`; Redis rate-limit failure reports `rateLimitStoreUnavailable`. Readiness output remains redacted.
 - The 2.31F post-restore smoke passed after request-time Redis readiness was fixed: readiness was `200`/`ok`, A/B trust was ready, A -> B reached `incomingRinging`, B accepted, A/B reached active audio, media failure stayed `none`, and hangup returned both sides to idle.
+- The 2.32C eligibility status controlled engineering soak passed with the eligibility status gate enabled: happy path, reverse, repeated calls, decline, cancel, timeout, and relaunch-ringing stayed fail-closed/redacted where expected, with no LiveKit room names in runner output and no Element Call route change.
+- The 2.33B runbook allows only a narrow engineering expansion: up to 4 named engineering operators, up to 8 named devices, predeclared pairs only, one active 1:1 native audio call at a time for the first expanded window, staging only, redacted reporting only, and no non-engineering users.
 - Controlled engineering dogfood may continue under the same narrow staging-only constraints.
 
 ## Next Step
@@ -106,11 +110,14 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 Controlled engineering dogfood may continue on the staging path under the private native audio runbook constraints:
 
 - named engineering operators only;
+- up to 4 named engineering operators and up to 8 named devices for the first narrow expansion window;
+- predeclared accounts/devices and pair labels only;
 - DEBUG/integration builds only;
 - foreground/open-room encrypted direct 1:1 sessions only;
 - verified/trusted peers only;
+- one active 1:1 native audio call at a time during the first expanded window;
 - private native audio card only;
 - Element Call toolbar path unchanged and available as fallback;
 - no CallKit, push, video, broad internal rollout, public rollout, or global production activation.
 
-Next, continue with `2.31G — eligibility status cache controlled engineering soak` while keeping controlled dogfood narrow and redacted.
+Next, continue with `2.33C — narrow engineering expansion pilot session 1` while keeping controlled dogfood engineering-only, staging-only, and redacted.

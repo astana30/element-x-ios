@@ -5,6 +5,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 ## Milestones
 
 - Polished native audio eligibility status redaction and recorded the runtime proof.
+- Added the narrow engineering expansion pilot runbook and participant/device matrix.
 - Recorded the eligibility status controlled engineering soak.
 - Hardened call-service readiness so Redis connected booleans require bounded live Redis pings in staging.
 - Recorded the Redis readiness recovery native audio smoke.
@@ -39,6 +40,18 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-24 — 2.33B Narrow Engineering Expansion Pilot Runbook
+
+- Added an engineering-only expansion runbook for the first narrow staging expansion window.
+- Capped the next expansion at up to 4 named engineering operators and up to 8 named devices.
+- Kept the first expanded window to one active 1:1 native audio call at a time.
+- Added ownership-window, participant/device, and pair-matrix templates that use labels only and exclude raw user IDs, room IDs, peer IDs, device IDs, tokens, JWTs, secrets, Matrix event bodies, Redis credential URLs, and LiveKit room names.
+- Required product UI, eligibility status, private dogfood, production start, staging token base URL, and DEBUG/integration diagnostics gates, with the legacy fake/dry-run gate unset.
+- Required every new pair to run happy path, reverse, repeated x2, decline, cancel, timeout if practical, relaunch fail-closed, listener/open-room unavailable, Element Call fallback, and backend-off/recovery only when safe.
+- Kept LiveKit-off not-run unless the shared staging LiveKit owner explicitly approves a disruption window.
+- Kept non-engineering users, broad internal rollout, production/public rollout, Element Call replacement, CallKit, push/background incoming, missed calls, video, session restoration, and global activation blocked.
+- Recommended next phase: `2.33C — narrow engineering expansion pilot session 1`.
 
 ## 2026-05-24 — 2.32B Eligibility Status Integration Polish and Runtime Proof
 
