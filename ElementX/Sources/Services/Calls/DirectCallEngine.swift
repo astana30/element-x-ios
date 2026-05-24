@@ -296,10 +296,10 @@ final class DirectCallEngine: DirectCallEngineProtocol {
 
         emitSignal(type: .timeout, from: session)
         transitionSession(to: .missed)
-        await disconnectMediaIfNeeded(callID: session.callID)
-        scheduleCleanup(for: session.callID)
-
         session = activeSessionSubject.value ?? session
+        await disconnectMediaIfNeeded(callID: session.callID)
+        await cleanupCall(callID: session.callID)
+
         return .success(session)
     }
 
@@ -572,9 +572,14 @@ final class DirectCallEngine: DirectCallEngineProtocol {
 
         transitionSession(to: .ending)
         transitionSession(to: terminalState)
+        let terminalSession = activeSessionSubject.value
         await disconnectMediaIfNeeded(callID: session.callID)
-        scheduleCleanup(for: session.callID)
-        return .success(activeSessionSubject.value)
+        if event.type == .timeout {
+            await cleanupCall(callID: session.callID)
+        } else {
+            scheduleCleanup(for: session.callID)
+        }
+        return .success(terminalSession)
     }
 
     private func failMediaConnectionIfActive(for session: DirectCallSession) async {
@@ -735,7 +740,7 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         emitSignal(type: .timeout, from: session)
         transitionSession(to: .failed)
         await disconnectMediaIfNeeded(callID: session.callID)
-        scheduleCleanup(for: session.callID)
+        await cleanupCall(callID: session.callID)
     }
 
     private func handleConnectingTimeout(callID: String) async {

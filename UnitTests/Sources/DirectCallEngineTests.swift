@@ -827,10 +827,10 @@ final class DirectCallEngineTests {
 
         try await Task.sleep(for: .milliseconds(40))
 
-        #expect(engine.activeSessionPublisher.value?.state == .failed)
+        #expect(engine.activeSessionPublisher.value == nil)
         #expect(emittedSignals.map(\.type) == [.invite, .timeout])
         #expect(mediaEngine.disconnectCallIDs == [session.callID])
-        #expect(mediaEngine.cleanupCallIDs.isEmpty)
+        #expect(mediaEngine.cleanupCallIDs == [session.callID])
     }
 
     @Test
@@ -859,10 +859,59 @@ final class DirectCallEngineTests {
 
         try await Task.sleep(for: .milliseconds(40))
 
-        #expect(engine.activeSessionPublisher.value?.state == .missed)
+        #expect(engine.activeSessionPublisher.value == nil)
         #expect(emittedSignals.map(\.type) == [.timeout])
         #expect(mediaEngine.disconnectCallIDs == ["call-timeout"])
-        #expect(mediaEngine.cleanupCallIDs.isEmpty)
+        #expect(mediaEngine.cleanupCallIDs == ["call-timeout"])
+    }
+
+    @Test
+    func remoteTimeoutClearsActiveSessionImmediately() async {
+        let mediaEngine = MediaEngineSpy()
+        let engine = makeEngine(mediaEngine: mediaEngine, cleanupDelay: .seconds(120))
+
+        guard let activeSession = await startConnectedAudioCall(engine: engine) else {
+            return
+        }
+
+        _ = await engine.receiveIncomingCall(event: .init(eventID: "$remote-timeout",
+                                                          roomID: roomID,
+                                                          senderID: peerUserID,
+                                                          callID: activeSession.callID,
+                                                          type: .timeout,
+                                                          intent: nil,
+                                                          timestamp: .now))
+
+        #expect(engine.activeSessionPublisher.value == nil)
+        #expect(mediaEngine.disconnectCallIDs == [activeSession.callID])
+        #expect(mediaEngine.cleanupCallIDs == [activeSession.callID])
+    }
+
+    @Test
+    func nextOutgoingCallAfterTimeoutSucceedsWithoutManualCleanup() async throws {
+        let mediaEngine = MediaEngineSpy()
+        let engine = makeEngine(mediaEngine: mediaEngine,
+                                cleanupDelay: .seconds(120),
+                                outgoingRingingTimeout: .milliseconds(10))
+
+        let timedOutCallResult = await engine.startOutgoingAudioCall(peer: peerUserID, roomID: roomID)
+        guard case .success(let timedOutSession) = timedOutCallResult else {
+            Issue.record("Expected outgoing call start to succeed.")
+            return
+        }
+
+        try await Task.sleep(for: .milliseconds(40))
+        #expect(engine.activeSessionPublisher.value == nil)
+
+        let nextCallResult = await engine.startOutgoingAudioCall(peer: peerUserID, roomID: roomID)
+
+        guard case .success(let nextSession) = nextCallResult else {
+            Issue.record("Expected next outgoing call to start after timeout cleanup.")
+            return
+        }
+
+        #expect(nextSession.state == .outgoingRinging)
+        #expect(nextSession.callID != timedOutSession.callID)
     }
 
     @Test
