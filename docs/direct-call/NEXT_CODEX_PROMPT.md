@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.34C — engineering expansion soak session 2.
+After 2.34D — engineering expansion soak session 3.
 
 Current checkpoints:
 - App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
@@ -37,6 +37,7 @@ Current checkpoints:
 - Engineering expansion soak plan: 2.34A defines a 3-session engineering-only soak before any broader readiness review.
 - Engineering expansion soak session 1: 2.34B passed as the first clean soak session.
 - Engineering expansion soak session 2: 2.34C passed as the second clean soak session.
+- Engineering expansion soak session 3: 2.34D passed as the third clean soak session; the planned 3-session engineering-only soak is complete.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -257,6 +258,17 @@ Current proven/prepared state:
   - LiveKit-off was not run because shared staging LiveKit must not be stopped without owner approval;
   - final A/B status was idle/no active session with media failure `none`, cleanup/disconnect attempted on both sides, no rollback, no stop criteria, no redaction issue, and Element Call route untouched;
   - soak progress is 2 of 3 clean sessions.
+- 2.34D engineering expansion soak session 3:
+  - session used redacted A/B engineering labels only, staging call-service, staging LiveKit, required DEBUG/integration gates, eligibility status gate, private dogfood gate, production start gate, and staging token base URL;
+  - the legacy fake/dry-run gate stayed unset;
+  - preflight passed with readiness `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, native audio eligibility/allowlist configured, A/B trust ready, activation enabled, and baseline A/B idle/no active session;
+  - runner-assisted A -> B happy path, B -> A reverse path, and repeated A -> B calls x2 reached A/B `activeAudio`, then hangup returned A/B idle/no active session with media failure `none`;
+  - decline, cancel, timeout, relaunch-ringing, listener-unavailable/open-room edge, and post-listener recovery passed;
+  - timeout reported A `outgoingTimeout` and B `incomingTimeout`; both sides returned idle/no active session with media failure `none`;
+  - backend-off recovery was not run because the local staging call-service stayed up for the session;
+  - LiveKit-off was not run because shared staging LiveKit must not be stopped without owner approval;
+  - final A/B status was idle/no active session with media failure `none`, cleanup/disconnect attempted on both sides, no rollback, no stop criteria, no redaction issue, and Element Call route untouched;
+  - soak progress is 3 of 3 clean sessions; the planned engineering-only soak is complete.
 - Element Call route remains unchanged and must stay available as fallback.
 - No CallKit, push/background incoming, missed calls, video, session restoration, broad internal rollout, public rollout, production activation, or global activation exists.
 
@@ -309,51 +321,26 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.34D — engineering expansion soak session 3.
+2.35A — post-soak engineering expansion readiness review.
 
 Task:
-Run or record the third engineering expansion soak session under the 2.34A plan. Do not modify code unless a real runtime bug is found and explicitly approved. Do not enable non-engineering activation.
+Inspection/decision review only. Do not modify code. Do not commit.
 
 Goal:
-Complete the 3-session engineering-only soak before any broader readiness review, using labelled engineering participants/devices under the strict cap: up to 4 named engineering operators, up to 8 named devices, predeclared pairs only, and one active 1:1 native audio call at a time.
+Decide whether the completed 3-session engineering-only soak allows the narrow engineering expansion to continue, whether any scope can safely change, and what still blocks non-engineering internal dogfood.
 
 Inspect:
 Use the 2.33B runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, the existing redacted runner/status tooling, and the 2.28A operations checklist. Do not print raw tokens, JWTs, secrets, room IDs, user IDs, peer IDs, device IDs, media keys, event bodies, Redis URLs, or LiveKit room names.
 
-Required setup:
-- label-only ownership window;
-- label-only participant/device matrix;
-- label-only pair matrix;
-- DEBUG/integration builds only;
-- staging call-service and staging LiveKit only;
-- required gates set, including `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1`;
-- legacy fake/dry-run gate unset;
-- Element Call fallback visible and unchanged.
-
-Required per-session matrix:
-- happy path A -> B;
-- reverse B -> A;
-- repeated calls x2;
-- decline incoming;
-- cancel outgoing;
-- timeout if practical;
-- relaunch fail-closed during ringing or active;
-- listener/open-room unavailable behavior;
-- Element Call fallback smoke;
-- backend-off/recovery only if safe;
-- LiveKit-off not run unless explicitly approved by the shared staging LiveKit owner.
-
 Required output:
-A. Soak session window and participant/device matrix, redacted labels only.
-B. Backend and client preflight result.
-C. Soak matrix result table.
-D. Final redacted status for each pair.
-E. Runtime bugs or stop criteria.
-F. Rollback used, if any.
-G. Redaction check.
-H. Element Call route status.
-I. Dogfood decision: continue / pause.
-J. Whether code changed.
+A. Files inspected.
+B. Completed soak summary.
+C. Readiness decision for continued engineering expansion.
+D. Maximum safe scope, if any.
+E. Required gates/preflight that remain mandatory.
+F. Stop/rollback criteria that remain mandatory.
+G. Remaining blockers for non-engineering internal dogfood.
+H. Recommended next phase.
 
 Allowed report fields:
 - readiness booleans;
@@ -404,4 +391,4 @@ Validation if docs change:
 - Direct-call forbidden scan.
 
 Suggested commit if docs change:
-Record engineering expansion soak session 3
+Document post-soak engineering expansion review
