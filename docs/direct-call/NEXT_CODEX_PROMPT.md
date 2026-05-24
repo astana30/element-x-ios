@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.33D — timeout terminal cleanup fix.
+After 2.33E — narrow engineering expansion pilot session 1 rerun.
 
 Current checkpoints:
 - App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
@@ -33,6 +33,7 @@ Current checkpoints:
 - Eligibility status controlled soak: 2.32C kept the eligibility status gate enabled during runner-assisted happy path, reverse, repeated, decline, cancel, timeout, and relaunch-ringing cases.
 - Narrow engineering expansion runbook: 2.33B defines the engineering-only expansion cap, ownership window, participant/device matrix, pair matrix, required gates, preflight, stop criteria, rollback, and redacted report template.
 - Timeout cleanup fix: 2.33D `Clear active session after direct call timeout` (`1d9218057`) makes timeout terminal paths disconnect and cleanup immediately.
+- Engineering expansion session 1 rerun: 2.33E passed the first expanded engineering-only pilot window after the timeout cleanup fix.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -211,6 +212,19 @@ Current proven/prepared state:
   - runtime proof passed with A terminal `outgoingTimeout`, B terminal `incomingTimeout`, A/B `productionSessionState=idle`, A/B `productionHasActiveSession=false`, cleanup/disconnect attempted, and media failure `none`;
   - next call after timeout reached A/B `activeAudio`, then hangup returned A/B idle with no active session and media failure `none`;
   - DirectCallEngineTests 36/36, focused native subset 171 tests, Release build, SwiftFormat/SwiftLint, `git diff --check`, and direct-call forbidden scan passed.
+- 2.33E engineering expansion pilot session 1 rerun:
+  - session used redacted A/B engineering labels only, staging call-service, staging LiveKit, required DEBUG/integration gates, eligibility status gate, private dogfood gate, production start gate, and the staging token base URL;
+  - the legacy fake/dry-run gate stayed unset;
+  - preflight passed with readiness `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, and native audio eligibility/allowlist configured;
+  - A/B trust was ready and baseline status was idle/no active session;
+  - runner-assisted happy path A -> B, reverse B -> A, and repeated A -> B calls x2 reached A/B `activeAudio`, then hangup returned A/B idle/no active session with media failure `none`;
+  - decline and cancel returned A/B to idle/no active session;
+  - timeout passed with A terminal `outgoingTimeout`, B terminal `incomingTimeout`, A/B idle/no active session, cleanup/disconnect attempted, and media failure `none`;
+  - relaunch during ringing returned A/B idle/no active session;
+  - listener-unavailable/open-room edge passed by stopping B before A started: A timed out fail-closed with `outgoingTimeout`, no active session, and media failure `none`; B relaunched idle/no active session;
+  - backend-off recovery was not run because the local staging call-service stayed up for the pilot;
+  - LiveKit-off was not run because shared staging LiveKit must not be stopped without owner approval;
+  - final A/B status was idle/no active session with media failure `none`, no rollback was needed, no stop criteria triggered, no redaction issue was observed, and Element Call route remained untouched.
 - Element Call route remains unchanged and must stay available as fallback.
 - No CallKit, push/background incoming, missed calls, video, session restoration, broad internal rollout, public rollout, production activation, or global activation exists.
 
@@ -263,13 +277,13 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.33E — narrow engineering expansion pilot session 1 rerun after timeout cleanup fix.
+2.33F — narrow engineering expansion pilot session 2.
 
 Task:
-Rerun the first narrow engineering expansion pilot window from the 2.33B runbook after `1d9218057`. Do not modify code unless a real runtime bug is found and explicitly approved. Do not enable non-engineering activation.
+Run or record the second narrow engineering expansion pilot window under the 2.33B runbook and 2.33E guardrails. Do not modify code unless a real runtime bug is found and explicitly approved. Do not enable non-engineering activation.
 
 Goal:
-Verify that the staging native audio path remains stable after the timeout cleanup fix when expanded to labelled engineering participants/devices under the strict cap: up to 4 named engineering operators, up to 8 named devices, predeclared pairs only, and one active 1:1 native audio call at a time.
+Verify repeatability after the successful 2.33E rerun when expanded to labelled engineering participants/devices under the strict cap: up to 4 named engineering operators, up to 8 named devices, predeclared pairs only, and one active 1:1 native audio call at a time.
 
 Inspect:
 Use the 2.33B runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, the existing redacted runner/status tooling, and the 2.28A operations checklist. Do not print raw tokens, JWTs, secrets, room IDs, user IDs, peer IDs, device IDs, media keys, event bodies, Redis URLs, or LiveKit room names.
@@ -358,4 +372,4 @@ Validation if docs change:
 - Direct-call forbidden scan.
 
 Suggested commit if docs change:
-Record engineering expansion pilot session 1
+Record engineering expansion pilot session 2

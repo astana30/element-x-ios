@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.33D — timeout terminal cleanup fix.
+After 2.33E — narrow engineering expansion pilot session 1 rerun.
 
 ## Latest App Code Checkpoint
 
@@ -237,6 +237,18 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Runtime timeout proof passed with A terminal `outgoingTimeout`, B terminal `incomingTimeout`, A/B `productionSessionState=idle`, A/B `productionHasActiveSession=false`, cleanup/disconnect attempted, and media failure `none`.
   - A next call after timeout reached A/B `activeAudio`, then hangup returned A/B to idle with no active session and media failure `none`.
   - Validation passed: DirectCallEngineTests 36/36, focused native subset 171 tests, Release build with existing warnings only, SwiftFormat/SwiftLint, `git diff --check`, and the direct-call forbidden scan.
+- Narrow engineering expansion pilot session 1 rerun passed after the timeout cleanup fix:
+  - Session used redacted A/B engineering labels only, staging call-service, staging LiveKit, required DEBUG/integration gates, eligibility status gate, private dogfood gate, production start gate, and the staging token base URL.
+  - The legacy fake/dry-run gate stayed unset.
+  - Preflight passed with readiness `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, and native audio eligibility/allowlist configured.
+  - A/B trust was ready, and baseline status was idle/no active session.
+  - Runner-assisted happy path A -> B, reverse B -> A, and repeated A -> B calls x2 reached `activeAudio`; hangup returned A/B to idle/no active session with media failure `none`.
+  - Decline and cancel returned A/B to idle/no active session.
+  - Timeout passed with A terminal `outgoingTimeout`, B terminal `incomingTimeout`, A/B idle/no active session, cleanup/disconnect attempted, and media failure `none`.
+  - Relaunch during ringing returned A/B to idle/no active session.
+  - Listener-unavailable behavior passed by stopping B before A started: A timed out fail-closed with `outgoingTimeout`, no active session, and media failure `none`; B relaunched idle/no active session.
+  - Backend-off recovery was not run because the local staging call-service stayed up for the pilot. LiveKit-off was not run because shared staging LiveKit must not be stopped without owner approval.
+  - Final A/B status was idle/no active session with media failure `none`, no rollback was needed, no stop criteria triggered, no redaction issue was observed, and Element Call route remained untouched.
 - Call-service Redis readiness is hardened:
   - Redis-backed staging readiness now performs bounded live Redis pings at startup and on each readiness request for both allocation and rate-limit stores.
   - `allocationStoreConnected` and `rateLimitConnected` now reflect live Redis connectivity for Redis stores, not only config shape or implementation presence.
@@ -777,7 +789,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Current Gate
 
-- Controlled engineering dogfood pilot may continue on staging under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, including the product-card-only happy path, repeated-call split-brain regression proof, 2.27F controlled matrix rerun, 2.28B/2.28C pilot sessions, the 2.32C eligibility status soak, and the 2.33D timeout cleanup proof.
+- Controlled engineering dogfood pilot may continue on staging under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, including the product-card-only happy path, repeated-call split-brain regression proof, 2.27F controlled matrix rerun, 2.28B/2.28C pilot sessions, the 2.32C eligibility status soak, the 2.33D timeout cleanup proof, and the 2.33E engineering expansion pilot session 1 rerun.
 - A narrow engineering expansion pilot may run under the 2.33B runbook: up to 4 named engineering operators, up to 8 named devices, predeclared pairs only, one active 1:1 native audio call at a time for the first expanded window, and redacted reporting only.
 - Pilot sessions must follow the 2.27A checkpoint, 2.28A operations checklist, and 2.33B expansion runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
@@ -791,9 +803,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.33E — narrow engineering expansion pilot session 1 rerun after timeout cleanup fix`
+`2.33F — narrow engineering expansion pilot session 2`
 
-Goal: rerun the first expanded engineering-only pilot window from the 2.33B runbook after `1d9218057`, with labelled participants/devices only, one active 1:1 native audio call at a time, required staging gates, per-pair smoke matrix, redacted reporting, and no Element Call route changes.
+Goal: run a second expanded engineering-only pilot window under the 2.33B runbook and 2.33E guardrails, with labelled participants/devices only, one active 1:1 native audio call at a time, required staging gates, per-pair smoke matrix, redacted reporting, and no Element Call route changes.
 
 ## Do-Not-Touch Constraints
 

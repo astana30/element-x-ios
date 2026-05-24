@@ -105,6 +105,7 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - The 2.32C eligibility status controlled engineering soak passed with the eligibility status gate enabled: happy path, reverse, repeated calls, decline, cancel, timeout, and relaunch-ringing stayed fail-closed/redacted where expected, with no LiveKit room names in runner output and no Element Call route change.
 - The 2.33B runbook allows only a narrow engineering expansion: up to 4 named engineering operators, up to 8 named devices, predeclared pairs only, one active 1:1 native audio call at a time for the first expanded window, staging only, redacted reporting only, and no non-engineering users.
 - The 2.33D timeout cleanup fix resolved the paused expansion blocker where timeout terminal reasons were set but active session ownership lingered until explicit cleanup. After `1d9218057`, A/B returned to idle with `productionHasActiveSession=false`, cleanup/disconnect attempted, and media failure `none`; a next call after timeout reached active audio and returned idle after hangup.
+- The 2.33E engineering expansion pilot session 1 rerun passed after the timeout cleanup fix. Happy path, reverse, repeated calls x2, decline, cancel, timeout, relaunch-ringing, and listener-unavailable/open-room edge all returned to idle/no active session with media failure `none` where applicable. Timeout reported A `outgoingTimeout` and B `incomingTimeout` with `productionHasActiveSession=false`. Backend-off was not run because the local staging call-service stayed up, and LiveKit-off was not run because shared staging LiveKit requires owner approval before disruption.
 - Controlled engineering dogfood may continue under the same narrow staging-only constraints.
 
 ## Next Step
@@ -122,4 +123,4 @@ Controlled engineering dogfood may continue on the staging path under the privat
 - Element Call toolbar path unchanged and available as fallback;
 - no CallKit, push, video, broad internal rollout, public rollout, or global production activation.
 
-Next, continue with `2.33E — narrow engineering expansion pilot session 1 rerun after timeout cleanup fix` while keeping controlled dogfood engineering-only, staging-only, and redacted.
+Next, continue with `2.33F — narrow engineering expansion pilot session 2` while keeping controlled dogfood engineering-only, staging-only, and redacted.

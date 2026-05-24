@@ -960,7 +960,54 @@ Runtime proof after the fix:
 
 Validation passed: DirectCallEngineTests 36/36, focused native subset 171 tests, Release build with existing warnings only, SwiftFormat/SwiftLint, `git diff --check`, and the direct-call forbidden scan.
 
-Next expanded-pilot attempt should use `2.33E — narrow engineering expansion pilot session 1 rerun after timeout cleanup fix`.
+## 2.33E Engineering Expansion Pilot Session 1 Rerun
+
+Session date/time: `2026-05-24 21:49 +05`.
+
+Operators and devices are recorded only as redacted A/B engineering labels. The session used the staging call-service, staging LiveKit, DEBUG/integration build gates, eligibility status gate, private dogfood gate, production start gate, and the staging token base URL. The legacy fake/dry-run gate stayed unset. One active 1:1 native audio call was exercised at a time.
+
+Preflight passed:
+
+| Check | Result | Redacted status |
+| --- | --- | --- |
+| Backend readiness | Pass | `200`, `ready=true`, `reason=ok` |
+| Redis/storage | Pass | allocation/rate-limit connected, storage key configured |
+| LiveKit provisioning | Pass | room provisioning configured |
+| Eligibility | Pass | eligibility and allowlist configured |
+| A/B trust | Pass | own session verified, cross-signing ready, peer trust ready |
+| Baseline state | Pass | A/B idle, no active session |
+
+Pilot matrix:
+
+| Case | Result | Redacted status |
+| --- | --- | --- |
+| A -> B happy path | Pass | A/B `activeAudio`, then idle/no active session, media failure `none` |
+| B -> A reverse path | Pass | A/B `activeAudio`, then idle/no active session, media failure `none` |
+| Repeated call 1 | Pass | A/B `activeAudio`, then idle/no active session, media failure `none` |
+| Repeated call 2 | Pass | A/B `activeAudio`, then idle/no active session, no split-brain, media failure `none` |
+| Decline incoming | Pass | incoming ringing returned A/B idle/no active session |
+| Cancel outgoing | Pass | outgoing ringing returned A/B idle/no active session |
+| Timeout | Pass | A `outgoingTimeout`, B `incomingTimeout`, A/B idle, `productionHasActiveSession=false`, cleanup/disconnect attempted, media failure `none` |
+| Relaunch during ringing | Pass | relaunch returned A/B idle/no active session |
+| Listener unavailable/open-room edge | Pass | B stopped before A start; A timed out fail-closed with `outgoingTimeout`, no active session, media failure `none`; B relaunched idle/no active session |
+| Backend-off recovery | Not run | local staging call-service stayed up for the pilot |
+| LiveKit-off | Not run | shared staging LiveKit must not be stopped without owner approval |
+
+Final status:
+
+- A/B idle;
+- A/B no active session;
+- media failure `none`;
+- no rollback used;
+- no stop criteria triggered;
+- no redaction issue observed;
+- Element Call route stayed untouched.
+
+Runner use: runner-assisted launch, status, trust, and matrix control were used for this engineering expansion rerun. The run did not invoke the Element Call route and did not change Element Call behavior. This is still an engineering-only staging pilot result, not product beta or non-engineering approval.
+
+Dogfood decision: continue the narrow engineering expansion under the 2.33B runbook constraints. Non-engineering internal dogfood, broad internal rollout, production/public rollout, Element Call replacement, CallKit, push/background incoming, missed calls, video, session restoration, and global activation remain blocked.
+
+Next expanded-pilot attempt should use `2.33F — narrow engineering expansion pilot session 2`.
 
 ### Remaining Blockers After Expansion
 

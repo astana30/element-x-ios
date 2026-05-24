@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Recorded the narrow engineering expansion pilot session 1 rerun after the timeout cleanup fix.
 - Recorded the direct-call timeout cleanup fix and runtime proof.
 - Polished native audio eligibility status redaction and recorded the runtime proof.
 - Added the narrow engineering expansion pilot runbook and participant/device matrix.
@@ -41,6 +42,22 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-24 — 2.33E Narrow Engineering Expansion Pilot Session 1 Rerun
+
+- Reran the first narrow engineering expansion pilot window after the 2.33D timeout cleanup fix.
+- Session used redacted A/B engineering labels only, staging call-service, staging LiveKit, DEBUG/integration gates, eligibility status gate, private dogfood gate, production start gate, and the staging token base URL. The legacy fake/dry-run gate stayed unset.
+- Preflight passed: readiness returned `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, and native audio eligibility/allowlist configured. A/B trust was ready and baseline status was idle/no active session.
+- Runner-assisted happy path A -> B, reverse B -> A, and repeated A -> B calls x2 all reached A/B `activeAudio`; hangup returned both sides to idle/no active session with media failure `none`.
+- Decline and cancel passed through the native terminal path: incoming ringing and outgoing ringing both returned A/B to idle/no active session.
+- Timeout now passed after `1d9218057`: A reported terminal `outgoingTimeout`, B reported terminal `incomingTimeout`, A/B returned to `idle`, A/B reported `productionHasActiveSession=false`, cleanup/disconnect were attempted, and media failure remained `none`.
+- Relaunch during ringing passed: relaunch returned A/B to idle/no active session.
+- Listener unavailable/open-room edge passed by stopping B before A started: A timed out fail-closed with `outgoingTimeout`, no active session, and media failure `none`; B relaunched idle/no active session.
+- Backend-off recovery was not run in this session because the local staging call-service stayed up for the pilot. LiveKit-off was not run because shared staging LiveKit should not be stopped without explicit owner approval.
+- Final A/B status was idle/no active session with media failure `none`. No rollback was needed, no stop criteria triggered, no redaction issue was observed, and Element Call route remained untouched.
+- No code changed during the runtime proof.
+- Dogfood decision: continue the narrow engineering expansion under the 2.33B runbook constraints; non-engineering internal dogfood and production/public rollout remain blocked.
+- Recommended next phase: `2.33F — narrow engineering expansion pilot session 2`.
 
 ## 2026-05-24 — 2.33D Timeout Terminal Cleanup Fix
 
