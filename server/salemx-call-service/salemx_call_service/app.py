@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from os import environ
 from typing import Any, Optional
 
@@ -37,6 +38,7 @@ ELIGIBILITY_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/eligibility"
 CAPABILITIES_PATH = "/_matrix/client/v3/capabilities"
 HEALTH_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/health"
 READINESS_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/readiness"
+REDIS_READINESS_TIMEOUT_SECONDS = 0.5
 
 
 def create_app(config: ServiceConfig | None = None,
@@ -81,6 +83,9 @@ def create_app(config: ServiceConfig | None = None,
             else:
                 readiness = service_readiness_from_config(config) if config is not None else validate_service_preflight()
                 config = config or ServiceConfig.from_env()
+                readiness = _readiness_with_live_store_checks(config, readiness)
+                if not readiness.ready:
+                    raise ServicePreflightError(readiness)
                 configure_logging(config.log_level)
                 service = DirectCallTokenService(
                     auth_validator=SynapseMatrixAuthValidator(config.synapse_base_url),
@@ -205,6 +210,59 @@ def _redis_client_from_url(redis_url: str) -> object:
     except ModuleNotFoundError as error:
         raise RuntimeError("Redis support requires the pinned redis dependency.") from error
     return redis_asyncio.from_url(redis_url, encoding="utf-8", decode_responses=True)
+
+
+def _readiness_with_live_store_checks(config: ServiceConfig, readiness: ServiceReadiness) -> ServiceReadiness:
+    if not readiness.ready:
+        return readiness
+
+    allocation_store_connected = readiness.allocation_store_connected
+    rate_limit_connected = readiness.rate_limit_connected
+
+    if config.allocation_store == "redis" and config.allocation_store_url is not None:
+        allocation_store_connected = _redis_ping_url(config.allocation_store_url)
+    if config.rate_limit_store == "redis" and config.rate_limit_store_url is not None:
+        rate_limit_connected = _redis_ping_url(config.rate_limit_store_url)
+
+    reason = ServicePreflightReason.OK.value
+    if not allocation_store_connected:
+        reason = ServicePreflightReason.ALLOCATION_STORE_UNAVAILABLE.value
+    elif not rate_limit_connected:
+        reason = ServicePreflightReason.RATE_LIMIT_STORE_UNAVAILABLE.value
+
+    return replace(
+        readiness,
+        ready=reason == ServicePreflightReason.OK.value,
+        reason=reason,
+        allocation_store_connected=allocation_store_connected,
+        rate_limit_connected=rate_limit_connected,
+    )
+
+
+def _redis_ping_url(redis_url: str) -> bool:
+    try:
+        from redis import Redis
+    except ModuleNotFoundError:
+        return False
+
+    client: object | None = None
+    try:
+        client = Redis.from_url(
+            redis_url,
+            socket_connect_timeout=REDIS_READINESS_TIMEOUT_SECONDS,
+            socket_timeout=REDIS_READINESS_TIMEOUT_SECONDS,
+            encoding="utf-8",
+            decode_responses=True,
+        )
+        return bool(client.ping())  # type: ignore[attr-defined]
+    except Exception:
+        return False
+    finally:
+        if client is not None:
+            try:
+                client.close()  # type: ignore[attr-defined]
+            except Exception:
+                pass
 
 
 app = create_app()

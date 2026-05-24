@@ -101,7 +101,7 @@ GET /_matrix/client/unstable/kz.salemx.direct_call/readiness
 ```
 
 The payload reports only mode, readiness, redacted reason, and configuration-presence booleans. It never includes tokens, secrets, URLs, Matrix room IDs, peer IDs, request bodies, or response bodies.
-`allocationStoreConnected` and `rateLimitConnected` mean a non-memory runtime implementation is wired for the selected store kind; they are not a substitute for the required deployed Redis smoke test.
+For Redis-backed staging stores, `allocationStoreConnected` and `rateLimitConnected` require a bounded live Redis ping at service startup. Memory/local fake stores remain connected only for their explicit local/test modes. These booleans still do not expose Redis URLs, credentials, keys, or values.
 
 Readiness reasons:
 
@@ -115,7 +115,9 @@ Readiness reasons:
 - `missingAllocationStoreConfig`
 - `memoryAllocationStoreForbidden`
 - `unsupportedAllocationStore`
+- `allocationStoreUnavailable`
 - `invalidRateLimitConfig`
+- `rateLimitStoreUnavailable`
 - `missingStorageKeySecret`
 - `unsupportedMode`
 
@@ -311,7 +313,7 @@ The 2.24H local smoke used the pinned backend test environment and ASGI route ha
 - caller/callee directions converged on the same LiveKit room;
 - Redis rate limiting allowed the under-limit request, returned `429` with `M_DIRECT_CALL_RATE_LIMITED` and `retry_after_ms` over limit, and did not issue a second token;
 - Redis keys/readiness output did not contain raw room IDs, peer IDs, user IDs, device IDs, bearer tokens, LiveKit participant tokens, JWTs, Synapse admin tokens, or LiveKit API secrets;
-- stopping Redis failed closed with `M_DIRECT_CALL_RATE_LIMIT_STORE_UNAVAILABLE` before token issuance, and the allocation-specific path failed closed with `M_DIRECT_CALL_ALLOCATION_FAILED` before token issuance.
+- stopping Redis failed readiness with `rateLimitConnected=false` / `rateLimitStoreUnavailable`, token issuance failed closed with `M_DIRECT_CALL_RATE_LIMIT_STORE_UNAVAILABLE`, and the allocation-specific path failed closed with `M_DIRECT_CALL_ALLOCATION_FAILED` before token issuance.
 
 Clean up the disposable container after the smoke:
 

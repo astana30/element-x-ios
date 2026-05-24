@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.31C — eligibility status cache no-activation runtime proof.
+After 2.31D — live Redis readiness check hardening.
 
 Current checkpoints:
 - App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
@@ -24,6 +24,7 @@ Current checkpoints:
 - Internal pilot eligibility contract skeleton: 2.30B added typed fail-closed app models, a redacted payload shape, safe card-copy mapping for account/peer ineligibility, and docs.
 - Eligibility runtime/no-activation proof: 2.30C confirmed product UI/start gates without private dogfood still fail closed, and controlled engineering dogfood still reaches active audio under explicit private dogfood gates.
 - Backend eligibility endpoint skeleton: 2.30E added the disabled-by-default call-service `/eligibility` endpoint, static allowlist policy skeleton, redacted readiness booleans, and token endpoint enforcement before rate limit/allocation/LiveKit room pre-create/token issuance.
+- Call-service Redis readiness hardening: 2.31D made Redis-backed staging readiness perform bounded live Redis pings for allocation and rate-limit stores, with safe reasons `allocationStoreUnavailable` and `rateLimitStoreUnavailable`.
 - Eligibility endpoint local route smoke: 2.30F proved default fail-closed `/eligibility`, token endpoint enforcement before allocation/pre-create/token issuance, explicit allowlisted positive route behavior, negative route cases, and redacted output.
 - iOS eligibility provider skeleton: 2.30H added a redacted request DTO, optional `capability_present` / `capabilityPresent` response decoding, and an HTTP provider skeleton for the backend `/eligibility` endpoint without wiring non-engineering activation.
 - iOS eligibility provider no-activation proof: 2.30I proved product UI/start gates without the private dogfood gate remain blocked with `appRolloutDisabled`, the iOS provider skeleton remains unwired for non-engineering activation, and controlled engineering dogfood still reaches active audio under the explicit private dogfood gate.
@@ -158,6 +159,12 @@ Current proven/prepared state:
   - with the explicit private dogfood gate restored, A/B trust and activation were ready;
   - runner-assisted A -> B reached A/B `activeAudio`, media/LiveKit connect were attempted on both sides, media failure stayed `none`, and hangup returned A/B to `idle`;
   - the legacy fake/dry-run gate remained unset and Element Call remained untouched.
+- 2.31D live Redis readiness hardening:
+  - Redis-backed staging readiness now requires bounded live Redis pings for both allocation and rate-limit stores;
+  - allocation Redis failure reports `allocationStoreUnavailable` with `allocationStoreConnected=false`;
+  - rate-limit Redis failure reports `rateLimitStoreUnavailable` with `rateLimitConnected=false`;
+  - readiness output remains redacted and does not include Redis URLs, credentials, keys, values, raw Matrix identifiers, tokens, JWTs, or secrets;
+  - token endpoint behavior remains fail-closed and unchanged on Redis failures.
 - Element Call route remains unchanged and must stay available as fallback.
 - No CallKit, push/background incoming, missed calls, video, session restoration, broad internal rollout, public rollout, production activation, or global activation exists.
 
@@ -205,7 +212,7 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.31D — eligibility status cache controlled engineering soak.
+2.31E — eligibility status cache controlled engineering soak.
 
 Task:
 Run a short controlled engineering soak with the side-effect-safe eligibility status cache enabled. Do not modify code unless a real runtime bug is found and explicitly approved.

@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.31C — eligibility status cache no-activation runtime proof.
+After 2.31D — live Redis readiness check hardening.
 
 ## Latest App Code Checkpoint
 
@@ -10,7 +10,7 @@ After 2.31C — eligibility status cache no-activation runtime proof.
 
 ## Latest Backend Code Checkpoint
 
-2.30E `Add native audio eligibility endpoint skeleton`
+2.31D `Harden call service Redis readiness checks`
 
 ## Latest SDK Checkpoint
 
@@ -199,6 +199,12 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - After Redis recovery, with the explicit private dogfood gate restored, A/B trust and activation were ready, A reached outgoing ringing, B reached incoming ringing, B accepted, and A/B reached `activeAudio`.
   - A/B had media connect and LiveKit client connect attempted, `productionMediaFailureReason=none`, and hangup returned A/B to `idle` with cleanup/disconnect attempted.
   - The legacy fake/dry-run gate remained unset, Element Call route remained untouched, and no code changes were needed during the runtime proof.
+- Call-service Redis readiness is hardened:
+  - Redis-backed staging readiness now performs bounded live Redis pings at service startup for both allocation and rate-limit stores.
+  - `allocationStoreConnected` and `rateLimitConnected` now reflect live Redis connectivity for Redis stores, not only config shape or implementation presence.
+  - If allocation Redis is unreachable, readiness fails closed with `allocationStoreUnavailable` and `allocationStoreConnected=false`.
+  - If rate-limit Redis is unreachable, readiness fails closed with `rateLimitStoreUnavailable` and `rateLimitConnected=false`.
+  - Token endpoint behavior remains unchanged and still fails closed without issuing tokens on Redis store failure.
 - Private dogfood activation is explicit and fail-closed by default:
   - `appRolloutDisabled` is produced by the production activation decision when `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` is absent.
   - `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1` can show the private card, and `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1` can allow start actions, but neither gate enables rollout/capability readiness by itself.

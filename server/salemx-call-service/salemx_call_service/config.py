@@ -63,7 +63,9 @@ class ServicePreflightReason(str, Enum):
     MISSING_ALLOCATION_STORE_CONFIG = "missingAllocationStoreConfig"
     MEMORY_ALLOCATION_STORE_FORBIDDEN = "memoryAllocationStoreForbidden"
     UNSUPPORTED_ALLOCATION_STORE = "unsupportedAllocationStore"
+    ALLOCATION_STORE_UNAVAILABLE = "allocationStoreUnavailable"
     INVALID_RATE_LIMIT_CONFIG = "invalidRateLimitConfig"
+    RATE_LIMIT_STORE_UNAVAILABLE = "rateLimitStoreUnavailable"
     MISSING_STORAGE_KEY_SECRET = "missingStorageKeySecret"
     UNSUPPORTED_MODE = "unsupportedMode"
 

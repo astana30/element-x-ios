@@ -1734,7 +1734,7 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaisesRegex(RuntimeError, "insecureLiveKitURL"):
                 app_module.create_app()
 
-        with patch.dict(os.environ, env | {ALLOW_INSECURE_LIVEKIT_URL_ENV: "1"}, clear=True):
+        with patch.dict(os.environ, env | {ALLOW_INSECURE_LIVEKIT_URL_ENV: "1"}, clear=True), _patch_redis_ping(app_module):
             app = app_module.create_app()
 
         status_code, body = await _asgi_get_json(app, app_module.READINESS_PATH)
@@ -1778,7 +1778,7 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
             RATE_LIMIT_STORE_URL_ENV: f"redis://:{rate_limit_secret}@rate-limit.example.test/0",
         })
 
-        with patch.dict(os.environ, env, clear=True):
+        with patch.dict(os.environ, env, clear=True), _patch_redis_ping(app_module):
             app = app_module.create_app()
 
         status_code, body = await _asgi_get_json(app, app_module.READINESS_PATH)
@@ -1811,7 +1811,7 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
             ALLOW_MEMORY_ALLOCATION_STORE_ENV: "1",
         })
 
-        with patch.dict(os.environ, env, clear=True):
+        with patch.dict(os.environ, env, clear=True), _patch_redis_ping(app_module):
             app = app_module.create_app()
 
         status_code, body = await _asgi_get_json(app, app_module.READINESS_PATH)
@@ -1829,7 +1829,7 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
             ALLOCATION_STORE_URL_ENV: f"redis://:{allocation_store_secret}@allocation.example.test/0",
         })
 
-        with patch.dict(os.environ, env, clear=True):
+        with patch.dict(os.environ, env, clear=True), _patch_redis_ping(app_module):
             app = app_module.create_app()
 
         status_code, body = await _asgi_get_json(app, app_module.READINESS_PATH)
@@ -1843,6 +1843,54 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(body["allocationStoreConnected"])
         self.assertNotIn(allocation_store_secret, output)
         self.assertNotIn("allocation.example.test", output)
+
+    async def test_staging_readiness_fails_when_allocation_redis_ping_fails(self) -> None:
+        app_module = _load_app_module()
+        allocation_store_secret = "allocation-store-password-sensitive"
+        env = _staging_env({
+            ALLOCATION_STORE_ENV: AllocationStoreKind.REDIS.value,
+            ALLOCATION_STORE_URL_ENV: f"redis://:{allocation_store_secret}@allocation.example.test/0",
+        })
+
+        with patch.dict(os.environ, env, clear=True), _patch_redis_ping(app_module, allocation_connected=False):
+            with self.assertRaisesRegex(RuntimeError, "allocationStoreUnavailable"):
+                app_module.create_app()
+            app = app_module.create_app(strict_startup=False)
+
+        status_code, body = await _asgi_get_json(app, app_module.READINESS_PATH)
+        output = json.dumps(body, sort_keys=True)
+
+        self.assertEqual(status_code, 503)
+        self.assertFalse(body["ready"])
+        self.assertEqual(body["reason"], "allocationStoreUnavailable")
+        self.assertFalse(body["allocationStoreConnected"])
+        self.assertTrue(body["rateLimitConnected"])
+        self.assertNotIn(allocation_store_secret, output)
+        self.assertNotIn("allocation.example.test", output)
+
+    async def test_staging_readiness_fails_when_rate_limit_redis_ping_fails(self) -> None:
+        app_module = _load_app_module()
+        rate_limit_secret = "rate-limit-store-password-sensitive"
+        env = _staging_env({
+            RATE_LIMIT_STORE_ENV: RateLimitStoreKind.REDIS.value,
+            RATE_LIMIT_STORE_URL_ENV: f"redis://:{rate_limit_secret}@rate-limit.example.test/0",
+        })
+
+        with patch.dict(os.environ, env, clear=True), _patch_redis_ping(app_module, rate_limit_connected=False):
+            with self.assertRaisesRegex(RuntimeError, "rateLimitStoreUnavailable"):
+                app_module.create_app()
+            app = app_module.create_app(strict_startup=False)
+
+        status_code, body = await _asgi_get_json(app, app_module.READINESS_PATH)
+        output = json.dumps(body, sort_keys=True)
+
+        self.assertEqual(status_code, 503)
+        self.assertFalse(body["ready"])
+        self.assertEqual(body["reason"], "rateLimitStoreUnavailable")
+        self.assertTrue(body["allocationStoreConnected"])
+        self.assertFalse(body["rateLimitConnected"])
+        self.assertNotIn(rate_limit_secret, output)
+        self.assertNotIn("rate-limit.example.test", output)
 
     async def test_staging_mode_refuses_postgres_allocation_until_implemented(self) -> None:
         app_module = _load_app_module()
@@ -2004,6 +2052,19 @@ def _load_app_module() -> object:
             raise unittest.SkipTest("FastAPI is not installed in this Python environment.") from error
         raise
     return app_module
+
+
+def _patch_redis_ping(app_module: object,
+                      allocation_connected: bool = True,
+                      rate_limit_connected: bool = True) -> object:
+    def redis_ping(redis_url: str) -> bool:
+        if "allocation" in redis_url:
+            return allocation_connected
+        if "rate-limit" in redis_url:
+            return rate_limit_connected
+        return allocation_connected and rate_limit_connected
+
+    return patch.object(app_module, "_redis_ping_url", side_effect=redis_ping)
 
 
 def _staging_env(overrides: dict[str, str] | None = None) -> dict[str, str]:

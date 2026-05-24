@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Hardened call-service readiness so Redis connected booleans require bounded live Redis pings in staging.
 - Added the iOS native audio eligibility provider skeleton for the backend `/eligibility` endpoint.
 - Recorded the eligibility contract runtime/no-activation proof.
 - Added the fail-closed internal pilot eligibility contract skeleton.
@@ -35,6 +36,16 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-24 — 2.31D Live Redis Readiness Check Hardening
+
+- Hardened call-service startup/readiness for Redis-backed staging stores.
+- `allocationStoreConnected` and `rateLimitConnected` now require bounded live Redis pings instead of only config shape/runtime implementation presence.
+- Added safe readiness reasons `allocationStoreUnavailable` and `rateLimitStoreUnavailable`.
+- Preserved local fake/memory readiness behavior for explicit local/test modes.
+- Preserved token endpoint fail-closed behavior: Redis rate-limit failure still returns `M_DIRECT_CALL_RATE_LIMIT_STORE_UNAVAILABLE` and no token is issued.
+- Updated backend tests for Redis ping success/failure and readiness redaction without printing Redis URLs or credentials.
+- Recommended next phase: `2.31E — eligibility status cache controlled engineering soak`.
 
 ## 2026-05-23 — 2.30C Eligibility Contract Runtime/No-Activation Proof
 
