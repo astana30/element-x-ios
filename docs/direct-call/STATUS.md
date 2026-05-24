@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-After 2.36D — internal pilot activation skeleton no-activation proof.
+After 2.36G — internal pilot activation provider no-activation proof.
 
 ## Latest App Code Checkpoint
 
-2.36C `Add native audio internal pilot activation skeleton`
+2.36F `Add server backed native audio activation provider`
 
 ## Latest Backend Code Checkpoint
 
@@ -131,6 +131,16 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - With private dogfood restored, A -> B reached `productionSessionState=activeAudio` with media failure `none`, media connect attempted, and LiveKit client connect attempted.
   - Hangup returned A/B to `productionSessionState=idle` with no active session, cleanup/disconnect attempted, and media failure `none`.
   - The legacy fake/dry-run gate remained unset, no code changed, no redaction issue was observed, and Element Call remained untouched.
+- Server-backed internal pilot activation provider no-activation runtime proof passed:
+  - Session timestamp: 2026-05-25 01:42 +05.
+  - Call-service readiness was `200`, `ready=true`, `reason=ok`, with Redis allocation/rate-limit connected and storage key configured.
+  - With product UI and eligibility status enabled, but private dogfood unset, activation stayed blocked with `appRolloutDisabled` once the encrypted direct 1:1 room was open.
+  - With product UI, eligibility status, and production start enabled, but private dogfood still unset, Start stayed blocked with `appRolloutDisabled`.
+  - The no-private-dogfood runs had no Matrix send, no token request, no media connect, no LiveKit client connect, no active session, and media failure `none`.
+  - The internal pilot rollout source stayed default-off; backend eligibility/status did not enable runtime Start or Accept.
+  - With private dogfood restored, A/B trust and activation were ready, A -> B reached `productionSessionState=activeAudio`, and media failure stayed `none`.
+  - Hangup returned A/B to `productionSessionState=idle` with no active session, cleanup/disconnect attempted, and media failure `none`.
+  - Element Call route stayed untouched, no code changed, and no redaction issue was observed.
 - Controlled engineering dogfood pilot session 1 is recorded:
   - Preflight passed with readiness `ready=true`, `reason=ok`, Redis allocation/rate-limit/storage booleans true, LiveKit room provisioning true, and A/B trust ready.
   - Required private dogfood gates were used, and the legacy fake/dry-run gate was unset.
@@ -864,6 +874,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - The iOS stack now has a native-audio-specific internal pilot rollout source that is disabled by default and DEBUG/integration-gated when environment-backed.
   - The concrete server-backed activation provider can return `activationAllowed` only when product UI, internal pilot rollout, backend eligibility, room eligibility, trust readiness, dependency readiness, and idle session state all pass.
   - The provider is not enabled for non-engineering runtime by default, and engineering private dogfood remains separate under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`.
+  - 2.36G runtime proof confirmed product UI, eligibility status, and production start still do not activate native audio without private dogfood, while the private engineering dogfood path still reaches active audio.
 - Pilot sessions must follow the 2.27A checkpoint, 2.28A operations checklist, and 2.33B expansion runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
@@ -876,9 +887,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.36G — internal pilot activation provider no-activation proof`
+`2.36H — internal pilot activation rollout wiring readiness review`
 
-Goal: prove the new server-backed activation provider and rollout source remain disabled/default-off at runtime, do not enable non-engineering access, and do not alter the existing private engineering dogfood path.
+Goal: inspect whether the server-backed activation provider is ready for any future rollout wiring beyond tests, define the exact fail-closed integration boundary, and keep non-engineering internal dogfood blocked until a separate implementation and runtime proof.
 
 ## Do-Not-Touch Constraints
 

@@ -39,6 +39,7 @@ No tokens, JWTs, passwords, shared secrets, authorization header values, or Live
 | Operator-owned engineering expansion session 1 | Passed |
 | iOS internal pilot activation provider skeleton | Added, disabled by default |
 | iOS internal pilot activation no-activation proof | Passed |
+| Server-backed internal pilot activation provider no-activation proof | Passed |
 
 ## Root Cause
 
@@ -114,6 +115,7 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - The 2.35C operator-owned engineering expansion session passed under the 2.35B handoff with redacted Operator A/B and Device A1/B1 labels only. Preflight passed, happy path, reverse, repeated calls x2, decline, cancel, timeout, relaunch-ringing, listener/open-room unavailable, and post-listener recovery passed, final A/B state was idle/no active session with media failure `none`, and Element Call stayed untouched.
 - The 2.36C iOS internal pilot activation provider skeleton is disabled by default and status-only when evaluated. It does not enable non-engineering activation, does not change token endpoint authority, and keeps product UI / backend eligibility alone insufficient to Start or Accept.
 - The 2.36D runtime proof passed: product UI, eligibility status, and production start gates without the private dogfood gate stayed blocked with `appRolloutDisabled`, no Matrix send, no token request, no media connect, no LiveKit client connect, and no active session. Restoring the private dogfood gate still allowed A -> B active audio and clean hangup back to idle.
+- The 2.36G runtime proof passed after the concrete server-backed activation provider was added: product UI, eligibility status, and production start still did not activate native audio without the private dogfood gate; the default-off internal pilot rollout source did not enable runtime Start or Accept; restoring private dogfood still allowed A -> B active audio and clean hangup back to idle.
 - Controlled engineering dogfood may continue under the same narrow staging-only constraints.
 
 ## Next Step
@@ -131,4 +133,4 @@ Controlled engineering dogfood may continue on the staging path under the privat
 - Element Call toolbar path unchanged and available as fallback;
 - no CallKit, push, video, broad internal rollout, public rollout, or global production activation.
 
-Next, continue with `2.33F — narrow engineering expansion pilot session 2` while keeping controlled dogfood engineering-only, staging-only, and redacted.
+Next, continue with `2.36H — internal pilot activation rollout wiring readiness review` while keeping controlled dogfood engineering-only, staging-only, and redacted.

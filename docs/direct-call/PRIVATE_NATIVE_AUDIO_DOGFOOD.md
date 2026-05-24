@@ -1403,6 +1403,37 @@ Element Call remained visible/available as fallback and the native path did not 
 
 Next phase should use `2.36E — server-backed internal pilot activation integration plan`.
 
+## 2.36G Internal Pilot Activation Provider No-Activation Proof
+
+Runtime proof timestamp: 2026-05-25 01:42 +05.
+
+Preflight passed:
+
+- call-service readiness `200`, `ready=true`, `reason=ok`;
+- Redis allocation/rate-limit connected;
+- storage key configured;
+- legacy fake/dry-run gate unset.
+
+No-activation proof:
+
+- With product UI and eligibility status enabled, and `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED` unset, activation stayed blocked.
+- With the encrypted direct 1:1 room open, activation/trigger dry-run returned `appRolloutDisabled`.
+- The no-private-dogfood status showed no Matrix send, no token request, no media connect, no LiveKit client connect, no active session, and media failure `none`.
+- Adding `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1` while keeping private dogfood unset still blocked Start with `appRolloutDisabled`.
+- Backend eligibility/status and the default-off internal pilot rollout source did not enable runtime Start or Accept.
+- `directOneToOneCallsEnabled` was not toggled at runtime because changing Element Call settings is out of scope. The committed server-backed activation-provider tests cover that separation, and Element Call was not touched during this proof.
+
+Private engineering dogfood compatibility proof:
+
+- With `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` restored, A/B trust was ready and A activation was enabled with dependencies ready, room eligible, endpoint accepted, peer trust ready, and key wrapper available.
+- A preliminary start attempt timed out before accept because the generic runner wait helper was used; the timeout path cleaned up safely with A `outgoingTimeout`, B `incomingTimeout`, no active session, cleanup/disconnect attempted, and media failure `none`.
+- The direct-accept happy path then reached A/B `productionSessionState=activeAudio` with encryption ready, media connect attempted, LiveKit client connect attempted, and `productionMediaFailureReason=none`.
+- Hangup returned A/B to `productionSessionState=idle` with no active session, cleanup/disconnect attempted, and media failure `none`.
+
+Element Call remained visible/available as fallback and the native path did not use the Element Call route. No app/backend code changed, no redaction issue was observed, and no runtime regression was found.
+
+Next phase should use `2.36H — internal pilot activation rollout wiring readiness review`.
+
 ## 2.35B Engineering Expansion Operations Handoff
 
 The 3-session engineering expansion soak completed cleanly, so narrow engineering dogfood can continue without per-session Codex supervision only when a named engineering operator owns the session and this handoff checklist is followed. This is still staging-only engineering dogfood, not non-engineering internal dogfood, product beta, public rollout, production activation, or Element Call replacement.
@@ -1971,7 +2002,7 @@ Rollback is complete only when the app relaunches without the private card path 
 
 These block broader internal dogfood and production, but not the controlled engineering dogfood scope above:
 
-- Server-backed internal pilot activation remains default-off. The iOS activation provider can model `activationAllowed` for tests only when all gates pass, but non-engineering Start/Accept is not enabled until a separate runtime no-activation proof and readiness review pass.
+- Server-backed internal pilot activation remains default-off. The iOS activation provider can model `activationAllowed` for tests only when all gates pass, and 2.36G proved it does not enable runtime Start/Accept without private dogfood; non-engineering Start/Accept is still not enabled until a separate rollout wiring implementation, runtime proof, and readiness review pass.
 - No CallKit.
 - No push or background incoming calls.
 - No missed calls.

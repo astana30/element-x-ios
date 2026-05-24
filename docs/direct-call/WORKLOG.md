@@ -1361,3 +1361,22 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added tests for default-off rollout, DEBUG/integration rollout gating, fail-closed single-gate behavior, all-gates unit activation, local room/trust/dependency/session override behavior, safe reason mapping, redaction, and `directOneToOneCallsEnabled` separation.
 - This does not enable non-engineering internal dogfood, does not change Element Call, and does not add CallKit, push, missed calls, video, or global activation.
 - Recommended next phase: `2.36G — internal pilot activation provider no-activation proof`.
+
+## 2026-05-25 — 2.36G Internal Pilot Activation Provider No-Activation Runtime Proof
+
+- Ran the runtime/no-activation proof after the server-backed internal pilot activation provider.
+- Confirmed call-service readiness returned `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, and storage key configured.
+- Launched A/B with product UI and eligibility status enabled, but without `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`.
+- With the encrypted direct 1:1 room open, activation stayed blocked with `appRolloutDisabled`.
+- Confirmed the no-private-dogfood run had no Matrix send, no token request, no media connect, no LiveKit client connect, no active session, and media failure `none`.
+- Relaunched with product UI, eligibility status, and production start enabled while still leaving private dogfood unset.
+- Confirmed Start stayed blocked with `appRolloutDisabled`, with no token/media/LiveKit path and no active session.
+- Confirmed the internal pilot rollout source remained default-off at runtime; backend eligibility/status did not enable Start or Accept without a future rollout implementation and proof.
+- `directOneToOneCallsEnabled` was not toggled at runtime because changing Element Call settings is out of scope; the committed activation-provider tests continue to cover that separation.
+- Restored the explicit private dogfood gate with product UI, eligibility status, production start, and staging token base URL gates.
+- Verified A/B trust ready and activation enabled with dependencies ready, room eligible, endpoint accepted, peer trust ready, and key wrapper available.
+- A preliminary start attempt timed out before accept because the generic runner wait helper was used; the timeout path cleaned up safely with A `outgoingTimeout`, B `incomingTimeout`, no active session, cleanup/disconnect attempted, and media failure `none`.
+- Reran the happy path with direct B accept: A -> B reached `productionSessionState=activeAudio`, media connect and LiveKit client connect were attempted, and media failure stayed `none`.
+- Hangup returned A/B to `productionSessionState=idle` with no active session, cleanup/disconnect attempted, and media failure `none`.
+- The legacy fake/dry-run gate remained unset, Element Call route stayed untouched, no redaction issue was observed, and no code changes were needed.
+- Recommended next phase: `2.36H — internal pilot activation rollout wiring readiness review`.
