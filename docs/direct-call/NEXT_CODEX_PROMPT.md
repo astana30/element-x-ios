@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.33B — narrow engineering expansion pilot runbook.
+After 2.33D — timeout terminal cleanup fix.
 
 Current checkpoints:
 - App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
@@ -32,6 +32,7 @@ Current checkpoints:
 - Eligibility status integration polish: 2.32B redacts LiveKit room names from token response descriptions, forwards the eligibility status gate through the two-client runner, and proved status-only/no-activation behavior plus the private dogfood happy path.
 - Eligibility status controlled soak: 2.32C kept the eligibility status gate enabled during runner-assisted happy path, reverse, repeated, decline, cancel, timeout, and relaunch-ringing cases.
 - Narrow engineering expansion runbook: 2.33B defines the engineering-only expansion cap, ownership window, participant/device matrix, pair matrix, required gates, preflight, stop criteria, rollback, and redacted report template.
+- Timeout cleanup fix: 2.33D `Clear active session after direct call timeout` (`1d9218057`) makes timeout terminal paths disconnect and cleanup immediately.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -203,6 +204,13 @@ Current proven/prepared state:
   - every new pair must run happy path, reverse, repeated x2, decline, cancel, timeout if practical, relaunch fail-closed, listener/open-room unavailable, Element Call fallback, and backend-off/recovery only when safe;
   - LiveKit-off remains not-run unless the shared staging LiveKit owner explicitly approves a disruption window;
   - non-engineering users, broad internal rollout, production/public rollout, Element Call replacement, CallKit, push/background incoming, missed calls, video, session restoration, and global activation remain blocked.
+- 2.33D timeout cleanup proof:
+  - the first 2.33C expansion attempt paused because timeout terminal reasons were set while `productionHasActiveSession` stayed true until explicit cleanup;
+  - root cause was timeout terminal paths leaving the active session owned until delayed cleanup;
+  - `1d9218057` disconnects and cleans up immediately on timeout terminal paths;
+  - runtime proof passed with A terminal `outgoingTimeout`, B terminal `incomingTimeout`, A/B `productionSessionState=idle`, A/B `productionHasActiveSession=false`, cleanup/disconnect attempted, and media failure `none`;
+  - next call after timeout reached A/B `activeAudio`, then hangup returned A/B idle with no active session and media failure `none`;
+  - DirectCallEngineTests 36/36, focused native subset 171 tests, Release build, SwiftFormat/SwiftLint, `git diff --check`, and direct-call forbidden scan passed.
 - Element Call route remains unchanged and must stay available as fallback.
 - No CallKit, push/background incoming, missed calls, video, session restoration, broad internal rollout, public rollout, production activation, or global activation exists.
 
@@ -255,13 +263,13 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.33C — narrow engineering expansion pilot session 1.
+2.33E — narrow engineering expansion pilot session 1 rerun after timeout cleanup fix.
 
 Task:
-Run the first narrow engineering expansion pilot window from the 2.33B runbook. Do not modify code unless a real runtime bug is found and explicitly approved. Do not enable non-engineering activation.
+Rerun the first narrow engineering expansion pilot window from the 2.33B runbook after `1d9218057`. Do not modify code unless a real runtime bug is found and explicitly approved. Do not enable non-engineering activation.
 
 Goal:
-Verify that the staging native audio path remains stable when expanded to labelled engineering participants/devices under the strict cap: up to 4 named engineering operators, up to 8 named devices, predeclared pairs only, and one active 1:1 native audio call at a time.
+Verify that the staging native audio path remains stable after the timeout cleanup fix when expanded to labelled engineering participants/devices under the strict cap: up to 4 named engineering operators, up to 8 named devices, predeclared pairs only, and one active 1:1 native audio call at a time.
 
 Inspect:
 Use the 2.33B runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, the existing redacted runner/status tooling, and the 2.28A operations checklist. Do not print raw tokens, JWTs, secrets, room IDs, user IDs, peer IDs, device IDs, media keys, event bodies, Redis URLs, or LiveKit room names.

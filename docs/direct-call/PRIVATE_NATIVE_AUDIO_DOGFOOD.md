@@ -940,6 +940,28 @@ Final:
 - decision: continue/pause
 ```
 
+## 2.33D Timeout Terminal Cleanup Fix
+
+The first 2.33C expansion attempt was paused when the timeout case produced safe terminal reasons but kept active session ownership until explicit cleanup. A reported `outgoingTimeout`, B reported `incomingTimeout`, and media failure stayed `none`, but `productionHasActiveSession` remained true during the delayed cleanup window.
+
+Root cause: DirectCallEngine timeout paths transitioned to terminal states while leaving the active session owned until delayed cleanup.
+
+Commit `1d9218057` fixes this by disconnecting and cleaning up immediately for timeout terminal paths. Normal hangup, decline, and cancel behavior remain unchanged.
+
+Runtime proof after the fix:
+
+| Check | Result | Redacted status |
+| --- | --- | --- |
+| Timeout terminal path | Pass | A `outgoingTimeout`, B `incomingTimeout` |
+| Active session cleanup | Pass | A/B `productionSessionState=idle`, `productionHasActiveSession=false` |
+| Media state | Pass | cleanup/disconnect attempted, media failure `none` |
+| Next call after timeout | Pass | A/B reached `activeAudio`, then hangup returned A/B idle |
+| Element Call separation | Pass | Existing Element Call route untouched |
+
+Validation passed: DirectCallEngineTests 36/36, focused native subset 171 tests, Release build with existing warnings only, SwiftFormat/SwiftLint, `git diff --check`, and the direct-call forbidden scan.
+
+Next expanded-pilot attempt should use `2.33E — narrow engineering expansion pilot session 1 rerun after timeout cleanup fix`.
+
 ### Remaining Blockers After Expansion
 
 Even if the expanded engineering pilot passes, the following remain blocked:

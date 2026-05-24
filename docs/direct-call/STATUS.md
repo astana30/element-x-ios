@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-After 2.33B — narrow engineering expansion pilot runbook.
+After 2.33D — timeout terminal cleanup fix.
 
 ## Latest App Code Checkpoint
 
-2.32B `Polish native audio eligibility status copy`
+2.33D `Clear active session after direct call timeout`
 
 ## Latest Backend Code Checkpoint
 
@@ -230,6 +230,13 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Every new pair must run happy path, reverse, repeated x2, decline, cancel, timeout if practical, relaunch fail-closed, listener/open-room unavailable, Element Call fallback, and backend-off/recovery only when safe.
   - LiveKit-off remains not-run unless the shared staging LiveKit owner explicitly approves a disruption window.
   - Non-engineering internal dogfood, broad internal rollout, production/public rollout, Element Call replacement, CallKit, push/background incoming, missed calls, video, session restoration, and global activation remain blocked.
+- Timeout terminal cleanup fix is recorded:
+  - The 2.33C expansion pilot paused because timeout terminal reasons were set while `productionHasActiveSession` stayed true until explicit cleanup.
+  - Root cause: timeout paths transitioned to terminal states but left the active session owned until delayed cleanup.
+  - Commit `1d9218057` makes DirectCallEngine timeout terminal paths disconnect and cleanup immediately.
+  - Runtime timeout proof passed with A terminal `outgoingTimeout`, B terminal `incomingTimeout`, A/B `productionSessionState=idle`, A/B `productionHasActiveSession=false`, cleanup/disconnect attempted, and media failure `none`.
+  - A next call after timeout reached A/B `activeAudio`, then hangup returned A/B to idle with no active session and media failure `none`.
+  - Validation passed: DirectCallEngineTests 36/36, focused native subset 171 tests, Release build with existing warnings only, SwiftFormat/SwiftLint, `git diff --check`, and the direct-call forbidden scan.
 - Call-service Redis readiness is hardened:
   - Redis-backed staging readiness now performs bounded live Redis pings at startup and on each readiness request for both allocation and rate-limit stores.
   - `allocationStoreConnected` and `rateLimitConnected` now reflect live Redis connectivity for Redis stores, not only config shape or implementation presence.
@@ -770,7 +777,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Current Gate
 
-- Controlled engineering dogfood pilot may continue on staging under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, including the product-card-only happy path, repeated-call split-brain regression proof, 2.27F controlled matrix rerun, 2.28B/2.28C pilot sessions, and the 2.32C eligibility status soak.
+- Controlled engineering dogfood pilot may continue on staging under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, including the product-card-only happy path, repeated-call split-brain regression proof, 2.27F controlled matrix rerun, 2.28B/2.28C pilot sessions, the 2.32C eligibility status soak, and the 2.33D timeout cleanup proof.
 - A narrow engineering expansion pilot may run under the 2.33B runbook: up to 4 named engineering operators, up to 8 named devices, predeclared pairs only, one active 1:1 native audio call at a time for the first expanded window, and redacted reporting only.
 - Pilot sessions must follow the 2.27A checkpoint, 2.28A operations checklist, and 2.33B expansion runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
@@ -784,9 +791,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.33C — narrow engineering expansion pilot session 1`
+`2.33E — narrow engineering expansion pilot session 1 rerun after timeout cleanup fix`
 
-Goal: run the first expanded engineering-only pilot window from the 2.33B runbook, with labelled participants/devices only, one active 1:1 native audio call at a time, required staging gates, per-pair smoke matrix, redacted reporting, and no Element Call route changes.
+Goal: rerun the first expanded engineering-only pilot window from the 2.33B runbook after `1d9218057`, with labelled participants/devices only, one active 1:1 native audio call at a time, required staging gates, per-pair smoke matrix, redacted reporting, and no Element Call route changes.
 
 ## Do-Not-Touch Constraints
 

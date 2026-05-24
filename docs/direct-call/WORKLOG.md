@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Recorded the direct-call timeout cleanup fix and runtime proof.
 - Polished native audio eligibility status redaction and recorded the runtime proof.
 - Added the narrow engineering expansion pilot runbook and participant/device matrix.
 - Recorded the eligibility status controlled engineering soak.
@@ -40,6 +41,17 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-24 — 2.33D Timeout Terminal Cleanup Fix
+
+- Paused the 2.33C narrow engineering expansion pilot because timeout terminal reasons were set while `productionHasActiveSession` stayed true until explicit cleanup.
+- Root cause: timeout paths transitioned to terminal states but left the active session owned until delayed cleanup.
+- Fixed in `1d9218057` by making DirectCallEngine timeout terminal paths disconnect and cleanup immediately.
+- Runtime timeout proof passed: A reported terminal `outgoingTimeout`, B reported terminal `incomingTimeout`, A/B returned to `productionSessionState=idle`, A/B reported `productionHasActiveSession=false`, cleanup/disconnect were attempted, and media failure remained `none`.
+- Next-call-after-timeout proof passed: a new A -> B call after timeout reached A/B `activeAudio`, then hangup returned A/B to idle with no active session and media failure `none`.
+- Element Call route remained untouched, with no CallKit, push, video, or global production activation.
+- Validation passed: DirectCallEngineTests 36/36, focused native subset 171 tests, Release build with existing warnings only, SwiftFormat/SwiftLint, `git diff --check`, and the direct-call forbidden scan.
+- Recommended next phase: `2.33E — narrow engineering expansion pilot session 1 rerun after timeout cleanup fix`.
 
 ## 2026-05-24 — 2.33B Narrow Engineering Expansion Pilot Runbook
 
