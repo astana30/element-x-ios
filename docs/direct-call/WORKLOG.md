@@ -5,6 +5,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 ## Milestones
 
 - Hardened call-service readiness so Redis connected booleans require bounded live Redis pings in staging.
+- Recorded the Redis readiness recovery native audio smoke.
 - Added the iOS native audio eligibility provider skeleton for the backend `/eligibility` endpoint.
 - Recorded the eligibility contract runtime/no-activation proof.
 - Added the fail-closed internal pilot eligibility contract skeleton.
@@ -46,6 +47,16 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Preserved token endpoint fail-closed behavior: Redis rate-limit failure still returns `M_DIRECT_CALL_RATE_LIMIT_STORE_UNAVAILABLE` and no token is issued.
 - Updated backend tests for Redis ping success/failure and readiness redaction without printing Redis URLs or credentials.
 - Recommended next phase: `2.31E — eligibility status cache controlled engineering soak`.
+
+## 2026-05-24 — 2.31F Redis Readiness Recovery Native Audio Smoke
+
+- Ran the post-restore native audio smoke after `f4656983a`.
+- Confirmed local call-service readiness returned `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit connected true, storage key configured, LiveKit room provisioning configured, and native audio eligibility/allowlist configured.
+- Confirmed A/B trust ready with own session verified, cross-signing ready, and peer trust ready.
+- Ran a runner-assisted A -> B happy path after Redis restore: A started, B reached `incomingRinging`, B accepted, and A/B reached `activeAudio` with encryption ready.
+- Confirmed media connect and LiveKit client connect were attempted, `productionMediaFailureReason=none`, and hangup returned A/B to idle/no active session with cleanup/disconnect attempted.
+- Element Call route remained untouched; no code changed during the runtime proof.
+- Recommended next phase: `2.31G — eligibility status cache controlled engineering soak`.
 
 ## 2026-05-23 — 2.30C Eligibility Contract Runtime/No-Activation Proof
 

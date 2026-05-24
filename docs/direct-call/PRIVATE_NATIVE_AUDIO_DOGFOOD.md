@@ -691,6 +691,19 @@ This proof confirms the 2.30H iOS provider skeleton stays side-effect-safe and f
 
 This proof confirms the 2.31B eligibility status cache remains status-only and fail-closed unless the existing DEBUG/integration private dogfood gate is explicitly enabled. Non-engineering dogfood remains blocked; eligibility status display is still not a rollout approval path.
 
+## 2.31F Redis Readiness Recovery Smoke
+
+| Check | Result | Redacted reason |
+| --- | --- | --- |
+| Backend readiness after Redis restore | Pass | readiness `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, eligibility configured |
+| A/B trust | Pass | own session verified, cross-signing ready, peer trust ready |
+| A -> B happy path | Pass | A started, B reached `incomingRinging`, B accepted, A/B reached `activeAudio` |
+| Media path | Pass | Media connect and LiveKit client connect attempted on both sides, media failure `none` |
+| Hangup/final state | Pass | A/B returned to `idle`, no active session, cleanup/disconnect attempted, media failure `none` |
+| Element Call separation | Pass | Existing Element Call route untouched |
+
+This smoke closes the post-restore check after request-time Redis readiness was fixed in `f4656983a`.
+
 ## 2.27E Split-Brain Regression Result
 
 | Check | Result | Redacted reason |

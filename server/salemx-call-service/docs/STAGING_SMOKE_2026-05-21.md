@@ -98,6 +98,7 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - During 2.31C, a temporary token-path blocker was diagnosed as Redis rate-limit store unavailability (`M_DIRECT_CALL_RATE_LIMIT_STORE_UNAVAILABLE` / `503`) and recovered by restoring Redis connectivity.
 - With Redis restored and the explicit private dogfood gate enabled, A/B trust and activation were ready, A/B reached active audio on staging, media/LiveKit connect were attempted, and hangup returned both sides to idle with media failure `none`.
 - 2.31D hardened call-service readiness so Redis-backed staging `allocationStoreConnected` and `rateLimitConnected` require bounded live Redis pings. Redis allocation failure now reports `allocationStoreUnavailable`; Redis rate-limit failure reports `rateLimitStoreUnavailable`. Readiness output remains redacted.
+- The 2.31F post-restore smoke passed after request-time Redis readiness was fixed: readiness was `200`/`ok`, A/B trust was ready, A -> B reached `incomingRinging`, B accepted, A/B reached active audio, media failure stayed `none`, and hangup returned both sides to idle.
 - Controlled engineering dogfood may continue under the same narrow staging-only constraints.
 
 ## Next Step
@@ -112,4 +113,4 @@ Controlled engineering dogfood may continue on the staging path under the privat
 - Element Call toolbar path unchanged and available as fallback;
 - no CallKit, push, video, broad internal rollout, public rollout, or global production activation.
 
-Next, continue with `2.31E — eligibility status cache controlled engineering soak` while keeping controlled dogfood narrow and redacted.
+Next, continue with `2.31G — eligibility status cache controlled engineering soak` while keeping controlled dogfood narrow and redacted.

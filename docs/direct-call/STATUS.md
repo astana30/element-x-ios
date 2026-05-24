@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.31D — live Redis readiness check hardening.
+After 2.31F — Redis readiness recovery native audio smoke.
 
 ## Latest App Code Checkpoint
 
@@ -10,7 +10,7 @@ After 2.31D — live Redis readiness check hardening.
 
 ## Latest Backend Code Checkpoint
 
-2.31D `Harden call service Redis readiness checks`
+2.31E-fix `Recheck Redis connectivity in readiness`
 
 ## Latest SDK Checkpoint
 
@@ -205,6 +205,12 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - If allocation Redis is unreachable, readiness fails closed with `allocationStoreUnavailable` and `allocationStoreConnected=false`.
   - If rate-limit Redis is unreachable, readiness fails closed with `rateLimitStoreUnavailable` and `rateLimitConnected=false`.
   - Token endpoint behavior remains unchanged and still fails closed without issuing tokens on Redis store failure.
+- Redis readiness recovery native audio smoke passed:
+  - After `f4656983a`, Redis-up readiness returned `200`, `ready=true`, `reason=ok`, allocation/rate-limit connected true, storage key configured, LiveKit room provisioning configured, and native audio eligibility/allowlist configured.
+  - A/B trust remained ready with own session verified, cross-signing ready, and peer trust ready.
+  - Runner-assisted A -> B reached B `incomingRinging`, B accepted, and A/B reached `activeAudio` with encryption ready.
+  - A/B had media connect and LiveKit client connect attempted, `productionMediaFailureReason=none`, and hangup returned both sides to `idle` with no active session.
+  - Element Call route remained untouched and no code changes were needed during the runtime proof.
 - Private dogfood activation is explicit and fail-closed by default:
   - `appRolloutDisabled` is produced by the production activation decision when `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` is absent.
   - `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1` can show the private card, and `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1` can allow start actions, but neither gate enables rollout/capability readiness by itself.
