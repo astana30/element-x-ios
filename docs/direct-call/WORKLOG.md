@@ -1350,3 +1350,14 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Hangup returned A/B to `idle` with no active session, cleanup/disconnect attempted, and media failure `none`.
 - The legacy fake/dry-run gate remained unset, Element Call route remained untouched, no redaction issue was observed, and no code changes were needed.
 - Recommended next phase: `2.31D — eligibility status cache controlled engineering soak`.
+
+## 2026-05-25 — 2.36F Server-Backed Internal Pilot Activation Provider
+
+- Added a native-audio-specific internal pilot rollout abstraction that is disabled by default.
+- Added a DEBUG/integration-only environment rollout gate, `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED=1`, for future proofing and tests.
+- Added a concrete server-backed internal pilot activation provider that can return `activationAllowed` only when product UI, internal pilot rollout, capability, backend eligibility, encrypted direct 1:1 room eligibility, trusted peer readiness, dependency readiness, and idle session state all pass.
+- Kept the existing status-only provider status/copy-only; it still never returns `activationAllowed`.
+- Kept engineering private dogfood separate under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`; the internal pilot rollout source does not enable private dogfood or production start.
+- Added tests for default-off rollout, DEBUG/integration rollout gating, fail-closed single-gate behavior, all-gates unit activation, local room/trust/dependency/session override behavior, safe reason mapping, redaction, and `directOneToOneCallsEnabled` separation.
+- This does not enable non-engineering internal dogfood, does not change Element Call, and does not add CallKit, push, missed calls, video, or global activation.
+- Recommended next phase: `2.36G — internal pilot activation provider no-activation proof`.

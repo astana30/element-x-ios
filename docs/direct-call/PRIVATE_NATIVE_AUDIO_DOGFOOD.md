@@ -1971,6 +1971,7 @@ Rollback is complete only when the app relaunches without the private card path 
 
 These block broader internal dogfood and production, but not the controlled engineering dogfood scope above:
 
+- Server-backed internal pilot activation remains default-off. The iOS activation provider can model `activationAllowed` for tests only when all gates pass, but non-engineering Start/Accept is not enabled until a separate runtime no-activation proof and readiness review pass.
 - No CallKit.
 - No push or background incoming calls.
 - No missed calls.

@@ -860,6 +860,10 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - A narrow engineering expansion may continue under the 2.33B runbook, 2.34A soak plan, and 2.35B operations handoff: up to 4 named engineering operators, up to 8 named devices, predeclared pairs only, one active 1:1 native audio call at a time, named session ownership, named redaction review, and redacted reporting only.
 - Soak progress: sessions 1, 2, and 3 of 3 are clean; the planned engineering expansion soak is complete, the post-soak readiness review allowed continued engineering expansion, the operations handoff is recorded, and the first operator-owned session is clean.
 - Per-session Codex supervision is no longer required for clean engineering sessions, but Codex/engineering review remains required for bugs, stop criteria, scope changes, rollout changes, non-engineering access, or config changes.
+- Server-backed internal pilot activation implementation is still default-off:
+  - The iOS stack now has a native-audio-specific internal pilot rollout source that is disabled by default and DEBUG/integration-gated when environment-backed.
+  - The concrete server-backed activation provider can return `activationAllowed` only when product UI, internal pilot rollout, backend eligibility, room eligibility, trust readiness, dependency readiness, and idle session state all pass.
+  - The provider is not enabled for non-engineering runtime by default, and engineering private dogfood remains separate under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`.
 - Pilot sessions must follow the 2.27A checkpoint, 2.28A operations checklist, and 2.33B expansion runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
@@ -872,9 +876,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.36E — server-backed internal pilot activation integration plan`
+`2.36G — internal pilot activation provider no-activation proof`
 
-Goal: define the next implementation boundary for using the server-backed eligibility/activation stack without enabling non-engineering access, preserving token endpoint authority and keeping broad/internal/public rollout blocked.
+Goal: prove the new server-backed activation provider and rollout source remain disabled/default-off at runtime, do not enable non-engineering access, and do not alter the existing private engineering dogfood path.
 
 ## Do-Not-Touch Constraints
 
