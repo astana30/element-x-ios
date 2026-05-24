@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.32B — eligibility status integration polish and runtime proof.
+After 2.32C — eligibility status controlled engineering soak.
 
 Current checkpoints:
 - App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
@@ -30,6 +30,7 @@ Current checkpoints:
 - iOS eligibility provider no-activation proof: 2.30I proved product UI/start gates without the private dogfood gate remain blocked with `appRolloutDisabled`, the iOS provider skeleton remains unwired for non-engineering activation, and controlled engineering dogfood still reaches active audio under the explicit private dogfood gate.
 - Eligibility status cache skeleton: 2.31B added a disabled-by-default DEBUG/integration status gate, room-flow scoped in-memory cache, safe card-status merge, manual refresh bypass, and tests proving backend eligibility status does not activate native audio.
 - Eligibility status integration polish: 2.32B redacts LiveKit room names from token response descriptions, forwards the eligibility status gate through the two-client runner, and proved status-only/no-activation behavior plus the private dogfood happy path.
+- Eligibility status controlled soak: 2.32C kept the eligibility status gate enabled during runner-assisted happy path, reverse, repeated, decline, cancel, timeout, and relaunch-ringing cases.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -183,6 +184,16 @@ Current proven/prepared state:
   - `wait-status incomingRinging` timed out before accept, but explicit accept and final status proved incoming, active audio, hangup, and cleanup;
   - negative backend eligibility reason mappings remain covered by unit tests and the 2.30F route smoke; the live staging allowlist was not reconfigured for negative cases;
   - the legacy fake/dry-run gate remained unset and Element Call remained untouched.
+- 2.32C eligibility status controlled engineering soak:
+  - readiness before and after the soak returned `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, and native audio eligibility/allowlist configured;
+  - A/B activation and trust were ready under the explicit private dogfood gates with `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1`;
+  - runner-assisted happy path A -> B and reverse B -> A reached A/B `activeAudio`, then hangup returned both sides to idle/no active session with media failure `none`;
+  - two repeated A -> B calls reached `activeAudio`, returned idle, and showed no stale session or split-brain;
+  - decline and cancel passed through the shared production hangup command: incoming ringing emitted `reject`, outgoing ringing emitted `cancel`, both sides returned idle, and terminal reason was `cancelled`;
+  - timeout passed with terminal reasons `outgoingTimeout` and `incomingTimeout`;
+  - relaunch during ringing restored no active session; post-relaunch status was `unavailable` until the encrypted 1:1 room is re-opened, matching the current foreground/open-room limitation;
+  - runner output did not include LiveKit room names;
+  - Element Call route remained untouched and no code changed during the soak.
 - Element Call route remains unchanged and must stay available as fallback.
 - No CallKit, push/background incoming, missed calls, video, session restoration, broad internal rollout, public rollout, production activation, or global activation exists.
 
@@ -230,27 +241,26 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.32C — eligibility status controlled engineering soak.
+2.32D — eligibility status negative-case runtime fixture proof.
 
 Task:
-Run a short controlled engineering soak with the side-effect-safe eligibility status cache enabled after the 2.32B runner/redaction polish. Do not modify code unless a real runtime bug is found and explicitly approved.
+Run a focused runtime fixture proof for backend eligibility negative states against the private native audio card status path. Do not enable non-engineering activation. Do not modify code unless a real runtime bug is found and explicitly approved.
 
 Goal:
-Verify that controlled engineering dogfood remains stable with `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1` enabled, while preserving the 2.31C no-activation guarantees and redacted reporting contract.
+Verify that `accountNotEligible`, `peerNotEligible`, `roomNotEligible`, `capabilityMissing`, `serviceUnavailable`, and malformed/fail-closed backend eligibility results map to safe card status/copy without activating native audio or leaking sensitive data.
 
 Inspect:
 Use the existing redacted runner/status tooling and the 2.28A operations checklist. Do not print raw tokens, JWTs, secrets, room IDs, user IDs, peer IDs, device IDs, media keys, event bodies, Redis URLs, or LiveKit room names.
 
 Required output:
-A. Backend readiness result.
-B. A/B gate and trust preflight.
-C. Soak matrix result table.
-D. Final A/B status.
-E. Any runtime regression.
-F. Any redaction or monitoring issue.
-G. Element Call route status.
-H. Whether code changed.
-I. Dogfood decision and recommended next phase.
+A. Fixture setup, redacted.
+B. Negative eligibility result table.
+C. Backend eligible-but-no-private-dogfood result.
+D. Side-effect check.
+E. Redaction check.
+F. Element Call route status.
+G. Whether code changed.
+H. Recommended next phase.
 
 Allowed report fields:
 - readiness booleans;
@@ -301,4 +311,4 @@ Validation if docs change:
 - Direct-call forbidden scan.
 
 Suggested commit if docs change:
-Record eligibility status cache soak result
+Record eligibility status negative-case proof

@@ -5,6 +5,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 ## Milestones
 
 - Polished native audio eligibility status redaction and recorded the runtime proof.
+- Recorded the eligibility status controlled engineering soak.
 - Hardened call-service readiness so Redis connected booleans require bounded live Redis pings in staging.
 - Recorded the Redis readiness recovery native audio smoke.
 - Added the iOS native audio eligibility provider skeleton for the backend `/eligibility` endpoint.
@@ -54,6 +55,21 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Negative backend eligibility reason mappings remain covered by unit tests and the 2.30F route smoke; this live staging run did not reconfigure the local allowlist for negative cases.
 - Element Call route remained untouched.
 - Recommended next phase: `2.32C — eligibility status controlled engineering soak`.
+
+## 2026-05-24 — 2.32C Eligibility Status Controlled Engineering Soak
+
+- Ran a controlled engineering soak with product UI, eligibility status, private dogfood, production start, and staging token base URL gates enabled.
+- Kept the legacy fake/dry-run gate unset.
+- Confirmed backend readiness before and after the soak: `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, and native audio eligibility/allowlist configured.
+- Confirmed A/B activation and trust ready before the soak.
+- Ran runner-assisted happy path A -> B and reverse B -> A; both reached `activeAudio`, then hangup returned A/B to idle/no active session with media failure `none`.
+- Ran two repeated A -> B calls; both reached `activeAudio`, returned idle, and showed no stale session or split-brain.
+- Ran decline and cancel through the shared production hangup command. Incoming ringing emitted `reject`, outgoing ringing emitted `cancel`, both sides returned idle, and terminal reason was `cancelled`.
+- Ran timeout; A ended with `outgoingTimeout`, B ended with `incomingTimeout`, both returned idle, and media failure remained `none`.
+- Ran relaunch during ringing; relaunch cleared both apps to no active session. Final post-relaunch status was `unavailable` because the encrypted 1:1 room was not re-opened, matching the current foreground/open-room limitation.
+- Runner output did not include LiveKit room names.
+- Element Call route remained untouched; no code changed during the soak.
+- Recommended next phase: `2.32D — eligibility status negative-case runtime fixture proof`.
 
 ## 2026-05-24 — 2.31D Live Redis Readiness Check Hardening
 

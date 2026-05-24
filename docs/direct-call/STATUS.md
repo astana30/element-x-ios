@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.32B — eligibility status integration polish and runtime proof.
+After 2.32C — eligibility status controlled engineering soak.
 
 ## Latest App Code Checkpoint
 
@@ -210,6 +210,17 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - A `wait-status incomingRinging` helper poll timed out before accept, but explicit accept and final status proved the incoming session, active audio, hangup, and cleanup path. This helper timeout is not a media/backend failure.
   - Negative backend eligibility reason mappings remain covered by unit tests and the 2.30F route smoke; this live run did not reconfigure the local staging allowlist for negative cases.
   - The legacy fake/dry-run gate remained unset and Element Call route remained untouched.
+- Native audio eligibility status controlled engineering soak passed:
+  - Preflight passed with readiness `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, and native audio eligibility/allowlist configured.
+  - A/B activation and trust were ready under the explicit private dogfood gates with `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1`.
+  - Runner-assisted happy path A -> B and reverse B -> A reached `activeAudio`, then hangup returned both sides to idle/no active session with media failure `none`.
+  - Two repeated A -> B calls reached `activeAudio`, returned idle, and showed no stale session or split-brain.
+  - Decline and cancel flows passed through the shared production hangup command: incoming ringing emitted `reject`, outgoing ringing emitted `cancel`, both sides returned idle, and terminal reason was `cancelled`.
+  - Timeout passed with terminal reasons `outgoingTimeout` and `incomingTimeout`; both sides returned idle with media failure `none`.
+  - Relaunch during ringing failed closed with no active session restored. Final post-relaunch status was `unavailable` because the encrypted 1:1 room was not re-opened, which is expected for the current foreground/open-room scope.
+  - Final readiness remained `ready=true`, `reason=ok`.
+  - Runner output did not include LiveKit room names, and Element Call route remained untouched.
+  - No code changed during the soak.
 - Call-service Redis readiness is hardened:
   - Redis-backed staging readiness now performs bounded live Redis pings at startup and on each readiness request for both allocation and rate-limit stores.
   - `allocationStoreConnected` and `rateLimitConnected` now reflect live Redis connectivity for Redis stores, not only config shape or implementation presence.

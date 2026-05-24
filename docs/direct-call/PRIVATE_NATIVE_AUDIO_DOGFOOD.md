@@ -712,6 +712,27 @@ This proof confirms the 2.31B eligibility status cache remains status-only and f
 
 This proof confirms eligibility status remains status/copy-only and still does not authorize native audio activation. Backend eligible status alone is insufficient; the DEBUG/integration private dogfood gate remains required for engineering activation, and non-engineering internal dogfood remains blocked.
 
+## 2.32C Eligibility Status Controlled Soak
+
+| Check | Result | Redacted reason |
+| --- | --- | --- |
+| Backend preflight | Pass | readiness `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, eligibility configured |
+| A/B preflight | Pass | activation enabled only under explicit private dogfood gates; A/B trust ready |
+| Happy path A -> B | Pass | A/B reached `activeAudio`, hangup -> idle, media failure `none` |
+| Reverse B -> A | Pass | A/B reached `activeAudio`, hangup -> idle, media failure `none` |
+| Repeated call 1 | Pass | A/B reached `activeAudio`, hangup -> idle, no stale session |
+| Repeated call 2 | Pass | A/B reached `activeAudio`, hangup -> idle, no split-brain |
+| Decline incoming | Pass | Incoming side emitted `reject`; A/B idle, terminal `cancelled`, media failure `none` |
+| Cancel outgoing | Pass | Outgoing side emitted `cancel`; A/B idle, terminal `cancelled`, media failure `none` |
+| Timeout | Pass | A/B idle with terminal `outgoingTimeout` / `incomingTimeout`, media failure `none` |
+| Relaunch during ringing | Pass | Relaunch restored no active session; post-relaunch status was `unavailable` until the room is re-opened |
+| Final backend readiness | Pass | readiness stayed `ready=true`, `reason=ok` |
+| Runner use | Pass | Matrix was runner-assisted for controlled engineering soak; not a manual product-card-only claim |
+| Redaction | Pass | No LiveKit room names were present in runner output; no tokens, secrets, raw IDs, event bodies, or Redis credentials were reported |
+| Element Call separation | Pass | Existing Element Call route untouched |
+
+This soak confirms the eligibility status gate can remain enabled during controlled engineering dogfood use without destabilising the staging native-audio path. It does not broaden activation: non-engineering dogfood remains blocked, and the explicit DEBUG/integration private dogfood gate is still required.
+
 ## 2.31F Redis Readiness Recovery Smoke
 
 | Check | Result | Redacted reason |
