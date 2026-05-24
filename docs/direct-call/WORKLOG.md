@@ -39,7 +39,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## 2026-05-24 — 2.31D Live Redis Readiness Check Hardening
 
-- Hardened call-service startup/readiness for Redis-backed staging stores.
+- Hardened call-service startup and request-time readiness for Redis-backed staging stores.
 - `allocationStoreConnected` and `rateLimitConnected` now require bounded live Redis pings instead of only config shape/runtime implementation presence.
 - Added safe readiness reasons `allocationStoreUnavailable` and `rateLimitStoreUnavailable`.
 - Preserved local fake/memory readiness behavior for explicit local/test modes.

@@ -101,7 +101,7 @@ GET /_matrix/client/unstable/kz.salemx.direct_call/readiness
 ```
 
 The payload reports only mode, readiness, redacted reason, and configuration-presence booleans. It never includes tokens, secrets, URLs, Matrix room IDs, peer IDs, request bodies, or response bodies.
-For Redis-backed staging stores, `allocationStoreConnected` and `rateLimitConnected` require a bounded live Redis ping at service startup. Memory/local fake stores remain connected only for their explicit local/test modes. These booleans still do not expose Redis URLs, credentials, keys, or values.
+For Redis-backed staging stores, `allocationStoreConnected` and `rateLimitConnected` require bounded live Redis pings at startup and on each readiness request. Memory/local fake stores remain connected only for their explicit local/test modes. These booleans still do not expose Redis URLs, credentials, keys, or values.
 
 Readiness reasons:
 

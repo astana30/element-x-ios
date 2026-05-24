@@ -206,7 +206,7 @@ Required result:
 - `storageKeyConfigured=true`;
 - `liveKitRoomProvisioningConfigured=true`.
 
-For Redis-backed staging stores, `allocationStoreConnected` and `rateLimitConnected` mean the call-service completed bounded live Redis pings during startup. If either connected boolean is false, or `reason` is `allocationStoreUnavailable` / `rateLimitStoreUnavailable`, do not start a dogfood call.
+For Redis-backed staging stores, `allocationStoreConnected` and `rateLimitConnected` mean the call-service completed bounded live Redis pings for the readiness request. If either connected boolean is false, or `reason` is `allocationStoreUnavailable` / `rateLimitStoreUnavailable`, do not start a dogfood call.
 
 If readiness fails, do not start a dogfood call. Record only the failing boolean or safe reason enum, then stop the session or recover the local service.
 

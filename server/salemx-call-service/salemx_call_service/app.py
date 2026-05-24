@@ -46,6 +46,7 @@ def create_app(config: ServiceConfig | None = None,
                strict_startup: bool = True) -> FastAPI:
     service: DirectCallTokenService | None
     readiness: ServiceReadiness
+    runtime_config: ServiceConfig | None = None
     local_fake_capabilities_enabled = False
     if token_service is not None:
         configure_logging("INFO")
@@ -86,6 +87,7 @@ def create_app(config: ServiceConfig | None = None,
                 readiness = _readiness_with_live_store_checks(config, readiness)
                 if not readiness.ready:
                     raise ServicePreflightError(readiness)
+                runtime_config = config
                 configure_logging(config.log_level)
                 service = DirectCallTokenService(
                     auth_validator=SynapseMatrixAuthValidator(config.synapse_base_url),
@@ -119,7 +121,8 @@ def create_app(config: ServiceConfig | None = None,
 
     @app.get(READINESS_PATH)
     async def ready() -> JSONResponse:
-        return JSONResponse(status_code=200 if readiness.ready else 503, content=readiness.as_dict())
+        current_readiness = _request_time_readiness(runtime_config, readiness)
+        return JSONResponse(status_code=200 if current_readiness.ready else 503, content=current_readiness.as_dict())
 
     @app.post(ENDPOINT_PATH)
     async def livekit_token(request: Request, authorization: Optional[str] = Header(default=None)) -> JSONResponse:
@@ -237,6 +240,12 @@ def _readiness_with_live_store_checks(config: ServiceConfig, readiness: ServiceR
         allocation_store_connected=allocation_store_connected,
         rate_limit_connected=rate_limit_connected,
     )
+
+
+def _request_time_readiness(config: ServiceConfig | None, readiness: ServiceReadiness) -> ServiceReadiness:
+    if config is None:
+        return readiness
+    return _readiness_with_live_store_checks(config, readiness)
 
 
 def _redis_ping_url(redis_url: str) -> bool:

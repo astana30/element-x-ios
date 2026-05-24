@@ -200,7 +200,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - A/B had media connect and LiveKit client connect attempted, `productionMediaFailureReason=none`, and hangup returned A/B to `idle` with cleanup/disconnect attempted.
   - The legacy fake/dry-run gate remained unset, Element Call route remained untouched, and no code changes were needed during the runtime proof.
 - Call-service Redis readiness is hardened:
-  - Redis-backed staging readiness now performs bounded live Redis pings at service startup for both allocation and rate-limit stores.
+  - Redis-backed staging readiness now performs bounded live Redis pings at startup and on each readiness request for both allocation and rate-limit stores.
   - `allocationStoreConnected` and `rateLimitConnected` now reflect live Redis connectivity for Redis stores, not only config shape or implementation presence.
   - If allocation Redis is unreachable, readiness fails closed with `allocationStoreUnavailable` and `allocationStoreConnected=false`.
   - If rate-limit Redis is unreachable, readiness fails closed with `rateLimitStoreUnavailable` and `rateLimitConnected=false`.

@@ -1892,6 +1892,38 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(rate_limit_secret, output)
         self.assertNotIn("rate-limit.example.test", output)
 
+    async def test_staging_readiness_rechecks_redis_without_recreating_app(self) -> None:
+        app_module = _load_app_module()
+        redis_status = {"allocation": True, "rate_limit": True}
+        env = _staging_env()
+
+        with patch.dict(os.environ, env, clear=True), _patch_redis_ping_from_status(app_module, redis_status):
+            app = app_module.create_app()
+
+            available_status, available_body = await _asgi_get_json(app, app_module.READINESS_PATH)
+            redis_status["rate_limit"] = False
+            unavailable_status, unavailable_body = await _asgi_get_json(app, app_module.READINESS_PATH)
+            redis_status["rate_limit"] = True
+            restored_status, restored_body = await _asgi_get_json(app, app_module.READINESS_PATH)
+
+        self.assertEqual(available_status, 200)
+        self.assertTrue(available_body["ready"])
+        self.assertEqual(available_body["reason"], "ok")
+        self.assertTrue(available_body["allocationStoreConnected"])
+        self.assertTrue(available_body["rateLimitConnected"])
+
+        self.assertEqual(unavailable_status, 503)
+        self.assertFalse(unavailable_body["ready"])
+        self.assertEqual(unavailable_body["reason"], "rateLimitStoreUnavailable")
+        self.assertTrue(unavailable_body["allocationStoreConnected"])
+        self.assertFalse(unavailable_body["rateLimitConnected"])
+
+        self.assertEqual(restored_status, 200)
+        self.assertTrue(restored_body["ready"])
+        self.assertEqual(restored_body["reason"], "ok")
+        self.assertTrue(restored_body["allocationStoreConnected"])
+        self.assertTrue(restored_body["rateLimitConnected"])
+
     async def test_staging_mode_refuses_postgres_allocation_until_implemented(self) -> None:
         app_module = _load_app_module()
         env = _staging_env({
@@ -2057,12 +2089,22 @@ def _load_app_module() -> object:
 def _patch_redis_ping(app_module: object,
                       allocation_connected: bool = True,
                       rate_limit_connected: bool = True) -> object:
+    return _patch_redis_ping_from_status(
+        app_module,
+        {
+            "allocation": allocation_connected,
+            "rate_limit": rate_limit_connected,
+        },
+    )
+
+
+def _patch_redis_ping_from_status(app_module: object, status: dict[str, bool]) -> object:
     def redis_ping(redis_url: str) -> bool:
         if "allocation" in redis_url:
-            return allocation_connected
+            return status["allocation"]
         if "rate-limit" in redis_url:
-            return rate_limit_connected
-        return allocation_connected and rate_limit_connected
+            return status["rate_limit"]
+        return status["allocation"] and status["rate_limit"]
 
     return patch.object(app_module, "_redis_ping_url", side_effect=redis_ping)
 
