@@ -81,13 +81,17 @@ struct DirectCallLiveKitTokenRequest: Equatable, CustomStringConvertible, Custom
     }
 }
 
-struct DirectCallLiveKitTokenResponse: Equatable, CustomStringConvertible {
+struct DirectCallLiveKitTokenResponse: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     let serverURLString: String
     let roomName: String
     let token: String
 
     var description: String {
-        "DirectCallLiveKitTokenResponse(serverURLString: <redacted>, roomName: \(roomName), token: <redacted>)"
+        "DirectCallLiveKitTokenResponse(serverURLString: <redacted>, roomName: <redacted>, token: <redacted>)"
+    }
+
+    var debugDescription: String {
+        description
     }
 }
 
@@ -145,7 +149,7 @@ struct DirectCallProductionLiveKitTokenResponseDTO: Codable, Equatable, CustomSt
         let expiresAt: String?
 
         var description: String {
-            "LiveKit(serverURL: <redacted>, roomName: \(roomName), participantToken: <redacted>, expiresAt: \(expiresAt ?? "<nil>"))"
+            "LiveKit(serverURL: <redacted>, roomName: <redacted>, participantToken: <redacted>, expiresAt: \(expiresAt ?? "<nil>"))"
         }
 
         var debugDescription: String {

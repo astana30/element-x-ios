@@ -691,6 +691,27 @@ This proof confirms the 2.30H iOS provider skeleton stays side-effect-safe and f
 
 This proof confirms the 2.31B eligibility status cache remains status-only and fail-closed unless the existing DEBUG/integration private dogfood gate is explicitly enabled. Non-engineering dogfood remains blocked; eligibility status display is still not a rollout approval path.
 
+## 2.32B Eligibility Status Integration Polish
+
+| Check | Result | Redacted reason |
+| --- | --- | --- |
+| Redaction polish | Pass | Production LiveKit token response descriptions redact LiveKit room names, server URLs, and participant tokens |
+| Runner eligibility status gate | Pass | Runner forwards `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1` and reports only enabled/disabled state |
+| Backend readiness | Pass | readiness `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, eligibility configured |
+| Eligibility status without private dogfood | Pass | Attached encrypted direct 1:1 room stayed blocked with `appRolloutDisabled` |
+| Product UI/start/status gates without private dogfood | Pass | `production-start-outgoing` stayed blocked with `appRolloutDisabled` |
+| No private dogfood side effects | Pass | No Matrix send, no token request, no media connect, no LiveKit connect, no active session |
+| Private dogfood activation | Pass | A/B activation enabled with dependencies ready, endpoint accepted, and A/B trust ready |
+| Engineering happy path | Pass | Runner-assisted A -> B reached A/B `activeAudio`, media failure `none` |
+| Media path | Pass | Media connect and LiveKit client connect attempted on both sides |
+| Hangup/final state | Pass | A/B returned to `idle`, no active session, cleanup/disconnect attempted, media failure `none` |
+| Runner caveat | Pass | `wait-status incomingRinging` timed out before accept, but explicit accept and final status proved incoming, active audio, hangup, and cleanup |
+| Negative eligibility cases | Not rerun | Covered by unit tests and the 2.30F route smoke; local staging allowlist was not reconfigured during this live run |
+| Legacy fake gate | Pass | Explicitly unset and not used |
+| Element Call separation | Pass | Existing Element Call route untouched |
+
+This proof confirms eligibility status remains status/copy-only and still does not authorize native audio activation. Backend eligible status alone is insufficient; the DEBUG/integration private dogfood gate remains required for engineering activation, and non-engineering internal dogfood remains blocked.
+
 ## 2.31F Redis Readiness Recovery Smoke
 
 | Check | Result | Redacted reason |

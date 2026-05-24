@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-After 2.31F — Redis readiness recovery native audio smoke.
+After 2.32B — eligibility status integration polish and runtime proof.
 
 ## Latest App Code Checkpoint
 
-2.31B `Add native audio eligibility status cache`
+2.32B `Polish native audio eligibility status copy`
 
 ## Latest Backend Code Checkpoint
 
@@ -199,6 +199,17 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - After Redis recovery, with the explicit private dogfood gate restored, A/B trust and activation were ready, A reached outgoing ringing, B reached incoming ringing, B accepted, and A/B reached `activeAudio`.
   - A/B had media connect and LiveKit client connect attempted, `productionMediaFailureReason=none`, and hangup returned A/B to `idle` with cleanup/disconnect attempted.
   - The legacy fake/dry-run gate remained unset, Element Call route remained untouched, and no code changes were needed during the runtime proof.
+- Native audio eligibility status integration polish and runtime proof passed:
+  - LiveKit room names are now redacted from production token response `description` and `debugDescription` output, matching the dogfood monitoring contract.
+  - The two-client diagnostic runner now forwards `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1` to launched simulator processes and reports that status gate as enabled/disabled without printing env values.
+  - With product UI, production start, and eligibility status gates enabled, but without `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, an attached encrypted direct 1:1 room stayed blocked with `appRolloutDisabled`.
+  - The no-private-dogfood run had no Matrix send, no token request, no media connect, no LiveKit client connect, and no active session.
+  - With the explicit private dogfood gate restored, readiness returned `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, and native audio eligibility/allowlist configured.
+  - A/B activation and trust were ready, the runner-assisted A -> B happy path reached `activeAudio`, media and LiveKit connect were attempted on both sides, and `productionMediaFailureReason=none`.
+  - Hangup returned A/B to `idle` with no active session, cleanup/disconnect attempted, and media failure `none`.
+  - A `wait-status incomingRinging` helper poll timed out before accept, but explicit accept and final status proved the incoming session, active audio, hangup, and cleanup path. This helper timeout is not a media/backend failure.
+  - Negative backend eligibility reason mappings remain covered by unit tests and the 2.30F route smoke; this live run did not reconfigure the local staging allowlist for negative cases.
+  - The legacy fake/dry-run gate remained unset and Element Call route remained untouched.
 - Call-service Redis readiness is hardened:
   - Redis-backed staging readiness now performs bounded live Redis pings at startup and on each readiness request for both allocation and rate-limit stores.
   - `allocationStoreConnected` and `rateLimitConnected` now reflect live Redis connectivity for Redis stores, not only config shape or implementation presence.

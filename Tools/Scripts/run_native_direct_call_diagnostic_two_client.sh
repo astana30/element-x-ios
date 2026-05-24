@@ -103,6 +103,8 @@ Optional environment:
                                   Optional. Set to 1 to show the DEBUG-only internal room control panel.
   NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED
                                   Optional. Set to 1 to show the private native-call room card.
+  NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED
+                                  Optional. Set to 1 for DEBUG/integration-only eligibility status display.
 
 Example planned signalling sequence:
   $SCRIPT_NAME init both
@@ -210,6 +212,11 @@ log_livekit_environment_summary() {
         log "Product native-call UI: enabled"
     else
         log "Product native-call UI: disabled"
+    fi
+    if [[ "${NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED:-}" == "1" ]]; then
+        log "Eligibility status display: enabled"
+    else
+        log "Eligibility status display: disabled"
     fi
     log "Production token backend base URL: $(redacted_env_state NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL)"
 }
@@ -1258,6 +1265,7 @@ launch_client_with_environment() {
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL="${NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL:-}" \
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED="${NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED:-}" \
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED="${NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED:-}" \
+        SIMCTL_CHILD_NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED="${NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED:-}" \
         SIMCTL_CHILD_UI_TESTS_SIGNALLING_CHANNEL="$channel" \
         SIMCTL_CHILD_INTEGRATION_TESTS_HOST="$INTEGRATION_TESTS_HOST" \
         SIMCTL_CHILD_INTEGRATION_TESTS_USERNAME="$username" \

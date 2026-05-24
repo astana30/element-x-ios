@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Polished native audio eligibility status redaction and recorded the runtime proof.
 - Hardened call-service readiness so Redis connected booleans require bounded live Redis pings in staging.
 - Recorded the Redis readiness recovery native audio smoke.
 - Added the iOS native audio eligibility provider skeleton for the backend `/eligibility` endpoint.
@@ -37,6 +38,22 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-24 — 2.32B Eligibility Status Integration Polish and Runtime Proof
+
+- Polished production LiveKit token response descriptions so LiveKit room names are redacted alongside server URLs and participant tokens.
+- Updated the two-client diagnostic runner to forward `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1` into simulator launches and to report the status gate without printing env values.
+- Confirmed local staging call-service readiness returned `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, and native audio eligibility/allowlist configured.
+- Launched A/B with product UI, production start, and eligibility status gates enabled, but without the private dogfood gate.
+- Confirmed an attached encrypted direct 1:1 room stayed blocked with `appRolloutDisabled`.
+- Confirmed the no-private-dogfood run had no Matrix send, no token request, no media connect, no LiveKit client connect, and no active session.
+- Relaunched with the explicit private dogfood gate restored and the legacy fake/dry-run gate unset.
+- Confirmed A/B activation and trust ready, then ran a runner-assisted A -> B happy path: B listener armed, A started, B accepted, and A/B reached `activeAudio`.
+- Confirmed media connect and LiveKit client connect were attempted on both sides, `productionMediaFailureReason=none`, and hangup returned A/B to idle/no active session with cleanup/disconnect attempted.
+- Observed a `wait-status incomingRinging` helper timeout before accept, but explicit accept and final status proved the incoming session and media path. The timeout is a runner polling caveat, not a backend/media failure.
+- Negative backend eligibility reason mappings remain covered by unit tests and the 2.30F route smoke; this live staging run did not reconfigure the local allowlist for negative cases.
+- Element Call route remained untouched.
+- Recommended next phase: `2.32C — eligibility status controlled engineering soak`.
 
 ## 2026-05-24 — 2.31D Live Redis Readiness Check Hardening
 

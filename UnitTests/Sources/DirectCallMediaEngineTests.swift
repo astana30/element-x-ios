@@ -1820,7 +1820,9 @@ final class DirectCallMediaProviderSkeletonTests {
         #expect(dto.liveKit.participantToken == "participant-credential")
         #expect(dto.allocation.callID == "call-a")
         #expect(String(describing: dto).contains("wss://livekit.example.com") == false)
+        #expect(String(describing: dto).contains("opaque-room") == false)
         #expect(String(describing: dto).contains("participant-credential") == false)
+        #expect(String(reflecting: dto).contains("opaque-room") == false)
         #expect(String(reflecting: dto).contains("participant-credential") == false)
     }
 
@@ -1842,7 +1844,7 @@ final class DirectCallMediaProviderSkeletonTests {
     }
 
     @Test
-    func liveKitTokenResponseAndConnectionInfoDescriptionsRedactTokenAndURL() throws {
+    func liveKitTokenResponseAndConnectionInfoDescriptionsRedactTokenURLAndRoomName() throws {
         let response = DirectCallLiveKitTokenResponse(serverURLString: "wss://livekit.example.com",
                                                       roomName: "direct-room",
                                                       token: "secret-token")
@@ -1853,6 +1855,8 @@ final class DirectCallMediaProviderSkeletonTests {
 
         #expect(String(describing: response).contains("secret-token") == false)
         #expect(String(describing: response).contains("wss://livekit.example.com") == false)
+        #expect(String(describing: response).contains("direct-room") == false)
+        #expect(String(reflecting: response).contains("direct-room") == false)
         #expect(String(describing: connectionInfo).contains("secret-token") == false)
         #expect(String(describing: connectionInfo).contains("wss://livekit.example.com") == false)
     }
