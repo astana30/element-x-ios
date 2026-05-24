@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.34A — engineering expansion soak plan.
+After 2.34B — engineering expansion soak session 1.
 
 ## Latest App Code Checkpoint
 
@@ -255,6 +255,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Each session must pass preflight, A -> B happy path, B -> A reverse, repeated calls x2, decline, cancel, timeout, relaunch fail-closed, listener/open-room unavailable, and Element Call fallback smoke.
   - Backend-off/recovery remains optional only when safe for the local staging setup; LiveKit-off remains not-run unless explicitly approved by the shared staging LiveKit owner.
   - Decision rule: 3 clean sessions lead to a readiness review for the next phase; any critical bug or stop criterion pauses the soak for diagnosis.
+- Engineering expansion soak session 1 passed:
+  - Session used redacted A/B engineering labels only, staging call-service, staging LiveKit, required DEBUG/integration gates, eligibility status gate, private dogfood gate, production start gate, and staging token base URL.
+  - The legacy fake/dry-run gate stayed unset.
+  - Preflight passed with readiness `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, native audio eligibility/allowlist configured, A/B trust ready, activation enabled, and baseline A/B idle/no active session.
+  - Runner-assisted A -> B happy path, B -> A reverse path, and repeated A -> B calls x2 reached A/B `activeAudio`, then hangup returned A/B idle/no active session with media failure `none`.
+  - Decline, cancel, timeout, relaunch-ringing, listener-unavailable/open-room edge, and post-listener recovery passed.
+  - Timeout reported A `outgoingTimeout` and B `incomingTimeout`; both sides returned idle/no active session with media failure `none`.
+  - Backend-off recovery was not run because the local staging call-service stayed up for the session. LiveKit-off was not run because shared staging LiveKit must not be stopped without owner approval.
+  - Final A/B status was idle/no active session with media failure `none`, cleanup/disconnect attempted on both sides, no rollback, no stop criteria, no redaction issue, and Element Call route untouched.
 - Call-service Redis readiness is hardened:
   - Redis-backed staging readiness now performs bounded live Redis pings at startup and on each readiness request for both allocation and rate-limit stores.
   - `allocationStoreConnected` and `rateLimitConnected` now reflect live Redis connectivity for Redis stores, not only config shape or implementation presence.
@@ -796,7 +805,8 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 ## Current Gate
 
 - Controlled engineering dogfood pilot may continue on staging under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, including the product-card-only happy path, repeated-call split-brain regression proof, 2.27F controlled matrix rerun, 2.28B/2.28C pilot sessions, the 2.32C eligibility status soak, the 2.33D timeout cleanup proof, and the 2.33E engineering expansion pilot session 1 rerun.
-- A narrow engineering expansion soak may run under the 2.33B runbook and 2.34A soak plan: up to 4 named engineering operators, up to 8 named devices, predeclared pairs only, one active 1:1 native audio call at a time, three clean sessions before readiness review, and redacted reporting only.
+- A narrow engineering expansion soak may continue under the 2.33B runbook and 2.34A soak plan: up to 4 named engineering operators, up to 8 named devices, predeclared pairs only, one active 1:1 native audio call at a time, three clean sessions before readiness review, and redacted reporting only.
+- Soak progress: session 1 of 3 is clean.
 - Pilot sessions must follow the 2.27A checkpoint, 2.28A operations checklist, and 2.33B expansion runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
@@ -809,9 +819,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.34B — engineering expansion soak session 1`
+`2.34C — engineering expansion soak session 2`
 
-Goal: run the first of three short engineering-only soak sessions under the 2.34A plan, with labelled participants/devices only, one active 1:1 native audio call at a time, required staging gates, per-session matrix, redacted reporting, and no Element Call route changes.
+Goal: run the second of three short engineering-only soak sessions under the 2.34A plan, with labelled participants/devices only, one active 1:1 native audio call at a time, required staging gates, per-session matrix, redacted reporting, and no Element Call route changes.
 
 ## Do-Not-Touch Constraints
 

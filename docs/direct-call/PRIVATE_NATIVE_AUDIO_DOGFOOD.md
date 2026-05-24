@@ -1186,6 +1186,60 @@ Allowed report fields are limited to pass/fail/not-run, readiness booleans and s
 - Any critical bug or stop criterion: pause the soak, keep non-engineering internal dogfood blocked, and diagnose before continuing.
 - Any non-critical not-run row must include a redacted safety reason and be accepted before the session can count as clean.
 
+## 2.34B Engineering Expansion Soak Session 1
+
+Session date/time: `2026-05-24 22:07 +05`.
+
+Operators and devices are recorded only as redacted A/B engineering labels. The session used staging call-service, staging LiveKit, DEBUG/integration diagnostics, product UI, eligibility status, private dogfood, production start, and staging token base URL gates. The legacy fake/dry-run gate stayed unset. One active 1:1 native audio call was exercised at a time.
+
+Preflight passed:
+
+| Check | Result | Redacted status |
+| --- | --- | --- |
+| Backend readiness | Pass | `200`, `ready=true`, `reason=ok` |
+| Redis/storage | Pass | allocation/rate-limit connected, storage key configured |
+| LiveKit provisioning | Pass | room provisioning configured |
+| Eligibility | Pass | eligibility and allowlist configured |
+| A/B trust | Pass | own session verified, cross-signing ready, peer trust ready |
+| Activation | Pass | enabled only under explicit private dogfood gates |
+| Baseline state | Pass | A/B idle, no active session |
+
+Soak matrix:
+
+| Case | Result | Redacted status |
+| --- | --- | --- |
+| A -> B happy path | Pass | A/B `activeAudio`, then idle/no active session, media failure `none` |
+| B -> A reverse path | Pass | A/B `activeAudio`, then idle/no active session, media failure `none` |
+| Repeated call 1 | Pass | A/B `activeAudio`, then idle/no active session, media failure `none` |
+| Repeated call 2 | Pass | A/B `activeAudio`, then idle/no active session, no split-brain, media failure `none` |
+| Decline incoming | Pass | incoming ringing returned A/B idle/no active session |
+| Cancel outgoing | Pass | outgoing ringing returned A/B idle/no active session |
+| Timeout | Pass | A `outgoingTimeout`, B `incomingTimeout`, A/B idle/no active session, media failure `none` |
+| Relaunch during ringing | Pass | relaunch returned A/B idle/no active session |
+| Listener unavailable/open-room edge | Pass | B stopped before A start; A timed out fail-closed with `outgoingTimeout`, no active session, media failure `none`; B relaunched idle/no active session |
+| Post-listener recovery | Pass | A/B `activeAudio`, then idle/no active session, media failure `none` |
+| Element Call fallback status | Pass | existing Element Call route remained visible/unchanged and was not invoked by the native soak |
+| Backend-off recovery | Not run | local staging call-service stayed up for the session |
+| LiveKit-off | Not run | shared staging LiveKit must not be stopped without owner approval |
+
+Final status:
+
+- A/B idle;
+- A/B no active session;
+- media failure `none`;
+- media and LiveKit connect attempted on both sides during successful calls;
+- cleanup/disconnect attempted on both sides;
+- no rollback used;
+- no stop criteria triggered;
+- no redaction issue observed;
+- Element Call route stayed untouched.
+
+Runner use: runner-assisted launch, status, trust, and matrix control were used for this engineering soak session. The run did not invoke the Element Call route and did not change Element Call behavior. This is still an engineering-only staging soak result, not product beta or non-engineering approval.
+
+Dogfood decision: continue the engineering-only soak. Session 1 of 3 is clean. Non-engineering internal dogfood, broad internal rollout, production/public rollout, Element Call replacement, CallKit, push/background incoming, missed calls, video, session restoration, and global activation remain blocked.
+
+Next soak attempt should use `2.34C — engineering expansion soak session 2`.
+
 ### Remaining Blockers After Expansion
 
 Even if the expanded engineering pilot passes, the following remain blocked:
