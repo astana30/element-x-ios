@@ -1348,6 +1348,30 @@ Dogfood decision: the engineering-only soak can continue only under the same nar
 
 Next phase should use `2.35A — post-soak engineering expansion readiness review`.
 
+## 2.36C Internal Pilot Activation Provider Skeleton
+
+The iOS app now has a native-audio-specific internal pilot activation provider skeleton. It is disabled and fail-closed by default, and it is not wired to enable non-engineering Start or Accept.
+
+The skeleton defines:
+
+- activation states: `disabled`, `unavailable`, `eligibleForStatusOnly`, and `activationAllowed`;
+- safe unavailable reasons: `rolloutDisabled`, `capabilityMissing`, `accountNotEligible`, `peerNotEligible`, `roomNotEligible`, `trustNotReady`, `serviceUnavailable`, `unsupportedClient`, `dependenciesUnavailable`, and `unknown`;
+- a provider protocol for a future activation decision boundary;
+- a fail-closed default provider;
+- a status-only provider that can combine future rollout/capability/eligibility/room/trust/dependency inputs but never returns `activationAllowed`.
+
+Current safety posture:
+
+- non-engineering internal dogfood remains disabled;
+- product UI gate alone remains insufficient;
+- backend eligibility alone remains insufficient;
+- eligibility status remains status/copy only;
+- private engineering dogfood remains on `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` under DEBUG/integration gates;
+- `directOneToOneCallsEnabled` remains unrelated to native audio activation;
+- token endpoint remains final authority before rate-limit, allocation, LiveKit room pre-create, and token issuance.
+
+This phase is a typed skeleton for a future server-backed activation implementation. It does not approve non-engineering users, broad internal rollout, production/public rollout, Element Call replacement, CallKit, push/background incoming, missed calls, video, session restoration, or global activation.
+
 ## 2.35B Engineering Expansion Operations Handoff
 
 The 3-session engineering expansion soak completed cleanly, so narrow engineering dogfood can continue without per-session Codex supervision only when a named engineering operator owns the session and this handoff checklist is followed. This is still staging-only engineering dogfood, not non-engineering internal dogfood, product beta, public rollout, production activation, or Element Call replacement.

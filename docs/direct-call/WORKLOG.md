@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Added the native audio internal pilot activation provider skeleton.
 - Recorded the first operator-owned engineering expansion session.
 - Added the engineering expansion operations handoff and monitoring baseline.
 - Completed the 3-session engineering expansion soak.
@@ -49,6 +50,17 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-24 — 2.36C Internal Pilot Activation Provider Skeleton
+
+- Added a native-audio-specific internal pilot activation model with `disabled`, `unavailable`, `eligibleForStatusOnly`, and `activationAllowed` states.
+- Added safe activation unavailable reasons: `rolloutDisabled`, `capabilityMissing`, `accountNotEligible`, `peerNotEligible`, `roomNotEligible`, `trustNotReady`, `serviceUnavailable`, `unsupportedClient`, `dependenciesUnavailable`, and `unknown`.
+- Added an activation provider protocol plus a fail-closed default provider.
+- Added a status-only provider that can combine future rollout/capability/eligibility/room/trust/dependency inputs but never returns `activationAllowed`.
+- Added tests proving default activation remains disabled, backend eligible alone does not activate, product UI / eligibility status alone do not activate, `directOneToOneCallsEnabled` does not activate native audio, local room/trust/dependency failures fail closed, and activation output remains redacted.
+- Engineering private dogfood remains on `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` under DEBUG/integration gates.
+- Non-engineering internal dogfood, broad internal rollout, production/public rollout, Element Call replacement, CallKit, push/background incoming, missed calls, video, session restoration, and global activation remain blocked.
+- Recommended next phase: `2.36D — internal pilot activation skeleton no-activation proof`.
 
 ## 2026-05-24 — 2.35B Engineering Expansion Operations Handoff
 

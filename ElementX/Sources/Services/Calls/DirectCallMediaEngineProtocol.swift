@@ -729,6 +729,197 @@ enum NativeDirectCallInternalPilotEligibility: Equatable, CustomStringConvertibl
     }
 }
 
+enum NativeDirectCallInternalPilotActivationUnavailableReason: String, CaseIterable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case rolloutDisabled
+    case capabilityMissing
+    case accountNotEligible
+    case peerNotEligible
+    case roomNotEligible
+    case trustNotReady
+    case serviceUnavailable
+    case unsupportedClient
+    case dependenciesUnavailable
+    case unknown
+
+    init(eligibilityReason: NativeDirectCallInternalPilotUnavailableReason) {
+        switch eligibilityReason {
+        case .accountNotEligible:
+            self = .accountNotEligible
+        case .peerNotEligible:
+            self = .peerNotEligible
+        case .roomNotEligible:
+            self = .roomNotEligible
+        case .trustNotReady:
+            self = .trustNotReady
+        case .serviceUnavailable:
+            self = .serviceUnavailable
+        case .capabilityMissing:
+            self = .capabilityMissing
+        case .unsupportedClient:
+            self = .unsupportedClient
+        case .unknown:
+            self = .unknown
+        }
+    }
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum NativeDirectCallInternalPilotActivation: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case disabled
+    case unavailable(reason: NativeDirectCallInternalPilotActivationUnavailableReason)
+    case eligibleForStatusOnly
+    case activationAllowed
+
+    var allowsActivation: Bool {
+        self == .activationAllowed
+    }
+
+    var description: String {
+        switch self {
+        case .disabled:
+            "disabled"
+        case .unavailable(let reason):
+            "unavailable(\(reason))"
+        case .eligibleForStatusOnly:
+            "eligibleForStatusOnly"
+        case .activationAllowed:
+            "activationAllowed"
+        }
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct NativeDirectCallInternalPilotActivationContext: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let isProductUIEnabled: Bool
+    let isInternalPilotRolloutEnabled: Bool
+    let isCapabilityPresent: Bool
+    let eligibility: NativeDirectCallInternalPilotEligibility
+    let roomEligibility: DirectCallProductionRoomEligibility
+    let peerTrustReadiness: DirectCallPeerTrustReadiness
+    let areDependenciesReady: Bool
+
+    init(isProductUIEnabled: Bool = false,
+         isInternalPilotRolloutEnabled: Bool = false,
+         isCapabilityPresent: Bool = false,
+         eligibility: NativeDirectCallInternalPilotEligibility = .disabled,
+         roomEligibility: DirectCallProductionRoomEligibility = .init(),
+         peerTrustReadiness: DirectCallPeerTrustReadiness = .peerTrustUnavailable,
+         areDependenciesReady: Bool = false) {
+        self.isProductUIEnabled = isProductUIEnabled
+        self.isInternalPilotRolloutEnabled = isInternalPilotRolloutEnabled
+        self.isCapabilityPresent = isCapabilityPresent
+        self.eligibility = eligibility
+        self.roomEligibility = roomEligibility
+        self.peerTrustReadiness = peerTrustReadiness
+        self.areDependenciesReady = areDependenciesReady
+    }
+
+    var description: String {
+        "NativeDirectCallInternalPilotActivationContext(" + [
+            "isProductUIEnabled: \(isProductUIEnabled)",
+            "isInternalPilotRolloutEnabled: \(isInternalPilotRolloutEnabled)",
+            "isCapabilityPresent: \(isCapabilityPresent)",
+            "eligibility: \(eligibility)",
+            "roomEligibility: \(roomEligibility)",
+            "peerTrustReadiness: \(peerTrustReadiness)",
+            "areDependenciesReady: \(areDependenciesReady)"
+        ].joined(separator: ", ") + ")"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+@MainActor
+protocol NativeDirectCallInternalPilotActivationProviding {
+    func nativeDirectCallInternalPilotActivation(for context: NativeDirectCallInternalPilotActivationContext) async -> NativeDirectCallInternalPilotActivation
+}
+
+@MainActor
+final class FailClosedNativeDirectCallInternalPilotActivationProvider: NativeDirectCallInternalPilotActivationProviding, CustomStringConvertible, CustomDebugStringConvertible {
+    func nativeDirectCallInternalPilotActivation(for context: NativeDirectCallInternalPilotActivationContext) async -> NativeDirectCallInternalPilotActivation {
+        .disabled
+    }
+
+    nonisolated var description: String {
+        "FailClosedNativeDirectCallInternalPilotActivationProvider(allowsActivation: false)"
+    }
+
+    nonisolated var debugDescription: String {
+        description
+    }
+}
+
+@MainActor
+struct StatusOnlyNativeDirectCallInternalPilotActivationProvider: NativeDirectCallInternalPilotActivationProviding, CustomStringConvertible, CustomDebugStringConvertible {
+    func nativeDirectCallInternalPilotActivation(for context: NativeDirectCallInternalPilotActivationContext) async -> NativeDirectCallInternalPilotActivation {
+        guard context.isInternalPilotRolloutEnabled else {
+            return .disabled
+        }
+
+        guard context.isProductUIEnabled else {
+            return .unavailable(reason: .rolloutDisabled)
+        }
+
+        guard context.isCapabilityPresent else {
+            return .unavailable(reason: .capabilityMissing)
+        }
+
+        if let reason = roomUnavailableReason(context.roomEligibility) {
+            return .unavailable(reason: reason)
+        }
+
+        if context.peerTrustReadiness != .peerTrustReady {
+            return .unavailable(reason: .trustNotReady)
+        }
+
+        guard context.areDependenciesReady else {
+            return .unavailable(reason: .dependenciesUnavailable)
+        }
+
+        switch context.eligibility {
+        case .eligible:
+            return .eligibleForStatusOnly
+        case .unavailable(let reason):
+            return .unavailable(reason: .init(eligibilityReason: reason))
+        case .unsupported:
+            return .unavailable(reason: .unsupportedClient)
+        case .disabled, .failClosed:
+            return .disabled
+        }
+    }
+
+    nonisolated var description: String {
+        "StatusOnlyNativeDirectCallInternalPilotActivationProvider(allowsActivation: false)"
+    }
+
+    nonisolated var debugDescription: String {
+        description
+    }
+
+    private func roomUnavailableReason(_ roomEligibility: DirectCallProductionRoomEligibility) -> NativeDirectCallInternalPilotActivationUnavailableReason? {
+        guard roomEligibility.isEncrypted,
+              roomEligibility.isDirect,
+              roomEligibility.hasExactlyTwoJoinedMembers,
+              roomEligibility.hasPeerUserID else {
+            return .roomNotEligible
+        }
+
+        return nil
+    }
+}
+
 struct NativeDirectCallInternalPilotEligibilityPayload: Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     let state: State
     let reason: NativeDirectCallInternalPilotUnavailableReason?

@@ -45,6 +45,139 @@ final class DirectCallInternalPilotEligibilityTests {
     }
 
     @Test
+    func failClosedInternalPilotActivationProviderIsDisabledByDefault() async {
+        let provider = FailClosedNativeDirectCallInternalPilotActivationProvider()
+
+        let activation = await provider.nativeDirectCallInternalPilotActivation(for: makeActivationContext(eligibility: .eligible))
+
+        #expect(activation == .disabled)
+        #expect(activation.allowsActivation == false)
+        assertActivationOutputIsRedacted(activation)
+        #expect(String(describing: provider).contains("directOneToOneCallsEnabled") == false)
+    }
+
+    @Test
+    func directOneToOneCallsSettingDoesNotEnableInternalPilotActivation() async {
+        let appSettings = AppSettings()
+        appSettings.directOneToOneCallsEnabled = true
+        let provider = FailClosedNativeDirectCallInternalPilotActivationProvider()
+
+        let activation = await provider.nativeDirectCallInternalPilotActivation(for: makeActivationContext(eligibility: .eligible))
+
+        #expect(appSettings.directOneToOneCallsEnabled)
+        #expect(activation == .disabled)
+        #expect(activation.allowsActivation == false)
+    }
+
+    @Test
+    func statusOnlyInternalPilotActivationProviderNeverAllowsActivation() async {
+        let provider = StatusOnlyNativeDirectCallInternalPilotActivationProvider()
+
+        let activation = await provider.nativeDirectCallInternalPilotActivation(for: makeActivationContext(eligibility: .eligible))
+
+        #expect(activation == .eligibleForStatusOnly)
+        #expect(activation.allowsActivation == false)
+        assertActivationOutputIsRedacted(activation)
+        #expect(String(describing: provider).contains("allowsActivation: false"))
+    }
+
+    @Test
+    func backendEligibleAloneDoesNotEnableInternalPilotActivation() async {
+        let provider = StatusOnlyNativeDirectCallInternalPilotActivationProvider()
+        let context = makeActivationContext(isInternalPilotRolloutEnabled: false,
+                                            eligibility: .eligible)
+
+        let activation = await provider.nativeDirectCallInternalPilotActivation(for: context)
+
+        #expect(activation == .disabled)
+        #expect(activation.allowsActivation == false)
+    }
+
+    @Test
+    func productUIOrEligibilityStatusDoesNotEnableInternalPilotActivation() async {
+        let provider = StatusOnlyNativeDirectCallInternalPilotActivationProvider()
+        let productUIOnlyContext = makeActivationContext(isInternalPilotRolloutEnabled: false,
+                                                         eligibility: .eligible)
+        let eligibilityStatusOnlyContext = NativeDirectCallInternalPilotActivationContext(isProductUIEnabled: false,
+                                                                                          isInternalPilotRolloutEnabled: false,
+                                                                                          isCapabilityPresent: true,
+                                                                                          eligibility: .eligible,
+                                                                                          roomEligibility: eligibleRoom,
+                                                                                          peerTrustReadiness: .peerTrustReady,
+                                                                                          areDependenciesReady: true)
+
+        #expect(await provider.nativeDirectCallInternalPilotActivation(for: productUIOnlyContext) == .disabled)
+        #expect(await provider.nativeDirectCallInternalPilotActivation(for: eligibilityStatusOnlyContext) == .disabled)
+    }
+
+    @Test
+    func internalPilotActivationMapsEligibilityReasonsToSafeUnavailableReasons() async {
+        let provider = StatusOnlyNativeDirectCallInternalPilotActivationProvider()
+        let cases: [(NativeDirectCallInternalPilotEligibility, NativeDirectCallInternalPilotActivation)] = [
+            (.unavailable(reason: .accountNotEligible), .unavailable(reason: .accountNotEligible)),
+            (.unavailable(reason: .peerNotEligible), .unavailable(reason: .peerNotEligible)),
+            (.unavailable(reason: .roomNotEligible), .unavailable(reason: .roomNotEligible)),
+            (.unavailable(reason: .trustNotReady), .unavailable(reason: .trustNotReady)),
+            (.unavailable(reason: .serviceUnavailable), .unavailable(reason: .serviceUnavailable)),
+            (.unavailable(reason: .capabilityMissing), .unavailable(reason: .capabilityMissing)),
+            (.unavailable(reason: .unsupportedClient), .unavailable(reason: .unsupportedClient)),
+            (.unavailable(reason: .unknown), .unavailable(reason: .unknown)),
+            (.unsupported, .unavailable(reason: .unsupportedClient)),
+            (.disabled, .disabled),
+            (.failClosed, .disabled)
+        ]
+
+        for (eligibility, expectedActivation) in cases {
+            let activation = await provider.nativeDirectCallInternalPilotActivation(for: makeActivationContext(eligibility: eligibility))
+
+            #expect(activation == expectedActivation)
+            #expect(activation.allowsActivation == false)
+            assertActivationOutputIsRedacted(activation)
+        }
+    }
+
+    @Test
+    func internalPilotActivationFailsClosedForMissingCapabilityOrDependencies() async {
+        let provider = StatusOnlyNativeDirectCallInternalPilotActivationProvider()
+        let missingCapability = makeActivationContext(isCapabilityPresent: false,
+                                                      eligibility: .eligible)
+        let missingDependencies = makeActivationContext(eligibility: .eligible,
+                                                        areDependenciesReady: false)
+
+        #expect(await provider.nativeDirectCallInternalPilotActivation(for: missingCapability) == .unavailable(reason: .capabilityMissing))
+        #expect(await provider.nativeDirectCallInternalPilotActivation(for: missingDependencies) == .unavailable(reason: .dependenciesUnavailable))
+    }
+
+    @Test
+    func localRoomAndTrustFailuresOverrideBackendEligibleActivation() async {
+        let provider = StatusOnlyNativeDirectCallInternalPilotActivationProvider()
+        let localFailureCases: [(NativeDirectCallInternalPilotActivationContext, NativeDirectCallInternalPilotActivation)] = [
+            (makeActivationContext(eligibility: .eligible,
+                                   roomEligibility: .init(isDirect: true, isEncrypted: false, joinedMemberCount: 2, hasPeerUserID: true)),
+             .unavailable(reason: .roomNotEligible)),
+            (makeActivationContext(eligibility: .eligible,
+                                   roomEligibility: .init(isDirect: false, isEncrypted: true, joinedMemberCount: 2, hasPeerUserID: true)),
+             .unavailable(reason: .roomNotEligible)),
+            (makeActivationContext(eligibility: .eligible,
+                                   roomEligibility: .init(isDirect: true, isEncrypted: true, joinedMemberCount: 3, hasPeerUserID: true)),
+             .unavailable(reason: .roomNotEligible)),
+            (makeActivationContext(eligibility: .eligible,
+                                   roomEligibility: .init(isDirect: true, isEncrypted: true, joinedMemberCount: 2, hasPeerUserID: false)),
+             .unavailable(reason: .roomNotEligible)),
+            (makeActivationContext(eligibility: .eligible,
+                                   peerTrustReadiness: .unverifiedDevice),
+             .unavailable(reason: .trustNotReady))
+        ]
+
+        for (context, expectedActivation) in localFailureCases {
+            let activation = await provider.nativeDirectCallInternalPilotActivation(for: context)
+
+            #expect(activation == expectedActivation)
+            #expect(activation.allowsActivation == false)
+        }
+    }
+
+    @Test
     func internalPilotEligibilityRequestEncodesContractJSONAndRedactsIdentifiers() throws {
         let request = makeEligibilityRequest()
 
@@ -418,6 +551,12 @@ final class DirectCallInternalPilotEligibilityTests {
     private let roomID = "!room:example.test"
     private let peerUserID = "@bob:example.test"
     private let deviceID = "DEVICEID"
+    private var eligibleRoom: DirectCallProductionRoomEligibility {
+        .init(isDirect: true,
+              isEncrypted: true,
+              joinedMemberCount: 2,
+              hasPeerUserID: true)
+    }
 
     private func makeEligibilityRequest(intent: DirectCallIntent = .audio) -> NativeDirectCallInternalPilotEligibilityRequest {
         .init(roomID: roomID,
@@ -426,11 +565,50 @@ final class DirectCallInternalPilotEligibilityTests {
               intent: intent)
     }
 
+    private func makeActivationContext(isProductUIEnabled: Bool = true,
+                                       isInternalPilotRolloutEnabled: Bool = true,
+                                       isCapabilityPresent: Bool = true,
+                                       eligibility: NativeDirectCallInternalPilotEligibility,
+                                       roomEligibility: DirectCallProductionRoomEligibility? = nil,
+                                       peerTrustReadiness: DirectCallPeerTrustReadiness = .peerTrustReady,
+                                       areDependenciesReady: Bool = true) -> NativeDirectCallInternalPilotActivationContext {
+        .init(isProductUIEnabled: isProductUIEnabled,
+              isInternalPilotRolloutEnabled: isInternalPilotRolloutEnabled,
+              isCapabilityPresent: isCapabilityPresent,
+              eligibility: eligibility,
+              roomEligibility: roomEligibility ?? eligibleRoom,
+              peerTrustReadiness: peerTrustReadiness,
+              areDependenciesReady: areDependenciesReady)
+    }
+
     private func assertEligibilityOutputIsRedacted(_ eligibility: NativeDirectCallInternalPilotEligibility) {
         let description = String(describing: eligibility)
         let forbiddenFragments = [
             "!room",
             "@alice",
+            "device",
+            "participant_" + "token",
+            "access_" + "token",
+            "bearer",
+            "j" + "wt",
+            "livekit",
+            "room_name",
+            "raw " + "key",
+            "matrix.example.com",
+            "redis://"
+        ]
+
+        for fragment in forbiddenFragments {
+            #expect(description.localizedCaseInsensitiveContains(fragment) == false)
+        }
+    }
+
+    private func assertActivationOutputIsRedacted(_ activation: NativeDirectCallInternalPilotActivation) {
+        let description = String(describing: activation)
+        let forbiddenFragments = [
+            "!room",
+            "@alice",
+            "@bob",
             "device",
             "participant_" + "token",
             "access_" + "token",

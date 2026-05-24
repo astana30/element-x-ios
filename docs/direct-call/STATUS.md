@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.35C — operator-owned engineering expansion session 1.
+After 2.36C — internal pilot activation provider skeleton.
 
 ## Latest App Code Checkpoint
 
@@ -113,6 +113,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Backend-off recovery was not run because the local staging call-service stayed up for the session. LiveKit-off was not run because shared staging LiveKit requires owner approval before disruption.
   - Final A/B status was idle/no active session with media failure `none`, cleanup/disconnect attempted on both sides, no rollback used, no stop criteria triggered, and no redaction issue observed.
   - Element Call fallback stayed visible/unchanged, and no app/backend code changed during the runtime proof.
+- Native audio internal pilot activation provider skeleton is added:
+  - The app now has a native-audio-specific activation model with `disabled`, `unavailable`, `eligibleForStatusOnly`, and `activationAllowed` states.
+  - Safe unavailable reasons are limited to `rolloutDisabled`, `capabilityMissing`, `accountNotEligible`, `peerNotEligible`, `roomNotEligible`, `trustNotReady`, `serviceUnavailable`, `unsupportedClient`, `dependenciesUnavailable`, and `unknown`.
+  - The default provider returns disabled/fail-closed.
+  - The status-only provider can combine future rollout/capability/eligibility/room/trust/dependency inputs but never returns `activationAllowed`.
+  - Backend eligible alone, product UI alone, and eligibility status alone still do not activate native audio.
+  - `directOneToOneCallsEnabled` remains unrelated to native audio activation.
+  - Non-engineering internal dogfood is still not enabled.
 - Controlled engineering dogfood pilot session 1 is recorded:
   - Preflight passed with readiness `ready=true`, `reason=ok`, Redis allocation/rate-limit/storage booleans true, LiveKit room provisioning true, and A/B trust ready.
   - Required private dogfood gates were used, and the legacy fake/dry-run gate was unset.
@@ -845,7 +853,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Pilot sessions must follow the 2.27A checkpoint, 2.28A operations checklist, and 2.33B expansion runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
-- Non-engineering internal dogfood remains blocked until the 2.29B hardening checklist is complete.
+- Non-engineering internal dogfood remains blocked until the 2.29B hardening checklist and server-backed activation runtime proofs are complete.
 - CallKit, push/background incoming, missed calls, video, session restoration, and global production activation remain out of scope.
 - Receiver listener behavior remains foreground/open-room scoped.
 - Operational ownership, monitoring, redaction checks, and secret-rotation readiness must remain explicit for any longer dogfood window.
@@ -854,9 +862,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.35D — operator-owned engineering expansion session 2`
+`2.36D — internal pilot activation skeleton no-activation proof`
 
-Goal: continue the operator-owned engineering expansion cadence under the 2.35B handoff with a second redacted session report, without changing the staging-only engineering scope or enabling non-engineering access.
+Goal: prove at runtime that the internal pilot activation skeleton remains disabled/fail-closed by default, does not make backend eligible or product UI sufficient to Start/Accept, and does not disturb the existing private engineering dogfood path.
 
 ## Do-Not-Touch Constraints
 

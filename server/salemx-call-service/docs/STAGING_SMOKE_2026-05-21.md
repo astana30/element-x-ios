@@ -37,6 +37,7 @@ No tokens, JWTs, passwords, shared secrets, authorization header values, or Live
 | Timeout terminal cleanup fix | Passed |
 | Engineering expansion operations handoff | Recorded |
 | Operator-owned engineering expansion session 1 | Passed |
+| iOS internal pilot activation provider skeleton | Added, disabled by default |
 
 ## Root Cause
 
@@ -110,6 +111,7 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - The 2.33E engineering expansion pilot session 1 rerun passed after the timeout cleanup fix. Happy path, reverse, repeated calls x2, decline, cancel, timeout, relaunch-ringing, and listener-unavailable/open-room edge all returned to idle/no active session with media failure `none` where applicable. Timeout reported A `outgoingTimeout` and B `incomingTimeout` with `productionHasActiveSession=false`. Backend-off was not run because the local staging call-service stayed up, and LiveKit-off was not run because shared staging LiveKit requires owner approval before disruption.
 - The 2.34B/2.34C/2.34D engineering expansion soak sessions completed cleanly under the same narrow staging scope. The 2.35B operations handoff now documents named operator ownership, backend readiness watching, redacted report intake, stop authority, rollback ownership, periodic cadence, and the monitoring baseline for continuing engineering sessions without per-session Codex supervision.
 - The 2.35C operator-owned engineering expansion session passed under the 2.35B handoff with redacted Operator A/B and Device A1/B1 labels only. Preflight passed, happy path, reverse, repeated calls x2, decline, cancel, timeout, relaunch-ringing, listener/open-room unavailable, and post-listener recovery passed, final A/B state was idle/no active session with media failure `none`, and Element Call stayed untouched.
+- The 2.36C iOS internal pilot activation provider skeleton is disabled by default and status-only when evaluated. It does not enable non-engineering activation, does not change token endpoint authority, and keeps product UI / backend eligibility alone insufficient to Start or Accept.
 - Controlled engineering dogfood may continue under the same narrow staging-only constraints.
 
 ## Next Step

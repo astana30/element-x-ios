@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.35C — operator-owned engineering expansion session 1.
+After 2.36C — internal pilot activation provider skeleton.
 
 Current checkpoints:
 - App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
@@ -40,6 +40,7 @@ Current checkpoints:
 - Engineering expansion soak session 3: 2.34D passed as the third clean soak session; the planned 3-session engineering-only soak is complete.
 - Engineering expansion operations handoff: 2.35B documents named operator ownership, backend readiness watching, redacted report intake, stop/rollback ownership, monitoring baseline, periodic cadence, and decision rules for continuing engineering sessions without per-session Codex supervision.
 - Operator-owned engineering expansion session 1: 2.35C passed under the 2.35B handoff with redacted Operator A/B and Device A1/B1 labels, readiness/trust/activation preflight, happy path, reverse, repeated calls x2, decline, cancel, timeout, relaunch-ringing, listener/open-room unavailable, and post-listener recovery.
+- Internal pilot activation provider skeleton: 2.36C added a disabled-by-default native-audio-specific activation model/provider boundary. The default provider fails closed, the status-only provider never returns `activationAllowed`, backend eligible alone remains insufficient, product UI alone remains insufficient, and non-engineering internal dogfood remains disabled.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -287,6 +288,14 @@ Current proven/prepared state:
   - backend-off recovery was not run because the local staging call-service stayed up for the session;
   - LiveKit-off was not run because shared staging LiveKit must not be stopped without owner approval;
   - final A/B status was idle/no active session with media failure `none`, cleanup/disconnect attempted on both sides, no rollback, no stop criteria, no redaction issue, and Element Call route untouched.
+- 2.36C internal pilot activation provider skeleton:
+  - activation states are `disabled`, `unavailable`, `eligibleForStatusOnly`, and `activationAllowed`;
+  - safe unavailable reasons are `rolloutDisabled`, `capabilityMissing`, `accountNotEligible`, `peerNotEligible`, `roomNotEligible`, `trustNotReady`, `serviceUnavailable`, `unsupportedClient`, `dependenciesUnavailable`, and `unknown`;
+  - default activation provider returns disabled/fail-closed;
+  - status-only provider can combine future rollout/capability/eligibility/room/trust/dependency inputs but never returns `activationAllowed`;
+  - backend eligible alone, product UI alone, eligibility status alone, and `directOneToOneCallsEnabled` do not activate native audio;
+  - engineering private dogfood remains on `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` under DEBUG/integration gates;
+  - non-engineering internal dogfood remains blocked.
 - Element Call route remains unchanged and must stay available as fallback.
 - No CallKit, push/background incoming, missed calls, video, session restoration, broad internal rollout, public rollout, production activation, or global activation exists.
 
@@ -339,82 +348,29 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.35D — operator-owned engineering expansion session 2.
+2.36D — internal pilot activation skeleton no-activation proof.
 
 Task:
-Run or record the second operator-owned engineering expansion session using the 2.35B handoff. Do not modify code unless a real runtime bug is found and explicitly approved. Do not enable non-engineering activation.
+Verify that the 2.36C internal pilot activation provider skeleton remains fail-closed by default and does not accidentally enable non-engineering native audio. Do not modify code unless a real runtime bug is found and explicitly approved. Do not enable non-engineering activation.
 
 Goal:
-Confirm that the operator-owned cadence remains repeatable under the narrow staging expansion handoff, while preserving redacted reporting and all stop/rollback rules.
+Prove that product UI, eligibility status, backend eligible status, and the new activation skeleton do not enable Start/Accept without the existing private dogfood engineering gate, and confirm the private engineering dogfood path still works.
 
-Required scope:
-- named engineering operators only;
-- up to 4 engineering operators and up to 8 named devices;
-- predeclared pair labels only;
-- staging call-service and staging LiveKit only;
-- private native audio card only;
-- foreground/open encrypted direct 1:1 rooms only;
-- verified/trusted peers only;
-- one active 1:1 native audio call at a time;
-- Element Call fallback visible and unchanged;
-- redacted reporting only;
-- legacy fake/dry-run gate unset.
-
-Required roles:
-- session owner;
-- backend readiness watcher;
-- client operators;
-- redaction reviewer;
-- stop authority;
-- rollback owner.
-
-Required gates:
-- `IS_RUNNING_INTEGRATION_TESTS=1`;
-- `NATIVE_DIRECT_CALL_DIAGNOSTICS=1`;
-- `NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1`;
-- `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`;
-- `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1`;
-- `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`;
-- `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`;
-- `NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=<staging call-service>`.
-
-Required preflight:
-- readiness `ready=true`;
-- readiness `reason=ok`;
-- Redis allocation/rate-limit connected;
-- storage key configured;
-- LiveKit room provisioning configured;
-- eligibility/allowlist configured if used;
-- A/B trust ready;
-- encrypted direct 1:1 DM open;
-- no stale active session;
-- Element Call fallback visible.
-
-Suggested matrix:
-- A -> B happy path;
-- B -> A reverse path;
-- repeated calls x2;
-- decline;
-- cancel;
-- timeout;
-- relaunch fail-closed;
-- listener/open-room unavailable;
-- Element Call fallback;
-- backend-off/recovery only if safe;
-- LiveKit-off not run unless explicitly approved by the shared staging LiveKit owner.
+Proofs:
+- launch with product UI and eligibility status gates only, private dogfood unset, and confirm activation remains blocked with no Matrix send, token request, media connect, LiveKit connect, or active session;
+- if a local allowlisted backend eligibility fixture is available, confirm backend eligible status still does not enable Start/Accept without private dogfood;
+- confirm `directOneToOneCallsEnabled` does not enable native audio;
+- restore private dogfood gates and run A -> B happy path to `activeAudio`, then hangup to idle;
+- confirm Element Call route remains visible/unchanged.
 
 Required output:
-A. Session date/time.
-B. Operator/device labels only.
-C. Roles filled with labels only.
-D. Preflight result.
-E. Matrix result table.
-F. Final A/B state.
-G. Runtime bugs or stop criteria.
-H. Rollback used or not.
-I. Element Call fallback status.
-J. Redaction review result.
-K. Decision: continue / pause.
+A. No-activation result without private dogfood gate.
+B. Backend eligible/status-only result if run.
+C. `directOneToOneCallsEnabled` separation result.
+D. Private dogfood happy path result.
+E. Final A/B state.
+F. Runtime regression, if any.
+G. Whether code changed.
 
 Allowed report fields:
 - readiness booleans;
@@ -465,4 +421,4 @@ Validation if docs change:
 - Direct-call forbidden scan.
 
 Suggested commit if docs change:
-Record operator-owned engineering expansion session 2
+Record internal pilot activation no-activation proof
