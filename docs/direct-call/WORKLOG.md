@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Added the short engineering expansion soak plan after the 2.33E pilot rerun.
 - Recorded the narrow engineering expansion pilot session 1 rerun after the timeout cleanup fix.
 - Recorded the direct-call timeout cleanup fix and runtime proof.
 - Polished native audio eligibility status redaction and recorded the runtime proof.
@@ -42,6 +43,18 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-24 — 2.34A Engineering Expansion Soak Plan
+
+- Added a 3-session engineering expansion soak plan before any broader readiness review.
+- Kept the soak within the existing controlled staging scope: up to 4 named engineering operators, up to 8 named devices, private native audio card only, foreground/open encrypted direct 1:1 rooms only, verified/trusted peers only, one active 1:1 call at a time, Element Call fallback visible, and redacted reporting only.
+- Added a session schedule template with label-only operator/device/pair fields and no raw user IDs, room IDs, peer IDs, device IDs, tokens, JWTs, secrets, Redis credential URLs, Matrix event bodies, or LiveKit room names.
+- Required every soak session to use the existing gates and preflight: DEBUG/integration diagnostics, product UI, eligibility status, private dogfood, production start, staging token base URL, Redis readiness, LiveKit room provisioning, eligibility/allowlist configuration when used, A/B trust ready, encrypted 1:1 DM open, no stale active session, and Element Call fallback visible.
+- Required each session matrix to cover A -> B happy path, B -> A reverse, repeated calls x2, decline, cancel, timeout, relaunch fail-closed, listener/open-room unavailable, and Element Call fallback smoke.
+- Kept backend-off/recovery optional only when safe for the local staging setup and kept LiveKit-off not-run unless explicitly approved by the shared staging LiveKit owner.
+- Added stop criteria, rollback, a redacted report template, and the decision rule: 3 clean sessions lead to a readiness review for the next phase; any critical bug pauses the soak for diagnosis.
+- Confirmed non-engineering internal dogfood, broad internal rollout, production/public rollout, Element Call replacement, CallKit, push/background incoming, missed calls, video, session restoration, and global activation remain blocked.
+- Recommended next phase: `2.34B — engineering expansion soak session 1`.
 
 ## 2026-05-24 — 2.33E Narrow Engineering Expansion Pilot Session 1 Rerun
 

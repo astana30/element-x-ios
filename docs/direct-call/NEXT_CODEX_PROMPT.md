@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.33E — narrow engineering expansion pilot session 1 rerun.
+After 2.34A — engineering expansion soak plan.
 
 Current checkpoints:
 - App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
@@ -34,6 +34,7 @@ Current checkpoints:
 - Narrow engineering expansion runbook: 2.33B defines the engineering-only expansion cap, ownership window, participant/device matrix, pair matrix, required gates, preflight, stop criteria, rollback, and redacted report template.
 - Timeout cleanup fix: 2.33D `Clear active session after direct call timeout` (`1d9218057`) makes timeout terminal paths disconnect and cleanup immediately.
 - Engineering expansion session 1 rerun: 2.33E passed the first expanded engineering-only pilot window after the timeout cleanup fix.
+- Engineering expansion soak plan: 2.34A defines a 3-session engineering-only soak before any broader readiness review.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -225,6 +226,13 @@ Current proven/prepared state:
   - backend-off recovery was not run because the local staging call-service stayed up for the pilot;
   - LiveKit-off was not run because shared staging LiveKit must not be stopped without owner approval;
   - final A/B status was idle/no active session with media failure `none`, no rollback was needed, no stop criteria triggered, no redaction issue was observed, and Element Call route remained untouched.
+- 2.34A engineering expansion soak plan:
+  - 3 short engineering-only soak sessions are required before any broader readiness review;
+  - scope remains up to 4 named engineering operators, up to 8 named devices, staging-only, private native audio card only, foreground/open encrypted direct 1:1 rooms only, verified/trusted peers only, one active 1:1 call at a time, Element Call fallback visible, and redacted reporting only;
+  - every soak session must run A -> B happy path, B -> A reverse, repeated calls x2, decline, cancel, timeout, relaunch fail-closed, listener/open-room unavailable, and Element Call fallback smoke;
+  - backend-off/recovery is optional only when safe for the local staging setup;
+  - LiveKit-off is not run unless explicitly approved by the shared staging LiveKit owner;
+  - decision rule: 3 clean sessions lead to a readiness review for the next phase; any critical bug or stop criterion pauses the soak for diagnosis.
 - Element Call route remains unchanged and must stay available as fallback.
 - No CallKit, push/background incoming, missed calls, video, session restoration, broad internal rollout, public rollout, production activation, or global activation exists.
 
@@ -277,13 +285,13 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.33F — narrow engineering expansion pilot session 2.
+2.34B — engineering expansion soak session 1.
 
 Task:
-Run or record the second narrow engineering expansion pilot window under the 2.33B runbook and 2.33E guardrails. Do not modify code unless a real runtime bug is found and explicitly approved. Do not enable non-engineering activation.
+Run or record the first engineering expansion soak session under the 2.34A plan. Do not modify code unless a real runtime bug is found and explicitly approved. Do not enable non-engineering activation.
 
 Goal:
-Verify repeatability after the successful 2.33E rerun when expanded to labelled engineering participants/devices under the strict cap: up to 4 named engineering operators, up to 8 named devices, predeclared pairs only, and one active 1:1 native audio call at a time.
+Begin the 3-session engineering-only soak before any broader readiness review, using labelled engineering participants/devices under the strict cap: up to 4 named engineering operators, up to 8 named devices, predeclared pairs only, and one active 1:1 native audio call at a time.
 
 Inspect:
 Use the 2.33B runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, the existing redacted runner/status tooling, and the 2.28A operations checklist. Do not print raw tokens, JWTs, secrets, room IDs, user IDs, peer IDs, device IDs, media keys, event bodies, Redis URLs, or LiveKit room names.
@@ -298,7 +306,7 @@ Required setup:
 - legacy fake/dry-run gate unset;
 - Element Call fallback visible and unchanged.
 
-Required per-pair matrix:
+Required per-session matrix:
 - happy path A -> B;
 - reverse B -> A;
 - repeated calls x2;
@@ -312,9 +320,9 @@ Required per-pair matrix:
 - LiveKit-off not run unless explicitly approved by the shared staging LiveKit owner.
 
 Required output:
-A. Pilot window and participant/device matrix, redacted labels only.
+A. Soak session window and participant/device matrix, redacted labels only.
 B. Backend and client preflight result.
-C. Pair matrix result table.
+C. Soak matrix result table.
 D. Final redacted status for each pair.
 E. Runtime bugs or stop criteria.
 F. Rollback used, if any.
@@ -372,4 +380,4 @@ Validation if docs change:
 - Direct-call forbidden scan.
 
 Suggested commit if docs change:
-Record engineering expansion pilot session 2
+Record engineering expansion soak session 1

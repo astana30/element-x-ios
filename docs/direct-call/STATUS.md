@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.33E — narrow engineering expansion pilot session 1 rerun.
+After 2.34A — engineering expansion soak plan.
 
 ## Latest App Code Checkpoint
 
@@ -249,6 +249,12 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Listener-unavailable behavior passed by stopping B before A started: A timed out fail-closed with `outgoingTimeout`, no active session, and media failure `none`; B relaunched idle/no active session.
   - Backend-off recovery was not run because the local staging call-service stayed up for the pilot. LiveKit-off was not run because shared staging LiveKit must not be stopped without owner approval.
   - Final A/B status was idle/no active session with media failure `none`, no rollback was needed, no stop criteria triggered, no redaction issue was observed, and Element Call route remained untouched.
+- Engineering expansion soak plan is recorded:
+  - 2.34A defines a 3-session engineering-only soak before any broader readiness review.
+  - Scope remains up to 4 named engineering operators, up to 8 named devices, predeclared labels only, staging call-service, staging LiveKit, private native audio card only, foreground/open encrypted direct 1:1 rooms only, verified/trusted peers only, and one active 1:1 call at a time.
+  - Each session must pass preflight, A -> B happy path, B -> A reverse, repeated calls x2, decline, cancel, timeout, relaunch fail-closed, listener/open-room unavailable, and Element Call fallback smoke.
+  - Backend-off/recovery remains optional only when safe for the local staging setup; LiveKit-off remains not-run unless explicitly approved by the shared staging LiveKit owner.
+  - Decision rule: 3 clean sessions lead to a readiness review for the next phase; any critical bug or stop criterion pauses the soak for diagnosis.
 - Call-service Redis readiness is hardened:
   - Redis-backed staging readiness now performs bounded live Redis pings at startup and on each readiness request for both allocation and rate-limit stores.
   - `allocationStoreConnected` and `rateLimitConnected` now reflect live Redis connectivity for Redis stores, not only config shape or implementation presence.
@@ -790,7 +796,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 ## Current Gate
 
 - Controlled engineering dogfood pilot may continue on staging under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, including the product-card-only happy path, repeated-call split-brain regression proof, 2.27F controlled matrix rerun, 2.28B/2.28C pilot sessions, the 2.32C eligibility status soak, the 2.33D timeout cleanup proof, and the 2.33E engineering expansion pilot session 1 rerun.
-- A narrow engineering expansion pilot may run under the 2.33B runbook: up to 4 named engineering operators, up to 8 named devices, predeclared pairs only, one active 1:1 native audio call at a time for the first expanded window, and redacted reporting only.
+- A narrow engineering expansion soak may run under the 2.33B runbook and 2.34A soak plan: up to 4 named engineering operators, up to 8 named devices, predeclared pairs only, one active 1:1 native audio call at a time, three clean sessions before readiness review, and redacted reporting only.
 - Pilot sessions must follow the 2.27A checkpoint, 2.28A operations checklist, and 2.33B expansion runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
@@ -803,9 +809,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.33F — narrow engineering expansion pilot session 2`
+`2.34B — engineering expansion soak session 1`
 
-Goal: run a second expanded engineering-only pilot window under the 2.33B runbook and 2.33E guardrails, with labelled participants/devices only, one active 1:1 native audio call at a time, required staging gates, per-pair smoke matrix, redacted reporting, and no Element Call route changes.
+Goal: run the first of three short engineering-only soak sessions under the 2.34A plan, with labelled participants/devices only, one active 1:1 native audio call at a time, required staging gates, per-session matrix, redacted reporting, and no Element Call route changes.
 
 ## Do-Not-Touch Constraints
 

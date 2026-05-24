@@ -1009,6 +1009,183 @@ Dogfood decision: continue the narrow engineering expansion under the 2.33B runb
 
 Next expanded-pilot attempt should use `2.33F — narrow engineering expansion pilot session 2`.
 
+## 2.34A Engineering Expansion Soak Plan
+
+The 2.33E rerun passed, so the next safe step is a short engineering-only soak before any broader readiness review. This is still controlled staging dogfood, not non-engineering internal dogfood, product beta, public rollout, production activation, or Element Call replacement.
+
+### Soak Scope
+
+- Up to 4 named engineering operators.
+- Up to 8 named engineering devices.
+- Predeclared accounts/devices only.
+- Staging call-service and staging LiveKit only.
+- Private native audio card only.
+- Foreground/open encrypted direct 1:1 rooms only.
+- Verified/trusted peers only.
+- One active 1:1 native audio call at a time.
+- Element Call fallback visible and unchanged.
+- Redacted reporting only.
+- No non-engineering users.
+- No unmanaged devices.
+
+### 3-Session Schedule Template
+
+Use labels only. Keep raw account and device identifiers in operator-local secure notes if needed; do not paste them into docs, chat, screenshots, runner output, or reports.
+
+| Soak session | Planned window | Operator labels | Device labels | Pair labels | Session owner | Redaction reviewer | Result |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Session 1 | `<date/time range>` | `<Operator A/B/...>` | `<Device A1/B1/...>` | `<Pair A-B/...>` | `<Owner>` | `<Reviewer>` | pass/fail/not-run |
+| Session 2 | `<date/time range>` | `<Operator A/B/...>` | `<Device A1/B1/...>` | `<Pair A-B/...>` | `<Owner>` | `<Reviewer>` | pass/fail/not-run |
+| Session 3 | `<date/time range>` | `<Operator A/B/...>` | `<Device A1/B1/...>` | `<Pair A-B/...>` | `<Owner>` | `<Reviewer>` | pass/fail/not-run |
+
+### Participant And Device Labels
+
+| Operator label | Account role label | Device label | Trust ready | Allowed pair labels | Notes |
+| --- | --- | --- | --- | --- | --- |
+| Operator A | Caller/Callee A | Device A1 | true/false | A-B | Redacted |
+| Operator B | Caller/Callee B | Device B1 | true/false | A-B | Redacted |
+| Operator C | Caller/Callee C | Device C1 | true/false | A-C, B-C | Redacted |
+| Operator D | Caller/Callee D | Device D1 | true/false | A-D, C-D | Redacted |
+
+Do not record raw Matrix user IDs, room IDs, peer IDs, device IDs, tokens, JWTs, secrets, LiveKit room names, Matrix event bodies, full request/response bodies, or Redis credential URLs.
+
+### Required Gates
+
+Every soak launch must set:
+
+```sh
+export IS_RUNNING_INTEGRATION_TESTS=1
+export NATIVE_DIRECT_CALL_DIAGNOSTICS=1
+export NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1
+export NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1
+export NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1
+export NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1
+export NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1
+export NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=<staging-call-service-base-url>
+```
+
+`NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` must remain unset for every staging soak session.
+
+### Required Preflight
+
+Backend preflight:
+
+- readiness `ready=true`;
+- readiness `reason=ok`;
+- Redis allocation store connected;
+- Redis rate-limit store connected;
+- `storageKeyConfigured=true`;
+- `liveKitRoomProvisioningConfigured=true`;
+- native audio eligibility and allowlist configured when the status/allowlist path is used;
+- Synapse validation smoke passing or explicitly accepted as a blocking prerequisite.
+
+Client preflight:
+
+- app launch ready for both sides;
+- trust ready for both sides;
+- encrypted direct 1:1 DM open on both sides;
+- private native audio card visible;
+- no stale active or ringing native session;
+- receiver listener/card available;
+- Element Call fallback visible and unchanged.
+
+### Per-Session Matrix
+
+Run this matrix once per soak session for each selected pair:
+
+| Case | Required result |
+| --- | --- |
+| A -> B happy path | Start, Accept, A/B `activeAudio`, Hang up, A/B idle |
+| B -> A reverse | Start, Accept, A/B `activeAudio`, Hang up, A/B idle |
+| Repeated calls x2 | Two clean calls with no stale session and no split-brain |
+| Decline | Incoming side declines; both sides return idle/no active session |
+| Cancel | Outgoing side cancels; both sides return idle/no active session |
+| Timeout | A `outgoingTimeout`, B `incomingTimeout`, A/B idle, `productionHasActiveSession=false`, media failure `none` |
+| Relaunch fail-closed | Relaunch during ringing or active returns no stale active/ringing session |
+| Listener/open-room unavailable | Unavailable side does not create unexpected token/media path; active side fails closed |
+| Element Call fallback smoke | Existing Element Call route remains visible and unchanged |
+| Backend-off/recovery | Run only if safe for the local staging setup; otherwise mark not-run |
+| LiveKit-off | Not run unless explicitly approved by the shared staging LiveKit owner |
+
+### Stop Criteria
+
+Stop the soak immediately if:
+
+- any forbidden secret, token, JWT, key, raw identifier, LiveKit room name, credentialed endpoint, Matrix event body, full request/response body, or Redis credential URL appears in output, screenshots, logs, docs, chat, or reports;
+- a call starts without the required gates;
+- Element Call route behavior changes;
+- an untrusted peer or device can connect;
+- stale active or ringing state survives cleanup or relaunch;
+- backend issues a token for invalid room, peer, trust, or membership;
+- media failure does not fail closed;
+- split-brain reappears;
+- Redis readiness fails or the call-service reports disconnected allocation/rate-limit stores;
+- shared staging LiveKit, Matrix, Redis, Nginx, firewall, or production services would need to be changed to continue;
+- any critical runtime bug is observed.
+
+### Rollback
+
+1. Unset `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED`, `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED`, `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED`, and `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED`.
+2. Relaunch the apps.
+3. Verify native direct-call status is idle/no active session.
+4. Stop the local staging call-service if the session used a local service process.
+5. Keep Element Call as the fallback route.
+6. Remove soak-only allowlist entries from local operator env when the session ends, if any were added.
+7. Preserve only redacted pass/fail status in reports.
+8. Rotate affected credentials if any leakage is suspected.
+
+Rollback is complete only when no private native session is active, private dogfood gates are disabled, and Element Call remains available.
+
+### Soak Report Template
+
+```text
+Soak session:
+- session number:
+- session date/time:
+- operator labels:
+- device labels:
+- pair labels:
+- build type: DEBUG/integration
+- staging call-service readiness: pass/fail
+- Redis allocation/rate-limit: pass/fail
+- LiveKit room provisioning: pass/fail
+- eligibility/allowlist configured: pass/fail/not-used
+- A/B trust: pass/fail
+- required gates: pass/fail
+- old fake/dry-run gate unset: pass/fail
+
+Matrix:
+- A -> B happy path:
+- B -> A reverse:
+- repeated calls x2:
+- decline:
+- cancel:
+- timeout:
+- relaunch fail-closed:
+- listener/open-room unavailable:
+- Element Call fallback:
+- backend-off/recovery:
+- LiveKit-off:
+
+Final:
+- final session state:
+- media failure:
+- terminal reason:
+- cleanup/disconnect:
+- runtime bug:
+- redaction issue:
+- rollback used:
+- decision: continue/pause
+```
+
+Allowed report fields are limited to pass/fail/not-run, readiness booleans and safe `reason`, trust booleans, redacted card state/reason enums, activation reason enum, `productionSessionState`, `productionMediaFailureReason`, terminal reason enum, media/LiveKit connect attempted booleans, cleanup/disconnect attempted booleans, and Element Call fallback pass/fail.
+
+### Decision Rule
+
+- 3 clean soak sessions: proceed to a readiness review for the next phase.
+- Any critical bug or stop criterion: pause the soak, keep non-engineering internal dogfood blocked, and diagnose before continuing.
+- Any non-critical not-run row must include a redacted safety reason and be accepted before the session can count as clean.
+
 ### Remaining Blockers After Expansion
 
 Even if the expanded engineering pilot passes, the following remain blocked:
