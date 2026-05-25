@@ -764,24 +764,152 @@ enum NativeDirectCallRoomRestorationAvailability: String, Equatable, CustomStrin
     }
 }
 
+enum NativeDirectCallInternalPilotActivationDryRunDecision: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case disabled
+    case unavailable
+    case statusOnly
+    case activationAllowed
+
+    init(_ activation: NativeDirectCallInternalPilotActivation) {
+        switch activation {
+        case .disabled:
+            self = .disabled
+        case .unavailable:
+            self = .unavailable
+        case .eligibleForStatusOnly:
+            self = .statusOnly
+        case .activationAllowed:
+            self = .activationAllowed
+        }
+    }
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct NativeDirectCallInternalPilotActivationDryRunStatus: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let isEnabled: Bool
+    let decision: NativeDirectCallInternalPilotActivationDryRunDecision
+    let reason: NativeDirectCallInternalPilotActivationUnavailableReason?
+    let isProductUIEnabled: Bool
+    let isInternalPilotRolloutEnabled: Bool
+    let isCapabilityPresent: Bool
+    let isRoomEligible: Bool
+    let isPeerTrustReady: Bool
+    let areDependenciesReady: Bool
+    let hasActiveSession: Bool
+
+    static let disabled = Self(isEnabled: false,
+                               decision: .disabled,
+                               reason: nil,
+                               isProductUIEnabled: false,
+                               isInternalPilotRolloutEnabled: false,
+                               isCapabilityPresent: false,
+                               isRoomEligible: false,
+                               isPeerTrustReady: false,
+                               areDependenciesReady: false,
+                               hasActiveSession: false)
+
+    init(isEnabled: Bool,
+         activation: NativeDirectCallInternalPilotActivation,
+         context: NativeDirectCallInternalPilotActivationContext) {
+        self.init(isEnabled: isEnabled,
+                  decision: .init(activation),
+                  reason: Self.reason(for: activation, context: context),
+                  isProductUIEnabled: context.isProductUIEnabled,
+                  isInternalPilotRolloutEnabled: context.isInternalPilotRolloutEnabled,
+                  isCapabilityPresent: context.isCapabilityPresent,
+                  isRoomEligible: context.roomEligibility.isEncrypted &&
+                      context.roomEligibility.isDirect &&
+                      context.roomEligibility.hasExactlyTwoJoinedMembers &&
+                      context.roomEligibility.hasPeerUserID,
+                  isPeerTrustReady: context.peerTrustReadiness == .peerTrustReady,
+                  areDependenciesReady: context.areDependenciesReady,
+                  hasActiveSession: context.hasActiveSession)
+    }
+
+    init(isEnabled: Bool,
+         decision: NativeDirectCallInternalPilotActivationDryRunDecision,
+         reason: NativeDirectCallInternalPilotActivationUnavailableReason?,
+         isProductUIEnabled: Bool,
+         isInternalPilotRolloutEnabled: Bool,
+         isCapabilityPresent: Bool,
+         isRoomEligible: Bool,
+         isPeerTrustReady: Bool,
+         areDependenciesReady: Bool,
+         hasActiveSession: Bool) {
+        self.isEnabled = isEnabled
+        self.decision = decision
+        self.reason = reason
+        self.isProductUIEnabled = isProductUIEnabled
+        self.isInternalPilotRolloutEnabled = isInternalPilotRolloutEnabled
+        self.isCapabilityPresent = isCapabilityPresent
+        self.isRoomEligible = isRoomEligible
+        self.isPeerTrustReady = isPeerTrustReady
+        self.areDependenciesReady = areDependenciesReady
+        self.hasActiveSession = hasActiveSession
+    }
+
+    var description: String {
+        [
+            "internalPilotActivationDryRunEnabled=\(isEnabled)",
+            "internalPilotActivationDecision=\(decision)",
+            "internalPilotActivationReason=\(reason?.description ?? "none")",
+            "isProductUIEnabled=\(isProductUIEnabled)",
+            "isInternalPilotRolloutEnabled=\(isInternalPilotRolloutEnabled)",
+            "isCapabilityPresent=\(isCapabilityPresent)",
+            "isRoomEligible=\(isRoomEligible)",
+            "isPeerTrustReady=\(isPeerTrustReady)",
+            "areDependenciesReady=\(areDependenciesReady)",
+            "hasActiveSession=\(hasActiveSession)"
+        ].joined(separator: ", ")
+    }
+
+    var debugDescription: String {
+        description
+    }
+
+    private static func reason(for activation: NativeDirectCallInternalPilotActivation,
+                               context: NativeDirectCallInternalPilotActivationContext) -> NativeDirectCallInternalPilotActivationUnavailableReason? {
+        switch activation {
+        case .disabled:
+            context.isInternalPilotRolloutEnabled ? nil : .rolloutDisabled
+        case .unavailable(let reason):
+            reason
+        case .eligibleForStatusOnly,
+             .activationAllowed:
+            nil
+        }
+    }
+}
+
 struct NativeDirectCallRoomCardStatus: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     let state: NativeDirectCallRoomCardState
     let receiverAvailability: NativeDirectCallRoomReceiverAvailability?
     let restorationAvailability: NativeDirectCallRoomRestorationAvailability?
+    let internalPilotActivationDryRun: NativeDirectCallInternalPilotActivationDryRunStatus
 
     init(state: NativeDirectCallRoomCardState,
          receiverAvailability: NativeDirectCallRoomReceiverAvailability? = nil,
-         restorationAvailability: NativeDirectCallRoomRestorationAvailability? = nil) {
+         restorationAvailability: NativeDirectCallRoomRestorationAvailability? = nil,
+         internalPilotActivationDryRun: NativeDirectCallInternalPilotActivationDryRunStatus = .disabled) {
         self.state = state
         self.receiverAvailability = receiverAvailability
         self.restorationAvailability = restorationAvailability
+        self.internalPilotActivationDryRun = internalPilotActivationDryRun
     }
 
     var description: String {
         [
             "state: \(state)",
             "receiverAvailability: \(receiverAvailability?.description ?? "none")",
-            "restorationAvailability: \(restorationAvailability?.description ?? "none")"
+            "restorationAvailability: \(restorationAvailability?.description ?? "none")",
+            "\(internalPilotActivationDryRun)"
         ].joined(separator: ", ")
     }
 
@@ -845,12 +973,14 @@ struct NativeDirectCallRoomCardRedactedStatus: Equatable, CustomStringConvertibl
     let failureReason: NativeDirectCallRoomCardFailureReason?
     let receiverAvailability: NativeDirectCallRoomReceiverAvailability?
     let restorationAvailability: NativeDirectCallRoomRestorationAvailability?
+    let internalPilotActivationDryRun: NativeDirectCallInternalPilotActivationDryRunStatus
     let isLoading: Bool
     let actions: NativeDirectCallRoomActionAvailability
 
     init(state: NativeDirectCallRoomCardState,
          receiverAvailability: NativeDirectCallRoomReceiverAvailability?,
          restorationAvailability: NativeDirectCallRoomRestorationAvailability?,
+         internalPilotActivationDryRun: NativeDirectCallInternalPilotActivationDryRunStatus = .disabled,
          isLoading: Bool,
          isStartAudioTemporarilyDisabled: Bool) {
         self.state = NativeDirectCallRoomCardRedactedState(state)
@@ -867,6 +997,7 @@ struct NativeDirectCallRoomCardRedactedStatus: Equatable, CustomStringConvertibl
         }
         self.receiverAvailability = receiverAvailability
         self.restorationAvailability = restorationAvailability
+        self.internalPilotActivationDryRun = internalPilotActivationDryRun
         self.isLoading = isLoading
         actions = .init(cardState: state,
                         isLoading: isLoading,
@@ -880,6 +1011,7 @@ struct NativeDirectCallRoomCardRedactedStatus: Equatable, CustomStringConvertibl
             "failureReason: \(failureReason?.description ?? "none")",
             "receiverAvailability: \(receiverAvailability?.description ?? "none")",
             "restorationAvailability: \(restorationAvailability?.description ?? "none")",
+            "\(internalPilotActivationDryRun)",
             "isLoading: \(isLoading)",
             "canRefreshStatus: \(actions.canRefreshStatus)",
             "canStartAudio: \(actions.canStartAudio)",
@@ -1043,6 +1175,7 @@ struct NativeDirectCallRoomCardViewState: Equatable {
         .init(state: state,
               receiverAvailability: receiverAvailability,
               restorationAvailability: restorationAvailability,
+              internalPilotActivationDryRun: .disabled,
               isLoading: isLoading,
               isStartAudioTemporarilyDisabled: isStartAudioTemporarilyDisabled)
     }
@@ -1363,6 +1496,7 @@ extension NativeDirectCallRoomCardStatus {
         .init(state: state,
               receiverAvailability: receiverAvailability,
               restorationAvailability: restorationAvailability,
+              internalPilotActivationDryRun: internalPilotActivationDryRun,
               isLoading: false,
               isStartAudioTemporarilyDisabled: false)
     }
@@ -1763,7 +1897,15 @@ extension NativeDirectCallRoomCardStatus {
 
         return .init(state: .unavailable(reason: mergedReason),
                      receiverAvailability: receiverAvailability,
-                     restorationAvailability: restorationAvailability)
+                     restorationAvailability: restorationAvailability,
+                     internalPilotActivationDryRun: internalPilotActivationDryRun)
+    }
+
+    func merging(internalPilotActivationDryRun dryRun: NativeDirectCallInternalPilotActivationDryRunStatus) -> Self {
+        .init(state: state,
+              receiverAvailability: receiverAvailability,
+              restorationAvailability: restorationAvailability,
+              internalPilotActivationDryRun: dryRun)
     }
 }
 

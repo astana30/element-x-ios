@@ -1323,6 +1323,83 @@ final class RoomFlowCoordinatorTests {
     }
 
     @Test
+    func nativeDirectCallInternalPilotActivationDryRunGateOffKeepsDisabledStatus() async throws {
+        let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: .disabled(.appRolloutDisabled))
+        let eligibilityProvider = NativeDirectCallInternalPilotEligibilityProviderSpy(result: .eligible)
+        setupRoomFlowCoordinator(nativeDirectCallProductionActivationDryRunProviderFactory: { _ in provider },
+                                 nativeDirectCallInternalPilotEligibilityProviderFactory: { _ in eligibilityProvider },
+                                 isNativeDirectCallEligibilityStatusEnabled: { true },
+                                 isNativeDirectCallInternalPilotActivationDryRunEnabled: { false },
+                                 isNativeDirectCallProductUIEnabled: { true })
+        clientProxy.roomForIdentifierClosure = { [weak self] _ in
+            .joined(self?.makeNativeDirectCallEligibilityRoomProxy() ?? JoinedRoomProxyMock(.init()))
+        }
+
+        try await process(route: .room(roomID: "1", via: []))
+        let cardStatus = await roomFlowCoordinator.nativeDirectCallRoomCardStatus()
+
+        #expect(cardStatus.internalPilotActivationDryRun == .disabled)
+        #expect(eligibilityProvider.requests.count == 1)
+    }
+
+    @Test
+    func nativeDirectCallInternalPilotActivationDryRunReportsRolloutOffWithoutActivating() async throws {
+        let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: eligibleButProductionDisabledDiagnostic())
+        let eligibilityProvider = NativeDirectCallInternalPilotEligibilityProviderSpy(result: .eligible)
+        setupRoomFlowCoordinator(nativeDirectCallProductionActivationDryRunProviderFactory: { _ in provider },
+                                 nativeDirectCallInternalPilotEligibilityProviderFactory: { _ in eligibilityProvider },
+                                 nativeDirectCallInternalPilotRolloutProvider: StaticNativeDirectCallInternalPilotRolloutProvider(),
+                                 isNativeDirectCallEligibilityStatusEnabled: { true },
+                                 isNativeDirectCallInternalPilotActivationDryRunEnabled: { true },
+                                 isNativeDirectCallProductUIEnabled: { true })
+        clientProxy.roomForIdentifierClosure = { [weak self] _ in
+            .joined(self?.makeNativeDirectCallEligibilityRoomProxy() ?? JoinedRoomProxyMock(.init()))
+        }
+
+        try await process(route: .room(roomID: "1", via: []))
+        let cardStatus = await roomFlowCoordinator.nativeDirectCallRoomCardStatus()
+        let productionStatus = roomFlowCoordinator.nativeDirectCallProductionStatus()
+
+        #expect(cardStatus.state == .unavailable(reason: .nativeCallsUnavailable))
+        #expect(cardStatus.internalPilotActivationDryRun.isEnabled)
+        #expect(cardStatus.internalPilotActivationDryRun.decision == .disabled)
+        #expect(cardStatus.internalPilotActivationDryRun.reason == .rolloutDisabled)
+        #expect(NativeDirectCallRoomCardAction.startAudio.isEnabled(in: cardStatus.state, isLoading: false) == false)
+        #expect(productionStatus.productionLastSignalSendAttempted == false)
+        #expect(productionStatus.productionMediaConnectAttempted == false)
+        #expect(productionStatus.productionLiveKitClientConnectAttempted == false)
+    }
+
+    @Test
+    func nativeDirectCallInternalPilotActivationDryRunCanReportAllowedWithoutEnablingStart() async throws {
+        let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: eligibleButProductionDisabledDiagnostic())
+        let eligibilityProvider = NativeDirectCallInternalPilotEligibilityProviderSpy(result: .eligible)
+        setupRoomFlowCoordinator(nativeDirectCallProductionActivationDryRunProviderFactory: { _ in provider },
+                                 nativeDirectCallInternalPilotEligibilityProviderFactory: { _ in eligibilityProvider },
+                                 nativeDirectCallInternalPilotRolloutProvider: StaticNativeDirectCallInternalPilotRolloutProvider(configuration: .init(isEnabled: true)),
+                                 isNativeDirectCallEligibilityStatusEnabled: { true },
+                                 isNativeDirectCallInternalPilotActivationDryRunEnabled: { true },
+                                 isNativeDirectCallProductUIEnabled: { true })
+        clientProxy.roomForIdentifierClosure = { [weak self] _ in
+            .joined(self?.makeNativeDirectCallEligibilityRoomProxy() ?? JoinedRoomProxyMock(.init()))
+        }
+
+        try await process(route: .room(roomID: "1", via: []))
+        let cardStatus = await roomFlowCoordinator.nativeDirectCallRoomCardStatus()
+        let productionStatus = roomFlowCoordinator.nativeDirectCallProductionStatus()
+
+        #expect(cardStatus.state == .unavailable(reason: .nativeCallsUnavailable))
+        #expect(cardStatus.internalPilotActivationDryRun.isEnabled)
+        #expect(cardStatus.internalPilotActivationDryRun.decision == .activationAllowed)
+        #expect(cardStatus.internalPilotActivationDryRun.reason == nil)
+        #expect(NativeDirectCallRoomCardAction.startAudio.isEnabled(in: cardStatus.state, isLoading: false) == false)
+        #expect(productionStatus.productionLastSignalSendAttempted == false)
+        #expect(productionStatus.productionMediaConnectAttempted == false)
+        #expect(productionStatus.productionLiveKitClientConnectAttempted == false)
+        #expect(eligibilityProvider.requests.count == 1)
+    }
+
+    @Test
     func nativeDirectCallProductionAcceptBlocksWhenOwnerUnavailable() async throws {
         let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: enabledProductionActivationDiagnostic())
         setupRoomFlowCoordinator { roomProxy in
@@ -3045,6 +3122,17 @@ final class RoomFlowCoordinatorTests {
               keyWrapperSource: .providerWrapper)
     }
 
+    private func eligibleButProductionDisabledDiagnostic() -> DirectCallProductionActivationDryRunDiagnostic {
+        .init(isEnabled: false,
+              disabledReason: .appRolloutDisabled,
+              isCapabilityPresent: true,
+              areDependenciesReady: true,
+              isRoomEligible: true,
+              isEndpointAccepted: true,
+              peerTrustReadiness: .peerTrustReady,
+              keyWrapperSource: .providerWrapper)
+    }
+
     private func makeVerifiedPeerClientProxy() -> ClientProxyMock {
         let clientProxy = ProductionDryRunClientProxyMock(.init(userID: RoomMemberProxyMock.mockMe.userID))
         clientProxy.userIdentityForFallBackToServerClosure = { userID, _ in
@@ -3087,8 +3175,18 @@ final class RoomFlowCoordinatorTests {
                                           nativeDirectCallInternalPilotEligibilityProviderFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallInternalPilotEligibilityProviding = { _ in
                                               FailClosedNativeDirectCallInternalPilotEligibilityProvider()
                                           },
+                                          nativeDirectCallInternalPilotActivationProviderFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallInternalPilotActivationProviding = { _ in
+                                              ServerBackedNativeDirectCallInternalPilotActivationProvider()
+                                          },
+                                          nativeDirectCallInternalPilotRolloutProvider: NativeDirectCallInternalPilotRolloutProviding? = nil,
                                           nativeDirectCallEligibilityStatusCache: NativeDirectCallEligibilityStatusCache = .init(),
                                           isNativeDirectCallEligibilityStatusEnabled: @escaping @MainActor () -> Bool = {
+                                              false
+                                          },
+                                          isNativeDirectCallInternalPilotActivationDryRunEnabled: @escaping @MainActor () -> Bool = {
+                                              false
+                                          },
+                                          isNativeDirectCallProductUIEnabled: @escaping @MainActor () -> Bool = {
                                               false
                                           }) {
         cancellables.removeAll()
@@ -3132,6 +3230,8 @@ final class RoomFlowCoordinatorTests {
                                                   notificationManager: NotificationManagerMock(),
                                                   stateMachineFactory: StateMachineFactory())
         
+        let internalPilotRolloutProvider = nativeDirectCallInternalPilotRolloutProvider ?? StaticNativeDirectCallInternalPilotRolloutProvider()
+
         roomFlowCoordinator = RoomFlowCoordinator(roomID: roomID,
                                                   isChildFlow: asChildFlow,
                                                   navigationStackCoordinator: navigationStackCoordinator,
@@ -3140,8 +3240,12 @@ final class RoomFlowCoordinatorTests {
                                                   nativeDirectCallProductionActivationDryRunProviderFactory: nativeDirectCallProductionActivationDryRunProviderFactory,
                                                   nativeDirectCallProductionRoomFlowOwnerFactory: nativeDirectCallProductionRoomFlowOwnerFactory,
                                                   nativeDirectCallInternalPilotEligibilityProviderFactory: nativeDirectCallInternalPilotEligibilityProviderFactory,
+                                                  nativeDirectCallInternalPilotActivationProviderFactory: nativeDirectCallInternalPilotActivationProviderFactory,
+                                                  nativeDirectCallInternalPilotRolloutProvider: internalPilotRolloutProvider,
                                                   nativeDirectCallEligibilityStatusCache: nativeDirectCallEligibilityStatusCache,
-                                                  isNativeDirectCallEligibilityStatusEnabled: isNativeDirectCallEligibilityStatusEnabled)
+                                                  isNativeDirectCallEligibilityStatusEnabled: isNativeDirectCallEligibilityStatusEnabled,
+                                                  isNativeDirectCallInternalPilotActivationDryRunEnabled: isNativeDirectCallInternalPilotActivationDryRunEnabled,
+                                                  isNativeDirectCallProductUIEnabled: isNativeDirectCallProductUIEnabled)
         roomFlowCoordinator.nativeDirectCallDiagnosticCommandConfiguration = nativeDirectCallDiagnosticCommandConfiguration
     }
 

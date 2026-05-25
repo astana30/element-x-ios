@@ -96,11 +96,16 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
     private let nativeDirectCallProductionActivationDryRunProviderFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionActivationDryRunProviding
     private let nativeDirectCallProductionRoomFlowOwnerFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionRoomFlowOwnerFactoryResult
     private let nativeDirectCallInternalPilotEligibilityProviderFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallInternalPilotEligibilityProviding
+    private let nativeDirectCallInternalPilotActivationProviderFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallInternalPilotActivationProviding
+    private let nativeDirectCallInternalPilotRolloutProvider: NativeDirectCallInternalPilotRolloutProviding
     private let nativeDirectCallEligibilityStatusCache: NativeDirectCallEligibilityStatusCache
     private let isNativeDirectCallEligibilityStatusEnabled: @MainActor () -> Bool
+    private let isNativeDirectCallInternalPilotActivationDryRunEnabled: @MainActor () -> Bool
+    private let isNativeDirectCallProductUIEnabled: @MainActor () -> Bool
     private var nativeDirectCallProductionActivationDryRunProvider: NativeDirectCallProductionActivationDryRunProviding?
     private var nativeDirectCallProductionRoomFlowOwner: NativeDirectCallRoomFlowOwning?
     private var nativeDirectCallInternalPilotEligibilityProvider: NativeDirectCallInternalPilotEligibilityProviding?
+    private var nativeDirectCallInternalPilotActivationProvider: NativeDirectCallInternalPilotActivationProviding?
     #if DEBUG
     private var nativeDirectCallDiagnosticCommandRouter: NativeDirectCallRoomDeveloperCommanding?
     var nativeDirectCallDiagnosticCommandConfiguration: NativeDirectCallRoomDeveloperCommandConfiguration = .init() {
@@ -135,9 +140,19 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
          nativeDirectCallInternalPilotEligibilityProviderFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallInternalPilotEligibilityProviding = { _ in
              FailClosedNativeDirectCallInternalPilotEligibilityProvider()
          },
+         nativeDirectCallInternalPilotActivationProviderFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallInternalPilotActivationProviding = { _ in
+             ServerBackedNativeDirectCallInternalPilotActivationProvider()
+         },
+         nativeDirectCallInternalPilotRolloutProvider: NativeDirectCallInternalPilotRolloutProviding? = nil,
          nativeDirectCallEligibilityStatusCache: NativeDirectCallEligibilityStatusCache = .init(),
          isNativeDirectCallEligibilityStatusEnabled: @escaping @MainActor () -> Bool = {
              ProcessInfo.isNativeDirectCallEligibilityStatusEnabled
+         },
+         isNativeDirectCallInternalPilotActivationDryRunEnabled: @escaping @MainActor () -> Bool = {
+             ProcessInfo.isNativeDirectCallInternalPilotActivationDryRunEnabled
+         },
+         isNativeDirectCallProductUIEnabled: @escaping @MainActor () -> Bool = {
+             ProcessInfo.isNativeDirectCallProductUIEnabled
          }) {
         self.roomID = roomID
         self.isChildFlow = isChildFlow
@@ -147,10 +162,22 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
         self.nativeDirectCallProductionActivationDryRunProviderFactory = nativeDirectCallProductionActivationDryRunProviderFactory
         self.nativeDirectCallProductionRoomFlowOwnerFactory = nativeDirectCallProductionRoomFlowOwnerFactory
         self.nativeDirectCallInternalPilotEligibilityProviderFactory = nativeDirectCallInternalPilotEligibilityProviderFactory
+        self.nativeDirectCallInternalPilotActivationProviderFactory = nativeDirectCallInternalPilotActivationProviderFactory
+        self.nativeDirectCallInternalPilotRolloutProvider = nativeDirectCallInternalPilotRolloutProvider ?? Self.defaultNativeDirectCallInternalPilotRolloutProvider()
         self.nativeDirectCallEligibilityStatusCache = nativeDirectCallEligibilityStatusCache
         self.isNativeDirectCallEligibilityStatusEnabled = isNativeDirectCallEligibilityStatusEnabled
+        self.isNativeDirectCallInternalPilotActivationDryRunEnabled = isNativeDirectCallInternalPilotActivationDryRunEnabled
+        self.isNativeDirectCallProductUIEnabled = isNativeDirectCallProductUIEnabled
         
         setupStateMachine()
+    }
+
+    private static func defaultNativeDirectCallInternalPilotRolloutProvider() -> NativeDirectCallInternalPilotRolloutProviding {
+        #if DEBUG
+        EnvironmentNativeDirectCallInternalPilotRolloutProvider()
+        #else
+        FailClosedNativeDirectCallInternalPilotRolloutProvider()
+        #endif
     }
         
     // MARK: - FlowCoordinatorProtocol
@@ -765,35 +792,69 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
         let status = NativeDirectCallRoomCardStatus.make(triggerDiagnostic: triggerDiagnostic,
                                                          productionStatus: productionStatus)
         return await nativeDirectCallRoomCardStatus(status,
+                                                    triggerDiagnostic: triggerDiagnostic,
                                                     productionStatus: productionStatus,
                                                     refreshMode: refreshMode)
     }
 
     private func nativeDirectCallRoomCardStatus(_ status: NativeDirectCallRoomCardStatus,
+                                                triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic,
                                                 productionStatus: NativeDirectCallProductionStatus,
                                                 refreshMode: NativeDirectCallRoomCardStatusRefreshMode) async -> NativeDirectCallRoomCardStatus {
-        guard isNativeDirectCallEligibilityStatusEnabled(),
-              let request = nativeDirectCallInternalPilotEligibilityRequest() else {
-            return status
+        var resolvedStatus = status
+        var resolvedEligibility = NativeDirectCallInternalPilotEligibility.disabled
+
+        if isNativeDirectCallEligibilityStatusEnabled(),
+           let request = nativeDirectCallInternalPilotEligibilityRequest() {
+            if productionStatus.productionMediaFailureReason == .tokenBackendRejected {
+                nativeDirectCallEligibilityStatusCache.invalidate(for: request)
+            }
+
+            if refreshMode == .cached,
+               let cachedEligibility = nativeDirectCallEligibilityStatusCache.eligibility(for: request) {
+                resolvedEligibility = cachedEligibility
+            } else if case .unavailable = status.state,
+                      let provider = nativeDirectCallInternalPilotEligibilityProvider {
+                let eligibility = await provider.nativeDirectCallInternalPilotEligibility(for: request)
+                nativeDirectCallEligibilityStatusCache.store(eligibility, for: request)
+                resolvedEligibility = eligibility
+            }
+
+            if case .unavailable = status.state {
+                resolvedStatus = status.merging(internalPilotEligibility: resolvedEligibility)
+            }
         }
 
-        if productionStatus.productionMediaFailureReason == .tokenBackendRejected {
-            nativeDirectCallEligibilityStatusCache.invalidate(for: request)
+        let dryRunStatus = await nativeDirectCallInternalPilotActivationDryRunStatus(eligibility: resolvedEligibility,
+                                                                                     triggerDiagnostic: triggerDiagnostic,
+                                                                                     productionStatus: productionStatus)
+        return resolvedStatus.merging(internalPilotActivationDryRun: dryRunStatus)
+    }
+
+    private func nativeDirectCallInternalPilotActivationDryRunStatus(eligibility: NativeDirectCallInternalPilotEligibility,
+                                                                     triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic,
+                                                                     productionStatus: NativeDirectCallProductionStatus) async -> NativeDirectCallInternalPilotActivationDryRunStatus {
+        guard isNativeDirectCallInternalPilotActivationDryRunEnabled(),
+              let roomProxy,
+              let provider = nativeDirectCallInternalPilotActivationProvider else {
+            return .disabled
         }
 
-        guard case .unavailable = status.state,
-              let provider = nativeDirectCallInternalPilotEligibilityProvider else {
-            return status
-        }
+        let rolloutConfiguration = nativeDirectCallInternalPilotRolloutProvider.nativeDirectCallInternalPilotRolloutConfiguration()
+        let roomEligibility = DirectCallProductionRoomEligibility(roomProxy: roomProxy)
+        let context = NativeDirectCallInternalPilotActivationContext(isProductUIEnabled: isNativeDirectCallProductUIEnabled(),
+                                                                     isInternalPilotRolloutEnabled: rolloutConfiguration.isEnabled,
+                                                                     isCapabilityPresent: eligibility.isCapabilityPresentForActivationDryRun,
+                                                                     eligibility: eligibility,
+                                                                     roomEligibility: roomEligibility,
+                                                                     peerTrustReadiness: triggerDiagnostic.peerTrustReadiness,
+                                                                     areDependenciesReady: triggerDiagnostic.areDependenciesReady,
+                                                                     hasActiveSession: productionStatus.productionHasActiveSession)
+        let activation = await provider.nativeDirectCallInternalPilotActivation(for: context)
 
-        if refreshMode == .cached,
-           let cachedEligibility = nativeDirectCallEligibilityStatusCache.eligibility(for: request) {
-            return status.merging(internalPilotEligibility: cachedEligibility)
-        }
-
-        let eligibility = await provider.nativeDirectCallInternalPilotEligibility(for: request)
-        nativeDirectCallEligibilityStatusCache.store(eligibility, for: request)
-        return status.merging(internalPilotEligibility: eligibility)
+        return .init(isEnabled: true,
+                     activation: activation,
+                     context: context)
     }
 
     private func nativeDirectCallInternalPilotEligibilityRequest() -> NativeDirectCallInternalPilotEligibilityRequest? {
@@ -846,6 +907,7 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
         nativeDirectCallRoomFlowOwner = nativeDirectCallRoomFlowOwnerFactory(roomProxy)
         nativeDirectCallProductionActivationDryRunProvider = nativeDirectCallProductionActivationDryRunProviderFactory(roomProxy)
         nativeDirectCallInternalPilotEligibilityProvider = nativeDirectCallInternalPilotEligibilityProviderFactory(roomProxy)
+        nativeDirectCallInternalPilotActivationProvider = nativeDirectCallInternalPilotActivationProviderFactory(roomProxy)
         nativeDirectCallEligibilityStatusCache.removeAll()
         nativeDirectCallProductionRoomFlowOwner = nil
         

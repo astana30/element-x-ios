@@ -1434,6 +1434,59 @@ Element Call remained visible/available as fallback and the native path did not 
 
 Next phase should use `2.36H — internal pilot activation rollout wiring readiness review`.
 
+## 2.36I Internal Pilot Activation Dry-Run Status Wiring
+
+The app now exposes a redacted, status-only internal pilot activation dry-run at the room-card provider boundary. This is diagnostic/status wiring only. It does not enable non-engineering Start or Accept.
+
+Gate:
+
+```sh
+export NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED=1
+```
+
+The gate is DEBUG/integration-only and also requires the diagnostic integration harness gates. It is off in default and Release builds.
+
+The dry-run evaluates only redacted model inputs:
+
+- product UI gate;
+- internal pilot rollout source;
+- backend eligibility result;
+- local encrypted direct 1:1 room eligibility;
+- peer trust readiness;
+- dependency readiness;
+- active/stale session state.
+
+Allowed dry-run output fields are:
+
+- `internalPilotActivationDryRunEnabled`;
+- `internalPilotActivationDecision` with safe enum values `disabled`, `unavailable`, `statusOnly`, or `activationAllowed`;
+- `internalPilotActivationReason` with safe unavailable reasons only;
+- redacted booleans for product UI, internal rollout, capability presence, room eligibility, peer trust, dependencies, and active session.
+
+The dry-run must not output raw room IDs, raw user IDs, raw peer IDs, raw device IDs, LiveKit room names, tokens, JWTs, keys, backend URLs, Matrix event bodies, or full request/response bodies.
+
+Side-effect boundary:
+
+- Dry-run may use the existing status eligibility path.
+- Dry-run must not send Matrix events.
+- Dry-run must not request a LiveKit participant token.
+- Dry-run must not rate-limit, allocate, or pre-create a LiveKit room.
+- Dry-run must not connect media or LiveKit.
+- Dry-run must not start an outgoing call.
+- Dry-run must not arm the receiver listener unless the existing private dogfood activation path already allows it.
+
+Activation remains unchanged:
+
+- dry-run `activationAllowed` is report-only;
+- Start and Accept remain controlled by the existing private engineering dogfood path;
+- product UI alone remains insufficient;
+- eligibility status alone remains insufficient;
+- backend eligible alone remains insufficient;
+- `directOneToOneCallsEnabled` remains unrelated;
+- non-engineering internal dogfood remains blocked.
+
+Next phase should use `2.36J — internal pilot activation dry-run no-activation runtime proof`.
+
 ## 2.35B Engineering Expansion Operations Handoff
 
 The 3-session engineering expansion soak completed cleanly, so narrow engineering dogfood can continue without per-session Codex supervision only when a named engineering operator owns the session and this handoff checklist is followed. This is still staging-only engineering dogfood, not non-engineering internal dogfood, product beta, public rollout, production activation, or Element Call replacement.
@@ -1951,6 +2004,7 @@ During each pilot session, monitor only redacted surfaces:
 - `productionSessionState`;
 - `productionMediaFailureReason`;
 - terminal reason enum;
+- redacted internal pilot activation dry-run enum/booleans when the dry-run gate is explicitly enabled;
 - cleanup and disconnect booleans.
 
 Do not capture raw backend request bodies, full response bodies, Matrix event bodies, bearer tokens, LiveKit participant tokens, JWTs, raw room IDs, raw user IDs, raw peer IDs, raw device IDs, LiveKit room names, Redis URLs with credentials, or LiveKit API secrets.
@@ -2002,7 +2056,7 @@ Rollback is complete only when the app relaunches without the private card path 
 
 These block broader internal dogfood and production, but not the controlled engineering dogfood scope above:
 
-- Server-backed internal pilot activation remains default-off. The iOS activation provider can model `activationAllowed` for tests only when all gates pass, and 2.36G proved it does not enable runtime Start/Accept without private dogfood; non-engineering Start/Accept is still not enabled until a separate rollout wiring implementation, runtime proof, and readiness review pass.
+- Server-backed internal pilot activation remains default-off. The iOS activation provider can model `activationAllowed` for tests and dry-run/status output only when all gates pass, and 2.36G/2.36I keep runtime Start/Accept controlled by private dogfood; non-engineering Start/Accept is still not enabled until a separate rollout wiring implementation, runtime proof, and readiness review pass.
 - No CallKit.
 - No push or background incoming calls.
 - No missed calls.

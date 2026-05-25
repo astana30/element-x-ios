@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-After 2.36G — internal pilot activation provider no-activation proof.
+After 2.36I — internal pilot activation dry-run status wiring.
 
 ## Latest App Code Checkpoint
 
-2.36F `Add server backed native audio activation provider`
+2.36I `Add internal pilot activation dry-run status`
 
 ## Latest Backend Code Checkpoint
 
@@ -138,6 +138,12 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - With product UI, eligibility status, and production start enabled, but private dogfood still unset, Start stayed blocked with `appRolloutDisabled`.
   - The no-private-dogfood runs had no Matrix send, no token request, no media connect, no LiveKit client connect, no active session, and media failure `none`.
   - The internal pilot rollout source stayed default-off; backend eligibility/status did not enable runtime Start or Accept.
+- Internal pilot activation dry-run status wiring is added:
+  - `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED=1` is DEBUG/integration-only and default off.
+  - The room-card provider boundary can now compute a redacted internal pilot activation dry-run status from product UI, internal rollout, backend eligibility, local encrypted direct 1:1 room state, trust readiness, dependency readiness, and active-session state.
+  - The exposed dry-run contract is enum/boolean-only: `internalPilotActivationDryRunEnabled`, `internalPilotActivationDecision`, `internalPilotActivationReason`, and redacted readiness booleans.
+  - Dry-run status does not enable Start or Accept; the private engineering path remains controlled by `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`, and non-engineering internal dogfood remains blocked.
+  - Tests cover dry-run gate-off behavior, rollout-off dry-run reporting, unit `activationAllowed` dry-run reporting without enabling Start, product UI/eligibility status insufficiency, side-effect boundaries, redaction, and Element Call separation.
   - With private dogfood restored, A/B trust and activation were ready, A -> B reached `productionSessionState=activeAudio`, and media failure stayed `none`.
   - Hangup returned A/B to `productionSessionState=idle` with no active session, cleanup/disconnect attempted, and media failure `none`.
   - Element Call route stayed untouched, no code changed, and no redaction issue was observed.
@@ -875,6 +881,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - The concrete server-backed activation provider can return `activationAllowed` only when product UI, internal pilot rollout, backend eligibility, room eligibility, trust readiness, dependency readiness, and idle session state all pass.
   - The provider is not enabled for non-engineering runtime by default, and engineering private dogfood remains separate under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`.
   - 2.36G runtime proof confirmed product UI, eligibility status, and production start still do not activate native audio without private dogfood, while the private engineering dogfood path still reaches active audio.
+  - 2.36I adds dry-run/status-only wiring for the provider behind `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED=1`; this can report a redacted decision but is not used to enable Start or Accept.
 - Pilot sessions must follow the 2.27A checkpoint, 2.28A operations checklist, and 2.33B expansion runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
@@ -887,9 +894,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.36H — internal pilot activation rollout wiring readiness review`
+`2.36J — internal pilot activation dry-run no-activation runtime proof`
 
-Goal: inspect whether the server-backed activation provider is ready for any future rollout wiring beyond tests, define the exact fail-closed integration boundary, and keep non-engineering internal dogfood blocked until a separate implementation and runtime proof.
+Goal: prove at runtime that the new dry-run/status gate can report redacted internal pilot activation decisions without enabling Start/Accept, while the existing private engineering dogfood path still reaches active audio.
 
 ## Do-Not-Touch Constraints
 

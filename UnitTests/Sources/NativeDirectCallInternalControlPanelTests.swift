@@ -1024,7 +1024,17 @@ final class NativeDirectCallInternalControlPanelTests {
         let redactedStatus = viewState.redactedStatus
         let redactedSnapshotStatus = NativeDirectCallRoomCardStatus(state: .unavailable(reason: .roomNotEncrypted),
                                                                     receiverAvailability: .openRoomRequired,
-                                                                    restorationAvailability: .unsupported).redactedStatus
+                                                                    restorationAvailability: .unsupported,
+                                                                    internalPilotActivationDryRun: .init(isEnabled: true,
+                                                                                                         decision: .unavailable,
+                                                                                                         reason: .roomNotEligible,
+                                                                                                         isProductUIEnabled: true,
+                                                                                                         isInternalPilotRolloutEnabled: true,
+                                                                                                         isCapabilityPresent: true,
+                                                                                                         isRoomEligible: false,
+                                                                                                         isPeerTrustReady: true,
+                                                                                                         areDependenciesReady: true,
+                                                                                                         hasActiveSession: false)).redactedStatus
 
         #expect(redactedStatus.state == .failed)
         #expect(redactedStatus.unavailableReason == nil)
@@ -1044,6 +1054,10 @@ final class NativeDirectCallInternalControlPanelTests {
         #expect(redactedSnapshotStatus.unavailableReason == .roomNotEncrypted)
         #expect(redactedSnapshotStatus.failureReason == nil)
         #expect(redactedSnapshotStatus.receiverAvailability == .openRoomRequired)
+        #expect(redactedSnapshotStatus.internalPilotActivationDryRun.isEnabled)
+        #expect(redactedSnapshotStatus.internalPilotActivationDryRun.decision == .unavailable)
+        #expect(redactedSnapshotStatus.description.contains("internalPilotActivationReason=roomNotEligible"))
+        #expect(Self.forbiddenNativeDirectCallFragments.allSatisfy { !redactedSnapshotStatus.description.contains($0) })
     }
 
     @Test

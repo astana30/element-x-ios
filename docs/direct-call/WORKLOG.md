@@ -1380,3 +1380,15 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Hangup returned A/B to `productionSessionState=idle` with no active session, cleanup/disconnect attempted, and media failure `none`.
 - The legacy fake/dry-run gate remained unset, Element Call route stayed untouched, no redaction issue was observed, and no code changes were needed.
 - Recommended next phase: `2.36H — internal pilot activation rollout wiring readiness review`.
+
+## 2026-05-25 — 2.36I Internal Pilot Activation Dry-Run Status Wiring
+
+- Added a DEBUG/integration-only dry-run status gate, `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED=1`.
+- Wired the server-backed internal pilot activation provider into the private native audio room-card provider boundary as redacted status only.
+- The dry-run combines product UI, internal pilot rollout, backend eligibility, encrypted direct 1:1 room eligibility, peer trust readiness, dependency readiness, and active-session state.
+- Exposed only enum/boolean output: `internalPilotActivationDryRunEnabled`, `internalPilotActivationDecision`, `internalPilotActivationReason`, product UI, internal rollout, capability presence, room eligibility, peer trust, dependency, and active-session booleans.
+- Kept Start/Accept availability unchanged. A dry-run `activationAllowed` result is report-only and does not enable native audio without the existing private dogfood path.
+- Preserved private engineering dogfood separation under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`; product UI, eligibility status, backend eligible, production start, and `directOneToOneCallsEnabled` remain insufficient by themselves.
+- Added tests for gate-off output, rollout-off dry-run reporting, unit `activationAllowed` dry-run reporting without enabling Start, safe redacted status descriptions, side-effect boundaries, and Element Call separation.
+- This does not enable non-engineering internal dogfood, does not change Element Call, and does not add CallKit, push, missed calls, video, or global activation.
+- Recommended next phase: `2.36J — internal pilot activation dry-run no-activation runtime proof`.

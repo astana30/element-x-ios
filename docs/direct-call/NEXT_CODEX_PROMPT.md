@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.36G — internal pilot activation provider no-activation proof.
+After 2.36I — internal pilot activation dry-run status wiring.
 
 Current checkpoints:
 - App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
@@ -44,6 +44,7 @@ Current checkpoints:
 - Internal pilot activation no-activation proof: 2.36D proved product UI, eligibility status, and production start gates without private dogfood stay blocked with `appRolloutDisabled`, no Matrix/token/media/LiveKit side effects, and no active session; private engineering dogfood still reaches active audio and returns idle.
 - Server-backed internal pilot activation provider: 2.36F added a default-off internal pilot rollout source and a concrete provider that can return `activationAllowed` only when all rollout, backend eligibility, local room, trust, dependency, and idle-session gates pass in unit tests; non-engineering runtime activation remains disabled.
 - Server-backed internal pilot activation provider no-activation proof: 2.36G proved product UI, eligibility status, and production start gates without private dogfood still block with `appRolloutDisabled`, no Matrix/token/media/LiveKit side effects, no active session, and private engineering dogfood still reaches active audio and returns idle.
+- Internal pilot activation dry-run status wiring: 2.36I adds a DEBUG/integration-only `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED=1` status gate that can report redacted internal pilot activation decisions from the server-backed provider without enabling Start or Accept.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -315,6 +316,12 @@ Current proven/prepared state:
   - the internal pilot rollout source stayed default-off at runtime and backend eligibility/status did not enable Start or Accept;
   - restoring private dogfood allowed A -> B `activeAudio`, then hangup returned A/B to idle with cleanup/disconnect attempted and media failure `none`;
   - no code changed, no redaction issue was observed, and Element Call stayed untouched.
+- 2.36I internal pilot activation dry-run status wiring:
+  - room-card provider boundary can compute a redacted dry-run status behind `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED=1`;
+  - dry-run output is limited to safe enum/boolean fields: enabled, decision, reason, product UI, internal rollout, capability, room, trust, dependency, and active-session booleans;
+  - dry-run can report `activationAllowed` in unit tests when all gates pass, but that result is status-only and does not enable Start or Accept;
+  - private engineering dogfood remains separate under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`;
+  - product UI, eligibility status, backend eligible, production start, and `directOneToOneCallsEnabled` remain insufficient by themselves.
 - Element Call route remains unchanged and must stay available as fallback.
 - No CallKit, push/background incoming, missed calls, video, session restoration, broad internal rollout, public rollout, production activation, or global activation exists.
 
@@ -367,74 +374,102 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.36H — internal pilot activation rollout wiring readiness review.
+2.36J — internal pilot activation dry-run no-activation runtime proof.
 
 Task:
-Inspection/design only. Do not modify code. Do not commit.
+Run runtime/no-activation proof for the internal pilot activation dry-run status wiring from 2.36I.
+Do not modify code unless a real runtime bug is found and explicitly approved.
+Do not change Element Call route.
+Do not wire CallKit/push/video.
+Do not globally activate production direct calls.
 
 Context:
-2.36F added the server-backed internal pilot activation provider behind a default-off native-audio-specific rollout source.
-2.36G runtime proof passed:
-- product UI + eligibility status without private dogfood stayed blocked with `appRolloutDisabled`;
-- product UI + eligibility status + production start without private dogfood still blocked Start with `appRolloutDisabled`;
-- no Matrix send, token request, media connect, LiveKit client connect, or active session occurred in no-private-dogfood runs;
-- backend eligibility/status and the default-off internal pilot rollout source did not enable runtime Start or Accept;
-- restoring private dogfood allowed A -> B `activeAudio`, then hangup returned A/B idle with media failure `none`;
-- Element Call stayed untouched and no code changed.
+2.36I added redacted runtime activation dry-run/status wiring:
+- `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED=1` is DEBUG/integration-only and default off;
+- dry-run status is computed at the room-card provider boundary;
+- dry-run combines product UI, internal pilot rollout, backend eligibility, local encrypted direct 1:1 room state, trust readiness, dependency readiness, and active-session state;
+- output is enum/boolean-only and redacted;
+- dry-run does not enable Start or Accept;
+- private engineering dogfood remains controlled by `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`.
 
 Goal:
-Decide whether the server-backed internal pilot activation provider is ready for a future wiring implementation, and define the smallest fail-closed next step without enabling non-engineering internal dogfood.
+Prove at runtime that the dry-run gate can report redacted activation decisions without changing Start/Accept availability, and that private engineering dogfood still works.
 
-Inspect:
-- `ElementX/Sources/Services/Calls/DirectCallMediaEngineProtocol.swift`
-- `ElementX/Sources/Screens/RoomScreen/RoomScreenModels.swift`
-- `ElementX/Sources/FlowCoordinators/RoomFlowCoordinator.swift`
-- `ElementX/Sources/Other/Extensions/ProcessInfo.swift`
-- `ElementX/Sources/Application/Settings/AppSettings.swift`
-- `UnitTests/Sources/DirectCallInternalPilotEligibilityTests.swift`
-- `UnitTests/Sources/NativeDirectCallInternalControlPanelTests.swift`
-- `server/salemx-call-service/salemx_call_service/eligibility.py`
-- `server/salemx-call-service/salemx_call_service/service.py`
-- `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`
-- `docs/direct-call/STATUS.md`
-- `docs/direct-call/WORKLOG.md`
-- `server/salemx-call-service/docs/STAGING_SMOKE_2026-05-21.md`
+Proof 1 — dry-run gate default off:
+1. Launch without `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED`.
+2. Product UI and eligibility status may be enabled for visibility.
+3. Keep `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED` unset.
+4. Confirm dry-run output is absent or disabled.
+5. Confirm activation stays blocked with safe reason, e.g. `appRolloutDisabled`.
+6. Confirm no Matrix send, token request, media connect, LiveKit connect, or active session.
 
-Questions:
-1. Is the provider ready to be wired into room-card activation decisions behind a default-off rollout source?
-2. Which runtime path should consume it first:
-   - card status only,
-   - activation dry-run only,
-   - Start/Accept availability behind explicit internal rollout,
-   - or no runtime wiring yet?
-3. What exact AND-gates must still be required before any future internal pilot Start/Accept?
-4. How should the private engineering dogfood path remain separate?
-5. What additional backend readiness/allowlist safeguards are needed?
-6. What runtime proof is required before enabling a non-engineering internal pilot candidate?
-7. What remains blocked regardless of this provider?
+Proof 2 — dry-run gate on, rollout off:
+1. Launch with:
+   - `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`
+   - `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1`
+   - `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED=1`
+2. Keep private dogfood unset.
+3. Confirm dry-run reports:
+   - `internalPilotActivationDryRunEnabled=true`
+   - `internalPilotActivationDecision=disabled` or unavailable safe equivalent
+   - `internalPilotActivationReason=rolloutDisabled`
+4. Confirm Start/Accept remain unavailable or blocked.
+5. Confirm no token/media/LiveKit path and no active session.
 
-Hard constraints:
-- Do not approve non-engineering internal dogfood yet.
-- Do not implement activation in this phase.
-- Do not propose public rollout.
-- Do not replace Element Call toolbar.
-- No CallKit/push/background incoming.
-- No missed-call UX implementation.
-- No video.
-- No global production activation.
-- Do not weaken trusted-device/E2EE behavior.
-- Do not use `directOneToOneCallsEnabled` as the native audio gate.
-- Do not expose raw tokens/JWTs/keys/room IDs/user IDs/device IDs.
-- Token endpoint remains final authority.
+Proof 3 — eligible status cannot activate:
+1. If safe local backend allowlist/eligibility fixture is available, confirm backend eligibility can report eligible/status-ready.
+2. Keep private dogfood unset.
+3. Confirm backend eligible plus dry-run/status still does not enable Start or Accept.
+4. If the fixture is unavailable, mark this row not-run and rely on 2.36I unit tests for `activationAllowed` dry-run output without Start enablement.
 
-Expected output:
-A. Files inspected.
-B. Readiness decision.
-C. Recommended wiring boundary.
-D. Required gates and merge rules.
-E. Engineering dogfood compatibility.
-F. Backend safeguards.
-G. iOS safeguards.
-H. Required tests.
-I. Required runtime proof.
-J. Recommended next implementation phase.
+Proof 4 — production start gate still insufficient:
+1. Add `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`.
+2. Keep private dogfood unset.
+3. Confirm Start remains blocked.
+4. Confirm no token request, media connect, LiveKit connect, or active session.
+
+Proof 5 — private engineering dogfood still works:
+1. Launch with:
+   - `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`
+   - `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1`
+   - `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED=1`
+   - `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`
+   - `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`
+   - `NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=<staging call-service>`
+2. Confirm readiness `ready=true`, `reason=ok`.
+3. Confirm A/B trust ready.
+4. Open encrypted direct 1:1 DM.
+5. A Start -> B Accept -> A/B `activeAudio`.
+6. Hang up -> A/B idle.
+7. Confirm media failure `none`.
+
+Proof 6 — Element Call separation:
+- Confirm Element Call route/buttons remain untouched.
+- Native path does not use `displayCall` or `presentCallScreen`.
+
+Report:
+A. Dry-run default-off result.
+B. Dry-run gate-on rollout-off result.
+C. Eligible-status-cannot-activate result.
+D. Production start gate insufficiency result.
+E. Private dogfood happy path result.
+F. Final A/B status.
+G. Any runtime regression.
+H. Whether code changed.
+
+Hard redaction:
+- no Matrix access tokens
+- no Synapse admin token
+- no LiveKit API secret
+- no participant JWT/token
+- no raw room IDs/user IDs/device IDs
+- no LiveKit room names
+- no media keys
+- no Matrix event bodies
+- no Redis credentials
+- no full request/response bodies
+
+If passed with no code changes, create docs-only proof commit.
+
+Suggested commit:
+Record internal pilot activation dry-run proof

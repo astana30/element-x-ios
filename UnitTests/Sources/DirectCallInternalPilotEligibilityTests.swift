@@ -609,6 +609,24 @@ final class DirectCallInternalPilotEligibilityTests {
     }
 
     @Test
+    func internalPilotActivationDryRunGateRequiresDebugIntegrationHarnessAndDoesNotEnableDogfood() {
+        let dryRunWithoutHarness = [
+            "NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED": "1"
+        ]
+        let dryRunWithHarness = [
+            "IS_RUNNING_INTEGRATION_TESTS": "1",
+            "NATIVE_DIRECT_CALL_DIAGNOSTICS": "1",
+            "NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED": "1",
+            "NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED": "1"
+        ]
+
+        #expect(ProcessInfo.isNativeDirectCallInternalPilotActivationDryRunEnabled(environment: dryRunWithoutHarness) == false)
+        #expect(ProcessInfo.isNativeDirectCallInternalPilotActivationDryRunEnabled(environment: dryRunWithHarness))
+        #expect(ProcessInfo.isNativeDirectCallPrivateDogfoodEnabled(environment: dryRunWithHarness) == false)
+        #expect(ProcessInfo.isNativeDirectCallProductionStartEnabled(environment: dryRunWithHarness) == false)
+    }
+
+    @Test
     func privateDogfoodGateRequiresDebugIntegrationHarness() {
         let dogfoodWithoutHarness = [
             "NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED": "1",

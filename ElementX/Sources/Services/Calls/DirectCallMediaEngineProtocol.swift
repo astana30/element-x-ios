@@ -709,6 +709,25 @@ enum NativeDirectCallInternalPilotEligibility: Equatable, CustomStringConvertibl
         self == .eligible
     }
 
+    var isCapabilityPresentForActivationDryRun: Bool {
+        switch self {
+        case .eligible,
+             .unavailable(reason: .accountNotEligible),
+             .unavailable(reason: .peerNotEligible),
+             .unavailable(reason: .roomNotEligible),
+             .unavailable(reason: .trustNotReady),
+             .unavailable(reason: .serviceUnavailable),
+             .unavailable(reason: .unsupportedClient),
+             .unavailable(reason: .unknown),
+             .unsupported:
+            return true
+        case .unavailable(reason: .capabilityMissing),
+             .disabled,
+             .failClosed:
+            return false
+        }
+    }
+
     var description: String {
         switch self {
         case .eligible:
