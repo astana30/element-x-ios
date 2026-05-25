@@ -882,6 +882,10 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - The provider is not enabled for non-engineering runtime by default, and engineering private dogfood remains separate under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`.
   - 2.36G runtime proof confirmed product UI, eligibility status, and production start still do not activate native audio without private dogfood, while the private engineering dogfood path still reaches active audio.
   - 2.36I adds dry-run/status-only wiring for the provider behind `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED=1`; this can report a redacted decision but is not used to enable Start or Accept.
+  - 2.36J runtime proof confirmed product UI, eligibility status, and internal pilot activation dry-run gates do not activate native audio without private dogfood.
+  - 2.36J also confirmed product UI, eligibility status, production start, and dry-run gates together remain blocked without private dogfood, with no Matrix send, no token request, no media connect, no LiveKit client connect, and no active session.
+  - With private dogfood restored, A -> B reached `activeAudio`, then hangup returned A/B to `idle` with no active session and media failure `none`.
+  - Runner-visible output remained redacted. Current runner diagnostics do not directly export the new internal-pilot dry-run enum fields, so a follow-up should add a redacted runner/status signal for direct dry-run observability before using this proof as operator-facing dry-run telemetry.
 - Pilot sessions must follow the 2.27A checkpoint, 2.28A operations checklist, and 2.33B expansion runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
@@ -894,9 +898,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.36J — internal pilot activation dry-run no-activation runtime proof`
+`2.36K — internal pilot activation dry-run runner observability`
 
-Goal: prove at runtime that the new dry-run/status gate can report redacted internal pilot activation decisions without enabling Start/Accept, while the existing private engineering dogfood path still reaches active audio.
+Goal: expose the existing internal pilot activation dry-run status through a redacted diagnostic/status signal so future runtime proofs can assert `internalPilotActivationDryRunEnabled`, `internalPilotActivationDecision`, and `internalPilotActivationReason` directly without changing Start/Accept activation.
 
 ## Do-Not-Touch Constraints
 

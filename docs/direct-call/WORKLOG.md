@@ -1392,3 +1392,22 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added tests for gate-off output, rollout-off dry-run reporting, unit `activationAllowed` dry-run reporting without enabling Start, safe redacted status descriptions, side-effect boundaries, and Element Call separation.
 - This does not enable non-engineering internal dogfood, does not change Element Call, and does not add CallKit, push, missed calls, video, or global activation.
 - Recommended next phase: `2.36J — internal pilot activation dry-run no-activation runtime proof`.
+
+## 2026-05-25 — 2.36J Internal Pilot Activation Dry-Run No-Activation Runtime Proof
+
+- Ran the runtime/no-activation proof after internal pilot activation dry-run status wiring.
+- Confirmed staging readiness returned `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, and native audio eligibility/allowlist configured.
+- Launched A/B with product UI, eligibility status, and the internal pilot activation dry-run gate enabled, while leaving private dogfood unset.
+- Confirmed activation remained blocked with safe reasons and no active session.
+- Confirmed the no-private-dogfood runs had no Matrix send, no token request, no media connect, no LiveKit client connect, and media failure `none`.
+- Relaunched with product UI, eligibility status, production start, and dry-run gates enabled while still leaving private dogfood unset.
+- Confirmed production start remained blocked without private dogfood; no token/media/LiveKit path was attempted and no active session was created.
+- Restored private dogfood with product UI, eligibility status, production start, dry-run, and staging token base URL gates enabled.
+- Verified A/B trust ready, activation enabled, dependencies ready, room eligible, endpoint accepted, peer trust ready, and key wrapper available.
+- A first runner sequence used the generic diagnostic `wait-status` helper against the production path and timed out before accept; timeout cleanup remained safe with A/B idle, no active session, cleanup/disconnect attempted, and media failure `none`.
+- Reran the happy path with production-status polling: A -> B reached `incomingRinging`, B accepted, A/B reached `activeAudio`, media and LiveKit client connect were attempted, and media failure stayed `none`.
+- Hangup returned A/B to `idle` with no active session, cleanup/disconnect attempted, and media failure `none`.
+- Runner-visible output stayed redacted and did not include raw tokens, JWTs, secrets, raw room/user/device IDs, LiveKit room names, Redis credentials, Matrix event bodies, or full request/response bodies.
+- Current runner diagnostics do not directly export the new internal-pilot dry-run enum fields from the room-card status contract. The no-activation runtime safety proof passed, but direct dry-run enum observability should be added before relying on runner output as operator-facing dry-run telemetry.
+- No code changed during the runtime proof, and Element Call route stayed untouched.
+- Recommended next phase: `2.36K — internal pilot activation dry-run runner observability`.

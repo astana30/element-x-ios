@@ -2057,6 +2057,7 @@ Rollback is complete only when the app relaunches without the private card path 
 These block broader internal dogfood and production, but not the controlled engineering dogfood scope above:
 
 - Server-backed internal pilot activation remains default-off. The iOS activation provider can model `activationAllowed` for tests and dry-run/status output only when all gates pass, and 2.36G/2.36I keep runtime Start/Accept controlled by private dogfood; non-engineering Start/Accept is still not enabled until a separate rollout wiring implementation, runtime proof, and readiness review pass.
+- The 2.36J dry-run runtime proof confirmed the dry-run gate does not activate Start/Accept without private dogfood, even when product UI, eligibility status, and production start are enabled. Private engineering dogfood still reached active audio and returned idle. Current runner diagnostics do not directly export the new dry-run enum fields, so operator-facing dry-run telemetry still needs a redacted runner/status signal before it is used for broader monitoring.
 - No CallKit.
 - No push or background incoming calls.
 - No missed calls.
