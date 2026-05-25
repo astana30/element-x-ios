@@ -105,6 +105,8 @@ Optional environment:
                                   Optional. Set to 1 to show the private native-call room card.
   NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED
                                   Optional. Set to 1 for DEBUG/integration-only eligibility status display.
+  NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED
+                                  Optional. Set to 1 for DEBUG/integration-only internal pilot activation dry-run status.
 
 Example planned signalling sequence:
   $SCRIPT_NAME init both
@@ -217,6 +219,11 @@ log_livekit_environment_summary() {
         log "Eligibility status display: enabled"
     else
         log "Eligibility status display: disabled"
+    fi
+    if [[ "${NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED:-}" == "1" ]]; then
+        log "Internal pilot activation dry-run status: enabled"
+    else
+        log "Internal pilot activation dry-run status: disabled"
     fi
     log "Production token backend base URL: $(redacted_env_state NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL)"
 }
@@ -758,7 +765,10 @@ def format_production_status(status):
         "productionMediaFactoryInjected={media_factory} productionMediaCredentialProviderAvailable={media_credentials} productionMediaE2EEProviderAvailable={media_e2ee_provider} "
         "productionMediaKeyHandleAvailable={media_key_handle} productionMediaKeyBridgeHit={media_key_bridge} productionMediaConnectAttempted={media_connect} "
         "productionMediaDisconnectAttempted={media_disconnect} productionMediaCleanupAttempted={media_cleanup} "
-        "productionLiveKitClientConnectAttempted={livekit_connect} productionMediaFailureReason={media_failure}"
+        "productionLiveKitClientConnectAttempted={livekit_connect} productionMediaFailureReason={media_failure} "
+        "internalPilotActivationDryRunEnabled={internal_dry_run_enabled} internalPilotActivationDecision={internal_dry_run_decision} "
+        "internalPilotActivationReason={internal_dry_run_reason} internalPilotRolloutEnabled={internal_rollout} internalPilotEligibilityReady={internal_eligibility} "
+        "internalPilotRoomReady={internal_room} internalPilotTrustReady={internal_trust} internalPilotDependenciesReady={internal_dependencies}"
     ).format(
         owner=str(status.get("productionOwnerAvailable", "unknown")).lower(),
         listener=str(status.get("productionListenerStarted", "unknown")).lower(),
@@ -799,6 +809,14 @@ def format_production_status(status):
         media_cleanup=str(status.get("productionMediaCleanupAttempted", "unknown")).lower(),
         livekit_connect=str(status.get("productionLiveKitClientConnectAttempted", "unknown")).lower(),
         media_failure=status.get("productionMediaFailureReason", "none"),
+        internal_dry_run_enabled=str(status.get("internalPilotActivationDryRunEnabled", "unknown")).lower(),
+        internal_dry_run_decision=status.get("internalPilotActivationDecision") or "unknown",
+        internal_dry_run_reason=status.get("internalPilotActivationReason") or "none",
+        internal_rollout=str(status.get("internalPilotRolloutEnabled", "unknown")).lower(),
+        internal_eligibility=str(status.get("internalPilotEligibilityReady", "unknown")).lower(),
+        internal_room=str(status.get("internalPilotRoomReady", "unknown")).lower(),
+        internal_trust=str(status.get("internalPilotTrustReady", "unknown")).lower(),
+        internal_dependencies=str(status.get("internalPilotDependenciesReady", "unknown")).lower(),
     )
 
 if expected_signal == "nativeDirectCallDiagnosticResult":
@@ -1266,6 +1284,7 @@ launch_client_with_environment() {
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED="${NATIVE_DIRECT_CALL_INTERNAL_UI_ENABLED:-}" \
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED="${NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED:-}" \
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED="${NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED:-}" \
+        SIMCTL_CHILD_NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED="${NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED:-}" \
         SIMCTL_CHILD_UI_TESTS_SIGNALLING_CHANNEL="$channel" \
         SIMCTL_CHILD_INTEGRATION_TESTS_HOST="$INTEGRATION_TESTS_HOST" \
         SIMCTL_CHILD_INTEGRATION_TESTS_USERNAME="$username" \

@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-After 2.36I — internal pilot activation dry-run status wiring.
+After 2.36K — internal pilot activation dry-run runner observability.
 
 ## Latest App Code Checkpoint
 
-2.36I `Add internal pilot activation dry-run status`
+2.36K `Expose internal pilot dry-run status in runner`
 
 ## Latest Backend Code Checkpoint
 
@@ -147,6 +147,11 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - With private dogfood restored, A/B trust and activation were ready, A -> B reached `productionSessionState=activeAudio`, and media failure stayed `none`.
   - Hangup returned A/B to `productionSessionState=idle` with no active session, cleanup/disconnect attempted, and media failure `none`.
   - Element Call route stayed untouched, no code changed, and no redaction issue was observed.
+- Internal pilot activation dry-run runner observability is added:
+  - The redacted `production-status` payload now carries `internalPilotActivationDryRunEnabled`, `internalPilotActivationDecision`, `internalPilotActivationReason`, `internalPilotRolloutEnabled`, `internalPilotEligibilityReady`, `internalPilotRoomReady`, `internalPilotTrustReady`, and `internalPilotDependenciesReady`.
+  - The two-client diagnostic runner forwards `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED=1` and prints those fields as simple key/value output.
+  - Runner-visible `internalPilotActivationDecision` values are safe enum strings: `disabled`, `unavailable`, `eligibleForStatusOnly`, `activationAllowed`, or `unknown`.
+  - This is observability only. Start and Accept remain controlled by the existing private engineering dogfood path, and non-engineering internal dogfood remains blocked.
 - Controlled engineering dogfood pilot session 1 is recorded:
   - Preflight passed with readiness `ready=true`, `reason=ok`, Redis allocation/rate-limit/storage booleans true, LiveKit room provisioning true, and A/B trust ready.
   - Required private dogfood gates were used, and the legacy fake/dry-run gate was unset.
@@ -885,7 +890,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - 2.36J runtime proof confirmed product UI, eligibility status, and internal pilot activation dry-run gates do not activate native audio without private dogfood.
   - 2.36J also confirmed product UI, eligibility status, production start, and dry-run gates together remain blocked without private dogfood, with no Matrix send, no token request, no media connect, no LiveKit client connect, and no active session.
   - With private dogfood restored, A -> B reached `activeAudio`, then hangup returned A/B to `idle` with no active session and media failure `none`.
-  - Runner-visible output remained redacted. Current runner diagnostics do not directly export the new internal-pilot dry-run enum fields, so a follow-up should add a redacted runner/status signal for direct dry-run observability before using this proof as operator-facing dry-run telemetry.
+  - 2.36K adds direct runner observability for the internal-pilot dry-run enum/boolean fields in redacted `production-status` output. This does not enable Start or Accept and still needs a runtime proof before it is used as operator-facing dry-run telemetry.
 - Pilot sessions must follow the 2.27A checkpoint, 2.28A operations checklist, and 2.33B expansion runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
@@ -898,9 +903,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.36K — internal pilot activation dry-run runner observability`
+`2.36L — internal pilot activation dry-run runner observability proof`
 
-Goal: expose the existing internal pilot activation dry-run status through a redacted diagnostic/status signal so future runtime proofs can assert `internalPilotActivationDryRunEnabled`, `internalPilotActivationDecision`, and `internalPilotActivationReason` directly without changing Start/Accept activation.
+Goal: prove the runner-visible internal pilot activation dry-run fields are redacted and observable at runtime, while product UI, eligibility status, production start, and dry-run gates still do not activate native audio without private dogfood.
 
 ## Do-Not-Touch Constraints
 

@@ -338,6 +338,15 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
 
         return chatsTabFlowCoordinator.nativeDirectCallProductionStatus()
     }
+
+    func nativeDirectCallInternalPilotActivationDryRunDiagnosticStatus() async -> NativeDirectCallInternalPilotActivationDryRunStatus {
+        guard nativeDirectCallDiagnosticRuntimeGate(),
+              navigationTabCoordinator.selectedTab == .chats else {
+            return .disabled
+        }
+
+        return await chatsTabFlowCoordinator.nativeDirectCallInternalPilotActivationDryRunDiagnosticStatus()
+    }
     #endif
 
     // MARK: - Private

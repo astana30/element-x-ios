@@ -1411,3 +1411,13 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Current runner diagnostics do not directly export the new internal-pilot dry-run enum fields from the room-card status contract. The no-activation runtime safety proof passed, but direct dry-run enum observability should be added before relying on runner output as operator-facing dry-run telemetry.
 - No code changed during the runtime proof, and Element Call route stayed untouched.
 - Recommended next phase: `2.36K — internal pilot activation dry-run runner observability`.
+
+## 2026-05-25 — 2.36K Internal Pilot Activation Dry-Run Runner Observability
+
+- Added the internal pilot activation dry-run status to the redacted native direct-call `production-status` diagnostic payload.
+- The payload now exposes `internalPilotActivationDryRunEnabled`, `internalPilotActivationDecision`, `internalPilotActivationReason`, `internalPilotRolloutEnabled`, `internalPilotEligibilityReady`, `internalPilotRoomReady`, `internalPilotTrustReady`, and `internalPilotDependenciesReady`.
+- Updated the two-client diagnostic runner to forward `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED=1` and print those fields as simple `key=value` output.
+- Kept the runner-visible decision enum safe and status-only: `disabled`, `unavailable`, `eligibleForStatusOnly`, `activationAllowed`, or `unknown`.
+- Preserved activation behavior. Dry-run `activationAllowed` remains report-only, Start/Accept remain controlled by the private engineering dogfood path, and non-engineering internal dogfood remains blocked.
+- Added tests for the new redacted production-status fields and the activationAllowed dry-run side-effect boundary.
+- Recommended next phase: `2.36L — internal pilot activation dry-run runner observability proof`.

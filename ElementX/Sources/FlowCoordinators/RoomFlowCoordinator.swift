@@ -636,6 +636,10 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
               roomAttached: roomProxy != nil && stateMachine.state != .complete)
     }
 
+    func nativeDirectCallInternalPilotActivationDryRunDiagnosticStatus() async -> NativeDirectCallInternalPilotActivationDryRunStatus {
+        await nativeDirectCallRoomCardStatus().internalPilotActivationDryRun
+    }
+
     private func makeNativeDirectCallInternalControlProvider() -> NativeDirectCallInternalControlProviding? {
         guard ProcessInfo.isNativeDirectCallInternalUIEnabled else {
             return nil

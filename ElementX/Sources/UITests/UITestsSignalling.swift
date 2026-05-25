@@ -497,6 +497,14 @@ enum UITestsSignal: Codable, Equatable {
         let productionMediaCleanupAttempted: Bool
         let productionLiveKitClientConnectAttempted: Bool
         let productionMediaFailureReason: DirectCallDiagnosticMediaFailureReason
+        let internalPilotActivationDryRunEnabled: Bool
+        let internalPilotActivationDecision: String
+        let internalPilotActivationReason: String
+        let internalPilotRolloutEnabled: Bool
+        let internalPilotEligibilityReady: Bool
+        let internalPilotRoomReady: Bool
+        let internalPilotTrustReady: Bool
+        let internalPilotDependenciesReady: Bool
 
         init(productionOwnerAvailable: Bool,
              productionListenerAvailable: Bool = false,
@@ -539,7 +547,8 @@ enum UITestsSignal: Codable, Equatable {
              productionMediaDisconnectAttempted: Bool = false,
              productionMediaCleanupAttempted: Bool = false,
              productionLiveKitClientConnectAttempted: Bool = false,
-             productionMediaFailureReason: DirectCallDiagnosticMediaFailureReason = .none) {
+             productionMediaFailureReason: DirectCallDiagnosticMediaFailureReason = .none,
+             internalPilotActivationDryRun: NativeDirectCallInternalPilotActivationDryRunStatus = .disabled) {
             self.productionOwnerAvailable = productionOwnerAvailable
             self.productionListenerAvailable = productionListenerAvailable
             self.productionListenerStarted = productionListenerStarted
@@ -582,6 +591,14 @@ enum UITestsSignal: Codable, Equatable {
             self.productionMediaCleanupAttempted = productionMediaCleanupAttempted
             self.productionLiveKitClientConnectAttempted = productionLiveKitClientConnectAttempted
             self.productionMediaFailureReason = productionMediaFailureReason
+            internalPilotActivationDryRunEnabled = internalPilotActivationDryRun.isEnabled
+            internalPilotActivationDecision = UITestsSignalling.sanitizedIdentifier(internalPilotActivationDryRun.diagnosticDecision) ?? "unknown"
+            internalPilotActivationReason = internalPilotActivationDryRun.reason.flatMap { UITestsSignalling.sanitizedIdentifier($0.description) } ?? "none"
+            internalPilotRolloutEnabled = internalPilotActivationDryRun.isInternalPilotRolloutEnabled
+            internalPilotEligibilityReady = internalPilotActivationDryRun.isEligibilityReady
+            internalPilotRoomReady = internalPilotActivationDryRun.isRoomEligible
+            internalPilotTrustReady = internalPilotActivationDryRun.isPeerTrustReady
+            internalPilotDependenciesReady = internalPilotActivationDryRun.areDependenciesReady
         }
     }
 
@@ -970,9 +987,11 @@ extension UITestsSignal.NativeDirectCallProductionHangupResult {
 }
 
 extension UITestsSignal.NativeDirectCallProductionStatusResult {
-    init(correlationID: String? = nil, _ status: NativeDirectCallProductionStatus) {
+    init(correlationID: String? = nil,
+         _ status: NativeDirectCallProductionStatus,
+         internalPilotActivationDryRun: NativeDirectCallInternalPilotActivationDryRunStatus = .disabled) {
         self.init(correlationID: correlationID,
-                  status: .init(status))
+                  status: .init(status, internalPilotActivationDryRun: internalPilotActivationDryRun))
     }
 }
 
@@ -1013,7 +1032,8 @@ extension UITestsSignal.NativeDirectCallProductionStartedSessionSummary {
 }
 
 extension UITestsSignal.NativeDirectCallProductionStatusPayload {
-    init(_ status: NativeDirectCallProductionStatus) {
+    init(_ status: NativeDirectCallProductionStatus,
+         internalPilotActivationDryRun: NativeDirectCallInternalPilotActivationDryRunStatus = .disabled) {
         self.init(productionOwnerAvailable: status.productionOwnerAvailable,
                   productionListenerAvailable: status.productionListenerAvailable,
                   productionListenerStarted: status.productionListenerStarted,
@@ -1055,7 +1075,23 @@ extension UITestsSignal.NativeDirectCallProductionStatusPayload {
                   productionMediaDisconnectAttempted: status.productionMediaDisconnectAttempted,
                   productionMediaCleanupAttempted: status.productionMediaCleanupAttempted,
                   productionLiveKitClientConnectAttempted: status.productionLiveKitClientConnectAttempted,
-                  productionMediaFailureReason: status.productionMediaFailureReason)
+                  productionMediaFailureReason: status.productionMediaFailureReason,
+                  internalPilotActivationDryRun: internalPilotActivationDryRun)
+    }
+}
+
+private extension NativeDirectCallInternalPilotActivationDryRunStatus {
+    var diagnosticDecision: String {
+        switch decision {
+        case .disabled:
+            "disabled"
+        case .unavailable:
+            "unavailable"
+        case .statusOnly:
+            "eligibleForStatusOnly"
+        case .activationAllowed:
+            "activationAllowed"
+        }
     }
 }
 

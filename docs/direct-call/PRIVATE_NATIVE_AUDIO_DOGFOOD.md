@@ -1456,7 +1456,7 @@ The dry-run evaluates only redacted model inputs:
 - dependency readiness;
 - active/stale session state.
 
-Allowed dry-run output fields are:
+Allowed room-card dry-run output fields are:
 
 - `internalPilotActivationDryRunEnabled`;
 - `internalPilotActivationDecision` with safe enum values `disabled`, `unavailable`, `statusOnly`, or `activationAllowed`;
@@ -1486,6 +1486,33 @@ Activation remains unchanged:
 - non-engineering internal dogfood remains blocked.
 
 Next phase should use `2.36J — internal pilot activation dry-run no-activation runtime proof`.
+
+## 2.36K Internal Pilot Activation Dry-Run Runner Observability
+
+The DEBUG/integration `production-status` diagnostic output now includes the internal pilot activation dry-run status as redacted enum/boolean fields. This is observability only. It does not enable Start, Accept, non-engineering internal dogfood, or any production rollout.
+
+Runner launch now forwards:
+
+```sh
+export NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED=1
+```
+
+When queried through `production-status`, the runner prints only safe key/value fields:
+
+- `internalPilotActivationDryRunEnabled`;
+- `internalPilotActivationDecision` with runner-safe values `disabled`, `unavailable`, `eligibleForStatusOnly`, `activationAllowed`, or `unknown`;
+- `internalPilotActivationReason`;
+- `internalPilotRolloutEnabled`;
+- `internalPilotEligibilityReady`;
+- `internalPilotRoomReady`;
+- `internalPilotTrustReady`;
+- `internalPilotDependenciesReady`.
+
+The runner-visible decision may report `activationAllowed` only as dry-run status. Start and Accept remain controlled by the existing private engineering dogfood path, and backend token issuance remains the final enforcement boundary.
+
+This output must not include raw room IDs, raw user IDs, raw peer IDs, raw device IDs, LiveKit room names, tokens, JWTs, keys, backend URLs with credentials, Matrix event bodies, Redis credentials, or full request/response bodies.
+
+Next phase should use `2.36L — internal pilot activation dry-run runner observability proof`.
 
 ## 2.35B Engineering Expansion Operations Handoff
 
@@ -2057,7 +2084,8 @@ Rollback is complete only when the app relaunches without the private card path 
 These block broader internal dogfood and production, but not the controlled engineering dogfood scope above:
 
 - Server-backed internal pilot activation remains default-off. The iOS activation provider can model `activationAllowed` for tests and dry-run/status output only when all gates pass, and 2.36G/2.36I keep runtime Start/Accept controlled by private dogfood; non-engineering Start/Accept is still not enabled until a separate rollout wiring implementation, runtime proof, and readiness review pass.
-- The 2.36J dry-run runtime proof confirmed the dry-run gate does not activate Start/Accept without private dogfood, even when product UI, eligibility status, and production start are enabled. Private engineering dogfood still reached active audio and returned idle. Current runner diagnostics do not directly export the new dry-run enum fields, so operator-facing dry-run telemetry still needs a redacted runner/status signal before it is used for broader monitoring.
+- The 2.36J dry-run runtime proof confirmed the dry-run gate does not activate Start/Accept without private dogfood, even when product UI, eligibility status, and production start are enabled. Private engineering dogfood still reached active audio and returned idle.
+- The 2.36K runner observability wiring exposes the internal pilot dry-run status in redacted `production-status` output. It remains observability only and still needs a runtime proof before it is used as operator-facing dry-run telemetry.
 - No CallKit.
 - No push or background incoming calls.
 - No missed calls.

@@ -1392,6 +1392,11 @@ final class RoomFlowCoordinatorTests {
         #expect(cardStatus.internalPilotActivationDryRun.isEnabled)
         #expect(cardStatus.internalPilotActivationDryRun.decision == .activationAllowed)
         #expect(cardStatus.internalPilotActivationDryRun.reason == nil)
+        #expect(cardStatus.internalPilotActivationDryRun.isInternalPilotRolloutEnabled)
+        #expect(cardStatus.internalPilotActivationDryRun.isEligibilityReady)
+        #expect(cardStatus.internalPilotActivationDryRun.isRoomEligible)
+        #expect(cardStatus.internalPilotActivationDryRun.isPeerTrustReady)
+        #expect(cardStatus.internalPilotActivationDryRun.areDependenciesReady)
         #expect(NativeDirectCallRoomCardAction.startAudio.isEnabled(in: cardStatus.state, isLoading: false) == false)
         #expect(productionStatus.productionLastSignalSendAttempted == false)
         #expect(productionStatus.productionMediaConnectAttempted == false)
@@ -2740,7 +2745,8 @@ final class RoomFlowCoordinatorTests {
                                                                            productionMediaKeyBridgeHit: true,
                                                                            productionMediaConnectAttempted: true,
                                                                            productionLiveKitClientConnectAttempted: true,
-                                                                           productionMediaFailureReason: .mediaSetupUnavailable)
+                                                                           productionMediaFailureReason: .mediaSetupUnavailable,
+                                                                           internalPilotActivationDryRun: Self.statusOnlyInternalPilotActivationDryRun())
         let result = UITestsSignal.NativeDirectCallProductionStatusResult(correlationID: "call-A-1",
                                                                           status: status)
         let requestSignal = UITestsSignal.nativeDirectCallProductionStatus(request)
@@ -2765,12 +2771,16 @@ final class RoomFlowCoordinatorTests {
             "productionLastEnvelopeRejectedReason", "productionLastReceiveFailureReason", "productionSendRoomFingerprint",
             "productionReceiveRoomFingerprint", "productionMediaFactoryInjected", "productionMediaCredentialProviderAvailable",
             "productionMediaE2EEProviderAvailable", "productionMediaKeyHandleAvailable", "productionMediaKeyBridgeHit",
-            "productionMediaConnectAttempted", "productionLiveKitClientConnectAttempted", "productionMediaFailureReason"
+            "productionMediaConnectAttempted", "productionLiveKitClientConnectAttempted", "productionMediaFailureReason",
+            "internalPilotActivationDryRunEnabled", "internalPilotActivationDecision", "internalPilotActivationReason",
+            "internalPilotRolloutEnabled", "internalPilotEligibilityReady", "internalPilotRoomReady", "internalPilotTrustReady",
+            "internalPilotDependenciesReady"
         ]
         for field in expectedStatusFields {
             #expect(encodedResult.contains(field))
         }
         #expect(encodedResult.contains("mediaSetupUnavailable"))
+        #expect(encodedResult.contains("eligibleForStatusOnly"))
         #expect(encodedResult.contains("send-room-redacted"))
         #expect(encodedResult.contains("receive-room-redacted"))
         #expect(result.correlationID == request.correlationID)
@@ -3131,6 +3141,20 @@ final class RoomFlowCoordinatorTests {
               isEndpointAccepted: true,
               peerTrustReadiness: .peerTrustReady,
               keyWrapperSource: .providerWrapper)
+    }
+
+    private static func statusOnlyInternalPilotActivationDryRun() -> NativeDirectCallInternalPilotActivationDryRunStatus {
+        .init(isEnabled: true,
+              decision: .statusOnly,
+              reason: nil,
+              isProductUIEnabled: true,
+              isInternalPilotRolloutEnabled: true,
+              isCapabilityPresent: true,
+              isEligibilityReady: true,
+              isRoomEligible: true,
+              isPeerTrustReady: true,
+              areDependenciesReady: true,
+              hasActiveSession: false)
     }
 
     private func makeVerifiedPeerClientProxy() -> ClientProxyMock {

@@ -799,6 +799,7 @@ struct NativeDirectCallInternalPilotActivationDryRunStatus: Equatable, CustomStr
     let isProductUIEnabled: Bool
     let isInternalPilotRolloutEnabled: Bool
     let isCapabilityPresent: Bool
+    let isEligibilityReady: Bool
     let isRoomEligible: Bool
     let isPeerTrustReady: Bool
     let areDependenciesReady: Bool
@@ -810,6 +811,7 @@ struct NativeDirectCallInternalPilotActivationDryRunStatus: Equatable, CustomStr
                                isProductUIEnabled: false,
                                isInternalPilotRolloutEnabled: false,
                                isCapabilityPresent: false,
+                               isEligibilityReady: false,
                                isRoomEligible: false,
                                isPeerTrustReady: false,
                                areDependenciesReady: false,
@@ -824,6 +826,7 @@ struct NativeDirectCallInternalPilotActivationDryRunStatus: Equatable, CustomStr
                   isProductUIEnabled: context.isProductUIEnabled,
                   isInternalPilotRolloutEnabled: context.isInternalPilotRolloutEnabled,
                   isCapabilityPresent: context.isCapabilityPresent,
+                  isEligibilityReady: context.eligibility == .eligible,
                   isRoomEligible: context.roomEligibility.isEncrypted &&
                       context.roomEligibility.isDirect &&
                       context.roomEligibility.hasExactlyTwoJoinedMembers &&
@@ -839,6 +842,7 @@ struct NativeDirectCallInternalPilotActivationDryRunStatus: Equatable, CustomStr
          isProductUIEnabled: Bool,
          isInternalPilotRolloutEnabled: Bool,
          isCapabilityPresent: Bool,
+         isEligibilityReady: Bool = false,
          isRoomEligible: Bool,
          isPeerTrustReady: Bool,
          areDependenciesReady: Bool,
@@ -849,6 +853,7 @@ struct NativeDirectCallInternalPilotActivationDryRunStatus: Equatable, CustomStr
         self.isProductUIEnabled = isProductUIEnabled
         self.isInternalPilotRolloutEnabled = isInternalPilotRolloutEnabled
         self.isCapabilityPresent = isCapabilityPresent
+        self.isEligibilityReady = isEligibilityReady
         self.isRoomEligible = isRoomEligible
         self.isPeerTrustReady = isPeerTrustReady
         self.areDependenciesReady = areDependenciesReady
@@ -863,6 +868,7 @@ struct NativeDirectCallInternalPilotActivationDryRunStatus: Equatable, CustomStr
             "isProductUIEnabled=\(isProductUIEnabled)",
             "isInternalPilotRolloutEnabled=\(isInternalPilotRolloutEnabled)",
             "isCapabilityPresent=\(isCapabilityPresent)",
+            "isEligibilityReady=\(isEligibilityReady)",
             "isRoomEligible=\(isRoomEligible)",
             "isPeerTrustReady=\(isPeerTrustReady)",
             "areDependenciesReady=\(areDependenciesReady)",

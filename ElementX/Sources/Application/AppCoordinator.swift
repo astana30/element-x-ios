@@ -1572,13 +1572,18 @@ extension AppCoordinator {
                             try? client?.send(.nativeDirectCallProductionHangupResult(result))
                         case .nativeDirectCallProductionStatus(let request):
                             let status: NativeDirectCallProductionStatus
+                            let internalPilotActivationDryRun: NativeDirectCallInternalPilotActivationDryRunStatus
                             if let flowCoordinator = self?.userSessionFlowCoordinator {
                                 status = flowCoordinator.nativeDirectCallProductionStatus()
+                                internalPilotActivationDryRun = await flowCoordinator.nativeDirectCallInternalPilotActivationDryRunDiagnosticStatus()
                             } else {
                                 status = .unavailable
+                                internalPilotActivationDryRun = .disabled
                             }
 
-                            let result = UITestsSignal.NativeDirectCallProductionStatusResult(correlationID: request.correlationID, status)
+                            let result = UITestsSignal.NativeDirectCallProductionStatusResult(correlationID: request.correlationID,
+                                                                                              status,
+                                                                                              internalPilotActivationDryRun: internalPilotActivationDryRun)
                             try? client?.send(.nativeDirectCallProductionStatusResult(result))
                         default:
                             return
