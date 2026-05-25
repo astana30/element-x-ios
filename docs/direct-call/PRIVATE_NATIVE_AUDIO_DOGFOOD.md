@@ -1514,6 +1514,55 @@ This output must not include raw room IDs, raw user IDs, raw peer IDs, raw devic
 
 Next phase should use `2.36L — internal pilot activation dry-run runner observability proof`.
 
+## 2.36N Engineering-Only Internal Pilot Activation Proof Wiring
+
+The app now has an engineering-only proof path that can use the server-backed internal pilot activation provider to make private native audio Start/Accept available without the private dogfood gate, but only under explicit DEBUG/integration proof gates.
+
+Required proof gates:
+
+```sh
+export IS_RUNNING_INTEGRATION_TESTS=1
+export NATIVE_DIRECT_CALL_DIAGNOSTICS=1
+export NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1
+export NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1
+export NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1
+export NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED=1
+export NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED=1
+export NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1
+export NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=<staging-call-service-base-url>
+unset NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED
+unset NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED
+```
+
+The server-backed provider can enable Start/Accept for this proof only when all of these are true:
+
+- product UI is visible;
+- internal pilot rollout is enabled;
+- backend eligibility returns eligible;
+- the room is an encrypted direct 1:1;
+- peer trust is ready;
+- dependencies are ready;
+- no stale active session exists;
+- foreground/open-room listener/card state is available;
+- the token endpoint accepts the request as final enforcement.
+
+Fail-closed guarantees remain:
+
+- default and Release remain disabled;
+- product UI alone is insufficient;
+- eligibility status alone is insufficient;
+- internal rollout alone is insufficient;
+- backend eligible alone is insufficient;
+- malformed/missing eligibility blocks;
+- local room, trust, dependency, or stale-session failures override backend eligible;
+- token endpoint `M_DIRECT_CALL_NOT_ELIGIBLE` blocks token/media/LiveKit setup and invalidates cached eligibility;
+- `directOneToOneCallsEnabled` remains unrelated;
+- private engineering dogfood remains separate under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1`.
+
+This phase does not approve non-engineering internal dogfood, broad internal rollout, production/public rollout, Element Call replacement, CallKit, push/background incoming, missed calls, video, session restoration, or global activation.
+
+Next phase should use `2.36O — engineering-only internal pilot activation runtime proof`.
+
 ## 2.35B Engineering Expansion Operations Handoff
 
 The 3-session engineering expansion soak completed cleanly, so narrow engineering dogfood can continue without per-session Codex supervision only when a named engineering operator owns the session and this handoff checklist is followed. This is still staging-only engineering dogfood, not non-engineering internal dogfood, product beta, public rollout, production activation, or Element Call replacement.
@@ -2086,6 +2135,7 @@ These block broader internal dogfood and production, but not the controlled engi
 - Server-backed internal pilot activation remains default-off. The iOS activation provider can model `activationAllowed` for tests and dry-run/status output only when all gates pass, and 2.36G/2.36I keep runtime Start/Accept controlled by private dogfood; non-engineering Start/Accept is still not enabled until a separate rollout wiring implementation, runtime proof, and readiness review pass.
 - The 2.36J dry-run runtime proof confirmed the dry-run gate does not activate Start/Accept without private dogfood, even when product UI, eligibility status, and production start are enabled. Private engineering dogfood still reached active audio and returned idle.
 - The 2.36K runner observability wiring exposes the internal pilot dry-run status in redacted `production-status` output. 2.36L proved the runner-visible fields are present at runtime and remain observability only.
+- The 2.36N engineering proof wiring allows Start/Accept from internal pilot activation only under explicit DEBUG/integration proof gates and only for allowlisted engineering runtime proof. Non-engineering internal dogfood remains blocked until the 2.36O runtime proof and a separate readiness review pass.
 - No CallKit.
 - No push or background incoming calls.
 - No missed calls.

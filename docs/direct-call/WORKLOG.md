@@ -1436,3 +1436,16 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Hangup returned A/B to `idle` with no active session, cleanup/disconnect attempted, and terminal reason `hangup`.
 - Runner output stayed redacted, Element Call route stayed untouched, no runtime regression was found, and no app/backend code changed.
 - Recommended next phase: `2.36M — internal pilot activation rollout readiness review`.
+
+## 2026-05-25 — 2.36N Engineering-Only Internal Pilot Activation Proof Wiring
+
+- Wired the server-backed internal pilot activation provider into private native audio Start/Accept availability for an engineering-only runtime proof path.
+- Kept the wiring behind explicit DEBUG/integration proof gates: product UI, eligibility status, internal pilot activation dry-run, internal pilot rollout, production start, and staging token base URL. The main proof path leaves `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED` unset.
+- Added the runtime bridge that can convert an internal pilot dry-run `activationAllowed` decision into an enabled production trigger only after backend eligibility, encrypted direct 1:1 room eligibility, trust readiness, dependency readiness, and idle-session checks pass.
+- Updated room-card status so an internal pilot `activationAllowed` decision can make the private native audio card show Start for the engineering proof path, while backend ineligible or local room/trust failures stay unavailable with safe copy.
+- Preserved private engineering dogfood separation: `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` still works independently and does not depend on the internal pilot rollout gate.
+- Preserved fail-closed defaults: product UI alone, eligibility status alone, internal rollout alone, backend eligible alone, malformed/missing eligibility, and `directOneToOneCallsEnabled` do not activate native audio.
+- Added tests proving Start and Accept can proceed without private dogfood only when all internal pilot proof gates pass, backend ineligible blocks, rendering/status refresh has no Matrix/token/media/LiveKit side effects, and Element Call route remains untouched.
+- Validation run so far: `RoomFlowCoordinatorTests` passed 104/104; `DirectCallInternalPilotEligibilityTests` plus `NativeDirectCallInternalControlPanelTests` passed 70/70.
+- Non-engineering internal dogfood, broad internal rollout, production/public rollout, Element Call replacement, CallKit, push/background incoming, missed calls, video, session restoration, and global activation remain blocked.
+- Recommended next phase: `2.36O — engineering-only internal pilot activation runtime proof`.

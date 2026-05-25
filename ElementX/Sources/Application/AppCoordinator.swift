@@ -1361,7 +1361,9 @@ extension AppCoordinator {
                                                                        environment: [String: String] = ProcessInfo.processInfo.environment) -> NativeDirectCallProductionActivationDryRunProviding {
         let roomEligibility = DirectCallProductionRoomEligibility(roomProxy: roomProxy)
         let homeserverBaseURL = URL(string: homeserver)
-        guard ProcessInfo.isNativeDirectCallPrivateDogfoodEnabled(environment: environment) else {
+        let isPrivateDogfoodEnabled = ProcessInfo.isNativeDirectCallPrivateDogfoodEnabled(environment: environment)
+        let isInternalPilotRolloutEnabled = ProcessInfo.isNativeDirectCallInternalPilotRolloutEnabled(environment: environment)
+        guard isPrivateDogfoodEnabled || isInternalPilotRolloutEnabled else {
             return NativeDirectCallProductionActivationDryRunProvider(activationDryRunDiagnostics: DirectCallProductionActivationDecisionService(),
                                                                       homeserverBaseURL: homeserverBaseURL,
                                                                       roomEligibility: roomEligibility)
@@ -1375,9 +1377,14 @@ extension AppCoordinator {
                                                                                                                                                  tokenEndpointBaseURL: tokenEndpointBaseURL),
                                                                             peerTrustReadinessProvider: makeNativeDirectCallProductionPeerTrustReadinessProvider(roomProxy: roomProxy,
                                                                                                                                                                  clientProxy: clientProxy))
-        return NativeDirectCallProductionActivationDryRunProvider(activationDryRunDiagnostics: decisionService,
-                                                                  homeserverBaseURL: homeserverBaseURL,
-                                                                  roomEligibility: roomEligibility)
+        let provider = NativeDirectCallProductionActivationDryRunProvider(activationDryRunDiagnostics: decisionService,
+                                                                          homeserverBaseURL: homeserverBaseURL,
+                                                                          roomEligibility: roomEligibility)
+        guard !isPrivateDogfoodEnabled else {
+            return provider
+        }
+
+        return NativeDirectCallInternalPilotActivationProofDryRunProvider(provider: provider)
     }
 
     @MainActor
@@ -1605,6 +1612,22 @@ extension AppCoordinator {
 private final class NativeDirectCallPrivateDogfoodRolloutProvider: DirectCallProductionRolloutProviding {
     func directCallProductionConfiguration() -> DirectCallProductionConfiguration {
         .init(isEnabled: true)
+    }
+}
+
+private struct NativeDirectCallInternalPilotActivationProofDryRunProvider: NativeDirectCallProductionActivationDryRunProviding {
+    let provider: NativeDirectCallProductionActivationDryRunProviding
+
+    func nativeDirectCallProductionActivationDryRunDiagnostic() async -> DirectCallProductionActivationDryRunDiagnostic {
+        let diagnostic = await provider.nativeDirectCallProductionActivationDryRunDiagnostic()
+        return .init(isEnabled: false,
+                     disabledReason: .appRolloutDisabled,
+                     isCapabilityPresent: diagnostic.isCapabilityPresent,
+                     areDependenciesReady: diagnostic.areDependenciesReady,
+                     isRoomEligible: diagnostic.isRoomEligible,
+                     isEndpointAccepted: diagnostic.isEndpointAccepted,
+                     peerTrustReadiness: diagnostic.peerTrustReadiness,
+                     keyWrapperSource: diagnostic.keyWrapperSource)
     }
 }
 

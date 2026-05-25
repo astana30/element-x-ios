@@ -492,7 +492,11 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
     }
 
     func nativeDirectCallProductionStartOutgoingAudioCall(isProductionStartEnabled: Bool) async -> NativeDirectCallProductionStartOutgoingAudioCallResult {
+        #if DEBUG
+        let triggerDiagnostic = await nativeDirectCallProductionTriggerDryRunDiagnosticAllowingInternalPilotActivation()
+        #else
         let triggerDiagnostic = await nativeDirectCallProductionTriggerDryRunDiagnostic()
+        #endif
 
         guard isProductionStartEnabled else {
             return .blocked(.productionStartDisabled, triggerDiagnostic: triggerDiagnostic)
@@ -537,7 +541,7 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
 
     #if DEBUG
     func nativeDirectCallProductionStartListener() async -> NativeDirectCallProductionStartListenerResult {
-        let triggerDiagnostic = await nativeDirectCallProductionTriggerDryRunDiagnostic()
+        let triggerDiagnostic = await nativeDirectCallProductionTriggerDryRunDiagnosticAllowingInternalPilotActivation()
 
         guard triggerDiagnostic.isEnabled else {
             return .blocked(triggerDiagnostic.blockedReason, triggerDiagnostic: triggerDiagnostic)
@@ -572,7 +576,7 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
     }
 
     func nativeDirectCallProductionAcceptIncomingCall() async -> NativeDirectCallProductionAcceptIncomingCallResult {
-        let triggerDiagnostic = await nativeDirectCallProductionTriggerDryRunDiagnostic()
+        let triggerDiagnostic = await nativeDirectCallProductionTriggerDryRunDiagnosticAllowingInternalPilotActivation(ignoresActiveSessionForIncomingAccept: true)
 
         guard triggerDiagnostic.isEnabled else {
             return .blocked(triggerDiagnostic.blockedReason, triggerDiagnostic: triggerDiagnostic)
@@ -791,14 +795,26 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
 
     func nativeDirectCallRoomCardStatus(refreshMode: NativeDirectCallRoomCardStatusRefreshMode = .cached) async -> NativeDirectCallRoomCardStatus {
         let triggerDiagnostic = await nativeDirectCallProductionTriggerDryRunDiagnostic()
-        await startNativeDirectCallRoomCardListenerIfNeeded(triggerDiagnostic: triggerDiagnostic)
         let productionStatus = nativeDirectCallProductionStatus()
         let status = NativeDirectCallRoomCardStatus.make(triggerDiagnostic: triggerDiagnostic,
                                                          productionStatus: productionStatus)
-        return await nativeDirectCallRoomCardStatus(status,
-                                                    triggerDiagnostic: triggerDiagnostic,
-                                                    productionStatus: productionStatus,
-                                                    refreshMode: refreshMode)
+        let resolvedStatus = await nativeDirectCallRoomCardStatus(status,
+                                                                  triggerDiagnostic: triggerDiagnostic,
+                                                                  productionStatus: productionStatus,
+                                                                  refreshMode: refreshMode)
+        let effectiveTriggerDiagnostic = triggerDiagnostic.enablingInternalPilotActivationIfAllowed(resolvedStatus.internalPilotActivationDryRun)
+        let didStartListener = await startNativeDirectCallRoomCardListenerIfNeeded(triggerDiagnostic: effectiveTriggerDiagnostic)
+        guard didStartListener else {
+            return resolvedStatus
+        }
+
+        let updatedProductionStatus = nativeDirectCallProductionStatus()
+        let updatedStatus = NativeDirectCallRoomCardStatus.make(triggerDiagnostic: effectiveTriggerDiagnostic,
+                                                                productionStatus: updatedProductionStatus)
+        return await nativeDirectCallRoomCardStatus(updatedStatus,
+                                                    triggerDiagnostic: effectiveTriggerDiagnostic,
+                                                    productionStatus: updatedProductionStatus,
+                                                    refreshMode: .cached)
     }
 
     private func nativeDirectCallRoomCardStatus(_ status: NativeDirectCallRoomCardStatus,
@@ -814,15 +830,15 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
                 nativeDirectCallEligibilityStatusCache.invalidate(for: request)
             }
 
-            if refreshMode == .cached,
-               let cachedEligibility = nativeDirectCallEligibilityStatusCache.eligibility(for: request) {
-                resolvedEligibility = cachedEligibility
-            } else if case .unavailable = status.state,
-                      let provider = nativeDirectCallInternalPilotEligibilityProvider {
-                let eligibility = await provider.nativeDirectCallInternalPilotEligibility(for: request)
-                nativeDirectCallEligibilityStatusCache.store(eligibility, for: request)
-                resolvedEligibility = eligibility
+            let shouldFetchEligibility: Bool
+            if case .unavailable = status.state {
+                shouldFetchEligibility = true
+            } else {
+                shouldFetchEligibility = false
             }
+            resolvedEligibility = await nativeDirectCallInternalPilotEligibility(refreshMode: refreshMode,
+                                                                                 productionStatus: productionStatus,
+                                                                                 shouldFetch: shouldFetchEligibility)
 
             if case .unavailable = status.state {
                 resolvedStatus = status.merging(internalPilotEligibility: resolvedEligibility)
@@ -835,9 +851,37 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
         return resolvedStatus.merging(internalPilotActivationDryRun: dryRunStatus)
     }
 
+    private func nativeDirectCallInternalPilotEligibility(refreshMode: NativeDirectCallRoomCardStatusRefreshMode,
+                                                          productionStatus: NativeDirectCallProductionStatus,
+                                                          shouldFetch: Bool) async -> NativeDirectCallInternalPilotEligibility {
+        guard isNativeDirectCallEligibilityStatusEnabled(),
+              let request = nativeDirectCallInternalPilotEligibilityRequest() else {
+            return .disabled
+        }
+
+        if productionStatus.productionMediaFailureReason == .tokenBackendRejected {
+            nativeDirectCallEligibilityStatusCache.invalidate(for: request)
+        }
+
+        if refreshMode == .cached,
+           let cachedEligibility = nativeDirectCallEligibilityStatusCache.eligibility(for: request) {
+            return cachedEligibility
+        }
+
+        guard shouldFetch,
+              let provider = nativeDirectCallInternalPilotEligibilityProvider else {
+            return .disabled
+        }
+
+        let eligibility = await provider.nativeDirectCallInternalPilotEligibility(for: request)
+        nativeDirectCallEligibilityStatusCache.store(eligibility, for: request)
+        return eligibility
+    }
+
     private func nativeDirectCallInternalPilotActivationDryRunStatus(eligibility: NativeDirectCallInternalPilotEligibility,
                                                                      triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic,
-                                                                     productionStatus: NativeDirectCallProductionStatus) async -> NativeDirectCallInternalPilotActivationDryRunStatus {
+                                                                     productionStatus: NativeDirectCallProductionStatus,
+                                                                     hasActiveSessionOverride: Bool? = nil) async -> NativeDirectCallInternalPilotActivationDryRunStatus {
         guard isNativeDirectCallInternalPilotActivationDryRunEnabled(),
               let roomProxy,
               let provider = nativeDirectCallInternalPilotActivationProvider else {
@@ -853,12 +897,29 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
                                                                      roomEligibility: roomEligibility,
                                                                      peerTrustReadiness: triggerDiagnostic.peerTrustReadiness,
                                                                      areDependenciesReady: triggerDiagnostic.areDependenciesReady,
-                                                                     hasActiveSession: productionStatus.productionHasActiveSession)
+                                                                     hasActiveSession: hasActiveSessionOverride ?? productionStatus.productionHasActiveSession)
         let activation = await provider.nativeDirectCallInternalPilotActivation(for: context)
 
         return .init(isEnabled: true,
                      activation: activation,
                      context: context)
+    }
+
+    private func nativeDirectCallProductionTriggerDryRunDiagnosticAllowingInternalPilotActivation(ignoresActiveSessionForIncomingAccept: Bool = false) async -> NativeDirectCallProductionTriggerDryRunDiagnostic {
+        let triggerDiagnostic = await nativeDirectCallProductionTriggerDryRunDiagnostic()
+        guard !triggerDiagnostic.isEnabled else {
+            return triggerDiagnostic
+        }
+
+        let productionStatus = nativeDirectCallProductionStatus()
+        let eligibility = await nativeDirectCallInternalPilotEligibility(refreshMode: .cached,
+                                                                         productionStatus: productionStatus,
+                                                                         shouldFetch: true)
+        let dryRunStatus = await nativeDirectCallInternalPilotActivationDryRunStatus(eligibility: eligibility,
+                                                                                     triggerDiagnostic: triggerDiagnostic,
+                                                                                     productionStatus: productionStatus,
+                                                                                     hasActiveSessionOverride: ignoresActiveSessionForIncomingAccept ? false : nil)
+        return triggerDiagnostic.enablingInternalPilotActivationIfAllowed(dryRunStatus)
     }
 
     private func nativeDirectCallInternalPilotEligibilityRequest() -> NativeDirectCallInternalPilotEligibilityRequest? {
@@ -873,20 +934,21 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
                      intent: .audio)
     }
 
-    private func startNativeDirectCallRoomCardListenerIfNeeded(triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic) async {
+    private func startNativeDirectCallRoomCardListenerIfNeeded(triggerDiagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic) async -> Bool {
         guard triggerDiagnostic.isEnabled else {
-            return
+            return false
         }
 
         if let activeSession = nativeDirectCallProductionRoomFlowOwner?.activeSession, !activeSession.state.isTerminal {
-            return
+            return false
         }
 
         guard nativeDirectCallProductionRoomFlowOwner?.isListenerStarted != true else {
-            return
+            return false
         }
 
-        _ = await nativeDirectCallProductionStartListener()
+        let result = await nativeDirectCallProductionStartListener()
+        return result.didStartListener
     }
     #endif
     
@@ -2314,6 +2376,27 @@ struct NativeDirectCallProductionTriggerDryRunDiagnostic: Equatable, CustomStrin
     let peerTrustReadiness: DirectCallPeerTrustReadiness
     let keyWrapperSource: NativeDirectCallProductionKeyWrapperSource?
 
+    init(wouldStart: Bool,
+         isEnabled: Bool,
+         blockedReason: DirectCallProductionActivationDisabledReason?,
+         isCapabilityPresent: Bool,
+         areDependenciesReady: Bool,
+         isRoomEligible: Bool,
+         isEndpointAccepted: Bool,
+         peerTrustReadiness: DirectCallPeerTrustReadiness,
+         keyWrapperSource: NativeDirectCallProductionKeyWrapperSource?) {
+        self.wouldStart = wouldStart
+        self.isEnabled = isEnabled
+        self.blockedReason = blockedReason
+        self.isCapabilityPresent = isCapabilityPresent
+        self.areDependenciesReady = areDependenciesReady
+        self.isRoomEligible = isRoomEligible
+        self.isEndpointAccepted = isEndpointAccepted
+        isPeerTrustReady = peerTrustReadiness == .peerTrustReady
+        self.peerTrustReadiness = peerTrustReadiness
+        self.keyWrapperSource = keyWrapperSource
+    }
+
     init(activationDiagnostic: DirectCallProductionActivationDryRunDiagnostic) {
         wouldStart = activationDiagnostic.isEnabled
         isEnabled = activationDiagnostic.isEnabled
@@ -2329,6 +2412,22 @@ struct NativeDirectCallProductionTriggerDryRunDiagnostic: Equatable, CustomStrin
 
     static func blocked(_ reason: DirectCallProductionActivationDisabledReason) -> Self {
         .init(activationDiagnostic: .disabled(reason))
+    }
+
+    func enablingInternalPilotActivationIfAllowed(_ dryRunStatus: NativeDirectCallInternalPilotActivationDryRunStatus) -> Self {
+        guard dryRunStatus.decision == .activationAllowed else {
+            return self
+        }
+
+        return .init(wouldStart: true,
+                     isEnabled: true,
+                     blockedReason: nil,
+                     isCapabilityPresent: dryRunStatus.isCapabilityPresent,
+                     areDependenciesReady: dryRunStatus.areDependenciesReady,
+                     isRoomEligible: dryRunStatus.isRoomEligible,
+                     isEndpointAccepted: isEndpointAccepted,
+                     peerTrustReadiness: dryRunStatus.isPeerTrustReady ? .peerTrustReady : peerTrustReadiness,
+                     keyWrapperSource: keyWrapperSource)
     }
 
     var description: String {

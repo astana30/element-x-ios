@@ -1908,10 +1908,18 @@ extension NativeDirectCallRoomCardStatus {
     }
 
     func merging(internalPilotActivationDryRun dryRun: NativeDirectCallInternalPilotActivationDryRunStatus) -> Self {
-        .init(state: state,
-              receiverAvailability: receiverAvailability,
-              restorationAvailability: restorationAvailability,
-              internalPilotActivationDryRun: dryRun)
+        let mergedState: NativeDirectCallRoomCardState
+        if dryRun.decision == .activationAllowed,
+           state == .unavailable(reason: .nativeCallsUnavailable) {
+            mergedState = .canStart
+        } else {
+            mergedState = state
+        }
+
+        return .init(state: mergedState,
+                     receiverAvailability: receiverAvailability,
+                     restorationAvailability: restorationAvailability,
+                     internalPilotActivationDryRun: dryRun)
     }
 }
 

@@ -41,6 +41,8 @@ No tokens, JWTs, passwords, shared secrets, authorization header values, or Live
 | iOS internal pilot activation no-activation proof | Passed |
 | Server-backed internal pilot activation provider no-activation proof | Passed |
 | Internal pilot activation dry-run no-activation proof | Passed, with runner enum observability follow-up |
+| Internal pilot dry-run runner observability proof | Passed |
+| Engineering-only internal pilot activation proof wiring | Added, disabled outside explicit proof gates |
 
 ## Root Cause
 
@@ -119,6 +121,8 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - The 2.36G runtime proof passed after the concrete server-backed activation provider was added: product UI, eligibility status, and production start still did not activate native audio without the private dogfood gate; the default-off internal pilot rollout source did not enable runtime Start or Accept; restoring private dogfood still allowed A -> B active audio and clean hangup back to idle.
 - The 2.36J runtime proof passed after dry-run status wiring: product UI, eligibility status, and internal pilot activation dry-run gates did not activate native audio without private dogfood; adding production start still remained blocked without private dogfood; restoring private dogfood allowed A -> B active audio and clean hangup back to idle.
 - The 2.36K/2.36L runner observability work now exposes the internal-pilot dry-run enum/boolean fields in redacted `production-status` output and proved them at runtime. Without private dogfood, the runner reported `internalPilotActivationDryRunEnabled=true`, `internalPilotActivationDecision=disabled`, and `internalPilotActivationReason=rolloutDisabled`, with no active session or media/LiveKit connection. Restoring private dogfood still allowed A -> B active audio and clean hangup back to idle.
+- The 2.36N app wiring allows Start/Accept from the server-backed internal pilot activation provider only for engineering proof runs with explicit DEBUG/integration proof gates and backend allowlisted A/B accounts. The main proof path leaves the private dogfood gate unset, keeps token endpoint eligibility as final authority, and remains staging-only.
+- The 2.36N path is disabled by default, disabled in Release/default, does not reuse `directOneToOneCallsEnabled`, keeps private engineering dogfood separate, and is not approval for non-engineering internal dogfood, broad internal rollout, public rollout, Element Call replacement, CallKit, push, video, or global production activation.
 - Controlled engineering dogfood may continue under the same narrow staging-only constraints.
 
 ## Next Step
@@ -136,4 +140,4 @@ Controlled engineering dogfood may continue on the staging path under the privat
 - Element Call toolbar path unchanged and available as fallback;
 - no CallKit, push, video, broad internal rollout, public rollout, or global production activation.
 
-Next, continue with `2.36M — internal pilot activation rollout readiness review` while keeping controlled dogfood engineering-only, staging-only, and redacted.
+Next, continue with `2.36O — engineering-only internal pilot activation runtime proof` while keeping controlled dogfood engineering-only, staging-only, and redacted.
