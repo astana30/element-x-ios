@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.36K — internal pilot activation dry-run runner observability.
+After 2.36L — internal pilot dry-run observability runtime proof.
 
 ## Latest App Code Checkpoint
 
@@ -152,6 +152,17 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - The two-client diagnostic runner forwards `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED=1` and prints those fields as simple key/value output.
   - Runner-visible `internalPilotActivationDecision` values are safe enum strings: `disabled`, `unavailable`, `eligibleForStatusOnly`, `activationAllowed`, or `unknown`.
   - This is observability only. Start and Accept remain controlled by the existing private engineering dogfood path, and non-engineering internal dogfood remains blocked.
+- Internal pilot activation dry-run runner observability runtime proof passed:
+  - Session timestamp: 2026-05-25 16:22 +05.
+  - Call-service readiness returned `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, and native audio eligibility/allowlist configured.
+  - A/B trust diagnostics were ready with `ownSessionVerified=true`, `crossSigningReady=true`, `peerTrustReady=true`, and `peerTrustReadiness=peerTrustReady`.
+  - With product UI, eligibility status, and internal pilot dry-run enabled but private dogfood unset, runner `production-status` exposed `internalPilotActivationDryRunEnabled=true`, `internalPilotActivationDecision=disabled`, and `internalPilotActivationReason=rolloutDisabled`.
+  - The no-private-dogfood run had no active session, no Matrix send, no media connect, no LiveKit client connect, and media failure `none`.
+  - With production start added and private dogfood still unset, Start remained blocked and no token/media/LiveKit path was attempted.
+  - With private dogfood restored, A/B attached to the encrypted direct 1:1 room with listener started, A -> B reached `incomingRinging`, B accepted, A/B reached `activeAudio`, and media failure stayed `none`.
+  - Hangup returned A/B to `idle` with no active session, cleanup/disconnect attempted, and terminal reason `hangup`.
+  - Runner output stayed redacted and did not expose raw tokens, JWTs, secrets, raw room/user/device IDs, LiveKit room names, Redis credentials, Matrix event bodies, full request/response bodies, or backend URLs with credentials.
+  - Element Call route stayed untouched, no code changed, and no redaction issue was observed.
 - Controlled engineering dogfood pilot session 1 is recorded:
   - Preflight passed with readiness `ready=true`, `reason=ok`, Redis allocation/rate-limit/storage booleans true, LiveKit room provisioning true, and A/B trust ready.
   - Required private dogfood gates were used, and the legacy fake/dry-run gate was unset.
@@ -890,7 +901,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - 2.36J runtime proof confirmed product UI, eligibility status, and internal pilot activation dry-run gates do not activate native audio without private dogfood.
   - 2.36J also confirmed product UI, eligibility status, production start, and dry-run gates together remain blocked without private dogfood, with no Matrix send, no token request, no media connect, no LiveKit client connect, and no active session.
   - With private dogfood restored, A -> B reached `activeAudio`, then hangup returned A/B to `idle` with no active session and media failure `none`.
-  - 2.36K adds direct runner observability for the internal-pilot dry-run enum/boolean fields in redacted `production-status` output. This does not enable Start or Accept and still needs a runtime proof before it is used as operator-facing dry-run telemetry.
+  - 2.36K adds direct runner observability for the internal-pilot dry-run enum/boolean fields in redacted `production-status` output. 2.36L proved those fields are visible at runtime and remain observability-only.
 - Pilot sessions must follow the 2.27A checkpoint, 2.28A operations checklist, and 2.33B expansion runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
@@ -903,9 +914,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.36L — internal pilot activation dry-run runner observability proof`
+`2.36M — internal pilot activation rollout readiness review`
 
-Goal: prove the runner-visible internal pilot activation dry-run fields are redacted and observable at runtime, while product UI, eligibility status, production start, and dry-run gates still do not activate native audio without private dogfood.
+Goal: inspect the now-proven dry-run observability stack and decide the safest next implementation step for future allowlisted internal pilot activation, without enabling non-engineering access.
 
 ## Do-Not-Touch Constraints
 

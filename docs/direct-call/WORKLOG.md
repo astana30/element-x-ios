@@ -1421,3 +1421,18 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Preserved activation behavior. Dry-run `activationAllowed` remains report-only, Start/Accept remain controlled by the private engineering dogfood path, and non-engineering internal dogfood remains blocked.
 - Added tests for the new redacted production-status fields and the activationAllowed dry-run side-effect boundary.
 - Recommended next phase: `2.36L — internal pilot activation dry-run runner observability proof`.
+
+## 2026-05-25 — 2.36L Internal Pilot Dry-Run Observability Runtime Proof
+
+- Ran the runtime proof for runner-visible internal pilot activation dry-run fields.
+- Confirmed staging readiness returned `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, and native audio eligibility/allowlist configured.
+- Confirmed A/B trust ready with `ownSessionVerified=true`, `crossSigningReady=true`, `peerTrustReady=true`, and `peerTrustReadiness=peerTrustReady`.
+- Launched A/B with product UI, eligibility status, and internal pilot dry-run enabled while leaving private dogfood unset.
+- Confirmed runner `production-status` exposed `internalPilotActivationDryRunEnabled=true`, `internalPilotActivationDecision=disabled`, and `internalPilotActivationReason=rolloutDisabled`.
+- Confirmed the no-private-dogfood run had no active session, no Matrix send, no media connect, no LiveKit client connect, and media failure `none`.
+- Relaunched with production start added and private dogfood still unset; Start remained blocked and no token/media/LiveKit path was attempted.
+- Restored private dogfood and confirmed A/B attached to the encrypted direct 1:1 room with listeners started.
+- Ran A -> B using production-status polling: B reached `incomingRinging`, B accepted, A/B reached `activeAudio`, media connect and LiveKit client connect were attempted, and media failure stayed `none`.
+- Hangup returned A/B to `idle` with no active session, cleanup/disconnect attempted, and terminal reason `hangup`.
+- Runner output stayed redacted, Element Call route stayed untouched, no runtime regression was found, and no app/backend code changed.
+- Recommended next phase: `2.36M — internal pilot activation rollout readiness review`.

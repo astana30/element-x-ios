@@ -2085,7 +2085,7 @@ These block broader internal dogfood and production, but not the controlled engi
 
 - Server-backed internal pilot activation remains default-off. The iOS activation provider can model `activationAllowed` for tests and dry-run/status output only when all gates pass, and 2.36G/2.36I keep runtime Start/Accept controlled by private dogfood; non-engineering Start/Accept is still not enabled until a separate rollout wiring implementation, runtime proof, and readiness review pass.
 - The 2.36J dry-run runtime proof confirmed the dry-run gate does not activate Start/Accept without private dogfood, even when product UI, eligibility status, and production start are enabled. Private engineering dogfood still reached active audio and returned idle.
-- The 2.36K runner observability wiring exposes the internal pilot dry-run status in redacted `production-status` output. It remains observability only and still needs a runtime proof before it is used as operator-facing dry-run telemetry.
+- The 2.36K runner observability wiring exposes the internal pilot dry-run status in redacted `production-status` output. 2.36L proved the runner-visible fields are present at runtime and remain observability only.
 - No CallKit.
 - No push or background incoming calls.
 - No missed calls.
