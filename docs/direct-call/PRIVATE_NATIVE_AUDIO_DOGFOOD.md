@@ -1643,6 +1643,191 @@ This does not approve non-engineering internal dogfood, broad internal rollout, 
 
 Next phase should use `2.37A — internal pilot activation engineering proof completion review`.
 
+## 2.37B Engineering-Only Internal Pilot Activation Soak Plan
+
+The server-backed internal pilot activation path needs a short engineering-only soak before any broader readiness review. This soak exercises Start/Accept through the internal-pilot rollout path, not through the private dogfood gate.
+
+This is still engineering-only staging proof. It does not approve non-engineering internal dogfood, broad internal rollout, production/public rollout, Element Call replacement, CallKit, push/background incoming, missed calls, video, session restoration, or global activation.
+
+### Scope
+
+- Engineering accounts only.
+- Named allowlisted A/B or named engineering pairs only.
+- Staging call-service and staging LiveKit only.
+- Private native audio card only.
+- Foreground/open encrypted direct 1:1 rooms only.
+- Verified/trusted peers only.
+- One active 1:1 native audio call at a time.
+- Element Call fallback visible and unchanged.
+- Redacted reporting only.
+- `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED` must remain unset for the main internal-pilot soak.
+
+### Required Gates
+
+- `IS_RUNNING_INTEGRATION_TESTS=1`
+- `NATIVE_DIRECT_CALL_DIAGNOSTICS=1`
+- `NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1`
+- `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`
+- `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1`
+- `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED=1`
+- `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED=1`
+- `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`
+- `NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=<staging call-service>`
+
+These must remain unset for the main soak:
+
+- `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED`
+- `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED`
+
+### Backend Requirements
+
+- `SALEMX_NATIVE_AUDIO_ELIGIBILITY_ENABLED=1` equivalent staging eligibility config is enabled.
+- Backend allowlist contains only the named engineering accounts for the session.
+- Readiness reports `ready=true` and `reason=ok`.
+- Redis allocation and rate-limit stores are connected.
+- LiveKit room provisioning is configured.
+- Native audio eligibility and allowlist readiness booleans are configured.
+
+### Session Count
+
+Run 3 clean sessions before the next readiness review.
+
+### Per-Session Matrix
+
+| Row | Required result |
+| --- | --- |
+| A -> B happy path | Start -> Accept -> `activeAudio` -> Hangup -> A/B `idle` |
+| B -> A reverse path | Start -> Accept -> `activeAudio` -> Hangup -> A/B `idle` |
+| Repeated calls x2 | Two sequential calls complete with no stale session or split-brain |
+| Decline incoming | Incoming side declines; A/B return idle/no active session |
+| Cancel outgoing | Caller cancels; A/B return idle/no active session |
+| Timeout | A `outgoingTimeout`, B `incomingTimeout`, A/B idle/no active session |
+| Relaunch fail-closed | Relaunch during ringing or active does not restore stale active/ringing state |
+| Listener/open-room unavailable | Closed receiver room or missing listener fails closed with safe state |
+| Post-listener recovery | Reopen/restore listener, then happy path reaches `activeAudio` |
+| Token final authority | If safe, remove/disable allowlist or use ineligible fixture; Start/Accept must block or token endpoint must reject before media/LiveKit |
+| Element Call fallback | Existing Element Call buttons/route remain visible and unchanged |
+
+Optional:
+
+- backend-off/recovery only if safe for the local/staging service owner;
+- LiveKit-off only with explicit LiveKit owner approval.
+
+### Report Template
+
+Use labels only for operators, devices, accounts, and pairs.
+
+```text
+Phase: 2.37C/2.37D/2.37E internal-pilot activation soak session <n>
+Session date/time:
+Operators/devices:
+Preflight:
+- readiness ready=true reason=ok
+- Redis allocation/rate-limit connected=true/false
+- LiveKit room provisioning configured=true/false
+- eligibility/allowlist configured=true/false
+- A/B trust ready=true/false
+- encrypted direct 1:1 DM open=true/false
+- Element Call fallback visible=true/false
+- private dogfood gate unset=true/false
+- old fake/dry-run gate unset=true/false
+
+Matrix:
+| Row | Result | Notes |
+| --- | --- | --- |
+| A -> B | pass/fail/not-run | safe enum/booleans only |
+| B -> A | pass/fail/not-run | safe enum/booleans only |
+| repeated x2 | pass/fail/not-run | safe enum/booleans only |
+| decline | pass/fail/not-run | safe enum/booleans only |
+| cancel | pass/fail/not-run | safe enum/booleans only |
+| timeout | pass/fail/not-run | safe enum/booleans only |
+| relaunch fail-closed | pass/fail/not-run | safe enum/booleans only |
+| listener/open-room unavailable | pass/fail/not-run | safe enum/booleans only |
+| post-listener recovery | pass/fail/not-run | safe enum/booleans only |
+| token final authority | pass/fail/not-run | safe enum/booleans only |
+| Element Call fallback | pass/fail/not-run | visible/unchanged |
+
+Final state:
+- A/B productionSessionState:
+- A/B productionHasActiveSession:
+- activationSource:
+- internalPilotActivationDecision:
+- internalPilotActivationReason:
+- productionMediaFailureReason:
+- terminal reason enum:
+- cleanup/disconnect attempted:
+- stop criteria hit: yes/no
+- rollback used: yes/no
+- redaction issue: yes/no
+- decision: continue/pause
+```
+
+### Allowed Report Fields
+
+- session date/time;
+- operator/device labels only;
+- preflight booleans;
+- pass/fail/not-run;
+- `activationSource`;
+- `internalPilotActivationDecision`;
+- `internalPilotActivationReason`;
+- `productionSessionState`;
+- `productionMediaFailureReason`;
+- terminal reason enum;
+- cleanup/disconnect attempted booleans;
+- stop criteria yes/no;
+- rollback yes/no;
+- redaction issue yes/no.
+
+### Forbidden Report Content
+
+- Matrix access tokens.
+- Synapse admin token.
+- LiveKit API secret.
+- Participant JWT/token.
+- Raw room IDs.
+- Raw user, peer, or device IDs.
+- LiveKit room names.
+- Media keys.
+- Matrix event bodies.
+- Redis credentials.
+- Full request/response bodies.
+- Backend URLs with credentials.
+
+### Stop Criteria
+
+Stop immediately if:
+
+- any raw secret, token, JWT, key, ID, credentialed endpoint, Matrix event body, or LiveKit room name appears;
+- a call starts without the required gates;
+- the private dogfood gate is accidentally used in the main internal-pilot soak;
+- Element Call route or buttons change;
+- an untrusted peer/device can connect;
+- stale active/ringing state survives cleanup or relaunch;
+- backend issues a token for an invalid room, peer, trust, or membership condition;
+- media failure does not fail closed;
+- split-brain reappears;
+- token final-authority check fails.
+
+### Rollback
+
+1. Unset `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED`.
+2. Unset `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED` and `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED` if needed.
+3. Remove or clear the backend allowlist for the session.
+4. Restart call-service if required.
+5. Relaunch apps.
+6. Confirm A/B idle, no active session, and media failure `none`.
+7. Keep Element Call fallback available.
+8. Rotate credentials if any leakage is suspected.
+
+### Decision Rule
+
+- 3 clean internal-pilot activation soak sessions lead to the next readiness review.
+- Any critical bug or stop criterion pauses the soak for diagnosis.
+- Non-engineering internal dogfood remains blocked until a separate readiness review approves it.
+
+Next phase should use `2.37C — engineering-only internal pilot activation soak session 1`.
+
 ## 2.35B Engineering Expansion Operations Handoff
 
 The 3-session engineering expansion soak completed cleanly, so narrow engineering dogfood can continue without per-session Codex supervision only when a named engineering operator owns the session and this handoff checklist is followed. This is still staging-only engineering dogfood, not non-engineering internal dogfood, product beta, public rollout, production activation, or Element Call replacement.

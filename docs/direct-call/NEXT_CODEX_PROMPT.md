@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.36P — internal pilot trigger dry-run observability alignment.
+After 2.37B — engineering-only internal pilot activation soak plan.
 
 Current checkpoints:
 - App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
@@ -50,6 +50,7 @@ Current checkpoints:
 - Engineering-only internal pilot activation proof wiring: 2.36N wires the server-backed activation provider into Start/Accept availability for explicit DEBUG/integration engineering proof gates only. Internal pilot rollout can enable Start/Accept only when backend eligibility, encrypted direct 1:1 room state, trust, dependencies, and no stale session all pass. Private dogfood remains separate, non-engineering internal dogfood remains blocked, and token endpoint enforcement remains final.
 - Engineering-only internal pilot activation runtime proof: 2.36O passed for the allowlisted A/B path after `5fc30fe6a` wired the HTTP eligibility provider through `AppCoordinator`, `UserSessionFlowCoordinator`, `ChatsTabFlowCoordinator`, and `RoomFlowCoordinator`. With private dogfood unset, internal rollout enabled, and backend allowlisted A/B, runner status reported internal-pilot `activationAllowed`; A Start -> B Accept reached `activeAudio`; hangup returned A/B to idle with no active session and media failure `none`.
 - Internal pilot trigger dry-run observability alignment: 2.36P `f930f8f7a` aligned `production-trigger-dry-run` with the same redacted activation decision path used by `production-start-outgoing`. Runner output now includes `activationSource`, `internalPilotActivationDecision`, and `internalPilotActivationReason`, and forwards `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED`. Dry-run remains side-effect-free, private dogfood compatibility was rechecked, and Element Call remains untouched.
+- Engineering-only internal pilot activation soak plan: 2.37B defines a 3-session soak for the server-backed internal pilot activation path using engineering accounts only. The main soak keeps `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED` unset, uses the internal rollout gate, requires token endpoint final authority, and keeps non-engineering internal dogfood blocked.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -413,88 +414,123 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.37A — internal pilot activation engineering proof completion review.
+2.37C — engineering-only internal pilot activation soak session 1.
 
 Task:
-Inspection/decision review only. Do not modify code. Do not commit.
+Run or record the first engineering-only soak session for the server-backed internal pilot activation path.
+Do not modify code unless a real runtime bug is found and explicitly approved.
+Do not change Element Call route.
+Do not wire CallKit/push/video.
+Do not globally activate production direct calls.
 
 Context:
-2.36N wired server-backed internal pilot activation into Start/Accept for engineering proof gates only.
-2.36O proved the engineering-only internal pilot activation path:
-- private dogfood unset;
-- internal rollout enabled;
-- backend allowlisted A/B;
-- A Start -> B Accept reached `activeAudio`;
-- Hangup returned A/B to `idle`;
-- media failure `none`;
-- token endpoint remained final authority;
-- Element Call remained untouched.
+2.37B added a 3-session soak plan for the server-backed internal pilot activation path.
+This soak uses engineering accounts only and explicitly tests the internal rollout path without the private dogfood gate.
+Non-engineering internal dogfood remains blocked.
+Production/public rollout remains blocked.
 
-2.36P then aligned `production-trigger-dry-run` observability:
-- trigger dry-run now reports the same redacted activation decision path used by `production-start-outgoing`;
-- runner output includes `activationSource`, `internalPilotActivationDecision`, and `internalPilotActivationReason`;
-- runner forwards `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED`;
-- trigger dry-run remains side-effect-free;
-- private dogfood compatibility still passed after the alignment.
+Required scope:
+- named engineering operators/devices only;
+- backend allowlisted A/B or named engineering pairs only;
+- staging call-service and staging LiveKit only;
+- private native audio card only;
+- foreground/open encrypted direct 1:1 rooms only;
+- verified/trusted peers only;
+- one active 1:1 call at a time;
+- Element Call fallback visible and unchanged;
+- redacted reporting only.
 
-Goal:
-Decide what the project can safely claim after the engineering-only server-backed internal pilot activation proof is complete, and define the next safest phase.
+Required gates:
+- `IS_RUNNING_INTEGRATION_TESTS=1`
+- `NATIVE_DIRECT_CALL_DIAGNOSTICS=1`
+- `NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1`
+- `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`
+- `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1`
+- `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED=1`
+- `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED=1`
+- `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`
+- `NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=<staging call-service>`
 
-Inspect:
-- docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md
-- docs/direct-call/STATUS.md
-- docs/direct-call/WORKLOG.md
-- docs/direct-call/NEXT_CODEX_PROMPT.md
-- server/salemx-call-service/docs/STAGING_SMOKE_2026-05-21.md
-- ElementX/Sources/Services/Calls/DirectCallMediaEngineProtocol.swift
-- ElementX/Sources/Screens/RoomScreen/RoomScreenModels.swift
-- ElementX/Sources/FlowCoordinators/RoomFlowCoordinator.swift
-- ElementX/Sources/Application/AppCoordinator.swift
-- ElementX/Sources/Other/Extensions/ProcessInfo.swift
-- UnitTests/Sources/DirectCallInternalPilotEligibilityTests.swift
-- UnitTests/Sources/NativeDirectCallInternalControlPanelTests.swift
-- UnitTests/Sources/RoomFlowCoordinatorTests.swift
-- server/salemx-call-service/salemx_call_service/eligibility.py
-- server/salemx-call-service/salemx_call_service/service.py
-- server/salemx-call-service/salemx_call_service/config.py
+Must remain unset for the main soak:
+- `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED`
+- `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED`
 
-Questions:
-1. What is now proven for engineering-only internal pilot activation?
-2. What is still limited to DEBUG/integration proof gates?
-3. Is it safe to continue engineering proof usage without private dogfood under the internal rollout gate?
-4. Is it safe to approve any non-engineering internal dogfood yet?
-5. What guardrails must remain mandatory?
-6. What remaining blockers exist before a narrow non-engineering internal pilot?
-7. What is the next highest-value workstream?
-   - engineering proof soak without private dogfood;
-   - internal pilot operational runbook;
-   - non-engineering readiness criteria;
-   - monitoring/telemetry automation;
-   - UX/audio controls polish;
-   - CallKit/push planning.
-8. What tests and runtime proofs are required before any next activation expansion?
+Backend preflight:
+- `SALEMX_NATIVE_AUDIO_ELIGIBILITY_ENABLED=1`
+- allowlist contains only named engineering accounts for this session;
+- readiness `ready=true`;
+- readiness `reason=ok`;
+- Redis allocation/rate-limit connected;
+- LiveKit room provisioning configured;
+- native audio eligibility and allowlist configured.
 
-Hard constraints:
-- Do not approve non-engineering internal dogfood unless fully justified.
-- Do not approve broad internal rollout.
-- Do not approve public rollout.
-- Do not replace Element Call toolbar.
-- No CallKit/push/background incoming.
-- No missed-call UX implementation.
-- No video.
-- No global production activation.
-- Do not weaken trusted-device/E2EE behavior.
-- Do not use `directOneToOneCallsEnabled` as the native audio gate.
-- No raw token/JWT/key/envelope/Matrix content.
-- No raw room/user/peer/device IDs in UI/logs.
-- Token endpoint remains final authority.
+Client preflight:
+- A/B launched;
+- A/B trust ready;
+- encrypted direct 1:1 DM open on both clients;
+- private native audio card visible;
+- no stale active session;
+- Element Call fallback visible.
 
-Expected output:
-A. Files inspected.
-B. Engineering proof completion decision.
-C. What is now allowed.
-D. What remains blocked.
-E. Mandatory guardrails.
-F. Remaining risks and gaps.
-G. Recommended next workstream.
-H. Recommended next phase name.
+Soak matrix:
+1. A -> B happy path.
+2. B -> A reverse path.
+3. Repeated calls x2.
+4. Decline incoming.
+5. Cancel outgoing.
+6. Timeout.
+7. Relaunch fail-closed during ringing or active.
+8. Listener/open-room unavailable behavior.
+9. Post-listener recovery.
+10. Token final-authority check if safe: remove/disable allowlist or use ineligible fixture; must block before media/LiveKit.
+11. Element Call fallback visible check.
+
+Optional:
+- backend-off/recovery only if safe;
+- LiveKit-off not run unless explicitly approved by LiveKit owner.
+
+Report only redacted:
+A. Session date/time.
+B. Operator/device labels only.
+C. Preflight result.
+D. Matrix result table.
+E. Final A/B state.
+F. `activationSource`, `internalPilotActivationDecision`, `internalPilotActivationReason`.
+G. Media failure enum.
+H. Terminal reason enum.
+I. Cleanup/disconnect booleans.
+J. Stop criteria hit yes/no.
+K. Rollback used yes/no.
+L. Redaction issue yes/no.
+M. Decision continue/pause.
+
+Forbidden:
+- Matrix access tokens;
+- Synapse admin token;
+- LiveKit API secret;
+- participant JWT/token;
+- raw room IDs;
+- raw user/peer/device IDs;
+- LiveKit room names;
+- media keys;
+- Matrix event bodies;
+- Redis credentials;
+- full request/response bodies;
+- backend URLs with credentials.
+
+Stop immediately if:
+- raw secret/token/JWT/key/ID appears;
+- call starts without required gates;
+- private dogfood gate is accidentally used in the main internal-pilot soak;
+- Element Call route changes;
+- untrusted peer/device can connect;
+- stale active/ringing survives cleanup/relaunch;
+- backend issues token for invalid room/peer/trust;
+- media failure does not fail closed;
+- split-brain reappears;
+- token final-authority check fails.
+
+If passed with no code changes, create docs-only report commit.
+
+Suggested commit:
+Record internal pilot activation soak session 1

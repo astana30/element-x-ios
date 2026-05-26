@@ -45,6 +45,7 @@ No tokens, JWTs, passwords, shared secrets, authorization header values, or Live
 | Engineering-only internal pilot activation proof wiring | Added, disabled outside explicit proof gates |
 | Engineering-only internal pilot activation runtime proof | Passed for allowlisted A/B path |
 | Internal pilot trigger dry-run observability alignment | Passed |
+| Engineering-only internal pilot activation soak plan | Added |
 
 ## Root Cause
 
@@ -129,6 +130,7 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - The 2.36P trigger dry-run observability alignment passed after commit `f930f8f7a`: `production-trigger-dry-run` now reports the same redacted activation decision path used by `production-start-outgoing`, including `activationSource`, `internalPilotActivationDecision`, and `internalPilotActivationReason`. The runner also forwards `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED`.
 - The aligned trigger dry-run remains side-effect-free: no Matrix send, token request, media connect, LiveKit client connect, allocation, LiveKit room pre-create, outgoing call, or active session is created by dry-run output.
 - Private dogfood compatibility was rechecked after 2.36P: Start -> Accept reached active audio, Hangup returned A/B to idle, no active session remained, and media failure stayed `none`.
+- The 2.37B plan requires 3 clean engineering-only soak sessions on the server-backed internal pilot activation path before the next readiness review. The main soak keeps the private dogfood gate unset, requires the internal rollout gate, uses allowlisted engineering accounts only, and keeps token endpoint final authority.
 - Controlled engineering dogfood may continue under the same narrow staging-only constraints.
 
 ## Next Step
@@ -146,4 +148,4 @@ Controlled engineering dogfood may continue on the staging path under the privat
 - Element Call toolbar path unchanged and available as fallback;
 - no CallKit, push, video, broad internal rollout, public rollout, or global production activation.
 
-Next, continue with `2.37A — internal pilot activation engineering proof completion review` while keeping controlled dogfood engineering-only, staging-only, and redacted.
+Next, continue with `2.37C — engineering-only internal pilot activation soak session 1` while keeping controlled dogfood engineering-only, staging-only, and redacted.

@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Added the engineering-only internal pilot activation soak plan.
 - Recorded the internal pilot trigger dry-run observability alignment.
 - Recorded the engineering-only internal pilot activation runtime proof.
 - Recorded the internal pilot activation skeleton no-activation runtime proof.
@@ -53,6 +54,19 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-26 — 2.37B Engineering-Only Internal Pilot Activation Soak Plan
+
+- Added a docs-only soak plan for the server-backed internal pilot activation path using engineering accounts only.
+- The main soak path leaves `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED` unset and uses the internal pilot rollout gate with the existing DEBUG/integration diagnostics, product UI, eligibility status, internal-pilot activation dry-run, production start, and staging token base URL gates.
+- Scope remains named allowlisted engineering A/B or named engineering pairs only, staging call-service and staging LiveKit only, private native audio card only, foreground/open encrypted direct 1:1 rooms only, verified/trusted peers only, one active 1:1 call at a time, Element Call fallback visible/unchanged, and redacted reporting only.
+- Backend requirements are explicit: native audio eligibility enabled, allowlist containing only named engineering accounts, readiness `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, LiveKit room provisioning configured, and eligibility/allowlist readiness configured.
+- The plan requires 3 clean sessions before the next readiness review.
+- Each session must cover A -> B happy path, B -> A reverse, repeated calls x2, decline, cancel, timeout, relaunch fail-closed, listener/open-room unavailable, post-listener recovery, token final-authority check when safe, and Element Call fallback.
+- Stop criteria now explicitly include accidental private dogfood gate use in the main internal-pilot soak and token final-authority check failure.
+- Rollback unsets the internal pilot rollout gate, clears production/eligibility gates if needed, removes/clears the backend allowlist, restarts call-service if required, relaunches apps, confirms A/B idle/no active session, and keeps Element Call fallback available.
+- Non-engineering internal dogfood, broad internal rollout, production/public rollout, CallKit, push/background incoming, missed calls, video, session restoration, and global activation remain blocked.
+- Recommended next phase: `2.37C — engineering-only internal pilot activation soak session 1`.
 
 ## 2026-05-26 — 2.36P Internal Pilot Trigger Dry-Run Observability Alignment
 

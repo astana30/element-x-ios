@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.36P — internal pilot trigger dry-run observability alignment.
+After 2.37B — engineering-only internal pilot activation soak plan.
 
 ## Latest App Code Checkpoint
 
@@ -171,6 +171,13 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Private dogfood compatibility was verified after the alignment: Start -> Accept reached `activeAudio`, Hangup returned A/B to `idle`, no active session remained, and media failure stayed `none`.
   - Element Call route stayed untouched, with no CallKit, push, video, production/public rollout, or global activation.
   - Validation passed: SwiftFormat, SwiftLint, targeted native-call tests 179/179, Release build with existing warnings only, runner `bash -n`, `git diff --check`, and changed-line forbidden scan.
+- Engineering-only internal pilot activation soak plan is recorded:
+  - The soak is specific to the server-backed internal pilot activation path, not the private dogfood path.
+  - The main soak leaves `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED` unset and uses `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED=1` with the existing DEBUG/integration diagnostics, product UI, eligibility status, internal-pilot dry-run, production start, and staging token base URL gates.
+  - Scope remains engineering accounts only, named allowlisted A/B or named engineering pairs, staging call-service and staging LiveKit, private native audio card, foreground/open encrypted direct 1:1 rooms, verified/trusted peers, one active 1:1 call at a time, Element Call fallback visible/unchanged, and redacted reporting only.
+  - The plan requires 3 clean sessions before the next readiness review.
+  - Each session covers happy path, reverse path, repeated calls x2, decline, cancel, timeout, relaunch fail-closed, listener/open-room unavailable, post-listener recovery, token final-authority check when safe, and Element Call fallback.
+  - Non-engineering internal dogfood, broad internal rollout, production/public rollout, CallKit, push/background incoming, missed calls, video, session restoration, and global activation remain blocked.
 - Controlled engineering dogfood pilot session 1 is recorded:
   - Preflight passed with readiness `ready=true`, `reason=ok`, Redis allocation/rate-limit/storage booleans true, LiveKit room provisioning true, and A/B trust ready.
   - Required private dogfood gates were used, and the legacy fake/dry-run gate was unset.
@@ -946,9 +953,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.37A — internal pilot activation engineering proof completion review`
+`2.37C — engineering-only internal pilot activation soak session 1`
 
-Goal: decide what can be safely claimed after the engineering-only server-backed internal pilot activation proof and dry-run observability alignment, confirm mandatory guardrails, and choose the next safest workstream. This review must not approve non-engineering dogfood, broad internal rollout, production/public rollout, or global activation unless separately and fully justified.
+Goal: run or record the first soak session for the server-backed internal pilot activation path using engineering accounts only, with the private dogfood gate unset, internal rollout gate enabled, redacted reporting, and Element Call fallback unchanged.
 
 ## Do-Not-Touch Constraints
 
