@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.37C — engineering-only internal pilot activation soak session 1.
+After 2.37D — engineering-only internal pilot activation soak session 2.
 
 Current checkpoints:
 - App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
@@ -52,6 +52,7 @@ Current checkpoints:
 - Internal pilot trigger dry-run observability alignment: 2.36P `f930f8f7a` aligned `production-trigger-dry-run` with the same redacted activation decision path used by `production-start-outgoing`. Runner output now includes `activationSource`, `internalPilotActivationDecision`, and `internalPilotActivationReason`, and forwards `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED`. Dry-run remains side-effect-free, private dogfood compatibility was rechecked, and Element Call remains untouched.
 - Engineering-only internal pilot activation soak plan: 2.37B defines a 3-session soak for the server-backed internal pilot activation path using engineering accounts only. The main soak keeps `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED` unset, uses the internal rollout gate, requires token endpoint final authority, and keeps non-engineering internal dogfood blocked.
 - Engineering-only internal pilot activation soak session 1: 2.37C passed with the private dogfood gate unset and the internal rollout path active. Preflight passed, trigger dry-run reported `activationSource=internalPilot`, `internalPilotActivationDecision=activationAllowed`, `internalPilotActivationReason=none`, and A -> B, B -> A, repeated calls x2, decline, cancel, timeout, relaunch fail-closed, listener/open-room unavailable, post-listener recovery, token final-authority, and Element Call fallback rows passed. Token final-authority used a temporary ineligible local fixture and blocked with safe reason `accountNotEligible` before media/LiveKit. Final A/B state was idle/no active session with media failure `none`, no rollback, no stop criteria, no runtime bug, and no redaction issue. Soak progress: 1 of 3 clean.
+- Engineering-only internal pilot activation soak session 2: 2.37D passed with the private dogfood gate unset and the internal rollout path active. Preflight passed, trigger dry-run reported `activationSource=internalPilot`, `internalPilotActivationDecision=activationAllowed`, `internalPilotActivationReason=none`, and A -> B, B -> A, repeated calls x2, decline, cancel, timeout, relaunch fail-closed, listener/open-room unavailable, operator-assisted post-listener recovery, token final-authority, and Element Call fallback rows passed. Token final-authority used a temporary ineligible local fixture and blocked with safe reason `accountNotEligible` before media/LiveKit. Final A/B state was idle/no active session with media failure `none`, no rollback, no stop criteria, no runtime bug, and no redaction issue. Soak progress: 2 of 3 clean.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -415,10 +416,10 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.37D — engineering-only internal pilot activation soak session 2.
+2.37E — engineering-only internal pilot activation soak session 3.
 
 Task:
-Run or record the second engineering-only soak session for the server-backed internal pilot activation path.
+Run or record the third engineering-only soak session for the server-backed internal pilot activation path.
 Do not modify code unless a real runtime bug is found and explicitly approved.
 Do not change Element Call route.
 Do not wire CallKit/push/video.
@@ -427,6 +428,7 @@ Do not globally activate production direct calls.
 Context:
 2.37B added a 3-session soak plan for the server-backed internal pilot activation path.
 2.37C passed as the first clean soak session.
+2.37D passed as the second clean soak session.
 This soak uses engineering accounts only and explicitly tests the internal rollout path without the private dogfood gate.
 Non-engineering internal dogfood remains blocked.
 Production/public rollout remains blocked.
@@ -535,4 +537,4 @@ Stop immediately if:
 If passed with no code changes, create docs-only report commit.
 
 Suggested commit:
-Record internal pilot activation soak session 2
+Record internal pilot activation soak session 3
