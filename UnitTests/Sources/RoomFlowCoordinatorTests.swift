@@ -824,6 +824,7 @@ final class RoomFlowCoordinatorTests {
         #expect(diagnostic.wouldStart == false)
         #expect(diagnostic.isEnabled == false)
         #expect(diagnostic.blockedReason == .appRolloutDisabled)
+        #expect(diagnostic.activationSource == .none)
         #expect(provider.makeCount == 1)
         #expect(provider.callCount == 1)
         #expect(owner.makeCount == 1)
@@ -865,6 +866,9 @@ final class RoomFlowCoordinatorTests {
         #expect(diagnostic.areDependenciesReady)
         #expect(diagnostic.isRoomEligible)
         #expect(diagnostic.isEndpointAccepted)
+        #expect(diagnostic.activationSource == .privateDogfood)
+        #expect(diagnostic.internalPilotActivationDecision == nil)
+        #expect(diagnostic.internalPilotActivationReason == nil)
         #expect(String(describing: diagnostic).contains("matrix.example.test") == false)
         #expect(String(describing: diagnostic).contains(DirectCallProductionConfiguration.tokenEndpointPath) == false)
         #expect(provider.makeCount == 1)
@@ -877,6 +881,149 @@ final class RoomFlowCoordinatorTests {
         #expect(owner.hangupCount == 0)
         #expect(owner.stopCount == 0)
         #expect(owner.resetCount == 0)
+    }
+
+    @Test
+    func nativeDirectCallProductionTriggerDryRunUsesInternalPilotBridgeWhenAllowedWithoutStartingCalls() async throws {
+        let owner = NativeDirectCallRoomFlowOwnerSpy()
+        let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: eligibleButProductionDisabledDiagnostic())
+        let eligibilityProvider = NativeDirectCallInternalPilotEligibilityProviderSpy(result: .eligible)
+        setupRoomFlowCoordinator(nativeDirectCallRoomFlowOwnerFactory: { roomProxy in
+                                     #expect(roomProxy.id == "1")
+                                     owner.makeCount += 1
+                                     return owner
+                                 },
+                                 nativeDirectCallProductionActivationDryRunProviderFactory: { roomProxy in
+                                     #expect(roomProxy.id == "1")
+                                     provider.makeCount += 1
+                                     return provider
+                                 },
+                                 nativeDirectCallInternalPilotEligibilityProviderFactory: { _ in
+                                     eligibilityProvider
+                                 },
+                                 nativeDirectCallInternalPilotRolloutProvider: StaticNativeDirectCallInternalPilotRolloutProvider(configuration: .init(isEnabled: true)),
+                                 isNativeDirectCallEligibilityStatusEnabled: {
+                                     true
+                                 },
+                                 isNativeDirectCallInternalPilotActivationDryRunEnabled: {
+                                     true
+                                 },
+                                 isNativeDirectCallProductUIEnabled: {
+                                     true
+                                 })
+        clientProxy.roomForIdentifierClosure = { [weak self] _ in
+            .joined(self?.makeNativeDirectCallEligibilityRoomProxy() ?? JoinedRoomProxyMock(.init()))
+        }
+
+        try await process(route: .room(roomID: "1", via: []))
+        let diagnostic = await roomFlowCoordinator.nativeDirectCallProductionTriggerDryRunDiagnosticForStartAvailability()
+
+        #expect(diagnostic.wouldStart)
+        #expect(diagnostic.isEnabled)
+        #expect(diagnostic.blockedReason == nil)
+        #expect(diagnostic.activationSource == .internalPilot)
+        #expect(diagnostic.internalPilotActivationDecision == .activationAllowed)
+        #expect(diagnostic.internalPilotActivationReason == nil)
+        #expect(provider.callCount == 1)
+        #expect(eligibilityProvider.requests.count == 1)
+        #expect(owner.makeCount == 1)
+        #expect(owner.prepareCount == 0)
+        #expect(owner.startCount == 0)
+        #expect(owner.outgoingCount == 0)
+        #expect(owner.acceptCount == 0)
+        #expect(owner.hangupCount == 0)
+        #expect(owner.stopCount == 0)
+        #expect(owner.resetCount == 0)
+    }
+
+    @Test
+    func nativeDirectCallProductionTriggerDryRunReportsInternalPilotRolloutOffWithoutStartingCalls() async throws {
+        let owner = NativeDirectCallRoomFlowOwnerSpy()
+        let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: eligibleButProductionDisabledDiagnostic())
+        let eligibilityProvider = NativeDirectCallInternalPilotEligibilityProviderSpy(result: .eligible)
+        setupRoomFlowCoordinator(nativeDirectCallRoomFlowOwnerFactory: { _ in
+                                     owner.makeCount += 1
+                                     return owner
+                                 },
+                                 nativeDirectCallProductionActivationDryRunProviderFactory: { _ in
+                                     provider.makeCount += 1
+                                     return provider
+                                 },
+                                 nativeDirectCallInternalPilotEligibilityProviderFactory: { _ in
+                                     eligibilityProvider
+                                 },
+                                 nativeDirectCallInternalPilotRolloutProvider: StaticNativeDirectCallInternalPilotRolloutProvider(),
+                                 isNativeDirectCallEligibilityStatusEnabled: {
+                                     true
+                                 },
+                                 isNativeDirectCallInternalPilotActivationDryRunEnabled: {
+                                     true
+                                 },
+                                 isNativeDirectCallProductUIEnabled: {
+                                     true
+                                 })
+        clientProxy.roomForIdentifierClosure = { [weak self] _ in
+            .joined(self?.makeNativeDirectCallEligibilityRoomProxy() ?? JoinedRoomProxyMock(.init()))
+        }
+
+        try await process(route: .room(roomID: "1", via: []))
+        let diagnostic = await roomFlowCoordinator.nativeDirectCallProductionTriggerDryRunDiagnosticForStartAvailability()
+
+        #expect(diagnostic.wouldStart == false)
+        #expect(diagnostic.isEnabled == false)
+        #expect(diagnostic.blockedReason == .appRolloutDisabled)
+        #expect(diagnostic.activationSource == .internalPilot)
+        #expect(diagnostic.internalPilotActivationDecision == .disabled)
+        #expect(diagnostic.internalPilotActivationReason == .rolloutDisabled)
+        #expect(provider.callCount == 1)
+        #expect(eligibilityProvider.requests.count == 1)
+        #expect(owner.outgoingCount == 0)
+        #expect(owner.acceptCount == 0)
+    }
+
+    @Test
+    func nativeDirectCallProductionTriggerDryRunReportsInternalPilotBackendIneligibleWithoutStartingCalls() async throws {
+        let owner = NativeDirectCallRoomFlowOwnerSpy()
+        let provider = NativeDirectCallProductionActivationDryRunProviderSpy(result: eligibleButProductionDisabledDiagnostic())
+        let eligibilityProvider = NativeDirectCallInternalPilotEligibilityProviderSpy(result: .unavailable(reason: .peerNotEligible))
+        setupRoomFlowCoordinator(nativeDirectCallRoomFlowOwnerFactory: { _ in
+                                     owner.makeCount += 1
+                                     return owner
+                                 },
+                                 nativeDirectCallProductionActivationDryRunProviderFactory: { _ in
+                                     provider.makeCount += 1
+                                     return provider
+                                 },
+                                 nativeDirectCallInternalPilotEligibilityProviderFactory: { _ in
+                                     eligibilityProvider
+                                 },
+                                 nativeDirectCallInternalPilotRolloutProvider: StaticNativeDirectCallInternalPilotRolloutProvider(configuration: .init(isEnabled: true)),
+                                 isNativeDirectCallEligibilityStatusEnabled: {
+                                     true
+                                 },
+                                 isNativeDirectCallInternalPilotActivationDryRunEnabled: {
+                                     true
+                                 },
+                                 isNativeDirectCallProductUIEnabled: {
+                                     true
+                                 })
+        clientProxy.roomForIdentifierClosure = { [weak self] _ in
+            .joined(self?.makeNativeDirectCallEligibilityRoomProxy() ?? JoinedRoomProxyMock(.init()))
+        }
+
+        try await process(route: .room(roomID: "1", via: []))
+        let diagnostic = await roomFlowCoordinator.nativeDirectCallProductionTriggerDryRunDiagnosticForStartAvailability()
+
+        #expect(diagnostic.wouldStart == false)
+        #expect(diagnostic.isEnabled == false)
+        #expect(diagnostic.blockedReason == .appRolloutDisabled)
+        #expect(diagnostic.activationSource == .internalPilot)
+        #expect(diagnostic.internalPilotActivationDecision == .unavailable)
+        #expect(diagnostic.internalPilotActivationReason == .peerNotEligible)
+        #expect(provider.callCount == 1)
+        #expect(eligibilityProvider.requests.count == 1)
+        #expect(owner.outgoingCount == 0)
+        #expect(owner.acceptCount == 0)
     }
 
     @Test
@@ -2564,7 +2711,10 @@ final class RoomFlowCoordinatorTests {
                                                                                                    capabilityPresent: false,
                                                                                                    dependenciesReady: false,
                                                                                                    roomEligible: true,
-                                                                                                   endpointAccepted: false))
+                                                                                                   endpointAccepted: false,
+                                                                                                   activationSource: "internalPilot",
+                                                                                                   internalPilotActivationDecision: "unavailable",
+                                                                                                   internalPilotActivationReason: "peerNotEligible"))
         let requestSignal = UITestsSignal.nativeDirectCallProductionTriggerDryRun(request)
         let resultSignal = UITestsSignal.nativeDirectCallProductionTriggerDryRunResult(result)
         let encoder = JSONEncoder()
@@ -2586,6 +2736,11 @@ final class RoomFlowCoordinatorTests {
         #expect(encodedResult.contains("endpointAccepted"))
         #expect(encodedResult.contains("peerTrustReady"))
         #expect(encodedResult.contains("peerTrustReadiness"))
+        #expect(encodedResult.contains("activationSource"))
+        #expect(encodedResult.contains("internalPilot"))
+        #expect(encodedResult.contains("internalPilotActivationDecision"))
+        #expect(encodedResult.contains("internalPilotActivationReason"))
+        #expect(encodedResult.contains("peerNotEligible"))
         #expect(result.correlationID == request.correlationID)
 
         let forbiddenFragments = [

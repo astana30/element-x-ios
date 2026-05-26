@@ -491,6 +491,14 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
         return .init(activationDiagnostic: activationDiagnostic)
     }
 
+    func nativeDirectCallProductionTriggerDryRunDiagnosticForStartAvailability() async -> NativeDirectCallProductionTriggerDryRunDiagnostic {
+        #if DEBUG
+        await nativeDirectCallProductionTriggerDryRunDiagnosticAllowingInternalPilotActivation()
+        #else
+        await nativeDirectCallProductionTriggerDryRunDiagnostic()
+        #endif
+    }
+
     func nativeDirectCallProductionStartOutgoingAudioCall(isProductionStartEnabled: Bool) async -> NativeDirectCallProductionStartOutgoingAudioCallResult {
         #if DEBUG
         let triggerDiagnostic = await nativeDirectCallProductionTriggerDryRunDiagnosticAllowingInternalPilotActivation()
@@ -919,7 +927,7 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
                                                                                      triggerDiagnostic: triggerDiagnostic,
                                                                                      productionStatus: productionStatus,
                                                                                      hasActiveSessionOverride: ignoresActiveSessionForIncomingAccept ? false : nil)
-        return triggerDiagnostic.enablingInternalPilotActivationIfAllowed(dryRunStatus)
+        return triggerDiagnostic.reportingInternalPilotActivation(dryRunStatus)
     }
 
     private func nativeDirectCallInternalPilotEligibilityRequest() -> NativeDirectCallInternalPilotEligibilityRequest? {
@@ -2365,6 +2373,20 @@ struct NativeDirectCallProductionActivationDryRunProvider: NativeDirectCallProdu
     }
 }
 
+enum NativeDirectCallProductionTriggerActivationSource: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case none
+    case privateDogfood
+    case internalPilot
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
 struct NativeDirectCallProductionTriggerDryRunDiagnostic: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     let wouldStart: Bool
     let isEnabled: Bool
@@ -2376,6 +2398,9 @@ struct NativeDirectCallProductionTriggerDryRunDiagnostic: Equatable, CustomStrin
     let isPeerTrustReady: Bool
     let peerTrustReadiness: DirectCallPeerTrustReadiness
     let keyWrapperSource: NativeDirectCallProductionKeyWrapperSource?
+    let activationSource: NativeDirectCallProductionTriggerActivationSource
+    let internalPilotActivationDecision: NativeDirectCallInternalPilotActivationDryRunDecision?
+    let internalPilotActivationReason: NativeDirectCallInternalPilotActivationUnavailableReason?
 
     init(wouldStart: Bool,
          isEnabled: Bool,
@@ -2385,7 +2410,10 @@ struct NativeDirectCallProductionTriggerDryRunDiagnostic: Equatable, CustomStrin
          isRoomEligible: Bool,
          isEndpointAccepted: Bool,
          peerTrustReadiness: DirectCallPeerTrustReadiness,
-         keyWrapperSource: NativeDirectCallProductionKeyWrapperSource?) {
+         keyWrapperSource: NativeDirectCallProductionKeyWrapperSource?,
+         activationSource: NativeDirectCallProductionTriggerActivationSource = .none,
+         internalPilotActivationDecision: NativeDirectCallInternalPilotActivationDryRunDecision? = nil,
+         internalPilotActivationReason: NativeDirectCallInternalPilotActivationUnavailableReason? = nil) {
         self.wouldStart = wouldStart
         self.isEnabled = isEnabled
         self.blockedReason = blockedReason
@@ -2396,6 +2424,9 @@ struct NativeDirectCallProductionTriggerDryRunDiagnostic: Equatable, CustomStrin
         isPeerTrustReady = peerTrustReadiness == .peerTrustReady
         self.peerTrustReadiness = peerTrustReadiness
         self.keyWrapperSource = keyWrapperSource
+        self.activationSource = activationSource
+        self.internalPilotActivationDecision = internalPilotActivationDecision
+        self.internalPilotActivationReason = internalPilotActivationReason
     }
 
     init(activationDiagnostic: DirectCallProductionActivationDryRunDiagnostic) {
@@ -2409,15 +2440,33 @@ struct NativeDirectCallProductionTriggerDryRunDiagnostic: Equatable, CustomStrin
         isPeerTrustReady = activationDiagnostic.isPeerTrustReady
         peerTrustReadiness = activationDiagnostic.peerTrustReadiness
         keyWrapperSource = activationDiagnostic.keyWrapperSource
+        activationSource = activationDiagnostic.isEnabled ? .privateDogfood : .none
+        internalPilotActivationDecision = nil
+        internalPilotActivationReason = nil
     }
 
     static func blocked(_ reason: DirectCallProductionActivationDisabledReason) -> Self {
         .init(activationDiagnostic: .disabled(reason))
     }
 
-    func enablingInternalPilotActivationIfAllowed(_ dryRunStatus: NativeDirectCallInternalPilotActivationDryRunStatus) -> Self {
-        guard dryRunStatus.decision == .activationAllowed else {
+    func reportingInternalPilotActivation(_ dryRunStatus: NativeDirectCallInternalPilotActivationDryRunStatus) -> Self {
+        guard dryRunStatus.isEnabled else {
             return self
+        }
+
+        guard dryRunStatus.decision == .activationAllowed else {
+            return .init(wouldStart: wouldStart,
+                         isEnabled: isEnabled,
+                         blockedReason: blockedReason,
+                         isCapabilityPresent: isCapabilityPresent,
+                         areDependenciesReady: areDependenciesReady,
+                         isRoomEligible: isRoomEligible,
+                         isEndpointAccepted: isEndpointAccepted,
+                         peerTrustReadiness: peerTrustReadiness,
+                         keyWrapperSource: keyWrapperSource,
+                         activationSource: .internalPilot,
+                         internalPilotActivationDecision: dryRunStatus.decision,
+                         internalPilotActivationReason: dryRunStatus.reason)
         }
 
         return .init(wouldStart: true,
@@ -2428,7 +2477,14 @@ struct NativeDirectCallProductionTriggerDryRunDiagnostic: Equatable, CustomStrin
                      isRoomEligible: dryRunStatus.isRoomEligible,
                      isEndpointAccepted: isEndpointAccepted,
                      peerTrustReadiness: dryRunStatus.isPeerTrustReady ? .peerTrustReady : peerTrustReadiness,
-                     keyWrapperSource: keyWrapperSource)
+                     keyWrapperSource: keyWrapperSource,
+                     activationSource: .internalPilot,
+                     internalPilotActivationDecision: dryRunStatus.decision,
+                     internalPilotActivationReason: dryRunStatus.reason)
+    }
+
+    func enablingInternalPilotActivationIfAllowed(_ dryRunStatus: NativeDirectCallInternalPilotActivationDryRunStatus) -> Self {
+        reportingInternalPilotActivation(dryRunStatus)
     }
 
     var description: String {
@@ -2442,7 +2498,10 @@ struct NativeDirectCallProductionTriggerDryRunDiagnostic: Equatable, CustomStrin
             "isEndpointAccepted: \(isEndpointAccepted)",
             "isPeerTrustReady: \(isPeerTrustReady)",
             "peerTrustReadiness: \(peerTrustReadiness)",
-            "keyWrapperSource: \(keyWrapperSource?.description ?? "none")"
+            "keyWrapperSource: \(keyWrapperSource?.description ?? "none")",
+            "activationSource: \(activationSource)",
+            "internalPilotActivationDecision: \(internalPilotActivationDecision?.description ?? "none")",
+            "internalPilotActivationReason: \(internalPilotActivationReason?.description ?? "none")"
         ]
         return "NativeDirectCallProductionTriggerDryRunDiagnostic(\(fields.joined(separator: ", ")))"
     }

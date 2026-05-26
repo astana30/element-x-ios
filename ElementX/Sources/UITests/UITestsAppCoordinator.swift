@@ -920,7 +920,7 @@ class MockScreen: Identifiable {
                         case .nativeDirectCallProductionTriggerDryRun(let request):
                             let diagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic
                             if let flowCoordinator {
-                                diagnostic = await flowCoordinator.nativeDirectCallProductionTriggerDryRunDiagnostic()
+                                diagnostic = await flowCoordinator.nativeDirectCallProductionTriggerDryRunDiagnosticForStartAvailability()
                             } else {
                                 diagnostic = .blocked(.roomUnavailable)
                             }

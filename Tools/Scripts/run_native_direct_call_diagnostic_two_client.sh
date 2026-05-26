@@ -107,6 +107,8 @@ Optional environment:
                                   Optional. Set to 1 for DEBUG/integration-only eligibility status display.
   NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED
                                   Optional. Set to 1 for DEBUG/integration-only internal pilot activation dry-run status.
+  NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED
+                                  Optional. Set to 1 for DEBUG/integration-only internal pilot rollout proof.
 
 Example planned signalling sequence:
   $SCRIPT_NAME init both
@@ -934,10 +936,13 @@ if expected_signal == "nativeDirectCallProductionActivationDryRunResult":
 if expected_signal == "nativeDirectCallProductionTriggerDryRunResult":
     diagnostic = body.get("diagnostic", {})
     print(
-        "wouldStart={would_start} enabled={enabled} reason={reason} capabilityPresent={capability} dependenciesReady={dependencies} roomEligible={room} endpointAccepted={endpoint} peerTrustReady={peer_trust_ready} peerTrustReadiness={peer_trust_readiness} keyWrapperSource={key_wrapper_source}".format(
+        "wouldStart={would_start} enabled={enabled} reason={reason} activationSource={activation_source} internalPilotActivationDecision={internal_decision} internalPilotActivationReason={internal_reason} capabilityPresent={capability} dependenciesReady={dependencies} roomEligible={room} endpointAccepted={endpoint} peerTrustReady={peer_trust_ready} peerTrustReadiness={peer_trust_readiness} keyWrapperSource={key_wrapper_source}".format(
             would_start=str(diagnostic.get("wouldStart", "unknown")).lower(),
             enabled=str(diagnostic.get("enabled", "unknown")).lower(),
             reason=diagnostic.get("reason") or "none",
+            activation_source=diagnostic.get("activationSource") or "none",
+            internal_decision=diagnostic.get("internalPilotActivationDecision") or "none",
+            internal_reason=diagnostic.get("internalPilotActivationReason") or "none",
             capability=str(diagnostic.get("capabilityPresent", "unknown")).lower(),
             dependencies=str(diagnostic.get("dependenciesReady", "unknown")).lower(),
             room=str(diagnostic.get("roomEligible", "unknown")).lower(),
@@ -1285,6 +1290,7 @@ launch_client_with_environment() {
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED="${NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED:-}" \
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED="${NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED:-}" \
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED="${NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED:-}" \
+        SIMCTL_CHILD_NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED="${NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED:-}" \
         SIMCTL_CHILD_UI_TESTS_SIGNALLING_CHANNEL="$channel" \
         SIMCTL_CHILD_INTEGRATION_TESTS_HOST="$INTEGRATION_TESTS_HOST" \
         SIMCTL_CHILD_INTEGRATION_TESTS_USERNAME="$username" \

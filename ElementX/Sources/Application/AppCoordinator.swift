@@ -1549,7 +1549,7 @@ extension AppCoordinator {
                         case .nativeDirectCallProductionTriggerDryRun(let request):
                             let diagnostic: NativeDirectCallProductionTriggerDryRunDiagnostic
                             if let flowCoordinator = self?.userSessionFlowCoordinator {
-                                diagnostic = await flowCoordinator.nativeDirectCallProductionTriggerDryRunDiagnostic()
+                                diagnostic = await flowCoordinator.nativeDirectCallProductionTriggerDryRunDiagnosticForStartAvailability()
                             } else {
                                 diagnostic = .blocked(.roomUnavailable)
                             }

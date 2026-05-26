@@ -715,6 +715,9 @@ enum UITestsSignal: Codable, Equatable {
         let peerTrustReady: Bool
         let peerTrustReadiness: String
         let keyWrapperSource: String?
+        let activationSource: String
+        let internalPilotActivationDecision: String?
+        let internalPilotActivationReason: String?
 
         init(wouldStart: Bool,
              enabled: Bool,
@@ -725,7 +728,10 @@ enum UITestsSignal: Codable, Equatable {
              endpointAccepted: Bool,
              peerTrustReady: Bool = false,
              peerTrustReadiness: String = DirectCallPeerTrustReadiness.peerTrustUnavailable.rawValue,
-             keyWrapperSource: String? = nil) {
+             keyWrapperSource: String? = nil,
+             activationSource: String = NativeDirectCallProductionTriggerActivationSource.none.rawValue,
+             internalPilotActivationDecision: String? = nil,
+             internalPilotActivationReason: String? = nil) {
             self.wouldStart = wouldStart
             self.enabled = enabled
             self.reason = reason
@@ -736,6 +742,9 @@ enum UITestsSignal: Codable, Equatable {
             self.peerTrustReady = peerTrustReady
             self.peerTrustReadiness = UITestsSignalling.sanitizedIdentifier(peerTrustReadiness) ?? DirectCallPeerTrustReadiness.peerTrustUnavailable.rawValue
             self.keyWrapperSource = keyWrapperSource.flatMap { UITestsSignalling.sanitizedIdentifier($0) }
+            self.activationSource = UITestsSignalling.sanitizedIdentifier(activationSource) ?? NativeDirectCallProductionTriggerActivationSource.none.rawValue
+            self.internalPilotActivationDecision = internalPilotActivationDecision.flatMap { UITestsSignalling.sanitizedIdentifier($0) }
+            self.internalPilotActivationReason = internalPilotActivationReason.flatMap { UITestsSignalling.sanitizedIdentifier($0) }
         }
     }
 
@@ -1150,7 +1159,10 @@ extension UITestsSignal.NativeDirectCallProductionTriggerDryRunDiagnosticPayload
                   endpointAccepted: diagnostic.isEndpointAccepted,
                   peerTrustReady: diagnostic.isPeerTrustReady,
                   peerTrustReadiness: diagnostic.peerTrustReadiness.description,
-                  keyWrapperSource: diagnostic.keyWrapperSource?.description)
+                  keyWrapperSource: diagnostic.keyWrapperSource?.description,
+                  activationSource: diagnostic.activationSource.description,
+                  internalPilotActivationDecision: diagnostic.internalPilotActivationDecision?.description,
+                  internalPilotActivationReason: diagnostic.internalPilotActivationReason?.description)
     }
 }
 
