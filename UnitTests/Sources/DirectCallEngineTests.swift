@@ -598,7 +598,7 @@ final class DirectCallEngineTests {
     }
 
     @Test
-    func callerMediaConnectFailureAfterRemoteAnswerDoesNotEmitPostAnswerTerminal() async {
+    func callerMediaConnectFailureAfterRemoteAnswerEmitsTerminalAndCleansUp() async {
         let mediaEngine = MediaEngineSpy(connectResult: .failure(.tokenBackendRejected))
         let engine = makeEngine(mediaEngine: mediaEngine)
         var emittedSignals = [DirectCallOutgoingSignal]()
@@ -626,8 +626,47 @@ final class DirectCallEngineTests {
 
         #expect(result == .failure(.mediaConnectionFailed(.tokenBackendRejected)))
         #expect(engine.activeSessionPublisher.value?.state == .failed)
-        #expect(emittedSignals.map(\.type) == [.invite])
+        #expect(emittedSignals.map(\.type) == [.invite, .hangup])
         #expect(mediaEngine.cleanupCallIDs == [startedSession.callID])
+    }
+
+    @Test
+    func callerManualHangupRacingPostAnswerMediaFailureDeduplicatesTerminal() async {
+        let mediaEngine = DelayedMediaEngineSpy()
+        let engine = makeEngine(mediaEngine: mediaEngine, cleanupDelay: .seconds(120))
+        var emittedSignals = [DirectCallOutgoingSignal]()
+        let cancellable = engine.actionsPublisher.sink { action in
+            guard case .emitSignal(let signal) = action else {
+                return
+            }
+            emittedSignals.append(signal)
+        }
+        defer { cancellable.cancel() }
+
+        let startResult = await engine.startOutgoingAudioCall(peer: peerUserID, roomID: roomID)
+        guard case .success(let startedSession) = startResult else {
+            Issue.record("Expected outgoing call start to succeed.")
+            return
+        }
+
+        let answerTask = Task {
+            await engine.receiveIncomingCall(event: .init(eventID: "$answer",
+                                                          roomID: roomID,
+                                                          senderID: peerUserID,
+                                                          callID: startedSession.callID,
+                                                          type: .answer,
+                                                          intent: nil,
+                                                          timestamp: .now))
+        }
+        #expect(await waitUntil { mediaEngine.connectedSessions.map(\.callID) == [startedSession.callID] })
+
+        _ = await engine.hangupActiveCall(callID: startedSession.callID)
+        mediaEngine.complete(with: .failure(.tokenBackendRejected))
+        _ = await answerTask.value
+
+        #expect(engine.activeSessionPublisher.value?.state == .ended)
+        #expect(emittedSignals.map(\.type) == [.invite, .hangup])
+        #expect(mediaEngine.cleanupCallIDs.isEmpty)
     }
 
     @Test

@@ -37,6 +37,7 @@ final class DirectCallEngine: DirectCallEngineProtocol {
     private var mediaDisconnectedCallIDs = Set<String>()
     private var mediaCleanedCallIDs = Set<String>()
     private var answerEmittedCallIDs = Set<String>()
+    private var remoteAnswerReceivedCallIDs = Set<String>()
     private var postAnswerMediaFailureTerminalEmittedCallIDs = Set<String>()
 
     private var activeSessionSubject = CurrentValueSubject<DirectCallSession?, Never>(nil)
@@ -314,6 +315,7 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         await cleanupMediaIfNeeded(callID: callID)
         mediaKeyHandlesByCallID.removeValue(forKey: callID)
         answerEmittedCallIDs.remove(callID)
+        remoteAnswerReceivedCallIDs.remove(callID)
         postAnswerMediaFailureTerminalEmittedCallIDs.remove(callID)
         cancelAllTasks()
         activeSessionSubject.send(nil)
@@ -516,6 +518,7 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         }
 
         transitionSession(to: .connecting)
+        remoteAnswerReceivedCallIDs.insert(session.callID)
         scheduleConnectingTimeout(for: session.callID)
 
         guard let updatedSession = activeSessionSubject.value else {
@@ -601,7 +604,7 @@ final class DirectCallEngine: DirectCallEngineProtocol {
     }
 
     private func shouldEmitPostAnswerMediaFailureTerminal(callID: String) -> Bool {
-        guard answerEmittedCallIDs.contains(callID) else {
+        guard answerEmittedCallIDs.contains(callID) || remoteAnswerReceivedCallIDs.contains(callID) else {
             return false
         }
 
