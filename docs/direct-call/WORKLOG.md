@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Recorded engineering-only internal pilot activation soak session 1.
 - Added the engineering-only internal pilot activation soak plan.
 - Recorded the internal pilot trigger dry-run observability alignment.
 - Recorded the engineering-only internal pilot activation runtime proof.
@@ -54,6 +55,20 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-26 — 2.37C Engineering-Only Internal Pilot Activation Soak Session 1
+
+- Ran and recorded the first engineering-only soak session for the server-backed internal pilot activation path.
+- The main soak kept `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED` unset and kept the legacy fake/dry-run gate unset.
+- Preflight passed with readiness `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, native audio eligibility/allowlist configured, A/B trust ready, encrypted direct 1:1 DM open, no stale active session, and Element Call fallback visible.
+- Trigger dry-run reported `activationSource=internalPilot`, `internalPilotActivationDecision=activationAllowed`, and `internalPilotActivationReason=none`.
+- A -> B, B -> A, repeated calls x2, decline, cancel, timeout, relaunch fail-closed, listener/open-room unavailable, post-listener recovery, token final-authority, and Element Call fallback rows passed with redacted output only.
+- Timeout reported A `outgoingTimeout` and B `incomingTimeout`; A/B returned idle with no active session.
+- Token final-authority used a temporary ineligible local fixture and blocked with safe reason `accountNotEligible` before media/LiveKit. The normal allowlisted staging service was restored afterward.
+- Final A/B state was idle/no active session with media failure `none`; no rollback was used, no stop criteria triggered, no runtime bug was observed, and no redaction issue was found.
+- Soak progress is now 1 clean session of 3 required before the next readiness review.
+- Non-engineering internal dogfood, broad internal rollout, production/public rollout, CallKit, push/background incoming, missed calls, video, session restoration, and global activation remain blocked.
+- Recommended next phase: `2.37D — engineering-only internal pilot activation soak session 2`.
 
 ## 2026-05-26 — 2.37B Engineering-Only Internal Pilot Activation Soak Plan
 

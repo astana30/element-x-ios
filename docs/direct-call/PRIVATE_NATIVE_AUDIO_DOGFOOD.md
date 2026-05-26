@@ -1828,6 +1828,72 @@ Stop immediately if:
 
 Next phase should use `2.37C — engineering-only internal pilot activation soak session 1`.
 
+## 2.37C Engineering-Only Internal Pilot Activation Soak Session 1
+
+Session date/time: 2026-05-26 16:08 +05.
+
+Operators/devices:
+
+- Operator A / Device A1.
+- Operator B / Device B1.
+
+This session exercised the server-backed internal pilot activation path, not the private dogfood path. `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED` and `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` stayed unset for the main soak. The session remained engineering-only, staging-only, foreground/open encrypted direct 1:1 only, verified/trusted peer only, one active 1:1 native audio call at a time, and redacted.
+
+### Preflight
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| Backend readiness | Pass | `200`, `ready=true`, `reason=ok` |
+| Redis allocation/rate-limit | Pass | connected booleans true |
+| Storage key | Pass | configured boolean true |
+| LiveKit room provisioning | Pass | configured boolean true |
+| Eligibility/allowlist | Pass | configured booleans true |
+| A/B trust | Pass | own session verified, cross-signing ready, peer trust ready |
+| Encrypted direct 1:1 DM | Pass | open on A/B |
+| Baseline session state | Pass | A/B idle, no active session, media failure `none` |
+| Element Call fallback | Pass | operator confirmed visible/unchanged on A/B |
+| Internal-pilot dry-run | Pass | `activationSource=internalPilot`, `internalPilotActivationDecision=activationAllowed`, `internalPilotActivationReason=none` |
+
+### Matrix
+
+| Row | Result | Notes |
+| --- | --- | --- |
+| A -> B happy path | Pass | Start -> Accept -> `activeAudio`; Hangup -> A/B `idle`; media failure `none` |
+| B -> A reverse path | Pass | Start -> Accept -> `activeAudio`; Hangup -> A/B `idle`; media failure `none` |
+| Repeated calls x2 | Pass | Two sequential A -> B calls reached `activeAudio` and returned A/B to `idle`; no stale session or split-brain |
+| Decline incoming | Pass | Incoming side rejected; A/B returned idle/no active session; terminal `cancelled` |
+| Cancel outgoing | Pass | Caller cancelled; A/B returned idle/no active session; terminal `cancelled` |
+| Timeout | Pass | A `outgoingTimeout`, B `incomingTimeout`; A/B idle/no active session; media failure `none` |
+| Relaunch fail-closed | Pass | Relaunch during ringing restored no stale ringing/active session and no media/LiveKit path |
+| Listener/open-room unavailable | Pass | Post-relaunch unavailable window reported no owner, no active session, and no media/LiveKit path |
+| Post-listener recovery | Pass | Room flow reattached, internal-pilot decision returned `activationAllowed`, and a recovery call reached `activeAudio` then A/B `idle` |
+| Token final authority | Pass | Temporary ineligible fixture reported `accountNotEligible`; Start blocked before media/LiveKit; no active session |
+| Element Call fallback | Pass | Operator confirmed normal Element Call fallback controls visible/unchanged on A/B |
+
+Optional backend-off/recovery and LiveKit-off were not run. The token final-authority row used a separate temporary ineligible local fixture and then restored the normal allowlisted staging service; shared staging LiveKit was not stopped.
+
+### Final State
+
+- A/B `productionSessionState=idle`.
+- A/B `productionHasActiveSession=false`.
+- `activationSource=internalPilot`.
+- `internalPilotActivationDecision=activationAllowed`.
+- `internalPilotActivationReason=none`.
+- `productionMediaFailureReason=none`.
+- Terminal reasons observed: `hangup`, `cancelled`, `outgoingTimeout`, `incomingTimeout`.
+- Cleanup/disconnect attempted on exercised terminal paths.
+- Stop criteria hit: no.
+- Rollback used: no.
+- Redaction issue: no.
+- Runtime bugs: none.
+- Decision: continue to soak session 2.
+
+Runner note: one legacy diagnostic `wait-status` poll watches the older diagnostic state and was not used as a pass criterion. The session pass/fail decisions used the production/internal-pilot runner commands and redacted `production-status` output.
+
+This session does not approve non-engineering internal dogfood, broad internal rollout, production/public rollout, Element Call replacement, CallKit, push/background incoming, missed calls, video, session restoration, or global activation.
+
+Next phase should use `2.37D — engineering-only internal pilot activation soak session 2`.
+
 ## 2.35B Engineering Expansion Operations Handoff
 
 The 3-session engineering expansion soak completed cleanly, so narrow engineering dogfood can continue without per-session Codex supervision only when a named engineering operator owns the session and this handoff checklist is followed. This is still staging-only engineering dogfood, not non-engineering internal dogfood, product beta, public rollout, production activation, or Element Call replacement.

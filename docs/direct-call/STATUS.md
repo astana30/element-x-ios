@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.37B — engineering-only internal pilot activation soak plan.
+After 2.37C — engineering-only internal pilot activation soak session 1.
 
 ## Latest App Code Checkpoint
 
@@ -178,6 +178,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - The plan requires 3 clean sessions before the next readiness review.
   - Each session covers happy path, reverse path, repeated calls x2, decline, cancel, timeout, relaunch fail-closed, listener/open-room unavailable, post-listener recovery, token final-authority check when safe, and Element Call fallback.
   - Non-engineering internal dogfood, broad internal rollout, production/public rollout, CallKit, push/background incoming, missed calls, video, session restoration, and global activation remain blocked.
+- Engineering-only internal pilot activation soak session 1 passed:
+  - The main soak used the server-backed internal pilot activation path with `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED` unset and the legacy fake/dry-run gate unset.
+  - Preflight passed with readiness `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, native audio eligibility/allowlist configured, A/B trust ready, encrypted direct 1:1 DM open, baseline A/B idle/no active session, and Element Call fallback visible.
+  - Runner trigger dry-run reported `activationSource=internalPilot`, `internalPilotActivationDecision=activationAllowed`, and `internalPilotActivationReason=none`.
+  - A -> B, B -> A, repeated calls x2, decline, cancel, timeout, relaunch fail-closed, listener/open-room unavailable, post-listener recovery, token final-authority check, and Element Call fallback rows passed with redacted output only.
+  - Token final-authority used a temporary ineligible local fixture and blocked with safe reason `accountNotEligible` before media/LiveKit; normal allowlisted staging service was restored afterward.
+  - Final A/B status was idle/no active session with media failure `none`; no rollback, stop criterion, runtime bug, or redaction issue was observed.
+  - Soak progress: session 1 of 3 clean.
 - Controlled engineering dogfood pilot session 1 is recorded:
   - Preflight passed with readiness `ready=true`, `reason=ok`, Redis allocation/rate-limit/storage booleans true, LiveKit room provisioning true, and A/B trust ready.
   - Required private dogfood gates were used, and the legacy fake/dry-run gate was unset.
@@ -953,9 +961,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.37C — engineering-only internal pilot activation soak session 1`
+`2.37D — engineering-only internal pilot activation soak session 2`
 
-Goal: run or record the first soak session for the server-backed internal pilot activation path using engineering accounts only, with the private dogfood gate unset, internal rollout gate enabled, redacted reporting, and Element Call fallback unchanged.
+Goal: run or record the second soak session for the server-backed internal pilot activation path using engineering accounts only, with the private dogfood gate unset, internal rollout gate enabled, redacted reporting, and Element Call fallback unchanged.
 
 ## Do-Not-Touch Constraints
 
