@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Recorded the engineering-only internal pilot activation runtime proof.
 - Recorded the internal pilot activation skeleton no-activation runtime proof.
 - Added the native audio internal pilot activation provider skeleton.
 - Recorded the first operator-owned engineering expansion session.
@@ -1449,3 +1450,17 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Validation run so far: `RoomFlowCoordinatorTests` passed 104/104; `DirectCallInternalPilotEligibilityTests` plus `NativeDirectCallInternalControlPanelTests` passed 70/70.
 - Non-engineering internal dogfood, broad internal rollout, production/public rollout, Element Call replacement, CallKit, push/background incoming, missed calls, video, session restoration, and global activation remain blocked.
 - Recommended next phase: `2.36O — engineering-only internal pilot activation runtime proof`.
+
+## 2026-05-26 — 2.36O Engineering-Only Internal Pilot Activation Runtime Proof
+
+- Recorded the engineering-only server-backed internal pilot activation proof after the HTTP eligibility provider wiring fix.
+- Commit `5fc30fe6a` wires the HTTP native audio internal pilot eligibility provider through `AppCoordinator`, `UserSessionFlowCoordinator`, `ChatsTabFlowCoordinator`, and `RoomFlowCoordinator`.
+- Default and Release behavior remain fail-closed. The HTTP provider is selected only under explicit DEBUG/integration proof gates.
+- Private engineering dogfood remains separate and unchanged; the main internal-pilot proof kept `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED` unset.
+- With internal rollout enabled and backend allowlisted A/B, runner status reported internal-pilot `activationAllowed`.
+- A Start -> B Accept reached `activeAudio`; hangup returned A/B to idle with no active session and media failure `none`.
+- Element Call route stayed untouched. No CallKit, push, video, global production activation, broad internal rollout, or non-engineering internal dogfood was enabled.
+- Runtime output stayed redacted and did not print raw identifiers, tokens, JWTs, secrets, LiveKit room names, Matrix event bodies, Redis credentials, or full request/response bodies.
+- Validation for the code commit passed: SwiftFormat, SwiftLint, targeted tests 176/176, Release build with existing warnings only, `git diff --check`, and changed-line forbidden scan.
+- Caveat: legacy `production-trigger-dry-run` still reports the older `appRolloutDisabled` path. The actual `production-start-outgoing` path used the internal-pilot activation bridge and passed.
+- Recommended next phase: `2.36P — internal pilot trigger dry-run observability alignment`.

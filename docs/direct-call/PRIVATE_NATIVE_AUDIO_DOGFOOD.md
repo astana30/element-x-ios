@@ -1563,6 +1563,52 @@ This phase does not approve non-engineering internal dogfood, broad internal rol
 
 Next phase should use `2.36O — engineering-only internal pilot activation runtime proof`.
 
+## 2.36O Engineering-Only Internal Pilot Activation Runtime Proof
+
+The first server-backed internal pilot activation proof passed for allowlisted engineering A/B under explicit DEBUG/integration proof gates.
+
+Commit `5fc30fe6a` wires the HTTP native audio internal pilot eligibility provider through:
+
+- `AppCoordinator`;
+- `UserSessionFlowCoordinator`;
+- `ChatsTabFlowCoordinator`;
+- `RoomFlowCoordinator`.
+
+Safety properties remain:
+
+- default and Release are fail-closed;
+- the HTTP provider is selected only under the explicit DEBUG/integration proof gates;
+- private engineering dogfood remains separate and unchanged;
+- `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED` stayed unset for the main proof;
+- backend `/eligibility` and the token endpoint remain final enforcement;
+- Element Call route stayed untouched.
+
+Observed allowlisted engineering proof:
+
+- internal rollout enabled;
+- backend allowlisted A/B;
+- runner status reported internal-pilot `activationAllowed`;
+- A Start -> B Accept reached `activeAudio`;
+- hangup returned A/B to `idle`;
+- no active session remained;
+- media failure stayed `none`;
+- no raw identifiers, tokens, JWTs, secrets, LiveKit room names, Matrix event bodies, Redis credentials, or full request/response bodies were printed.
+
+Validation for the code commit passed:
+
+- SwiftFormat;
+- SwiftLint;
+- targeted tests 176/176;
+- Release build with existing warnings only;
+- `git diff --check`;
+- changed-line forbidden scan.
+
+Caveat: legacy `production-trigger-dry-run` still reports the older `appRolloutDisabled` path. The actual `production-start-outgoing` path used the internal-pilot activation bridge and passed.
+
+This proof does not approve non-engineering internal dogfood, broad internal rollout, production/public rollout, Element Call replacement, CallKit, push/background incoming, missed calls, video, session restoration, or global activation.
+
+Next phase should use `2.36P — internal pilot trigger dry-run observability alignment`.
+
 ## 2.35B Engineering Expansion Operations Handoff
 
 The 3-session engineering expansion soak completed cleanly, so narrow engineering dogfood can continue without per-session Codex supervision only when a named engineering operator owns the session and this handoff checklist is followed. This is still staging-only engineering dogfood, not non-engineering internal dogfood, product beta, public rollout, production activation, or Element Call replacement.

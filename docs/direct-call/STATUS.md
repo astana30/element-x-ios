@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-After 2.36N — engineering-only internal pilot activation proof wiring.
+After 2.36O — engineering-only internal pilot activation runtime proof.
 
 ## Latest App Code Checkpoint
 
-2.36N `Wire internal pilot activation for engineering proof`
+2.36O-fix `Wire HTTP eligibility provider into internal pilot proof`
 
 ## Latest Backend Code Checkpoint
 
@@ -910,6 +910,16 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Private engineering dogfood remains separate under `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED=1` and does not depend on the internal pilot rollout gate.
   - Default/Release remain fail-closed, product UI alone remains insufficient, eligibility status alone remains insufficient, backend eligible alone remains insufficient, and `directOneToOneCallsEnabled` remains unrelated.
   - This is not approval for non-engineering internal dogfood, broad internal rollout, production/public rollout, Element Call replacement, CallKit, push/background incoming, missed calls, video, session restoration, or global activation.
+- Engineering-only server-backed internal pilot activation runtime proof passed for the allowlisted A/B path:
+  - Commit `5fc30fe6a` wires the HTTP native audio internal pilot eligibility provider through `AppCoordinator`, `UserSessionFlowCoordinator`, `ChatsTabFlowCoordinator`, and `RoomFlowCoordinator`.
+  - Default and Release behavior remain fail-closed.
+  - The HTTP provider is selected only under the explicit DEBUG/integration proof gates, and private engineering dogfood remains separate and unchanged.
+  - With `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED` unset, internal rollout enabled, and backend allowlisted A/B, runner status reported internal-pilot `activationAllowed`.
+  - A Start -> B Accept reached `activeAudio`; hangup returned A/B to `idle` with no active session and media failure `none`.
+  - No raw identifiers, tokens, JWTs, secrets, LiveKit room names, Matrix event bodies, Redis credentials, or full request/response bodies were printed.
+  - Element Call route stayed untouched, and no CallKit, push, video, global production activation, broad internal rollout, or non-engineering internal dogfood was enabled.
+  - Validation for the code commit passed: SwiftFormat, SwiftLint, targeted tests 176/176, Release build with existing warnings only, `git diff --check`, and changed-line forbidden scan.
+  - Caveat: legacy `production-trigger-dry-run` still reports the older `appRolloutDisabled` path. The actual `production-start-outgoing` path used the internal-pilot activation bridge and passed.
 - Pilot sessions must follow the 2.27A checkpoint, 2.28A operations checklist, and 2.33B expansion runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
@@ -922,9 +932,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.36O — engineering-only internal pilot activation runtime proof`
+`2.36P — internal pilot trigger dry-run observability alignment`
 
-Goal: prove the 2.36N wiring is safe at runtime: internal rollout off remains blocked, backend ineligible remains blocked, allowlisted engineering A/B can Start/Accept without the private dogfood gate under explicit proof gates, removing allowlist blocks again, private dogfood still works separately, and Element Call remains untouched.
+Goal: align the legacy runner `production-trigger-dry-run` command with the internal-pilot activation bridge so future proofs can observe the same redacted activation decision path that `production-start-outgoing` uses. This is observability only and must not broaden activation.
 
 ## Do-Not-Touch Constraints
 

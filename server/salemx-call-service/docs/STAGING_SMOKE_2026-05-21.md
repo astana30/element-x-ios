@@ -43,6 +43,7 @@ No tokens, JWTs, passwords, shared secrets, authorization header values, or Live
 | Internal pilot activation dry-run no-activation proof | Passed, with runner enum observability follow-up |
 | Internal pilot dry-run runner observability proof | Passed |
 | Engineering-only internal pilot activation proof wiring | Added, disabled outside explicit proof gates |
+| Engineering-only internal pilot activation runtime proof | Passed for allowlisted A/B path |
 
 ## Root Cause
 
@@ -123,6 +124,8 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - The 2.36K/2.36L runner observability work now exposes the internal-pilot dry-run enum/boolean fields in redacted `production-status` output and proved them at runtime. Without private dogfood, the runner reported `internalPilotActivationDryRunEnabled=true`, `internalPilotActivationDecision=disabled`, and `internalPilotActivationReason=rolloutDisabled`, with no active session or media/LiveKit connection. Restoring private dogfood still allowed A -> B active audio and clean hangup back to idle.
 - The 2.36N app wiring allows Start/Accept from the server-backed internal pilot activation provider only for engineering proof runs with explicit DEBUG/integration proof gates and backend allowlisted A/B accounts. The main proof path leaves the private dogfood gate unset, keeps token endpoint eligibility as final authority, and remains staging-only.
 - The 2.36N path is disabled by default, disabled in Release/default, does not reuse `directOneToOneCallsEnabled`, keeps private engineering dogfood separate, and is not approval for non-engineering internal dogfood, broad internal rollout, public rollout, Element Call replacement, CallKit, push, video, or global production activation.
+- The 2.36O engineering-only runtime proof passed for the allowlisted A/B path after commit `5fc30fe6a` wired the HTTP eligibility provider into the room-flow dependency chain. With private dogfood unset, internal rollout enabled, and backend allowlisted A/B, runner status reported internal-pilot `activationAllowed`; A Start -> B Accept reached active audio; hangup returned A/B to idle with no active session and media failure `none`.
+- Caveat: legacy `production-trigger-dry-run` still reports the older `appRolloutDisabled` path. The actual `production-start-outgoing` path used the internal-pilot activation bridge and passed, so the next app-side follow-up is runner dry-run observability alignment.
 - Controlled engineering dogfood may continue under the same narrow staging-only constraints.
 
 ## Next Step
