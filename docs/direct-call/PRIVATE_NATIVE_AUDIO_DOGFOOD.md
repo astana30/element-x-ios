@@ -1603,11 +1603,45 @@ Validation for the code commit passed:
 - `git diff --check`;
 - changed-line forbidden scan.
 
-Caveat: legacy `production-trigger-dry-run` still reports the older `appRolloutDisabled` path. The actual `production-start-outgoing` path used the internal-pilot activation bridge and passed.
-
 This proof does not approve non-engineering internal dogfood, broad internal rollout, production/public rollout, Element Call replacement, CallKit, push/background incoming, missed calls, video, session restoration, or global activation.
 
 Next phase should use `2.36P — internal pilot trigger dry-run observability alignment`.
+
+## 2.36P Internal Pilot Trigger Dry-Run Observability Alignment
+
+The legacy `production-trigger-dry-run` diagnostic output now reports the same redacted activation decision path used by `production-start-outgoing`.
+
+Commit `f930f8f7a` adds runner-visible fields:
+
+- `activationSource`;
+- `internalPilotActivationDecision`;
+- `internalPilotActivationReason`.
+
+The runner now also forwards `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED` for explicit DEBUG/integration proof runs.
+
+Runtime proof results:
+
+- with private dogfood unset, internal rollout enabled, backend allowlisted A/B, and the encrypted trusted 1:1 open, `production-trigger-dry-run` reported the internal-pilot activation bridge decision using safe enum fields;
+- trigger dry-run did not send Matrix events, request tokens, allocate or pre-create LiveKit rooms, connect media, connect LiveKit, or create an active session;
+- actual Start/Accept still required explicit actions and token endpoint final enforcement;
+- private dogfood compatibility remained intact: Start -> Accept reached `activeAudio`, Hangup returned A/B to `idle`, no active session remained, and media failure stayed `none`;
+- Element Call route remained untouched.
+
+Validation passed:
+
+- SwiftFormat;
+- SwiftLint;
+- targeted native-call tests 179/179;
+- Release build with existing warnings only;
+- runner `bash -n`;
+- `git diff --check`;
+- changed-line forbidden scan.
+
+This phase completes the engineering proof observability gap from 2.36O. Server-backed internal pilot activation now works for engineering proof accounts under explicit DEBUG/integration gates, and dry-run output can report the same safe decision path as actual Start.
+
+This does not approve non-engineering internal dogfood, broad internal rollout, production/public rollout, Element Call replacement, CallKit, push/background incoming, missed calls, video, session restoration, or global activation.
+
+Next phase should use `2.37A — internal pilot activation engineering proof completion review`.
 
 ## 2.35B Engineering Expansion Operations Handoff
 
@@ -2178,10 +2212,11 @@ Rollback is complete only when the app relaunches without the private card path 
 
 These block broader internal dogfood and production, but not the controlled engineering dogfood scope above:
 
-- Server-backed internal pilot activation remains default-off. The iOS activation provider can model `activationAllowed` for tests and dry-run/status output only when all gates pass, and 2.36G/2.36I keep runtime Start/Accept controlled by private dogfood; non-engineering Start/Accept is still not enabled until a separate rollout wiring implementation, runtime proof, and readiness review pass.
+- Server-backed internal pilot activation remains limited to explicit DEBUG/integration engineering proof gates. The 2.36N/2.36O path can make Start/Accept available for allowlisted engineering proof accounts only when backend eligibility, local room, trust, dependency, and idle-session gates all pass; non-engineering Start/Accept is still not approved until a separate readiness review passes.
 - The 2.36J dry-run runtime proof confirmed the dry-run gate does not activate Start/Accept without private dogfood, even when product UI, eligibility status, and production start are enabled. Private engineering dogfood still reached active audio and returned idle.
 - The 2.36K runner observability wiring exposes the internal pilot dry-run status in redacted `production-status` output. 2.36L proved the runner-visible fields are present at runtime and remain observability only.
-- The 2.36N engineering proof wiring allows Start/Accept from internal pilot activation only under explicit DEBUG/integration proof gates and only for allowlisted engineering runtime proof. Non-engineering internal dogfood remains blocked until the 2.36O runtime proof and a separate readiness review pass.
+- The 2.36N engineering proof wiring allows Start/Accept from internal pilot activation only under explicit DEBUG/integration proof gates and only for allowlisted engineering runtime proof. The 2.36O runtime proof passed for engineering A/B, but non-engineering internal dogfood remains blocked until a separate readiness review approves it.
+- The 2.36P trigger dry-run alignment makes `production-trigger-dry-run` report the same redacted activation decision path as `production-start-outgoing`, without adding side effects or changing Element Call.
 - No CallKit.
 - No push or background incoming calls.
 - No missed calls.

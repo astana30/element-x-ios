@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Recorded the internal pilot trigger dry-run observability alignment.
 - Recorded the engineering-only internal pilot activation runtime proof.
 - Recorded the internal pilot activation skeleton no-activation runtime proof.
 - Added the native audio internal pilot activation provider skeleton.
@@ -52,6 +53,19 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-26 — 2.36P Internal Pilot Trigger Dry-Run Observability Alignment
+
+- Recorded commit `f930f8f7a`, which aligns `production-trigger-dry-run` with the same redacted activation decision path used by `production-start-outgoing`.
+- Runner output now includes `activationSource`, `internalPilotActivationDecision`, and `internalPilotActivationReason`.
+- The two-client diagnostic runner forwards `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED` for DEBUG/integration internal-pilot proof runs.
+- Dry-run remains side-effect-free: no Matrix send, token request, allocation, LiveKit room pre-create, media connect, LiveKit client connect, outgoing call, or active session is created by the dry-run command.
+- Private dogfood compatibility was verified after the alignment: Start -> Accept reached `activeAudio`, Hangup returned A/B to `idle`, no active session remained, and media failure stayed `none`.
+- Element Call route remained untouched, with no CallKit, push, video, global activation, production/public rollout, or non-engineering internal dogfood enablement.
+- Validation passed: SwiftFormat, SwiftLint, targeted native-call tests 179/179, Release build with existing warnings only, runner `bash -n`, `git diff --check`, and changed-line forbidden scan.
+- Server-backed internal pilot activation proof path now works for engineering accounts, and internal pilot dry-run observability is aligned.
+- Non-engineering internal dogfood, broad internal rollout, and production/public rollout remain blocked.
+- Recommended next phase: `2.37A — internal pilot activation engineering proof completion review`.
 
 ## 2026-05-24 — 2.36C Internal Pilot Activation Provider Skeleton
 
@@ -1462,5 +1476,5 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Element Call route stayed untouched. No CallKit, push, video, global production activation, broad internal rollout, or non-engineering internal dogfood was enabled.
 - Runtime output stayed redacted and did not print raw identifiers, tokens, JWTs, secrets, LiveKit room names, Matrix event bodies, Redis credentials, or full request/response bodies.
 - Validation for the code commit passed: SwiftFormat, SwiftLint, targeted tests 176/176, Release build with existing warnings only, `git diff --check`, and changed-line forbidden scan.
-- Caveat: legacy `production-trigger-dry-run` still reports the older `appRolloutDisabled` path. The actual `production-start-outgoing` path used the internal-pilot activation bridge and passed.
+- Caveat at the time: legacy `production-trigger-dry-run` still reported the older `appRolloutDisabled` path while `production-start-outgoing` used the internal-pilot activation bridge and passed. This was resolved in 2.36P.
 - Recommended next phase: `2.36P — internal pilot trigger dry-run observability alignment`.

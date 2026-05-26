@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-After 2.36O — engineering-only internal pilot activation runtime proof.
+After 2.36P — internal pilot trigger dry-run observability alignment.
 
 ## Latest App Code Checkpoint
 
-2.36O-fix `Wire HTTP eligibility provider into internal pilot proof`
+2.36P `Align internal pilot trigger dry-run observability`
 
 ## Latest Backend Code Checkpoint
 
@@ -163,6 +163,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Hangup returned A/B to `idle` with no active session, cleanup/disconnect attempted, and terminal reason `hangup`.
   - Runner output stayed redacted and did not expose raw tokens, JWTs, secrets, raw room/user/device IDs, LiveKit room names, Redis credentials, Matrix event bodies, full request/response bodies, or backend URLs with credentials.
   - Element Call route stayed untouched, no code changed, and no redaction issue was observed.
+- Internal pilot trigger dry-run observability alignment is complete:
+  - Commit `f930f8f7a` aligned `production-trigger-dry-run` with the same redacted activation decision path used by `production-start-outgoing`.
+  - Runner output now includes `activationSource`, `internalPilotActivationDecision`, and `internalPilotActivationReason`.
+  - The runner forwards `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED` for DEBUG/integration proof runs.
+  - Trigger dry-run remains side-effect-free: it does not send Matrix events, request participant tokens, allocate or pre-create LiveKit rooms, connect media, connect LiveKit, or create an active session.
+  - Private dogfood compatibility was verified after the alignment: Start -> Accept reached `activeAudio`, Hangup returned A/B to `idle`, no active session remained, and media failure stayed `none`.
+  - Element Call route stayed untouched, with no CallKit, push, video, production/public rollout, or global activation.
+  - Validation passed: SwiftFormat, SwiftLint, targeted native-call tests 179/179, Release build with existing warnings only, runner `bash -n`, `git diff --check`, and changed-line forbidden scan.
 - Controlled engineering dogfood pilot session 1 is recorded:
   - Preflight passed with readiness `ready=true`, `reason=ok`, Redis allocation/rate-limit/storage booleans true, LiveKit room provisioning true, and A/B trust ready.
   - Required private dogfood gates were used, and the legacy fake/dry-run gate was unset.
@@ -919,11 +927,17 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - No raw identifiers, tokens, JWTs, secrets, LiveKit room names, Matrix event bodies, Redis credentials, or full request/response bodies were printed.
   - Element Call route stayed untouched, and no CallKit, push, video, global production activation, broad internal rollout, or non-engineering internal dogfood was enabled.
   - Validation for the code commit passed: SwiftFormat, SwiftLint, targeted tests 176/176, Release build with existing warnings only, `git diff --check`, and changed-line forbidden scan.
-  - Caveat: legacy `production-trigger-dry-run` still reports the older `appRolloutDisabled` path. The actual `production-start-outgoing` path used the internal-pilot activation bridge and passed.
+- Internal pilot trigger dry-run observability alignment passed:
+  - Commit `f930f8f7a` aligns `production-trigger-dry-run` with the same redacted activation decision path used by `production-start-outgoing`.
+  - Runner output now includes `activationSource`, `internalPilotActivationDecision`, and `internalPilotActivationReason`.
+  - Runner forwards `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED` for explicit DEBUG/integration proof runs.
+  - Trigger dry-run remains side-effect-free: no Matrix send, token request, allocation, LiveKit room pre-create, media connect, LiveKit client connect, outgoing call, or active session.
+  - Private dogfood compatibility was rechecked and still reached `activeAudio`, then returned A/B to `idle` with no active session and media failure `none`.
+  - Validation passed: SwiftFormat, SwiftLint, targeted native-call tests 179/179, Release build with existing warnings only, runner `bash -n`, `git diff --check`, and changed-line forbidden scan.
 - Pilot sessions must follow the 2.27A checkpoint, 2.28A operations checklist, and 2.33B expansion runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
-- Non-engineering internal dogfood remains blocked until the 2.29B hardening checklist and server-backed activation runtime proofs are complete.
+- Non-engineering internal dogfood remains blocked until the 2.29B hardening checklist is satisfied and a separate readiness review explicitly approves it.
 - CallKit, push/background incoming, missed calls, video, session restoration, and global production activation remain out of scope.
 - Receiver listener behavior remains foreground/open-room scoped.
 - Operational ownership, monitoring, redaction checks, and secret-rotation readiness must remain explicit for any longer dogfood window.
@@ -932,9 +946,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.36P — internal pilot trigger dry-run observability alignment`
+`2.37A — internal pilot activation engineering proof completion review`
 
-Goal: align the legacy runner `production-trigger-dry-run` command with the internal-pilot activation bridge so future proofs can observe the same redacted activation decision path that `production-start-outgoing` uses. This is observability only and must not broaden activation.
+Goal: decide what can be safely claimed after the engineering-only server-backed internal pilot activation proof and dry-run observability alignment, confirm mandatory guardrails, and choose the next safest workstream. This review must not approve non-engineering dogfood, broad internal rollout, production/public rollout, or global activation unless separately and fully justified.
 
 ## Do-Not-Touch Constraints
 

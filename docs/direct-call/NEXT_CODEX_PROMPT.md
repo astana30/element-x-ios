@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.36O — engineering-only internal pilot activation runtime proof.
+After 2.36P — internal pilot trigger dry-run observability alignment.
 
 Current checkpoints:
 - App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
@@ -48,7 +48,8 @@ Current checkpoints:
 - Internal pilot activation dry-run no-activation proof: 2.36J proved product UI, eligibility status, dry-run, and production start gates still do not activate native audio without private dogfood, while private engineering dogfood still reaches active audio and returns idle. Runner-visible output remained redacted, but that proof did not yet expose the new dry-run enum fields directly.
 - Internal pilot activation dry-run runner observability: 2.36K exposes the dry-run enum/boolean fields in redacted `production-status` output and forwards the dry-run gate through the runner. 2.36L proved the fields are visible at runtime, enum/boolean-only, and observability-only.
 - Engineering-only internal pilot activation proof wiring: 2.36N wires the server-backed activation provider into Start/Accept availability for explicit DEBUG/integration engineering proof gates only. Internal pilot rollout can enable Start/Accept only when backend eligibility, encrypted direct 1:1 room state, trust, dependencies, and no stale session all pass. Private dogfood remains separate, non-engineering internal dogfood remains blocked, and token endpoint enforcement remains final.
-- Engineering-only internal pilot activation runtime proof: 2.36O passed for the allowlisted A/B path after `5fc30fe6a` wired the HTTP eligibility provider through `AppCoordinator`, `UserSessionFlowCoordinator`, `ChatsTabFlowCoordinator`, and `RoomFlowCoordinator`. With private dogfood unset, internal rollout enabled, and backend allowlisted A/B, runner status reported internal-pilot `activationAllowed`; A Start -> B Accept reached `activeAudio`; hangup returned A/B to idle with no active session and media failure `none`. Legacy `production-trigger-dry-run` still reports the older `appRolloutDisabled` path, so the next phase is runner dry-run observability alignment.
+- Engineering-only internal pilot activation runtime proof: 2.36O passed for the allowlisted A/B path after `5fc30fe6a` wired the HTTP eligibility provider through `AppCoordinator`, `UserSessionFlowCoordinator`, `ChatsTabFlowCoordinator`, and `RoomFlowCoordinator`. With private dogfood unset, internal rollout enabled, and backend allowlisted A/B, runner status reported internal-pilot `activationAllowed`; A Start -> B Accept reached `activeAudio`; hangup returned A/B to idle with no active session and media failure `none`.
+- Internal pilot trigger dry-run observability alignment: 2.36P `f930f8f7a` aligned `production-trigger-dry-run` with the same redacted activation decision path used by `production-start-outgoing`. Runner output now includes `activationSource`, `internalPilotActivationDecision`, and `internalPilotActivationReason`, and forwards `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED`. Dry-run remains side-effect-free, private dogfood compatibility was rechecked, and Element Call remains untouched.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -352,7 +353,14 @@ Current proven/prepared state:
   - hangup returned A/B to idle with no active session and media failure `none`;
   - no raw identifiers, tokens, JWTs, secrets, LiveKit room names, Matrix event bodies, Redis credentials, or full request/response bodies were printed;
   - validation passed: SwiftFormat, SwiftLint, targeted tests 176/176, Release build with existing warnings only, `git diff --check`, and changed-line forbidden scan;
-  - caveat: legacy `production-trigger-dry-run` still reports the older `appRolloutDisabled` path, while `production-start-outgoing` used the internal-pilot activation bridge and passed.
+  - the remaining observability caveat was handled in 2.36P.
+- 2.36P internal pilot trigger dry-run observability alignment:
+  - commit `f930f8f7a` aligns `production-trigger-dry-run` with the same redacted activation decision path used by `production-start-outgoing`;
+  - runner output now includes `activationSource`, `internalPilotActivationDecision`, and `internalPilotActivationReason`;
+  - runner forwards `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED` for explicit DEBUG/integration proof runs;
+  - trigger dry-run remains side-effect-free: no Matrix send, token request, allocation, LiveKit room pre-create, media connect, LiveKit client connect, outgoing call, or active session;
+  - private dogfood compatibility was verified after the alignment: Start -> Accept reached `activeAudio`, Hangup returned A/B to `idle`, no active session remained, and media failure stayed `none`;
+  - validation passed: SwiftFormat, SwiftLint, targeted native-call tests 179/179, Release build with existing warnings only, runner `bash -n`, `git diff --check`, and changed-line forbidden scan.
 - Element Call route remains unchanged and must stay available as fallback.
 - No CallKit, push/background incoming, missed calls, video, session restoration, broad internal rollout, public rollout, production activation, or global activation exists.
 
@@ -405,98 +413,88 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.36P — internal pilot trigger dry-run observability alignment.
+2.37A — internal pilot activation engineering proof completion review.
 
 Task:
-Align the legacy runner `production-trigger-dry-run` command with the server-backed internal pilot activation bridge so future proofs can observe the same redacted decision path used by `production-start-outgoing`.
-Do not enable non-engineering internal dogfood.
-Do not change Element Call route.
-Do not wire CallKit/push/video.
-Do not globally activate production direct calls.
+Inspection/decision review only. Do not modify code. Do not commit.
 
 Context:
-2.36O runtime proof passed after `5fc30fe6a` wired the HTTP eligibility provider into the actual room-flow path:
-- with private dogfood unset, internal rollout enabled, and backend allowlisted A/B, runner status reported internal-pilot `activationAllowed`;
+2.36N wired server-backed internal pilot activation into Start/Accept for engineering proof gates only.
+2.36O proved the engineering-only internal pilot activation path:
+- private dogfood unset;
+- internal rollout enabled;
+- backend allowlisted A/B;
 - A Start -> B Accept reached `activeAudio`;
-- hangup returned A/B to idle with no active session and media failure `none`;
-- default and Release remain fail-closed;
-- private dogfood remains separate;
-- non-engineering internal dogfood remains blocked;
-- token endpoint remains final authority.
+- Hangup returned A/B to `idle`;
+- media failure `none`;
+- token endpoint remained final authority;
+- Element Call remained untouched.
 
-Caveat:
-- legacy `production-trigger-dry-run` still reports the older `appRolloutDisabled` path;
-- actual `production-start-outgoing` used the internal-pilot activation bridge and passed.
+2.36P then aligned `production-trigger-dry-run` observability:
+- trigger dry-run now reports the same redacted activation decision path used by `production-start-outgoing`;
+- runner output includes `activationSource`, `internalPilotActivationDecision`, and `internalPilotActivationReason`;
+- runner forwards `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED`;
+- trigger dry-run remains side-effect-free;
+- private dogfood compatibility still passed after the alignment.
 
 Goal:
-Make `production-trigger-dry-run` report the same redacted internal-pilot activation bridge decision that Start uses when the internal-pilot proof gates are present, without enabling any new activation path.
+Decide what the project can safely claim after the engineering-only server-backed internal pilot activation proof is complete, and define the next safest phase.
 
-Required proof gates for the internal pilot path:
-- `IS_RUNNING_INTEGRATION_TESTS=1`
-- `NATIVE_DIRECT_CALL_DIAGNOSTICS=1`
-- `NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1`
-- `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`
-- `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1`
-- `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED=1`
-- `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED=1`
-- `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`
-- `NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=<staging call-service>`
+Inspect:
+- docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md
+- docs/direct-call/STATUS.md
+- docs/direct-call/WORKLOG.md
+- docs/direct-call/NEXT_CODEX_PROMPT.md
+- server/salemx-call-service/docs/STAGING_SMOKE_2026-05-21.md
+- ElementX/Sources/Services/Calls/DirectCallMediaEngineProtocol.swift
+- ElementX/Sources/Screens/RoomScreen/RoomScreenModels.swift
+- ElementX/Sources/FlowCoordinators/RoomFlowCoordinator.swift
+- ElementX/Sources/Application/AppCoordinator.swift
+- ElementX/Sources/Other/Extensions/ProcessInfo.swift
+- UnitTests/Sources/DirectCallInternalPilotEligibilityTests.swift
+- UnitTests/Sources/NativeDirectCallInternalControlPanelTests.swift
+- UnitTests/Sources/RoomFlowCoordinatorTests.swift
+- server/salemx-call-service/salemx_call_service/eligibility.py
+- server/salemx-call-service/salemx_call_service/service.py
+- server/salemx-call-service/salemx_call_service/config.py
 
-Must remain unset for the main internal pilot proof:
-- `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED`
-- old fake/dry-run gate
+Questions:
+1. What is now proven for engineering-only internal pilot activation?
+2. What is still limited to DEBUG/integration proof gates?
+3. Is it safe to continue engineering proof usage without private dogfood under the internal rollout gate?
+4. Is it safe to approve any non-engineering internal dogfood yet?
+5. What guardrails must remain mandatory?
+6. What remaining blockers exist before a narrow non-engineering internal pilot?
+7. What is the next highest-value workstream?
+   - engineering proof soak without private dogfood;
+   - internal pilot operational runbook;
+   - non-engineering readiness criteria;
+   - monitoring/telemetry automation;
+   - UX/audio controls polish;
+   - CallKit/push planning.
+8. What tests and runtime proofs are required before any next activation expansion?
 
-Implementation requirements:
-1. Inspect the current diagnostic trigger dry-run command path from runner output through UITests signalling and room coordinator handling.
-2. Make trigger dry-run use the same internal-pilot activation bridge decision as `production-start-outgoing` when internal-pilot proof gates are present.
-3. Keep output redacted and enum/boolean-only.
-4. Do not make dry-run produce Matrix sends, token requests, allocation, LiveKit room pre-create, media connect, LiveKit connect, or outgoing calls.
-5. Keep private dogfood dry-run behavior unchanged where applicable.
-6. Keep product UI alone, eligibility status alone, internal rollout alone, and backend eligible alone insufficient.
-7. Keep default and Release fail-closed.
-8. Keep Element Call route untouched.
+Hard constraints:
+- Do not approve non-engineering internal dogfood unless fully justified.
+- Do not approve broad internal rollout.
+- Do not approve public rollout.
+- Do not replace Element Call toolbar.
+- No CallKit/push/background incoming.
+- No missed-call UX implementation.
+- No video.
+- No global production activation.
+- Do not weaken trusted-device/E2EE behavior.
+- Do not use `directOneToOneCallsEnabled` as the native audio gate.
+- No raw token/JWT/key/envelope/Matrix content.
+- No raw room/user/peer/device IDs in UI/logs.
+- Token endpoint remains final authority.
 
-Tests:
-- trigger dry-run reports the internal-pilot activation bridge decision under full proof gates;
-- trigger dry-run remains blocked when rollout is off;
-- trigger dry-run remains blocked when backend eligibility is unavailable/ineligible;
-- trigger dry-run has no Matrix/token/media/LiveKit side effects;
-- `production-start-outgoing` behavior remains unchanged;
-- private dogfood path remains separate;
-- `directOneToOneCallsEnabled` remains ignored;
-- Element Call display/present route remains untouched;
-- output contains no raw identifiers, tokens, JWTs, secrets, LiveKit room names, Matrix event bodies, Redis credentials, full request/response bodies, or credentialed backend URLs.
-
-Runtime proof:
-1. With private dogfood unset, internal rollout enabled, backend allowlisted A/B, and the encrypted trusted 1:1 open, `production-trigger-dry-run` reports enabled/allowed using safe enum fields.
-2. The command does not send Matrix events, request tokens, allocate/pre-create rooms, connect media, connect LiveKit, or create an active session.
-3. `production-start-outgoing` still reaches `activeAudio` only through explicit Start/Accept actions and token endpoint final enforcement.
-4. Hangup returns A/B idle with no active session and media failure `none`.
-5. Element Call route remains untouched.
-
-Hard redaction:
-- no Matrix access tokens
-- no Synapse admin token
-- no LiveKit API secret
-- no participant JWT/token
-- no raw room IDs/user IDs/peer IDs/device IDs
-- no LiveKit room names
-- no media keys
-- no Matrix event bodies
-- no Redis credentials
-- no full request/response bodies
-- no backend URLs with credentials
-
-Report:
-A. Files changed.
-B. Trigger dry-run alignment result.
-C. No-side-effect proof.
-D. Start/Accept compatibility result.
-E. Final A/B status.
-F. Any regression.
-G. Whether code changed.
-
-If code changes are made, validate and commit only if tests/build/runtime proof pass.
-
-Suggested commit:
-Align internal pilot trigger dry-run observability
+Expected output:
+A. Files inspected.
+B. Engineering proof completion decision.
+C. What is now allowed.
+D. What remains blocked.
+E. Mandatory guardrails.
+F. Remaining risks and gaps.
+G. Recommended next workstream.
+H. Recommended next phase name.
