@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Added the internal pilot operational readiness and kill-switch plan.
 - Recorded engineering-only internal pilot activation soak session 3 rerun.
 - Recorded the 2.37E-blocker caller media setup failure split-state fix.
 - Recorded engineering-only internal pilot activation soak session 2.
@@ -58,6 +59,18 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-26 — 2.38A Internal Pilot Operational Readiness And Kill-Switch Plan
+
+- Recorded the post-soak operational decision: the server-backed internal pilot activation path is stable for engineering accounts, but non-engineering internal dogfood remains blocked.
+- Added required operational roles: pilot owner, backend owner, allowlist owner, redaction/report reviewer, rollback operator, and incident decision owner.
+- Documented a kill-switch model that can remove activation by disabling the app-side internal rollout gate, disabling backend eligibility, clearing/removing allowlist entries, restarting call-service if needed, relaunching clients, verifying idle/no active session, verifying `internalPilotActivationDecision` no longer reports `activationAllowed`, and preserving Element Call fallback.
+- Added allowlist operation requirements: named users only, named devices only when supported, no wildcard/global entries, change approval, redacted audit trail, removal procedure, and no raw IDs in shared reports.
+- Added a monitoring baseline restricted to readiness booleans, eligibility state/reason enum, `activationSource`, `internalPilotActivationDecision`, `internalPilotActivationReason`, `productionSessionState`, `productionMediaFailureReason`, terminal reason enum, cleanup/disconnect booleans, and pass/fail/not-run.
+- Re-stated forbidden outputs: tokens, JWTs, secrets, raw room/user/peer/device IDs, LiveKit room names, media keys, Matrix event bodies, Redis credentials, full request/response bodies, and credentialed backend URLs.
+- Added stop criteria, rollback procedure, and a redacted incident report template.
+- Listed remaining blockers for non-engineering readiness: no CallKit/push/background incoming, foreground/open-room limitation, no missed-call UX, no session restoration, runner/report-based monitoring, support/rollback not proven with non-engineers, no production rollout/capability governance, shared staging LiveKit destructive-test limits, and non-engineering-safe UX still needing review.
+- Recommended next phase: `2.38B — internal pilot operational proof and kill-switch rehearsal`.
 
 ## 2026-05-26 — 2.37F Engineering-Only Internal Pilot Activation Soak Session 3 Rerun
 

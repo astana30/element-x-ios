@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.37F — internal pilot activation soak session 3 rerun.
+After 2.38A — internal pilot operational readiness and kill-switch plan.
 
 Current checkpoints:
 - App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
@@ -56,6 +56,7 @@ Current checkpoints:
 - 2.37E soak session 3 was paused during the repeated-call row after a split state: A returned idle with `tokenBackendRejected` / `connectingFailed`, while B reported `activeAudio` with an active session. Cleanup returned final A/B to idle/no active session, but 2.37E was not continued or recorded as passed.
 - Caller media setup failure split-state fix: 2.37E-blocker `4ea9490ec` tracks received remote answers in `DirectCallEngine` and emits one deduped hangup if caller media/token setup fails after the peer may have entered `activeAudio`. The exact `tokenBackendRejected` split did not reproduce in runtime after the fix, but the caller-failure-after-answer path is covered by a new unit regression and `DirectCallEngineTests` 37/37 passed.
 - Engineering-only internal pilot activation soak session 3 rerun: 2.37F passed after the caller media setup failure fix. The main soak kept private dogfood unset and the internal rollout path active. Preflight passed, trigger dry-run reported `activationSource=internalPilot`, `internalPilotActivationDecision=activationAllowed`, `internalPilotActivationReason=none`, and A -> B, B -> A, repeated calls x2, decline, cancel, timeout, relaunch fail-closed, listener/open-room unavailable, post-listener recovery, and Element Call fallback rows passed. The repeated-call regression guard observed no `tokenBackendRejected`, no `connectingFailed`, and no split state. Token final-authority was not rerun in this restored allowlisted pass because sessions 1 and 2 already covered the temporary ineligible fixture path. Final A/B state was idle/no active session with media failure `none`, no rollback, no stop criteria, no runtime bug, and no redaction issue. The 3-session engineering-only internal pilot activation soak is complete for the required runtime matrix.
+- Internal pilot operational readiness and kill-switch plan: 2.38A records that the server-backed activation path is stable for engineering accounts but does not approve non-engineering internal dogfood. The plan defines required owners, kill-switch model, allowlist operations, redacted monitoring baseline, stop criteria, rollback procedure, redacted incident report template, and remaining non-engineering blockers. Non-engineering internal dogfood remains blocked until this plan is implemented and proven by an operational proof/kill-switch rehearsal.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -436,10 +437,11 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.37G — internal pilot activation post-soak readiness review.
+2.38B — internal pilot operational proof and kill-switch rehearsal.
 
 Task:
-Inspection/decision review only. Do not modify code. Do not commit.
+Run or record an engineering-only operational proof for the internal pilot kill-switch model.
+Do not modify code unless a real runtime bug is found and explicitly approved.
 Do not change Element Call route.
 Do not wire CallKit/push/video.
 Do not globally activate production direct calls.
@@ -459,36 +461,77 @@ Context:
 - repeated-call regression guard observed no `tokenBackendRejected`, no `connectingFailed`, and no split state;
 - final A/B state was idle/no active session with media failure `none`;
 - token final-authority was not rerun in 2.37F because sessions 1 and 2 already covered the temporary ineligible fixture path.
+2.37G review concluded that the server-backed activation path is stable for engineering accounts only.
+2.38A added the operational readiness and kill-switch plan:
+- required owners: pilot owner, backend owner, allowlist owner, redaction/report reviewer, rollback operator, incident decision owner;
+- kill switch: app-side rollout off, backend eligibility disabled if needed, allowlist cleared/removed, call-service restart if config-based, client relaunch, idle/no-active-session verification, internal-pilot decision no longer activationAllowed, Element Call fallback visible;
+- monitoring: redacted booleans/enums only;
+- non-engineering internal dogfood remains blocked until this operational proof passes.
 Non-engineering internal dogfood remains blocked.
 Production/public rollout remains blocked.
 
-Inspect:
-- `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`
-- `docs/direct-call/STATUS.md`
-- `docs/direct-call/WORKLOG.md`
-- `docs/direct-call/NEXT_CODEX_PROMPT.md`
-- `server/salemx-call-service/docs/STAGING_SMOKE_2026-05-21.md`
-- `ElementX/Sources/Services/Calls/DirectCallMediaEngineProtocol.swift`
-- `ElementX/Sources/FlowCoordinators/RoomFlowCoordinator.swift`
-- `ElementX/Sources/Other/Extensions/ProcessInfo.swift`
-- `ElementX/Sources/Application/Settings/AppSettings.swift`
-- backend eligibility/config/service files if needed.
+Scope:
+- engineering accounts only;
+- staging call-service and staging LiveKit only;
+- private native audio card only;
+- foreground/open encrypted trusted direct 1:1 room only;
+- Element Call fallback visible and unchanged;
+- redacted reporting only;
+- no private dogfood gate for the main internal-pilot path.
 
-Questions:
-1. Is the engineering-only server-backed internal pilot activation soak now complete?
-2. What guarantees are proven by the three clean sessions and the 2.37E-blocker fix?
-3. What remains blocked before any non-engineering internal dogfood?
-4. What remains blocked before production/public rollout?
-5. What hardening should happen next:
-   - operational monitoring/kill switch;
-   - non-engineering readiness review preparation;
-   - foreground UX/failure-copy polish;
-   - multi-device/network soak;
-   - CallKit/push/background incoming planning;
-   - audio controls;
-   - backend rollout/allowlist operations?
-6. What stop criteria must remain mandatory?
-7. What should be the next implementation or operations phase?
+Required positive gates before kill-switch action:
+- `IS_RUNNING_INTEGRATION_TESTS=1`
+- `NATIVE_DIRECT_CALL_DIAGNOSTICS=1`
+- `NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1`
+- `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`
+- `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1`
+- `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED=1`
+- `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED=1`
+- `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`
+- `NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=<staging call-service>`
+
+Must remain unset for the main proof:
+- `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED`
+- `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED`
+
+Preflight:
+1. Backend readiness `ready=true`, `reason=ok`.
+2. Redis allocation/rate-limit connected.
+3. Storage key configured.
+4. LiveKit room provisioning configured.
+5. Native audio eligibility/allowlist configured.
+6. A/B trust ready.
+7. Encrypted direct 1:1 DM open on A/B.
+8. Baseline A/B idle/no active session.
+9. Element Call fallback visible.
+10. Trigger dry-run reports `activationSource=internalPilot` and `internalPilotActivationDecision=activationAllowed`.
+
+Proof:
+1. Positive control:
+   - A Start -> B Accept -> A/B `activeAudio`;
+   - Hangup -> A/B `idle`;
+   - media failure `none`.
+2. Rollout kill switch:
+   - relaunch clients with `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED` unset;
+   - keep private dogfood unset;
+   - confirm `internalPilotActivationDecision` is not `activationAllowed`;
+   - confirm Start/Accept blocked;
+   - confirm no Matrix send, token request, media connect, LiveKit connect, or active session.
+3. Backend allowlist/eligibility kill switch if safe:
+   - clear/remove temporary allowlist entry or use an ineligible fixture;
+   - restart call-service if required;
+   - relaunch clients with rollout enabled;
+   - confirm backend ineligible or disabled blocks activation/token path;
+   - confirm no media/LiveKit connect and no active session;
+   - restore allowlist after proof if it was changed.
+4. Recovery:
+   - restore allowlist/rollout for engineering A/B;
+   - relaunch clients;
+   - confirm `activationSource=internalPilot`, `internalPilotActivationDecision=activationAllowed`;
+   - A -> B reaches `activeAudio`;
+   - Hangup returns A/B `idle`.
+5. Element Call:
+   - confirm fallback remains visible/unchanged.
 
 Forbidden:
 - Matrix access tokens;
@@ -517,10 +560,19 @@ Stop immediately if:
 - token final-authority check fails.
 
 Expected output:
-A. Files inspected.
-B. Completion decision.
-C. Proven guarantees.
-D. Remaining blockers.
-E. Recommended next workstream.
-F. Mandatory stop criteria.
-G. Recommended next phase name.
+A. Preflight result.
+B. Positive-control result.
+C. Rollout kill-switch result.
+D. Backend allowlist/eligibility kill-switch result or not-run reason.
+E. Recovery result.
+F. Final A/B state.
+G. Element Call fallback status.
+H. Stop criteria hit yes/no.
+I. Rollback used yes/no.
+J. Redaction issue yes/no.
+K. Decision continue/pause.
+
+If passed with no code changes, create docs-only report commit.
+
+Suggested commit:
+Record internal pilot kill-switch rehearsal

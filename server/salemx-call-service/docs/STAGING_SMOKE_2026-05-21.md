@@ -51,6 +51,7 @@ No tokens, JWTs, passwords, shared secrets, authorization header values, or Live
 | Engineering-only internal pilot activation soak session 3 | Paused; not passed |
 | Caller media setup failure split-state fix | Passed |
 | Engineering-only internal pilot activation soak session 3 rerun | Passed |
+| Internal pilot operational readiness and kill-switch plan | Added |
 
 ## Root Cause
 
@@ -142,6 +143,7 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - Commit `4ea9490ec` fixes the caller-side media setup failure path by tracking received remote answers and emitting one deduped hangup if caller media/token setup fails after the peer may have entered `activeAudio`. The exact split did not reproduce in runtime after the fix, but the caller-failure-after-answer path is covered by the new unit regression. A normal and repeated A -> B runtime proof passed after the fix.
 - The 2.37F engineering-only internal pilot activation soak session 3 rerun passed after the caller media setup failure fix. The main soak kept the private dogfood gate unset, trigger dry-run reported `activationSource=internalPilot` with `internalPilotActivationDecision=activationAllowed`, happy path, reverse, repeated calls x2, decline, cancel, timeout, relaunch fail-closed, listener/open-room unavailable, post-listener recovery, and Element Call fallback rows passed, and final A/B state was idle/no active session with media failure `none`. The repeated-call regression guard observed no `tokenBackendRejected`, no `connectingFailed`, and no split state. Token final-authority was not rerun in this restored allowlisted pass because sessions 1 and 2 already covered the temporary ineligible fixture path.
 - The 3-session engineering-only server-backed internal pilot activation soak is complete for the required runtime matrix. Non-engineering internal dogfood, broad internal rollout, production/public rollout, CallKit, push/background incoming, missed calls, video, session restoration, and global activation remain blocked pending a separate readiness review.
+- The 2.38A operational readiness plan records the required ownership model, kill-switch model, allowlist operations, monitoring baseline, stop criteria, rollback procedure, and redacted incident template before any non-engineering internal pilot can be considered. Non-engineering internal dogfood remains blocked until the plan is implemented and proven by an operational proof/kill-switch rehearsal.
 - Controlled engineering dogfood may continue under the same narrow staging-only constraints.
 
 ## Next Step
@@ -159,4 +161,4 @@ Controlled engineering dogfood may continue on the staging path under the privat
 - Element Call toolbar path unchanged and available as fallback;
 - no CallKit, push, video, broad internal rollout, public rollout, or global production activation.
 
-Next, continue with `2.37G — internal pilot activation post-soak readiness review` while keeping controlled dogfood engineering-only, staging-only, and redacted.
+Next, continue with `2.38B — internal pilot operational proof and kill-switch rehearsal` while keeping controlled dogfood engineering-only, staging-only, and redacted.

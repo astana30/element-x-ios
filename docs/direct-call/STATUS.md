@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.37F — internal pilot activation soak session 3 rerun.
+After 2.38A — internal pilot operational readiness and kill-switch plan.
 
 ## Latest App Code Checkpoint
 
@@ -987,6 +987,13 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - The repeated-call regression guard observed no `tokenBackendRejected`, no `connectingFailed`, and no split state.
   - Final A/B state was idle/no active session with media failure `none`; no rollback was used, no stop criteria triggered, no runtime bug was observed, and no redaction issue was found.
   - Token final-authority was not rerun in 2.37F because sessions 1 and 2 already covered the temporary ineligible fixture path.
+- Internal pilot operational readiness and kill-switch plan is recorded:
+  - 2.38A documents the decision that the server-backed activation path is stable for engineering accounts but does not approve non-engineering internal dogfood.
+  - Required owners are pilot owner, backend owner, allowlist owner, redaction/report reviewer, rollback operator, and incident decision owner.
+  - The kill-switch model covers app-side internal rollout disablement, backend eligibility disablement, allowlist clearing/removal, call-service restart when config-based, client relaunch, idle/no-active-session verification, `internalPilotActivationDecision` no-longer-allowed verification, Element Call fallback verification, and secret rotation on suspected leakage.
+  - Allowlist operations require named users only, named devices only when supported, no wildcard/global entries, explicit change approval, redacted audit trail, and removal procedure.
+  - Monitoring remains limited to readiness booleans, eligibility state/reason, activation source/decision/reason, production session/media/terminal enums, cleanup/disconnect booleans, and pass/fail/not-run.
+  - Non-engineering internal dogfood remains blocked until this plan is implemented and proven by an operational proof/kill-switch rehearsal.
 - Pilot sessions must follow the 2.27A checkpoint, 2.28A operations checklist, and 2.33B expansion runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
@@ -999,9 +1006,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.37G — internal pilot activation post-soak readiness review`
+`2.38B — internal pilot operational proof and kill-switch rehearsal`
 
-Goal: decide what the completed engineering-only server-backed internal pilot activation soak can safely claim, what remains blocked before non-engineering internal dogfood, and which hardening workstream should come next.
+Goal: rehearse the operational kill switch using engineering accounts only, prove internal-pilot activation can be removed by rollout/allowlist/backend controls, and verify clients return to idle with Element Call fallback visible.
 
 ## Do-Not-Touch Constraints
 

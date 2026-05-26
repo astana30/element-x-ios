@@ -2071,6 +2071,168 @@ This session does not approve non-engineering internal dogfood, broad internal r
 
 Next phase should use `2.37G — internal pilot activation post-soak readiness review`.
 
+## 2.38A Internal Pilot Operational Readiness And Kill-Switch Plan
+
+The 2.37G review concluded that the server-backed internal pilot activation path is stable for engineering accounts under the proven staging constraints. The path has 3 clean engineering-only soak sessions and works without the private dogfood gate when the internal rollout gate, backend allowlist, local room, trust, dependency, and idle-session gates all pass.
+
+This is not approval for non-engineering internal dogfood. Non-engineering internal dogfood remains blocked until the operational readiness and kill-switch plan below is implemented and proven with an explicit rehearsal. Production/public rollout remains blocked.
+
+### Operational Decision
+
+- Engineering server-backed activation may continue for named engineering accounts under the existing staging runbook.
+- Non-engineering internal pilot activation must not begin until operational ownership, kill switch, allowlist operation, monitoring, redacted reporting, rollback, and incident handling are assigned and rehearsed.
+- Element Call must remain visible and unchanged as fallback.
+- CallKit, push/background incoming, missed-call UX, video, session restoration, production/public rollout, broad internal rollout, and global activation remain out of scope.
+
+### Ownership Model
+
+Use role labels only in shared reports. Do not record raw Matrix user IDs, room IDs, peer IDs, device IDs, tokens, JWTs, secrets, LiveKit room names, Matrix event bodies, full request/response bodies, or Redis credential URLs.
+
+| Role | Required owner | Responsibility |
+| --- | --- | --- |
+| Pilot owner | `<Owner label>` | Approves the session window, scope, participant labels, and continue/pause decision |
+| Backend owner | `<Owner label>` | Owns call-service readiness, Redis readiness, LiveKit provisioning readiness, and backend recovery |
+| Allowlist owner | `<Owner label>` | Owns allowlist changes, approval records, removals, and redacted audit trail |
+| Redaction/report reviewer | `<Reviewer label>` | Reviews every report before it is shared or committed |
+| Rollback operator | `<Operator label>` | Executes rollout disablement, allowlist removal, service restart, and client relaunch checks |
+| Incident decision owner | `<Owner label>` | Decides pause/continue after stop criteria, leakage, backend failure, or split-state reports |
+
+No pilot window may start unless every role has a named owner and a stop authority is present.
+
+### Kill Switch Model
+
+The kill switch must be able to remove native audio activation without relying on app code changes:
+
+1. Turn off the app-side internal rollout gate for the affected clients.
+2. Disable backend native audio eligibility when a global stop is needed.
+3. Clear or remove affected backend allowlist entries.
+4. Restart the call-service if the allowlist or eligibility configuration is process-local.
+5. Relaunch affected clients.
+6. Verify native audio status is idle/no active session.
+7. Verify `internalPilotActivationDecision` no longer reports `activationAllowed`.
+8. Verify Element Call fallback remains visible and unchanged.
+9. Rotate secrets if leakage is suspected.
+
+The kill switch is not complete until the backend no longer grants eligibility for the affected scope and clients no longer report internal-pilot activation allowed.
+
+### Allowlist Operations
+
+- Use named users only.
+- Use named devices only if/when device-scoped allowlisting is supported.
+- No wildcard, homeserver-wide, domain-wide, global, or implicit allowlist entries.
+- Every add/remove requires pilot-owner and allowlist-owner approval.
+- Maintain a redacted audit trail with operator labels, account role labels, approval time, action, and safe reason. Do not include raw IDs.
+- Remove entries immediately after a temporary session window if they are not part of the standing approved pilot set.
+- A failed or suspicious session should pause allowlist additions until the incident decision owner explicitly clears the issue.
+
+### Monitoring Baseline
+
+Allowed monitoring/reporting fields:
+
+- readiness booleans and safe `reason`;
+- eligibility state and safe reason enum;
+- `activationSource`;
+- `internalPilotActivationDecision`;
+- `internalPilotActivationReason`;
+- `productionSessionState`;
+- `productionMediaFailureReason`;
+- terminal reason enum;
+- cleanup/disconnect attempted booleans;
+- pass/fail/not-run.
+
+Forbidden monitoring/reporting content:
+
+- Matrix access tokens;
+- Synapse admin token;
+- LiveKit API secret;
+- participant JWT/token;
+- raw room IDs;
+- raw user, peer, or device IDs;
+- LiveKit room names;
+- media keys;
+- Matrix event bodies;
+- Redis credentials;
+- full request or response bodies;
+- backend URLs with credentials.
+
+### Stop Criteria
+
+Stop immediately if any of the following occurs:
+
+- raw secret, token, JWT, key, credential, room ID, user ID, peer ID, device ID, LiveKit room name, media key, Matrix event body, Redis credential, or full request/response body appears in output, UI, screenshots, logs, docs, or reports;
+- call starts without required gates;
+- backend issues a token for invalid room, peer, membership, trust, or eligibility conditions;
+- stale active or ringing state survives cleanup/relaunch;
+- split-brain or split-state reappears;
+- media failure does not fail closed;
+- Element Call route or toolbar behavior changes;
+- untrusted peer or device connects;
+- readiness is not `ready=true` with `reason=ok` before the session.
+
+### Rollback Procedure
+
+1. Disable `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED` for affected clients.
+2. Clear/remove the affected allowlist entry or disable backend eligibility for a full stop.
+3. Restart call-service if allowlist or eligibility changes require process restart.
+4. Relaunch affected clients.
+5. Verify A/B or affected participants are `idle` with `productionHasActiveSession=false`.
+6. Verify `internalPilotActivationDecision` is no longer `activationAllowed`.
+7. Verify Element Call fallback remains visible.
+8. Rotate secrets if leakage is suspected.
+9. Record only redacted rollback result and continue/pause decision.
+
+Rollback may be recorded as clean only when native audio activation is disabled for the affected scope, no active session remains, and Element Call fallback is available.
+
+### Redacted Incident Report Template
+
+```text
+Time:
+Pilot/session label:
+Operator/device labels:
+Affected scope:
+Safe reason enum:
+productionSessionState:
+productionMediaFailureReason:
+terminal reason enum:
+cleanup/disconnect attempted:
+Action taken:
+Rollback result:
+Redaction issue: yes/no
+Decision: continue/pause
+```
+
+Do not add raw IDs, request/response bodies, credentialed URLs, tokens, JWTs, keys, LiveKit room names, Matrix event bodies, or media keys to incident reports.
+
+### Remaining Non-Engineering Readiness Blockers
+
+- No CallKit, push, or background incoming behavior.
+- Foreground/open-room limitation remains.
+- No missed-call UX.
+- No session restoration.
+- Monitoring is still runner/report based rather than an owned operational dashboard.
+- Support and rollback have not been rehearsed with non-engineering participants.
+- Production rollout/capability governance does not exist.
+- Shared staging LiveKit limits destructive LiveKit-off testing.
+- Non-engineering-safe UX copy and expectation setting still need review before any participant outside engineering.
+
+### Next Phase
+
+Recommended next phase: `2.38B — internal pilot operational proof and kill-switch rehearsal`.
+
+That proof should rehearse the kill switch with engineering accounts only:
+
+- start from allowlisted internal-pilot activation allowed;
+- disable rollout or remove/clear allowlist;
+- restart call-service if required;
+- relaunch clients;
+- verify activation no longer reports `activationAllowed`;
+- verify Start/Accept are blocked;
+- verify A/B idle/no active session;
+- verify Element Call fallback remains visible;
+- record only redacted fields.
+
+CallKit/push planning may become the next product-experience workstream after operational proof, but it must remain separate from activation approval.
+
 ## 2.35B Engineering Expansion Operations Handoff
 
 The 3-session engineering expansion soak completed cleanly, so narrow engineering dogfood can continue without per-session Codex supervision only when a named engineering operator owns the session and this handoff checklist is followed. This is still staging-only engineering dogfood, not non-engineering internal dogfood, product beta, public rollout, production activation, or Element Call replacement.
