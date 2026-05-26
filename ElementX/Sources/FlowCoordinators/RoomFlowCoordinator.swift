@@ -2148,7 +2148,8 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
                                               navigationStackCoordinator: navigationStackCoordinator,
                                               flowParameters: flowParameters,
                                               nativeDirectCallProductionActivationDryRunProviderFactory: nativeDirectCallProductionActivationDryRunProviderFactory,
-                                              nativeDirectCallProductionRoomFlowOwnerFactory: nativeDirectCallProductionRoomFlowOwnerFactory)
+                                              nativeDirectCallProductionRoomFlowOwnerFactory: nativeDirectCallProductionRoomFlowOwnerFactory,
+                                              nativeDirectCallInternalPilotEligibilityProviderFactory: nativeDirectCallInternalPilotEligibilityProviderFactory)
         coordinator.actions.sink { [weak self] action in
             guard let self else { return }
             

@@ -93,6 +93,9 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
          },
          nativeDirectCallProductionRoomFlowOwnerFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionRoomFlowOwnerFactoryResult = { _ in
              .blocked(.productionOwnerUnavailable)
+         },
+         nativeDirectCallInternalPilotEligibilityProviderFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallInternalPilotEligibilityProviding = { _ in
+             FailClosedNativeDirectCallInternalPilotEligibilityProvider()
          }) {
         self.navigationRootCoordinator = navigationRootCoordinator
         self.appLockService = appLockService
@@ -110,7 +113,8 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
                                                           nativeDirectCallDiagnosticCommandConfiguration: nativeDirectCallDiagnosticCommandConfiguration,
                                                           nativeDirectCallRoomFlowOwnerFactory: nativeDirectCallRoomFlowOwnerFactory,
                                                           nativeDirectCallProductionActivationDryRunProviderFactory: nativeDirectCallProductionActivationDryRunProviderFactory,
-                                                          nativeDirectCallProductionRoomFlowOwnerFactory: nativeDirectCallProductionRoomFlowOwnerFactory)
+                                                          nativeDirectCallProductionRoomFlowOwnerFactory: nativeDirectCallProductionRoomFlowOwnerFactory,
+                                                          nativeDirectCallInternalPilotEligibilityProviderFactory: nativeDirectCallInternalPilotEligibilityProviderFactory)
         chatsTabDetails = .init(tag: HomeTab.chats, title: L10n.screenHomeTabChats, icon: \.chat, selectedIcon: \.chatSolid)
         chatsTabDetails.navigationSplitCoordinator = chatsSplitCoordinator
 

@@ -1329,6 +1329,9 @@ extension AppCoordinator {
         } nativeDirectCallProductionRoomFlowOwnerFactory: { roomProxy in
             Self.makeNativeDirectCallProductionRoomFlowOwner(roomProxy: roomProxy,
                                                              clientProxy: flowParameters.userSession.clientProxy)
+        } nativeDirectCallInternalPilotEligibilityProviderFactory: { _ in
+            Self.makeNativeDirectCallInternalPilotEligibilityProvider(homeserver: flowParameters.userSession.clientProxy.homeserver,
+                                                                      accessTokenProvider: flowParameters.userSession.clientProxy as? DirectCallMatrixAccessTokenProviding)
         }
         #else
         return UserSessionFlowCoordinator(isNewLogin: isNewLogin,
@@ -1385,6 +1388,25 @@ extension AppCoordinator {
         }
 
         return NativeDirectCallInternalPilotActivationProofDryRunProvider(provider: provider)
+    }
+
+    @MainActor
+    static func makeNativeDirectCallInternalPilotEligibilityProvider(homeserver _: String,
+                                                                     accessTokenProvider: DirectCallMatrixAccessTokenProviding? = nil,
+                                                                     httpTransport: DirectCallHTTPTransportProtocol? = nil,
+                                                                     environment: [String: String] = ProcessInfo.processInfo.environment) -> NativeDirectCallInternalPilotEligibilityProviding {
+        guard ProcessInfo.isNativeDirectCallProductUIEnabled(environment: environment),
+              ProcessInfo.isNativeDirectCallEligibilityStatusEnabled(environment: environment),
+              ProcessInfo.isNativeDirectCallInternalPilotActivationDryRunEnabled(environment: environment),
+              ProcessInfo.isNativeDirectCallInternalPilotRolloutEnabled(environment: environment),
+              ProcessInfo.isNativeDirectCallProductionStartEnabled(environment: environment),
+              let tokenEndpointBaseURL = ProcessInfo.nativeDirectCallProductionTokenBaseURL(environment: environment) else {
+            return FailClosedNativeDirectCallInternalPilotEligibilityProvider()
+        }
+
+        return HTTPNativeDirectCallInternalPilotEligibilityProvider(endpointBaseURL: tokenEndpointBaseURL,
+                                                                    httpTransport: httpTransport ?? URLSessionDirectCallHTTPTransport(),
+                                                                    accessTokenProvider: accessTokenProvider)
     }
 
     @MainActor

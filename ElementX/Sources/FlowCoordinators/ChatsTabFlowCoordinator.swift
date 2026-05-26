@@ -56,6 +56,7 @@ class ChatsTabFlowCoordinator: FlowCoordinatorProtocol {
     private let nativeDirectCallRoomFlowOwnerFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning
     private let nativeDirectCallProductionActivationDryRunProviderFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionActivationDryRunProviding
     private let nativeDirectCallProductionRoomFlowOwnerFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionRoomFlowOwnerFactoryResult
+    private let nativeDirectCallInternalPilotEligibilityProviderFactory: @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallInternalPilotEligibilityProviding
     
     private let actionsSubject: PassthroughSubject<ChatsTabFlowCoordinatorAction, Never> = .init()
     var actionsPublisher: AnyPublisher<ChatsTabFlowCoordinatorAction, Never> {
@@ -75,6 +76,9 @@ class ChatsTabFlowCoordinator: FlowCoordinatorProtocol {
          },
          nativeDirectCallProductionRoomFlowOwnerFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallProductionRoomFlowOwnerFactoryResult = { _ in
              .blocked(.productionOwnerUnavailable)
+         },
+         nativeDirectCallInternalPilotEligibilityProviderFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallInternalPilotEligibilityProviding = { _ in
+             FailClosedNativeDirectCallInternalPilotEligibilityProvider()
          }) {
         stateMachine = flowParameters.stateMachineFactory.makeChatsTabFlowStateMachine()
         self.navigationSplitCoordinator = navigationSplitCoordinator
@@ -84,6 +88,7 @@ class ChatsTabFlowCoordinator: FlowCoordinatorProtocol {
         self.nativeDirectCallRoomFlowOwnerFactory = nativeDirectCallRoomFlowOwnerFactory
         self.nativeDirectCallProductionActivationDryRunProviderFactory = nativeDirectCallProductionActivationDryRunProviderFactory
         self.nativeDirectCallProductionRoomFlowOwnerFactory = nativeDirectCallProductionRoomFlowOwnerFactory
+        self.nativeDirectCallInternalPilotEligibilityProviderFactory = nativeDirectCallInternalPilotEligibilityProviderFactory
         
         sidebarNavigationStackCoordinator = NavigationStackCoordinator(navigationSplitCoordinator: navigationSplitCoordinator)
         navigationSplitCoordinator.setSidebarCoordinator(sidebarNavigationStackCoordinator)
@@ -672,7 +677,8 @@ class ChatsTabFlowCoordinator: FlowCoordinatorProtocol {
                                               flowParameters: flowParameters,
                                               nativeDirectCallRoomFlowOwnerFactory: nativeDirectCallRoomFlowOwnerFactory,
                                               nativeDirectCallProductionActivationDryRunProviderFactory: nativeDirectCallProductionActivationDryRunProviderFactory,
-                                              nativeDirectCallProductionRoomFlowOwnerFactory: nativeDirectCallProductionRoomFlowOwnerFactory)
+                                              nativeDirectCallProductionRoomFlowOwnerFactory: nativeDirectCallProductionRoomFlowOwnerFactory,
+                                              nativeDirectCallInternalPilotEligibilityProviderFactory: nativeDirectCallInternalPilotEligibilityProviderFactory)
         #if DEBUG
         coordinator.nativeDirectCallDiagnosticCommandConfiguration = nativeDirectCallDiagnosticCommandConfiguration
         #endif

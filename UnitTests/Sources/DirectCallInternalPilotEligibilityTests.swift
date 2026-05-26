@@ -441,6 +441,45 @@ final class DirectCallInternalPilotEligibilityTests {
     }
 
     @Test
+    func appCoordinatorEligibilityProviderFailsClosedWithoutInternalPilotProofGates() async {
+        let responseData = makeEligibleEligibilityResponseData()
+        let transport = NativeAudioEligibilityHTTPTransportSpy(result: .success(.init(statusCode: 200, data: responseData)))
+        let provider = AppCoordinator.makeNativeDirectCallInternalPilotEligibilityProvider(homeserver: "https://matrix.example.test",
+                                                                                           accessTokenProvider: NativeAudioEligibilityAccessTokenProviderStub(accessToken: "matrix-access-credential"),
+                                                                                           httpTransport: transport,
+                                                                                           environment: [:])
+
+        let eligibility = await provider.nativeDirectCallInternalPilotEligibility(for: makeEligibilityRequest())
+
+        #expect(eligibility == .disabled)
+        #expect(transport.requests.isEmpty)
+        #expect(String(describing: provider).contains("matrix.example.test") == false)
+        #expect(String(describing: provider).contains("matrix-access-credential") == false)
+    }
+
+    @Test
+    func appCoordinatorEligibilityProviderUsesHTTPProviderWhenInternalPilotProofGatesPass() async throws {
+        let responseData = makeEligibleEligibilityResponseData()
+        let transport = NativeAudioEligibilityHTTPTransportSpy(result: .success(.init(statusCode: 200, data: responseData)))
+        let provider = AppCoordinator.makeNativeDirectCallInternalPilotEligibilityProvider(homeserver: "https://matrix.example.test",
+                                                                                           accessTokenProvider: NativeAudioEligibilityAccessTokenProviderStub(accessToken: "matrix-access-credential"),
+                                                                                           httpTransport: transport,
+                                                                                           environment: makeInternalPilotProofEnvironment())
+
+        let eligibility = await provider.nativeDirectCallInternalPilotEligibility(for: makeEligibilityRequest())
+
+        #expect(eligibility == .eligible)
+        let transportRequest = try #require(transport.requests.first)
+        #expect(transport.requests.count == 1)
+        #expect(transportRequest.method == "POST")
+        #expect(transportRequest.url.host == "127.0.0.1")
+        #expect(transportRequest.url.path == DirectCallProductionConfiguration.eligibilityEndpointPath)
+        assertEligibilityOutputIsRedacted(eligibility)
+        #expect(String(describing: provider).contains("127.0.0.1") == false)
+        #expect(String(describing: provider).contains("matrix-access-credential") == false)
+    }
+
+    @Test
     func httpEligibilityProviderDecodesUnavailableReasons() async throws {
         let endpointURL = try #require(URL(string: "https://call-service.example.test/_matrix/client/unstable/kz.salemx.direct_call/eligibility"))
         let cases: [(String, NativeDirectCallInternalPilotEligibility)] = [
@@ -706,6 +745,36 @@ final class DirectCallInternalPilotEligibilityTests {
               peerUserID: peerUserID,
               deviceID: deviceID,
               intent: intent)
+    }
+
+    private func makeInternalPilotProofEnvironment() -> [String: String] {
+        [
+            "IS_RUNNING_INTEGRATION_TESTS": "1",
+            "NATIVE_DIRECT_CALL_DIAGNOSTICS": "1",
+            "NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED": "1",
+            "NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED": "1",
+            "NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED": "1",
+            "NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED": "1",
+            "NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED": "1",
+            "NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED": "1",
+            "NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL": "http://127.0.0.1:8088"
+        ]
+    }
+
+    private func makeEligibleEligibilityResponseData() -> Data {
+        Data("""
+        {
+          "state": "eligible",
+          "reason": null,
+          "account_eligible": true,
+          "peer_eligible": true,
+          "room_eligible": true,
+          "trust_ready": true,
+          "service_available": true,
+          "capability_present": true,
+          "client_supported": true
+        }
+        """.utf8)
     }
 
     private func makeActivationContext(isProductUIEnabled: Bool = true,
