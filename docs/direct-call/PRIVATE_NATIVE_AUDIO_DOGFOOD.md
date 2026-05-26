@@ -1960,6 +1960,47 @@ This session does not approve non-engineering internal dogfood, broad internal r
 
 Next phase should use `2.37E — engineering-only internal pilot activation soak session 3`.
 
+## 2.37E-blocker Caller Media Setup Failure Split-State Fix
+
+The third engineering-only internal pilot activation soak session was paused and was not recorded as passed.
+
+Before the stop, the session had passed backend readiness, Redis connectivity, LiveKit provisioning, eligibility/allowlist readiness, private-dogfood-unset internal rollout activation, A/B trust, room attachment, A -> B happy path, B -> A reverse path, and the first repeated call.
+
+The repeated-call row then exposed a split state after a timeout/retry sequence:
+
+- A returned idle with `tokenBackendRejected` / `connectingFailed`.
+- B reported `activeAudio` with an active session.
+- Cleanup returned final A/B to idle/no active session.
+- B cleanup/hangup succeeded.
+- A still reported media failure `tokenBackendRejected`.
+
+Root cause: caller-side media/token setup failure after receiving a remote answer did not count as post-answer, so the caller failed locally without emitting a terminal event to the remote side. Callee-side post-answer media failure already had this protection.
+
+Fix commit: `4ea9490ec` `Fail closed remote when caller media setup fails`.
+
+The fix updates `DirectCallEngine` to track received remote answers and emit one deduped hangup if caller media setup fails after the peer may have entered `activeAudio`.
+
+Validation:
+
+- SwiftFormat passed.
+- SwiftLint changed files passed.
+- `DirectCallEngineTests`: 37/37 passed.
+- Release build passed with existing warnings only.
+- `git diff --check` passed.
+- Direct-call forbidden scan passed.
+
+Runtime proof after the fix:
+
+- Backend readiness was OK.
+- A/B were attached, trust ready, and internal-pilot activation allowed.
+- A -> B call reached `activeAudio`, and hangup returned A/B idle/no active session.
+- Repeated A -> B call reached `activeAudio`, and hangup returned A/B idle/no active session.
+- The exact `tokenBackendRejected` split did not reproduce in runtime; the exact caller-failure-after-answer path is covered by the new unit regression.
+
+Element Call route stayed untouched. No CallKit, push, video, global activation, production/public rollout, broad internal rollout, or non-engineering internal dogfood was enabled.
+
+Next phase should use `2.37F — rerun internal pilot activation soak session 3 after caller failure fix`.
+
 ## 2.35B Engineering Expansion Operations Handoff
 
 The 3-session engineering expansion soak completed cleanly, so narrow engineering dogfood can continue without per-session Codex supervision only when a named engineering operator owns the session and this handoff checklist is followed. This is still staging-only engineering dogfood, not non-engineering internal dogfood, product beta, public rollout, production activation, or Element Call replacement.

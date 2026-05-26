@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-After 2.37D — engineering-only internal pilot activation soak session 2.
+After 2.37E-blocker — caller media setup failure split-state fix.
 
 ## Latest App Code Checkpoint
 
-2.36P `Align internal pilot trigger dry-run observability`
+2.37E-blocker `4ea9490ec` `Fail closed remote when caller media setup fails`
 
 ## Latest Backend Code Checkpoint
 
@@ -194,6 +194,17 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Token final-authority used a temporary ineligible local fixture and blocked with safe reason `accountNotEligible` before media/LiveKit; normal allowlisted staging service was restored afterward.
   - Final A/B status was idle/no active session with media failure `none`; no rollback, stop criterion, runtime bug, or redaction issue was observed.
   - Soak progress: session 2 of 3 clean.
+- Engineering-only internal pilot activation soak session 3 is paused after a repeated-call split-state blocker:
+  - Preflight passed with backend readiness `ready=true`, `reason=ok`, Redis connected, LiveKit provisioning configured, eligibility/allowlist configured, private dogfood unset, legacy fake/dry-run unset, internal rollout active, A/B trust ready, A/B room attached, and dry-run `activationSource=internalPilot` with `internalPilotActivationDecision=activationAllowed`.
+  - A -> B happy path, B -> A reverse path, and the first repeated call passed before the stop.
+  - The repeated-call row then hit a split state after a timeout/retry sequence: A returned idle with `tokenBackendRejected` / `connectingFailed`, while B reported `activeAudio` with an active session.
+  - Cleanup returned final A/B to idle/no active session; B cleanup/hangup succeeded, while A still reported media failure `tokenBackendRejected`.
+  - Root cause: caller-side media/token setup failure after receiving a remote answer did not count as post-answer, so it failed locally without emitting a terminal event to the remote side. The callee-side protection already existed.
+  - Commit `4ea9490ec` fixes this by tracking received remote answers and emitting one deduped hangup if caller media setup fails after the peer may have entered `activeAudio`.
+  - `DirectCallEngineTests` now include caller `tokenBackendRejected` regression and manual-hangup race dedupe coverage; 37/37 passed.
+  - Runtime proof after the fix passed for A -> B and repeated A -> B active-audio calls with clean hangup to A/B idle/no active session. The exact `tokenBackendRejected` split did not reproduce in runtime; the exact caller-failure-after-answer path is covered by the new unit regression.
+  - Element Call route stayed untouched, with no CallKit, push, video, production/public rollout, broad internal rollout, or global activation.
+  - 2.37E was not continued or recorded as passed. Soak progress remains 2 clean sessions of 3 until the session 3 rerun passes.
 - Controlled engineering dogfood pilot session 1 is recorded:
   - Preflight passed with readiness `ready=true`, `reason=ok`, Redis allocation/rate-limit/storage booleans true, LiveKit room provisioning true, and A/B trust ready.
   - Required private dogfood gates were used, and the legacy fake/dry-run gate was unset.
@@ -969,9 +980,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.37E — engineering-only internal pilot activation soak session 3`
+`2.37F — rerun internal pilot activation soak session 3 after caller failure fix`
 
-Goal: run or record the third soak session for the server-backed internal pilot activation path using engineering accounts only, with the private dogfood gate unset, internal rollout gate enabled, redacted reporting, and Element Call fallback unchanged.
+Goal: rerun the third soak session for the server-backed internal pilot activation path after `4ea9490ec`, using engineering accounts only, with the private dogfood gate unset, internal rollout gate enabled, redacted reporting, repeated-call split-state checks, and Element Call fallback unchanged.
 
 ## Do-Not-Touch Constraints
 

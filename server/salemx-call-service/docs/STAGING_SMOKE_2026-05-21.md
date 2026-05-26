@@ -48,6 +48,8 @@ No tokens, JWTs, passwords, shared secrets, authorization header values, or Live
 | Engineering-only internal pilot activation soak plan | Added |
 | Engineering-only internal pilot activation soak session 1 | Passed |
 | Engineering-only internal pilot activation soak session 2 | Passed |
+| Engineering-only internal pilot activation soak session 3 | Paused; not passed |
+| Caller media setup failure split-state fix | Passed |
 
 ## Root Cause
 
@@ -135,6 +137,8 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - The 2.37B plan requires 3 clean engineering-only soak sessions on the server-backed internal pilot activation path before the next readiness review. The main soak keeps the private dogfood gate unset, requires the internal rollout gate, uses allowlisted engineering accounts only, and keeps token endpoint final authority.
 - The 2.37C engineering-only internal pilot activation soak session 1 passed. The main soak kept the private dogfood gate unset, trigger dry-run reported `activationSource=internalPilot` with `internalPilotActivationDecision=activationAllowed`, happy path, reverse, repeated calls x2, decline, cancel, timeout, relaunch fail-closed, listener/open-room unavailable, post-listener recovery, token final-authority, and Element Call fallback rows passed, and final A/B state was idle/no active session with media failure `none`.
 - The 2.37D engineering-only internal pilot activation soak session 2 passed. The main soak kept the private dogfood gate unset, trigger dry-run reported `activationSource=internalPilot` with `internalPilotActivationDecision=activationAllowed`, happy path, reverse, repeated calls x2, decline, cancel, timeout, relaunch fail-closed, listener/open-room unavailable, operator-assisted post-listener recovery, token final-authority, and Element Call fallback rows passed, and final A/B state was idle/no active session with media failure `none`.
+- The 2.37E engineering-only internal pilot activation soak session 3 was paused and not recorded as passed after a repeated-call split state: A returned idle with `tokenBackendRejected` / `connectingFailed`, while B reported `activeAudio` with an active session. Cleanup returned final A/B to idle/no active session.
+- Commit `4ea9490ec` fixes the caller-side media setup failure path by tracking received remote answers and emitting one deduped hangup if caller media/token setup fails after the peer may have entered `activeAudio`. The exact split did not reproduce in runtime after the fix, but the caller-failure-after-answer path is covered by the new unit regression. A normal and repeated A -> B runtime proof passed after the fix.
 - Controlled engineering dogfood may continue under the same narrow staging-only constraints.
 
 ## Next Step
@@ -152,4 +156,4 @@ Controlled engineering dogfood may continue on the staging path under the privat
 - Element Call toolbar path unchanged and available as fallback;
 - no CallKit, push, video, broad internal rollout, public rollout, or global production activation.
 
-Next, continue with `2.37E — engineering-only internal pilot activation soak session 3` while keeping controlled dogfood engineering-only, staging-only, and redacted.
+Next, continue with `2.37F — rerun internal pilot activation soak session 3 after caller failure fix` while keeping controlled dogfood engineering-only, staging-only, and redacted.
