@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.37E-blocker — caller media setup failure split-state fix.
+After 2.37F — internal pilot activation soak session 3 rerun.
 
 Current checkpoints:
 - App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
@@ -54,7 +54,8 @@ Current checkpoints:
 - Engineering-only internal pilot activation soak session 1: 2.37C passed with the private dogfood gate unset and the internal rollout path active. Preflight passed, trigger dry-run reported `activationSource=internalPilot`, `internalPilotActivationDecision=activationAllowed`, `internalPilotActivationReason=none`, and A -> B, B -> A, repeated calls x2, decline, cancel, timeout, relaunch fail-closed, listener/open-room unavailable, post-listener recovery, token final-authority, and Element Call fallback rows passed. Token final-authority used a temporary ineligible local fixture and blocked with safe reason `accountNotEligible` before media/LiveKit. Final A/B state was idle/no active session with media failure `none`, no rollback, no stop criteria, no runtime bug, and no redaction issue. Soak progress: 1 of 3 clean.
 - Engineering-only internal pilot activation soak session 2: 2.37D passed with the private dogfood gate unset and the internal rollout path active. Preflight passed, trigger dry-run reported `activationSource=internalPilot`, `internalPilotActivationDecision=activationAllowed`, `internalPilotActivationReason=none`, and A -> B, B -> A, repeated calls x2, decline, cancel, timeout, relaunch fail-closed, listener/open-room unavailable, operator-assisted post-listener recovery, token final-authority, and Element Call fallback rows passed. Token final-authority used a temporary ineligible local fixture and blocked with safe reason `accountNotEligible` before media/LiveKit. Final A/B state was idle/no active session with media failure `none`, no rollback, no stop criteria, no runtime bug, and no redaction issue. Soak progress: 2 of 3 clean.
 - 2.37E soak session 3 was paused during the repeated-call row after a split state: A returned idle with `tokenBackendRejected` / `connectingFailed`, while B reported `activeAudio` with an active session. Cleanup returned final A/B to idle/no active session, but 2.37E was not continued or recorded as passed.
-- Caller media setup failure split-state fix: 2.37E-blocker `4ea9490ec` tracks received remote answers in `DirectCallEngine` and emits one deduped hangup if caller media/token setup fails after the peer may have entered `activeAudio`. The exact `tokenBackendRejected` split did not reproduce in runtime after the fix, but the caller-failure-after-answer path is covered by a new unit regression and `DirectCallEngineTests` 37/37 passed. Soak progress remains 2 of 3 clean until session 3 is rerun.
+- Caller media setup failure split-state fix: 2.37E-blocker `4ea9490ec` tracks received remote answers in `DirectCallEngine` and emits one deduped hangup if caller media/token setup fails after the peer may have entered `activeAudio`. The exact `tokenBackendRejected` split did not reproduce in runtime after the fix, but the caller-failure-after-answer path is covered by a new unit regression and `DirectCallEngineTests` 37/37 passed.
+- Engineering-only internal pilot activation soak session 3 rerun: 2.37F passed after the caller media setup failure fix. The main soak kept private dogfood unset and the internal rollout path active. Preflight passed, trigger dry-run reported `activationSource=internalPilot`, `internalPilotActivationDecision=activationAllowed`, `internalPilotActivationReason=none`, and A -> B, B -> A, repeated calls x2, decline, cancel, timeout, relaunch fail-closed, listener/open-room unavailable, post-listener recovery, and Element Call fallback rows passed. The repeated-call regression guard observed no `tokenBackendRejected`, no `connectingFailed`, and no split state. Token final-authority was not rerun in this restored allowlisted pass because sessions 1 and 2 already covered the temporary ineligible fixture path. Final A/B state was idle/no active session with media failure `none`, no rollback, no stop criteria, no runtime bug, and no redaction issue. The 3-session engineering-only internal pilot activation soak is complete for the required runtime matrix.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -373,7 +374,16 @@ Current proven/prepared state:
   - commit `4ea9490ec` tracks received remote answers and emits one deduped hangup if caller media setup fails after the peer may have entered `activeAudio`;
   - `DirectCallEngineTests` 37/37 passed, including caller `tokenBackendRejected` regression and manual-hangup race dedupe coverage;
   - runtime proof after the fix passed for normal and repeated A -> B active-audio calls, but the exact `tokenBackendRejected` split did not reproduce at runtime;
-  - next step must rerun session 3 before claiming the 3-session internal-pilot activation soak is complete.
+  - 2.37F reran session 3 before the 3-session internal-pilot activation soak was considered complete.
+- 2.37F engineering-only internal pilot activation soak session 3 rerun:
+  - private dogfood and the legacy fake/dry-run gate stayed unset;
+  - preflight passed with readiness `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, native audio eligibility/allowlist configured, A/B trust ready, encrypted direct 1:1 DM open, no stale active session, and Element Call fallback visible;
+  - trigger dry-run reported `activationSource=internalPilot`, `internalPilotActivationDecision=activationAllowed`, and `internalPilotActivationReason=none`;
+  - A -> B, B -> A, repeated calls x2, decline, cancel, timeout, relaunch fail-closed, listener/open-room unavailable, post-listener recovery, and Element Call fallback rows passed;
+  - repeated-call regression guard observed no `tokenBackendRejected`, no `connectingFailed`, and no split state;
+  - token final-authority was not rerun because sessions 1 and 2 already covered the temporary ineligible fixture path;
+  - final A/B state was idle/no active session with media failure `none`, no rollback, no stop criteria, no runtime bug, and no redaction issue;
+  - the 3-session engineering-only internal pilot activation soak is complete for the required runtime matrix.
 - Element Call route remains unchanged and must stay available as fallback.
 - No CallKit, push/background incoming, missed calls, video, session restoration, broad internal rollout, public rollout, production activation, or global activation exists.
 
@@ -426,11 +436,10 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.37F — rerun internal pilot activation soak session 3 after caller failure fix.
+2.37G — internal pilot activation post-soak readiness review.
 
 Task:
-Rerun the third engineering-only soak session for the server-backed internal pilot activation path after `4ea9490ec`.
-Do not modify code unless a real runtime bug is found and explicitly approved.
+Inspection/decision review only. Do not modify code. Do not commit.
 Do not change Element Call route.
 Do not wire CallKit/push/video.
 Do not globally activate production direct calls.
@@ -439,97 +448,47 @@ Context:
 2.37B added a 3-session soak plan for the server-backed internal pilot activation path.
 2.37C passed as the first clean soak session.
 2.37D passed as the second clean soak session.
-2.37E session 3 was paused during the repeated-call row after a split state: A returned idle with `tokenBackendRejected` / `connectingFailed`, while B reported `activeAudio` with an active session.
-Root cause was caller-side media/token setup failure after receiving a remote answer not being treated as post-answer, so the caller failed locally without emitting a terminal event to the remote side.
-Commit `4ea9490ec` fixes this by tracking received remote answers and emitting one deduped hangup if caller media setup fails after the peer may have entered `activeAudio`.
-The exact `tokenBackendRejected` split did not reproduce in runtime after the fix; the exact caller-failure-after-answer path is covered by a new unit regression.
-This soak uses engineering accounts only and explicitly tests the internal rollout path without the private dogfood gate.
+2.37E session 3 was paused during the repeated-call row after a split state.
+2.37E-blocker `4ea9490ec` fixed the caller-side media/token setup failure terminal path.
+2.37F reran session 3 and passed for the required runtime matrix:
+- private dogfood unset;
+- internal rollout path active;
+- preflight readiness/trust/room state passed;
+- trigger dry-run reported `activationSource=internalPilot`, `internalPilotActivationDecision=activationAllowed`, `internalPilotActivationReason=none`;
+- A -> B, B -> A, repeated calls x2, decline, cancel, timeout, relaunch fail-closed, listener/open-room unavailable, post-listener recovery, and Element Call fallback rows passed;
+- repeated-call regression guard observed no `tokenBackendRejected`, no `connectingFailed`, and no split state;
+- final A/B state was idle/no active session with media failure `none`;
+- token final-authority was not rerun in 2.37F because sessions 1 and 2 already covered the temporary ineligible fixture path.
 Non-engineering internal dogfood remains blocked.
 Production/public rollout remains blocked.
 
-Required scope:
-- named engineering operators/devices only;
-- backend allowlisted A/B or named engineering pairs only;
-- staging call-service and staging LiveKit only;
-- private native audio card only;
-- foreground/open encrypted direct 1:1 rooms only;
-- verified/trusted peers only;
-- one active 1:1 call at a time;
-- Element Call fallback visible and unchanged;
-- redacted reporting only.
+Inspect:
+- `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`
+- `docs/direct-call/STATUS.md`
+- `docs/direct-call/WORKLOG.md`
+- `docs/direct-call/NEXT_CODEX_PROMPT.md`
+- `server/salemx-call-service/docs/STAGING_SMOKE_2026-05-21.md`
+- `ElementX/Sources/Services/Calls/DirectCallMediaEngineProtocol.swift`
+- `ElementX/Sources/FlowCoordinators/RoomFlowCoordinator.swift`
+- `ElementX/Sources/Other/Extensions/ProcessInfo.swift`
+- `ElementX/Sources/Application/Settings/AppSettings.swift`
+- backend eligibility/config/service files if needed.
 
-Required gates:
-- `IS_RUNNING_INTEGRATION_TESTS=1`
-- `NATIVE_DIRECT_CALL_DIAGNOSTICS=1`
-- `NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1`
-- `NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1`
-- `NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1`
-- `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED=1`
-- `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED=1`
-- `NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1`
-- `NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=<staging call-service>`
-
-Must remain unset for the main soak:
-- `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED`
-- `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED`
-
-Backend preflight:
-- `SALEMX_NATIVE_AUDIO_ELIGIBILITY_ENABLED=1`
-- allowlist contains only named engineering accounts for this session;
-- readiness `ready=true`;
-- readiness `reason=ok`;
-- Redis allocation/rate-limit connected;
-- LiveKit room provisioning configured;
-- native audio eligibility and allowlist configured.
-
-Client preflight:
-- A/B launched;
-- A/B trust ready;
-- encrypted direct 1:1 DM open on both clients;
-- private native audio card visible;
-- no stale active session;
-- Element Call fallback visible;
-- trigger dry-run reports `activationSource=internalPilot`;
-- trigger dry-run reports `internalPilotActivationDecision=activationAllowed` or equivalent safe enum.
-
-Soak matrix:
-1. A -> B happy path.
-2. B -> A reverse path.
-3. Repeated calls x2.
-4. Decline incoming.
-5. Cancel outgoing.
-6. Timeout.
-7. Relaunch fail-closed during ringing or active.
-8. Listener/open-room unavailable behavior.
-9. Post-listener recovery.
-10. Token final-authority check if safe: remove/disable allowlist or use ineligible fixture; must block before media/LiveKit.
-11. Element Call fallback visible check.
-
-Repeated-call split-state guard:
-- If `tokenBackendRejected`, `connectingFailed`, or another caller media/token setup failure appears after the remote answer may have been received, confirm the remote side receives a terminal path and does not remain `activeAudio`.
-- Final A/B must be idle with no active session.
-- A next call after cleanup must either reach `activeAudio` and hang up cleanly, or both sides must fail closed without a split state.
-
-Optional:
-- backend-off/recovery only if safe;
-- LiveKit-off not run unless explicitly approved by LiveKit owner.
-
-Report only redacted:
-A. Session date/time.
-B. Operator/device labels only.
-C. Preflight result.
-D. Matrix result table.
-E. Repeated-call split-state guard result.
-F. Final A/B state.
-G. `activationSource`, `internalPilotActivationDecision`, `internalPilotActivationReason`.
-H. Media failure enum.
-I. Terminal reason enum.
-J. Cleanup/disconnect booleans.
-K. Stop criteria hit yes/no.
-L. Rollback used yes/no.
-M. Redaction issue yes/no.
-N. Decision continue/pause.
-O. Whether the 3-session internal-pilot activation soak is complete.
+Questions:
+1. Is the engineering-only server-backed internal pilot activation soak now complete?
+2. What guarantees are proven by the three clean sessions and the 2.37E-blocker fix?
+3. What remains blocked before any non-engineering internal dogfood?
+4. What remains blocked before production/public rollout?
+5. What hardening should happen next:
+   - operational monitoring/kill switch;
+   - non-engineering readiness review preparation;
+   - foreground UX/failure-copy polish;
+   - multi-device/network soak;
+   - CallKit/push/background incoming planning;
+   - audio controls;
+   - backend rollout/allowlist operations?
+6. What stop criteria must remain mandatory?
+7. What should be the next implementation or operations phase?
 
 Forbidden:
 - Matrix access tokens;
@@ -557,7 +516,11 @@ Stop immediately if:
 - split state reappears;
 - token final-authority check fails.
 
-If passed with no code changes, create docs-only report commit.
-
-Suggested commit:
-Record internal pilot activation soak session 3 rerun
+Expected output:
+A. Files inspected.
+B. Completion decision.
+C. Proven guarantees.
+D. Remaining blockers.
+E. Recommended next workstream.
+F. Mandatory stop criteria.
+G. Recommended next phase name.

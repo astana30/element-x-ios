@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.37E-blocker — caller media setup failure split-state fix.
+After 2.37F — internal pilot activation soak session 3 rerun.
 
 ## Latest App Code Checkpoint
 
@@ -204,7 +204,16 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - `DirectCallEngineTests` now include caller `tokenBackendRejected` regression and manual-hangup race dedupe coverage; 37/37 passed.
   - Runtime proof after the fix passed for A -> B and repeated A -> B active-audio calls with clean hangup to A/B idle/no active session. The exact `tokenBackendRejected` split did not reproduce in runtime; the exact caller-failure-after-answer path is covered by the new unit regression.
   - Element Call route stayed untouched, with no CallKit, push, video, production/public rollout, broad internal rollout, or global activation.
-  - 2.37E was not continued or recorded as passed. Soak progress remains 2 clean sessions of 3 until the session 3 rerun passes.
+  - 2.37E was not continued or recorded as passed. Soak progress remained 2 clean sessions of 3 until the 2.37F session 3 rerun passed.
+- Engineering-only internal pilot activation soak session 3 rerun passed:
+  - The rerun used the server-backed internal pilot activation path with `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED` unset and the legacy fake/dry-run gate unset.
+  - Preflight passed with readiness `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, native audio eligibility/allowlist configured, A/B trust ready, encrypted direct 1:1 DM open, baseline A/B idle/no active session, and Element Call fallback visible.
+  - Runner trigger dry-run reported `activationSource=internalPilot`, `internalPilotActivationDecision=activationAllowed`, and `internalPilotActivationReason=none`.
+  - A -> B, B -> A, repeated calls x2, decline, cancel, timeout, relaunch fail-closed, listener/open-room unavailable, post-listener recovery, and Element Call fallback rows passed with redacted output only.
+  - Repeated-call split-state guard passed with no `tokenBackendRejected`, no `connectingFailed`, and no split state observed.
+  - Token final-authority was not rerun in 2.37F because sessions 1 and 2 already covered the temporary ineligible fixture path.
+  - Final A/B status was idle/no active session with media failure `none`; no rollback, stop criterion, runtime bug, or redaction issue was observed.
+  - The 3-session engineering-only internal pilot activation soak is complete for the required runtime matrix.
 - Controlled engineering dogfood pilot session 1 is recorded:
   - Preflight passed with readiness `ready=true`, `reason=ok`, Redis allocation/rate-limit/storage booleans true, LiveKit room provisioning true, and A/B trust ready.
   - Required private dogfood gates were used, and the legacy fake/dry-run gate was unset.
@@ -968,6 +977,16 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Trigger dry-run remains side-effect-free: no Matrix send, token request, allocation, LiveKit room pre-create, media connect, LiveKit client connect, outgoing call, or active session.
   - Private dogfood compatibility was rechecked and still reached `activeAudio`, then returned A/B to `idle` with no active session and media failure `none`.
   - Validation passed: SwiftFormat, SwiftLint, targeted native-call tests 179/179, Release build with existing warnings only, runner `bash -n`, `git diff --check`, and changed-line forbidden scan.
+- Engineering-only internal pilot activation soak is complete for the required runtime matrix:
+  - 2.37C and 2.37D passed as the first two clean soak sessions.
+  - 2.37E session 3 was paused after a repeated-call split state; commit `4ea9490ec` fixed the caller media setup failure terminal path.
+  - 2.37F reran session 3 after the fix with private dogfood unset, internal rollout enabled, and backend allowlisted engineering A/B.
+  - Preflight passed with readiness `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, native audio eligibility/allowlist configured, A/B trust ready, encrypted direct 1:1 DM open, no stale active session, and Element Call fallback visible.
+  - Trigger dry-run reported `activationSource=internalPilot`, `internalPilotActivationDecision=activationAllowed`, and `internalPilotActivationReason=none`.
+  - A -> B, B -> A, repeated calls x2, decline, cancel, timeout, relaunch fail-closed, listener/open-room unavailable, post-listener recovery, and Element Call fallback rows passed.
+  - The repeated-call regression guard observed no `tokenBackendRejected`, no `connectingFailed`, and no split state.
+  - Final A/B state was idle/no active session with media failure `none`; no rollback was used, no stop criteria triggered, no runtime bug was observed, and no redaction issue was found.
+  - Token final-authority was not rerun in 2.37F because sessions 1 and 2 already covered the temporary ineligible fixture path.
 - Pilot sessions must follow the 2.27A checkpoint, 2.28A operations checklist, and 2.33B expansion runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
@@ -980,9 +999,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.37F — rerun internal pilot activation soak session 3 after caller failure fix`
+`2.37G — internal pilot activation post-soak readiness review`
 
-Goal: rerun the third soak session for the server-backed internal pilot activation path after `4ea9490ec`, using engineering accounts only, with the private dogfood gate unset, internal rollout gate enabled, redacted reporting, repeated-call split-state checks, and Element Call fallback unchanged.
+Goal: decide what the completed engineering-only server-backed internal pilot activation soak can safely claim, what remains blocked before non-engineering internal dogfood, and which hardening workstream should come next.
 
 ## Do-Not-Touch Constraints
 

@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Recorded engineering-only internal pilot activation soak session 3 rerun.
 - Recorded the 2.37E-blocker caller media setup failure split-state fix.
 - Recorded engineering-only internal pilot activation soak session 2.
 - Recorded engineering-only internal pilot activation soak session 1.
@@ -58,6 +59,22 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
 
+## 2026-05-26 — 2.37F Engineering-Only Internal Pilot Activation Soak Session 3 Rerun
+
+- Reran the third engineering-only soak session for the server-backed internal pilot activation path after `4ea9490ec`.
+- The main soak kept `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED` unset and kept the legacy fake/dry-run gate unset.
+- Preflight passed with readiness `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, native audio eligibility/allowlist configured, A/B trust ready, encrypted direct 1:1 DM open, no stale active session, and Element Call fallback visible.
+- Trigger dry-run reported `activationSource=internalPilot`, `internalPilotActivationDecision=activationAllowed`, and `internalPilotActivationReason=none`.
+- A -> B, B -> A, repeated calls x2, decline, cancel, timeout, relaunch fail-closed, listener/open-room unavailable, post-listener recovery, and Element Call fallback rows passed with redacted output only.
+- The repeated-call split-state guard passed: `tokenBackendRejected` did not appear, `connectingFailed` did not appear, and no split state was observed.
+- Timeout reported A `outgoingTimeout` and B `incomingTimeout`; A/B returned idle with no active session.
+- Listener/open-room unavailable behavior passed with B stopped: A timed out fail-closed, returned idle/no active session, and did not connect media/LiveKit. After B relaunched, post-listener recovery reached `activeAudio` and returned A/B to idle.
+- Token final-authority was not rerun in this restored allowlisted pass because sessions 1 and 2 already covered the temporary ineligible fixture path.
+- Final A/B state was idle/no active session with media failure `none`; no rollback was used, no stop criteria triggered, no runtime bug was observed, and no redaction issue was found.
+- The 3-session engineering-only soak for the server-backed internal pilot activation path is complete for the required runtime matrix.
+- Non-engineering internal dogfood, broad internal rollout, production/public rollout, CallKit, push/background incoming, missed calls, video, session restoration, and global activation remain blocked.
+- Recommended next phase: `2.37G — internal pilot activation post-soak readiness review`.
+
 ## 2026-05-26 — 2.37E-blocker Caller Media Setup Failure Split-State Fix
 
 - Recorded the blocker that paused the third engineering-only internal pilot activation soak session.
@@ -71,8 +88,8 @@ This file records durable phase-level progress for future Codex and strategy ses
 - The exact `tokenBackendRejected` split did not reproduce in runtime; the exact caller-failure-after-answer path is covered by the new unit regression.
 - Validation for the code fix passed: SwiftFormat, SwiftLint changed files, `DirectCallEngineTests` 37/37, Release build with existing warnings only, `git diff --check`, and direct-call forbidden scan.
 - Element Call route stayed untouched. No CallKit, push, video, production/public rollout, broad internal rollout, non-engineering dogfood, or global activation was enabled.
-- 2.37E soak session 3 was not continued or recorded as passed. Soak progress remains 2 clean sessions of 3.
-- Recommended next phase: `2.37F — rerun internal pilot activation soak session 3 after caller failure fix`.
+- 2.37E soak session 3 was not continued or recorded as passed. At this point, soak progress remained 2 clean sessions of 3.
+- Recommended next phase at the time: `2.37F — rerun internal pilot activation soak session 3 after caller failure fix`.
 
 ## 2026-05-26 — 2.37D Engineering-Only Internal Pilot Activation Soak Session 2
 
