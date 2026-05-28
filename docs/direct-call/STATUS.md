@@ -2,15 +2,15 @@
 
 ## Current Phase
 
-After 2.39I — supervised narrow non-engineering pilot window 1.
+After 2.39R — supervised non-engineering pilot window 3.
 
 ## Latest App Code Checkpoint
 
-2.37E-blocker `4ea9490ec` `Fail closed remote when caller media setup fails`
+2.39M `d321b8f7b` `Add redacted token failure observability`
 
 ## Latest Backend Code Checkpoint
 
-2.31E-fix `Recheck Redis connectivity in readiness`
+2.39M `d321b8f7b` `Add redacted token failure observability`
 
 ## Latest SDK Checkpoint
 
@@ -56,6 +56,16 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - A -> B, B -> A, one repeated call, outgoing cancel, and timeout rows passed.
   - Timeout produced `outgoingTimeout` / `incomingTimeout`, then A/B returned idle/no active session with media failure `none`.
   - App-side kill-switch check passed: disabling internal rollout made dry-run report `wouldStart=false`, `activationSource=internalPilot`, `internalPilotActivationDecision=disabled`, and `internalPilotActivationReason=rolloutDisabled`, with no active session or media/LiveKit side effects.
+  - Element Call fallback remained visible/unchanged, no stop criteria hit, no redaction issue was observed, and no app/backend code changed.
+  - No additional non-engineering pilot window is approved by this result; continue only to post-window review.
+- The 2.39R supervised non-engineering internal pilot window 3 passed:
+  - Exactly one additional supervised window ran after the 2.39Q approval, with the same Participant A/B and Device A1/B1 labels only.
+  - The main path used the server-backed internal pilot activation path with private dogfood and legacy fake/dry-run gates unset.
+  - Preflight passed with readiness `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, eligibility/allowlist configured, A/B trust ready, encrypted direct 1:1 DM open, no active session, Element Call fallback visible, `activationSource=internalPilot`, and `internalPilotActivationDecision=activationAllowed`.
+  - A -> B, B -> A, one repeated A -> B call, outgoing cancel, timeout, app-side kill-switch, and Element Call fallback rows passed.
+  - Active call rows reported `tokenStatus=200`, `tokenErrcode=none`, `tokenReason=issued`, `tokenIssued=true`, `liveKitRoomPrecreateAttempted=true`, LiveKit connect attempted, `productionLiveKitFailureReason=none`, and `productionMediaFailureReason=none`.
+  - Timeout produced `outgoingTimeout` / `incomingTimeout`, cancel produced terminal `cancelled`, and A/B returned idle/no active session.
+  - App-side kill-switch check blocked safely after internal rollout was unset and A/B relaunched, with no active session, token request, media connect, or LiveKit connect.
   - Element Call fallback remained visible/unchanged, no stop criteria hit, no redaction issue was observed, and no app/backend code changed.
   - No additional non-engineering pilot window is approved by this result; continue only to post-window review.
 - Staging iOS private native audio smoke passed after LiveKit room pre-create:
@@ -1063,9 +1073,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.39Q — post-recovery non-engineering pilot review`
+`2.39S — post-window 3 non-engineering pilot review`
 
-Goal: decide what the clean 2.39P supervised recovery window proves after the 2.39K failure, whether any further supervised window is justified, and what remains blocked before broader internal readiness.
+Goal: decide what the clean 2.39R supervised non-engineering window proves after the 2.39K failure, 2.39M observability, 2.39N retry diagnostics, and 2.39P recovery window; whether execution should pause for product/operational hardening or any further supervised window can be considered; and what remains blocked before broader internal readiness.
 
 ## Do-Not-Touch Constraints
 

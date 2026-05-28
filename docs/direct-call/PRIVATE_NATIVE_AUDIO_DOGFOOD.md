@@ -3365,6 +3365,21 @@ Rollback is complete only when the app relaunches without the private card path 
 - Rollback was not used. Element Call fallback controls were visible and unchanged.
 - Next step is a post-recovery readiness review. No further non-engineering window is approved by this result.
 
+## 2.39R Supervised Non-Engineering Pilot Window 3
+
+- 2.39R ran exactly one additional supervised non-engineering internal pilot window after 2.39Q approval. It did not approve additional windows, participant/device expansion, broad internal rollout, production/public rollout, or unsupervised dogfood.
+- Session time: 2026-05-28 17:31:30 +0500.
+- Scope stayed unchanged: Participant A / Device A1 and Participant B / Device B1 labels only, staging call-service and staging LiveKit only, foreground/open encrypted direct 1:1 DM only, private native audio card only, trusted peers only, one active native 1:1 call at a time, and redacted reporting only.
+- Preflight passed with readiness `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, eligibility/allowlist configured, participant opt-in still valid by the existing checklist, A/B trust ready, approved encrypted DM open, no stale active session, Element Call fallback visible, `activationSource=internalPilot`, and `internalPilotActivationDecision=activationAllowed`.
+- Private dogfood and legacy fake/dry-run gates remained unset.
+- The window matrix passed: A -> B happy path, B -> A reverse path, one repeated A -> B call, outgoing cancel, timeout, final idle/no active session check, app-side kill-switch check, and Element Call fallback visibility check.
+- Every active call row reached `activeAudio` and reported safe token/LiveKit fields: `tokenStatus=200`, `tokenErrcode=none`, `tokenReason=issued`, `tokenIssued=true`, `liveKitRoomPrecreateAttempted=true`, LiveKit connect attempted, `productionLiveKitFailureReason=none`, and `productionMediaFailureReason=none`.
+- Cancel returned A/B to idle/no active session with terminal `cancelled`; timeout returned A/B to idle/no active session with A `outgoingTimeout` and B `incomingTimeout`.
+- App-side kill-switch check passed as a safe block after the internal rollout gate was unset and A/B relaunched: activation was not allowed, no active session existed, no token request was made, and no media/LiveKit connection was attempted.
+- Final A/B state was idle/no active session. No `tokenBackendRejected`, no `liveKitNetworkFailed`, no split-brain, no stale active session, no participant confusion, and no redaction issue occurred.
+- Rollback was not needed beyond the planned app-side kill-switch row. Element Call fallback controls were visible and unchanged, and the private native audio card remained separate.
+- Next step is a post-window readiness review. No further non-engineering window is approved by this result.
+
 ## Remaining Blockers
 
 These block broader internal dogfood and production, but not the controlled engineering dogfood scope above:

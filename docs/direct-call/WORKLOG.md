@@ -1697,3 +1697,22 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Rollback was not used. Element Call fallback controls were visually confirmed visible and unchanged, and the private native audio card remained separate.
 - No app/backend code changed during the recovery window.
 - Decision: continue to post-recovery review; no additional non-engineering pilot window is approved by this result.
+
+## 2026-05-28 — 2.39R Supervised Non-Engineering Pilot Window 3
+
+- Ran exactly one additional supervised non-engineering internal pilot window after the 2.39Q approval. This did not approve additional windows, participant/device expansion, broad internal rollout, production/public rollout, or unsupervised dogfood.
+- Session time recorded as 2026-05-28 17:31:30 +0500.
+- Participant/device labels remained Participant A / Device A1 and Participant B / Device B1 only.
+- Scope stayed unchanged: staging call-service and staging LiveKit only, foreground/open encrypted direct 1:1 DM only, private native audio card only, verified/trusted peers only, one active native 1:1 call at a time, Element Call fallback visible/unchanged, and redacted reporting only.
+- Preflight passed: backend readiness `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, eligibility/allowlist configured, participant opt-in still valid by the existing 2.39G checklist, A/B trust ready, approved encrypted 1:1 DM open, no stale active session, Element Call fallback visible, `activationSource=internalPilot`, and `internalPilotActivationDecision=activationAllowed`.
+- Required app gates were present; `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED` and `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` remained unset.
+- A -> B happy path passed: Start/Accept reached `activeAudio`; token diagnostics reported `tokenStatus=200`, `tokenErrcode=none`, `tokenReason=issued`, `tokenIssued=true`, and `liveKitRoomPrecreateAttempted=true`; LiveKit connect was attempted with `productionLiveKitFailureReason=none`; `productionMediaFailureReason=none`; hangup returned A/B idle/no active session after the bounded post-hangup status check.
+- B -> A reverse path passed with the same safe token/LiveKit success classification; hangup returned A/B idle/no active session.
+- One repeated A -> B call passed with the same safe token/LiveKit success classification; hangup returned A/B idle/no active session.
+- Outgoing cancel passed: caller emitted `cancel`, A/B returned idle/no active session, terminal reason was `cancelled`, and no token/LiveKit/media failure was observed.
+- Timeout passed: A reported `outgoingTimeout`, B reported `incomingTimeout`, both returned idle/no active session, cleanup/disconnect were attempted, and media failure stayed `none`.
+- App-side kill-switch check passed as a safe block after `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED` was unset and A/B relaunched: activation was not allowed, no active session existed, no token request was made, and no media/LiveKit connection was attempted.
+- Element Call fallback controls were visually confirmed visible and unchanged; the private native audio card remained separate.
+- Stop criteria hit: no. No `tokenBackendRejected`, no `liveKitNetworkFailed`, no split-brain, no stale active session, no participant confusion, and no redaction issue were observed.
+- Rollback was not needed beyond the planned app-side kill-switch row. No app/backend code changed during the window.
+- Decision: continue to a post-window readiness review; no additional non-engineering pilot window is approved by this result.
