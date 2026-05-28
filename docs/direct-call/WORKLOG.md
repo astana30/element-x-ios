@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Recorded the internal pilot operational proof and kill-switch rehearsal.
 - Added the internal pilot operational readiness and kill-switch plan.
 - Recorded engineering-only internal pilot activation soak session 3 rerun.
 - Recorded the 2.37E-blocker caller media setup failure split-state fix.
@@ -59,6 +60,20 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-28 — 2.38B Internal Pilot Operational Proof And Kill-Switch Rehearsal
+
+- Ran the engineering-only operational proof for the server-backed internal pilot activation path and kill-switch rollback model.
+- Enabled-state proof passed with private dogfood unset, internal rollout enabled, backend allowlisted engineering A/B, readiness `200`, `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, LiveKit room provisioning configured, native audio eligibility/allowlist configured, A/B trust ready, and an encrypted direct 1:1 DM open.
+- Trigger dry-run reported `activationSource=internalPilot`, `internalPilotActivationDecision=activationAllowed`, and `internalPilotActivationReason=none`.
+- Positive proof passed: A Start -> B Accept reached `activeAudio`; A hangup returned A/B to idle with `productionHasActiveSession=false` and media failure `none`.
+- App-side kill switch passed: unsetting `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED` made dry-run/start block with `appRolloutDisabled` / `rolloutDisabled`; A/B remained without active session, Matrix send, media connect, or LiveKit connect.
+- Backend allowlist kill switch passed: restarting the local staging call-service with eligibility enabled and an empty allowlist kept readiness redacted and made the app report internal-pilot activation unavailable with safe reason `serviceUnavailable`; diagnostic start blocked before media/LiveKit and A/B remained idle/no active session.
+- Restore proof passed after the correct encrypted r1/r2 DM and trust state were restored: readiness returned `ready=true`, allowlist configured true, A/B dry-run returned `activationAllowed`, A Start -> B Accept reached `activeAudio`, and hangup returned A/B idle/no active session with media failure `none`.
+- Element Call fallback was visually confirmed visible and unchanged; the private native audio card remained separate.
+- No raw IDs, secrets, LiveKit room names, request/response bodies, Redis credentials, tokens, or JWTs were recorded. No code changed.
+- Non-engineering internal dogfood, broad internal rollout, production/public rollout, CallKit, push/background incoming, missed calls, video, session restoration, and global activation remain blocked.
+- Recommended next phase: `2.38C — internal pilot operational readiness completion review`.
 
 ## 2026-05-26 — 2.38A Internal Pilot Operational Readiness And Kill-Switch Plan
 

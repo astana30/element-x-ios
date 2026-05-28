@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.38A — internal pilot operational readiness and kill-switch plan.
+After 2.38B — internal pilot operational proof and kill-switch rehearsal.
 
 ## Latest App Code Checkpoint
 
@@ -994,6 +994,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Allowlist operations require named users only, named devices only when supported, no wildcard/global entries, explicit change approval, redacted audit trail, and removal procedure.
   - Monitoring remains limited to readiness booleans, eligibility state/reason, activation source/decision/reason, production session/media/terminal enums, cleanup/disconnect booleans, and pass/fail/not-run.
   - Non-engineering internal dogfood remains blocked until this plan is implemented and proven by an operational proof/kill-switch rehearsal.
+- Internal pilot operational proof and kill-switch rehearsal passed:
+  - Enabled-state proof used the server-backed internal pilot activation path with private dogfood unset, internal rollout enabled, backend allowlisted engineering A/B, readiness `200`, `ready=true`, `reason=ok`, Redis connected, LiveKit room provisioning configured, native audio eligibility/allowlist configured, A/B trust ready, encrypted direct 1:1 DM open, and no stale active session.
+  - Trigger dry-run reported `activationSource=internalPilot`, `internalPilotActivationDecision=activationAllowed`, and `internalPilotActivationReason=none`.
+  - Positive proof reached `activeAudio`; hangup returned A/B to idle/no active session with media failure `none`.
+  - App-side kill switch passed: removing `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED` blocked dry-run/start with `appRolloutDisabled` / `rolloutDisabled` and created no Matrix send, token/media path, LiveKit connect, or active session.
+  - Backend allowlist kill switch passed: restarting the local staging call-service with eligibility enabled and an empty allowlist made activation unavailable with safe reason `serviceUnavailable`; diagnostic start blocked before media/LiveKit and A/B remained idle/no active session.
+  - Restore proof passed after reopening the correct encrypted r1/r2 DM and restoring trust: backend readiness and allowlist returned to ready/configured, A/B dry-run returned `activationAllowed`, A Start -> B Accept reached `activeAudio`, and hangup returned A/B idle/no active session with media failure `none`.
+  - Element Call phone/video fallback controls were visually confirmed visible and unchanged; the private native audio card remained separate.
+  - No code changed and no redaction issue was observed.
 - Pilot sessions must follow the 2.27A checkpoint, 2.28A operations checklist, and 2.33B expansion runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
@@ -1006,9 +1015,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.38B — internal pilot operational proof and kill-switch rehearsal`
+`2.38C — internal pilot operational readiness completion review`
 
-Goal: rehearse the operational kill switch using engineering accounts only, prove internal-pilot activation can be removed by rollout/allowlist/backend controls, and verify clients return to idle with Element Call fallback visible.
+Goal: decide whether the engineering-only internal pilot operational controls are complete enough to support a future narrow non-engineering readiness review, while keeping non-engineering internal dogfood, production/public rollout, CallKit, push/background incoming, video, and global activation blocked.
 
 ## Do-Not-Touch Constraints
 

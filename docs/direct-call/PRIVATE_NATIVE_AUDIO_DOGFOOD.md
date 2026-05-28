@@ -2233,6 +2233,66 @@ That proof should rehearse the kill switch with engineering accounts only:
 
 CallKit/push planning may become the next product-experience workstream after operational proof, but it must remain separate from activation approval.
 
+## 2.38B Internal Pilot Operational Proof And Kill-Switch Rehearsal
+
+The engineering-only operational proof for the server-backed internal pilot activation path passed with redacted output only. The main path kept `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED` unset and kept the legacy fake/dry-run gate unset.
+
+### Session Scope
+
+- Engineering A/B labels only.
+- Staging call-service and staging LiveKit only.
+- Private native audio card only.
+- Foreground/open encrypted direct 1:1 room only.
+- Verified/trusted peers only.
+- Element Call fallback visible and unchanged.
+- No raw Matrix user IDs, room IDs, peer IDs, device IDs, tokens, JWTs, LiveKit room names, media keys, Matrix event bodies, Redis credentials, credentialed URLs, or full request/response bodies were recorded.
+
+### Enabled Positive Proof
+
+- Backend readiness returned `200`, `ready=true`, `reason=ok`.
+- Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, and native audio eligibility/allowlist configured.
+- A/B trust diagnostics were ready in the correct encrypted r1/r2 DM.
+- A/B production status was room-attached, idle, and had no active session.
+- Trigger dry-run reported `activationSource=internalPilot`, `internalPilotActivationDecision=activationAllowed`, and `internalPilotActivationReason=none`.
+- A Start -> B Accept reached `activeAudio`.
+- A hangup returned A/B to idle with `productionHasActiveSession=false` and media failure `none`.
+
+### App-Side Kill Switch
+
+- The app-side rollout gate was removed by unsetting `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED`.
+- Dry-run/start blocked with safe rollout reasons: `appRolloutDisabled` / `rolloutDisabled`.
+- A/B remained without active session, Matrix send, token request, media connect, or LiveKit connect.
+- This proves the app-side rollout gate can remove internal-pilot activation for the affected clients.
+
+### Backend Allowlist Kill Switch
+
+- The local staging call-service was restarted with native audio eligibility enabled and an empty allowlist.
+- Readiness remained redacted and safe: `ready=true`, `reason=ok`, native audio eligibility configured, allowlist configured false.
+- With internal rollout restored, activation became unavailable with safe reason `serviceUnavailable`.
+- Diagnostic start blocked before media/LiveKit and A/B remained idle with no active session.
+- This proves backend allowlist removal can remove activation without issuing participant tokens or connecting media.
+
+### Restore Proof
+
+- The allowlist was restored and the call-service restarted.
+- Backend readiness returned `ready=true`, `reason=ok`, and native audio eligibility/allowlist configured true.
+- After reopening the correct encrypted r1/r2 DM and restoring A/B trust, both sides reported `internalPilotActivationDecision=activationAllowed`.
+- A Start -> B Accept reached `activeAudio`.
+- A hangup returned A/B to idle with `productionHasActiveSession=false`, cleanup/disconnect attempted, LiveKit/media connect attempted only during the successful call, and media failure `none`.
+
+### Element Call Fallback
+
+Element Call phone/video fallback controls were visually confirmed visible and unchanged on A/B. The private native audio card remained separate.
+
+### Decision
+
+- The engineering-only operational kill-switch rehearsal is complete for the proven staging scope.
+- Engineering internal-pilot activation can continue under the existing staging constraints and redacted reporting rules.
+- Non-engineering internal dogfood remains blocked pending a separate readiness review.
+- Production/public rollout, broad internal rollout, Element Call replacement, CallKit, push/background incoming, missed-call UX, video, session restoration, and global activation remain blocked.
+
+Next phase should use `2.38C — internal pilot operational readiness completion review`.
+
 ## 2.35B Engineering Expansion Operations Handoff
 
 The 3-session engineering expansion soak completed cleanly, so narrow engineering dogfood can continue without per-session Codex supervision only when a named engineering operator owns the session and this handoff checklist is followed. This is still staging-only engineering dogfood, not non-engineering internal dogfood, product beta, public rollout, production activation, or Element Call replacement.
