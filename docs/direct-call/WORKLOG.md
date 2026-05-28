@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Documented the blocked non-engineering pilot execution approval and remediation checklist.
 - Added the narrow non-engineering internal pilot preparation runbook.
 - Recorded the internal pilot operational proof and kill-switch rehearsal.
 - Added the internal pilot operational readiness and kill-switch plan.
@@ -61,6 +62,19 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-28 — 2.39D Non-Engineering Pilot Blocker Remediation Checklist
+
+- Recorded the 2.39C decision that the first narrow non-engineering pilot window remains blocked.
+- Reason: the preparation runbook is sufficient, but execution approval criteria are not filled with actual owner labels, participant/device labels, explicit opt-in, fresh preflight, and execution-time support/rollback readiness.
+- Added a label-only owner table for pilot owner, backend owner, allowlist owner, rollback operator, redaction/report reviewer, and incident decision owner.
+- Added a label-only participant/device table for Participant A/B, Device A/B, account allowed yes/no, device trusted yes/no, and explicit opt-in yes/no.
+- Added the required opt-in statement: pilot is not production, foreground/open encrypted DM only, no background incoming, no CallKit system incoming screen, no missed-call UX, Element Call fallback, and participant can stop anytime.
+- Added a fresh preflight template requiring readiness `ready=true`, `reason=ok`, Redis connected, storage key configured, LiveKit room provisioning configured, eligibility/allowlist configured, trusted encrypted 1:1 room, no active session, Element Call fallback visible, and `internalPilotActivationDecision=activationAllowed` before any call.
+- Added an execution approval checklist: owners filled, participants filled, opt-in recorded, preflight green, rollback operator present, kill switch verified, and redaction reviewer present.
+- Kept stop criteria and rollback explicit: leakage, untrusted device, stale active session, split-brain, media failure not fail-closed, Element Call route change, and participant confusion about foreground-only behavior all stop the pilot.
+- No app or backend code changed. Pilot execution remains blocked until the checklist is complete and a separate re-review passes.
+- Recommended next phase: `2.39E — narrow non-engineering pilot execution approval re-review`.
 
 ## 2026-05-28 — 2.39B Narrow Non-Engineering Internal Pilot Preparation Runbook
 

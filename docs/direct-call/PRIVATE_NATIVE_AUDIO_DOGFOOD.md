@@ -2498,6 +2498,117 @@ Forbidden report content:
 
 Next phase should use `2.39C — narrow non-engineering pilot execution readiness approval`.
 
+## 2.39D Non-Engineering Pilot Blocker Remediation Checklist
+
+The 2.39C readiness review blocked execution of the first narrow non-engineering internal pilot window. The 2.39B runbook is strong enough for preparation, but the required execution controls are not filled in yet. No pilot window may run until the checklist below is complete and a separate approval re-review passes.
+
+### Decision
+
+- Execution remains blocked.
+- Preparation may continue.
+- No pilot window may run until the owner, participant, opt-in, preflight, rollback, kill-switch, and redaction-review blockers are filled.
+- Broad internal rollout remains blocked.
+- Production/public rollout remains blocked.
+- Element Call remains the fallback path and must stay visible and unchanged.
+
+### Required Owner Table
+
+Use labels only. Do not record raw user IDs, device IDs, room IDs, tokens, JWTs, LiveKit room names, or secrets.
+
+| Role | Label | Filled |
+| --- | --- | --- |
+| Pilot owner | `<Owner label>` | yes/no |
+| Backend owner | `<Owner label>` | yes/no |
+| Allowlist owner | `<Owner label>` | yes/no |
+| Rollback operator | `<Owner label>` | yes/no |
+| Redaction/report reviewer | `<Owner label>` | yes/no |
+| Incident decision owner | `<Owner label>` | yes/no |
+
+### Required Participant And Device Table
+
+Use labels only. Do not record raw account IDs, device IDs, room IDs, or contact details in the pilot report.
+
+| Participant label | Device label | Account allowed | Device trusted | Explicit opt-in |
+| --- | --- | --- | --- | --- |
+| Participant A | Device A | yes/no | yes/no | yes/no |
+| Participant B | Device B | yes/no | yes/no | yes/no |
+
+### Required Opt-In Statement
+
+Record explicit participant acknowledgement of this text before allowlisting:
+
+```text
+This pilot is not production.
+Native audio calls work only while the encrypted direct chat is open.
+There are no background incoming calls.
+There is no CallKit system incoming-call screen.
+There is no missed-call UX.
+Use the normal Element Call controls as fallback.
+You can stop participating at any time.
+Report failures only as pass/fail/not-run with the provided redacted fields.
+Do not share screenshots or logs that contain raw IDs, tokens, secrets, Matrix event content, or LiveKit room names.
+```
+
+### Fresh Preflight Template
+
+Fill this immediately before any execution re-review:
+
+```text
+readiness ready=true/false
+readiness reason=<safe enum>
+Redis allocation/rate-limit connected=true/false
+storageKeyConfigured=true/false
+liveKitRoomProvisioningConfigured=true/false
+eligibility/allowlist configured=true/false
+trusted encrypted 1:1 room=true/false
+no active session=true/false
+Element Call fallback visible=true/false
+internalPilotActivationDecision=activationAllowed/not-allowed
+```
+
+### Execution Approval Checklist
+
+Execution can be reconsidered only when all rows are `yes`:
+
+| Check | Result |
+| --- | --- |
+| All owner labels filled | yes/no |
+| Participant/device labels filled | yes/no |
+| Explicit opt-in recorded | yes/no |
+| Fresh preflight green | yes/no |
+| Rollback operator present during window | yes/no |
+| App-side rollout kill switch verified | yes/no |
+| Backend allowlist removal kill switch verified | yes/no |
+| Redaction/report reviewer present | yes/no |
+
+### Stop Criteria
+
+Stop immediately and roll back if any of the following occurs:
+
+- Secret, token, JWT, key, or raw ID leakage.
+- Untrusted peer/device can connect.
+- Stale active/ringing session survives cleanup or relaunch.
+- Split-brain appears.
+- Media failure does not fail closed.
+- Element Call route changes.
+- Participant confusion about foreground/open-room-only behavior.
+
+### Rollback
+
+1. Disable the internal rollout gate.
+2. Clear/remove the backend allowlist entry.
+3. Restart call-service if config-based allowlist changes require it.
+4. Relaunch apps.
+5. Verify A/B idle/no active session.
+6. Verify `internalPilotActivationDecision` no longer reports `activationAllowed`.
+7. Verify Element Call fallback remains visible and usable.
+8. Rotate secrets if leakage is suspected.
+
+### Next Decision
+
+- If every checklist item is complete, next phase may be `2.39E — narrow non-engineering pilot execution approval re-review`.
+- If any checklist item is incomplete, execution remains blocked.
+
 ## 2.35B Engineering Expansion Operations Handoff
 
 The 3-session engineering expansion soak completed cleanly, so narrow engineering dogfood can continue without per-session Codex supervision only when a named engineering operator owns the session and this handoff checklist is followed. This is still staging-only engineering dogfood, not non-engineering internal dogfood, product beta, public rollout, production activation, or Element Call replacement.

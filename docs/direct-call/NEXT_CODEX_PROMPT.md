@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.39B — narrow non-engineering internal pilot preparation runbook.
+After 2.39D — non-engineering pilot blocker remediation checklist.
 
 Current checkpoints:
 - App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
@@ -59,6 +59,7 @@ Current checkpoints:
 - Internal pilot operational readiness and kill-switch plan: 2.38A records that the server-backed activation path is stable for engineering accounts but does not approve non-engineering internal dogfood. The plan defines required owners, kill-switch model, allowlist operations, redacted monitoring baseline, stop criteria, rollback procedure, redacted incident report template, and remaining non-engineering blockers. Non-engineering internal dogfood remains blocked until this plan is implemented and proven by an operational proof/kill-switch rehearsal.
 - Internal pilot operational proof and kill-switch rehearsal: 2.38B proved the engineering-only kill-switch model. Enabled state reached `activeAudio` via server-backed internal pilot activation with private dogfood unset. Removing `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED` blocked dry-run/start with rollout-disabled reasons and no Matrix/token/media/LiveKit side effects. Restarting the local staging call-service with an empty allowlist blocked activation with safe reason `serviceUnavailable` before media/LiveKit. Restoring allowlist, the correct encrypted r1/r2 DM, and A/B trust returned both sides to `activationAllowed`; A Start -> B Accept reached `activeAudio`; hangup returned A/B idle/no active session with media failure `none`. Element Call fallback remained visible and unchanged.
 - Narrow non-engineering internal pilot preparation runbook: 2.39B documents preparation for a future supervised 1-2 participant non-engineering internal pilot window. Execution is not yet approved. The runbook defines named participant/device scope, consent/expectation text, owners, preflight, app/backend gates, first-session matrix, stop criteria, rollback, redacted report template, and remaining blockers.
+- Non-engineering pilot blocker remediation checklist: 2.39D records that execution remains blocked after 2.39C because actual owner labels, participant/device labels, explicit opt-in, fresh preflight, rollback presence, kill-switch verification, and redaction reviewer presence are not filled. The checklist defines the exact label-only rows and preflight that must be completed before re-review.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -439,7 +440,7 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.39C — narrow non-engineering pilot execution readiness approval.
+2.39E — narrow non-engineering pilot execution approval re-review.
 
 Task:
 Inspection/decision review only. Do not modify code. Do not commit.
@@ -457,18 +458,27 @@ Context:
 - Element Call fallback visible and unchanged;
 - participant consent/expectation text;
 - required owners, preflight, app/backend gates, first-session matrix, stop criteria, rollback, and redacted report template.
+2.39C blocked execution because required execution details were not filled.
+2.39D added the remediation checklist that must be complete before execution can be reconsidered:
+- owner labels;
+- participant/device labels;
+- explicit opt-in;
+- fresh preflight;
+- rollback operator present;
+- kill-switch verified;
+- redaction reviewer present.
 
 Current status:
 - Engineering server-backed internal pilot activation path is stable under staging constraints.
 - App-side rollout and backend allowlist kill switches were rehearsed.
 - Restore after allowlist recovery was proven.
-- Non-engineering pilot execution is not yet approved.
+- Non-engineering pilot execution remains blocked until the 2.39D checklist is complete.
 - Broad internal rollout remains blocked.
 - Production/public rollout remains blocked.
 - No CallKit, push/background incoming, missed-call UX, video, session restoration, Element Call replacement, or global activation exists.
 
 Goal:
-Decide whether the prepared, supervised, staging-only, 1-2 participant non-engineering pilot window can be executed, or whether more work is required first.
+Re-check whether the 2.39D blocker-remediation checklist is complete enough to approve exactly one supervised, staging-only, 1-2 participant non-engineering pilot window.
 
 Inspect:
 - `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`
@@ -479,15 +489,16 @@ Inspect:
 - relevant internal-pilot activation and eligibility code only if needed for decision context
 
 Questions:
-1. Does the 2.39B runbook contain enough operational detail to approve one supervised non-engineering pilot window?
-2. What exact constraints must apply if execution is approved?
-3. What must be verified immediately before execution?
-4. What must remain disabled?
-5. Is foreground/open-room-only behavior acceptable for the first supervised participants after consent?
-6. What owner sign-offs are mandatory?
-7. What stop criteria require immediate rollback?
-8. What report must be recorded after the session?
-9. What should be the next phase name?
+1. Are all owner labels filled?
+2. Are participant/device labels filled without raw IDs?
+3. Is explicit opt-in recorded for each participant?
+4. Is fresh preflight green?
+5. Is the rollback operator present for the window?
+6. Have app-side rollout and backend allowlist kill switches been verified or accepted as ready immediately before the window?
+7. Is the redaction/report reviewer present?
+8. If all checklist items are complete, what exact constraints apply to one approved window?
+9. If any checklist item is incomplete, what remains blocked?
+10. What should be the next phase name?
 
 Hard constraints:
 - Do not approve broad internal rollout.
@@ -504,10 +515,10 @@ Hard constraints:
 
 Expected output:
 A. Files inspected.
-B. Execution readiness decision.
-C. Required scope and constraints.
-D. Required preflight/sign-offs.
-E. Must-remain-disabled items.
+B. Checklist completion decision.
+C. Execution readiness decision: approve exactly one supervised window / remain blocked.
+D. Required constraints if approved.
+E. Missing blockers if blocked.
 F. Stop/rollback criteria.
 G. Remaining risks.
 H. Recommended next phase name.

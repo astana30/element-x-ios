@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.39B — narrow non-engineering internal pilot preparation runbook.
+After 2.39D — non-engineering pilot blocker remediation checklist.
 
 ## Latest App Code Checkpoint
 
@@ -38,6 +38,10 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Required owners, preflight, app gates, backend gates, first-session matrix, stop criteria, rollback, and redacted report template are recorded.
   - The main non-engineering preparation path keeps `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED` unset and uses the server-backed internal pilot activation path with token endpoint final authority.
   - Broad internal rollout, production/public rollout, CallKit, push/background incoming, missed-call UX, video, session restoration, and global activation remain blocked.
+- Narrow non-engineering pilot execution remains blocked after 2.39C review:
+  - The 2.39B runbook is sufficient for preparation, but actual owner labels, participant/device labels, explicit opt-in, fresh preflight, rollback presence, kill-switch verification, and redaction reviewer presence were not filled.
+  - 2.39D adds a remediation checklist with owner and participant/device tables, opt-in statement, fresh preflight template, execution approval checklist, stop criteria, rollback, and re-review decision rule.
+  - No pilot window may run until every checklist item is complete and a separate re-review approves execution.
 - Staging iOS private native audio smoke passed after LiveKit room pre-create:
   - A/B reached `productionSessionState=activeAudio`.
   - A/B had `productionEncryptionState=ready`.
@@ -1021,9 +1025,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.39C — narrow non-engineering pilot execution readiness approval`
+`2.39E — narrow non-engineering pilot execution approval re-review`
 
-Goal: decide whether the prepared, supervised, staging-only, 1-2 participant non-engineering pilot window can be executed, while keeping broad internal rollout, production/public rollout, CallKit, push/background incoming, missed-call UX, video, session restoration, and global activation blocked.
+Goal: re-check whether the label-only owners, participant/device labels, opt-in, fresh preflight, rollback presence, kill-switch verification, and redaction reviewer presence are complete enough to approve exactly one supervised non-engineering pilot window.
 
 ## Do-Not-Touch Constraints
 
