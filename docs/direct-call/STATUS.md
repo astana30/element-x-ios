@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.39D — non-engineering pilot blocker remediation checklist.
+After 2.39F — pilot checklist completion attempt.
 
 ## Latest App Code Checkpoint
 
@@ -42,6 +42,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - The 2.39B runbook is sufficient for preparation, but actual owner labels, participant/device labels, explicit opt-in, fresh preflight, rollback presence, kill-switch verification, and redaction reviewer presence were not filled.
   - 2.39D adds a remediation checklist with owner and participant/device tables, opt-in statement, fresh preflight template, execution approval checklist, stop criteria, rollback, and re-review decision rule.
   - No pilot window may run until every checklist item is complete and a separate re-review approves execution.
+- The 2.39F checklist completion attempt remains incomplete:
+  - Required owner labels, participant/device labels, explicit opt-in, fresh green preflight, rollback operator presence, kill-switch verification, and redaction/report reviewer presence are still missing.
+  - Execution remains blocked; no pilot may run.
 - Staging iOS private native audio smoke passed after LiveKit room pre-create:
   - A/B reached `productionSessionState=activeAudio`.
   - A/B had `productionEncryptionState=ready`.
@@ -1025,9 +1028,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.39E — narrow non-engineering pilot execution approval re-review`
+`2.39G — pilot checklist completion follow-up`
 
-Goal: re-check whether the label-only owners, participant/device labels, opt-in, fresh preflight, rollback presence, kill-switch verification, and redaction reviewer presence are complete enough to approve exactly one supervised non-engineering pilot window.
+Goal: fill the missing label-only owner, participant/device, opt-in, preflight, rollback, kill-switch, and redaction-reviewer fields before any execution approval re-review.
 
 ## Do-Not-Touch Constraints
 

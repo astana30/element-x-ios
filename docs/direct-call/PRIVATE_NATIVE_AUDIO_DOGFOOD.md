@@ -2609,6 +2609,43 @@ Stop immediately and roll back if any of the following occurs:
 - If every checklist item is complete, next phase may be `2.39E — narrow non-engineering pilot execution approval re-review`.
 - If any checklist item is incomplete, execution remains blocked.
 
+## 2.39F Pilot Checklist Completion Attempt
+
+The 2.39F checklist completion attempt did not provide the required label-only operational data. Execution remains blocked.
+
+### Checklist Completeness
+
+| Required item | Status |
+| --- | --- |
+| Pilot owner label | Missing |
+| Backend owner label | Missing |
+| Allowlist owner label | Missing |
+| Rollback operator label | Missing |
+| Redaction/report reviewer label | Missing |
+| Incident decision owner label | Missing |
+| Participant A/B labels | Missing |
+| Device A/B labels | Missing |
+| Explicit opt-in | Missing |
+| Fresh preflight green | Missing |
+| Rollback operator present during window | Missing |
+| App-side rollout kill switch verified | Missing |
+| Backend allowlist removal kill switch verified | Missing |
+| Redaction/report reviewer present | Missing |
+
+### Decision
+
+- Execution remains blocked.
+- Do not run the pilot.
+- Preparation may continue with label-only data.
+- No broad internal rollout is approved.
+- No production/public rollout is approved.
+- Element Call remains the fallback path and must stay visible and unchanged.
+
+### Next Decision
+
+- If all missing rows are filled with label-only data, next phase may be `2.39H — one-window non-engineering pilot execution approval`.
+- If any row remains missing, next phase remains `2.39G — pilot checklist completion follow-up`.
+
 ## 2.35B Engineering Expansion Operations Handoff
 
 The 3-session engineering expansion soak completed cleanly, so narrow engineering dogfood can continue without per-session Codex supervision only when a named engineering operator owns the session and this handoff checklist is followed. This is still staging-only engineering dogfood, not non-engineering internal dogfood, product beta, public rollout, production activation, or Element Call replacement.

@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Recorded the incomplete pilot checklist completion attempt.
 - Documented the blocked non-engineering pilot execution approval and remediation checklist.
 - Added the narrow non-engineering internal pilot preparation runbook.
 - Recorded the internal pilot operational proof and kill-switch rehearsal.
@@ -62,6 +63,16 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-28 — 2.39F Pilot Checklist Completion Attempt
+
+- Reviewed the 2.39D blocker-remediation checklist for label-only completion.
+- Execution remains blocked because the required operational data is still not filled in.
+- Missing blockers remain: owner labels, participant/device labels, explicit opt-in, fresh green preflight, rollback operator presence, kill-switch verification, and redaction/report reviewer presence.
+- No pilot was executed, and no execution approval was granted.
+- Broad internal rollout, production/public rollout, Element Call replacement, CallKit, push/background incoming, missed-call UX, video, session restoration, and global activation remain blocked.
+- No app or backend code changed.
+- Recommended next phase: `2.39G — pilot checklist completion follow-up`.
 
 ## 2026-05-28 — 2.39D Non-Engineering Pilot Blocker Remediation Checklist
 

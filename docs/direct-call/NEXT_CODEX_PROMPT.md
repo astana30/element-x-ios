@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.39D — non-engineering pilot blocker remediation checklist.
+After 2.39F — pilot checklist completion attempt.
 
 Current checkpoints:
 - App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
@@ -60,6 +60,7 @@ Current checkpoints:
 - Internal pilot operational proof and kill-switch rehearsal: 2.38B proved the engineering-only kill-switch model. Enabled state reached `activeAudio` via server-backed internal pilot activation with private dogfood unset. Removing `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED` blocked dry-run/start with rollout-disabled reasons and no Matrix/token/media/LiveKit side effects. Restarting the local staging call-service with an empty allowlist blocked activation with safe reason `serviceUnavailable` before media/LiveKit. Restoring allowlist, the correct encrypted r1/r2 DM, and A/B trust returned both sides to `activationAllowed`; A Start -> B Accept reached `activeAudio`; hangup returned A/B idle/no active session with media failure `none`. Element Call fallback remained visible and unchanged.
 - Narrow non-engineering internal pilot preparation runbook: 2.39B documents preparation for a future supervised 1-2 participant non-engineering internal pilot window. Execution is not yet approved. The runbook defines named participant/device scope, consent/expectation text, owners, preflight, app/backend gates, first-session matrix, stop criteria, rollback, redacted report template, and remaining blockers.
 - Non-engineering pilot blocker remediation checklist: 2.39D records that execution remains blocked after 2.39C because actual owner labels, participant/device labels, explicit opt-in, fresh preflight, rollback presence, kill-switch verification, and redaction reviewer presence are not filled. The checklist defines the exact label-only rows and preflight that must be completed before re-review.
+- Pilot checklist completion attempt: 2.39F reviewed the checklist but did not fill required label-only operational data. Owner labels, participant/device labels, explicit opt-in, fresh green preflight, rollback operator presence, kill-switch verification, and redaction/report reviewer presence remain missing. Execution remains blocked.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -440,7 +441,7 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.39E — narrow non-engineering pilot execution approval re-review.
+2.39G — pilot checklist completion follow-up.
 
 Task:
 Inspection/decision review only. Do not modify code. Do not commit.
@@ -467,18 +468,19 @@ Context:
 - rollback operator present;
 - kill-switch verified;
 - redaction reviewer present.
+2.39F attempted checklist completion, but no label-only operational data was supplied. Execution remains blocked.
 
 Current status:
 - Engineering server-backed internal pilot activation path is stable under staging constraints.
 - App-side rollout and backend allowlist kill switches were rehearsed.
 - Restore after allowlist recovery was proven.
-- Non-engineering pilot execution remains blocked until the 2.39D checklist is complete.
+- Non-engineering pilot execution remains blocked until the checklist is complete.
 - Broad internal rollout remains blocked.
 - Production/public rollout remains blocked.
 - No CallKit, push/background incoming, missed-call UX, video, session restoration, Element Call replacement, or global activation exists.
 
 Goal:
-Re-check whether the 2.39D blocker-remediation checklist is complete enough to approve exactly one supervised, staging-only, 1-2 participant non-engineering pilot window.
+Fill the missing label-only operational fields, or keep execution blocked if any field remains missing. Do not execute the pilot in this phase.
 
 Inspect:
 - `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`
@@ -489,16 +491,16 @@ Inspect:
 - relevant internal-pilot activation and eligibility code only if needed for decision context
 
 Questions:
-1. Are all owner labels filled?
-2. Are participant/device labels filled without raw IDs?
-3. Is explicit opt-in recorded for each participant?
+1. What label-only owner values are supplied?
+2. What label-only participant/device values are supplied?
+3. Is explicit opt-in recorded as yes for each participant?
 4. Is fresh preflight green?
-5. Is the rollback operator present for the window?
-6. Have app-side rollout and backend allowlist kill switches been verified or accepted as ready immediately before the window?
-7. Is the redaction/report reviewer present?
-8. If all checklist items are complete, what exact constraints apply to one approved window?
-9. If any checklist item is incomplete, what remains blocked?
-10. What should be the next phase name?
+5. Is rollback operator presence recorded?
+6. Is app-side rollout kill switch verification recorded?
+7. Is backend allowlist removal kill-switch verification recorded?
+8. Is redaction/report reviewer presence recorded?
+9. If every row is complete, should the next phase be execution approval re-review?
+10. If any row remains incomplete, what remains blocked?
 
 Hard constraints:
 - Do not approve broad internal rollout.
@@ -515,10 +517,13 @@ Hard constraints:
 
 Expected output:
 A. Files inspected.
-B. Checklist completion decision.
-C. Execution readiness decision: approve exactly one supervised window / remain blocked.
-D. Required constraints if approved.
-E. Missing blockers if blocked.
-F. Stop/rollback criteria.
-G. Remaining risks.
-H. Recommended next phase name.
+B. Checklist completion status.
+C. Missing blockers if any.
+D. Execution decision: ready for approval re-review / remain blocked.
+E. Recommended next phase name.
+
+Suggested next phase if complete:
+2.39H — one-window non-engineering pilot execution approval
+
+Suggested next phase if incomplete:
+2.39H — pilot checklist completion follow-up
