@@ -3343,6 +3343,16 @@ Rollback is complete only when the app relaunches without the private card path 
 - Weakening `OnlyTrustedDevices` media-key wrapping.
 - Public/global production activation.
 
+## 2.39N Window 2 Failure Retry Diagnostics
+
+- 2.39N retried only the minimal failed window-2 paths with the redacted token/LiveKit observability added in `d321b8f7b`. This was not a new non-engineering pilot window and does not approve further execution.
+- Required gates were present, private dogfood and legacy fake/dry-run remained unset, backend readiness was `ready=true` / `reason=ok`, Redis/storage/LiveKit/eligibility/allowlist were configured, A/B trust was ready, the approved encrypted 1:1 DM was open, A/B were idle/no active session, and internal pilot activation was `activationAllowed`.
+- A -> B reached `activeAudio`; token classification was `tokenStatus=200`, `tokenErrcode=none`, `tokenReason=issued`, `tokenIssued=true`, and `liveKitRoomPrecreateAttempted=true`; LiveKit connect was attempted with failure reason `none`; media failure stayed `none`; hangup returned A/B idle/no active session.
+- B -> A reached `activeAudio` with the same safe token/LiveKit success classification and returned A/B idle/no active session after hangup.
+- The 2.39K failure did not reproduce. No `tokenBackendRejected`, no `liveKitNetworkFailed`, no split state, no stale active session, and no redaction issue were observed.
+- Root cause remains unproven and should be treated as transient or environment-sensitive unless it reappears with safe diagnostics.
+- Non-engineering pilot execution remains paused until a separate approval review decides whether exactly one supervised window 2 recovery attempt may run.
+
 ## Remaining Blockers
 
 These block broader internal dogfood and production, but not the controlled engineering dogfood scope above:

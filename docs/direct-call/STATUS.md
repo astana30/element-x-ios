@@ -1029,6 +1029,19 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Restore proof passed after reopening the correct encrypted r1/r2 DM and restoring trust: backend readiness and allowlist returned to ready/configured, A/B dry-run returned `activationAllowed`, A Start -> B Accept reached `activeAudio`, and hangup returned A/B idle/no active session with media failure `none`.
   - Element Call phone/video fallback controls were visually confirmed visible and unchanged; the private native audio card remained separate.
   - No code changed and no redaction issue was observed.
+- Redacted token/LiveKit failure observability is available:
+  - Commit `d321b8f7b` adds safe token/backend and LiveKit setup diagnostics to backend responses, iOS media status, and runner `production-status` output.
+  - The runner now redacts exact A/B simulator identifiers, generic UUID-shaped simulator identifiers, and `udid=<value>` fields before printing command output.
+  - Runtime proof showed a positive A -> B call reaching `activeAudio`, with token diagnostics `tokenStatus=200`, `tokenErrcode=none`, `tokenReason=issued`, `tokenIssued=true`, `liveKitRoomPrecreateAttempted=true`, LiveKit connect attempted, LiveKit failure `none`, and media failure `none`.
+  - A controlled negative token diagnostic against a temporary current-code local service returned safe fields only: `tokenStatus=401`, `tokenErrcode=M_UNKNOWN_TOKEN`, `tokenReason=authRejected`, and `tokenIssued=false`.
+- Window 2 failure retry diagnostics passed without reproducing the failure:
+  - 2.39N reran only the minimal failed paths, not a new non-engineering pilot window.
+  - Preflight was green: backend readiness `ready=true`, `reason=ok`, Redis/storage/LiveKit/eligibility/allowlist configured, A/B trust ready, approved encrypted 1:1 DM open, A/B idle/no active session, and internal pilot activation `activationAllowed`.
+  - A -> B reached `activeAudio`, reported `tokenStatus=200`, `tokenErrcode=none`, `tokenReason=issued`, `tokenIssued=true`, `liveKitRoomPrecreateAttempted=true`, LiveKit connect attempted, LiveKit failure `none`, and media failure `none`; hangup returned A/B idle/no active session.
+  - B -> A reached `activeAudio` with the same safe token/LiveKit success classification; hangup returned A/B idle/no active session.
+  - The original window 2 `tokenBackendRejected` / `liveKitNetworkFailed` failure did not reproduce, no split state appeared, no redaction issue was observed, and no app/backend code changed during the retry.
+  - Root cause remains unproven; the evidence supports an environment-sensitive or transient failure rather than a confirmed app/backend defect.
+  - Further non-engineering pilot execution remains paused until a separate approval review decides whether to run exactly one supervised recovery window.
 - Pilot sessions must follow the 2.27A checkpoint, 2.28A operations checklist, and 2.33B expansion runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
@@ -1041,9 +1054,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.39H — one-window non-engineering pilot execution approval`
+`2.39O — supervised pilot window 2 recovery approval review`
 
-Goal: decide whether the completed checklist is sufficient to approve exactly one supervised non-engineering pilot window, without broad internal rollout, production/public rollout, CallKit, push/background incoming, missed-call UX, video, session restoration, Element Call replacement, or global activation.
+Goal: decide whether the clean 2.39N minimal retry diagnostics are sufficient to approve exactly one supervised recovery window for window 2, without approving additional windows, participant expansion, broad internal rollout, production/public rollout, CallKit, push/background incoming, missed-call UX, video, session restoration, Element Call replacement, or global activation.
 
 ## Do-Not-Touch Constraints
 

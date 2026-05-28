@@ -58,6 +58,8 @@ No tokens, JWTs, passwords, shared secrets, authorization header values, or Live
 | Narrow non-engineering pilot checklist completion | Incomplete; execution remains blocked |
 | Narrow non-engineering pilot checklist completion follow-up | Complete; ready for approval re-review only |
 | Supervised narrow non-engineering pilot window 1 | Passed; no additional window approved |
+| Redacted token/LiveKit failure observability | Added; runner simulator identifier redaction fixed |
+| Window 2 failure retry diagnostics | Passed; failure not reproduced; recovery approval review required |
 
 ## Root Cause
 
@@ -156,6 +158,9 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - The 2.39F checklist completion attempt remains incomplete because label-only owner, participant/device, opt-in, fresh preflight, rollback, kill-switch, and redaction-reviewer fields are still missing. No pilot window may run.
 - The 2.39G checklist completion follow-up fills the label-only owner, participant/device, opt-in, fresh preflight, rollback, kill-switch, and redaction-reviewer fields. This permits execution approval re-review only; it does not run or approve the pilot window.
 - The 2.39I supervised narrow non-engineering pilot window passed for exactly one approved window. The main path used server-backed internal pilot activation with private dogfood unset. Preflight passed, A -> B, B -> A, one repeated call, outgoing cancel, timeout, final idle/no active session, app-side kill-switch, and Element Call fallback rows passed. Timeout returned `outgoingTimeout` / `incomingTimeout`; the kill-switch check reported `rolloutDisabled`; no stop criteria, redaction issue, runtime bug, or app/backend code change occurred. This does not approve any additional non-engineering window.
+- Commit `d321b8f7b` adds redacted token/backend and LiveKit setup observability and fixes runner simulator identifier redaction. The runner now reports safe token status/errcode/reason, token issued boolean, LiveKit room pre-create attempted boolean, LiveKit connect attempted boolean, and LiveKit failure enum without printing simulator identifiers, raw room/user/device IDs, tokens, JWTs, secrets, LiveKit room names, Redis credentials, Matrix event bodies, or full request/response bodies.
+- The 2.39N minimal window-2 retry diagnostics passed. A -> B and B -> A both reached active audio, token diagnostics reported `tokenStatus=200`, `tokenErrcode=none`, `tokenReason=issued`, `tokenIssued=true`, and `liveKitRoomPrecreateAttempted=true`, LiveKit connect was attempted with failure reason `none`, media failure stayed `none`, and hangup returned A/B idle/no active session.
+- The original 2.39K failure did not reproduce during 2.39N. Root cause remains unproven and should be treated as transient or environment-sensitive unless it reappears with safe diagnostics. Non-engineering pilot execution remains paused pending a separate approval review for any supervised recovery window.
 - Controlled engineering dogfood may continue under the same narrow staging-only constraints.
 
 ## Next Step

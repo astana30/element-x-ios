@@ -1659,3 +1659,23 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Validation for the code commit passed: SwiftFormat, SwiftLint, targeted tests 176/176, Release build with existing warnings only, `git diff --check`, and changed-line forbidden scan.
 - Caveat at the time: legacy `production-trigger-dry-run` still reported the older `appRolloutDisabled` path while `production-start-outgoing` used the internal-pilot activation bridge and passed. This was resolved in 2.36P.
 - Recommended next phase: `2.36P — internal pilot trigger dry-run observability alignment`.
+
+## 2026-05-28 — 2.39M Redacted Token/LiveKit Failure Observability
+
+- Added redacted token/backend and LiveKit setup diagnostics for the failure class seen during non-engineering pilot window 2.
+- Backend token diagnostics now classify token request seen, HTTP status, safe errcode/reason, eligibility allowed, rate limit, allocation attempted, LiveKit room pre-create attempted, and token issued without exposing request bodies, raw identifiers, tokens, JWTs, secrets, or LiveKit room names.
+- iOS media diagnostics and runner `production-status` now expose safe token and LiveKit fields: `tokenStatus`, `tokenErrcode`, `tokenReason`, `tokenIssued`, `liveKitRoomPrecreateAttempted`, `productionLiveKitFailureReason`, and related booleans.
+- Fixed runner redaction after simulator identifiers leaked from launch/relaunch output. The runner now redacts exact A/B simulator identifiers, generic UUID-shaped simulator identifiers, and `udid=<value>` fields before printing.
+- Runtime observability proof passed: a positive A -> B call reached `activeAudio`, then hangup returned A/B idle/no active session with token `200` / `issued`, token issued true, LiveKit room pre-create attempted, LiveKit connect attempted, LiveKit failure `none`, and media failure `none`.
+- Controlled negative token proof used a temporary current-code local service and returned only safe diagnostics: `tokenStatus=401`, `tokenErrcode=M_UNKNOWN_TOKEN`, `tokenReason=authRejected`, and `tokenIssued=false`.
+- Element Call route stayed untouched, no CallKit/push/video/global activation was added, and non-engineering pilot execution remained paused.
+
+## 2026-05-28 — 2.39N Window 2 Failure Retry Diagnostics
+
+- Reran only the minimal failed window-2 call paths using the new redacted token/LiveKit observability. This was not a new non-engineering pilot window and did not approve further execution.
+- Preflight passed with backend readiness `ready=true`, `reason=ok`, Redis/storage/LiveKit/eligibility/allowlist configured, A/B trust ready, approved encrypted 1:1 DM open, no active session, and internal pilot activation `activationAllowed`.
+- A -> B retry passed: Start/Accept reached `activeAudio`; token diagnostics reported `tokenStatus=200`, `tokenErrcode=none`, `tokenReason=issued`, `tokenIssued=true`, and `liveKitRoomPrecreateAttempted=true`; LiveKit connect was attempted with failure reason `none`; media failure stayed `none`; hangup returned A/B idle/no active session.
+- B -> A retry passed with the same safe token/LiveKit success classification and final A/B idle/no active session.
+- The original window 2 failure did not reproduce: no `tokenBackendRejected`, no `liveKitNetworkFailed`, no split state, no stale active session, and no redaction issue were observed.
+- Root cause remains unproven. With the clean retry and new diagnostics, the best classification is transient or environment-sensitive unless the failure reappears with safe fields.
+- No app/backend code changed during 2.39N. Recommendation: proceed only to a separate approval review for exactly one supervised window 2 recovery attempt; otherwise non-engineering pilot execution remains paused.
