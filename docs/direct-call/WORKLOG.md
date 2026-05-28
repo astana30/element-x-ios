@@ -1679,3 +1679,21 @@ This file records durable phase-level progress for future Codex and strategy ses
 - The original window 2 failure did not reproduce: no `tokenBackendRejected`, no `liveKitNetworkFailed`, no split state, no stale active session, and no redaction issue were observed.
 - Root cause remains unproven. With the clean retry and new diagnostics, the best classification is transient or environment-sensitive unless the failure reappears with safe fields.
 - No app/backend code changed during 2.39N. Recommendation: proceed only to a separate approval review for exactly one supervised window 2 recovery attempt; otherwise non-engineering pilot execution remains paused.
+
+## 2026-05-28 — 2.39P Supervised Non-Engineering Recovery Pilot Window
+
+- Ran the single supervised recovery window approved by 2.39O. This did not approve additional windows, participant/device expansion, broad internal rollout, production/public rollout, or unsupervised dogfood.
+- Session time recorded as 2026-05-28 16:51:34 +0500.
+- Participant/device labels remained Participant A / Device A1 and Participant B / Device B1 only.
+- Preflight passed: backend readiness `ready=true`, `reason=ok`, Redis/storage/LiveKit/eligibility/allowlist configured, participant opt-in still valid by the existing 2.39G checklist, A/B trust ready, approved encrypted 1:1 DM open, no stale active session, Element Call fallback visible, `activationSource=internalPilot`, and `internalPilotActivationDecision=activationAllowed`.
+- Required app gates were present; `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED` and `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` remained unset.
+- Recovery matrix was intentionally shorter than 2.39K: A -> B happy path, B -> A reverse path, one repeated A -> B call, final idle/no active session, and Element Call fallback check.
+- A -> B passed: reached `activeAudio`, then hangup returned A/B idle/no active session.
+- B -> A passed: reached `activeAudio`, then hangup returned A/B idle/no active session.
+- One repeated A -> B call passed: reached `activeAudio`, then hangup returned A/B idle/no active session.
+- Every call row reported safe token/LiveKit fields: `tokenStatus=200`, `tokenErrcode=none`, `tokenReason=issued`, `tokenIssued=true`, `liveKitRoomPrecreateAttempted=true`, LiveKit connect attempted, `productionLiveKitFailureReason=none`, and `productionMediaFailureReason=none`.
+- Cleanup/disconnect were attempted after each hangup, and final A/B state was idle/no active session.
+- Stop criteria hit: no. No `tokenBackendRejected`, no `liveKitNetworkFailed`, no split-brain, no stale active session, no participant confusion, and no redaction issue.
+- Rollback was not used. Element Call fallback controls were visually confirmed visible and unchanged, and the private native audio card remained separate.
+- No app/backend code changed during the recovery window.
+- Decision: continue to post-recovery review; no additional non-engineering pilot window is approved by this result.

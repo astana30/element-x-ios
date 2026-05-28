@@ -7,23 +7,25 @@ Branch:
 salemx-native-direct-calls
 
 Phase:
-2.39O — supervised pilot window 2 recovery approval review.
+2.39Q — post-recovery non-engineering pilot review.
 
 Task:
-Inspection/decision review only. Do not modify app/backend code. Do not execute a pilot window in this phase. Do not approve broad internal rollout. Do not approve production/public rollout.
+Inspection/decision review only. Do not modify app/backend code. Do not execute another pilot window. Do not approve broad internal rollout. Do not approve production/public rollout.
 
 Context:
-- 2.39K supervised non-engineering pilot window 2 did not pass. A saw `tokenBackendRejected` / `connectingFailed`; B saw `liveKitNetworkFailed`; both failed closed to idle/no active session; no split-brain or redaction issue occurred.
-- 2.39M added redacted token/backend and LiveKit setup observability and fixed runner simulator-identifier redaction.
-- 2.39M positive proof reached `activeAudio` and returned idle with safe token diagnostics `tokenStatus=200`, `tokenErrcode=none`, `tokenReason=issued`, `tokenIssued=true`, `liveKitRoomPrecreateAttempted=true`, LiveKit connect attempted, LiveKit failure `none`, and media failure `none`.
-- 2.39M controlled negative token proof returned safe diagnostics only: `tokenStatus=401`, `tokenErrcode=M_UNKNOWN_TOKEN`, `tokenReason=authRejected`, `tokenIssued=false`.
-- 2.39N retried only the minimal failed paths, not a new pilot window.
-- 2.39N A -> B and B -> A both reached `activeAudio`, then hangup returned A/B idle/no active session. Token diagnostics were `200` / `issued`, token issued true, LiveKit room pre-create attempted, LiveKit connect attempted, LiveKit failure `none`, and media failure `none`.
-- The original window 2 failure did not reproduce. Root cause remains unproven and is currently classified as transient or environment-sensitive unless it reappears with safe fields.
-- Non-engineering pilot execution remains paused pending this approval review.
+- 2.39K supervised non-engineering pilot window 2 failed but failed closed: A saw `tokenBackendRejected` / `connectingFailed`, B saw `liveKitNetworkFailed`, both returned idle/no active session, no split-brain, and no redaction issue.
+- 2.39M added redacted token/backend and LiveKit setup observability and fixed runner simulator identifier redaction.
+- 2.39N retried the minimal failed paths. A -> B and B -> A both reached `activeAudio`, token diagnostics were `200` / `issued`, token issued true, LiveKit room pre-create and connect were attempted, LiveKit failure was `none`, media failure was `none`, and final A/B state was idle/no active session. The 2.39K failure did not reproduce.
+- 2.39O approved exactly one supervised recovery window.
+- 2.39P ran the approved shorter recovery window with the same participant/device cap and no expansion.
+- 2.39P passed A -> B, B -> A, and one repeated A -> B call. Every row reached `activeAudio`, then hangup returned A/B idle/no active session.
+- Every 2.39P row reported `tokenStatus=200`, `tokenErrcode=none`, `tokenReason=issued`, `tokenIssued=true`, `liveKitRoomPrecreateAttempted=true`, LiveKit connect attempted, `productionLiveKitFailureReason=none`, and `productionMediaFailureReason=none`.
+- Element Call fallback controls were visible and unchanged.
+- No stop criteria, redaction issue, rollback, or app/backend code change occurred.
+- No additional non-engineering pilot window is approved by 2.39P.
 
 Goal:
-Decide whether exactly one supervised window 2 recovery attempt may be run, or whether non-engineering pilot execution must remain paused.
+Decide what the recovery window proves, whether any further supervised non-engineering window may be considered, and what remains blocked before broader internal readiness.
 
 Inspect:
 - `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`
@@ -32,39 +34,38 @@ Inspect:
 - `docs/direct-call/NEXT_CODEX_PROMPT.md`
 - `server/salemx-call-service/docs/STAGING_SMOKE_2026-05-21.md`
 
-Decision criteria:
-- The retry diagnostics must be clean and redacted.
-- A/B must be idle/no active session at the end of retry.
-- Token/LiveKit classification must be sufficient to diagnose future repeats.
-- No code change must be required before a recovery attempt.
-- Owners, participant labels, opt-in, rollback operator, redaction reviewer, kill switch, and fresh preflight must still be available.
+Questions:
+1. Can 2.39P be considered a clean recovery window?
+2. What claims are now valid after 2.39M, 2.39N, and 2.39P?
+3. What claims remain invalid?
+4. Is another supervised non-engineering window justified, or should execution pause for owner/product review?
+5. Should the next workstream be monitoring automation, foreground UX polish, CallKit/push planning, or additional supervised windows?
+6. What remains blocked before broad internal rollout?
+7. What remains blocked before production/public rollout?
 
-If approved:
-- Approve exactly one supervised window 2 recovery attempt.
-- Same participant/device cap as 2.39I/2.39K.
-- Staging only.
-- Foreground/open encrypted direct 1:1 room only.
-- Private native audio card only.
-- Element Call fallback visible and unchanged.
-- No CallKit, push/background incoming, missed-call UX, video, broad rollout, production/public, or global activation.
-- Redacted reporting only.
-
-If blocked:
-- Keep non-engineering pilot execution paused.
-- List missing blockers.
+Hard constraints:
+- Do not approve broad internal rollout.
+- Do not approve production/public rollout.
+- Do not approve unsupervised dogfood.
+- Do not expand participant/device count.
+- Do not replace Element Call toolbar.
+- Do not add CallKit/push/background incoming.
+- Do not add missed-call UX or video.
+- Do not globally activate production direct calls.
+- Token endpoint remains final authority.
+- No raw IDs/secrets/tokens in reports.
 
 Expected output:
 A. Files inspected.
-B. Readiness decision: approve exactly one recovery window / remain paused.
-C. Valid claims from 2.39M/2.39N.
-D. Remaining risks.
-E. Constraints if approved.
-F. Stop criteria.
-G. Rollback checklist.
-H. Recommended next phase.
+B. Recovery window result decision.
+C. Valid claims.
+D. Invalid claims / still blocked.
+E. Remaining risks.
+F. Recommendation on additional windows.
+G. Recommended next phase.
 
-Suggested next phase if approved:
-2.39P — supervised window 2 recovery attempt
+Suggested next phase if another supervised window is allowed:
+2.39R — supervised non-engineering pilot window 3 approval
 
-Suggested next phase if blocked:
-2.39P — window 2 recovery blocker remediation
+Suggested next phase if execution should pause:
+2.39R — post-pilot hardening plan

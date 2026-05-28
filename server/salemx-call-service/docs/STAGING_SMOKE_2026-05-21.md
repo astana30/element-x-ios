@@ -60,6 +60,7 @@ No tokens, JWTs, passwords, shared secrets, authorization header values, or Live
 | Supervised narrow non-engineering pilot window 1 | Passed; no additional window approved |
 | Redacted token/LiveKit failure observability | Added; runner simulator identifier redaction fixed |
 | Window 2 failure retry diagnostics | Passed; failure not reproduced; recovery approval review required |
+| Supervised non-engineering recovery pilot window | Passed; no additional window approved |
 
 ## Root Cause
 
@@ -161,6 +162,7 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - Commit `d321b8f7b` adds redacted token/backend and LiveKit setup observability and fixes runner simulator identifier redaction. The runner now reports safe token status/errcode/reason, token issued boolean, LiveKit room pre-create attempted boolean, LiveKit connect attempted boolean, and LiveKit failure enum without printing simulator identifiers, raw room/user/device IDs, tokens, JWTs, secrets, LiveKit room names, Redis credentials, Matrix event bodies, or full request/response bodies.
 - The 2.39N minimal window-2 retry diagnostics passed. A -> B and B -> A both reached active audio, token diagnostics reported `tokenStatus=200`, `tokenErrcode=none`, `tokenReason=issued`, `tokenIssued=true`, and `liveKitRoomPrecreateAttempted=true`, LiveKit connect was attempted with failure reason `none`, media failure stayed `none`, and hangup returned A/B idle/no active session.
 - The original 2.39K failure did not reproduce during 2.39N. Root cause remains unproven and should be treated as transient or environment-sensitive unless it reappears with safe diagnostics. Non-engineering pilot execution remains paused pending a separate approval review for any supervised recovery window.
+- The 2.39P supervised recovery window passed after explicit approval for exactly one shorter recovery window. A -> B, B -> A, and one repeated A -> B call reached active audio and returned A/B idle/no active session. Every row reported token `200` / `issued`, token issued true, LiveKit room pre-create attempted, LiveKit connect attempted, LiveKit failure `none`, and media failure `none`. Element Call fallback remained visible and unchanged. No stop criteria, redaction issue, rollback, or app/backend code change occurred. This does not approve any additional non-engineering window.
 - Controlled engineering dogfood may continue under the same narrow staging-only constraints.
 
 ## Next Step

@@ -1042,6 +1042,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - The original window 2 `tokenBackendRejected` / `liveKitNetworkFailed` failure did not reproduce, no split state appeared, no redaction issue was observed, and no app/backend code changed during the retry.
   - Root cause remains unproven; the evidence supports an environment-sensitive or transient failure rather than a confirmed app/backend defect.
   - Further non-engineering pilot execution remains paused until a separate approval review decides whether to run exactly one supervised recovery window.
+- Supervised non-engineering recovery pilot window passed:
+  - 2.39O approved exactly one supervised recovery window after the 2.39K failure and 2.39N clean retry diagnostics.
+  - 2.39P ran a shorter recovery matrix only: A -> B happy path, B -> A reverse path, one repeated A -> B call, final idle/no active session check, and Element Call fallback visibility check.
+  - Required gates were present, `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED` and `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` remained unset, backend readiness was `ready=true` / `reason=ok`, Redis/storage/LiveKit/eligibility/allowlist were configured, A/B trust was ready, the approved encrypted 1:1 DM was open, A/B were idle/no active session, and internal pilot activation was `activationAllowed`.
+  - All three call rows reached `activeAudio`; each reported `tokenStatus=200`, `tokenErrcode=none`, `tokenReason=issued`, `tokenIssued=true`, `liveKitRoomPrecreateAttempted=true`, LiveKit connect attempted, `productionLiveKitFailureReason=none`, and `productionMediaFailureReason=none`.
+  - Hangup returned A/B to idle/no active session after each row, with cleanup/disconnect attempted.
+  - The 2.39K failure did not reproduce: no `tokenBackendRejected`, no `liveKitNetworkFailed`, no split state, no stale active session, and no redaction issue were observed.
+  - Element Call fallback controls were visually confirmed visible and unchanged; the private native audio card remained separate.
+  - No app/backend code changed during the recovery window. This result does not approve additional non-engineering windows, participant/device expansion, broad internal rollout, production/public rollout, CallKit, push/background incoming, missed-call UX, video, session restoration, Element Call replacement, or global activation.
 - Pilot sessions must follow the 2.27A checkpoint, 2.28A operations checklist, and 2.33B expansion runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
@@ -1054,9 +1063,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.39O — supervised pilot window 2 recovery approval review`
+`2.39Q — post-recovery non-engineering pilot review`
 
-Goal: decide whether the clean 2.39N minimal retry diagnostics are sufficient to approve exactly one supervised recovery window for window 2, without approving additional windows, participant expansion, broad internal rollout, production/public rollout, CallKit, push/background incoming, missed-call UX, video, session restoration, Element Call replacement, or global activation.
+Goal: decide what the clean 2.39P supervised recovery window proves after the 2.39K failure, whether any further supervised window is justified, and what remains blocked before broader internal readiness.
 
 ## Do-Not-Touch Constraints
 

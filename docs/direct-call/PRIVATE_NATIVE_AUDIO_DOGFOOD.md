@@ -3353,6 +3353,18 @@ Rollback is complete only when the app relaunches without the private card path 
 - Root cause remains unproven and should be treated as transient or environment-sensitive unless it reappears with safe diagnostics.
 - Non-engineering pilot execution remains paused until a separate approval review decides whether exactly one supervised window 2 recovery attempt may run.
 
+## 2.39P Supervised Non-Engineering Recovery Pilot Window
+
+- 2.39P ran exactly one supervised recovery window after 2.39O approval. It did not approve any additional windows, participant/device expansion, broad internal rollout, production/public rollout, or unsupervised dogfood.
+- Scope stayed unchanged: Participant A / Device A1 and Participant B / Device B1 labels only, staging call-service and staging LiveKit only, foreground/open encrypted direct 1:1 DM only, private native audio card only, trusted peers only, one active native 1:1 call at a time, and redacted reporting only.
+- Preflight passed with readiness `ready=true`, `reason=ok`, Redis/storage/LiveKit/eligibility/allowlist configured, A/B trust ready, approved encrypted DM open, no stale active session, Element Call fallback visible, `activationSource=internalPilot`, and `internalPilotActivationDecision=activationAllowed`.
+- Private dogfood and legacy fake/dry-run gates remained unset.
+- The shortened recovery matrix passed: A -> B, B -> A, one repeated A -> B call, final idle/no active session check, and Element Call fallback visibility check.
+- Every call row reached `activeAudio` and reported `tokenStatus=200`, `tokenErrcode=none`, `tokenReason=issued`, `tokenIssued=true`, `liveKitRoomPrecreateAttempted=true`, LiveKit connect attempted, `productionLiveKitFailureReason=none`, and `productionMediaFailureReason=none`.
+- Final A/B state was idle/no active session with cleanup/disconnect attempted. No `tokenBackendRejected`, no `liveKitNetworkFailed`, no split-brain, no stale active session, and no redaction issue occurred.
+- Rollback was not used. Element Call fallback controls were visible and unchanged.
+- Next step is a post-recovery readiness review. No further non-engineering window is approved by this result.
+
 ## Remaining Blockers
 
 These block broader internal dogfood and production, but not the controlled engineering dogfood scope above:
