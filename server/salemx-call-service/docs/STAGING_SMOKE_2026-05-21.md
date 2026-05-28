@@ -56,6 +56,7 @@ No tokens, JWTs, passwords, shared secrets, authorization header values, or Live
 | Narrow non-engineering internal pilot preparation runbook | Added; execution not approved |
 | Narrow non-engineering pilot blocker remediation checklist | Added; execution remains blocked |
 | Narrow non-engineering pilot checklist completion | Incomplete; execution remains blocked |
+| Narrow non-engineering pilot checklist completion follow-up | Complete; ready for approval re-review only |
 
 ## Root Cause
 
@@ -152,6 +153,7 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - The 2.39B preparation runbook allows planning a future very narrow non-engineering internal pilot window but does not approve execution. Scope is limited to 1-2 named internal participants, named accounts/devices only, staging call-service and staging LiveKit only, foreground/open encrypted trusted 1:1 rooms, private native audio card only, one active native 1:1 call at a time, Element Call fallback visible/unchanged, and redacted reporting only.
 - The 2.39D blocker remediation checklist records that execution remains blocked until actual owner labels, participant/device labels, explicit opt-in, fresh preflight, rollback presence, kill-switch verification, and redaction reviewer presence are filled and a separate re-review approves exactly one supervised window.
 - The 2.39F checklist completion attempt remains incomplete because label-only owner, participant/device, opt-in, fresh preflight, rollback, kill-switch, and redaction-reviewer fields are still missing. No pilot window may run.
+- The 2.39G checklist completion follow-up fills the label-only owner, participant/device, opt-in, fresh preflight, rollback, kill-switch, and redaction-reviewer fields. This permits execution approval re-review only; it does not run or approve the pilot window.
 - Controlled engineering dogfood may continue under the same narrow staging-only constraints.
 
 ## Next Step
@@ -169,4 +171,4 @@ Controlled engineering dogfood may continue on the staging path under the privat
 - Element Call toolbar path unchanged and available as fallback;
 - no CallKit, push, video, broad internal rollout, public rollout, or global production activation.
 
-Next, continue with `2.39G — pilot checklist completion follow-up` to fill the missing label-only checklist fields. Broad internal rollout, production/public rollout, CallKit, push/background incoming, missed-call UX, video, session restoration, and global activation remain blocked.
+Next, continue with `2.39H — one-window non-engineering pilot execution approval` to decide whether exactly one supervised pilot window may run. Broad internal rollout, production/public rollout, CallKit, push/background incoming, missed-call UX, video, session restoration, and global activation remain blocked.

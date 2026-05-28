@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.39F — pilot checklist completion attempt.
+After 2.39G — pilot checklist completion follow-up.
 
 ## Latest App Code Checkpoint
 
@@ -45,6 +45,10 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - The 2.39F checklist completion attempt remains incomplete:
   - Required owner labels, participant/device labels, explicit opt-in, fresh green preflight, rollback operator presence, kill-switch verification, and redaction/report reviewer presence are still missing.
   - Execution remains blocked; no pilot may run.
+- The 2.39G checklist completion follow-up is complete:
+  - Owner labels, participant/device labels, explicit opt-in, fresh green preflight, rollback operator presence, kill-switch verification, and redaction/report reviewer presence are recorded with label-only data.
+  - This permits proceeding to execution approval re-review only. It does not approve or execute the pilot.
+  - Broad internal rollout, production/public rollout, CallKit, push/background incoming, missed-call UX, video, session restoration, Element Call replacement, and global activation remain blocked.
 - Staging iOS private native audio smoke passed after LiveKit room pre-create:
   - A/B reached `productionSessionState=activeAudio`.
   - A/B had `productionEncryptionState=ready`.
@@ -1028,9 +1032,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.39G — pilot checklist completion follow-up`
+`2.39H — one-window non-engineering pilot execution approval`
 
-Goal: fill the missing label-only owner, participant/device, opt-in, preflight, rollback, kill-switch, and redaction-reviewer fields before any execution approval re-review.
+Goal: decide whether the completed checklist is sufficient to approve exactly one supervised non-engineering pilot window, without broad internal rollout, production/public rollout, CallKit, push/background incoming, missed-call UX, video, session restoration, Element Call replacement, or global activation.
 
 ## Do-Not-Touch Constraints
 

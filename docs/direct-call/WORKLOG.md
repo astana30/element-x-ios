@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Completed the label-only pilot checklist for execution approval re-review.
 - Recorded the incomplete pilot checklist completion attempt.
 - Documented the blocked non-engineering pilot execution approval and remediation checklist.
 - Added the narrow non-engineering internal pilot preparation runbook.
@@ -63,6 +64,20 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-28 — 2.39G Pilot Checklist Completion Follow-Up
+
+- Recorded the label-only operational data for the narrow non-engineering pilot checklist.
+- Owner labels are filled for pilot owner, backend owner, allowlist owner, rollback operator, redaction/report reviewer, and incident decision owner.
+- Participant/device labels are filled for Participant A/B and Device A/B.
+- Explicit opt-in is recorded as yes for both participants.
+- Participant expectations are acknowledged: not production, foreground/open encrypted DM only, no background incoming, no CallKit system incoming screen, no missed-call UX, Element Call fallback, and participants can stop anytime.
+- Fresh preflight is recorded green: readiness `ready=true`, `reason=ok`, Redis connected, storage key configured, LiveKit room provisioning configured, eligibility/allowlist configured, trust ready, encrypted direct 1:1 DM open, no active session, Element Call fallback visible, and `internalPilotActivationDecision=activationAllowed`.
+- Kill-switch readiness is recorded: app rollout disable verified, backend allowlist removal verified, rollback operator present, and redaction reviewer present.
+- No raw user IDs, device IDs, room IDs, tokens, JWTs, LiveKit room names, Redis credentials, or secrets are recorded.
+- Checklist is complete enough to proceed to execution approval re-review only.
+- No pilot was executed, and execution is not approved in this phase.
+- Recommended next phase: `2.39H — one-window non-engineering pilot execution approval`.
 
 ## 2026-05-28 — 2.39F Pilot Checklist Completion Attempt
 

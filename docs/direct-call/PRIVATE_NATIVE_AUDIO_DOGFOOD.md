@@ -2646,6 +2646,77 @@ The 2.39F checklist completion attempt did not provide the required label-only o
 - If all missing rows are filled with label-only data, next phase may be `2.39H — one-window non-engineering pilot execution approval`.
 - If any row remains missing, next phase remains `2.39G — pilot checklist completion follow-up`.
 
+## 2.39G Pilot Checklist Completion Follow-Up
+
+The 2.39G follow-up supplied label-only operational data for the previously missing checklist rows. The checklist is complete enough to proceed to an execution approval re-review. This is not pilot execution approval, and no pilot may run until the next phase explicitly approves exactly one supervised window.
+
+### Owner Table
+
+| Role | Label | Filled |
+| --- | --- | --- |
+| Pilot owner | Operator Owner 1 | yes |
+| Backend owner | Backend Owner 1 | yes |
+| Allowlist owner | Allowlist Owner 1 | yes |
+| Rollback operator | Rollback Operator 1 | yes |
+| Redaction/report reviewer | Redaction Reviewer 1 | yes |
+| Incident decision owner | Incident Owner 1 | yes |
+
+### Participant And Device Table
+
+| Participant label | Device label | Account allowed | Device trusted | Explicit opt-in |
+| --- | --- | --- | --- | --- |
+| Participant A | Device A1 | yes | yes | yes |
+| Participant B | Device B1 | yes | yes | yes |
+
+### Participant Expectation Acknowledgement
+
+Both participants acknowledged:
+
+- This is not production.
+- Native audio works only while the encrypted direct chat is open.
+- No background incoming calls.
+- No CallKit system incoming screen.
+- No missed-call UX.
+- Element Call remains the fallback.
+- Participants can stop the pilot at any time.
+
+### Fresh Preflight
+
+| Check | Result |
+| --- | --- |
+| readiness | `ready=true`, `reason=ok` |
+| Redis connected | true |
+| storage key configured | true |
+| LiveKit room provisioning configured | true |
+| eligibility/allowlist configured | true |
+| trust ready | true |
+| encrypted direct 1:1 DM open | true |
+| no active session | true |
+| Element Call fallback visible | true |
+| internal pilot activation decision | `activationAllowed` |
+
+### Kill-Switch Readiness
+
+| Check | Result |
+| --- | --- |
+| app rollout disable verified | true |
+| backend allowlist removal verified | true |
+| rollback operator present | true |
+| redaction reviewer present | true |
+
+### Decision
+
+- Checklist completion status: complete.
+- Execution decision: ready for execution approval re-review only.
+- Do not run the pilot in this phase.
+- Broad internal rollout remains blocked.
+- Production/public rollout remains blocked.
+- CallKit, push/background incoming, missed-call UX, video, session restoration, Element Call replacement, and global activation remain blocked.
+- Token endpoint remains final authority.
+- Reports remain redacted and must not include raw user IDs, device IDs, room IDs, tokens, JWTs, LiveKit room names, Redis credentials, Matrix event bodies, or secrets.
+
+Next phase should use `2.39H — one-window non-engineering pilot execution approval`.
+
 ## 2.35B Engineering Expansion Operations Handoff
 
 The 3-session engineering expansion soak completed cleanly, so narrow engineering dogfood can continue without per-session Codex supervision only when a named engineering operator owns the session and this handoff checklist is followed. This is still staging-only engineering dogfood, not non-engineering internal dogfood, product beta, public rollout, production activation, or Element Call replacement.
