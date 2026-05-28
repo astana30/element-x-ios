@@ -1739,3 +1739,16 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added tests covering the foreground limitation copy, user-facing redaction against backend/token/LiveKit/request/response/raw-ID wording, and unchanged safe state copy coverage.
 - This is UX/copy polish only: no activation gates, Start/Accept availability, Matrix send path, token request path, media/LiveKit setup, private dogfood, internal pilot activation, Element Call route, CallKit, push/background incoming, missed-call UX, video, global activation, broad rollout, or production/public rollout changed.
 - Recommended next phase: `2.39W — foreground limitation UX no-activation proof`.
+
+## 2026-05-28 — 2.39W Foreground Limitation UX Runtime Proof
+
+- Ran the foreground/open-chat UX runtime proof for the 2.39V private native audio card polish.
+- A/B were launched with product UI, eligibility status, internal pilot dry-run, internal pilot rollout, production start, and staging token base URL gates set; `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED` and `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` remained unset.
+- The private native audio card visibly showed the foreground/open-chat limitation copy on A/B: native audio works only while the encrypted direct chat stays open, there is no background incoming call behavior or system incoming call screen yet, missed-call alerts are not present yet, and Element Call remains fallback.
+- Redaction check passed: the visible card copy did not expose backend, token, LiveKit, raw identifier, LiveKit room name, request/response, secret, JWT, or simulator identifier details.
+- Element Call phone/video fallback controls were visually confirmed visible and unchanged; the private native audio card remained separate.
+- Rendering/status refresh before any call action had no Matrix send, no token request, no media connect, no LiveKit connect, and no active session on A/B.
+- Optional internal-pilot A -> B smoke passed: Start/Accept reached `activeAudio`; hangup/cleanup returned A/B to `idle` with no active session.
+- Smoke diagnostics were clean: token `200` / `issued`, token issued true, LiveKit room pre-create and connect attempted, LiveKit failure `none`, and media failure `none`.
+- No app/backend code changed. No regression was observed. Additional non-engineering windows, participant/device expansion, broad internal rollout, production/public rollout, unsupervised dogfood, Element Call replacement, CallKit/push/background incoming, missed-call UX, video, session restoration, and global activation remain blocked.
+- Recommended next phase: `2.39X — operational monitoring automation design`.

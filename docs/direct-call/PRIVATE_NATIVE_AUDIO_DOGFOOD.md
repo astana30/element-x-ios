@@ -3414,6 +3414,15 @@ Copy must be concise, safe, and user-facing. It must not mention raw backend err
 - Accessibility summary includes the same foreground-only limitation in relevant states.
 - This is copy/accessibility polish only. It does not change Start/Accept availability, activation gates, Matrix events, token requests, media/LiveKit setup, Element Call routing, CallKit, push/background incoming, missed-call UX, video, session restoration, broad rollout, or production/public rollout.
 
+2.39W proves the foreground limitation polish at runtime:
+
+- The private native audio card visibly showed the foreground/open-chat limitation copy on A/B in the approved encrypted direct 1:1 room.
+- The visible copy stayed user-facing and did not expose backend, token, LiveKit, raw identifier, LiveKit room name, request/response, secret, JWT, or simulator identifier details.
+- Element Call phone/video fallback controls remained visible and unchanged, and the native card remained separate.
+- Rendering/status refresh did not send Matrix events, request a participant token, connect media, connect LiveKit, or create an active session.
+- A short internal-pilot A -> B smoke still reached `activeAudio`, then hangup/cleanup returned A/B to idle/no active session with media failure `none`.
+- This proof did not approve more non-engineering pilot windows, participant/device expansion, broad internal rollout, production/public rollout, unsupervised dogfood, Element Call replacement, CallKit/push/background incoming, missed-call UX, video, session restoration, or global activation.
+
 ### In-Card State Polish
 
 The private native audio card should use user-safe states for:

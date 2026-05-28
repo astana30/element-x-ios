@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-After 2.39T — post-pilot hardening plan.
+After 2.39W — foreground limitation UX runtime proof.
 
 ## Latest App Code Checkpoint
 
-2.39M `d321b8f7b` `Add redacted token failure observability`
+2.39V `bf4ae10a5` `Polish native audio foreground limitation UX`
 
 ## Latest Backend Code Checkpoint
 
@@ -1075,6 +1075,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Listener/open-room, trust, participant eligibility, service unavailable, timeout, cancelled, and safely failed states remain non-technical and do not mention backend, token, LiveKit, raw IDs, request/response details, or internal gates.
   - Accessibility summary now includes the foreground-only limitation for relevant private native audio card states.
   - This is UX polish only. It does not change Start/Accept eligibility, activation gates, Matrix send behavior, token requests, media/LiveKit setup, private dogfood, internal pilot activation, Element Call route, CallKit, push/background incoming, missed-call UX, video, session restoration, broad rollout, or production/public rollout.
+- Foreground limitation UX runtime proof passed:
+  - A/B were launched with product UI, eligibility status, internal pilot dry-run, internal pilot rollout, production start, and staging token base URL gates set; private dogfood and legacy fake/dry-run gates remained unset.
+  - The private native audio card visibly showed the foreground/open-chat limitation copy in the approved encrypted direct 1:1 room on A/B.
+  - The visible card copy did not expose backend, token, LiveKit, raw identifier, LiveKit room name, request/response, secret, JWT, or simulator identifier details.
+  - Element Call phone/video fallback controls remained visible and unchanged; the private native audio card stayed separate.
+  - Rendering/status refresh before the smoke path showed no Matrix send, no token request, no media connect, no LiveKit connect, and no active session on A/B.
+  - A short internal-pilot A -> B smoke reached `activeAudio`; hangup/cleanup returned A/B to `idle` with no active session.
+  - Smoke diagnostics reported token `200` / `issued`, token issued true, LiveKit room pre-create and connect attempted, LiveKit failure `none`, and media failure `none`.
+  - No app/backend code changed during the proof. Additional non-engineering windows, participant/device expansion, broad internal rollout, production/public rollout, unsupervised dogfood, Element Call replacement, CallKit/push/background incoming, missed-call UX, video, session restoration, and global activation remain blocked.
 - Pilot sessions must follow the 2.27A checkpoint, 2.28A operations checklist, and 2.33B expansion runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
@@ -1087,9 +1096,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.39W — foreground limitation UX no-activation proof`
+`2.39X — operational monitoring automation design`
 
-Goal: verify the foreground/open-chat limitation copy appears in the private native audio card without changing activation behavior. Confirm rendering/status refresh remains side-effect-free, Element Call fallback is visible and unchanged, no private dogfood/internal pilot gates changed, and no raw IDs/secrets or backend/token/LiveKit details appear in UI/accessibility output.
+Goal: design the next post-pilot hardening slice for redacted operational monitoring automation. Define safe telemetry fields, alert-worthy states, dashboard/log contracts, incident triage, and validation requirements before implementing anything beyond the current runner/report-based proof flow.
 
 ## Do-Not-Touch Constraints
 
