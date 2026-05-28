@@ -3649,6 +3649,127 @@ Fail closed and avoid token/media/LiveKit setup when any of these occur:
 - No weakening of E2EE or trusted-device behavior.
 - No reuse of `directOneToOneCallsEnabled` as the native audio gate.
 
+## 2.40E Apple Developer Signing Remediation Checklist
+
+The 2.40D signing and entitlement audit proved that native audio CallKit/PushKit/APNs implementation cannot start yet. Foreground/open encrypted direct 1:1 native audio remains the current proven mode. This checklist is remediation only; it does not change entitlements, app code, backend code, bundle identifiers, Element Call routing, or rollout scope.
+
+### Current Decision
+
+- CallKit, PushKit, APNs, background incoming, and missed-call implementation remain blocked.
+- Signing and provisioning remediation must be completed first.
+- Foreground/open-chat-only native audio remains the only proven native audio user experience.
+- Simulator-only proof is not sufficient for APNs, PushKit token issuance, background wake, or physical-device provisioning.
+
+### Current Audit Findings
+
+- Generic `iphoneos` build completed, but signature verification reported an untrusted signing chain.
+- Local code-signing identity inspection reported no valid local identities.
+- Embedded main app, NSE, and ShareExtension provisioning profiles existed, but they expire on 2026-06-01 and look like short-lived local/free-style proof profiles.
+- Main app, NSE, and ShareExtension profiles did not include `aps-environment`.
+- Main app configuration includes `UIBackgroundModes`: `audio`, `fetch`, `processing`, and `voip`.
+- App Groups and Keychain Sharing are present for app and extensions.
+- NSE filtering entitlement is absent.
+- A physical iPhone was visible to Xcode tooling but offline, so install/runtime proof could not run.
+
+### Required Apple Developer State
+
+- Paid Apple Developer Program team available for this bundle family.
+- Valid Apple Development certificate installed locally.
+- Trusted signing chain verified locally.
+- Physical iPhone registered to the team and online.
+- Xcode can build, sign, and install the app plus extensions to that physical device.
+- Apple account capability access is verified for Push Notifications, App Groups, Keychain Sharing, app extensions, VoIP push provisioning, and any future managed NSE filtering entitlement.
+
+### Required App IDs
+
+- Main app: `kz.salemx.msg`.
+- Notification Service Extension: `kz.salemx.msg.nse`.
+- Share Extension: `kz.salemx.msg.shareextension`.
+- App Group: `group.kz.salemx.msg`.
+
+### Required Capabilities
+
+- Push Notifications for the main app, producing `aps-environment` in the signed app profile.
+- App Groups for the main app, NSE, and ShareExtension.
+- Keychain Sharing for the main app, NSE, and ShareExtension.
+- Background Modes including `voip` for the main app.
+- NSE filtering entitlement only if the encrypted NSE-to-CallKit path is chosen in a later design phase.
+
+### Required Provisioning Profiles
+
+- Development provisioning profile for the main app.
+- Development provisioning profile for the NSE.
+- Development provisioning profile for the ShareExtension.
+- Profiles must include the required entitlements for their targets.
+- Profiles must be durable Developer Program profiles, not short-lived local/free-style proof profiles.
+- Profiles must be regenerated after enabling or changing capabilities.
+
+### Required Local Verification Checks
+
+Run these with redaction and without printing certificates, private keys, push tokens, full profile payloads, or Apple account private data:
+
+- Inspect local signing identities and confirm at least one valid Apple Development identity.
+- Build for `iphoneos` with the main app, NSE, and ShareExtension.
+- Inspect embedded provisioning profiles for entitlement presence only.
+- Inspect signed app entitlement output for `aps-environment`.
+- Inspect signed app, NSE, and ShareExtension for App Group and Keychain Sharing entitlements.
+- Verify `UIBackgroundModes` still includes `voip` in the signed app's Info.plist.
+- Verify app, NSE, and ShareExtension install on the registered physical iPhone.
+- Confirm no raw device identifiers, certificates, private keys, profile secrets, push tokens, or Apple account private data appear in reports.
+
+### Required Physical-Device Proof
+
+- Build and install SalemX on the registered iPhone.
+- Confirm the main app's signed entitlements include `aps-environment`.
+- Confirm the main app, NSE, and ShareExtension all install.
+- Confirm App Group and Keychain Sharing entitlements are present and compatible across all three targets.
+- Later phase: prove normal APNs registration without printing a device token.
+- Later phase: prove PushKit VoIP token issuance without printing a token.
+- Later phase: prove background wake behavior only after APNs/PushKit registration is explicitly implemented.
+
+### Explicit Blockers
+
+- No valid local signing identity.
+- Untrusted signatures.
+- `aps-environment` missing from signed profiles.
+- Physical device offline.
+- Short-lived local/free-style provisioning profiles.
+- NSE filtering entitlement absent.
+- Apple account capability access unproven.
+- No native-audio-specific PushKit/APNs registration or pusher separation implemented yet.
+
+### Remediation Sequence
+
+1. Use a paid Apple Developer Program team with access to the bundle family.
+2. Install and trust a valid Apple Development certificate locally.
+3. Register the physical iPhone with the team.
+4. Configure App IDs for the main app, NSE, and ShareExtension.
+5. Enable App Groups and Keychain Sharing for all required targets.
+6. Enable Push Notifications for the main app.
+7. Regenerate development provisioning profiles for all three targets.
+8. Build and install to the physical iPhone.
+9. Inspect signed entitlements and embedded profiles with redacted output.
+10. Record whether `aps-environment`, App Groups, Keychain Sharing, and `voip` background mode are present.
+
+### Next Phase Options
+
+- `2.40F — physical-device signing remediation execution`: if a paid team, device, and certificate are available now.
+- `2.40F — paid Apple Developer account setup and profile regeneration`: if team membership, certificates, or profiles must be created first.
+
+### Still Blocked After This Checklist
+
+- CallKit adapter implementation.
+- PushKit/APNs registration.
+- Native audio background incoming.
+- Missed-call UX.
+- Additional non-engineering pilot windows.
+- Participant/device expansion.
+- Broad internal rollout.
+- Production/public rollout.
+- Element Call replacement.
+- Video.
+- Global production activation.
+
 ## Remaining Blockers
 
 These block broader internal dogfood and production, but not the controlled engineering dogfood scope above:

@@ -1092,6 +1092,13 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - The backend must not centralize Matrix trust decisions. Matrix signalling remains the source of call semantics, while the call-service may provide opaque handles, eligibility, readiness, token final enforcement, and redacted observability only.
   - The fail-closed matrix covers malformed/expired push, decrypt/classify failure, invalid room shape, trust not ready, ineligible participants, disabled rollout, dependency failure, existing active session, locked/killed app without safe session state, token rejection, LiveKit failure, CallKit report failure, ambiguous terminal delivery, and unsafe Element Call conflict.
   - This is docs-only. It does not implement CallKit, PushKit, APNs, missed-call UX, background incoming, video, Element Call replacement, rollout expansion, or global activation.
+- Apple Developer signing remediation checklist is documented:
+  - 2.40D proved the project is not ready for native audio CallKit/PushKit/APNs implementation: the generic `iphoneos` build completed, but local signing identity inspection reported no valid local identities, signature verification reported an untrusted chain, embedded app/NSE/ShareExtension profiles expire on 2026-06-01, and `aps-environment` is missing.
+  - The main app already has `UIBackgroundModes` including `audio`, `fetch`, `processing`, and `voip`; App Groups and Keychain Sharing are present for app and extensions.
+  - The physical iPhone was visible but offline, so install/runtime proof could not run. Simulator proof remains insufficient for APNs, PushKit token issuance, background wake, or provisioning validation.
+  - 2.40E records the required remediation: paid Apple Developer Program team, valid trusted Apple Development certificate, online registered physical iPhone, configured App IDs for main app/NSE/ShareExtension, App Group, Push Notifications for the main app, durable development provisioning profiles, redacted entitlement/profile inspection, and physical-device install proof.
+  - NSE filtering entitlement remains absent and should be requested only if a later encrypted NSE-to-CallKit design chooses that path.
+  - CallKit, PushKit/APNs, background incoming, missed-call UX, production/public rollout, broad rollout, participant/device expansion, Element Call replacement, video, and global activation remain blocked.
 - Pilot sessions must follow the 2.27A checkpoint, 2.28A operations checklist, and 2.33B expansion runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
@@ -1104,9 +1111,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.40C — native audio signing and entitlement readiness audit`
+`2.40F — physical-device signing remediation execution`
 
-Goal: prove the signing, entitlement, Apple Developer account, physical-device, APNs environment, VoIP background mode, and push gateway prerequisites before any native audio CallKit/PushKit/APNs implementation begins.
+Goal: complete the paid-team/certificate/profile/device remediation checklist and prove, with redacted output, that the app, NSE, and ShareExtension sign and install on a physical iPhone with required App Group, Keychain Sharing, `voip` background mode, and main-app `aps-environment` entitlements.
 
 ## Do-Not-Touch Constraints
 

@@ -7,55 +7,73 @@ Branch:
 salemx-native-direct-calls
 
 Phase:
-2.40C — native audio signing and entitlement readiness audit.
+2.40F — physical-device signing remediation execution.
 
 Task:
-Inspection/audit only. Do not modify app/backend code. Do not wire CallKit. Do not wire PushKit/APNs. Do not change Element Call route. Do not add video. Do not globally activate production direct calls.
+Run or record the Apple Developer signing/provisioning remediation proof for future native audio CallKit/PushKit/APNs work.
+Do not implement CallKit.
+Do not implement PushKit/APNs.
+Do not change app/backend code unless explicitly requested.
+Do not change bundle IDs.
+Do not change Element Call route.
+Do not add video.
+Do not globally activate production direct calls.
 
 Context:
-- 2.39V implemented foreground/open-chat limitation UX polish for the private native audio card.
-- 2.39W proved the UX polish at runtime: visible foreground/open-chat limitation copy, no backend/token/LiveKit/raw-ID wording in visible copy, Element Call fallback visible/unchanged, no rendering side effects, and a short internal-pilot A -> B smoke returned idle/no active session with media failure none.
-- 2.40A reviewed the path from foreground/open-chat-only native audio toward proper incoming-call UX.
-- 2.40B documented the native audio incoming-call lifecycle architecture contract:
-  - native incoming lifecycle is separate from Element Call;
-  - CallKit reporting happens only after safe local validation;
-  - PushKit/APNs payloads must be minimal and opaque;
-  - token endpoint remains final authority;
-  - backend must not centralize Matrix trust decisions;
-  - APNs/PushKit work requires signing, entitlements, provisioning, physical-device, and push gateway proof first.
-- Additional non-engineering pilot windows, participant/device expansion, broad internal rollout, production/public rollout, unsupervised dogfood, CallKit/PushKit/APNs implementation, missed-call UX, video, session restoration, Element Call replacement, and global activation remain blocked.
+- 2.40B documented the native audio incoming-call lifecycle architecture contract.
+- 2.40D signing audit found blockers:
+  - generic `iphoneos` build completed;
+  - local signing identity inspection reported no valid local identities;
+  - signature verification reported an untrusted signing chain;
+  - embedded main app, NSE, and ShareExtension profiles existed but expire on 2026-06-01;
+  - `aps-environment` was missing;
+  - physical iPhone was visible but offline;
+  - simulator proof is insufficient.
+- 2.40E documented the remediation checklist.
+- Current proven native audio mode remains foreground/open encrypted direct 1:1 only.
+- CallKit, PushKit/APNs, missed-call UX, background incoming, video, Element Call replacement, broad rollout, production/public rollout, participant/device expansion, and global activation remain blocked.
 
 Goal:
-Audit whether the app and team are ready to begin future native audio CallKit/PushKit/APNs implementation work. This phase should prove or list blockers for signing, entitlements, Apple Developer account capabilities, physical device coverage, APNs environment, VoIP background mode, and push gateway prerequisites.
+Prove or record whether the signing/provisioning remediation checklist is complete enough to unblock future native audio CallKit/PushKit/APNs implementation planning.
 
-Inspect:
-- docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md
-- docs/direct-call/STATUS.md
-- docs/direct-call/WORKLOG.md
-- server/salemx-call-service/docs/STAGING_SMOKE_2026-05-21.md
-- project.yml
-- ElementX/SupportingFiles/target.yml
-- ElementX/SupportingFiles/ElementX.entitlements
-- NSE/SupportingFiles/NSE.entitlements
-- ElementX/Sources/Application/Settings/AppSettings.swift
-- ElementX/Sources/Services/ElementCall/ElementCallService.swift
-- ElementX/Sources/Services/Notification/Manager/NotificationManager.swift
-- NSE/Sources/NotificationHandler.swift
-- Any provisioning/signing docs or local build settings that are safe to inspect without printing secrets.
+Required remediation state:
+- paid Apple Developer Program team available;
+- valid Apple Development certificate installed locally;
+- signing chain trusted locally;
+- physical iPhone registered and online;
+- App IDs configured:
+  - main app: `kz.salemx.msg`;
+  - NSE: `kz.salemx.msg.nse`;
+  - ShareExtension: `kz.salemx.msg.shareextension`;
+  - App Group: `group.kz.salemx.msg`;
+- Push Notifications enabled for the main app;
+- App Groups and Keychain Sharing enabled for app and extensions;
+- durable development provisioning profiles generated for app, NSE, and ShareExtension.
 
-Questions:
-1. Is Push Notifications capability present for the app target and relevant profiles?
-2. Is `aps-environment` present or supplied by provisioning for the app target?
-3. Is VoIP background mode present and correctly scoped?
-4. Is a physical device available for future APNs/PushKit proof?
-5. Does the Apple Developer account/App ID support the required capabilities?
-6. Is native audio pusher registration able to stay separate from Element Call pusher registration?
-7. What APNs/push gateway or Sygnal prerequisites are required for staging?
-8. What must be proven before any CallKit adapter or PushKit registration code is written?
-9. What remains blocked even if signing looks ready?
+Checks:
+1. Inspect local signing identities without printing certificate private data.
+2. Build for `iphoneos`.
+3. Inspect embedded provisioning profiles with redacted output.
+4. Inspect signed app entitlements with redacted output.
+5. Confirm main app signed entitlements include `aps-environment`.
+6. Confirm app, NSE, and ShareExtension include App Group and Keychain Sharing entitlements.
+7. Confirm signed app Info.plist includes `UIBackgroundModes` with `voip`.
+8. Install app with NSE and ShareExtension on the registered physical iPhone.
+9. Confirm install succeeds.
+10. Do not print push tokens, raw device identifiers, certificates, private keys, provisioning private data, or Apple account private data.
+
+Expected report:
+A. Files/settings inspected.
+B. Signing identity status.
+C. Profile status for app/NSE/ShareExtension.
+D. Signed entitlement status.
+E. Physical-device install result.
+F. Remaining blockers.
+G. Whether CallKit/PushKit/APNs implementation planning can proceed.
+H. Recommended next phase.
 
 Hard constraints:
-- Do not implement CallKit, PushKit, APNs, or native incoming-call code.
+- Do not implement CallKit, PushKit, APNs, native background incoming, or missed-call UX.
 - Do not approve additional non-engineering pilot windows.
 - Do not approve participant/device expansion.
 - Do not approve broad internal rollout.
@@ -67,16 +85,10 @@ Hard constraints:
 - Do not weaken trusted-device/E2EE behavior.
 - Do not use `directOneToOneCallsEnabled` as the native audio gate.
 - Token endpoint remains final authority.
-- No raw IDs, tokens, JWTs, secrets, LiveKit room names, Matrix event bodies, or credentialed URLs in reports.
+- No raw IDs, tokens, JWTs, secrets, certificates, private keys, profile secrets, LiveKit room names, Matrix event bodies, or credentialed URLs in reports.
 
-Expected output:
-A. Files inspected.
-B. Signing and entitlement readiness.
-C. Physical-device readiness.
-D. APNs/PushKit/pusher prerequisites.
-E. Apple account/provisioning blockers.
-F. Element Call separation risks.
-G. Redaction/privacy risks.
-H. Required proof before implementation.
-I. Remaining blocked items.
-J. Recommended next phase.
+Suggested next phase if complete:
+2.40G — disabled native incoming-call service and CallKit adapter protocols
+
+Suggested next phase if still blocked:
+2.40G — signing remediation follow-up

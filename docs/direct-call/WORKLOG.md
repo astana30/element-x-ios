@@ -1767,3 +1767,16 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Recommended phased implementation: 2.40C signing/entitlement readiness audit, 2.40D disabled native incoming service and CallKit adapter protocols/mocks, 2.40E push/NSE classification dry-run, 2.40F device-only synthetic CallKit incoming proof, 2.40G PushKit/APNs registration dry-run, 2.40H supervised device E2E incoming proof, then missed/decline/cancel/background/killed-app tests.
 - No app or backend code changed. No CallKit, PushKit, APNs, missed-call UX, background incoming, video, Element Call replacement, rollout expansion, or global activation was implemented.
 - Recommended next phase: `2.40C — native audio signing and entitlement readiness audit`.
+
+## 2026-05-28 — 2.40E Apple Developer Signing Remediation Checklist
+
+- Documented the remediation checklist required before native audio CallKit/PushKit/APNs implementation can start.
+- The 2.40D audit found that a generic `iphoneos` build completed, but signing readiness is blocked: local signing identity inspection reported no valid local identities, signature verification reported an untrusted chain, embedded profiles expire on 2026-06-01, and `aps-environment` is missing from main app/NSE/ShareExtension profiles.
+- Confirmed existing positives: the main app has `UIBackgroundModes` with `audio`, `fetch`, `processing`, and `voip`; App Groups and Keychain Sharing are configured for the app, NSE, and ShareExtension.
+- Confirmed physical-device proof did not run because the physical iPhone was visible but offline. Simulator-only proof remains insufficient for APNs, PushKit token issuance, background wake, or provisioning validation.
+- Recorded the required Apple Developer state: paid Apple Developer Program team, valid trusted Apple Development certificate, registered online physical iPhone, and Xcode build/sign/install proof on that device.
+- Recorded the required App IDs: main app `kz.salemx.msg`, NSE `kz.salemx.msg.nse`, ShareExtension `kz.salemx.msg.shareextension`, and App Group `group.kz.salemx.msg`.
+- Recorded required capabilities and profiles: Push Notifications for the main app producing `aps-environment`, App Groups, Keychain Sharing, background mode with `voip`, durable development profiles for app/NSE/ShareExtension, and NSE filtering entitlement only if a later encrypted NSE-to-CallKit path chooses it.
+- Recorded redacted local verification checks for signing identities, embedded profiles, signed entitlements, `aps-environment`, App Group, Keychain Sharing, physical-device install, and `voip` background mode.
+- No entitlements, bundle IDs, app code, backend code, Element Call route, CallKit, PushKit, APNs, video, or rollout settings changed.
+- Recommended next phase: `2.40F — physical-device signing remediation execution` if the paid team/device/certificate are available, otherwise `2.40F — paid Apple Developer account setup and profile regeneration`.
