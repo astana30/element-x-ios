@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.38B — internal pilot operational proof and kill-switch rehearsal.
+After 2.39B — narrow non-engineering internal pilot preparation runbook.
 
 Current checkpoints:
 - App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
@@ -58,6 +58,7 @@ Current checkpoints:
 - Engineering-only internal pilot activation soak session 3 rerun: 2.37F passed after the caller media setup failure fix. The main soak kept private dogfood unset and the internal rollout path active. Preflight passed, trigger dry-run reported `activationSource=internalPilot`, `internalPilotActivationDecision=activationAllowed`, `internalPilotActivationReason=none`, and A -> B, B -> A, repeated calls x2, decline, cancel, timeout, relaunch fail-closed, listener/open-room unavailable, post-listener recovery, and Element Call fallback rows passed. The repeated-call regression guard observed no `tokenBackendRejected`, no `connectingFailed`, and no split state. Token final-authority was not rerun in this restored allowlisted pass because sessions 1 and 2 already covered the temporary ineligible fixture path. Final A/B state was idle/no active session with media failure `none`, no rollback, no stop criteria, no runtime bug, and no redaction issue. The 3-session engineering-only internal pilot activation soak is complete for the required runtime matrix.
 - Internal pilot operational readiness and kill-switch plan: 2.38A records that the server-backed activation path is stable for engineering accounts but does not approve non-engineering internal dogfood. The plan defines required owners, kill-switch model, allowlist operations, redacted monitoring baseline, stop criteria, rollback procedure, redacted incident report template, and remaining non-engineering blockers. Non-engineering internal dogfood remains blocked until this plan is implemented and proven by an operational proof/kill-switch rehearsal.
 - Internal pilot operational proof and kill-switch rehearsal: 2.38B proved the engineering-only kill-switch model. Enabled state reached `activeAudio` via server-backed internal pilot activation with private dogfood unset. Removing `NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED` blocked dry-run/start with rollout-disabled reasons and no Matrix/token/media/LiveKit side effects. Restarting the local staging call-service with an empty allowlist blocked activation with safe reason `serviceUnavailable` before media/LiveKit. Restoring allowlist, the correct encrypted r1/r2 DM, and A/B trust returned both sides to `activationAllowed`; A Start -> B Accept reached `activeAudio`; hangup returned A/B idle/no active session with media failure `none`. Element Call fallback remained visible and unchanged.
+- Narrow non-engineering internal pilot preparation runbook: 2.39B documents preparation for a future supervised 1-2 participant non-engineering internal pilot window. Execution is not yet approved. The runbook defines named participant/device scope, consent/expectation text, owners, preflight, app/backend gates, first-session matrix, stop criteria, rollback, redacted report template, and remaining blockers.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -438,34 +439,36 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.38C — internal pilot operational readiness completion review.
+2.39C — narrow non-engineering pilot execution readiness approval.
 
 Task:
 Inspection/decision review only. Do not modify code. Do not commit.
 
 Context:
-2.37G concluded that the server-backed internal pilot activation path is stable for engineering accounts only.
-2.38A added the operational readiness and kill-switch plan.
-2.38B passed the engineering-only operational proof and kill-switch rehearsal:
-- private dogfood unset for the main path;
-- internal rollout enabled for positive/restore paths;
-- backend allowlisted engineering A/B for positive/restore paths;
-- app-side rollout removal blocked dry-run/start with rollout-disabled reasons and no Matrix/token/media/LiveKit side effects;
-- backend empty-allowlist restart blocked activation before media/LiveKit with a safe unavailable reason;
-- restored allowlist plus the correct encrypted r1/r2 DM and A/B trust returned both sides to `activationAllowed`;
-- A Start -> B Accept reached `activeAudio`;
-- hangup returned A/B idle/no active session with media failure `none`;
-- Element Call fallback remained visible and unchanged.
+2.39A concluded that a very narrow non-engineering internal pilot may be prepared, but execution was not yet approved.
+2.39B added the preparation runbook:
+- 1-2 named non-engineering internal participants only;
+- named accounts/devices only;
+- staging call-service and staging LiveKit only;
+- private native audio card only;
+- foreground/open encrypted direct 1:1 rooms only;
+- verified/trusted peers only;
+- one active native 1:1 call at a time;
+- Element Call fallback visible and unchanged;
+- participant consent/expectation text;
+- required owners, preflight, app/backend gates, first-session matrix, stop criteria, rollback, and redacted report template.
 
 Current status:
-- Engineering server-backed internal pilot activation path is stable for engineering accounts under staging constraints.
-- Operational kill-switch controls have been rehearsed for app-side rollout disablement and backend allowlist removal/restore.
-- Non-engineering internal dogfood remains blocked.
+- Engineering server-backed internal pilot activation path is stable under staging constraints.
+- App-side rollout and backend allowlist kill switches were rehearsed.
+- Restore after allowlist recovery was proven.
+- Non-engineering pilot execution is not yet approved.
+- Broad internal rollout remains blocked.
 - Production/public rollout remains blocked.
 - No CallKit, push/background incoming, missed-call UX, video, session restoration, Element Call replacement, or global activation exists.
 
 Goal:
-Decide whether operational readiness is complete enough to prepare a separate narrow non-engineering internal pilot readiness review, and define the next safe phase.
+Decide whether the prepared, supervised, staging-only, 1-2 participant non-engineering pilot window can be executed, or whether more work is required first.
 
 Inspect:
 - `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`
@@ -476,16 +479,17 @@ Inspect:
 - relevant internal-pilot activation and eligibility code only if needed for decision context
 
 Questions:
-1. Can the engineering-only operational readiness and kill-switch proof be considered complete?
-2. What exact guarantees are now proven?
-3. What still blocks non-engineering internal dogfood?
-4. What operational items remain manual or runner-based?
-5. Is a narrow non-engineering readiness review appropriate as the next planning step, or should the next phase be monitoring automation / UX limitation polish / CallKit-push planning?
-6. What must remain mandatory stop criteria?
-7. What should be the next phase name?
+1. Does the 2.39B runbook contain enough operational detail to approve one supervised non-engineering pilot window?
+2. What exact constraints must apply if execution is approved?
+3. What must be verified immediately before execution?
+4. What must remain disabled?
+5. Is foreground/open-room-only behavior acceptable for the first supervised participants after consent?
+6. What owner sign-offs are mandatory?
+7. What stop criteria require immediate rollback?
+8. What report must be recorded after the session?
+9. What should be the next phase name?
 
 Hard constraints:
-- Do not approve non-engineering internal dogfood unless fully justified by this review.
 - Do not approve broad internal rollout.
 - Do not approve production/public rollout.
 - Do not replace Element Call toolbar.
@@ -500,9 +504,10 @@ Hard constraints:
 
 Expected output:
 A. Files inspected.
-B. Operational readiness completion decision.
-C. Proven guarantees.
-D. Remaining blockers.
-E. Remaining operational risks/manual steps.
-F. Recommended next workstream.
-G. Recommended next phase name.
+B. Execution readiness decision.
+C. Required scope and constraints.
+D. Required preflight/sign-offs.
+E. Must-remain-disabled items.
+F. Stop/rollback criteria.
+G. Remaining risks.
+H. Recommended next phase name.

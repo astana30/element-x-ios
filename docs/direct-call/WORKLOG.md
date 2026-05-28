@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Added the narrow non-engineering internal pilot preparation runbook.
 - Recorded the internal pilot operational proof and kill-switch rehearsal.
 - Added the internal pilot operational readiness and kill-switch plan.
 - Recorded engineering-only internal pilot activation soak session 3 rerun.
@@ -60,6 +61,18 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-28 — 2.39B Narrow Non-Engineering Internal Pilot Preparation Runbook
+
+- Added a docs-only preparation runbook for a future very narrow non-engineering internal pilot window.
+- Recorded the decision from 2.39A: preparation may proceed, but execution is not yet approved.
+- Scope is limited to 1-2 named non-engineering internal participants, named accounts/devices only, staging call-service and staging LiveKit only, private native audio card only, foreground/open encrypted direct 1:1 rooms only, verified/trusted peers only, one active native 1:1 call at a time, Element Call fallback visible/unchanged, no unmanaged devices, and no public or broad rollout.
+- Added participant consent and expectation text covering internal-pilot status, foreground/open-chat limitation, no background incoming calls, no CallKit incoming screen, no missed-call UX, Element Call fallback, and redacted pass/fail reporting.
+- Added required owners: pilot owner, backend owner, allowlist owner, rollback operator, redaction/report reviewer, and incident decision owner.
+- Added required preflight, app gates, backend gates, first-session matrix, stop criteria, rollback procedure, and redacted report template.
+- Re-stated forbidden report content: Matrix access tokens, Synapse admin token, LiveKit API secret, participant JWT/token, raw room/user/peer/device IDs, LiveKit room names, media keys, Matrix event bodies, Redis credentials, full request/response bodies, and backend URLs with credentials.
+- Remaining blockers stay explicit: no CallKit, no push/background incoming, no missed-call UX, no session restoration, no video, no production/public rollout, no broad internal rollout, monitoring remains runner/report based, and support/rollback is not yet proven with non-engineering participants.
+- No app or backend code changed, and execution of the pilot remains blocked pending `2.39C — narrow non-engineering pilot execution readiness approval`.
 
 ## 2026-05-28 — 2.38B Internal Pilot Operational Proof And Kill-Switch Rehearsal
 

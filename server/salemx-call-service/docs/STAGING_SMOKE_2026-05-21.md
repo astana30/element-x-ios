@@ -53,6 +53,7 @@ No tokens, JWTs, passwords, shared secrets, authorization header values, or Live
 | Engineering-only internal pilot activation soak session 3 rerun | Passed |
 | Internal pilot operational readiness and kill-switch plan | Added |
 | Internal pilot operational proof and kill-switch rehearsal | Passed |
+| Narrow non-engineering internal pilot preparation runbook | Added; execution not approved |
 
 ## Root Cause
 
@@ -146,6 +147,7 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - The 3-session engineering-only server-backed internal pilot activation soak is complete for the required runtime matrix. Non-engineering internal dogfood, broad internal rollout, production/public rollout, CallKit, push/background incoming, missed calls, video, session restoration, and global activation remain blocked pending a separate readiness review.
 - The 2.38A operational readiness plan records the required ownership model, kill-switch model, allowlist operations, monitoring baseline, stop criteria, rollback procedure, and redacted incident template before any non-engineering internal pilot can be considered. Non-engineering internal dogfood remains blocked until the plan is implemented and proven by an operational proof/kill-switch rehearsal.
 - The 2.38B operational proof rehearsed the internal pilot kill switch with engineering accounts only. Enabled state reached `activeAudio` through the server-backed internal pilot path with private dogfood unset. Removing the app-side internal rollout gate blocked dry-run/start with rollout-disabled reasons and no Matrix/token/media/LiveKit side effects. Restarting the local staging call-service with an empty allowlist blocked activation with a safe unavailable reason before media/LiveKit. Restoring the allowlist and correct trusted encrypted r1/r2 DM returned A/B to `activationAllowed`; A Start -> B Accept reached `activeAudio`, and hangup returned A/B idle/no active session with media failure `none`. Element Call fallback remained visible and unchanged.
+- The 2.39B preparation runbook allows planning a future very narrow non-engineering internal pilot window but does not approve execution. Scope is limited to 1-2 named internal participants, named accounts/devices only, staging call-service and staging LiveKit only, foreground/open encrypted trusted 1:1 rooms, private native audio card only, one active native 1:1 call at a time, Element Call fallback visible/unchanged, and redacted reporting only.
 - Controlled engineering dogfood may continue under the same narrow staging-only constraints.
 
 ## Next Step
@@ -163,4 +165,4 @@ Controlled engineering dogfood may continue on the staging path under the privat
 - Element Call toolbar path unchanged and available as fallback;
 - no CallKit, push, video, broad internal rollout, public rollout, or global production activation.
 
-Next, continue with `2.38C — internal pilot operational readiness completion review` while keeping controlled dogfood engineering-only, staging-only, and redacted.
+Next, continue with `2.39C — narrow non-engineering pilot execution readiness approval` while keeping broad internal rollout, production/public rollout, CallKit, push/background incoming, missed-call UX, video, session restoration, and global activation blocked.

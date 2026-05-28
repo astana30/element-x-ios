@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.38B — internal pilot operational proof and kill-switch rehearsal.
+After 2.39B — narrow non-engineering internal pilot preparation runbook.
 
 ## Latest App Code Checkpoint
 
@@ -32,6 +32,12 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 ## Proven Checkpoints
 
 - SalemX call-service now pre-creates allocated LiveKit rooms through server-side RoomService `CreateRoom` before issuing participant tokens. Participant tokens remain scoped to room join/publish/subscribe, and room provision failures return a safe fail-closed error without issuing a token.
+- Narrow non-engineering internal pilot preparation is documented, but execution is not yet approved:
+  - Scope is limited to a future supervised 1-2 participant internal window, named accounts/devices only, staging call-service and staging LiveKit only, private native audio card only, foreground/open encrypted direct 1:1 rooms only, verified/trusted peers only, one active native 1:1 call at a time, and Element Call fallback visible/unchanged.
+  - Participant expectations explicitly state that this is not production, calls work only while the encrypted direct chat is open, there is no background incoming call behavior, no CallKit incoming screen, no missed-call UX, and Element Call remains the fallback.
+  - Required owners, preflight, app gates, backend gates, first-session matrix, stop criteria, rollback, and redacted report template are recorded.
+  - The main non-engineering preparation path keeps `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED` unset and uses the server-backed internal pilot activation path with token endpoint final authority.
+  - Broad internal rollout, production/public rollout, CallKit, push/background incoming, missed-call UX, video, session restoration, and global activation remain blocked.
 - Staging iOS private native audio smoke passed after LiveKit room pre-create:
   - A/B reached `productionSessionState=activeAudio`.
   - A/B had `productionEncryptionState=ready`.
@@ -1015,9 +1021,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.38C — internal pilot operational readiness completion review`
+`2.39C — narrow non-engineering pilot execution readiness approval`
 
-Goal: decide whether the engineering-only internal pilot operational controls are complete enough to support a future narrow non-engineering readiness review, while keeping non-engineering internal dogfood, production/public rollout, CallKit, push/background incoming, video, and global activation blocked.
+Goal: decide whether the prepared, supervised, staging-only, 1-2 participant non-engineering pilot window can be executed, while keeping broad internal rollout, production/public rollout, CallKit, push/background incoming, missed-call UX, video, session restoration, and global activation blocked.
 
 ## Do-Not-Touch Constraints
 

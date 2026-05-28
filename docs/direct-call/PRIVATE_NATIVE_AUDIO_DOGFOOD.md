@@ -2293,6 +2293,211 @@ Element Call phone/video fallback controls were visually confirmed visible and u
 
 Next phase should use `2.38C — internal pilot operational readiness completion review`.
 
+## 2.39B Narrow Non-Engineering Internal Pilot Preparation Runbook
+
+The 2.39A review concluded that a very narrow non-engineering internal pilot may be prepared, but execution is not yet approved. This section is a preparation runbook only. It does not approve a pilot window, broad internal rollout, production/public rollout, Element Call replacement, CallKit, push/background incoming, missed-call UX, video, session restoration, or global activation.
+
+### Preparation Decision
+
+- Preparation is allowed for one future supervised pilot window.
+- Execution is not approved until a separate readiness approval phase passes.
+- Broad internal rollout remains blocked.
+- Production/public rollout remains blocked.
+- Element Call remains the fallback path and must stay visible and unchanged.
+
+### Scope
+
+- 1-2 named non-engineering internal participants only.
+- Named accounts and named devices only.
+- Staging call-service and staging LiveKit only.
+- Private native audio card only.
+- Foreground/open encrypted direct 1:1 rooms only.
+- Verified/trusted peers only.
+- One active native 1:1 call at a time.
+- Element Call fallback visible and unchanged.
+- No unmanaged devices.
+- No wildcard or broad cohort.
+- No public, production, or broad internal rollout.
+
+### Participant Consent And Expectations
+
+Use this plain-language expectation text before any participant is added to the allowlist:
+
+```text
+This is an internal pilot, not production.
+Native audio calls work only while the encrypted direct chat is open.
+There are no background incoming calls.
+There is no CallKit system incoming-call screen.
+There is no missed-call UX.
+Use the normal Element Call controls as fallback.
+Report failures only as pass/fail/not-run with the provided redacted fields.
+Do not share screenshots or logs that contain raw IDs, tokens, secrets, Matrix event content, or LiveKit room names.
+```
+
+### Required Owners
+
+| Role | Requirement |
+| --- | --- |
+| Pilot owner | Owns scope, participant consent, start/stop decision, and final continue/pause decision |
+| Backend owner | Watches readiness, Redis, LiveKit provisioning, eligibility, and token final-authority behavior |
+| Allowlist owner | Adds/removes only named pilot accounts, keeps no wildcard entries, and maintains a redacted audit trail |
+| Rollback operator | Disables rollout/allowlist, restarts call-service if required, relaunches clients, and verifies idle/no active session |
+| Redaction/report reviewer | Reviews runner output, reports, screenshots, and notes before sharing or committing |
+| Incident decision owner | Decides continue/pause after stop criteria, rollback, or suspected leakage |
+
+### Required Preflight
+
+- Readiness `ready=true`.
+- Readiness `reason=ok`.
+- Redis allocation store connected.
+- Redis rate-limit store connected.
+- Storage key configured.
+- LiveKit room provisioning configured.
+- Native audio eligibility configured.
+- Native audio allowlist configured.
+- Participant accounts/devices allowlisted.
+- A/B trust ready.
+- Encrypted direct 1:1 DM open.
+- No stale active session.
+- Element Call fallback visible.
+
+### Required App Gates
+
+```sh
+export IS_RUNNING_INTEGRATION_TESTS=1
+export NATIVE_DIRECT_CALL_DIAGNOSTICS=1
+export NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1
+export NATIVE_DIRECT_CALL_PRODUCT_UI_ENABLED=1
+export NATIVE_DIRECT_CALL_ELIGIBILITY_STATUS_ENABLED=1
+export NATIVE_DIRECT_CALL_INTERNAL_PILOT_ACTIVATION_DRY_RUN_ENABLED=1
+export NATIVE_DIRECT_CALL_INTERNAL_PILOT_ROLLOUT_ENABLED=1
+export NATIVE_DIRECT_CALL_PRODUCTION_START_ENABLED=1
+export NATIVE_DIRECT_CALL_PRODUCTION_TOKEN_BASE_URL=<staging call-service>
+unset NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED
+unset NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED
+```
+
+The private dogfood gate must remain unset for the main non-engineering internal-pilot path. The legacy fake/dry-run gate must remain unset.
+
+### Backend Gates
+
+- `SALEMX_NATIVE_AUDIO_ELIGIBILITY_ENABLED=1` or the current deployment-equivalent native audio eligibility switch must be enabled.
+- The allowlist contains only named pilot accounts.
+- No wildcard allowlist.
+- Token endpoint remains final authority.
+- Allowlist removal must block access before media/LiveKit.
+
+### First-Session Matrix
+
+| Row | Required result |
+| --- | --- |
+| A -> B happy path | A/B reach `activeAudio`, hangup returns A/B idle/no active session, media failure `none` |
+| B -> A reverse path | Same as happy path, opposite direction |
+| Repeated call x2 | Both attempts return idle/no active session, no split state |
+| Decline incoming | Caller/callee return idle with safe terminal reason |
+| Cancel outgoing | Caller/callee return idle with safe terminal reason |
+| Timeout | A/B return idle/no active session with timeout terminal reasons |
+| Relaunch fail-closed if practical | Relaunch leaves no stale active/ringing session |
+| Listener/open-room unavailable behavior | Fails closed or times out without media/LiveKit connect |
+| Token final-authority if safe | Ineligible fixture or allowlist removal blocks before media/LiveKit |
+| Element Call fallback visible check | Normal Element Call phone/video controls remain visible and unchanged |
+
+### Stop Criteria
+
+Stop immediately if any of the following occurs:
+
+- Raw secret, token, JWT, key, or ID appears.
+- Call starts without required gates.
+- Backend issues a token for invalid room, peer, trust, or membership state.
+- Stale active/ringing state survives cleanup or relaunch.
+- Media failure does not fail closed.
+- Split-brain appears.
+- Element Call route changes.
+- Untrusted peer/device can connect.
+- Participant confusion about the foreground-only limitation appears.
+
+### Rollback
+
+1. Disable the internal rollout gate.
+2. Clear/remove the backend allowlist entry.
+3. Restart call-service if config-based allowlist changes require it.
+4. Relaunch apps.
+5. Verify A/B idle/no active session.
+6. Verify `internalPilotActivationDecision` no longer reports `activationAllowed`.
+7. Keep Element Call fallback available.
+8. Rotate secrets if leakage is suspected.
+
+### Redacted Report Template
+
+```text
+Session date/time:
+Participant labels:
+
+Preflight:
+- readiness ready=true/false reason=<safe enum>
+- Redis allocation/rate-limit connected=true/false
+- storageKeyConfigured=true/false
+- liveKitRoomProvisioningConfigured=true/false
+- eligibility/allowlist configured=true/false
+- trust ready=true/false
+- encrypted direct 1:1 DM open=true/false
+- no stale active session=true/false
+- Element Call fallback visible=true/false
+
+Matrix:
+- A -> B:
+- B -> A:
+- repeated x2:
+- decline:
+- cancel:
+- timeout:
+- relaunch fail-closed:
+- listener/open-room unavailable:
+- token final-authority:
+- Element Call fallback visible:
+
+Activation:
+- activationSource:
+- internalPilotActivationDecision:
+- internalPilotActivationReason:
+
+Final:
+- final A/B state:
+- stop criteria hit yes/no:
+- rollback used yes/no:
+- redaction issue yes/no:
+- decision continue/pause:
+```
+
+Forbidden report content:
+
+- Matrix access tokens.
+- Synapse admin token.
+- LiveKit API secret.
+- Participant JWT/token.
+- Raw room IDs.
+- Raw user/peer/device IDs.
+- LiveKit room names.
+- Media keys.
+- Matrix event bodies.
+- Redis credentials.
+- Full request/response bodies.
+- Backend URLs with credentials.
+
+### Remaining Blockers
+
+- No CallKit.
+- No push/background incoming.
+- No missed-call UX.
+- No session restoration.
+- No video.
+- No production/public rollout.
+- No broad internal rollout.
+- Monitoring remains runner/report based.
+- Support and rollback are not yet proven with non-engineering participants.
+
+Next phase should use `2.39C — narrow non-engineering pilot execution readiness approval`.
+
 ## 2.35B Engineering Expansion Operations Handoff
 
 The 3-session engineering expansion soak completed cleanly, so narrow engineering dogfood can continue without per-session Codex supervision only when a named engineering operator owns the session and this handoff checklist is followed. This is still staging-only engineering dogfood, not non-engineering internal dogfood, product beta, public rollout, production activation, or Element Call replacement.
