@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.39R — supervised non-engineering pilot window 3.
+After 2.39T — post-pilot hardening plan.
 
 ## Latest App Code Checkpoint
 
@@ -68,6 +68,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - App-side kill-switch check blocked safely after internal rollout was unset and A/B relaunched, with no active session, token request, media connect, or LiveKit connect.
   - Element Call fallback remained visible/unchanged, no stop criteria hit, no redaction issue was observed, and no app/backend code changed.
   - No additional non-engineering pilot window is approved by this result; continue only to post-window review.
+- Post-pilot hardening plan is recorded:
+  - 2.39S paused additional non-engineering pilot windows after the clean 2.39R window.
+  - The foreground-only supervised path is proven for approved named participants/devices under staging constraints, but further same-cap windows are not the next highest-value work.
+  - Foreground limitation UX must clearly explain that native audio works only while the encrypted direct chat is open, with no background incoming, no CallKit incoming screen, and no missed-call UX yet. Element Call remains fallback.
+  - In-card state polish must cover chat not open/listener unavailable, trust not ready, participant not eligible, service unavailable, timed out, cancelled, safely failed, retry, and dismiss states without raw backend/token/LiveKit details.
+  - Mandatory monitoring remains redacted only: readiness booleans, activation source/decision/reason, token status/errcode/reason/issued, LiveKit pre-create and failure enum, media failure enum, session state/active boolean, terminal reason, and cleanup/disconnect booleans.
+  - Operational monitoring automation should reduce runner-only dependency and alert on `tokenBackendRejected`, `liveKitNetworkFailed`, split-brain, stale active session, readiness not ready, and `tokenIssued=false` for an otherwise eligible call.
+  - Additional non-engineering windows, participant/device expansion, broad internal rollout, production/public rollout, unsupervised dogfood, Element Call replacement, CallKit/push implementation, video, global activation, and `directOneToOneCallsEnabled` as the native audio gate remain blocked.
 - Staging iOS private native audio smoke passed after LiveKit room pre-create:
   - A/B reached `productionSessionState=activeAudio`.
   - A/B had `productionEncryptionState=ready`.
@@ -1073,9 +1081,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.39S — post-window 3 non-engineering pilot review`
+`2.39U — post-pilot hardening workstream selection`
 
-Goal: decide what the clean 2.39R supervised non-engineering window proves after the 2.39K failure, 2.39M observability, 2.39N retry diagnostics, and 2.39P recovery window; whether execution should pause for product/operational hardening or any further supervised window can be considered; and what remains blocked before broader internal readiness.
+Goal: choose the first implementation workstream from the post-pilot hardening plan: foreground UX polish, monitoring automation, CallKit/push/background incoming planning, audio controls polish, or a later additional soak after hardening. Do not approve additional non-engineering windows, participant/device expansion, broad internal rollout, or production/public rollout in this phase.
 
 ## Do-Not-Touch Constraints
 

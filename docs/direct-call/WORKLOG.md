@@ -1716,3 +1716,15 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Stop criteria hit: no. No `tokenBackendRejected`, no `liveKitNetworkFailed`, no split-brain, no stale active session, no participant confusion, and no redaction issue were observed.
 - Rollback was not needed beyond the planned app-side kill-switch row. No app/backend code changed during the window.
 - Decision: continue to a post-window readiness review; no additional non-engineering pilot window is approved by this result.
+
+## 2026-05-28 — 2.39T Post-Pilot Hardening Plan
+
+- Recorded the 2.39S decision to pause additional non-engineering pilot windows after the clean 2.39R window.
+- Confirmed the valid claims: server-backed internal pilot activation works for approved named participants/devices under staging gates; token diagnostics were `tokenStatus=200`, `tokenErrcode=none`, `tokenReason=issued`, and `tokenIssued=true`; LiveKit/media diagnostics were clean; cancel, timeout, hangup, final idle/no active session, app-side kill-switch, and Element Call fallback passed.
+- Documented foreground limitation UX requirements: native audio works only while the encrypted direct chat is open; no background incoming, CallKit system incoming screen, or missed-call UX exists yet; Element Call remains fallback.
+- Documented in-card state polish requirements for listener unavailable, trust not ready, participant not eligible, service unavailable, timed out, cancelled, safely failed, retry, and dismiss states.
+- Locked the mandatory monitoring baseline to redacted readiness, activation, token, LiveKit/media, session, terminal, and cleanup/disconnect fields only.
+- Added operational monitoring automation requirements and alert-worthy states: `tokenBackendRejected`, `liveKitNetworkFailed`, split-brain, stale active session, readiness not ready, and `tokenIssued=false` for an otherwise eligible call.
+- Added support/rollback requirements covering operator procedure, kill-switch checklist, allowlist removal, app relaunch, idle/no active session verification, incident template, and secret rotation trigger.
+- Kept additional non-engineering windows, participant/device expansion, broad internal rollout, production/public rollout, Element Call replacement, CallKit/push implementation, video, global activation, and `directOneToOneCallsEnabled` as a native audio gate blocked.
+- Recommended next phase: `2.39U — post-pilot hardening workstream selection`.

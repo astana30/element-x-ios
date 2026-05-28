@@ -7,24 +7,49 @@ Branch:
 salemx-native-direct-calls
 
 Phase:
-2.39S — post-window 3 non-engineering pilot review.
+2.39U — post-pilot hardening workstream selection.
 
 Task:
-Inspection/decision review only. Do not modify app/backend code. Do not execute another pilot window. Do not approve broad internal rollout. Do not approve production/public rollout. Do not approve unsupervised dogfood or participant/device expansion.
+Inspection/decision review only. Do not modify app/backend code. Do not execute another pilot window. Do not approve additional non-engineering windows, participant/device expansion, broad internal rollout, production/public rollout, or unsupervised dogfood.
 
 Context:
-- 2.39K supervised non-engineering pilot window 2 failed but failed closed: A saw `tokenBackendRejected` / `connectingFailed`, B saw `liveKitNetworkFailed`, both returned idle/no active session, no split-brain, and no redaction issue.
-- 2.39M added redacted token/backend and LiveKit setup observability and fixed runner simulator identifier redaction.
-- 2.39N retried the minimal failed paths. A -> B and B -> A both reached `activeAudio`, token diagnostics were `200` / `issued`, token issued true, LiveKit room pre-create and connect were attempted, LiveKit failure was `none`, media failure was `none`, and final A/B state was idle/no active session. The 2.39K failure did not reproduce.
-- 2.39P ran the approved shorter recovery window with the same participant/device cap and no expansion. A -> B, B -> A, and one repeated A -> B call reached `activeAudio`; every row reported `tokenStatus=200`, `tokenErrcode=none`, `tokenReason=issued`, `tokenIssued=true`, `liveKitRoomPrecreateAttempted=true`, LiveKit connect attempted, `productionLiveKitFailureReason=none`, and `productionMediaFailureReason=none`.
-- 2.39Q approved exactly one additional supervised non-engineering pilot window with the same participant/device cap.
-- 2.39R ran that approved window. A -> B, B -> A, and one repeated A -> B call reached `activeAudio`; outgoing cancel returned A/B idle/no active session with terminal `cancelled`; timeout returned A/B idle/no active session with A `outgoingTimeout` and B `incomingTimeout`; app-side kill-switch blocked safely after internal rollout was unset; Element Call fallback remained visible and unchanged.
-- 2.39R active call rows reported `tokenStatus=200`, `tokenErrcode=none`, `tokenReason=issued`, `tokenIssued=true`, `liveKitRoomPrecreateAttempted=true`, LiveKit connect attempted, `productionLiveKitFailureReason=none`, and `productionMediaFailureReason=none`.
-- No `tokenBackendRejected`, no `liveKitNetworkFailed`, no split-brain, no stale active session, no participant confusion, no redaction issue, and no app/backend code change occurred during 2.39R.
-- No additional non-engineering pilot window is approved by 2.39R.
+- 2.39I, 2.39P, and 2.39R supervised non-engineering foreground-only windows passed under strict staging constraints.
+- 2.39K failed closed with `tokenBackendRejected` / `liveKitNetworkFailed`; after 2.39M redacted token/LiveKit observability, the failure did not reproduce in 2.39N, 2.39P, or 2.39R.
+- 2.39R passed A -> B, B -> A, one repeated A -> B, outgoing cancel, timeout, app-side kill-switch, final idle/no active session, and Element Call fallback checks.
+- 2.39R token diagnostics were clean: `tokenStatus=200`, `tokenErrcode=none`, `tokenReason=issued`, `tokenIssued=true`.
+- 2.39R LiveKit/media diagnostics were clean: `liveKitRoomPrecreateAttempted=true`, `productionLiveKitFailureReason=none`, and `productionMediaFailureReason=none`.
+- 2.39S review paused additional non-engineering pilot windows. Another same-cap supervised window has diminishing value compared with product and operational hardening.
+- 2.39T recorded the post-pilot hardening plan.
+
+Hardening areas recorded in 2.39T:
+- foreground limitation UX;
+- in-card state polish;
+- redacted monitoring baseline;
+- operational monitoring automation;
+- support/rollback procedure;
+- incident reporting and secret rotation triggers;
+- future CallKit/push/background incoming planning readiness.
+
+Current blockers:
+- foreground/open-room-only limitation;
+- no CallKit;
+- no push/background incoming;
+- no missed-call UX;
+- no video;
+- no session restoration;
+- monitoring still runner/report based;
+- support/rollback process is not product-grade;
+- no production/public rollout governance.
 
 Goal:
-Decide what the clean 2.39R window proves, what remains blocked, and whether the safest next workstream is another supervised window, foreground UX polish, CallKit/push planning, operational monitoring automation, or broader readiness documentation.
+Choose the next implementation workstream after the post-pilot hardening plan.
+
+Options:
+A. foreground UX polish implementation;
+B. operational monitoring automation;
+C. CallKit/push/background incoming planning;
+D. audio controls polish;
+E. defer implementation and prepare another readiness review.
 
 Inspect:
 - `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`
@@ -34,38 +59,34 @@ Inspect:
 - `server/salemx-call-service/docs/STAGING_SMOKE_2026-05-21.md`
 
 Questions:
-1. What can be claimed after 2.39R?
-2. What claims remain invalid?
-3. Should non-engineering pilot execution pause for product/operational hardening?
-4. Is any further supervised non-engineering window justified, or should the next workstream be monitoring automation, foreground UX polish, CallKit/push planning, or broader readiness docs?
-5. Should participant/device count remain unchanged?
-6. What monitoring fields remain mandatory?
-7. What remains blocked before broad internal rollout?
-8. What remains blocked before production/public rollout?
+1. Which workstream should be implemented first?
+2. What is the smallest safe implementation slice?
+3. What must stay blocked?
+4. What tests and runtime proof are required?
+5. Should any new pilot window be considered before hardening? Default answer should be no unless fully justified.
+6. What is the recommended next phase?
 
 Hard constraints:
+- Do not approve additional non-engineering pilot windows.
+- Do not approve participant/device expansion.
 - Do not approve broad internal rollout.
 - Do not approve production/public rollout.
 - Do not approve unsupervised dogfood.
-- Do not expand participant/device count.
 - Do not replace Element Call toolbar.
-- Do not add CallKit/push/background incoming.
-- Do not add missed-call UX or video.
+- Do not add CallKit/push/background incoming implementation in this phase.
+- Do not add video.
 - Do not globally activate production direct calls.
 - Token endpoint remains final authority.
 - No raw IDs/secrets/tokens in reports.
 
 Expected output:
 A. Files inspected.
-B. Post-window readiness decision.
-C. Valid claims.
-D. Invalid claims / still blocked.
-E. Remaining risks.
-F. Recommended next workstream.
+B. Workstream decision.
+C. Smallest safe implementation slice.
+D. Must-remain-blocked items.
+E. Required tests.
+F. Required runtime proof.
 G. Recommended next phase.
 
-Suggested next phase if execution pauses for hardening:
-2.39T — post-pilot hardening plan
-
-Suggested next phase if exactly one more supervised window is justified:
-2.39T — supervised non-engineering pilot window 4 approval
+Suggested next phase:
+2.39V — foreground limitation UX polish

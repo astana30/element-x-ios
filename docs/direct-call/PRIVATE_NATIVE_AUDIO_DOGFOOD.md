@@ -3380,6 +3380,119 @@ Rollback is complete only when the app relaunches without the private card path 
 - Rollback was not needed beyond the planned app-side kill-switch row. Element Call fallback controls were visible and unchanged, and the private native audio card remained separate.
 - Next step is a post-window readiness review. No further non-engineering window is approved by this result.
 
+## 2.39T Post-Pilot Hardening Plan
+
+The 2.39S review pauses additional non-engineering pilot windows. The supervised foreground-only path is proven for the approved named participants/devices under staging constraints, but further same-cap windows have diminishing value until the product and operations surface is hardened.
+
+This plan does not approve additional pilot windows, participant/device expansion, broad internal rollout, production/public rollout, unsupervised dogfood, Element Call replacement, CallKit/push implementation, video, or global production activation.
+
+### Valid Current Claims
+
+- Server-backed internal pilot activation works for approved named participants/devices under explicit staging gates.
+- Token endpoint final enforcement stayed healthy in the latest supervised window: `tokenStatus=200`, `tokenErrcode=none`, `tokenReason=issued`, and `tokenIssued=true`.
+- LiveKit/media diagnostics stayed healthy: `liveKitRoomPrecreateAttempted=true`, `productionLiveKitFailureReason=none`, and `productionMediaFailureReason=none`.
+- Cancel, timeout, hangup, final idle/no active session, and app-side kill-switch behavior passed.
+- Element Call fallback remained visible and unchanged.
+
+### Foreground Limitation UX
+
+Before any further non-engineering expansion, user-facing copy must make the current limitation plain and non-technical:
+
+- Native audio works only while the encrypted direct chat is open.
+- There is no background incoming call behavior yet.
+- There is no CallKit system incoming screen yet.
+- There is no missed-call UX yet.
+- Element Call remains the fallback.
+
+Copy must be concise, safe, and user-facing. It must not mention raw backend errors, token details, LiveKit room names, Matrix identifiers, device identifiers, or internal gate names.
+
+### In-Card State Polish
+
+The private native audio card should use user-safe states for:
+
+- chat not open / listener unavailable;
+- trust not ready;
+- participant not eligible;
+- service unavailable;
+- call timed out;
+- call cancelled;
+- call failed safely;
+- retry and dismiss behavior.
+
+The card must not expose raw backend/token/LiveKit details, raw identifiers, Matrix event content, room names, or request/response bodies.
+
+### Monitoring Baseline
+
+The mandatory redacted monitoring fields remain:
+
+- readiness booleans;
+- `activationSource`;
+- `internalPilotActivationDecision`;
+- `internalPilotActivationReason`;
+- `tokenStatus`;
+- `tokenErrcode`;
+- `tokenReason`;
+- `tokenIssued`;
+- `liveKitRoomPrecreateAttempted`;
+- `productionLiveKitFailureReason`;
+- `productionMediaFailureReason`;
+- `productionSessionState`;
+- `productionHasActiveSession`;
+- terminal reason enum;
+- cleanup/disconnect booleans.
+
+### Operational Monitoring Automation
+
+The next monitoring work should reduce dependency on manual runner/report interpretation. Dashboard or log-safe telemetry may include only redacted booleans/enums and non-identifying counters.
+
+Alert-worthy states:
+
+- `tokenBackendRejected`;
+- `liveKitNetworkFailed`;
+- split-brain;
+- stale active session;
+- readiness not `ready=true` / `reason=ok`;
+- `tokenIssued=false` for an otherwise eligible call.
+
+Automation must not capture raw room IDs, user IDs, peer IDs, device IDs, tokens, JWTs, LiveKit room names, Redis credential URLs, Matrix event bodies, full request bodies, or full response bodies.
+
+### Support And Rollback
+
+Each future pilot or expansion proposal must have:
+
+- standard operator procedure;
+- kill-switch checklist;
+- allowlist removal procedure;
+- app relaunch instruction;
+- idle/no active session verification;
+- redacted incident report template;
+- secret rotation trigger.
+
+Rollback remains complete only when internal activation is no longer allowed, clients relaunch safely, A/B are idle/no active session, and Element Call fallback remains available.
+
+### Next Technical Work Candidates
+
+The next implementation workstream should be chosen by readiness review from:
+
+- foreground UX polish;
+- monitoring automation;
+- CallKit/push/background incoming planning;
+- audio controls polish if needed;
+- additional network/device soak only after the hardening items above are addressed.
+
+### Explicitly Blocked
+
+- Additional non-engineering pilot windows until a separate approval review.
+- Participant/device expansion.
+- Broad internal rollout.
+- Production/public rollout.
+- Element Call replacement.
+- CallKit/push implementation in this phase.
+- Video.
+- `directOneToOneCallsEnabled` as the native audio gate.
+
+Decision rule: complete this hardening plan, then run a readiness review to choose between foreground UX polish implementation, monitoring automation, CallKit/push planning, or another tightly supervised pilot window.
+
 ## Remaining Blockers
 
 These block broader internal dogfood and production, but not the controlled engineering dogfood scope above:
