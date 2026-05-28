@@ -223,6 +223,7 @@ class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
                      rooms: dict[str, RoomEligibility] | None = None,
                      issuer: FakeLiveKitTokenIssuer | None = None,
                      provisioner: FakeLiveKitRoomProvisioner | None = None,
+                     allocation_store: object | None = None,
                      rate_limiter: RateLimiterProtocol | None = None,
                      rate_limit_per_minute: int = 30,
                      eligibility_policy: NativeAudioEligibilityPolicyProtocol | None = None) -> DirectCallTokenService:
@@ -234,7 +235,7 @@ class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
             room_validator=InMemoryRoomValidator(rooms or {
                 "!room:example.test": RoomEligibility(("@alice:example.test", "@bob:example.test"), True),
             }),
-            allocation_store=InMemoryAllocationStore(allocation_ttl_seconds=300),
+            allocation_store=allocation_store or InMemoryAllocationStore(allocation_ttl_seconds=300),
             rate_limiter=rate_limiter or InMemoryRateLimiter(),
             room_provisioner=provisioner or FakeLiveKitRoomProvisioner(),
             token_issuer=issuer or FakeLiveKitTokenIssuer(),
@@ -352,6 +353,93 @@ class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(context.exception.status_code, 503)
         self.assertEqual(context.exception.errcode, "M_DIRECT_CALL_LIVEKIT_ROOM_UNAVAILABLE")
         self.assertEqual(len(provisioner.ensured_rooms), 1)
+        self.assertEqual(len(issuer.issued), 0)
+
+    async def test_successful_token_response_includes_redacted_diagnostics(self) -> None:
+        response = await self.make_service().issue_token("Bearer matrix-token-a-sensitive", self.valid_payload())
+        diagnostics = response.as_dict()["diagnostics"]
+
+        self.assertTrue(diagnostics["token_request_seen"])
+        self.assertEqual(diagnostics["token_status"], 200)
+        self.assertIsNone(diagnostics["token_errcode"])
+        self.assertEqual(diagnostics["token_reason"], "issued")
+        self.assertTrue(diagnostics["eligibility_allowed"])
+        self.assertFalse(diagnostics["rate_limited"])
+        self.assertTrue(diagnostics["allocation_attempted"])
+        self.assertTrue(diagnostics["livekit_room_precreate_attempted"])
+        self.assertTrue(diagnostics["token_issued"])
+        output = json.dumps(diagnostics, sort_keys=True)
+        self.assertNotIn("matrix-token-a-sensitive", output)
+        self.assertNotIn("participant-token-sensitive", output)
+        self.assertNotIn("!room:example.test", output)
+        self.assertNotIn("@alice:example.test", output)
+        self.assertNotIn("@bob:example.test", output)
+
+    async def test_eligibility_rejection_includes_redacted_token_diagnostics(self) -> None:
+        service = self.make_service(eligibility_policy=DisabledNativeAudioEligibilityPolicy())
+
+        with self.assertRaises(CallServiceError) as context:
+            await service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload())
+
+        diagnostics = context.exception.as_dict()["diagnostics"]
+        self.assertEqual(diagnostics["token_status"], 403)
+        self.assertEqual(diagnostics["token_errcode"], "M_DIRECT_CALL_NOT_ELIGIBLE")
+        self.assertEqual(diagnostics["token_reason"], "eligibilityRejected")
+        self.assertFalse(diagnostics["eligibility_allowed"])
+        self.assertFalse(diagnostics["rate_limited"])
+        self.assertFalse(diagnostics["allocation_attempted"])
+        self.assertFalse(diagnostics["livekit_room_precreate_attempted"])
+        self.assertFalse(diagnostics["token_issued"])
+
+    async def test_rate_limit_rejection_includes_redacted_token_diagnostics(self) -> None:
+        service = self.make_service(rate_limit_per_minute=1)
+
+        await service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload(client_transaction_id="txn-1"))
+        with self.assertRaises(CallServiceError) as context:
+            await service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload(client_transaction_id="txn-2"))
+
+        diagnostics = context.exception.as_dict()["diagnostics"]
+        self.assertEqual(diagnostics["token_status"], 429)
+        self.assertEqual(diagnostics["token_errcode"], "M_DIRECT_CALL_RATE_LIMITED")
+        self.assertEqual(diagnostics["token_reason"], "rateLimited")
+        self.assertTrue(diagnostics["eligibility_allowed"])
+        self.assertTrue(diagnostics["rate_limited"])
+        self.assertFalse(diagnostics["allocation_attempted"])
+        self.assertFalse(diagnostics["livekit_room_precreate_attempted"])
+        self.assertFalse(diagnostics["token_issued"])
+
+    async def test_allocation_failure_includes_redacted_token_diagnostics(self) -> None:
+        service = self.make_service(allocation_store=SharedAllocationStoreSkeleton(AllocationStoreKind.REDIS.value))
+
+        with self.assertRaises(CallServiceError) as context:
+            await service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload())
+
+        diagnostics = context.exception.as_dict()["diagnostics"]
+        self.assertEqual(diagnostics["token_status"], 503)
+        self.assertEqual(diagnostics["token_errcode"], "M_DIRECT_CALL_ALLOCATION_FAILED")
+        self.assertEqual(diagnostics["token_reason"], "allocationFailed")
+        self.assertTrue(diagnostics["eligibility_allowed"])
+        self.assertFalse(diagnostics["rate_limited"])
+        self.assertTrue(diagnostics["allocation_attempted"])
+        self.assertFalse(diagnostics["livekit_room_precreate_attempted"])
+        self.assertFalse(diagnostics["token_issued"])
+
+    async def test_livekit_room_precreate_failure_includes_redacted_token_diagnostics(self) -> None:
+        issuer = FakeLiveKitTokenIssuer()
+        service = self.make_service(issuer=issuer, provisioner=FakeLiveKitRoomProvisioner(fail=True))
+
+        with self.assertRaises(CallServiceError) as context:
+            await service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload())
+
+        diagnostics = context.exception.as_dict()["diagnostics"]
+        self.assertEqual(diagnostics["token_status"], 503)
+        self.assertEqual(diagnostics["token_errcode"], "M_DIRECT_CALL_LIVEKIT_ROOM_UNAVAILABLE")
+        self.assertEqual(diagnostics["token_reason"], "liveKitRoomPrecreateFailed")
+        self.assertTrue(diagnostics["eligibility_allowed"])
+        self.assertFalse(diagnostics["rate_limited"])
+        self.assertTrue(diagnostics["allocation_attempted"])
+        self.assertTrue(diagnostics["livekit_room_precreate_attempted"])
+        self.assertFalse(diagnostics["token_issued"])
         self.assertEqual(len(issuer.issued), 0)
 
     async def test_valid_incoming_reuses_allocation(self) -> None:

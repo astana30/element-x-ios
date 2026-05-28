@@ -143,9 +143,36 @@ class AllocationPayload:
 
 
 @dataclass(frozen=True)
+class TokenDiagnosticsPayload:
+    token_request_seen: bool = True
+    token_status: int | None = None
+    token_errcode: str | None = None
+    token_reason: str = "unknown"
+    eligibility_allowed: bool = False
+    rate_limited: bool = False
+    allocation_attempted: bool = False
+    livekit_room_precreate_attempted: bool = False
+    token_issued: bool = False
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "token_request_seen": self.token_request_seen,
+            "token_status": self.token_status,
+            "token_errcode": self.token_errcode,
+            "token_reason": self.token_reason,
+            "eligibility_allowed": self.eligibility_allowed,
+            "rate_limited": self.rate_limited,
+            "allocation_attempted": self.allocation_attempted,
+            "livekit_room_precreate_attempted": self.livekit_room_precreate_attempted,
+            "token_issued": self.token_issued,
+        }
+
+
+@dataclass(frozen=True)
 class TokenResponse:
     livekit: LiveKitPayload
     allocation: AllocationPayload
+    diagnostics: TokenDiagnosticsPayload = TokenDiagnosticsPayload()
     version: int = 1
 
     def as_dict(self) -> dict[str, Any]:
@@ -153,4 +180,5 @@ class TokenResponse:
             "version": self.version,
             "livekit": self.livekit.as_dict(),
             "allocation": self.allocation.as_dict(),
+            "diagnostics": self.diagnostics.as_dict(),
         }

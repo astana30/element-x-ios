@@ -1293,6 +1293,7 @@ final class DirectCallLiveKitMediaEngineDiagnosticsTests {
         #expect(engine.diagnosticSnapshot.mediaKeyHandleAvailable)
         #expect(engine.diagnosticSnapshot.mediaConnectAttempted)
         #expect(engine.diagnosticSnapshot.liveKitClientConnectAttempted)
+        #expect(engine.diagnosticSnapshot.liveKitFailureReason == .liveKitConnectFailed)
         #expect(engine.diagnosticSnapshot.mediaFailureReason == DirectCallDiagnosticMediaFailureReason.liveKitConnectFailed)
         #expect(String(describing: engine.diagnosticSnapshot).contains("test-token") == false)
         #expect(String(describing: engine.diagnosticSnapshot).contains("livekit.example.com") == false)
@@ -1314,6 +1315,7 @@ final class DirectCallLiveKitMediaEngineDiagnosticsTests {
         }
         #expect(engine.diagnosticSnapshot.mediaConnectAttempted)
         #expect(engine.diagnosticSnapshot.liveKitClientConnectAttempted)
+        #expect(engine.diagnosticSnapshot.liveKitFailureReason == .liveKitTokenRejected)
         #expect(engine.diagnosticSnapshot.mediaFailureReason == .liveKitTokenRejected)
         #expect(String(describing: engine.diagnosticSnapshot).contains("test-token") == false)
         #expect(String(describing: engine.diagnosticSnapshot).contains("livekit.example.com") == false)
@@ -1344,8 +1346,55 @@ final class DirectCallLiveKitMediaEngineDiagnosticsTests {
             return
         }
         #expect(mediaState.phase == .activeAudio)
+        #expect(engine.diagnosticSnapshot.liveKitFailureReason == .none)
         #expect(engine.diagnosticSnapshot.mediaFailureReason == .none)
         #expect(String(describing: engine.diagnosticSnapshot).contains("test-token") == false)
+    }
+
+    @Test
+    func liveKitMediaEngineMergesRedactedTokenDiagnostics() async throws {
+        let endpointURL = try #require(URL(string: "https://call-service.example.com/direct-calls"))
+        let errorBody = Data("""
+        {
+          "errcode": "M_DIRECT_CALL_LIVEKIT_ROOM_UNAVAILABLE",
+          "error": "Detailed backend text should not be logged",
+          "diagnostics": {
+            "token_request_seen": true,
+            "token_status": 503,
+            "token_errcode": "M_DIRECT_CALL_LIVEKIT_ROOM_UNAVAILABLE",
+            "token_reason": "liveKitRoomPrecreateFailed",
+            "eligibility_allowed": true,
+            "rate_limited": false,
+            "allocation_attempted": true,
+            "livekit_room_precreate_attempted": true,
+            "token_issued": false
+          }
+        }
+        """.utf8)
+        let httpTransport = DirectCallHTTPTransportSpy(result: .success(.init(statusCode: 503, data: errorBody)))
+        let tokenClient = ProductionDirectCallLiveKitTokenClient(configuration: .init(tokenEndpointURL: endpointURL),
+                                                                 httpTransport: httpTransport,
+                                                                 accessTokenProvider: MatrixAccessTokenProviderStub(accessToken: "matrix-credential"))
+        let tokenProvider = DirectCallLiveKitTokenProvider(tokenClient: tokenClient)
+        let engine = LiveKitDirectCallMediaEngine(tokenProvider: tokenProvider,
+                                                  e2eeContextProvider: MediaE2EEContextProviderSpy(),
+                                                  liveKitClient: LiveKitClientSpy())
+        let session = makeSession(encryptionState: .ready)
+
+        let result = await engine.connectAudio(for: session, keyHandle: DirectCallMediaKeyHandle(callID: callID, keyID: "key-a"))
+
+        #expect(result == .failure(.tokenBackendRejected))
+        #expect(engine.diagnosticSnapshot.tokenRequestSeen)
+        #expect(engine.diagnosticSnapshot.tokenStatus == 503)
+        #expect(engine.diagnosticSnapshot.tokenErrcode == "M_DIRECT_CALL_LIVEKIT_ROOM_UNAVAILABLE")
+        #expect(engine.diagnosticSnapshot.tokenReason == .liveKitRoomPrecreateFailed)
+        #expect(engine.diagnosticSnapshot.tokenEligibilityAllowed)
+        #expect(engine.diagnosticSnapshot.tokenAllocationAttempted)
+        #expect(engine.diagnosticSnapshot.tokenLiveKitRoomPrecreateAttempted)
+        #expect(engine.diagnosticSnapshot.tokenIssued == false)
+        #expect(engine.diagnosticSnapshot.mediaFailureReason == .tokenBackendRejected)
+        #expect(String(describing: engine.diagnosticSnapshot).contains("Detailed backend text") == false)
+        #expect(String(describing: engine.diagnosticSnapshot).contains("matrix-credential") == false)
     }
 
     @Test
@@ -1360,6 +1409,7 @@ final class DirectCallLiveKitMediaEngineDiagnosticsTests {
         let failedResult = await engine.connectAudio(for: session, keyHandle: keyHandle)
 
         #expect(failedResult == .failure(.liveKitNetworkFailed))
+        #expect(engine.diagnosticSnapshot.liveKitFailureReason == .liveKitNetworkFailed)
         #expect(engine.diagnosticSnapshot.mediaFailureReason == .liveKitNetworkFailed)
 
         liveKitClient.connectResult = .success(())
@@ -1371,6 +1421,7 @@ final class DirectCallLiveKitMediaEngineDiagnosticsTests {
             return
         }
         #expect(mediaState.phase == .activeAudio)
+        #expect(engine.diagnosticSnapshot.liveKitFailureReason == .none)
         #expect(engine.diagnosticSnapshot.mediaFailureReason == .none)
         #expect(String(describing: engine.diagnosticSnapshot).contains("test-token") == false)
     }
@@ -1832,7 +1883,18 @@ final class DirectCallMediaProviderSkeletonTests {
         {
           "errcode": "M_DIRECT_CALL_RATE_LIMITED",
           "error": "Detailed backend text should not be logged",
-          "retry_after_ms": 30000
+          "retry_after_ms": 30000,
+          "diagnostics": {
+            "token_request_seen": true,
+            "token_status": 429,
+            "token_errcode": "M_DIRECT_CALL_RATE_LIMITED",
+            "token_reason": "rateLimited",
+            "eligibility_allowed": true,
+            "rate_limited": true,
+            "allocation_attempted": false,
+            "livekit_room_precreate_attempted": false,
+            "token_issued": false
+          }
         }
         """.utf8)
 
@@ -1840,6 +1902,9 @@ final class DirectCallMediaProviderSkeletonTests {
 
         #expect(dto.errcode == "M_DIRECT_CALL_RATE_LIMITED")
         #expect(dto.retryAfterMS == 30000)
+        #expect(dto.diagnostics?.tokenStatus == 429)
+        #expect(dto.diagnostics?.tokenReason == .rateLimited)
+        #expect(dto.diagnostics?.tokenIssued == false)
         #expect(String(describing: dto).contains("Detailed backend text") == false)
     }
 
@@ -2531,6 +2596,83 @@ final class DirectCallMediaProviderSkeletonTests {
                           updatedAt: .now,
                           state: state,
                           encryptionState: encryptionState)
+    }
+}
+
+extension DirectCallMediaProviderSkeletonTests {
+    @Test
+    func productionLiveKitTokenDiagnosticsDecodeSafeBackendFields() throws {
+        let data = Data("""
+        {
+          "token_request_seen": true,
+          "token_status": 503,
+          "token_errcode": "M_DIRECT_CALL_LIVEKIT_ROOM_UNAVAILABLE",
+          "token_reason": "liveKitRoomPrecreateFailed",
+          "eligibility_allowed": true,
+          "rate_limited": false,
+          "allocation_attempted": true,
+          "livekit_room_precreate_attempted": true,
+          "token_issued": false
+        }
+        """.utf8)
+
+        let dto = try JSONDecoder().decode(DirectCallProductionLiveKitTokenDiagnosticsDTO.self, from: data)
+        let snapshot = dto.diagnosticSnapshot
+
+        #expect(snapshot.tokenRequestSeen)
+        #expect(snapshot.tokenStatus == 503)
+        #expect(snapshot.tokenErrcode == "M_DIRECT_CALL_LIVEKIT_ROOM_UNAVAILABLE")
+        #expect(snapshot.tokenReason == .liveKitRoomPrecreateFailed)
+        #expect(snapshot.tokenEligibilityAllowed)
+        #expect(snapshot.tokenAllocationAttempted)
+        #expect(snapshot.tokenLiveKitRoomPrecreateAttempted)
+        #expect(snapshot.tokenIssued == false)
+        #expect(String(describing: dto).contains("participant") == false)
+        #expect(String(describing: dto).contains("!room") == false)
+    }
+
+    @Test
+    func productionLiveKitTokenClientExposesBackendErrorDiagnostics() async throws {
+        let endpointURL = try #require(URL(string: "https://call-service.example.com/direct-calls"))
+        let errorBody = Data("""
+        {
+          "errcode": "M_DIRECT_CALL_RATE_LIMITED",
+          "error": "Detailed backend text should not be logged",
+          "retry_after_ms": 30000,
+          "diagnostics": {
+            "token_request_seen": true,
+            "token_status": 429,
+            "token_errcode": "M_DIRECT_CALL_RATE_LIMITED",
+            "token_reason": "rateLimited",
+            "eligibility_allowed": true,
+            "rate_limited": true,
+            "allocation_attempted": false,
+            "livekit_room_precreate_attempted": false,
+            "token_issued": false
+          }
+        }
+        """.utf8)
+        let httpTransport = DirectCallHTTPTransportSpy(result: .success(.init(statusCode: 429, data: errorBody)))
+        let client = ProductionDirectCallLiveKitTokenClient(configuration: .init(tokenEndpointURL: endpointURL),
+                                                            httpTransport: httpTransport,
+                                                            accessTokenProvider: MatrixAccessTokenProviderStub(accessToken: "matrix-credential"))
+        let request = DirectCallLiveKitTokenRequest(callID: callID,
+                                                    roomID: roomID,
+                                                    peerUserID: peerUserID)
+
+        let result = await client.connection(for: request)
+
+        #expect(result == .failure(.tokenBackendRejected))
+        #expect(client.diagnosticSnapshot.tokenRequestSeen)
+        #expect(client.diagnosticSnapshot.tokenStatus == 429)
+        #expect(client.diagnosticSnapshot.tokenErrcode == "M_DIRECT_CALL_RATE_LIMITED")
+        #expect(client.diagnosticSnapshot.tokenReason == .rateLimited)
+        #expect(client.diagnosticSnapshot.tokenEligibilityAllowed)
+        #expect(client.diagnosticSnapshot.tokenRateLimited)
+        #expect(client.diagnosticSnapshot.tokenIssued == false)
+        #expect(String(describing: client.diagnosticSnapshot).contains("Detailed backend text") == false)
+        #expect(String(describing: client.diagnosticSnapshot).contains(roomID) == false)
+        #expect(String(describing: client.diagnosticSnapshot).contains(peerUserID) == false)
     }
 }
 

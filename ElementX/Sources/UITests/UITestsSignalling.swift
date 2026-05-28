@@ -496,6 +496,16 @@ enum UITestsSignal: Codable, Equatable {
         let productionMediaDisconnectAttempted: Bool
         let productionMediaCleanupAttempted: Bool
         let productionLiveKitClientConnectAttempted: Bool
+        let productionLiveKitFailureReason: DirectCallDiagnosticMediaFailureReason
+        let productionTokenRequestSeen: Bool
+        let productionTokenStatus: Int?
+        let productionTokenErrcode: String?
+        let productionTokenReason: String
+        let productionTokenEligibilityAllowed: Bool
+        let productionTokenRateLimited: Bool
+        let productionTokenAllocationAttempted: Bool
+        let productionTokenLiveKitRoomPrecreateAttempted: Bool
+        let productionTokenIssued: Bool
         let productionMediaFailureReason: DirectCallDiagnosticMediaFailureReason
         let internalPilotActivationDryRunEnabled: Bool
         let internalPilotActivationDecision: String
@@ -547,6 +557,16 @@ enum UITestsSignal: Codable, Equatable {
              productionMediaDisconnectAttempted: Bool = false,
              productionMediaCleanupAttempted: Bool = false,
              productionLiveKitClientConnectAttempted: Bool = false,
+             productionLiveKitFailureReason: DirectCallDiagnosticMediaFailureReason = .none,
+             productionTokenRequestSeen: Bool = false,
+             productionTokenStatus: Int? = nil,
+             productionTokenErrcode: String? = nil,
+             productionTokenReason: String = DirectCallDiagnosticTokenReason.none.rawValue,
+             productionTokenEligibilityAllowed: Bool = false,
+             productionTokenRateLimited: Bool = false,
+             productionTokenAllocationAttempted: Bool = false,
+             productionTokenLiveKitRoomPrecreateAttempted: Bool = false,
+             productionTokenIssued: Bool = false,
              productionMediaFailureReason: DirectCallDiagnosticMediaFailureReason = .none,
              internalPilotActivationDryRun: NativeDirectCallInternalPilotActivationDryRunStatus = .disabled) {
             self.productionOwnerAvailable = productionOwnerAvailable
@@ -590,6 +610,16 @@ enum UITestsSignal: Codable, Equatable {
             self.productionMediaDisconnectAttempted = productionMediaDisconnectAttempted
             self.productionMediaCleanupAttempted = productionMediaCleanupAttempted
             self.productionLiveKitClientConnectAttempted = productionLiveKitClientConnectAttempted
+            self.productionLiveKitFailureReason = productionLiveKitFailureReason
+            self.productionTokenRequestSeen = productionTokenRequestSeen
+            self.productionTokenStatus = productionTokenStatus
+            self.productionTokenErrcode = productionTokenErrcode.flatMap { UITestsSignalling.sanitizedIdentifier($0) }
+            self.productionTokenReason = UITestsSignalling.sanitizedIdentifier(productionTokenReason) ?? DirectCallDiagnosticTokenReason.unknown.rawValue
+            self.productionTokenEligibilityAllowed = productionTokenEligibilityAllowed
+            self.productionTokenRateLimited = productionTokenRateLimited
+            self.productionTokenAllocationAttempted = productionTokenAllocationAttempted
+            self.productionTokenLiveKitRoomPrecreateAttempted = productionTokenLiveKitRoomPrecreateAttempted
+            self.productionTokenIssued = productionTokenIssued
             self.productionMediaFailureReason = productionMediaFailureReason
             internalPilotActivationDryRunEnabled = internalPilotActivationDryRun.isEnabled
             internalPilotActivationDecision = UITestsSignalling.sanitizedIdentifier(internalPilotActivationDryRun.diagnosticDecision) ?? "unknown"
@@ -1084,6 +1114,16 @@ extension UITestsSignal.NativeDirectCallProductionStatusPayload {
                   productionMediaDisconnectAttempted: status.productionMediaDisconnectAttempted,
                   productionMediaCleanupAttempted: status.productionMediaCleanupAttempted,
                   productionLiveKitClientConnectAttempted: status.productionLiveKitClientConnectAttempted,
+                  productionLiveKitFailureReason: status.productionLiveKitFailureReason,
+                  productionTokenRequestSeen: status.productionTokenRequestSeen,
+                  productionTokenStatus: status.productionTokenStatus,
+                  productionTokenErrcode: status.productionTokenErrcode,
+                  productionTokenReason: status.productionTokenReason.rawValue,
+                  productionTokenEligibilityAllowed: status.productionTokenEligibilityAllowed,
+                  productionTokenRateLimited: status.productionTokenRateLimited,
+                  productionTokenAllocationAttempted: status.productionTokenAllocationAttempted,
+                  productionTokenLiveKitRoomPrecreateAttempted: status.productionTokenLiveKitRoomPrecreateAttempted,
+                  productionTokenIssued: status.productionTokenIssued,
                   productionMediaFailureReason: status.productionMediaFailureReason,
                   internalPilotActivationDryRun: internalPilotActivationDryRun)
     }

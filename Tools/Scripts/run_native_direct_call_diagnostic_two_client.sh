@@ -43,6 +43,7 @@ usage() {
 Usage:
   DRY_RUN=1 $SCRIPT_NAME plan
   DRY_RUN=1 $SCRIPT_NAME validate
+  DRY_RUN=1 $SCRIPT_NAME redaction-self-test
   DRY_RUN=0 $SCRIPT_NAME init A|B|both
   DRY_RUN=0 $SCRIPT_NAME launch A|B|both
   DRY_RUN=0 $SCRIPT_NAME send A|B <command>
@@ -127,12 +128,50 @@ Example planned signalling sequence:
 USAGE
 }
 
+redact_output() {
+    python3 -c '
+import os
+import re
+import sys
+
+text = sys.stdin.read()
+simulator_labels = (
+    ("A", os.environ.get("SIMULATOR_UDID_A", "")),
+    ("B", os.environ.get("SIMULATOR_UDID_B", "")),
+)
+
+for label, udid in simulator_labels:
+    if udid:
+        text = text.replace(udid, f"<simulator-{label}>")
+
+text = re.sub(
+    r"\b[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\b",
+    "<simulator-udid-redacted>",
+    text,
+)
+text = re.sub(
+    r"\budid=(?!<simulator-[AB]>)([^\s]+)",
+    "udid=<simulator-udid-redacted>",
+    text,
+)
+sys.stdout.write(text)
+'
+}
+
+redact_text() {
+    printf '%s' "$*" | redact_output
+}
+
 log() {
-    printf '[native-direct-call-runner] %s\n' "$*"
+    local message
+    message="$(redact_text "$*")"
+    printf '[native-direct-call-runner] %s\n' "$message"
 }
 
 fail() {
-    printf '[native-direct-call-runner] error: %s\n' "$*" >&2
+    local message
+    message="$(redact_text "$*")"
+    printf '[native-direct-call-runner] error: %s\n' "$message" >&2
     exit 1
 }
 
@@ -162,6 +201,22 @@ require_common_environment() {
 require_host_tools() {
     require_command python3
     require_command xcrun
+}
+
+run_redacted_command() {
+    local output
+    local status
+
+    set +e
+    output="$("$@" 2>&1)"
+    status=$?
+    set -e
+
+    if [[ -n "$output" ]]; then
+        printf '%s\n' "$output" | redact_output
+    fi
+
+    return "$status"
 }
 
 is_livekit_diagnostics_enabled() {
@@ -260,6 +315,14 @@ client_udid() {
     esac
 }
 
+redacted_client_udid() {
+    case "$1" in
+        A) printf '<simulator-A>\n' ;;
+        B) printf '<simulator-B>\n' ;;
+        *) printf '<simulator-udid-redacted>\n' ;;
+    esac
+}
+
 client_username() {
     case "$1" in
         A) printf '%s\n' "$INTEGRATION_TESTS_USERNAME_A" ;;
@@ -296,7 +359,19 @@ client_name() {
         return
     fi
 
-    xcrun simctl getenv "$(client_udid "$client")" SIMULATOR_DEVICE_NAME
+    local output
+    local status
+    set +e
+    output="$(xcrun simctl getenv "$(client_udid "$client")" SIMULATOR_DEVICE_NAME 2>&1)"
+    status=$?
+    set -e
+
+    if (( status != 0 )); then
+        printf '%s\n' "$output" | redact_output >&2
+        return "$status"
+    fi
+
+    printf '%s\n' "$output"
 }
 
 signal_file() {
@@ -767,7 +842,11 @@ def format_production_status(status):
         "productionMediaFactoryInjected={media_factory} productionMediaCredentialProviderAvailable={media_credentials} productionMediaE2EEProviderAvailable={media_e2ee_provider} "
         "productionMediaKeyHandleAvailable={media_key_handle} productionMediaKeyBridgeHit={media_key_bridge} productionMediaConnectAttempted={media_connect} "
         "productionMediaDisconnectAttempted={media_disconnect} productionMediaCleanupAttempted={media_cleanup} "
-        "productionLiveKitClientConnectAttempted={livekit_connect} productionMediaFailureReason={media_failure} "
+        "productionLiveKitClientConnectAttempted={livekit_connect} productionLiveKitFailureReason={livekit_failure} "
+        "tokenRequestSeen={token_request_seen} tokenStatus={token_status} tokenErrcode={token_errcode} tokenReason={token_reason} "
+        "eligibilityAllowed={eligibility_allowed} rateLimited={rate_limited} allocationAttempted={allocation_attempted} "
+        "liveKitRoomPrecreateAttempted={livekit_room_precreate_attempted} tokenIssued={token_issued} "
+        "productionMediaFailureReason={media_failure} "
         "internalPilotActivationDryRunEnabled={internal_dry_run_enabled} internalPilotActivationDecision={internal_dry_run_decision} "
         "internalPilotActivationReason={internal_dry_run_reason} internalPilotRolloutEnabled={internal_rollout} internalPilotEligibilityReady={internal_eligibility} "
         "internalPilotRoomReady={internal_room} internalPilotTrustReady={internal_trust} internalPilotDependenciesReady={internal_dependencies}"
@@ -810,6 +889,16 @@ def format_production_status(status):
         media_disconnect=str(status.get("productionMediaDisconnectAttempted", "unknown")).lower(),
         media_cleanup=str(status.get("productionMediaCleanupAttempted", "unknown")).lower(),
         livekit_connect=str(status.get("productionLiveKitClientConnectAttempted", "unknown")).lower(),
+        livekit_failure=status.get("productionLiveKitFailureReason", "none"),
+        token_request_seen=str(status.get("productionTokenRequestSeen", "unknown")).lower(),
+        token_status=status.get("productionTokenStatus", "none"),
+        token_errcode=status.get("productionTokenErrcode", "none"),
+        token_reason=status.get("productionTokenReason", "unknown"),
+        eligibility_allowed=str(status.get("productionTokenEligibilityAllowed", "unknown")).lower(),
+        rate_limited=str(status.get("productionTokenRateLimited", "unknown")).lower(),
+        allocation_attempted=str(status.get("productionTokenAllocationAttempted", "unknown")).lower(),
+        livekit_room_precreate_attempted=str(status.get("productionTokenLiveKitRoomPrecreateAttempted", "unknown")).lower(),
+        token_issued=str(status.get("productionTokenIssued", "unknown")).lower(),
         media_failure=status.get("productionMediaFailureReason", "none"),
         internal_dry_run_enabled=str(status.get("internalPilotActivationDryRunEnabled", "unknown")).lower(),
         internal_dry_run_decision=status.get("internalPilotActivationDecision") or "unknown",
@@ -1251,9 +1340,9 @@ set_client_environment() {
     local client="$1"
 
     if [[ "$DRY_RUN" == "1" ]]; then
-        local udid
-        udid="$(client_udid "$client")"
-        log "DRY_RUN: set integration env for channel=$client udid=$udid host=<set> username=<set> credential=<redacted> diagnosticEncryption=${NATIVE_DIRECT_CALL_DIAGNOSTIC_ENCRYPTION:-0}"
+        local udid_label
+        udid_label="$(redacted_client_udid "$client")"
+        log "DRY_RUN: set integration env for channel=$client udid=$udid_label host=<set> username=<set> credential=<redacted> diagnosticEncryption=${NATIVE_DIRECT_CALL_DIAGNOSTIC_ENCRYPTION:-0}"
         log_livekit_environment_summary
         return
     fi
@@ -1273,7 +1362,10 @@ launch_client_with_environment() {
     credential="$(client_credential "$client")"
     channel="$(client_channel "$client")"
 
-    SIMCTL_CHILD_IS_RUNNING_INTEGRATION_TESTS=1 \
+    local output
+    local status
+    set +e
+    output="$(SIMCTL_CHILD_IS_RUNNING_INTEGRATION_TESTS=1 \
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_DIAGNOSTICS=1 \
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_DIAGNOSTICS_ENABLED=1 \
         SIMCTL_CHILD_NATIVE_DIRECT_CALL_DIAGNOSTIC_ENCRYPTION="${NATIVE_DIRECT_CALL_DIAGNOSTIC_ENCRYPTION:-}" \
@@ -1295,7 +1387,15 @@ launch_client_with_environment() {
         SIMCTL_CHILD_INTEGRATION_TESTS_HOST="$INTEGRATION_TESTS_HOST" \
         SIMCTL_CHILD_INTEGRATION_TESTS_USERNAME="$username" \
         SIMCTL_CHILD_INTEGRATION_TESTS_PASSWORD="$credential" \
-        xcrun simctl launch --terminate-running-process "$udid" "$BUNDLE_ID" >/dev/null
+        xcrun simctl launch --terminate-running-process "$udid" "$BUNDLE_ID" 2>&1 >/dev/null)"
+    status=$?
+    set -e
+
+    if [[ -n "$output" ]]; then
+        printf '%s\n' "$output" | redact_output
+    fi
+
+    return "$status"
 }
 
 launch_client() {
@@ -1307,15 +1407,17 @@ launch_client() {
     set_client_environment "$client"
 
     if [[ "$DRY_RUN" == "1" ]]; then
-        log "DRY_RUN: install app for channel=$client udid=$udid app=${SALEMX_APP_PATH:-<missing>}"
-        log "DRY_RUN: launch bundle=$BUNDLE_ID for channel=$client udid=$udid"
+        local udid_label
+        udid_label="$(redacted_client_udid "$client")"
+        log "DRY_RUN: install app for channel=$client udid=$udid_label app=${SALEMX_APP_PATH:-<missing>}"
+        log "DRY_RUN: launch bundle=$BUNDLE_ID for channel=$client udid=$udid_label"
         log "DRY_RUN: wait for channel=$client app diagnostic signalling readiness"
         return
     fi
 
-    xcrun simctl install "$udid" "$SALEMX_APP_PATH"
+    run_redacted_command xcrun simctl install "$udid" "$SALEMX_APP_PATH"
     launch_client_with_environment "$client" "$udid"
-    log "launched channel=$client udid=$udid bundle=$BUNDLE_ID"
+    log "launched channel=$client udid=$(redacted_client_udid "$client") bundle=$BUNDLE_ID"
     wait_for_app_ready "$client"
 }
 
@@ -1585,6 +1687,28 @@ Full two-client proof is intentionally not run by this skeleton.
 PLAN
 }
 
+redaction_self_test() {
+    local sample_a="11111111-2222-3333-4444-"
+    sample_a+="555555555555"
+    local sample_b="AAAAAAAA-BBBB-CCCC-DDDD-"
+    sample_b+="EEEEEEEEEEEE"
+    local sample_other="12345678-1234-1234-1234-"
+    sample_other+="123456789ABC"
+    local output
+
+    output="$(SIMULATOR_UDID_A="$sample_a" SIMULATOR_UDID_B="$sample_b" redact_text "channel=A udid=$sample_a channel=B udid=$sample_b other=$sample_other")"
+
+    if [[ "$output" == *"$sample_a"* || "$output" == *"$sample_b"* || "$output" == *"$sample_other"* ]]; then
+        fail "redaction self-test failed"
+    fi
+
+    if [[ "$output" != *"channel=A"* || "$output" != *"channel=B"* || "$output" != *"<simulator-A>"* || "$output" != *"<simulator-B>"* ]]; then
+        fail "redaction self-test failed"
+    fi
+
+    log "redaction self-test passed"
+}
+
 main() {
     local action="${1:-plan}"
 
@@ -1594,6 +1718,10 @@ main() {
             ;;
         plan)
             print_plan
+            ;;
+        redaction-self-test)
+            require_command python3
+            redaction_self_test
             ;;
         validate)
             require_host_tools

@@ -2965,43 +2965,7 @@ final class RoomFlowCoordinatorTests {
     @Test
     func nativeDirectCallProductionStatusSignalEncodesRedactedResult() throws {
         let request = UITestsSignal.NativeDirectCallProductionStatusRequest(correlationID: "call-A-1")
-        let status = UITestsSignal.NativeDirectCallProductionStatusPayload(productionOwnerAvailable: true,
-                                                                           productionListenerStarted: true,
-                                                                           productionHasActiveSession: true,
-                                                                           productionSessionState: "outgoingRinging",
-                                                                           productionEncryptionState: "ready",
-                                                                           productionLastSignalEventEmitted: .invite,
-                                                                           productionLastSignalSendAttempted: true,
-                                                                           productionLastSignalSendSucceeded: true,
-                                                                           productionLastSignalSendFailureReason: nil,
-                                                                           productionListenerAttached: true,
-                                                                           productionListenerHandleRetained: true,
-                                                                           productionListenerStartCount: 1,
-                                                                           productionTimelineUpdateCount: 2,
-                                                                           productionTimelineDiffReceivedCount: 3,
-                                                                           productionLastTimelineDiffKind: .append,
-                                                                           productionLastTimelineDiffItemCount: 1,
-                                                                           productionTimelineEventReceivedCount: 4,
-                                                                           productionDirectCallEventTypeSeenCount: 5,
-                                                                           productionEnvelopeExtractedCount: 6,
-                                                                           productionEnvelopeDeliveredToEngineCount: 7,
-                                                                           productionHistoricalEventIgnoredCount: 8,
-                                                                           productionLiveEventDeliveredCount: 9,
-                                                                           productionBaselineEstablished: true,
-                                                                           productionLastReceiveEventKind: .directCallInvite,
-                                                                           productionLastEnvelopeRejectedReason: .none,
-                                                                           productionLastReceiveFailureReason: .engineRejected,
-                                                                           productionSendRoomFingerprint: "send-room-redacted",
-                                                                           productionReceiveRoomFingerprint: "receive-room-redacted",
-                                                                           productionMediaFactoryInjected: true,
-                                                                           productionMediaCredentialProviderAvailable: true,
-                                                                           productionMediaE2EEProviderAvailable: true,
-                                                                           productionMediaKeyHandleAvailable: true,
-                                                                           productionMediaKeyBridgeHit: true,
-                                                                           productionMediaConnectAttempted: true,
-                                                                           productionLiveKitClientConnectAttempted: true,
-                                                                           productionMediaFailureReason: .mediaSetupUnavailable,
-                                                                           internalPilotActivationDryRun: Self.statusOnlyInternalPilotActivationDryRun())
+        let status = Self.productionStatusPayloadWithTokenDiagnostics()
         let result = UITestsSignal.NativeDirectCallProductionStatusResult(correlationID: "call-A-1",
                                                                           status: status)
         let requestSignal = UITestsSignal.nativeDirectCallProductionStatus(request)
@@ -3026,7 +2990,10 @@ final class RoomFlowCoordinatorTests {
             "productionLastEnvelopeRejectedReason", "productionLastReceiveFailureReason", "productionSendRoomFingerprint",
             "productionReceiveRoomFingerprint", "productionMediaFactoryInjected", "productionMediaCredentialProviderAvailable",
             "productionMediaE2EEProviderAvailable", "productionMediaKeyHandleAvailable", "productionMediaKeyBridgeHit",
-            "productionMediaConnectAttempted", "productionLiveKitClientConnectAttempted", "productionMediaFailureReason",
+            "productionMediaConnectAttempted", "productionLiveKitClientConnectAttempted", "productionLiveKitFailureReason",
+            "productionTokenRequestSeen", "productionTokenStatus", "productionTokenErrcode", "productionTokenReason",
+            "productionTokenEligibilityAllowed", "productionTokenRateLimited", "productionTokenAllocationAttempted",
+            "productionTokenLiveKitRoomPrecreateAttempted", "productionTokenIssued", "productionMediaFailureReason",
             "internalPilotActivationDryRunEnabled", "internalPilotActivationDecision", "internalPilotActivationReason",
             "internalPilotRolloutEnabled", "internalPilotEligibilityReady", "internalPilotRoomReady", "internalPilotTrustReady",
             "internalPilotDependenciesReady"
@@ -3035,6 +3002,8 @@ final class RoomFlowCoordinatorTests {
             #expect(encodedResult.contains(field))
         }
         #expect(encodedResult.contains("mediaSetupUnavailable"))
+        #expect(encodedResult.contains("liveKitRoomPrecreateFailed"))
+        #expect(encodedResult.contains("M_DIRECT_CALL_LIVEKIT_ROOM_UNAVAILABLE"))
         #expect(encodedResult.contains("eligibleForStatusOnly"))
         #expect(encodedResult.contains("send-room-redacted"))
         #expect(encodedResult.contains("receive-room-redacted"))
@@ -3059,6 +3028,56 @@ final class RoomFlowCoordinatorTests {
         for fragment in forbiddenFragments {
             #expect((encodedRequest + encodedResult).localizedCaseInsensitiveContains(fragment) == false)
         }
+    }
+
+    private static func productionStatusPayloadWithTokenDiagnostics() -> UITestsSignal.NativeDirectCallProductionStatusPayload {
+        UITestsSignal.NativeDirectCallProductionStatusPayload(productionOwnerAvailable: true,
+                                                              productionListenerStarted: true,
+                                                              productionHasActiveSession: true,
+                                                              productionSessionState: "outgoingRinging",
+                                                              productionEncryptionState: "ready",
+                                                              productionLastSignalEventEmitted: .invite,
+                                                              productionLastSignalSendAttempted: true,
+                                                              productionLastSignalSendSucceeded: true,
+                                                              productionLastSignalSendFailureReason: nil,
+                                                              productionListenerAttached: true,
+                                                              productionListenerHandleRetained: true,
+                                                              productionListenerStartCount: 1,
+                                                              productionTimelineUpdateCount: 2,
+                                                              productionTimelineDiffReceivedCount: 3,
+                                                              productionLastTimelineDiffKind: .append,
+                                                              productionLastTimelineDiffItemCount: 1,
+                                                              productionTimelineEventReceivedCount: 4,
+                                                              productionDirectCallEventTypeSeenCount: 5,
+                                                              productionEnvelopeExtractedCount: 6,
+                                                              productionEnvelopeDeliveredToEngineCount: 7,
+                                                              productionHistoricalEventIgnoredCount: 8,
+                                                              productionLiveEventDeliveredCount: 9,
+                                                              productionBaselineEstablished: true,
+                                                              productionLastReceiveEventKind: .directCallInvite,
+                                                              productionLastEnvelopeRejectedReason: .none,
+                                                              productionLastReceiveFailureReason: .engineRejected,
+                                                              productionSendRoomFingerprint: "send-room-redacted",
+                                                              productionReceiveRoomFingerprint: "receive-room-redacted",
+                                                              productionMediaFactoryInjected: true,
+                                                              productionMediaCredentialProviderAvailable: true,
+                                                              productionMediaE2EEProviderAvailable: true,
+                                                              productionMediaKeyHandleAvailable: true,
+                                                              productionMediaKeyBridgeHit: true,
+                                                              productionMediaConnectAttempted: true,
+                                                              productionLiveKitClientConnectAttempted: true,
+                                                              productionLiveKitFailureReason: .liveKitNetworkFailed,
+                                                              productionTokenRequestSeen: true,
+                                                              productionTokenStatus: 503,
+                                                              productionTokenErrcode: "M_DIRECT_CALL_LIVEKIT_ROOM_UNAVAILABLE",
+                                                              productionTokenReason: "liveKitRoomPrecreateFailed",
+                                                              productionTokenEligibilityAllowed: true,
+                                                              productionTokenRateLimited: false,
+                                                              productionTokenAllocationAttempted: true,
+                                                              productionTokenLiveKitRoomPrecreateAttempted: true,
+                                                              productionTokenIssued: false,
+                                                              productionMediaFailureReason: .mediaSetupUnavailable,
+                                                              internalPilotActivationDryRun: statusOnlyInternalPilotActivationDryRun())
     }
 
     @Test

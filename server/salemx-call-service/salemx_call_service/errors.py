@@ -12,6 +12,7 @@ class CallServiceError(Exception):
     errcode: str
     error: str
     retry_after_ms: int | None = None
+    diagnostics: dict[str, Any] | None = None
 
     def as_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -20,7 +21,18 @@ class CallServiceError(Exception):
         }
         if self.retry_after_ms is not None:
             payload["retry_after_ms"] = self.retry_after_ms
+        if self.diagnostics is not None:
+            payload["diagnostics"] = self.diagnostics
         return payload
+
+    def with_diagnostics(self, diagnostics: dict[str, Any]) -> "CallServiceError":
+        return CallServiceError(
+            status_code=self.status_code,
+            errcode=self.errcode,
+            error=self.error,
+            retry_after_ms=self.retry_after_ms,
+            diagnostics=diagnostics,
+        )
 
 
 MISSING_OR_INVALID_TOKEN = CallServiceError(

@@ -239,6 +239,46 @@ enum DirectCallEngineError: Error, Equatable {
     case mediaConnectionFailed(DirectCallMediaError)
 }
 
+enum DirectCallDiagnosticTokenReason: String, Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case none
+    case issued
+    case unsupportedIntent
+    case badRequest
+    case authRejected
+    case roomValidationFailed
+    case eligibilityRejected
+    case rateLimited
+    case rateLimitStoreUnavailable
+    case allocationFailed
+    case liveKitRoomPrecreateFailed
+    case tokenSigningFailed
+    case tokenEndpointUnavailable
+    case accessTokenUnavailable
+    case tokenHTTPUnavailable
+    case tokenResponseInvalid
+    case serviceUnavailable
+    case unknown
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        self = Self(rawValue: rawValue) ?? .unknown
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
 #if DEBUG
 enum DirectCallDiagnosticSignalEvent: String, Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     case invite
@@ -618,6 +658,16 @@ struct DirectCallDiagnosticSnapshot: Codable, Equatable, CustomStringConvertible
     var mediaDisconnectAttempted = false
     var mediaCleanupAttempted = false
     var liveKitClientConnectAttempted = false
+    var liveKitFailureReason: DirectCallDiagnosticMediaFailureReason = .none
+    var tokenRequestSeen = false
+    var tokenStatus: Int?
+    var tokenErrcode: String?
+    var tokenReason: DirectCallDiagnosticTokenReason = .none
+    var tokenEligibilityAllowed = false
+    var tokenRateLimited = false
+    var tokenAllocationAttempted = false
+    var tokenLiveKitRoomPrecreateAttempted = false
+    var tokenIssued = false
     var mediaFailureReason: DirectCallDiagnosticMediaFailureReason = .none
 
     static let empty = Self()
@@ -663,9 +713,35 @@ struct DirectCallDiagnosticSnapshot: Codable, Equatable, CustomStringConvertible
         mediaDisconnectAttempted = mediaDisconnectAttempted || other.mediaDisconnectAttempted
         mediaCleanupAttempted = mediaCleanupAttempted || other.mediaCleanupAttempted
         liveKitClientConnectAttempted = liveKitClientConnectAttempted || other.liveKitClientConnectAttempted
+        mergeLiveKitDiagnostics(from: other)
+        mergeTokenDiagnostics(from: other)
+    }
+
+    private mutating func mergeLiveKitDiagnostics(from other: Self) {
+        if other.liveKitFailureReason != .none {
+            liveKitFailureReason = other.liveKitFailureReason
+        }
         if other.mediaFailureReason != .none {
             mediaFailureReason = other.mediaFailureReason
         }
+    }
+
+    private mutating func mergeTokenDiagnostics(from other: Self) {
+        tokenRequestSeen = tokenRequestSeen || other.tokenRequestSeen
+        if let tokenStatus = other.tokenStatus {
+            self.tokenStatus = tokenStatus
+        }
+        if let tokenErrcode = other.tokenErrcode {
+            self.tokenErrcode = tokenErrcode
+        }
+        if other.tokenReason != .none {
+            tokenReason = other.tokenReason
+        }
+        tokenEligibilityAllowed = tokenEligibilityAllowed || other.tokenEligibilityAllowed
+        tokenRateLimited = tokenRateLimited || other.tokenRateLimited
+        tokenAllocationAttempted = tokenAllocationAttempted || other.tokenAllocationAttempted
+        tokenLiveKitRoomPrecreateAttempted = tokenLiveKitRoomPrecreateAttempted || other.tokenLiveKitRoomPrecreateAttempted
+        tokenIssued = tokenIssued || other.tokenIssued
     }
 
     var description: String {
@@ -703,6 +779,16 @@ struct DirectCallDiagnosticSnapshot: Codable, Equatable, CustomStringConvertible
             "mediaDisconnectAttempted: \(mediaDisconnectAttempted), " +
             "mediaCleanupAttempted: \(mediaCleanupAttempted), " +
             "liveKitClientConnectAttempted: \(liveKitClientConnectAttempted), " +
+            "liveKitFailureReason: \(liveKitFailureReason), " +
+            "tokenRequestSeen: \(tokenRequestSeen), " +
+            "tokenStatus: \(tokenStatus.map(String.init) ?? "none"), " +
+            "tokenErrcode: \(tokenErrcode ?? "none"), " +
+            "tokenReason: \(tokenReason), " +
+            "tokenEligibilityAllowed: \(tokenEligibilityAllowed), " +
+            "tokenRateLimited: \(tokenRateLimited), " +
+            "tokenAllocationAttempted: \(tokenAllocationAttempted), " +
+            "tokenLiveKitRoomPrecreateAttempted: \(tokenLiveKitRoomPrecreateAttempted), " +
+            "tokenIssued: \(tokenIssued), " +
             "mediaFailureReason: \(mediaFailureReason))"
     }
 

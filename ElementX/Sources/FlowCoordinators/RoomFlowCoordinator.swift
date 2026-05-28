@@ -3192,6 +3192,16 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
     let productionMediaDisconnectAttempted: Bool
     let productionMediaCleanupAttempted: Bool
     let productionLiveKitClientConnectAttempted: Bool
+    let productionLiveKitFailureReason: DirectCallDiagnosticMediaFailureReason
+    let productionTokenRequestSeen: Bool
+    let productionTokenStatus: Int?
+    let productionTokenErrcode: String?
+    let productionTokenReason: DirectCallDiagnosticTokenReason
+    let productionTokenEligibilityAllowed: Bool
+    let productionTokenRateLimited: Bool
+    let productionTokenAllocationAttempted: Bool
+    let productionTokenLiveKitRoomPrecreateAttempted: Bool
+    let productionTokenIssued: Bool
     let productionMediaFailureReason: DirectCallDiagnosticMediaFailureReason
 
     @MainActor
@@ -3252,6 +3262,16 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
         productionMediaDisconnectAttempted = diagnosticSnapshot.mediaDisconnectAttempted
         productionMediaCleanupAttempted = diagnosticSnapshot.mediaCleanupAttempted
         productionLiveKitClientConnectAttempted = diagnosticSnapshot.liveKitClientConnectAttempted
+        productionLiveKitFailureReason = diagnosticSnapshot.liveKitFailureReason
+        productionTokenRequestSeen = diagnosticSnapshot.tokenRequestSeen
+        productionTokenStatus = diagnosticSnapshot.tokenStatus
+        productionTokenErrcode = diagnosticSnapshot.tokenErrcode
+        productionTokenReason = diagnosticSnapshot.tokenReason
+        productionTokenEligibilityAllowed = diagnosticSnapshot.tokenEligibilityAllowed
+        productionTokenRateLimited = diagnosticSnapshot.tokenRateLimited
+        productionTokenAllocationAttempted = diagnosticSnapshot.tokenAllocationAttempted
+        productionTokenLiveKitRoomPrecreateAttempted = diagnosticSnapshot.tokenLiveKitRoomPrecreateAttempted
+        productionTokenIssued = diagnosticSnapshot.tokenIssued
         productionMediaFailureReason = diagnosticSnapshot.mediaFailureReason
     }
 
@@ -3299,6 +3319,16 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
              productionMediaDisconnectAttempted: false,
              productionMediaCleanupAttempted: false,
              productionLiveKitClientConnectAttempted: false,
+             productionLiveKitFailureReason: .none,
+             productionTokenRequestSeen: false,
+             productionTokenStatus: nil,
+             productionTokenErrcode: nil,
+             productionTokenReason: .none,
+             productionTokenEligibilityAllowed: false,
+             productionTokenRateLimited: false,
+             productionTokenAllocationAttempted: false,
+             productionTokenLiveKitRoomPrecreateAttempted: false,
+             productionTokenIssued: false,
              productionMediaFailureReason: .none)
     }
 
@@ -3343,6 +3373,16 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
                  productionMediaDisconnectAttempted: Bool,
                  productionMediaCleanupAttempted: Bool,
                  productionLiveKitClientConnectAttempted: Bool,
+                 productionLiveKitFailureReason: DirectCallDiagnosticMediaFailureReason,
+                 productionTokenRequestSeen: Bool,
+                 productionTokenStatus: Int?,
+                 productionTokenErrcode: String?,
+                 productionTokenReason: DirectCallDiagnosticTokenReason,
+                 productionTokenEligibilityAllowed: Bool,
+                 productionTokenRateLimited: Bool,
+                 productionTokenAllocationAttempted: Bool,
+                 productionTokenLiveKitRoomPrecreateAttempted: Bool,
+                 productionTokenIssued: Bool,
                  productionMediaFailureReason: DirectCallDiagnosticMediaFailureReason) {
         self.productionOwnerAvailable = productionOwnerAvailable
         self.productionListenerAvailable = productionListenerAvailable
@@ -3385,6 +3425,16 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
         self.productionMediaDisconnectAttempted = productionMediaDisconnectAttempted
         self.productionMediaCleanupAttempted = productionMediaCleanupAttempted
         self.productionLiveKitClientConnectAttempted = productionLiveKitClientConnectAttempted
+        self.productionLiveKitFailureReason = productionLiveKitFailureReason
+        self.productionTokenRequestSeen = productionTokenRequestSeen
+        self.productionTokenStatus = productionTokenStatus
+        self.productionTokenErrcode = productionTokenErrcode
+        self.productionTokenReason = productionTokenReason
+        self.productionTokenEligibilityAllowed = productionTokenEligibilityAllowed
+        self.productionTokenRateLimited = productionTokenRateLimited
+        self.productionTokenAllocationAttempted = productionTokenAllocationAttempted
+        self.productionTokenLiveKitRoomPrecreateAttempted = productionTokenLiveKitRoomPrecreateAttempted
+        self.productionTokenIssued = productionTokenIssued
         self.productionMediaFailureReason = productionMediaFailureReason
     }
 
@@ -3431,6 +3481,16 @@ struct NativeDirectCallProductionStatus: Equatable, CustomStringConvertible, Cus
             "productionMediaDisconnectAttempted: \(productionMediaDisconnectAttempted)",
             "productionMediaCleanupAttempted: \(productionMediaCleanupAttempted)",
             "productionLiveKitClientConnectAttempted: \(productionLiveKitClientConnectAttempted)",
+            "productionLiveKitFailureReason: \(productionLiveKitFailureReason)",
+            "productionTokenRequestSeen: \(productionTokenRequestSeen)",
+            "productionTokenStatus: \(productionTokenStatus.map(String.init) ?? "none")",
+            "productionTokenErrcode: \(productionTokenErrcode ?? "none")",
+            "productionTokenReason: \(productionTokenReason)",
+            "productionTokenEligibilityAllowed: \(productionTokenEligibilityAllowed)",
+            "productionTokenRateLimited: \(productionTokenRateLimited)",
+            "productionTokenAllocationAttempted: \(productionTokenAllocationAttempted)",
+            "productionTokenLiveKitRoomPrecreateAttempted: \(productionTokenLiveKitRoomPrecreateAttempted)",
+            "productionTokenIssued: \(productionTokenIssued)",
             "productionMediaFailureReason: \(productionMediaFailureReason)"
         ]
         return "NativeDirectCallProductionStatus(\(fields.joined(separator: ", ")))"

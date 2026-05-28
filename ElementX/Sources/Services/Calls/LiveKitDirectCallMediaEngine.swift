@@ -73,6 +73,9 @@ final class LiveKitDirectCallMediaEngine: DirectCallMediaEngineProtocol {
 
     var diagnosticSnapshot: DirectCallDiagnosticSnapshot {
         var snapshot = diagnosticState
+        if let tokenDiagnostics = tokenProvider as? DirectCallMediaDiagnosticSnapshotProviding {
+            snapshot.mergeReceiveDiagnostics(from: tokenDiagnostics.diagnosticSnapshot)
+        }
         if let e2eeDiagnostics = e2eeContextProvider as? DirectCallMediaDiagnosticSnapshotProviding {
             snapshot.mergeReceiveDiagnostics(from: e2eeDiagnostics.diagnosticSnapshot)
         }
@@ -124,6 +127,7 @@ final class LiveKitDirectCallMediaEngine: DirectCallMediaEngineProtocol {
         diagnosticState.mediaConnectAttempted = true
         diagnosticState.mediaKeyHandleAvailable = !keyHandle.keyID.isEmpty && keyHandle.callID == session.callID
         diagnosticState.mediaFailureReason = .none
+        diagnosticState.liveKitFailureReason = .none
         #endif
 
         let preparingState = DirectCallMediaState(callID: session.callID,
@@ -174,7 +178,9 @@ final class LiveKitDirectCallMediaEngine: DirectCallMediaEngineProtocol {
                 return .success(activeState)
             case .failure(let error):
                 #if DEBUG
-                diagnosticState.mediaFailureReason = error == .mediaSetupUnavailable ? .liveKitConnectFailed : .init(error)
+                let failureReason: DirectCallDiagnosticMediaFailureReason = error == .mediaSetupUnavailable ? .liveKitConnectFailed : .init(error)
+                diagnosticState.liveKitFailureReason = failureReason
+                diagnosticState.mediaFailureReason = failureReason
                 #endif
                 return fail(callID: session.callID, error: error)
             }

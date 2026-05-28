@@ -187,6 +187,7 @@ struct DirectCallProductionLiveKitTokenResponseDTO: Codable, Equatable, CustomSt
     let version: Int
     let liveKit: LiveKit
     let allocation: Allocation
+    let diagnostics: DirectCallProductionLiveKitTokenDiagnosticsDTO?
 
     var description: String {
         "DirectCallProductionLiveKitTokenResponseDTO(version: \(version), liveKit: \(liveKit), allocation: \(allocation))"
@@ -200,6 +201,98 @@ struct DirectCallProductionLiveKitTokenResponseDTO: Codable, Equatable, CustomSt
         case version
         case liveKit = "livekit"
         case allocation
+        case diagnostics
+    }
+}
+
+struct DirectCallProductionLiveKitTokenDiagnosticsDTO: Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let tokenRequestSeen: Bool
+    let tokenStatus: Int?
+    let tokenErrcode: String?
+    let tokenReason: DirectCallDiagnosticTokenReason
+    let eligibilityAllowed: Bool
+    let rateLimited: Bool
+    let allocationAttempted: Bool
+    let liveKitRoomPrecreateAttempted: Bool
+    let tokenIssued: Bool
+
+    init(tokenRequestSeen: Bool = false,
+         tokenStatus: Int? = nil,
+         tokenErrcode: String? = nil,
+         tokenReason: DirectCallDiagnosticTokenReason = .unknown,
+         eligibilityAllowed: Bool = false,
+         rateLimited: Bool = false,
+         allocationAttempted: Bool = false,
+         liveKitRoomPrecreateAttempted: Bool = false,
+         tokenIssued: Bool = false) {
+        self.tokenRequestSeen = tokenRequestSeen
+        self.tokenStatus = tokenStatus
+        self.tokenErrcode = tokenErrcode
+        self.tokenReason = tokenReason
+        self.eligibilityAllowed = eligibilityAllowed
+        self.rateLimited = rateLimited
+        self.allocationAttempted = allocationAttempted
+        self.liveKitRoomPrecreateAttempted = liveKitRoomPrecreateAttempted
+        self.tokenIssued = tokenIssued
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        tokenRequestSeen = try container.decodeIfPresent(Bool.self, forKey: .tokenRequestSeen) ?? false
+        tokenStatus = try container.decodeIfPresent(Int.self, forKey: .tokenStatus)
+        tokenErrcode = try container.decodeIfPresent(String.self, forKey: .tokenErrcode)
+        tokenReason = try container.decodeIfPresent(DirectCallDiagnosticTokenReason.self, forKey: .tokenReason) ?? .unknown
+        eligibilityAllowed = try container.decodeIfPresent(Bool.self, forKey: .eligibilityAllowed) ?? false
+        rateLimited = try container.decodeIfPresent(Bool.self, forKey: .rateLimited) ?? false
+        allocationAttempted = try container.decodeIfPresent(Bool.self, forKey: .allocationAttempted) ?? false
+        liveKitRoomPrecreateAttempted = try container.decodeIfPresent(Bool.self, forKey: .liveKitRoomPrecreateAttempted) ?? false
+        tokenIssued = try container.decodeIfPresent(Bool.self, forKey: .tokenIssued) ?? false
+    }
+
+    #if DEBUG
+    var diagnosticSnapshot: DirectCallDiagnosticSnapshot {
+        var snapshot = DirectCallDiagnosticSnapshot()
+        snapshot.tokenRequestSeen = tokenRequestSeen
+        snapshot.tokenStatus = tokenStatus
+        snapshot.tokenErrcode = tokenErrcode
+        snapshot.tokenReason = tokenReason
+        snapshot.tokenEligibilityAllowed = eligibilityAllowed
+        snapshot.tokenRateLimited = rateLimited
+        snapshot.tokenAllocationAttempted = allocationAttempted
+        snapshot.tokenLiveKitRoomPrecreateAttempted = liveKitRoomPrecreateAttempted
+        snapshot.tokenIssued = tokenIssued
+        return snapshot
+    }
+    #endif
+
+    var description: String {
+        "DirectCallProductionLiveKitTokenDiagnosticsDTO(" + [
+            "tokenRequestSeen: \(tokenRequestSeen)",
+            "tokenStatus: \(tokenStatus.map(String.init) ?? "none")",
+            "tokenErrcode: \(tokenErrcode ?? "none")",
+            "tokenReason: \(tokenReason)",
+            "eligibilityAllowed: \(eligibilityAllowed)",
+            "rateLimited: \(rateLimited)",
+            "allocationAttempted: \(allocationAttempted)",
+            "liveKitRoomPrecreateAttempted: \(liveKitRoomPrecreateAttempted)",
+            "tokenIssued: \(tokenIssued)"
+        ].joined(separator: ", ") + ")"
+    }
+
+    var debugDescription: String {
+        description
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case tokenRequestSeen = "token_request_seen"
+        case tokenStatus = "token_status"
+        case tokenErrcode = "token_errcode"
+        case tokenReason = "token_reason"
+        case eligibilityAllowed = "eligibility_allowed"
+        case rateLimited = "rate_limited"
+        case allocationAttempted = "allocation_attempted"
+        case liveKitRoomPrecreateAttempted = "livekit_room_precreate_attempted"
+        case tokenIssued = "token_issued"
     }
 }
 
@@ -207,9 +300,10 @@ struct DirectCallProductionLiveKitTokenErrorDTO: Codable, Equatable, CustomStrin
     let errcode: String
     let error: String
     let retryAfterMS: Int?
+    let diagnostics: DirectCallProductionLiveKitTokenDiagnosticsDTO?
 
     var description: String {
-        "DirectCallProductionLiveKitTokenErrorDTO(errcode: \(errcode), error: <redacted>, retryAfterMS: \(String(describing: retryAfterMS)))"
+        "DirectCallProductionLiveKitTokenErrorDTO(errcode: \(errcode), error: <redacted>, retryAfterMS: \(String(describing: retryAfterMS)), diagnostics: \(diagnostics.map { String(describing: $0) } ?? "none"))"
     }
 
     var debugDescription: String {
@@ -220,6 +314,7 @@ struct DirectCallProductionLiveKitTokenErrorDTO: Codable, Equatable, CustomStrin
         case errcode
         case error
         case retryAfterMS = "retry_after_ms"
+        case diagnostics
     }
 }
 
@@ -2224,6 +2319,13 @@ final class ProductionDirectCallLiveKitTokenClient: DirectCallLiveKitTokenClient
     private let accessTokenProvider: DirectCallMatrixAccessTokenProviding?
     private let jsonEncoder: JSONEncoder
     private let jsonDecoder: JSONDecoder
+    #if DEBUG
+    private var diagnosticState = DirectCallDiagnosticSnapshot()
+
+    var diagnosticSnapshot: DirectCallDiagnosticSnapshot {
+        diagnosticState
+    }
+    #endif
 
     init(configuration: DirectCallProductionLiveKitConfiguration = .init(),
          httpTransport: DirectCallHTTPTransportProtocol? = nil,
@@ -2238,21 +2340,29 @@ final class ProductionDirectCallLiveKitTokenClient: DirectCallLiveKitTokenClient
     }
 
     func connection(for request: DirectCallLiveKitTokenRequest) async -> Result<DirectCallLiveKitTokenResponse, DirectCallMediaError> {
+        #if DEBUG
+        diagnosticState = DirectCallDiagnosticSnapshot()
+        #endif
+
         guard request.intent == .audio else {
+            recordTokenFailure(reason: .unsupportedIntent)
             return .failure(.unsupportedIntent)
         }
 
         guard let endpointURL = configuration.tokenEndpointURL else {
+            recordTokenFailure(reason: .tokenEndpointUnavailable)
             return .failure(.tokenEndpointUnavailable)
         }
 
         guard let httpTransport else {
+            recordTokenFailure(reason: .tokenHTTPUnavailable)
             return .failure(.tokenHTTPUnavailable)
         }
 
         guard let accessTokenProvider,
               let accessToken = await accessTokenProvider.matrixAccessToken(),
               !accessToken.isEmpty else {
+            recordTokenFailure(reason: .accessTokenUnavailable)
             return .failure(.accessTokenUnavailable)
         }
 
@@ -2260,6 +2370,7 @@ final class ProductionDirectCallLiveKitTokenClient: DirectCallLiveKitTokenClient
         do {
             requestData = try jsonEncoder.encode(DirectCallProductionLiveKitTokenRequestDTO(request: request))
         } catch {
+            recordTokenFailure(reason: .tokenResponseInvalid)
             return .failure(.tokenResponseInvalid)
         }
 
@@ -2270,6 +2381,7 @@ final class ProductionDirectCallLiveKitTokenClient: DirectCallLiveKitTokenClient
         case .success(let response):
             return decodeConnectionResponse(response, for: request)
         case .failure:
+            recordTokenFailure(reason: .tokenHTTPUnavailable)
             return .failure(.tokenHTTPUnavailable)
         }
     }
@@ -2285,21 +2397,40 @@ final class ProductionDirectCallLiveKitTokenClient: DirectCallLiveKitTokenClient
     private func decodeConnectionResponse(_ response: DirectCallHTTPTransportResponse,
                                           for request: DirectCallLiveKitTokenRequest) -> Result<DirectCallLiveKitTokenResponse, DirectCallMediaError> {
         guard (200..<300).contains(response.statusCode) else {
-            return .failure(decodeError(response.data))
+            return .failure(decodeError(response.data, statusCode: response.statusCode))
         }
 
         do {
             let dto = try jsonDecoder.decode(DirectCallProductionLiveKitTokenResponseDTO.self, from: response.data)
+            recordTokenDiagnostics(dto.diagnostics ?? .init(tokenRequestSeen: true,
+                                                            tokenStatus: response.statusCode,
+                                                            tokenReason: .issued,
+                                                            eligibilityAllowed: true,
+                                                            allocationAttempted: true,
+                                                            liveKitRoomPrecreateAttempted: true,
+                                                            tokenIssued: true))
             return tokenResponse(from: dto, for: request)
         } catch {
+            recordTokenDiagnostics(.init(tokenRequestSeen: true,
+                                         tokenStatus: response.statusCode,
+                                         tokenReason: .tokenResponseInvalid))
             return .failure(.tokenResponseInvalid)
         }
     }
 
-    private func decodeError(_ data: Data) -> DirectCallMediaError {
+    private func decodeError(_ data: Data, statusCode: Int) -> DirectCallMediaError {
         guard let errorDTO = try? jsonDecoder.decode(DirectCallProductionLiveKitTokenErrorDTO.self, from: data) else {
+            recordTokenDiagnostics(.init(tokenRequestSeen: true,
+                                         tokenStatus: statusCode,
+                                         tokenReason: .unknown))
             return .tokenBackendRejected
         }
+
+        recordTokenDiagnostics(errorDTO.diagnostics ?? .init(tokenRequestSeen: true,
+                                                             tokenStatus: statusCode,
+                                                             tokenErrcode: errorDTO.errcode,
+                                                             tokenReason: tokenReason(for: errorDTO.errcode, statusCode: statusCode),
+                                                             rateLimited: errorDTO.errcode == "M_DIRECT_CALL_RATE_LIMITED"))
 
         switch errorDTO.errcode {
         case "M_DIRECT_CALL_UNSUPPORTED_INTENT":
@@ -2324,11 +2455,55 @@ final class ProductionDirectCallLiveKitTokenClient: DirectCallLiveKitTokenClient
                               roomName: dto.liveKit.roomName,
                               token: dto.liveKit.participantToken))
     }
+
+    private func tokenReason(for errcode: String, statusCode: Int) -> DirectCallDiagnosticTokenReason {
+        switch errcode {
+        case "M_DIRECT_CALL_UNSUPPORTED_INTENT":
+            .unsupportedIntent
+        case "M_DIRECT_CALL_NOT_ELIGIBLE":
+            .eligibilityRejected
+        case "M_DIRECT_CALL_RATE_LIMITED":
+            .rateLimited
+        case "M_DIRECT_CALL_RATE_LIMIT_STORE_UNAVAILABLE":
+            .rateLimitStoreUnavailable
+        case "M_DIRECT_CALL_ALLOCATION_FAILED":
+            .allocationFailed
+        case "M_DIRECT_CALL_LIVEKIT_ROOM_UNAVAILABLE":
+            .liveKitRoomPrecreateFailed
+        case "M_NOT_JOINED", "M_DIRECT_CALL_PEER_MISMATCH", "M_ROOM_NOT_ENCRYPTED", "M_DIRECT_CALL_NOT_1_TO_1":
+            .roomValidationFailed
+        case "M_UNKNOWN_TOKEN", "M_FORBIDDEN":
+            .authRejected
+        default:
+            statusCode == 400 ? .badRequest : .unknown
+        }
+    }
+
+    private func recordTokenFailure(reason: DirectCallDiagnosticTokenReason) {
+        recordTokenDiagnostics(.init(tokenRequestSeen: false,
+                                     tokenReason: reason))
+    }
+
+    private func recordTokenDiagnostics(_ diagnostics: DirectCallProductionLiveKitTokenDiagnosticsDTO) {
+        #if DEBUG
+        diagnosticState.mergeReceiveDiagnostics(from: diagnostics.diagnosticSnapshot)
+        #endif
+    }
 }
+
+#if DEBUG
+extension ProductionDirectCallLiveKitTokenClient: DirectCallMediaDiagnosticSnapshotProviding { }
+#endif
 
 @MainActor
 final class DirectCallLiveKitTokenProvider: DirectCallMediaTokenProviderProtocol {
     private let tokenClient: DirectCallLiveKitTokenClientProtocol
+
+    #if DEBUG
+    var diagnosticSnapshot: DirectCallDiagnosticSnapshot {
+        (tokenClient as? DirectCallMediaDiagnosticSnapshotProviding)?.diagnosticSnapshot ?? .empty
+    }
+    #endif
 
     init(tokenClient: DirectCallLiveKitTokenClientProtocol? = nil) {
         self.tokenClient = tokenClient ?? UnavailableDirectCallLiveKitTokenClient()
@@ -2375,6 +2550,10 @@ final class DirectCallLiveKitTokenProvider: DirectCallMediaTokenProviderProtocol
                               token: response.token))
     }
 }
+
+#if DEBUG
+extension DirectCallLiveKitTokenProvider: DirectCallMediaDiagnosticSnapshotProviding { }
+#endif
 
 @MainActor
 final class NoOpDirectCallAudioRouteController: DirectCallAudioRouteControllerProtocol {
