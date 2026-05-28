@@ -1084,6 +1084,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - A short internal-pilot A -> B smoke reached `activeAudio`; hangup/cleanup returned A/B to `idle` with no active session.
   - Smoke diagnostics reported token `200` / `issued`, token issued true, LiveKit room pre-create and connect attempted, LiveKit failure `none`, and media failure `none`.
   - No app/backend code changed during the proof. Additional non-engineering windows, participant/device expansion, broad internal rollout, production/public rollout, unsupervised dogfood, Element Call replacement, CallKit/push/background incoming, missed-call UX, video, session restoration, and global activation remain blocked.
+- Native audio incoming-call lifecycle architecture contract is documented:
+  - 2.40B records the target lifecycle for moving beyond foreground/open-chat-only native audio: receive a native direct-call invite signal, classify it safely, validate encrypted direct 1:1 room state, validate trusted peer/device state, validate rollout/eligibility/dependencies/idle session state, report to CallKit only after that safe boundary, accept through the native direct-call engine, request the participant token only on accept, connect LiveKit only after token and E2EE readiness, and fail closed on validation/media/terminal failures.
+  - The future CallKit boundary must be a native audio adapter/protocol separate from `ElementCallService`, `displayCall`, and `presentCallScreen`. It maps CallKit UUIDs to validated native sessions, handles answer/end/mute/audio session callbacks, and cannot bypass trust, room eligibility, backend eligibility, rollout, or token endpoint enforcement.
+  - The future PushKit/APNs boundary requires separate native audio pusher registration, minimal opaque payloads, local fetch/decrypt/classification when needed, and no raw room/user/peer/device IDs, tokens, JWTs, media keys, LiveKit room names, Matrix event bodies, request/response bodies, or credentialed URLs.
+  - Signing remains a blocker: Push Notifications capability, APNs `aps-environment`, VoIP background mode, provisioning profiles, Apple Developer account capability, physical-device availability, and push gateway configuration must be proven before PushKit/APNs runtime work. Simulator-only proof is insufficient.
+  - The backend must not centralize Matrix trust decisions. Matrix signalling remains the source of call semantics, while the call-service may provide opaque handles, eligibility, readiness, token final enforcement, and redacted observability only.
+  - The fail-closed matrix covers malformed/expired push, decrypt/classify failure, invalid room shape, trust not ready, ineligible participants, disabled rollout, dependency failure, existing active session, locked/killed app without safe session state, token rejection, LiveKit failure, CallKit report failure, ambiguous terminal delivery, and unsafe Element Call conflict.
+  - This is docs-only. It does not implement CallKit, PushKit, APNs, missed-call UX, background incoming, video, Element Call replacement, rollout expansion, or global activation.
 - Pilot sessions must follow the 2.27A checkpoint, 2.28A operations checklist, and 2.33B expansion runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
@@ -1096,9 +1104,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.39X — operational monitoring automation design`
+`2.40C — native audio signing and entitlement readiness audit`
 
-Goal: design the next post-pilot hardening slice for redacted operational monitoring automation. Define safe telemetry fields, alert-worthy states, dashboard/log contracts, incident triage, and validation requirements before implementing anything beyond the current runner/report-based proof flow.
+Goal: prove the signing, entitlement, Apple Developer account, physical-device, APNs environment, VoIP background mode, and push gateway prerequisites before any native audio CallKit/PushKit/APNs implementation begins.
 
 ## Do-Not-Touch Constraints
 

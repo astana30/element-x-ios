@@ -3510,6 +3510,145 @@ The next implementation workstream should be chosen by readiness review from:
 
 Decision rule: complete this hardening plan, then run a readiness review to choose between foreground UX polish implementation, monitoring automation, CallKit/push planning, or another tightly supervised pilot window.
 
+## 2.40B Native Audio Incoming-Call Lifecycle Architecture Contract
+
+The 2.40A design review selected a docs-only architecture contract before any CallKit, PushKit, APNs, missed-call, or background incoming implementation. This contract does not change app or backend code, does not approve additional non-engineering pilot windows, and does not replace the Element Call route.
+
+### Current Limitation
+
+- Native direct audio remains foreground/open encrypted direct 1:1 room scoped.
+- The private native audio card can start or accept only while the approved encrypted direct chat is open and the room-flow listener is available.
+- There is no native CallKit incoming UI.
+- There is no PushKit/APNs background incoming path.
+- There is no missed-call UX, killed-app restoration, background listener, or video.
+- Element Call remains visible and available as the fallback.
+
+### Target Incoming-Call Lifecycle
+
+The future native incoming-call path must use this order:
+
+1. Receive a native direct-call invite signal through a room-independent incoming-call service.
+2. Fetch/decrypt/classify enough local state to prove the invite is a native direct audio call.
+3. Validate the room is encrypted, direct, and 1:1.
+4. Validate the peer and device trust state before showing native audio as answerable.
+5. Validate product visibility, native internal rollout, backend eligibility, dependency readiness, and idle session state.
+6. Report the incoming call to CallKit only after the safe validation boundary passes.
+7. Accept through the native direct-call engine, not through Element Call.
+8. Request the participant token only after explicit accept and local validation.
+9. Connect LiveKit only after token issuance, key/E2EE readiness, and media dependency readiness.
+10. Fail closed and end the CallKit call on any validation, token, media, or terminal failure.
+11. Emit a safe terminal event to the peer when local failure occurs after the remote side may have entered active audio.
+
+### CallKit Boundary
+
+- Add a native audio CallKit adapter/protocol with mocks before implementation.
+- Keep it separate from `ElementCallService`, `displayCall`, and `presentCallScreen`.
+- Map CallKit UUIDs to validated native call sessions only; do not use raw room, user, peer, or device identifiers as operator-visible IDs.
+- Handle answer, end, mute, hold-or-not-supported, and audio session activation/deactivation callbacks.
+- Do not bypass trust checks, room eligibility, backend eligibility, internal rollout, or token endpoint enforcement.
+- End the CallKit call for terminal fail-closed states, token rejection, LiveKit setup failure, duplicate/out-of-order call state, or ambiguous cleanup.
+- Keep Element Call fallback controls and routing unchanged.
+
+### PushKit / APNs Boundary
+
+- Add PushKit token registration only behind an explicit future phase and signing proof.
+- Keep native audio pusher registration separate from Element Call pusher registration.
+- Push payloads must be minimal and opaque.
+- Push payloads must not include raw room IDs, user IDs, peer IDs, device IDs, LiveKit room names, media keys, participant tokens, JWTs, Matrix event bodies, full request/response bodies, or credentialed URLs.
+- If metadata encryption prevents the server from knowing whether an event is a native audio call, the app or notification service extension must fetch/decrypt/classify locally.
+- The token endpoint remains final authority. A push wake or CallKit report never implies media authorization.
+
+### NSE / Encrypted Payload Handling
+
+- A future NSE path may classify encrypted incoming content only up to a safe native-call boundary.
+- If decrypt or classify is unavailable, stale, malformed, or ambiguous, fail closed and do not report an answerable native audio call.
+- Do not log raw event bodies, decrypted payloads, room identifiers, user identifiers, device identifiers, tokens, media keys, or LiveKit room names.
+- If the server can positively identify a VoIP call without exposing private metadata, use a VoIP push path; otherwise use encrypted notification classification and keep all output redacted.
+
+### Entitlements And Signing
+
+- Push Notifications capability and the APNs `aps-environment` entitlement must be proven in the signed app profile before APNs/PushKit work begins.
+- The app already declares the VoIP background mode in target configuration, but provisioning and Apple Developer account capability must still be verified.
+- Physical-device proof is required for PushKit/APNs. Simulator-only proof is insufficient.
+- Apple Developer Program access, App ID capabilities, provisioning profiles, push gateway credentials, and staging APNs environment selection can block implementation.
+- No phase may proceed to PushKit/APNs runtime proof until these signing and capability checks pass.
+
+### Backend / Server Requirements
+
+- Backend services must not centralize Matrix trust decisions. Trust remains a client-side E2EE/device verification decision.
+- Matrix signalling remains the source of call semantics.
+- The call-service may help with opaque handles, readiness, eligibility, token final enforcement, and redacted observability only.
+- No participant token is issued before accept-time validation.
+- Token issuance remains blocked unless backend eligibility, local room/trust validation, and token endpoint enforcement all pass.
+- Server logs must remain redacted and must not include raw IDs, tokens, JWTs, LiveKit room names, Matrix event bodies, full request bodies, full response bodies, or credentialed URLs.
+
+### Redaction And Privacy Contract
+
+Allowed diagnostics:
+
+- readiness booleans;
+- activation source/decision/reason enums;
+- token status, safe errcode, safe reason, and token-issued boolean;
+- LiveKit room pre-create attempted boolean;
+- LiveKit/media failure safe enums;
+- production session state and active-session boolean;
+- terminal reason enum;
+- cleanup/disconnect booleans;
+- pass/fail/not-run labels.
+
+Forbidden diagnostics and UI/report content:
+
+- raw room IDs, user IDs, peer IDs, or device IDs;
+- simulator UDIDs or unmanaged device identifiers;
+- Matrix access tokens, participant tokens, JWTs, media keys, or secrets;
+- LiveKit room names;
+- Matrix event bodies or decrypted push payloads;
+- Redis credentials, credentialed URLs, full request bodies, or full response bodies.
+
+CallKit display metadata must be safe and non-identifying beyond the approved user-visible display-name policy.
+
+### Fail-Closed Matrix
+
+Fail closed and avoid token/media/LiveKit setup when any of these occur:
+
+- malformed, expired, duplicate, or out-of-order push;
+- decrypt or classify unavailable;
+- room is not encrypted, direct, and 1:1;
+- peer/device trust is not ready;
+- account or peer is not eligible;
+- internal rollout or product gate is disabled;
+- dependency readiness is missing;
+- existing active or ringing native session exists;
+- app is locked, killed, or restored without safe session state;
+- token endpoint rejects or is unavailable;
+- LiveKit pre-create, token handling, or connect fails;
+- CallKit report fails or the system disallows the call;
+- terminal delivery is ambiguous after remote may have become active;
+- Element Call route conflict cannot be resolved safely.
+
+### Phased Implementation Plan
+
+1. `2.40C — native audio signing and entitlement readiness audit`: prove Push Notifications capability, APNs environment entitlement, VoIP background mode, provisioning, physical-device availability, and push gateway prerequisites.
+2. `2.40D — disabled native incoming-call service and CallKit adapter protocols`: add protocols/mocks and state mapping only; keep runtime disabled/default-off.
+3. `2.40E — push/NSE classification dry-run`: classify candidate native audio pushes with redacted output only; no CallKit UI.
+4. `2.40F — device-only synthetic CallKit incoming proof`: exercise local synthetic incoming CallKit actions on a physical device; no PushKit/APNs.
+5. `2.40G — PushKit/APNs registration dry-run`: register and report safe token-registration state without enabling incoming calls.
+6. `2.40H — supervised device E2E incoming proof`: push -> CallKit -> accept -> token -> active audio -> hangup under named staging operators only.
+7. Later phases must separately cover missed, decline, cancel, timeout, background, killed-app, interrupted-audio, and rollback tests.
+
+### Explicitly Blocked
+
+- No implementation in 2.40B.
+- No production/public rollout.
+- No broad internal rollout.
+- No participant/device expansion.
+- No unsupervised dogfood.
+- No Element Call replacement.
+- No CallKit or PushKit wiring in this phase.
+- No video.
+- No weakening of E2EE or trusted-device behavior.
+- No reuse of `directOneToOneCallsEnabled` as the native audio gate.
+
 ## Remaining Blockers
 
 These block broader internal dogfood and production, but not the controlled engineering dogfood scope above:
