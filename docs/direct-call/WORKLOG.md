@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Recorded supervised narrow non-engineering pilot window 1.
 - Completed the label-only pilot checklist for execution approval re-review.
 - Recorded the incomplete pilot checklist completion attempt.
 - Documented the blocked non-engineering pilot execution approval and remediation checklist.
@@ -64,6 +65,26 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-05-28 — 2.39I Supervised Narrow Non-Engineering Pilot Window 1
+
+- Ran exactly one supervised non-engineering internal pilot window under the 2.39H constraints.
+- Used label-only participants/devices: Participant A/B and Device A1/B1.
+- Main path kept `NATIVE_DIRECT_CALL_PRIVATE_DOGFOOD_ENABLED` and `NATIVE_DIRECT_CALL_PRODUCTION_DRY_RUN_FAKE_ENABLED` unset.
+- Backend readiness passed with `ready=true`, `reason=ok`, Redis allocation/rate-limit connected, storage key configured, LiveKit room provisioning configured, and eligibility/allowlist configured.
+- A/B trust was ready after the approved encrypted direct 1:1 DM was opened on both clients.
+- Preflight reported no stale active session, Element Call fallback visible, `activationSource=internalPilot`, `internalPilotActivationDecision=activationAllowed`, and `internalPilotActivationReason=none`.
+- A -> B happy path passed: A/B reached `activeAudio`, media failure stayed `none`, and hangup returned A/B idle/no active session.
+- B -> A reverse path passed with the same active-audio and clean-hangup result.
+- Repeated call once passed with no stale active session and no split state.
+- Decline/cancel row was run as outgoing cancel because the runner does not expose a distinct decline command; A sent terminal `cancelled`, B received cancel, and A/B returned idle/no active session.
+- Timeout row passed: A reported `outgoingTimeout`, B reported `incomingTimeout`, and A/B returned idle/no active session with media failure `none`.
+- Planned app-side kill-switch check passed: relaunching with internal rollout disabled made dry-run report `wouldStart=false`, `activationSource=internalPilot`, `internalPilotActivationDecision=disabled`, and `internalPilotActivationReason=rolloutDisabled`; no active session or media/LiveKit side effects were present.
+- Element Call fallback visibility was confirmed pass by the operator; normal Element Call controls remained visible/unchanged and separate from the private native audio card.
+- Stop criteria hit: no. Redaction issue: no. Runtime bug: no. Emergency rollback: no.
+- No app/backend code changed.
+- Decision: pause for post-window review. No additional non-engineering pilot window is approved by this run.
+- Recommended next phase: `2.39J — narrow non-engineering pilot window 1 post-run review`.
 
 ## 2026-05-28 — 2.39G Pilot Checklist Completion Follow-Up
 

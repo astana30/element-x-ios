@@ -7,7 +7,7 @@ Branch:
 salemx-native-direct-calls
 
 Current phase:
-After 2.39G — pilot checklist completion follow-up.
+After 2.39I — supervised narrow non-engineering pilot window 1.
 
 Current checkpoints:
 - App room-card UX/status hardening: 2.29D `Harden native audio card failure copy` (`71056f143`).
@@ -62,6 +62,7 @@ Current checkpoints:
 - Non-engineering pilot blocker remediation checklist: 2.39D records that execution remains blocked after 2.39C because actual owner labels, participant/device labels, explicit opt-in, fresh preflight, rollback presence, kill-switch verification, and redaction reviewer presence are not filled. The checklist defines the exact label-only rows and preflight that must be completed before re-review.
 - Pilot checklist completion attempt: 2.39F reviewed the checklist but did not fill required label-only operational data. Owner labels, participant/device labels, explicit opt-in, fresh green preflight, rollback operator presence, kill-switch verification, and redaction/report reviewer presence remain missing. Execution remains blocked.
 - Pilot checklist completion follow-up: 2.39G records label-only owner values, participant/device labels, explicit opt-in yes for both participants, fresh green preflight, app-side rollout kill-switch verification, backend allowlist removal verification, rollback operator presence, and redaction reviewer presence. The checklist is complete enough to proceed to execution approval re-review only; the pilot has not been approved or run.
+- Supervised narrow non-engineering pilot window 1: 2.39I ran exactly one supervised foreground-only staging window with Participant A/B and Device A1/B1 labels only. The main path used server-backed internal pilot activation with private dogfood and legacy fake/dry-run gates unset. Preflight passed with readiness `ready=true`, `reason=ok`, Redis/storage/LiveKit/eligibility readiness, A/B trust ready, encrypted direct 1:1 DM open, no active session, Element Call fallback visible, and `internalPilotActivationDecision=activationAllowed`. A -> B, B -> A, one repeated call, outgoing cancel, timeout, final idle/no active session, app-side kill-switch, and Element Call fallback rows passed. Timeout returned `outgoingTimeout` / `incomingTimeout`; app-side kill-switch returned `rolloutDisabled`; no stop criteria, redaction issue, runtime bug, or app/backend code change occurred. No additional non-engineering window is approved by this result.
 - SDK: f7c2cfe5c `Add direct-call media key envelope crypto tests`.
 - Wrapper: 1e58d0a `Add direct-call media key envelope bindings`.
 
@@ -442,61 +443,45 @@ Required client preflight:
 - Element Call fallback visible
 
 Phase:
-2.39H — one-window non-engineering pilot execution approval.
+2.39J — narrow non-engineering pilot window 1 post-run review.
 
 Task:
-Inspection/decision review only. Do not modify code. Do not commit.
+Inspection/decision review only. Do not modify app/backend code. Do not execute another pilot window. Do not approve broad internal rollout. Do not approve production/public rollout.
 
 Context:
-2.39A concluded that a very narrow non-engineering internal pilot may be prepared, but execution was not yet approved.
-2.39B added the preparation runbook:
-- 1-2 named non-engineering internal participants only;
-- named accounts/devices only;
+2.39H approved exactly one supervised non-engineering internal pilot window.
+2.39I ran that single window:
+- Participant A/B and Device A1/B1 labels only;
+- main path used server-backed internal pilot activation;
+- private dogfood gate unset;
+- legacy fake/dry-run gate unset;
 - staging call-service and staging LiveKit only;
-- private native audio card only;
-- foreground/open encrypted direct 1:1 rooms only;
-- verified/trusted peers only;
-- one active native 1:1 call at a time;
-- Element Call fallback visible and unchanged;
-- participant consent/expectation text;
-- required owners, preflight, app/backend gates, first-session matrix, stop criteria, rollback, and redacted report template.
-2.39C blocked execution because required execution details were not filled.
-2.39D added the remediation checklist that must be complete before execution can be reconsidered:
-- owner labels;
-- participant/device labels;
-- explicit opt-in;
-- fresh preflight;
-- rollback operator present;
-- kill-switch verified;
-- redaction reviewer present.
-2.39F attempted checklist completion, but no label-only operational data was supplied. Execution remained blocked.
-2.39G completed the checklist with label-only operational data:
-- Pilot owner: Operator Owner 1
-- Backend owner: Backend Owner 1
-- Allowlist owner: Allowlist Owner 1
-- Rollback operator: Rollback Operator 1
-- Redaction/report reviewer: Redaction Reviewer 1
-- Incident decision owner: Incident Owner 1
-- Participant A / Device A1 and Participant B / Device B1
-- Explicit opt-in: yes for both participants
-- Fresh preflight: green
-- App rollout disable verified: true
-- Backend allowlist removal verified: true
-- Rollback operator present: true
-- Redaction reviewer present: true
+- foreground/open encrypted direct 1:1 DM only;
+- Element Call fallback visible and unchanged.
+
+2.39I results:
+- Preflight passed with readiness `ready=true`, `reason=ok`, Redis connected, storage key configured, LiveKit room provisioning configured, eligibility/allowlist configured, A/B trust ready, encrypted direct 1:1 DM open, no active session, Element Call fallback visible, and `internalPilotActivationDecision=activationAllowed`.
+- A -> B happy path passed.
+- B -> A reverse path passed.
+- One repeated call passed.
+- Decline/cancel row passed as outgoing cancel.
+- Timeout passed with A `outgoingTimeout`, B `incomingTimeout`, and A/B idle/no active session.
+- Planned app-side kill-switch check passed with `internalPilotActivationDecision=disabled` and `internalPilotActivationReason=rolloutDisabled`.
+- Stop criteria hit: no.
+- Redaction issue: no.
+- Runtime bug: no.
+- Emergency rollback: no.
+- No app/backend code changed.
 
 Current status:
-- Engineering server-backed internal pilot activation path is stable under staging constraints.
-- App-side rollout and backend allowlist kill switches were rehearsed.
-- Restore after allowlist recovery was proven.
-- Non-engineering pilot checklist is complete enough for execution approval re-review.
-- Non-engineering pilot has not been approved or run yet.
+- Exactly one supervised non-engineering internal pilot window has passed.
+- No additional non-engineering window is approved.
 - Broad internal rollout remains blocked.
 - Production/public rollout remains blocked.
 - No CallKit, push/background incoming, missed-call UX, video, session restoration, Element Call replacement, or global activation exists.
 
 Goal:
-Decide whether exactly one supervised, foreground-only, staging-only non-engineering pilot window may be approved. Do not execute the pilot in this phase.
+Decide what can safely be claimed after the first supervised non-engineering pilot window and define the next safest phase.
 
 Inspect:
 - `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`
@@ -504,17 +489,15 @@ Inspect:
 - `docs/direct-call/WORKLOG.md`
 - `docs/direct-call/NEXT_CODEX_PROMPT.md`
 - `server/salemx-call-service/docs/STAGING_SMOKE_2026-05-21.md`
-- relevant internal-pilot activation and eligibility code only if needed for decision context
 
 Questions:
-1. Is the completed checklist sufficient to approve exactly one supervised pilot window?
-2. What exact constraints must apply if approved?
-3. What must be re-verified immediately before the window starts?
-4. What must remain disabled/out of scope?
-5. What stop criteria require immediate rollback?
-6. What report must be recorded after the window?
-7. If execution should remain blocked, what blocker remains?
-8. What should be the next phase name?
+1. Can the first supervised non-engineering pilot window be considered passed?
+2. What guarantees are now proven for the approved scope?
+3. Should any additional non-engineering window be approved now, or should this pause for owner review?
+4. What risks remain before any second window?
+5. What still blocks broad internal rollout?
+6. What still blocks production/public rollout?
+7. What should be the next phase name?
 
 Hard constraints:
 - Do not approve broad internal rollout.
@@ -531,16 +514,12 @@ Hard constraints:
 
 Expected output:
 A. Files inspected.
-B. Checklist completion status.
-C. Execution approval decision: approve exactly one supervised window / remain blocked.
-D. Required constraints if approved.
-E. Required immediate preflight if approved.
-F. Stop/rollback criteria.
-G. Remaining risks.
-H. Recommended next phase name.
+B. Window 1 result decision.
+C. Valid claims.
+D. Invalid claims / still blocked.
+E. Remaining risks.
+F. Recommendation on additional windows.
+G. Recommended next phase name.
 
-Suggested next phase if approved:
-2.39I — supervised narrow non-engineering pilot window 1
-
-Suggested next phase if blocked:
-2.39I — execution approval blocker remediation
+Suggested next phase:
+2.39K — non-engineering pilot window 1 post-run decision

@@ -2717,6 +2717,67 @@ Both participants acknowledged:
 
 Next phase should use `2.39H — one-window non-engineering pilot execution approval`.
 
+## 2.39I Supervised Narrow Non-Engineering Pilot Window 1
+
+The approved 2.39I window ran exactly one supervised, foreground-only, staging-only non-engineering internal pilot window. This was not a broad internal rollout, not production/public rollout, and not approval for additional windows.
+
+### Session
+
+| Field | Value |
+| --- | --- |
+| Session date/time | 2026-05-28 10:56:53 +0500 |
+| Participant labels | Participant A, Participant B |
+| Device labels | Device A1, Device B1 |
+| Scope | one supervised window only |
+
+### Preflight
+
+| Check | Result |
+| --- | --- |
+| readiness | pass: `ready=true`, `reason=ok` |
+| Redis allocation/rate-limit connected | pass |
+| storage key configured | pass |
+| LiveKit room provisioning configured | pass |
+| eligibility/allowlist configured | pass |
+| participant opt-in | pass |
+| A/B trust ready | pass |
+| encrypted direct 1:1 DM open | pass after operator opened the approved DM |
+| no stale active session | pass |
+| Element Call fallback visible | pass |
+| activation source | `internalPilot` |
+| internal pilot activation decision | `activationAllowed` |
+| internal pilot activation reason | `none` |
+
+The private dogfood gate and the legacy fake/dry-run gate remained unset for the main pilot path.
+
+### Matrix
+
+| Row | Result | Redacted notes |
+| --- | --- | --- |
+| A -> B happy path | pass | A/B reached `activeAudio`, media failure `none`, hangup returned A/B idle/no active session |
+| B -> A reverse path | pass | A/B reached `activeAudio`, media failure `none`, hangup returned A/B idle/no active session |
+| repeated call once | pass | A -> B reached `activeAudio`, media failure `none`, hangup returned A/B idle/no active session |
+| decline or cancel | pass | outgoing cancel sent terminal `cancelled`; A/B returned idle/no active session |
+| timeout | pass | A reported `outgoingTimeout`, B reported `incomingTimeout`; A/B returned idle/no active session with media failure `none` |
+| final idle/no active session | pass | A/B had no active session before the kill-switch check |
+| kill-switch check | pass | app-side internal rollout disabled; dry-run reported `wouldStart=false`, `activationSource=internalPilot`, `internalPilotActivationDecision=disabled`, `internalPilotActivationReason=rolloutDisabled`; no active session or media/LiveKit side effects |
+| Element Call fallback visible | pass | normal Element Call controls were visible/unchanged; private native audio card remained separate |
+
+### Outcome
+
+- Stop criteria hit: no.
+- Runtime bug observed: no.
+- Emergency rollback used: no.
+- Planned app-side kill-switch check used: yes.
+- Final A/B state: no active session; after the planned kill-switch check, production status was unavailable/blocked by `rolloutDisabled`.
+- Redaction issue: no.
+- Code changed: no.
+- Decision: pause for post-window review. No additional non-engineering pilot window is approved by this result.
+
+Broad internal rollout, production/public rollout, Element Call replacement, CallKit, push/background incoming, missed-call UX, video, session restoration, and global activation remain blocked. Token endpoint remains final authority.
+
+Next phase should use `2.39J — narrow non-engineering pilot window 1 post-run review`.
+
 ## 2.35B Engineering Expansion Operations Handoff
 
 The 3-session engineering expansion soak completed cleanly, so narrow engineering dogfood can continue without per-session Codex supervision only when a named engineering operator owns the session and this handoff checklist is followed. This is still staging-only engineering dogfood, not non-engineering internal dogfood, product beta, public rollout, production activation, or Element Call replacement.

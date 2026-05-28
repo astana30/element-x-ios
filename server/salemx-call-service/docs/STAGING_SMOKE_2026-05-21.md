@@ -57,6 +57,7 @@ No tokens, JWTs, passwords, shared secrets, authorization header values, or Live
 | Narrow non-engineering pilot blocker remediation checklist | Added; execution remains blocked |
 | Narrow non-engineering pilot checklist completion | Incomplete; execution remains blocked |
 | Narrow non-engineering pilot checklist completion follow-up | Complete; ready for approval re-review only |
+| Supervised narrow non-engineering pilot window 1 | Passed; no additional window approved |
 
 ## Root Cause
 
@@ -154,6 +155,7 @@ Issued a MAS compatibility token with Synapse admin privileges for the service a
 - The 2.39D blocker remediation checklist records that execution remains blocked until actual owner labels, participant/device labels, explicit opt-in, fresh preflight, rollback presence, kill-switch verification, and redaction reviewer presence are filled and a separate re-review approves exactly one supervised window.
 - The 2.39F checklist completion attempt remains incomplete because label-only owner, participant/device, opt-in, fresh preflight, rollback, kill-switch, and redaction-reviewer fields are still missing. No pilot window may run.
 - The 2.39G checklist completion follow-up fills the label-only owner, participant/device, opt-in, fresh preflight, rollback, kill-switch, and redaction-reviewer fields. This permits execution approval re-review only; it does not run or approve the pilot window.
+- The 2.39I supervised narrow non-engineering pilot window passed for exactly one approved window. The main path used server-backed internal pilot activation with private dogfood unset. Preflight passed, A -> B, B -> A, one repeated call, outgoing cancel, timeout, final idle/no active session, app-side kill-switch, and Element Call fallback rows passed. Timeout returned `outgoingTimeout` / `incomingTimeout`; the kill-switch check reported `rolloutDisabled`; no stop criteria, redaction issue, runtime bug, or app/backend code change occurred. This does not approve any additional non-engineering window.
 - Controlled engineering dogfood may continue under the same narrow staging-only constraints.
 
 ## Next Step

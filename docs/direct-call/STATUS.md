@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.39G — pilot checklist completion follow-up.
+After 2.39I — supervised narrow non-engineering pilot window 1.
 
 ## Latest App Code Checkpoint
 
@@ -49,6 +49,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Owner labels, participant/device labels, explicit opt-in, fresh green preflight, rollback operator presence, kill-switch verification, and redaction/report reviewer presence are recorded with label-only data.
   - This permits proceeding to execution approval re-review only. It does not approve or execute the pilot.
   - Broad internal rollout, production/public rollout, CallKit, push/background incoming, missed-call UX, video, session restoration, Element Call replacement, and global activation remain blocked.
+- The 2.39I supervised narrow non-engineering internal pilot window passed:
+  - Exactly one supervised window ran with Participant A/B and Device A1/B1 labels only.
+  - The main path used the server-backed internal pilot activation path with private dogfood and legacy fake/dry-run gates unset.
+  - Preflight passed with readiness `ready=true`, `reason=ok`, Redis connected, storage key configured, LiveKit room provisioning configured, eligibility/allowlist configured, A/B trust ready, encrypted direct 1:1 DM open, no active session, Element Call fallback visible, and `internalPilotActivationDecision=activationAllowed`.
+  - A -> B, B -> A, one repeated call, outgoing cancel, and timeout rows passed.
+  - Timeout produced `outgoingTimeout` / `incomingTimeout`, then A/B returned idle/no active session with media failure `none`.
+  - App-side kill-switch check passed: disabling internal rollout made dry-run report `wouldStart=false`, `activationSource=internalPilot`, `internalPilotActivationDecision=disabled`, and `internalPilotActivationReason=rolloutDisabled`, with no active session or media/LiveKit side effects.
+  - Element Call fallback remained visible/unchanged, no stop criteria hit, no redaction issue was observed, and no app/backend code changed.
+  - No additional non-engineering pilot window is approved by this result; continue only to post-window review.
 - Staging iOS private native audio smoke passed after LiveKit room pre-create:
   - A/B reached `productionSessionState=activeAudio`.
   - A/B had `productionEncryptionState=ready`.
