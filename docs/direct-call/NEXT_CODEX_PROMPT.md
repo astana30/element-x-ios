@@ -7,64 +7,41 @@ Branch:
 salemx-native-direct-calls
 
 Phase:
-2.39U — post-pilot hardening workstream selection.
+2.39W — foreground limitation UX no-activation proof.
 
 Task:
-Inspection/decision review only. Do not modify app/backend code. Do not execute another pilot window. Do not approve additional non-engineering windows, participant/device expansion, broad internal rollout, production/public rollout, or unsupervised dogfood.
+Run or record a no-activation proof for the foreground/open-chat limitation UX polish added in 2.39V. Do not modify app/backend code unless a real runtime bug is found and explicitly approved. Do not execute another non-engineering pilot window. Do not approve additional windows, participant/device expansion, broad internal rollout, production/public rollout, or unsupervised dogfood.
 
 Context:
-- 2.39I, 2.39P, and 2.39R supervised non-engineering foreground-only windows passed under strict staging constraints.
-- 2.39K failed closed with `tokenBackendRejected` / `liveKitNetworkFailed`; after 2.39M redacted token/LiveKit observability, the failure did not reproduce in 2.39N, 2.39P, or 2.39R.
-- 2.39R passed A -> B, B -> A, one repeated A -> B, outgoing cancel, timeout, app-side kill-switch, final idle/no active session, and Element Call fallback checks.
-- 2.39R token diagnostics were clean: `tokenStatus=200`, `tokenErrcode=none`, `tokenReason=issued`, `tokenIssued=true`.
-- 2.39R LiveKit/media diagnostics were clean: `liveKitRoomPrecreateAttempted=true`, `productionLiveKitFailureReason=none`, and `productionMediaFailureReason=none`.
-- 2.39S review paused additional non-engineering pilot windows. Another same-cap supervised window has diminishing value compared with product and operational hardening.
-- 2.39T recorded the post-pilot hardening plan.
-
-Hardening areas recorded in 2.39T:
-- foreground limitation UX;
-- in-card state polish;
-- redacted monitoring baseline;
-- operational monitoring automation;
-- support/rollback procedure;
-- incident reporting and secret rotation triggers;
-- future CallKit/push/background incoming planning readiness.
-
-Current blockers:
-- foreground/open-room-only limitation;
-- no CallKit;
-- no push/background incoming;
-- no missed-call UX;
-- no video;
-- no session restoration;
-- monitoring still runner/report based;
-- support/rollback process is not product-grade;
-- no production/public rollout governance.
+- 2.39V implemented foreground/open-chat limitation UX polish for the private native audio card.
+- The card now states native audio works only while the encrypted direct chat stays open, there are no background incoming calls, no system incoming call screen, no missed-call alerts yet, and Element Call remains fallback.
+- Listener/open-room, trust, eligibility, service unavailable, timeout, cancelled, and safely failed states remain non-technical.
+- This was UX/copy polish only. It did not change Start/Accept eligibility, activation gates, Matrix send behavior, token requests, media/LiveKit setup, private dogfood, internal pilot activation, Element Call route, CallKit, push/background incoming, missed-call UX, video, session restoration, broad rollout, or production/public rollout.
 
 Goal:
-Choose the next implementation workstream after the post-pilot hardening plan.
+Prove that the UX polish is visible and safe without activating or changing native audio behavior.
 
-Options:
-A. foreground UX polish implementation;
-B. operational monitoring automation;
-C. CallKit/push/background incoming planning;
-D. audio controls polish;
-E. defer implementation and prepare another readiness review.
+Proof checklist:
+1. Launch with product UI/status gates needed to render the private native audio card.
+2. Confirm the foreground/open-chat limitation copy is visible in the card for an available state and an unavailable/listener state.
+3. Confirm accessibility/status text contains only safe user-facing wording.
+4. Confirm UI/accessibility output does not include backend, token, LiveKit, request/response details, raw room IDs, raw user IDs, raw device IDs, tokens, JWTs, secrets, LiveKit room names, or simulator UDIDs.
+5. Confirm rendering/status refresh does not send Matrix events, request a participant token, allocate/pre-create a room, connect media, connect LiveKit, or create an active session.
+6. Confirm Start/Accept availability remains controlled by the existing private dogfood/internal pilot gates and is unchanged by copy rendering.
+7. Confirm Element Call phone/video fallback controls remain visible and unchanged.
 
-Inspect:
-- `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`
-- `docs/direct-call/STATUS.md`
-- `docs/direct-call/WORKLOG.md`
-- `docs/direct-call/NEXT_CODEX_PROMPT.md`
-- `server/salemx-call-service/docs/STAGING_SMOKE_2026-05-21.md`
+Optional positive sanity check:
+- If the approved engineering/internal pilot proof environment is already running, one A -> B call may be used only to confirm copy did not break the existing proven path. This is not a new non-engineering pilot window.
 
-Questions:
-1. Which workstream should be implemented first?
-2. What is the smallest safe implementation slice?
-3. What must stay blocked?
-4. What tests and runtime proof are required?
-5. Should any new pilot window be considered before hardening? Default answer should be no unless fully justified.
-6. What is the recommended next phase?
+Report:
+A. Files/build inspected.
+B. Copy visibility result.
+C. Redaction result.
+D. No-activation/side-effect result.
+E. Element Call fallback result.
+F. Any regression.
+G. Whether code changed.
+H. Recommended next phase.
 
 Hard constraints:
 - Do not approve additional non-engineering pilot windows.
@@ -78,15 +55,10 @@ Hard constraints:
 - Do not globally activate production direct calls.
 - Token endpoint remains final authority.
 - No raw IDs/secrets/tokens in reports.
+- No backend/token/LiveKit wording in UI/accessibility output.
 
 Expected output:
-A. Files inspected.
-B. Workstream decision.
-C. Smallest safe implementation slice.
-D. Must-remain-blocked items.
-E. Required tests.
-F. Required runtime proof.
-G. Recommended next phase.
+If passed with no code changes, create a docs-only proof commit.
 
-Suggested next phase:
-2.39V — foreground limitation UX polish
+Suggested commit:
+Record foreground limitation UX proof

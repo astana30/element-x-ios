@@ -3406,6 +3406,14 @@ Before any further non-engineering expansion, user-facing copy must make the cur
 
 Copy must be concise, safe, and user-facing. It must not mention raw backend errors, token details, LiveKit room names, Matrix identifiers, device identifiers, or internal gate names.
 
+2.39V implements the first UX polish slice for this requirement:
+
+- The private native audio card now includes a foreground-only limitation note for relevant non-active states.
+- The note says native audio works only while the encrypted direct chat stays open, there are no background incoming calls, no system incoming call screen, no missed-call alerts yet, and Element Call remains fallback.
+- Listener/open-room, incoming, timeout, cancelled, unavailable, and safely failed copy remains user-facing and avoids backend/token/LiveKit/request/response wording.
+- Accessibility summary includes the same foreground-only limitation in relevant states.
+- This is copy/accessibility polish only. It does not change Start/Accept availability, activation gates, Matrix events, token requests, media/LiveKit setup, Element Call routing, CallKit, push/background incoming, missed-call UX, video, session restoration, broad rollout, or production/public rollout.
+
 ### In-Card State Polish
 
 The private native audio card should use user-safe states for:

@@ -287,6 +287,14 @@ struct NativeDirectCallRoomCard: View {
                         .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+
+                if let foregroundLimitationText = state.foregroundLimitationText {
+                    Text(foregroundLimitationText)
+                        .font(.compound.bodyXS)
+                        .foregroundStyle(.compound.textSecondary)
+                        .lineLimit(4)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             if let receiverAvailability = state.receiverAvailability {
@@ -340,6 +348,7 @@ struct NativeDirectCallRoomCard: View {
         .buttonStyle(.compound(.secondary, size: .small))
         .frame(maxWidth: .infinity)
         .disabled(!isEnabled)
+        .accessibilityLabel(cardAction.buttonTitle)
         .accessibilityIdentifier(cardAction.accessibilityIdentifier)
     }
 }
@@ -360,10 +369,17 @@ struct NativeDirectCallRoomCard_Previews: PreviewProvider {
                             receiverAvailability: .readyToReceive)
                 previewCard(state: .failed(reason: .liveKitNetworkFailed),
                             receiverAvailability: .readyToReceive)
+                previewCard(state: .ended(reason: .cancelled),
+                            receiverAvailability: .readyToReceive)
                 previewCard(state: .unavailable(reason: .peerTrustUnavailable),
+                            receiverAvailability: .readyToReceive)
+                previewCard(state: .unavailable(reason: .accountNotEligible),
                             receiverAvailability: .readyToReceive)
                 previewCard(state: .canStart,
                             receiverAvailability: .openRoomRequired,
+                            restorationAvailability: .unsupported)
+                previewCard(state: .canStart,
+                            receiverAvailability: .listenerUnavailable,
                             restorationAvailability: .unsupported)
                 previewCard(state: .ended(reason: .callTimedOut),
                             receiverAvailability: .readyToReceive)

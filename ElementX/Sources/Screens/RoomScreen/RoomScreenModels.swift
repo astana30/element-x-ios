@@ -1186,11 +1186,28 @@ struct NativeDirectCallRoomCardViewState: Equatable {
               isStartAudioTemporarilyDisabled: isStartAudioTemporarilyDisabled)
     }
 
+    var foregroundLimitationText: String? {
+        switch state {
+        case .hidden,
+             .activeAudio:
+            nil
+        case .unavailable,
+             .canStart,
+             .outgoingRinging,
+             .incomingRinging,
+             .connecting,
+             .failed,
+             .ended:
+            UntranslatedL10n.screenRoomNativeDirectCallForegroundLimitDetail
+        }
+    }
+
     var accessibilitySummary: String {
         [
             UntranslatedL10n.screenRoomNativeDirectCallTitle,
             state.displayText,
             state.detailText,
+            foregroundLimitationText,
             receiverAvailability?.displayText,
             restorationAvailability?.displayText
         ].compactMap { $0 }

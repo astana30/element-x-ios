@@ -1069,6 +1069,12 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - The 2.39K failure did not reproduce: no `tokenBackendRejected`, no `liveKitNetworkFailed`, no split state, no stale active session, and no redaction issue were observed.
   - Element Call fallback controls were visually confirmed visible and unchanged; the private native audio card remained separate.
   - No app/backend code changed during the recovery window. This result does not approve additional non-engineering windows, participant/device expansion, broad internal rollout, production/public rollout, CallKit, push/background incoming, missed-call UX, video, session restoration, Element Call replacement, or global activation.
+- Foreground limitation UX polish is implemented:
+  - The private native audio card now shows explicit, user-facing copy that native audio works only while the encrypted direct chat stays open.
+  - The copy states there are no background incoming calls, no system incoming call screen, and no missed-call alerts yet, and keeps Element Call as the fallback.
+  - Listener/open-room, trust, participant eligibility, service unavailable, timeout, cancelled, and safely failed states remain non-technical and do not mention backend, token, LiveKit, raw IDs, request/response details, or internal gates.
+  - Accessibility summary now includes the foreground-only limitation for relevant private native audio card states.
+  - This is UX polish only. It does not change Start/Accept eligibility, activation gates, Matrix send behavior, token requests, media/LiveKit setup, private dogfood, internal pilot activation, Element Call route, CallKit, push/background incoming, missed-call UX, video, session restoration, broad rollout, or production/public rollout.
 - Pilot sessions must follow the 2.27A checkpoint, 2.28A operations checklist, and 2.33B expansion runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
@@ -1081,9 +1087,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.39U — post-pilot hardening workstream selection`
+`2.39W — foreground limitation UX no-activation proof`
 
-Goal: choose the first implementation workstream from the post-pilot hardening plan: foreground UX polish, monitoring automation, CallKit/push/background incoming planning, audio controls polish, or a later additional soak after hardening. Do not approve additional non-engineering windows, participant/device expansion, broad internal rollout, or production/public rollout in this phase.
+Goal: verify the foreground/open-chat limitation copy appears in the private native audio card without changing activation behavior. Confirm rendering/status refresh remains side-effect-free, Element Call fallback is visible and unchanged, no private dogfood/internal pilot gates changed, and no raw IDs/secrets or backend/token/LiveKit details appear in UI/accessibility output.
 
 ## Do-Not-Touch Constraints
 

@@ -1728,3 +1728,14 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added support/rollback requirements covering operator procedure, kill-switch checklist, allowlist removal, app relaunch, idle/no active session verification, incident template, and secret rotation trigger.
 - Kept additional non-engineering windows, participant/device expansion, broad internal rollout, production/public rollout, Element Call replacement, CallKit/push implementation, video, global activation, and `directOneToOneCallsEnabled` as a native audio gate blocked.
 - Recommended next phase: `2.39U — post-pilot hardening workstream selection`.
+
+## 2026-05-28 — 2.39V Foreground Limitation UX Polish
+
+- Implemented the first post-pilot hardening slice selected by 2.39U: foreground/open-chat limitation UX polish for the private native audio card.
+- Added explicit user-facing copy that native audio works only while the encrypted direct chat stays open, with no background incoming calls, no system incoming call screen, no missed-call alerts yet, and Element Call as fallback.
+- Polished existing safe card copy for listener/open-room availability, incoming calls, timeout, and safe failure states.
+- Added the foreground-only limitation to the card accessibility summary for relevant non-active states.
+- Added previews for additional unavailable, listener unavailable, cancelled, and failure states.
+- Added tests covering the foreground limitation copy, user-facing redaction against backend/token/LiveKit/request/response/raw-ID wording, and unchanged safe state copy coverage.
+- This is UX/copy polish only: no activation gates, Start/Accept availability, Matrix send path, token request path, media/LiveKit setup, private dogfood, internal pilot activation, Element Call route, CallKit, push/background incoming, missed-call UX, video, global activation, broad rollout, or production/public rollout changed.
+- Recommended next phase: `2.39W — foreground limitation UX no-activation proof`.

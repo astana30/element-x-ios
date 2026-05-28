@@ -86,27 +86,29 @@ internal enum UntranslatedL10n {
   internal static var screenRoomNativeDirectCallEnded: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_ended") }
   /// The call has ended.
   internal static var screenRoomNativeDirectCallEndedDetail: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_ended_detail") }
+  /// Works only while this encrypted direct chat stays open. No background incoming calls, system call screen or missed-call alerts yet. Use Element Call as a fallback.
+  internal static var screenRoomNativeDirectCallForegroundLimitDetail: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_foreground_limit_detail") }
   /// Incoming call
   internal static var screenRoomNativeDirectCallIncoming: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_incoming") }
-  /// Answer only if you trust this chat.
+  /// Answer only if this trusted chat is open and you expect the call.
   internal static var screenRoomNativeDirectCallIncomingDetail: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_incoming_detail") }
   /// Incoming
   internal static var screenRoomNativeDirectCallIncomingLabel: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_incoming_label") }
-  /// Incoming unavailable
+  /// Incoming calls need this chat open
   internal static var screenRoomNativeDirectCallIncomingUnavailable: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_incoming_unavailable") }
-  /// Keep this chat open to receive calls
+  /// Keep this encrypted chat open to receive calls
   internal static var screenRoomNativeDirectCallListenerNotArmed: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_listener_not_armed") }
   /// Private audio calls are not available here
   internal static var screenRoomNativeDirectCallNotAvailableHere: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_not_available_here") }
   /// Use Element Call if you need a fallback.
   internal static var screenRoomNativeDirectCallNotAvailableHereDetail: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_not_available_here_detail") }
-  /// Open this chat to receive calls
+  /// Keep this encrypted chat open to receive calls
   internal static var screenRoomNativeDirectCallOpenRoomRequired: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_open_room_required") }
   /// Internal pilot
   internal static var screenRoomNativeDirectCallPilotBadge: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_pilot_badge") }
   /// Ready to call
   internal static var screenRoomNativeDirectCallReady: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_ready") }
-  /// Available only in this open encrypted direct chat.
+  /// Available only while this encrypted direct chat is open.
   internal static var screenRoomNativeDirectCallReadyDetail: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_ready_detail") }
   /// Ready to receive while this chat stays open
   internal static var screenRoomNativeDirectCallReadyToReceive: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_ready_to_receive") }
@@ -124,13 +126,13 @@ internal enum UntranslatedL10n {
   internal static var screenRoomNativeDirectCallRoomNotOneToOneDetail: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_room_not_one_to_one_detail") }
   /// Call timed out
   internal static var screenRoomNativeDirectCallTimedOut: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_timed_out") }
-  /// The other person did not answer in time.
+  /// The other person did not answer before the call timed out. You can try again.
   internal static var screenRoomNativeDirectCallTimedOutDetail: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_timed_out_detail") }
   /// Private audio call
   internal static var screenRoomNativeDirectCallTitle: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_title") }
   /// Call unavailable
   internal static var screenRoomNativeDirectCallUnknownFailure: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_unknown_failure") }
-  /// Try again, or use Element Call as a fallback.
+  /// The call stopped safely. Try again, or use Element Call as a fallback.
   internal static var screenRoomNativeDirectCallUnknownFailureDetail: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_unknown_failure_detail") }
   /// Verify this chat before calling
   internal static var screenRoomNativeDirectCallVerifyBeforeCalling: String { return UntranslatedL10n.tr("Untranslated", "screen_room_native_direct_call_verify_before_calling") }

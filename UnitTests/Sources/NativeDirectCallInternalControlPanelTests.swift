@@ -994,6 +994,8 @@ final class NativeDirectCallInternalControlPanelTests {
             let state = NativeDirectCallRoomCardState.unavailable(reason: reason)
             #expect(!state.displayText.isEmpty)
             #expect(state.detailText?.isEmpty == false)
+            #expect(Self.forbiddenNativeDirectCallUserFacingFragments.allSatisfy { !state.displayText.localizedCaseInsensitiveContains($0) })
+            #expect(Self.forbiddenNativeDirectCallUserFacingFragments.allSatisfy { state.detailText?.localizedCaseInsensitiveContains($0) == false })
             #expect(Self.forbiddenNativeDirectCallFragments.allSatisfy { !state.displayText.contains($0) })
             #expect(Self.forbiddenNativeDirectCallFragments.allSatisfy { state.detailText?.contains($0) == false })
         }
@@ -1005,6 +1007,10 @@ final class NativeDirectCallInternalControlPanelTests {
             #expect(failedState.detailText?.isEmpty == false)
             #expect(!endedState.displayText.isEmpty)
             #expect(endedState.detailText?.isEmpty == false)
+            #expect(Self.forbiddenNativeDirectCallUserFacingFragments.allSatisfy { !failedState.displayText.localizedCaseInsensitiveContains($0) })
+            #expect(Self.forbiddenNativeDirectCallUserFacingFragments.allSatisfy { failedState.detailText?.localizedCaseInsensitiveContains($0) == false })
+            #expect(Self.forbiddenNativeDirectCallUserFacingFragments.allSatisfy { !endedState.displayText.localizedCaseInsensitiveContains($0) })
+            #expect(Self.forbiddenNativeDirectCallUserFacingFragments.allSatisfy { endedState.detailText?.localizedCaseInsensitiveContains($0) == false })
             #expect(Self.forbiddenNativeDirectCallFragments.allSatisfy { !failedState.displayText.contains($0) })
             #expect(Self.forbiddenNativeDirectCallFragments.allSatisfy { failedState.detailText?.contains($0) == false })
             #expect(Self.forbiddenNativeDirectCallFragments.allSatisfy { !endedState.displayText.contains($0) })
@@ -1081,18 +1087,6 @@ final class NativeDirectCallInternalControlPanelTests {
         #expect(Self.forbiddenNativeDirectCallFragments.allSatisfy { !cardStatusDescription.contains($0) })
     }
 
-    private static let forbiddenNativeDirectCallFragments = [
-        "participant" + "_" + "tok" + "en",
-        "encrypted" + "_payload",
-        "raw " + "key",
-        "access" + "_" + "tok" + "en",
-        "ey" + "J",
-        "room" + "_" + "id",
-        "user" + "_" + "id",
-        "device" + "_" + "id",
-        "Bearer"
-    ]
-
     private static func nativeDirectCallStatus(availability: NativeDirectCallInternalControlAvailability = .canStart,
                                                sessionState: String = "idle",
                                                canArmListener: Bool,
@@ -1143,6 +1137,60 @@ final class NativeDirectCallInternalControlPanelTests {
                                                     productionHasActiveSession: false,
                                                     currentSessionState: .idle)
         return NativeDirectCallRoomCardStateReducer.status(snapshot: snapshot)
+    }
+}
+
+extension NativeDirectCallInternalControlPanelTests {
+    fileprivate static let forbiddenNativeDirectCallFragments = [
+        "participant" + "_" + "tok" + "en",
+        "encrypted" + "_payload",
+        "raw " + "key",
+        "access" + "_" + "tok" + "en",
+        "ey" + "J",
+        "room" + "_" + "id",
+        "user" + "_" + "id",
+        "device" + "_" + "id",
+        "Bearer"
+    ]
+
+    fileprivate static let forbiddenNativeDirectCallUserFacingFragments = [
+        "backend",
+        "token",
+        "jwt",
+        "livekit",
+        "request",
+        "response",
+        "room id",
+        "user id",
+        "device id"
+    ]
+
+    @Test
+    func productCardForegroundLimitationCopyExplainsOpenChatLimitSafely() throws {
+        let canStartCard = NativeDirectCallRoomCardViewState(isVisible: true,
+                                                             isLoading: false,
+                                                             state: .canStart,
+                                                             receiverAvailability: .readyToReceive,
+                                                             restorationAvailability: .unsupported,
+                                                             lastAction: nil,
+                                                             lastActionOutcome: nil)
+        let activeCard = NativeDirectCallRoomCardViewState(isVisible: true,
+                                                           isLoading: false,
+                                                           state: .activeAudio,
+                                                           receiverAvailability: .readyToReceive,
+                                                           restorationAvailability: .unsupported,
+                                                           lastAction: nil,
+                                                           lastActionOutcome: nil)
+        let text = try #require(canStartCard.foregroundLimitationText)
+
+        #expect(text.contains("encrypted direct chat"))
+        #expect(text.contains("No background incoming calls"))
+        #expect(text.contains("system call screen"))
+        #expect(text.contains("missed-call alerts"))
+        #expect(text.contains("Element Call"))
+        #expect(activeCard.foregroundLimitationText == nil)
+        #expect(Self.forbiddenNativeDirectCallUserFacingFragments.allSatisfy { !text.localizedCaseInsensitiveContains($0) })
+        #expect(Self.forbiddenNativeDirectCallUserFacingFragments.allSatisfy { !canStartCard.accessibilitySummary.localizedCaseInsensitiveContains($0) })
     }
 }
 
