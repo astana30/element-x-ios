@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.40I — push and CallKit payload contract.
+After 2.40J — device-only synthetic CallKit proof.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,12 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- Device-only synthetic CallKit proof surface is added:
+  - 2.40J adds a disabled synthetic proof coordinator and safe display metadata contract for future native direct-audio CallKit work.
+  - The synthetic path accepts only safe local incoming-call identity data from the disabled 2.40H contracts and maps report, answer, end, and mute actions into disabled local callbacks and redacted diagnostics.
+  - Default behavior is fail-closed. Unit coverage verifies safe display metadata validation, disabled default blocking, safe local identity reporting, answer/end/mute local callbacks, unknown-handle blocking, local state cleanup, and redacted diagnostics.
+  - `docs/direct-call/SYNTHETIC_CALLKIT_PROOF.md` records the device-only manual proof contract.
+  - No PushKit runtime, APNs runtime, push credential registration, push delivery, server push, media credential request, media connection, background incoming behavior, missed-call UX, Element Call route change, native audio gate change, bundle/signing/project setting change, server change, video, or rollout expansion is introduced.
 - Push and CallKit payload contract is documented:
   - 2.40I adds `docs/direct-call/PUSH_CALLKIT_PAYLOAD_CONTRACT.md`.
   - The contract defines future VoIP incoming native direct-audio invite payloads, optional normal APNs notification separation, server acknowledgement/invalidation payloads, local CallKit display metadata, terminal/stale handling, client validation, server requirements, redaction, failure matrix, test plan, and future phases.
