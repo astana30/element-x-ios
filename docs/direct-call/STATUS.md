@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.39W — foreground limitation UX runtime proof.
+After 2.40G — PushKit / APNs / CallKit design plan.
 
 ## Latest App Code Checkpoint
 
@@ -11,6 +11,14 @@ After 2.39W — foreground limitation UX runtime proof.
 ## Latest Backend Code Checkpoint
 
 2.39M `d321b8f7b` `Add redacted token failure observability`
+
+## Latest Signing Checkpoint
+
+2.40F `fa9e71689` `Merge branch 'salemx-2.40f-signing-remediation' into salemx-native-direct-calls`
+
+Signing proof tag: `salemx-2.40f-signing-proof-20260608`
+
+Proof doc: `docs/direct-call/APPLE_SIGNING_PROOF_2026-06-08.md`
 
 ## Latest SDK Checkpoint
 
@@ -31,6 +39,11 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- Native audio CallKit / PushKit / APNs planning is documented:
+  - 2.40F physical-device signing readiness is complete with signed development entitlements for the main app and extension targets.
+  - The development App Group is `group.kz.salemx.msg.dev`, and the main app development entitlement includes APNs environment support.
+  - `docs/direct-call/CALLKIT_PUSHKIT_APNS_DESIGN.md` records the design-only baseline, Apple compliance assumptions, proposed incoming and outgoing call flows, token/device model, server requirements, future client components, risk register, redaction contract, fail-closed matrix, phased implementation plan, non-goals, and acceptance criteria.
+  - Runtime CallKit, PushKit, APNs, background incoming, missed-call UX, video, Element Call replacement, native audio gating changes, signing changes, broad rollout, and production/public rollout remain blocked.
 - SalemX call-service now pre-creates allocated LiveKit rooms through server-side RoomService `CreateRoom` before issuing participant tokens. Participant tokens remain scoped to room join/publish/subscribe, and room provision failures return a safe fail-closed error without issuing a token.
 - Narrow non-engineering internal pilot preparation is documented, but execution is not yet approved:
   - Scope is limited to a future supervised 1-2 participant internal window, named accounts/devices only, staging call-service and staging LiveKit only, private native audio card only, foreground/open encrypted direct 1:1 rooms only, verified/trusted peers only, one active native 1:1 call at a time, and Element Call fallback visible/unchanged.
