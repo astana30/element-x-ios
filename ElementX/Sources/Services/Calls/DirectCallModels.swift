@@ -579,6 +579,189 @@ final class DisabledNativeIncomingCallLifecycleService: CustomStringConvertible,
     }
 }
 
+struct NativeIncomingCallKitDisplayMetadata: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let label: String
+
+    init?(_ label: String) {
+        let trimmedLabel = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedLabel.isEmpty,
+              trimmedLabel.count <= 80,
+              !trimmedLabel.contains("@"),
+              !trimmedLabel.contains("!"),
+              !trimmedLabel.contains("$"),
+              !trimmedLabel.contains(":"),
+              !trimmedLabel.contains("/"),
+              !trimmedLabel.contains("\\") else {
+            return nil
+        }
+        self.label = trimmedLabel
+    }
+
+    var description: String {
+        "NativeIncomingCallKitDisplayMetadata(label: <redacted>, isPresent: \(!label.isEmpty))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum NativeIncomingSyntheticCallKitProofResult: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case reported
+    case answered
+    case ended
+    case muted(Bool)
+    case failed(NativeIncomingCallFailClosedReason)
+
+    var description: String {
+        switch self {
+        case .reported:
+            "reported"
+        case .answered:
+            "answered"
+        case .ended:
+            "ended"
+        case .muted(let isMuted):
+            "muted(\(isMuted))"
+        case .failed(let reason):
+            "failed(\(reason))"
+        }
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+protocol NativeIncomingSyntheticCallKitActionHandling: AnyObject {
+    func answerSyntheticCall(identity: NativeIncomingCallIdentity)
+    func endSyntheticCall(identity: NativeIncomingCallIdentity)
+    func setSyntheticCallMuted(_ isMuted: Bool, identity: NativeIncomingCallIdentity)
+}
+
+final class DisabledNativeIncomingSyntheticCallKitProofCoordinator: CustomStringConvertible, CustomDebugStringConvertible {
+    private let isEnabled: Bool
+    private let stateStore: NativeIncomingCallStateStoring
+    private let reportingAdapter: NativeIncomingCallReportingAdapting
+    private let actionHandler: NativeIncomingSyntheticCallKitActionHandling
+    private let diagnosticsRecorder: NativeIncomingCallDiagnosticsRecording
+    private var activeIdentities = [NativeIncomingCallHandle: NativeIncomingCallIdentity]()
+
+    init(isEnabled: Bool = false,
+         stateStore: NativeIncomingCallStateStoring,
+         reportingAdapter: NativeIncomingCallReportingAdapting,
+         actionHandler: NativeIncomingSyntheticCallKitActionHandling,
+         diagnosticsRecorder: NativeIncomingCallDiagnosticsRecording) {
+        self.isEnabled = isEnabled
+        self.stateStore = stateStore
+        self.reportingAdapter = reportingAdapter
+        self.actionHandler = actionHandler
+        self.diagnosticsRecorder = diagnosticsRecorder
+    }
+
+    func reportSyntheticIncomingCall(identity: NativeIncomingCallIdentity,
+                                     displayMetadata: NativeIncomingCallKitDisplayMetadata?) -> NativeIncomingSyntheticCallKitProofResult {
+        guard isEnabled else {
+            return failClosed(.dependencyUnavailable)
+        }
+        guard displayMetadata != nil else {
+            return failClosed(.malformed)
+        }
+        guard stateStore.hasSeen(identity.handle) else {
+            return failClosed(.unverifiable)
+        }
+        guard activeIdentities[identity.handle] == nil else {
+            return failClosed(.duplicate)
+        }
+
+        let reportSucceeded = reportingAdapter.reportIncomingCall(identity: identity)
+        diagnosticsRecorder.record(.init(lifecycleState: reportSucceeded ? .reported : .blocked,
+                                         failClosedReason: reportSucceeded ? nil : .callReportingUnavailable,
+                                         reportAttempted: true,
+                                         reportSucceeded: reportSucceeded,
+                                         mediaCredentialRequested: false,
+                                         mediaConnectAttempted: false))
+        guard reportSucceeded else {
+            return .failed(.callReportingUnavailable)
+        }
+
+        activeIdentities[identity.handle] = identity
+        stateStore.setState(.reported, for: identity.handle)
+        return .reported
+    }
+
+    func answerSyntheticCall(handle rawHandle: String) -> NativeIncomingSyntheticCallKitProofResult {
+        guard let identity = activeIdentity(for: rawHandle) else {
+            return failClosed(.unverifiable)
+        }
+
+        stateStore.setState(.answered, for: identity.handle)
+        actionHandler.answerSyntheticCall(identity: identity)
+        diagnosticsRecorder.record(.init(lifecycleState: .answered,
+                                         failClosedReason: nil,
+                                         reportAttempted: false,
+                                         reportSucceeded: nil,
+                                         mediaCredentialRequested: false,
+                                         mediaConnectAttempted: false))
+        return .answered
+    }
+
+    func endSyntheticCall(handle rawHandle: String) -> NativeIncomingSyntheticCallKitProofResult {
+        guard let identity = activeIdentity(for: rawHandle) else {
+            return failClosed(.unverifiable)
+        }
+
+        activeIdentities[identity.handle] = nil
+        stateStore.setState(.ended, for: identity.handle)
+        reportingAdapter.endReportedCall(identity: identity, reason: .unknown)
+        actionHandler.endSyntheticCall(identity: identity)
+        diagnosticsRecorder.record(.init(lifecycleState: .ended,
+                                         failClosedReason: nil,
+                                         reportAttempted: false,
+                                         reportSucceeded: nil,
+                                         mediaCredentialRequested: false,
+                                         mediaConnectAttempted: false))
+        stateStore.clear(identity.handle)
+        return .ended
+    }
+
+    func setSyntheticCallMuted(_ isMuted: Bool, handle rawHandle: String) -> NativeIncomingSyntheticCallKitProofResult {
+        guard let identity = activeIdentity(for: rawHandle) else {
+            return failClosed(.unverifiable)
+        }
+
+        actionHandler.setSyntheticCallMuted(isMuted, identity: identity)
+        diagnosticsRecorder.record(.init(lifecycleState: stateStore.state(for: identity.handle) ?? .reported,
+                                         failClosedReason: nil,
+                                         reportAttempted: false,
+                                         reportSucceeded: nil,
+                                         mediaCredentialRequested: false,
+                                         mediaConnectAttempted: false))
+        return .muted(isMuted)
+    }
+
+    private func activeIdentity(for rawHandle: String) -> NativeIncomingCallIdentity? {
+        guard isEnabled,
+              let handle = NativeIncomingCallHandle(rawHandle) else {
+            return nil
+        }
+        return activeIdentities[handle]
+    }
+
+    private func failClosed(_ reason: NativeIncomingCallFailClosedReason) -> NativeIncomingSyntheticCallKitProofResult {
+        diagnosticsRecorder.record(.failClosed(reason))
+        return .failed(reason)
+    }
+
+    var description: String {
+        "DisabledNativeIncomingSyntheticCallKitProofCoordinator(isEnabled: \(isEnabled), realCallKitRuntime: false)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
 enum DirectCallDiagnosticTokenReason: String, Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     case none
     case issued

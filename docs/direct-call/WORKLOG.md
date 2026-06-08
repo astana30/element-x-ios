@@ -1812,3 +1812,14 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Documented server requirements, safe display metadata rules, redacted diagnostics, failure matrix, and test plan.
 - Kept this phase docs-only: no app/backend runtime code, CallKit, PushKit, APNs, push credential registration, system incoming UI, background incoming behavior, missed-call UX, media connection, LiveKit, MatrixRTC, Element Call route, native audio gating, bundle ID, App Group, signing/provisioning/project setting, server, video, broad rollout, or production/public rollout changed.
 - Recommended next phase: `2.40J — device-only synthetic CallKit proof`.
+
+## 2026-06-08 — 2.40J Device-Only Synthetic CallKit Proof
+
+- Added a disabled synthetic CallKit proof coordinator for future native direct-audio incoming-call work.
+- Added safe CallKit display metadata validation that rejects empty, oversized, or raw-looking labels.
+- The synthetic proof accepts only safe local incoming-call identity data from the disabled 2.40H contracts.
+- Report, answer, end, and mute actions map only into injected disabled local callbacks and redacted diagnostics.
+- Added unit coverage for disabled default fail-closed behavior, safe local identity reporting, answer/end/mute callback mapping, unknown-handle fail-closed behavior, local state cleanup, and redacted diagnostics.
+- Added `docs/direct-call/SYNTHETIC_CALLKIT_PROOF.md` with device-only manual proof steps.
+- Kept this phase disabled and local: no PushKit runtime, APNs runtime, push credential registration, push delivery, server push, media credential request, media connection, LiveKit, MatrixRTC, Element Call route, native audio gating, bundle ID, App Group, signing/provisioning/project setting, server, video, broad rollout, or production/public rollout changed.
+- Recommended next phase: `2.40K — PushKit registration dry run planning`.

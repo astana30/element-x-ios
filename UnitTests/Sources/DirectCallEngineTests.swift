@@ -1269,6 +1269,161 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(!description.contains("presentCallScreen"))
     }
 
+    @Test
+    func syntheticCallKitDisplayMetadataAcceptsOnlySafeLabels() {
+        #expect(NativeIncomingCallKitDisplayMetadata("Pilot Participant") != nil)
+        #expect(NativeIncomingCallKitDisplayMetadata("unsafe@label") == nil)
+        #expect(NativeIncomingCallKitDisplayMetadata("unsafe!label") == nil)
+        #expect(NativeIncomingCallKitDisplayMetadata("https://invalid.example") == nil)
+        #expect(NativeIncomingCallKitDisplayMetadata("") == nil)
+    }
+
+    @Test
+    func disabledSyntheticCallKitProofFailsClosedByDefault() {
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let actionHandler = NativeIncomingSyntheticCallKitActionHandlerSpy()
+        let coordinator = DisabledNativeIncomingSyntheticCallKitProofCoordinator(stateStore: dependencies.stateStore,
+                                                                                 reportingAdapter: dependencies.reportingAdapter,
+                                                                                 actionHandler: actionHandler,
+                                                                                 diagnosticsRecorder: dependencies.diagnosticsRecorder)
+        guard let identity = reportedIncomingIdentity(dependencies: dependencies) else {
+            return
+        }
+
+        let result = coordinator.reportSyntheticIncomingCall(identity: identity,
+                                                             displayMetadata: NativeIncomingCallKitDisplayMetadata("Pilot Participant"))
+
+        #expect(result == .failed(.dependencyUnavailable))
+        #expect(dependencies.reportingAdapter.reportedIdentities.count == 1)
+        #expect(actionHandler.answeredIdentities.isEmpty)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last == .failClosed(.dependencyUnavailable))
+    }
+
+    @Test
+    func syntheticCallKitProofReportsOnlySafeLocalIdentity() {
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let actionHandler = NativeIncomingSyntheticCallKitActionHandlerSpy()
+        let coordinator = DisabledNativeIncomingSyntheticCallKitProofCoordinator(isEnabled: true,
+                                                                                 stateStore: dependencies.stateStore,
+                                                                                 reportingAdapter: dependencies.reportingAdapter,
+                                                                                 actionHandler: actionHandler,
+                                                                                 diagnosticsRecorder: dependencies.diagnosticsRecorder)
+        guard let identity = reportedIncomingIdentity(dependencies: dependencies) else {
+            return
+        }
+
+        let result = coordinator.reportSyntheticIncomingCall(identity: identity,
+                                                             displayMetadata: NativeIncomingCallKitDisplayMetadata("Pilot Participant"))
+
+        #expect(result == .reported)
+        #expect(dependencies.reportingAdapter.reportedIdentities.count == 2)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.lifecycleState == .reported)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaCredentialRequested == false)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaConnectAttempted == false)
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !String(describing: coordinator).contains($0) })
+    }
+
+    @Test
+    func syntheticAnswerRecordsDisabledCallbackOnly() {
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let actionHandler = NativeIncomingSyntheticCallKitActionHandlerSpy()
+        let coordinator = makeSyntheticCallKitProofCoordinator(dependencies: dependencies,
+                                                               actionHandler: actionHandler)
+        guard let identity = reportedIncomingIdentity(dependencies: dependencies) else {
+            return
+        }
+        _ = coordinator.reportSyntheticIncomingCall(identity: identity,
+                                                    displayMetadata: NativeIncomingCallKitDisplayMetadata("Pilot Participant"))
+
+        let result = coordinator.answerSyntheticCall(handle: "safe-local-call")
+
+        #expect(result == .answered)
+        #expect(actionHandler.answeredIdentities == [identity])
+        #expect(dependencies.stateStore.state(for: identity.handle) == .answered)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaCredentialRequested == false)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaConnectAttempted == false)
+    }
+
+    @Test
+    func syntheticUnknownHandleActionFailsClosed() {
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let actionHandler = NativeIncomingSyntheticCallKitActionHandlerSpy()
+        let coordinator = makeSyntheticCallKitProofCoordinator(dependencies: dependencies,
+                                                               actionHandler: actionHandler)
+
+        let result = coordinator.answerSyntheticCall(handle: "unknown-local-call")
+
+        #expect(result == .failed(.unverifiable))
+        #expect(actionHandler.answeredIdentities.isEmpty)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last == .failClosed(.unverifiable))
+    }
+
+    @Test
+    func syntheticEndClearsLocalState() {
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let actionHandler = NativeIncomingSyntheticCallKitActionHandlerSpy()
+        let coordinator = makeSyntheticCallKitProofCoordinator(dependencies: dependencies,
+                                                               actionHandler: actionHandler)
+        guard let identity = reportedIncomingIdentity(dependencies: dependencies) else {
+            return
+        }
+        _ = coordinator.reportSyntheticIncomingCall(identity: identity,
+                                                    displayMetadata: NativeIncomingCallKitDisplayMetadata("Pilot Participant"))
+
+        let result = coordinator.endSyntheticCall(handle: "safe-local-call")
+
+        #expect(result == .ended)
+        #expect(actionHandler.endedIdentities == [identity])
+        #expect(dependencies.reportingAdapter.endedReasons == [.unknown])
+        #expect(dependencies.stateStore.state(for: identity.handle) == nil)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaCredentialRequested == false)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaConnectAttempted == false)
+    }
+
+    @Test
+    func syntheticMuteIsDiagnosticOnly() {
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let actionHandler = NativeIncomingSyntheticCallKitActionHandlerSpy()
+        let coordinator = makeSyntheticCallKitProofCoordinator(dependencies: dependencies,
+                                                               actionHandler: actionHandler)
+        guard let identity = reportedIncomingIdentity(dependencies: dependencies) else {
+            return
+        }
+        _ = coordinator.reportSyntheticIncomingCall(identity: identity,
+                                                    displayMetadata: NativeIncomingCallKitDisplayMetadata("Pilot Participant"))
+
+        let result = coordinator.setSyntheticCallMuted(true, handle: "safe-local-call")
+
+        #expect(result == .muted(true))
+        #expect(actionHandler.muteActions == [true])
+        #expect(actionHandler.mutedIdentities == [identity])
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaCredentialRequested == false)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaConnectAttempted == false)
+    }
+
+    @Test
+    func syntheticProofDiagnosticsStayRedacted() {
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let actionHandler = NativeIncomingSyntheticCallKitActionHandlerSpy()
+        let coordinator = makeSyntheticCallKitProofCoordinator(dependencies: dependencies,
+                                                               actionHandler: actionHandler)
+        guard let identity = reportedIncomingIdentity(dependencies: dependencies) else {
+            return
+        }
+        _ = coordinator.reportSyntheticIncomingCall(identity: identity,
+                                                    displayMetadata: NativeIncomingCallKitDisplayMetadata("Pilot Participant"))
+        _ = coordinator.answerSyntheticCall(handle: "safe-local-call")
+
+        let description = String(describing: coordinator)
+            + " " + dependencies.diagnosticsRecorder.diagnostics.map(String.init(describing:)).joined(separator: " ")
+            + " " + actionHandler.description
+
+        #expect(description.contains("realCallKitRuntime: false"))
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !description.contains($0) })
+        #expect(!description.contains("displayCall"))
+        #expect(!description.contains("presentCallScreen"))
+    }
+
     private static let forbiddenNativeIncomingFragments = [
         "!unsafe-room",
         "@unsafe-user",
@@ -1282,6 +1437,17 @@ final class NativeIncomingCallLifecycleContractTests {
         "displayCall",
         "presentCallScreen"
     ]
+
+    private func reportedIncomingIdentity(dependencies: NativeIncomingLifecycleDependencies) -> NativeIncomingCallIdentity? {
+        let outcome = dependencies.service.receiveIncomingCall(handle: "safe-local-call",
+                                                               receivedAt: .now,
+                                                               context: .valid)
+        guard case .reported(let identity) = outcome else {
+            Issue.record("Expected safe incoming call identity to be reported.")
+            return nil
+        }
+        return identity
+    }
 
     private func makeNativeIncomingLifecycleDependencies(isEnabled: Bool = true,
                                                          reportResult: Bool = true) -> NativeIncomingLifecycleDependencies {
@@ -1299,6 +1465,15 @@ final class NativeIncomingCallLifecycleContractTests {
                      reportingAdapter: reportingAdapter,
                      timeoutScheduler: timeoutScheduler,
                      diagnosticsRecorder: diagnosticsRecorder)
+    }
+
+    private func makeSyntheticCallKitProofCoordinator(dependencies: NativeIncomingLifecycleDependencies,
+                                                      actionHandler: NativeIncomingSyntheticCallKitActionHandlerSpy) -> DisabledNativeIncomingSyntheticCallKitProofCoordinator {
+        DisabledNativeIncomingSyntheticCallKitProofCoordinator(isEnabled: true,
+                                                               stateStore: dependencies.stateStore,
+                                                               reportingAdapter: dependencies.reportingAdapter,
+                                                               actionHandler: actionHandler,
+                                                               diagnosticsRecorder: dependencies.diagnosticsRecorder)
     }
 }
 
@@ -1394,6 +1569,30 @@ private final class NativeIncomingPushRegistrySpy: NativeIncomingPushRegistryMan
 
     var debugDescription: String {
         description
+    }
+}
+
+private final class NativeIncomingSyntheticCallKitActionHandlerSpy: NativeIncomingSyntheticCallKitActionHandling, CustomStringConvertible {
+    private(set) var answeredIdentities = [NativeIncomingCallIdentity]()
+    private(set) var endedIdentities = [NativeIncomingCallIdentity]()
+    private(set) var mutedIdentities = [NativeIncomingCallIdentity]()
+    private(set) var muteActions = [Bool]()
+
+    func answerSyntheticCall(identity: NativeIncomingCallIdentity) {
+        answeredIdentities.append(identity)
+    }
+
+    func endSyntheticCall(identity: NativeIncomingCallIdentity) {
+        endedIdentities.append(identity)
+    }
+
+    func setSyntheticCallMuted(_ isMuted: Bool, identity: NativeIncomingCallIdentity) {
+        muteActions.append(isMuted)
+        mutedIdentities.append(identity)
+    }
+
+    var description: String {
+        "NativeIncomingSyntheticCallKitActionHandlerSpy(answeredCount: \(answeredIdentities.count), endedCount: \(endedIdentities.count), mutedCount: \(mutedIdentities.count))"
     }
 }
 
