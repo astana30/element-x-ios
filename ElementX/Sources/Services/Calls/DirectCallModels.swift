@@ -239,6 +239,346 @@ enum DirectCallEngineError: Error, Equatable {
     case mediaConnectionFailed(DirectCallMediaError)
 }
 
+struct NativeIncomingCallHandle: Hashable, CustomStringConvertible, CustomDebugStringConvertible {
+    let value: String
+
+    init?(_ value: String) {
+        guard Self.isValid(value) else {
+            return nil
+        }
+        self.value = value
+    }
+
+    private static func isValid(_ value: String) -> Bool {
+        guard !value.isEmpty, value.count <= 64 else {
+            return false
+        }
+
+        let allowedCharacters = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")
+        return value.unicodeScalars.allSatisfy { allowedCharacters.contains($0) }
+    }
+
+    var description: String {
+        "NativeIncomingCallHandle(value: <redacted>, isPresent: true)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct NativeIncomingCallIdentity: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let handle: NativeIncomingCallHandle
+    let receivedAt: Date
+
+    var description: String {
+        "NativeIncomingCallIdentity(handle: <redacted>, receivedAt: <redacted>)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum NativeIncomingCallLifecycleState: String, Codable, Equatable, CaseIterable, CustomStringConvertible, CustomDebugStringConvertible {
+    case idle
+    case received
+    case validating
+    case reportable
+    case reported
+    case answered
+    case connecting
+    case active
+    case ended
+    case failed
+    case stale
+    case rejected
+    case missed
+    case blocked
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum NativeIncomingCallFailClosedReason: String, Codable, Equatable, CaseIterable, CustomStringConvertible, CustomDebugStringConvertible {
+    case malformed
+    case stale
+    case duplicate
+    case unverifiable
+    case notEncryptedDirectOneToOne
+    case trustNotReady
+    case eligibilityDenied
+    case dependencyUnavailable
+    case existingActiveNativeSession
+    case loggedOutOrSessionUnavailable
+    case callReportingUnavailable
+    case serverIssuedMediaCredentialRejected
+    case mediaSetupUnavailable
+    case routeConflict
+    case unknown
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct NativeIncomingCallValidationContext: Equatable {
+    var isEncryptedDirectOneToOneRoom = true
+    var isPeerTrustReady = true
+    var isEligible = true
+    var areDependenciesAvailable = true
+    var hasExistingActiveNativeSession = false
+    var isLoggedIn = true
+    var isRouteAvailable = true
+
+    static let valid = Self()
+
+    var failClosedReason: NativeIncomingCallFailClosedReason? {
+        if !isEncryptedDirectOneToOneRoom {
+            return .notEncryptedDirectOneToOne
+        }
+        if !isPeerTrustReady {
+            return .trustNotReady
+        }
+        if !isEligible {
+            return .eligibilityDenied
+        }
+        if !areDependenciesAvailable {
+            return .dependencyUnavailable
+        }
+        if hasExistingActiveNativeSession {
+            return .existingActiveNativeSession
+        }
+        if !isLoggedIn {
+            return .loggedOutOrSessionUnavailable
+        }
+        if !isRouteAvailable {
+            return .routeConflict
+        }
+        return nil
+    }
+}
+
+struct NativeIncomingCallRedactedDiagnostics: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    var lifecycleState: NativeIncomingCallLifecycleState
+    var failClosedReason: NativeIncomingCallFailClosedReason?
+    var reportAttempted: Bool
+    var reportSucceeded: Bool?
+    var mediaCredentialRequested: Bool
+    var mediaConnectAttempted: Bool
+
+    static func failClosed(_ reason: NativeIncomingCallFailClosedReason) -> Self {
+        .init(lifecycleState: .blocked,
+              failClosedReason: reason,
+              reportAttempted: false,
+              reportSucceeded: nil,
+              mediaCredentialRequested: false,
+              mediaConnectAttempted: false)
+    }
+
+    var description: String {
+        "NativeIncomingCallRedactedDiagnostics(" + [
+            "lifecycleState: \(lifecycleState)",
+            "failClosedReason: \(failClosedReason?.description ?? "none")",
+            "reportAttempted: \(reportAttempted)",
+            "reportSucceeded: \(reportSucceeded.map(String.init) ?? "none")",
+            "mediaCredentialRequested: \(mediaCredentialRequested)",
+            "mediaConnectAttempted: \(mediaConnectAttempted)"
+        ].joined(separator: ", ") + ")"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum NativeIncomingCallLifecycleOutcome: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case failClosed(NativeIncomingCallFailClosedReason)
+    case reportable(NativeIncomingCallIdentity)
+    case reported(NativeIncomingCallIdentity)
+
+    var description: String {
+        switch self {
+        case .failClosed(let reason):
+            "failClosed(\(reason))"
+        case .reportable:
+            "reportable(identity: <redacted>)"
+        case .reported:
+            "reported(identity: <redacted>)"
+        }
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct NativeIncomingPushRegistrationCredential: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    enum Kind: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+        case standard
+        case voIP
+
+        var description: String {
+            rawValue
+        }
+
+        var debugDescription: String {
+            description
+        }
+    }
+
+    let kind: Kind
+    private let value: Data
+
+    init(kind: Kind, value: Data) {
+        self.kind = kind
+        self.value = value
+    }
+
+    var isPresent: Bool {
+        !value.isEmpty
+    }
+
+    var description: String {
+        "NativeIncomingPushRegistrationCredential(kind: \(kind), value: <redacted>, isPresent: \(isPresent))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+protocol NativeIncomingCallStateStoring: AnyObject {
+    func state(for handle: NativeIncomingCallHandle) -> NativeIncomingCallLifecycleState?
+    func hasSeen(_ handle: NativeIncomingCallHandle) -> Bool
+    func setState(_ state: NativeIncomingCallLifecycleState, for handle: NativeIncomingCallHandle)
+    func clear(_ handle: NativeIncomingCallHandle)
+}
+
+protocol NativeIncomingCallReportingAdapting: AnyObject {
+    func reportIncomingCall(identity: NativeIncomingCallIdentity) -> Bool
+    func endReportedCall(identity: NativeIncomingCallIdentity, reason: NativeIncomingCallFailClosedReason)
+}
+
+protocol NativeIncomingPushRegistryManaging: AnyObject {
+    func registerForIncomingCallPushes() -> Bool
+    func updateIncomingCallPushCredential(_ credential: NativeIncomingPushRegistrationCredential)
+    func unregisterIncomingCallPushes()
+}
+
+protocol NativeIncomingCallTimeoutScheduling: AnyObject {
+    func scheduleTimeout(for identity: NativeIncomingCallIdentity, after timeout: Duration)
+    func cancelTimeout(for identity: NativeIncomingCallIdentity)
+}
+
+protocol NativeIncomingCallDiagnosticsRecording: AnyObject {
+    func record(_ diagnostics: NativeIncomingCallRedactedDiagnostics)
+}
+
+final class DisabledNativeIncomingCallLifecycleService: CustomStringConvertible, CustomDebugStringConvertible {
+    private let isEnabled: Bool
+    private let stateStore: NativeIncomingCallStateStoring
+    private let reportingAdapter: NativeIncomingCallReportingAdapting
+    private let timeoutScheduler: NativeIncomingCallTimeoutScheduling
+    private let diagnosticsRecorder: NativeIncomingCallDiagnosticsRecording
+    private let staleInterval: TimeInterval
+    private let reportTimeout: Duration
+
+    init(isEnabled: Bool = false,
+         stateStore: NativeIncomingCallStateStoring,
+         reportingAdapter: NativeIncomingCallReportingAdapting,
+         timeoutScheduler: NativeIncomingCallTimeoutScheduling,
+         diagnosticsRecorder: NativeIncomingCallDiagnosticsRecording,
+         staleInterval: TimeInterval = 45,
+         reportTimeout: Duration = .seconds(45)) {
+        self.isEnabled = isEnabled
+        self.stateStore = stateStore
+        self.reportingAdapter = reportingAdapter
+        self.timeoutScheduler = timeoutScheduler
+        self.diagnosticsRecorder = diagnosticsRecorder
+        self.staleInterval = staleInterval
+        self.reportTimeout = reportTimeout
+    }
+
+    func receiveIncomingCall(handle rawHandle: String,
+                             receivedAt: Date,
+                             now: Date = .now,
+                             context: NativeIncomingCallValidationContext = .valid) -> NativeIncomingCallLifecycleOutcome {
+        guard isEnabled else {
+            return failClosed(.dependencyUnavailable)
+        }
+        guard let handle = NativeIncomingCallHandle(rawHandle) else {
+            return failClosed(.malformed)
+        }
+        guard now.timeIntervalSince(receivedAt) <= staleInterval else {
+            return failClosed(.stale)
+        }
+        guard !stateStore.hasSeen(handle) else {
+            return failClosed(.duplicate)
+        }
+        if let failClosedReason = context.failClosedReason {
+            return failClosed(failClosedReason)
+        }
+
+        let identity = NativeIncomingCallIdentity(handle: handle, receivedAt: receivedAt)
+        stateStore.setState(.received, for: handle)
+        stateStore.setState(.validating, for: handle)
+        stateStore.setState(.reportable, for: handle)
+
+        let reportSucceeded = reportingAdapter.reportIncomingCall(identity: identity)
+        diagnosticsRecorder.record(.init(lifecycleState: reportSucceeded ? .reported : .blocked,
+                                         failClosedReason: reportSucceeded ? nil : .callReportingUnavailable,
+                                         reportAttempted: true,
+                                         reportSucceeded: reportSucceeded,
+                                         mediaCredentialRequested: false,
+                                         mediaConnectAttempted: false))
+
+        guard reportSucceeded else {
+            stateStore.setState(.blocked, for: handle)
+            return .failClosed(.callReportingUnavailable)
+        }
+
+        stateStore.setState(.reported, for: handle)
+        timeoutScheduler.scheduleTimeout(for: identity, after: reportTimeout)
+        return .reported(identity)
+    }
+
+    func failAfterMediaCredentialRejection(identity: NativeIncomingCallIdentity) -> NativeIncomingCallLifecycleOutcome {
+        stateStore.setState(.failed, for: identity.handle)
+        timeoutScheduler.cancelTimeout(for: identity)
+        reportingAdapter.endReportedCall(identity: identity, reason: .serverIssuedMediaCredentialRejected)
+        diagnosticsRecorder.record(.init(lifecycleState: .failed,
+                                         failClosedReason: .serverIssuedMediaCredentialRejected,
+                                         reportAttempted: false,
+                                         reportSucceeded: nil,
+                                         mediaCredentialRequested: true,
+                                         mediaConnectAttempted: false))
+        return .failClosed(.serverIssuedMediaCredentialRejected)
+    }
+
+    private func failClosed(_ reason: NativeIncomingCallFailClosedReason) -> NativeIncomingCallLifecycleOutcome {
+        diagnosticsRecorder.record(.failClosed(reason))
+        return .failClosed(reason)
+    }
+
+    var description: String {
+        "DisabledNativeIncomingCallLifecycleService(isEnabled: \(isEnabled), realRuntime: false)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
 enum DirectCallDiagnosticTokenReason: String, Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     case none
     case issued

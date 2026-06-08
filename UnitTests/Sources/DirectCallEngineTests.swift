@@ -1127,6 +1127,277 @@ final class DirectCallEngineTests {
 }
 
 @MainActor
+final class NativeIncomingCallLifecycleContractTests {
+    @Test
+    func disabledNativeIncomingLifecycleServiceFailsClosedByDefault() {
+        let dependencies = makeNativeIncomingLifecycleDependencies(isEnabled: false)
+
+        let outcome = dependencies.service.receiveIncomingCall(handle: "safe-local-call",
+                                                               receivedAt: .now,
+                                                               context: .valid)
+
+        #expect(outcome == .failClosed(.dependencyUnavailable))
+        #expect(dependencies.reportingAdapter.reportedIdentities.isEmpty)
+        #expect(dependencies.timeoutScheduler.scheduledIdentities.isEmpty)
+        #expect(dependencies.diagnosticsRecorder.diagnostics == [.failClosed(.dependencyUnavailable)])
+    }
+
+    @Test
+    func malformedStaleAndDuplicateHandlesFailClosed() {
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let now = Date(timeIntervalSince1970: 1000)
+
+        let malformed = dependencies.service.receiveIncomingCall(handle: "not safe",
+                                                                 receivedAt: now,
+                                                                 now: now,
+                                                                 context: .valid)
+        #expect(malformed == .failClosed(.malformed))
+
+        let stale = dependencies.service.receiveIncomingCall(handle: "safe-local-call-stale",
+                                                             receivedAt: now.addingTimeInterval(-120),
+                                                             now: now,
+                                                             context: .valid)
+        #expect(stale == .failClosed(.stale))
+
+        let first = dependencies.service.receiveIncomingCall(handle: "safe-local-call",
+                                                             receivedAt: now,
+                                                             now: now,
+                                                             context: .valid)
+        guard case .reported = first else {
+            Issue.record("Expected the first safe handle to be reportable through the test adapter.")
+            return
+        }
+
+        let duplicate = dependencies.service.receiveIncomingCall(handle: "safe-local-call",
+                                                                 receivedAt: now,
+                                                                 now: now,
+                                                                 context: .valid)
+        #expect(duplicate == .failClosed(.duplicate))
+    }
+
+    @Test
+    func invalidValidationContextFailsClosedBeforeReporting() {
+        let cases: [(NativeIncomingCallValidationContext, NativeIncomingCallFailClosedReason)] = [
+            (.init(isEncryptedDirectOneToOneRoom: false), .notEncryptedDirectOneToOne),
+            (.init(isPeerTrustReady: false), .trustNotReady),
+            (.init(isEligible: false), .eligibilityDenied),
+            (.init(areDependenciesAvailable: false), .dependencyUnavailable),
+            (.init(hasExistingActiveNativeSession: true), .existingActiveNativeSession),
+            (.init(isLoggedIn: false), .loggedOutOrSessionUnavailable),
+            (.init(isRouteAvailable: false), .routeConflict)
+        ]
+
+        for (index, testCase) in cases.enumerated() {
+            let dependencies = makeNativeIncomingLifecycleDependencies()
+            let outcome = dependencies.service.receiveIncomingCall(handle: "safe-local-call-\(index)",
+                                                                   receivedAt: .now,
+                                                                   context: testCase.0)
+
+            #expect(outcome == .failClosed(testCase.1))
+            #expect(dependencies.reportingAdapter.reportedIdentities.isEmpty)
+            #expect(dependencies.timeoutScheduler.scheduledIdentities.isEmpty)
+        }
+    }
+
+    @Test
+    func mediaCredentialRejectionMapsToSafeTerminalDiagnostics() {
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let now = Date(timeIntervalSince1970: 1000)
+
+        let outcome = dependencies.service.receiveIncomingCall(handle: "safe-local-call",
+                                                               receivedAt: now,
+                                                               now: now,
+                                                               context: .valid)
+        guard case .reported(let identity) = outcome else {
+            Issue.record("Expected safe incoming call identity to be reported.")
+            return
+        }
+
+        let failure = dependencies.service.failAfterMediaCredentialRejection(identity: identity)
+
+        #expect(failure == .failClosed(.serverIssuedMediaCredentialRejected))
+        #expect(dependencies.stateStore.state(for: identity.handle) == .failed)
+        #expect(dependencies.reportingAdapter.endedReasons == [.serverIssuedMediaCredentialRejected])
+        #expect(dependencies.timeoutScheduler.cancelledIdentities == [identity])
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.failClosedReason == .serverIssuedMediaCredentialRejected)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaCredentialRequested == true)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaConnectAttempted == false)
+    }
+
+    @Test
+    func callReportingAdapterReceivesOnlySafeIdentityData() {
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+
+        _ = dependencies.service.receiveIncomingCall(handle: "safe-local-call",
+                                                     receivedAt: .now,
+                                                     context: .valid)
+
+        #expect(dependencies.reportingAdapter.reportedIdentities.count == 1)
+        let description = String(describing: dependencies.reportingAdapter.reportedIdentities[0])
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !description.contains($0) })
+    }
+
+    @Test
+    func pushRegistryTestDoubleStaysRedacted() {
+        let registry = NativeIncomingPushRegistrySpy()
+        let credential = NativeIncomingPushRegistrationCredential(kind: .voIP,
+                                                                  value: Data("sensitive-incoming-credential-a".utf8))
+
+        registry.updateIncomingCallPushCredential(credential)
+
+        let description = String(describing: credential) + " " + String(describing: registry)
+        #expect(description.contains("<redacted>"))
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !description.contains($0) })
+    }
+
+    @Test
+    func diagnosticsAndOutcomesStayRedacted() {
+        let diagnostics = NativeIncomingCallRedactedDiagnostics(lifecycleState: .failed,
+                                                                failClosedReason: .serverIssuedMediaCredentialRejected,
+                                                                reportAttempted: true,
+                                                                reportSucceeded: false,
+                                                                mediaCredentialRequested: true,
+                                                                mediaConnectAttempted: false)
+        let outcome = NativeIncomingCallLifecycleOutcome.failClosed(.serverIssuedMediaCredentialRejected)
+        let serviceDescription = String(describing: makeNativeIncomingLifecycleDependencies().service)
+        let description = String(describing: diagnostics) + " " + String(describing: outcome) + " " + serviceDescription
+
+        #expect(description.contains("serverIssuedMediaCredentialRejected"))
+        #expect(description.contains("realRuntime: false"))
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !description.contains($0) })
+        #expect(!description.contains("displayCall"))
+        #expect(!description.contains("presentCallScreen"))
+    }
+
+    private static let forbiddenNativeIncomingFragments = [
+        "!unsafe-room",
+        "@unsafe-user",
+        "DEVICE-SECRET",
+        "redacted-fixture-a",
+        "sensitive-incoming-credential-a",
+        "sensitive-incoming-credential-b",
+        "sample-media-credential",
+        "redacted-fixture-b",
+        "redacted-fixture-c",
+        "displayCall",
+        "presentCallScreen"
+    ]
+
+    private func makeNativeIncomingLifecycleDependencies(isEnabled: Bool = true,
+                                                         reportResult: Bool = true) -> NativeIncomingLifecycleDependencies {
+        let stateStore = NativeIncomingCallStateStoreSpy()
+        let reportingAdapter = NativeIncomingCallReportingAdapterSpy(reportResult: reportResult)
+        let timeoutScheduler = NativeIncomingCallTimeoutSchedulerSpy()
+        let diagnosticsRecorder = NativeIncomingCallDiagnosticsRecorderSpy()
+        let service = DisabledNativeIncomingCallLifecycleService(isEnabled: isEnabled,
+                                                                 stateStore: stateStore,
+                                                                 reportingAdapter: reportingAdapter,
+                                                                 timeoutScheduler: timeoutScheduler,
+                                                                 diagnosticsRecorder: diagnosticsRecorder)
+        return .init(service: service,
+                     stateStore: stateStore,
+                     reportingAdapter: reportingAdapter,
+                     timeoutScheduler: timeoutScheduler,
+                     diagnosticsRecorder: diagnosticsRecorder)
+    }
+}
+
+private struct NativeIncomingLifecycleDependencies {
+    let service: DisabledNativeIncomingCallLifecycleService
+    let stateStore: NativeIncomingCallStateStoreSpy
+    let reportingAdapter: NativeIncomingCallReportingAdapterSpy
+    let timeoutScheduler: NativeIncomingCallTimeoutSchedulerSpy
+    let diagnosticsRecorder: NativeIncomingCallDiagnosticsRecorderSpy
+}
+
+private final class NativeIncomingCallStateStoreSpy: NativeIncomingCallStateStoring {
+    private var states = [NativeIncomingCallHandle: NativeIncomingCallLifecycleState]()
+
+    func state(for handle: NativeIncomingCallHandle) -> NativeIncomingCallLifecycleState? {
+        states[handle]
+    }
+
+    func hasSeen(_ handle: NativeIncomingCallHandle) -> Bool {
+        states[handle] != nil
+    }
+
+    func setState(_ state: NativeIncomingCallLifecycleState, for handle: NativeIncomingCallHandle) {
+        states[handle] = state
+    }
+
+    func clear(_ handle: NativeIncomingCallHandle) {
+        states[handle] = nil
+    }
+}
+
+private final class NativeIncomingCallReportingAdapterSpy: NativeIncomingCallReportingAdapting {
+    private let reportResult: Bool
+    private(set) var reportedIdentities = [NativeIncomingCallIdentity]()
+    private(set) var endedReasons = [NativeIncomingCallFailClosedReason]()
+
+    init(reportResult: Bool) {
+        self.reportResult = reportResult
+    }
+
+    func reportIncomingCall(identity: NativeIncomingCallIdentity) -> Bool {
+        reportedIdentities.append(identity)
+        return reportResult
+    }
+
+    func endReportedCall(identity: NativeIncomingCallIdentity, reason: NativeIncomingCallFailClosedReason) {
+        endedReasons.append(reason)
+    }
+}
+
+private final class NativeIncomingCallTimeoutSchedulerSpy: NativeIncomingCallTimeoutScheduling {
+    private(set) var scheduledIdentities = [NativeIncomingCallIdentity]()
+    private(set) var cancelledIdentities = [NativeIncomingCallIdentity]()
+
+    func scheduleTimeout(for identity: NativeIncomingCallIdentity, after timeout: Duration) {
+        scheduledIdentities.append(identity)
+    }
+
+    func cancelTimeout(for identity: NativeIncomingCallIdentity) {
+        cancelledIdentities.append(identity)
+    }
+}
+
+private final class NativeIncomingCallDiagnosticsRecorderSpy: NativeIncomingCallDiagnosticsRecording {
+    private(set) var diagnostics = [NativeIncomingCallRedactedDiagnostics]()
+
+    func record(_ diagnostics: NativeIncomingCallRedactedDiagnostics) {
+        self.diagnostics.append(diagnostics)
+    }
+}
+
+private final class NativeIncomingPushRegistrySpy: NativeIncomingPushRegistryManaging, CustomStringConvertible, CustomDebugStringConvertible {
+    private(set) var registerCount = 0
+    private(set) var unregisterCount = 0
+    private var credentialCount = 0
+
+    func registerForIncomingCallPushes() -> Bool {
+        registerCount += 1
+        return false
+    }
+
+    func updateIncomingCallPushCredential(_ credential: NativeIncomingPushRegistrationCredential) {
+        credentialCount += credential.isPresent ? 1 : 0
+    }
+
+    func unregisterIncomingCallPushes() {
+        unregisterCount += 1
+    }
+
+    var description: String {
+        "NativeIncomingPushRegistrySpy(registerCount: \(registerCount), credentialCount: \(credentialCount), unregisterCount: \(unregisterCount), value: <redacted>)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+@MainActor
 private final class EncryptionServiceSpy: DirectCallEncryptionServiceProtocol {
     struct GenerateRequest: Equatable {
         let callID: String
