@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.40H — native incoming lifecycle contracts and mocks.
+After 2.40I — push and CallKit payload contract.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,12 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- Push and CallKit payload contract is documented:
+  - 2.40I adds `docs/direct-call/PUSH_CALLKIT_PAYLOAD_CONTRACT.md`.
+  - The contract defines future VoIP incoming native direct-audio invite payloads, optional normal APNs notification separation, server acknowledgement/invalidation payloads, local CallKit display metadata, terminal/stale handling, client validation, server requirements, redaction, failure matrix, test plan, and future phases.
+  - Payloads remain minimal and opaque. They must not include raw identifiers, push credential values, media credentials, media-session names, Matrix event bodies, full request/response bodies, or credentialed URLs.
+  - The push payload is never final authority. The server-issued media credential endpoint remains final authority after user answer.
+  - No real CallKit, PushKit, APNs, push credential registration, system incoming UI, background incoming behavior, missed-call UX, media connection, Element Call route change, native audio gate change, bundle/signing/project setting change, server change, video, or rollout expansion is introduced.
 - Disabled native incoming lifecycle contracts are added:
   - 2.40H adds inert Swift models, protocols, a fail-closed disabled lifecycle service, local test doubles, and redacted diagnostics for future native direct-audio incoming-call work.
   - The contract surface includes safe local incoming call handles, lifecycle states, fail-closed reasons, validation context, redacted diagnostics, state store, call reporting adapter, incoming push registry, timeout scheduler, and diagnostics recorder protocols.

@@ -1801,3 +1801,14 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added `docs/direct-call/NATIVE_INCOMING_CONTRACTS.md`.
 - No real CallKit, PushKit, APNs, token registration, system incoming UI, background incoming behavior, missed-call UX, media connection, Element Call route change, native audio gate change, bundle ID, App Group, signing/provisioning/project setting, server, video, broad rollout, or production/public rollout changed.
 - Recommended next phase: `2.40I — push and call reporting payload contract`.
+
+## 2026-06-08 — 2.40I Push And CallKit Payload Contract
+
+- Added `docs/direct-call/PUSH_CALLKIT_PAYLOAD_CONTRACT.md`.
+- Documented the contract-only payload classes for future VoIP incoming native direct-audio invites, optional normal APNs notification separation, server acknowledgement/invalidation payloads, local CallKit display metadata, and terminal/stale call handling.
+- Defined the future VoIP incoming payload as minimal and opaque: schema version, opaque local call handle, native direct-audio call kind, timestamps, safe display label reference, and validation hint enum only.
+- Documented client validation: reject malformed, unsupported, stale, duplicate, missing-label, unsupported-kind, unavailable-session, dependency, trust, eligibility, active-session, and route-conflict cases before reportability.
+- Documented that push payloads are never final authority and cannot request media credentials or connect media on receipt. Server-issued media credential authority remains after user answer.
+- Documented server requirements, safe display metadata rules, redacted diagnostics, failure matrix, and test plan.
+- Kept this phase docs-only: no app/backend runtime code, CallKit, PushKit, APNs, push credential registration, system incoming UI, background incoming behavior, missed-call UX, media connection, LiveKit, MatrixRTC, Element Call route, native audio gating, bundle ID, App Group, signing/provisioning/project setting, server, video, broad rollout, or production/public rollout changed.
+- Recommended next phase: `2.40J — device-only synthetic CallKit proof`.
