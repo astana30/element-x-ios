@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.40G — PushKit / APNs / CallKit design plan.
+After 2.40H — native incoming lifecycle contracts and mocks.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,12 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- Disabled native incoming lifecycle contracts are added:
+  - 2.40H adds inert Swift models, protocols, a fail-closed disabled lifecycle service, local test doubles, and redacted diagnostics for future native direct-audio incoming-call work.
+  - The contract surface includes safe local incoming call handles, lifecycle states, fail-closed reasons, validation context, redacted diagnostics, state store, call reporting adapter, incoming push registry, timeout scheduler, and diagnostics recorder protocols.
+  - Default behavior is no-op/fail-closed. Unit coverage verifies malformed, stale, duplicate, invalid room/trust/eligibility/session/dependency, and server-issued media credential rejection paths.
+  - No real CallKit, PushKit, APNs, token registration, system incoming UI, background incoming behavior, missed-call UX, media connection, Element Call route change, native audio gate change, bundle/signing/project setting change, server change, video, or rollout expansion is introduced.
+  - `docs/direct-call/NATIVE_INCOMING_CONTRACTS.md` records the disabled contract boundary.
 - Native audio CallKit / PushKit / APNs planning is documented:
   - 2.40F physical-device signing readiness is complete with signed development entitlements for the main app and extension targets.
   - The development App Group is `group.kz.salemx.msg.dev`, and the main app development entitlement includes APNs environment support.

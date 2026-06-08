@@ -1790,3 +1790,14 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Documented the token/device model, server requirements, future client components, risk register, redaction contract, fail-closed matrix, and phased implementation plan.
 - Kept this phase design-only: no app/backend runtime code, bundle IDs, App Group IDs, signing/provisioning settings, LiveKit, MatrixRTC, Element Call route, native audio gating, CallKit, PushKit, APNs, video, broad rollout, or production/public rollout changed.
 - Recommended next phase: `2.40H — native incoming lifecycle contracts and mocks`.
+
+## 2026-06-08 — 2.40H Native Incoming Lifecycle Contracts And Mocks
+
+- Added a disabled native incoming-call contract surface for future CallKit / PushKit / APNs work.
+- Added safe local incoming call handle and identity models with redacted descriptions.
+- Added lifecycle state and fail-closed reason models, validation context, redacted diagnostics, and protocol boundaries for state storage, call reporting, incoming push registry, timeout scheduling, and diagnostics recording.
+- Added a disabled lifecycle service whose default behavior is no-op/fail-closed and whose test-enabled path only talks to local test doubles.
+- Added unit coverage for default fail-closed behavior, malformed/stale/duplicate handles, invalid local validation context, server-issued media credential rejection diagnostics, call reporting redaction, incoming push registry redaction, and Element Call route action name absence in diagnostics.
+- Added `docs/direct-call/NATIVE_INCOMING_CONTRACTS.md`.
+- No real CallKit, PushKit, APNs, token registration, system incoming UI, background incoming behavior, missed-call UX, media connection, Element Call route change, native audio gate change, bundle ID, App Group, signing/provisioning/project setting, server, video, broad rollout, or production/public rollout changed.
+- Recommended next phase: `2.40I — push and call reporting payload contract`.
