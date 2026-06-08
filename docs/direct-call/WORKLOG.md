@@ -1780,3 +1780,13 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Recorded redacted local verification checks for signing identities, embedded profiles, signed entitlements, `aps-environment`, App Group, Keychain Sharing, physical-device install, and `voip` background mode.
 - No entitlements, bundle IDs, app code, backend code, Element Call route, CallKit, PushKit, APNs, video, or rollout settings changed.
 - Recommended next phase: `2.40F — physical-device signing remediation execution` if the paid team/device/certificate are available, otherwise `2.40F — paid Apple Developer account setup and profile regeneration`.
+
+## 2026-06-08 — 2.40G PushKit / APNs / CallKit Design Plan
+
+- Added `docs/direct-call/CALLKIT_PUSHKIT_APNS_DESIGN.md` after the successful 2.40F physical-device signing proof.
+- Recorded the baseline: physical-device signing readiness passed, the main app has development APNs entitlement, app and extensions use `group.kz.salemx.msg.dev`, and runtime CallKit/PushKit/APNs implementation has not started.
+- Documented Apple compliance assumptions: PushKit VoIP pushes are only for real incoming calls, regular chat/message notifications must not use PushKit, and valid incoming calls must be reported to CallKit quickly.
+- Proposed future incoming and outgoing native direct-audio flows while preserving token endpoint final authority and keeping Element Call separate.
+- Documented the token/device model, server requirements, future client components, risk register, redaction contract, fail-closed matrix, and phased implementation plan.
+- Kept this phase design-only: no app/backend runtime code, bundle IDs, App Group IDs, signing/provisioning settings, LiveKit, MatrixRTC, Element Call route, native audio gating, CallKit, PushKit, APNs, video, broad rollout, or production/public rollout changed.
+- Recommended next phase: `2.40H — native incoming lifecycle contracts and mocks`.

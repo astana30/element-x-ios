@@ -7,88 +7,89 @@ Branch:
 salemx-native-direct-calls
 
 Phase:
-2.40F — physical-device signing remediation execution.
+2.40H — native incoming lifecycle contracts and mocks.
 
 Task:
-Run or record the Apple Developer signing/provisioning remediation proof for future native audio CallKit/PushKit/APNs work.
-Do not implement CallKit.
-Do not implement PushKit/APNs.
-Do not change app/backend code unless explicitly requested.
-Do not change bundle IDs.
+Create disabled native audio incoming-call lifecycle contracts and test doubles for future CallKit / PushKit / APNs work.
+Do not implement CallKit runtime code.
+Do not implement PushKit runtime code.
+Do not implement APNs runtime code.
+Do not register for push tokens.
+Do not report real system incoming calls.
 Do not change Element Call route.
+Do not modify LiveKit, MatrixRTC, native audio engine media setup, or feature gating.
+Do not change bundle IDs, App Group IDs, signing, provisioning, or production distribution settings.
 Do not add video.
 Do not globally activate production direct calls.
 
 Context:
-- 2.40B documented the native audio incoming-call lifecycle architecture contract.
-- 2.40D signing audit found blockers:
-  - generic `iphoneos` build completed;
-  - local signing identity inspection reported no valid local identities;
-  - signature verification reported an untrusted signing chain;
-  - embedded main app, NSE, and ShareExtension profiles existed but expire on 2026-06-01;
-  - `aps-environment` was missing;
-  - physical iPhone was visible but offline;
-  - simulator proof is insufficient.
-- 2.40E documented the remediation checklist.
-- Current proven native audio mode remains foreground/open encrypted direct 1:1 only.
-- CallKit, PushKit/APNs, missed-call UX, background incoming, video, Element Call replacement, broad rollout, production/public rollout, participant/device expansion, and global activation remain blocked.
+- 2.40F physical-device signing proof passed and is recorded in `docs/direct-call/APPLE_SIGNING_PROOF_2026-06-08.md`.
+- 2.40G added `docs/direct-call/CALLKIT_PUSHKIT_APNS_DESIGN.md`.
+- Current proven native audio remains foreground/open encrypted direct 1:1 only.
+- The signed development app has APNs entitlement and the app/extension App Group is `group.kz.salemx.msg.dev`.
+- CallKit, PushKit, APNs runtime, background incoming, missed-call UX, video, broad rollout, production/public rollout, and Element Call replacement remain blocked.
 
 Goal:
-Prove or record whether the signing/provisioning remediation checklist is complete enough to unblock future native audio CallKit/PushKit/APNs implementation planning.
+Prepare the smallest disabled architecture surface for future incoming-call work without enabling runtime behavior.
 
-Required remediation state:
-- paid Apple Developer Program team available;
-- valid Apple Development certificate installed locally;
-- signing chain trusted locally;
-- physical iPhone registered and online;
-- App IDs configured:
-  - main app: `kz.salemx.msg`;
-  - NSE: `kz.salemx.msg.nse`;
-  - ShareExtension: `kz.salemx.msg.shareextension`;
-  - App Group: `group.kz.salemx.msg`;
-- Push Notifications enabled for the main app;
-- App Groups and Keychain Sharing enabled for app and extensions;
-- durable development provisioning profiles generated for app, NSE, and ShareExtension.
+Inspect:
+- `docs/direct-call/CALLKIT_PUSHKIT_APNS_DESIGN.md`
+- `docs/direct-call/STATUS.md`
+- `docs/direct-call/WORKLOG.md`
+- `DirectCallEngine.swift`
+- `DirectCallMediaEngineProtocol.swift`
+- `RoomFlowCoordinator.swift`
+- `RoomScreenModels.swift`
+- `AppCoordinator.swift`
+- existing notification and call-related protocols if present
+- relevant unit test targets
 
-Checks:
-1. Inspect local signing identities without printing certificate private data.
-2. Build for `iphoneos`.
-3. Inspect embedded provisioning profiles with redacted output.
-4. Inspect signed app entitlements with redacted output.
-5. Confirm main app signed entitlements include `aps-environment`.
-6. Confirm app, NSE, and ShareExtension include App Group and Keychain Sharing entitlements.
-7. Confirm signed app Info.plist includes `UIBackgroundModes` with `voip`.
-8. Install app with NSE and ShareExtension on the registered physical iPhone.
-9. Confirm install succeeds.
-10. Do not print push tokens, raw device identifiers, certificates, private keys, provisioning private data, or Apple account private data.
+Implementation goals:
+1. Add disabled protocol/model contracts only if they can stay inert by default:
+   - native incoming call identity model using safe opaque labels only;
+   - CallKit adapter protocol/test double;
+   - PushKit registry protocol/test double;
+   - incoming native call state store protocol/test double;
+   - call timeout/stale-call model;
+   - redacted diagnostics model.
+2. Default runtime behavior must remain no-op/fail-closed.
+3. No production app path should instantiate real CallKit, PushKit, or APNs objects.
+4. No rendering/status refresh should send Matrix events, request media credentials, connect media, connect LiveKit, or report system calls.
+5. Element Call route and toolbar must remain unchanged.
+6. Token endpoint remains final authority.
+7. Do not use `directOneToOneCallsEnabled` as the native audio gate.
 
-Expected report:
-A. Files/settings inspected.
-B. Signing identity status.
-C. Profile status for app/NSE/ShareExtension.
-D. Signed entitlement status.
-E. Physical-device install result.
-F. Remaining blockers.
-G. Whether CallKit/PushKit/APNs implementation planning can proceed.
-H. Recommended next phase.
+Required tests:
+- default disabled incoming-call service is fail-closed;
+- malformed/stale/duplicate incoming handles fail closed;
+- invalid room/trust/eligibility/dependency/session states fail closed;
+- token endpoint rejection maps to safe terminal diagnostics;
+- CallKit adapter test double receives only safe local identity data;
+- PushKit registry test double never exposes token values in descriptions/logs;
+- redaction tests cover raw identifiers, push tokens, media credentials, event bodies, and media-session names;
+- Element Call route remains untouched.
 
 Hard constraints:
-- Do not implement CallKit, PushKit, APNs, native background incoming, or missed-call UX.
-- Do not approve additional non-engineering pilot windows.
-- Do not approve participant/device expansion.
-- Do not approve broad internal rollout.
-- Do not approve production/public rollout.
-- Do not approve unsupervised dogfood.
-- Do not replace Element Call toolbar or route.
-- Do not add video.
-- Do not globally activate production direct calls.
-- Do not weaken trusted-device/E2EE behavior.
-- Do not use `directOneToOneCallsEnabled` as the native audio gate.
-- Token endpoint remains final authority.
-- No raw IDs, tokens, JWTs, secrets, certificates, private keys, profile secrets, LiveKit room names, Matrix event bodies, or credentialed URLs in reports.
+- No real CallKit runtime implementation.
+- No real PushKit/APNs runtime implementation.
+- No push token registration.
+- No real system incoming UI.
+- No background incoming behavior.
+- No missed-call UX.
+- No video.
+- No broad internal rollout.
+- No production/public rollout.
+- No bundle ID/App Group/signing changes.
+- No raw identifiers, push tokens, media credentials, Matrix event bodies, Apple private data, or media-session names in logs/docs.
 
-Suggested next phase if complete:
-2.40G — disabled native incoming-call service and CallKit adapter protocols
+Validation:
+- SwiftFormat changed Swift files.
+- SwiftLint changed Swift files.
+- Targeted native-call tests.
+- Release build if Swift files changed.
+- `git diff --check`.
+- Direct-call forbidden scan.
+- Docs secret scan if docs changed.
 
-Suggested next phase if still blocked:
-2.40G — signing remediation follow-up
+Suggested commit:
+Add disabled native incoming call contracts
