@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.41B — foreground audio and call lifecycle hardening.
+After 2.41D - video path inspection and remote rendering diagnosis.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,12 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.41D inspected the video path after the two-physical-iPhone smoke where local video appeared but remote participant video was not visible:
+  - The standard room video button routes through `displayCall(startMode: .video)` and `presentCallScreen(startMode: .video)`, which opens the existing Element Call / embedded call route.
+  - The private native direct-call path remains audio-only: the media protocol exposes audio APIs only, media state has audio phases only, the LiveKit direct-call client subscribes to remote audio only, and video intent is rejected before native media connection.
+  - Native direct-call eligibility, activation, capability, and credential-authority surfaces are audio-scoped; non-audio intent is rejected before a native media credential request.
+  - The observed self-view-only symptom is therefore most likely in the Element Call / MatrixRTC / embedded call video path, or in call-session matching, publish/subscribe, or remote renderer attachment, rather than in the proven native audio path.
+  - No runtime code changed. Native direct-call video implementation, PushKit/APNs/background incoming, production/public rollout, broad internal rollout, Element Call replacement, signing/project changes, and global activation remain blocked.
 - 2.41B hardens the foreground native incoming lifecycle after the one-device smoke:
   - Duplicate answered-call handling no longer creates a second media connection after the foreground authority path has already connected.
   - End is idempotent in the foreground incoming coordinator.
@@ -1185,9 +1191,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.40F — physical-device signing remediation execution`
+`2.41E - Element Call video remote rendering diagnosis`
 
-Goal: complete the paid-team/certificate/profile/device remediation checklist and prove, with redacted output, that the app, NSE, and ShareExtension sign and install on a physical iPhone with required App Group, Keychain Sharing, `voip` background mode, and main-app `aps-environment` entitlements.
+Goal: verify whether the failing video smoke used the Element Call route, then inspect call-session matching, local camera publish, remote track subscription, and remote renderer attachment on two physical iPhones. Keep native audio as a regression guard and keep native direct-call video implementation out of scope unless separately approved.
 
 ## Do-Not-Touch Constraints
 

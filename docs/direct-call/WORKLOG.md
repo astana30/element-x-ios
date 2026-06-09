@@ -1904,3 +1904,14 @@ Confirmed on a physical iPhone Debug build that the isolated synthetic CallKit p
 - Added unit coverage for direct gate behavior and isolated synthetic CallKit UI adapter callback-to-gate behavior.
 - No PushKit runtime, APNs runtime, APNs/VoIP value registration, background incoming handling, real server-issued media credential request, media connection, Matrix event emission, Element Call route change, LiveKit/MatrixRTC production path change, signing change, bundle change, entitlement change, project setting change, production UI, video, broad rollout, or production/public rollout was added.
 - Added `docs/direct-call/FOREGROUND_INCOMING_ACCEPTANCE_GATE.md`.
+
+## 2026-06-09 - 2.41D Video Path Inspection And Remote Rendering Diagnosis
+
+- Inspected the video path after a two-physical-iPhone smoke showed local video on both devices but no visible remote participant video.
+- Classified the standard room video button as the existing Element Call / embedded call route: room UI sends `displayCall(startMode: .video)`, coordinators forward `presentCallScreen(startMode: .video)`, and the user-session coordinator builds an Element Call configuration.
+- Confirmed the private native direct-call path remains audio-only: direct-call media protocol exposes audio APIs only, media state has audio phases only, native LiveKit direct-call client subscribes to remote audio only, and native video intent fails closed before media connection.
+- Confirmed native direct-call eligibility, activation, capability, and credential-authority surfaces are audio-scoped; non-audio intent is rejected before a native media credential request.
+- Documented that the observed self-view-only symptom is most likely in Element Call / MatrixRTC / embedded call remote rendering, call-session matching, publish/subscribe, or renderer attachment, not in the proven native audio path.
+- No app/runtime code changed. No PushKit/APNs runtime, background incoming, signing/project change, native direct-call video implementation, Element Call replacement, broad rollout, production/public rollout, or global activation was added.
+- Added `docs/direct-call/VIDEO_REMOTE_RENDERING_INSPECTION.md`.
+- Recommended next phase: `2.41E - Element Call video remote rendering diagnosis`.
