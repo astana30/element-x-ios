@@ -1834,3 +1834,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added `docs/direct-call/SYNTHETIC_CALLKIT_UI_PROOF.md`.
 - Project-file changes are limited to adding the isolated proof Swift file to the app target. No bundle ID, App Group, signing, entitlement, Info.plist, app.yml, production distribution, Element Call, LiveKit, MatrixRTC, native audio gate, push delivery, server fanout, media credential request, media connection, video, broad rollout, or production/public rollout changed.
 - Recommended next phase: `2.40K — PushKit registration dry run planning`.
+
+## 2026-06-09 — 2.40J-C Physical Synthetic CallKit UI Proof
+
+Confirmed on a physical iPhone Debug build that the isolated synthetic CallKit proof path can display the system CallKit incoming-call UI. The trigger used the DEBUG-only Objective-C runtime bridge via LLDB runtime lookup. Full runtime logs were intentionally omitted because they contain private Matrix/runtime identifiers. No PushKit/APNs runtime, token registration, server-issued media credential request, LiveKit/MatrixRTC media connection, Matrix event emission, Element Call route change, signing change, bundle change, entitlement change, or project setting change was added by this proof path.

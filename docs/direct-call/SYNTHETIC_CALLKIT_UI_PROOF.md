@@ -77,6 +77,35 @@ Unit coverage verifies:
 - unknown handle fails closed.
 - diagnostics and descriptions stay redacted.
 
+## 2.40J-C — Physical Device Synthetic CallKit UI Proof
+
+Status: closed.
+
+A physical iPhone Debug build successfully displayed the iOS system CallKit incoming-call UI using the isolated synthetic CallKit proof path.
+
+The proof was triggered through a DEBUG-only Objective-C runtime bridge using LLDB runtime lookup:
+
+```lldb
+expr -l objc++ -O -- NSClassFromString(@"SalemXSyntheticCallKitUIProofDebug")
+expr -l objc++ -O -- [(Class)NSClassFromString(@"SalemXSyntheticCallKitUIProofDebug") performSelector:@selector(report)]
+continue
+```
+
+Observed result:
+
+- The system CallKit incoming-call UI appeared on the physical iPhone.
+- The displayed call was synthetic/local proof-only.
+- The proof path remained DEBUG-only.
+- The proof did not intentionally request server-issued media credentials.
+- The proof did not intentionally connect LiveKit/MatrixRTC media.
+- The proof did not intentionally emit Matrix call events.
+- The proof did not add PushKit runtime handling.
+- The proof did not add APNs token registration.
+- The proof did not modify Element Call routing.
+- The proof did not modify signing, bundle identifiers, entitlements, or project settings.
+
+Full runtime logs are intentionally omitted because they contain private Matrix/runtime identifiers.
+
 ## Remaining Blockers
 
 - Real PushKit registration remains blocked.
