@@ -288,6 +288,7 @@ enum NativeIncomingCallLifecycleState: String, Codable, Equatable, CaseIterable,
     case reported
     case answered
     case answerRequested
+    case foregroundCredentialAuthorized
     case connecting
     case active
     case ended
@@ -318,6 +319,11 @@ enum NativeIncomingCallFailClosedReason: String, Codable, Equatable, CaseIterabl
     case existingActiveNativeSession
     case loggedOutOrSessionUnavailable
     case callReportingUnavailable
+    case foregroundCredentialAuthorityUnavailable
+    case foregroundCredentialDenied
+    case foregroundCredentialMalformed
+    case foregroundCredentialExpired
+    case foregroundCredentialUnverifiable
     case serverIssuedMediaCredentialRejected
     case mediaSetupUnavailable
     case routeConflict
@@ -423,6 +429,66 @@ enum NativeIncomingCallLifecycleOutcome: Equatable, CustomStringConvertible, Cus
     }
 }
 
+enum NativeIncomingForegroundAcceptanceDecision: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case authorized
+    case denied
+    case malformed
+    case expired
+    case unverifiable
+
+    var failClosedReason: NativeIncomingCallFailClosedReason? {
+        switch self {
+        case .authorized:
+            nil
+        case .denied:
+            .foregroundCredentialDenied
+        case .malformed:
+            .foregroundCredentialMalformed
+        case .expired:
+            .foregroundCredentialExpired
+        case .unverifiable:
+            .foregroundCredentialUnverifiable
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .authorized:
+            "authorized"
+        case .denied:
+            "denied"
+        case .malformed:
+            "malformed"
+        case .expired:
+            "expired"
+        case .unverifiable:
+            "unverifiable"
+        }
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum NativeIncomingForegroundAcceptanceOutcome: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case failClosed(NativeIncomingCallFailClosedReason)
+    case credentialAuthorized(NativeIncomingCallIdentity)
+
+    var description: String {
+        switch self {
+        case .failClosed(let reason):
+            "failClosed(\(reason))"
+        case .credentialAuthorized:
+            "credentialAuthorized(identity: <redacted>)"
+        }
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
 struct NativeIncomingPushRegistrationCredential: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     enum Kind: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
         case standard
@@ -483,6 +549,10 @@ protocol NativeIncomingCallTimeoutScheduling: AnyObject {
 
 protocol NativeIncomingCallDiagnosticsRecording: AnyObject {
     func record(_ diagnostics: NativeIncomingCallRedactedDiagnostics)
+}
+
+protocol NativeIncomingForegroundAcceptanceAuthorizing: AnyObject {
+    func foregroundAcceptanceDecision(for identity: NativeIncomingCallIdentity) -> NativeIncomingForegroundAcceptanceDecision
 }
 
 final class DisabledNativeIncomingCallLifecycleService: CustomStringConvertible, CustomDebugStringConvertible {
@@ -644,6 +714,84 @@ protocol NativeIncomingCallStateMachineActionRouting: AnyObject {
     func requestAnswer(identity: NativeIncomingCallIdentity)
     func endIncomingCall(identity: NativeIncomingCallIdentity)
     func setIncomingCallMuted(_ isMuted: Bool, identity: NativeIncomingCallIdentity)
+}
+
+final class DisabledNativeIncomingForegroundAcceptanceGate: CustomStringConvertible, CustomDebugStringConvertible {
+    private let isEnabled: Bool
+    private let stateStore: NativeIncomingCallStateStoring
+    private let diagnosticsRecorder: NativeIncomingCallDiagnosticsRecording
+    private let authorizer: NativeIncomingForegroundAcceptanceAuthorizing?
+
+    init(isEnabled: Bool = false,
+         stateStore: NativeIncomingCallStateStoring,
+         diagnosticsRecorder: NativeIncomingCallDiagnosticsRecording,
+         authorizer: NativeIncomingForegroundAcceptanceAuthorizing?) {
+        self.isEnabled = isEnabled
+        self.stateStore = stateStore
+        self.diagnosticsRecorder = diagnosticsRecorder
+        self.authorizer = authorizer
+    }
+
+    func requestForegroundAcceptance(identity: NativeIncomingCallIdentity) -> NativeIncomingForegroundAcceptanceOutcome {
+        guard isEnabled else {
+            return failClosed(.dependencyUnavailable, identity: identity, mediaCredentialRequested: false)
+        }
+        guard stateStore.state(for: identity.handle) == .answerRequested else {
+            return failClosed(.unverifiable, identity: identity, mediaCredentialRequested: false)
+        }
+        guard let authorizer else {
+            return failClosed(.foregroundCredentialAuthorityUnavailable, identity: identity, mediaCredentialRequested: false)
+        }
+
+        let decision = authorizer.foregroundAcceptanceDecision(for: identity)
+        if let failClosedReason = decision.failClosedReason {
+            return failClosed(failClosedReason, identity: identity, mediaCredentialRequested: true)
+        }
+
+        stateStore.setState(.foregroundCredentialAuthorized, for: identity.handle)
+        diagnosticsRecorder.record(.init(lifecycleState: .foregroundCredentialAuthorized,
+                                         failClosedReason: nil,
+                                         reportAttempted: false,
+                                         reportSucceeded: nil,
+                                         mediaCredentialRequested: true,
+                                         mediaConnectAttempted: false))
+        return .credentialAuthorized(identity)
+    }
+
+    func isMediaAllowedAfterForegroundAcceptance(identity: NativeIncomingCallIdentity) -> Bool {
+        stateStore.state(for: identity.handle) == .foregroundCredentialAuthorized
+    }
+
+    func endForegroundAcceptance(identity: NativeIncomingCallIdentity) {
+        stateStore.clear(identity.handle)
+        diagnosticsRecorder.record(.init(lifecycleState: .ended,
+                                         failClosedReason: nil,
+                                         reportAttempted: false,
+                                         reportSucceeded: nil,
+                                         mediaCredentialRequested: false,
+                                         mediaConnectAttempted: false))
+    }
+
+    private func failClosed(_ reason: NativeIncomingCallFailClosedReason,
+                            identity: NativeIncomingCallIdentity,
+                            mediaCredentialRequested: Bool) -> NativeIncomingForegroundAcceptanceOutcome {
+        stateStore.setState(.failed, for: identity.handle)
+        diagnosticsRecorder.record(.init(lifecycleState: .failed,
+                                         failClosedReason: reason,
+                                         reportAttempted: false,
+                                         reportSucceeded: nil,
+                                         mediaCredentialRequested: mediaCredentialRequested,
+                                         mediaConnectAttempted: false))
+        return .failClosed(reason)
+    }
+
+    var description: String {
+        "DisabledNativeIncomingForegroundAcceptanceGate(isEnabled: \(isEnabled), realRuntime: false)"
+    }
+
+    var debugDescription: String {
+        description
+    }
 }
 
 final class DisabledNativeIncomingCallStateMachineActionRouter: NativeIncomingCallStateMachineActionRouting, CustomStringConvertible, CustomDebugStringConvertible {

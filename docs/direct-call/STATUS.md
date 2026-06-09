@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.40K — incoming CallKit action routing proof.
+After 2.40L — foreground incoming-call acceptance gate.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.40L adds a foreground-only acceptance gate after synthetic/local incoming CallKit answer routing:
+  - Answer remains routed to `answerRequested`.
+  - Media remains blocked until a mocked/test-safe foreground authority returns an authorized decision.
+  - Missing, denied, malformed, expired, and unverifiable authority decisions fail closed.
+  - Authorized decisions move only to `foregroundCredentialAuthorized`, a safe local state that does not connect media.
+  - End clears local incoming/acceptance state, and mute remains local/diagnostic-only.
+  - Unit coverage verifies direct gate behavior and isolated synthetic CallKit UI adapter callback-to-gate behavior.
+  - No PushKit runtime, APNs runtime, APNs/VoIP value registration, background incoming handling, real server-issued media credential request, media connection, Matrix event emission, Element Call route change, LiveKit/MatrixRTC production path change, signing/project setting change, production UI, video, broad rollout, or production/public rollout is introduced.
 - 2.40K adds a disabled local incoming-call state-machine action surface for synthetic CallKit answer/end/mute callbacks:
   - Answer routes to `answerRequested`, meaning the local incoming call is ready for the future server-issued media credential authority step.
   - End routes to local termination and clears the synthetic incoming state.

@@ -1849,3 +1849,15 @@ Confirmed on a physical iPhone Debug build that the isolated synthetic CallKit p
 - The proof records only redacted lifecycle diagnostics; media credential request and media connection flags remain false.
 - No PushKit runtime, APNs runtime, APNs/VoIP value registration, background incoming handling, server-issued media credential request, media connection, Matrix event emission, Element Call route change, LiveKit/MatrixRTC production path change, signing change, bundle change, entitlement change, project setting change, production UI, video, broad rollout, or production/public rollout was added.
 - Added `docs/direct-call/INCOMING_CALL_STATE_MACHINE_PROOF.md`.
+
+## 2026-06-09 — 2.40L Foreground Incoming Acceptance Gate
+
+- Added a foreground-only acceptance gate after synthetic/local incoming CallKit answer routing.
+- The local incoming state still moves to `answerRequested` on answer.
+- The acceptance gate keeps media blocked until a mocked/test-safe foreground authority returns an authorized decision.
+- Missing, denied, malformed, expired, and unverifiable authority decisions fail closed.
+- An authorized decision moves only to `foregroundCredentialAuthorized`; it does not connect media, request real server-issued media credentials, or emit Matrix call events.
+- End clears local incoming/acceptance state, and mute remains local and diagnostic-only.
+- Added unit coverage for direct gate behavior and isolated synthetic CallKit UI adapter callback-to-gate behavior.
+- No PushKit runtime, APNs runtime, APNs/VoIP value registration, background incoming handling, real server-issued media credential request, media connection, Matrix event emission, Element Call route change, LiveKit/MatrixRTC production path change, signing change, bundle change, entitlement change, project setting change, production UI, video, broad rollout, or production/public rollout was added.
+- Added `docs/direct-call/FOREGROUND_INCOMING_ACCEPTANCE_GATE.md`.
