@@ -1915,3 +1915,15 @@ Confirmed on a physical iPhone Debug build that the isolated synthetic CallKit p
 - No app/runtime code changed. No PushKit/APNs runtime, background incoming, signing/project change, native direct-call video implementation, Element Call replacement, broad rollout, production/public rollout, or global activation was added.
 - Added `docs/direct-call/VIDEO_REMOTE_RENDERING_INSPECTION.md`.
 - Recommended next phase: `2.41E - Element Call video remote rendering diagnosis`.
+
+## 2026-06-09 - 2.41E Element Call Video Remote Rendering Diagnosis
+
+- Inspected the Element Call / embedded call video path after the two-physical-iPhone smoke where both devices showed local video but no remote participant video.
+- Confirmed the normal room video button flows through `displayCall(startMode: .video)`, `presentCallScreen(startMode: .video)`, `ElementCallConfiguration.roomCall`, `CallScreenViewModel`, `ElementCallWidgetDriver`, and the embedded Element Call web view.
+- Confirmed direct room video uses the SDK direct-message video call intent, while direct room audio uses the distinct voice intent.
+- Found no app-side audio-only configuration for the Element Call video route: direct-room URL parameters hide app-replaced controls and screensharing, but do not disable video.
+- Confirmed the native shell hosts the web view and grants media capture for the embedded call origin; local camera publish, remote video subscription, and remote renderer attachment are Element Call / MatrixRTC responsibilities inside the web view.
+- Classified the suspected root cause as Element Call / MatrixRTC session matching, local publish, remote subscribe, renderer attachment, or RTC transport credential/grant behavior.
+- No app/runtime code changed. No PushKit/APNs runtime, background incoming, signing/project change, Element Call route replacement, private native direct-call video implementation, broad rollout, production/public rollout, or global activation was added.
+- Added `docs/direct-call/ELEMENT_CALL_VIDEO_REMOTE_RENDERING_DIAGNOSIS.md`.
+- Recommended next phase: `2.41F - redacted Element Call media diagnostics`.
