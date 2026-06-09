@@ -626,6 +626,9 @@ private struct CallView: UIViewRepresentable {
             case .widgetAction:
                 guard let message = message.body as? String else { return }
                 viewModelContext?.send(viewAction: .widgetAction(message: message))
+            case .elementCallMediaDiagnostics:
+                guard let message = message.body as? String else { return }
+                viewModelContext?.send(viewAction: .elementCallMediaDiagnostics(message: message))
             case .showNativeOutputDevicePicker:
                 DispatchQueue.main.async {
                     self.tapRoutePickerView()
@@ -656,8 +659,22 @@ private struct CallView: UIViewRepresentable {
                 return .deny
             }
             
+            MXLog.info("Element Call media diagnostics: media_capture_permission=granted kind=\(safeMediaCaptureKind(type))")
             viewModelContext?.send(viewAction: .mediaCapturePermissionGranted)
             return .grant
+        }
+
+        private func safeMediaCaptureKind(_ type: WKMediaCaptureType) -> String {
+            switch type {
+            case .camera:
+                "camera"
+            case .microphone:
+                "microphone"
+            case .cameraAndMicrophone:
+                "camera_and_microphone"
+            @unknown default:
+                "unknown"
+            }
         }
         
         // MARK: - WKNavigationDelegate

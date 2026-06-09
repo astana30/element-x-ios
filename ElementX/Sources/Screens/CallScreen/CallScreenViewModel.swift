@@ -209,6 +209,8 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             handleOutputDeviceSelected(deviceID: deviceID)
         case .widgetAction(let message):
             Task { await handleWidgetAction(message: message) }
+        case .elementCallMediaDiagnostics(let message):
+            handleElementCallMediaDiagnostics(message: message)
         }
     }
     
@@ -237,6 +239,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
            decodedMessage.hasLoaded {
             // This means that the call room was joined succesfully, we can stop the timeout task
             timeoutTask = nil
+            MXLog.info("Element Call media diagnostics: content_loaded=true start_mode=\(configuration.startMode)")
         }
         
         if await handleNativeWidgetActionIfNeeded(message) {
@@ -244,6 +247,15 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         }
         
         await widgetDriver.handleMessage(message)
+    }
+
+    private func handleElementCallMediaDiagnostics(message: String) {
+        guard configuration.startMode == .video,
+              let payload = ElementCallWebMediaDiagnosticsPayload.decode(message: message) else {
+            return
+        }
+
+        MXLog.info("Element Call media diagnostics: \(payload)")
     }
 
     private func requestLocalCallTermination(sendHangupMessage: Bool = true) {
@@ -316,6 +328,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                     guard !Task.isCancelled, !isDismissingAfterLocalHangup else {
                         return
                     }
+                    MXLog.info("Element Call media diagnostics: url_generated=true start_mode=\(configuration.startMode) direct_room=\(state.directRoomCallDetails != nil)")
                     state.url = url
                 case .failure(let error):
                     guard !Task.isCancelled, !isDismissingAfterLocalHangup else {
@@ -639,6 +652,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
 
             state.isMicrophoneEnabled = audioEnabled
             state.isVideoEnabled = videoEnabled
+            MXLog.info("Element Call media diagnostics: media_state audio_enabled=\(audioEnabled) video_enabled=\(videoEnabled)")
             elementCallService.setAudioEnabled(audioEnabled, roomID: configuration.callRoomID)
             await acknowledgeWidgetRequest(requestPayload,
                                            data: [
