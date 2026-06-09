@@ -57,6 +57,40 @@ Pending for a later supervised device proof:
 - No crash.
 - Element Call fallback remains visible and unchanged.
 
+## 2.41A-S — One-Device Foreground Native Incoming Smoke
+
+Status: completed with follow-up hardening items.
+
+Smoke setup:
+
+- Caller: iOS Simulator using a separate test user.
+- Callee: physical iPhone using a separate test user.
+- Callee state: SalemX open in foreground.
+- Background incoming calls were not tested.
+- PushKit/APNs were not tested.
+
+Observed result:
+
+- The physical iPhone displayed the iOS system CallKit incoming-call UI.
+- The Answer action worked.
+- Media connected after the foreground incoming path.
+- The End action cleared the call immediately on one side and after approximately 10 seconds on the peer side.
+- No app crash was observed.
+- Audio connected, but a repeating tick/click artifact was heard.
+
+Conclusion:
+
+The foreground native incoming call E2E path is physically smoke-tested with one physical iPhone and one iOS Simulator.
+
+Carry-forward items for `2.41B — foreground audio and call lifecycle hardening`:
+
+- Investigate and fix the repeating audio tick/click artifact.
+- Investigate peer-side end cleanup delay of approximately 10 seconds.
+- Repeat smoke with two physical iPhones when available.
+- Validate mute/unmute, speaker/earpiece/Bluetooth routing, repeated calls, and longer 5-10 minute calls.
+
+Full runtime logs are intentionally omitted because they may contain private Matrix/runtime identifiers.
+
 ## Still Blocked
 
 - PushKit runtime.

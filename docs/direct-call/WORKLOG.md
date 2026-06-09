@@ -67,6 +67,17 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
 
+### 2.41A-S — One-device foreground native incoming smoke
+
+Ran a supervised foreground smoke using an iOS Simulator caller and a physical iPhone callee. The callee app was open in foreground. The physical iPhone displayed the system CallKit incoming-call UI, Answer worked, media connected, and End cleared the call. No app crash was observed.
+
+Observed follow-up items:
+- Repeating audio tick/click artifact during connected media.
+- Peer-side call cleanup delay of approximately 10 seconds after End.
+- Full two-physical-device smoke remains pending.
+
+No raw runtime logs were added because they may contain private Matrix/runtime identifiers.
+
 ## 2026-06-09 — 2.41A Foreground Native Incoming Call E2E
 
 - Added a foreground-only native incoming call E2E coordinator contract.

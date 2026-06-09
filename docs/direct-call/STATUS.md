@@ -39,6 +39,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.41A-S completed: one-device foreground smoke passed with Simulator caller and physical iPhone callee. CallKit UI appeared, Answer worked, media connected, End cleared the call. Carry-forward issues: repeating audio tick/click artifact and peer-side end cleanup delay of approximately 10 seconds. Full two-physical-device smoke remains pending.
 - 2.41A adds a foreground-only native incoming call E2E coordinator contract:
   - A foreground incoming ringing audio `DirectCallSession` can be validated and reported through the isolated CallKit UI adapter.
   - CallKit answer routes to `answerRequested`.
