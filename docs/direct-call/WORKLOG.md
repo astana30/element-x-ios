@@ -1838,3 +1838,14 @@ This file records durable phase-level progress for future Codex and strategy ses
 ## 2026-06-09 — 2.40J-C Physical Synthetic CallKit UI Proof
 
 Confirmed on a physical iPhone Debug build that the isolated synthetic CallKit proof path can display the system CallKit incoming-call UI. The trigger used the DEBUG-only Objective-C runtime bridge via LLDB runtime lookup. Full runtime logs were intentionally omitted because they contain private Matrix/runtime identifiers. No PushKit/APNs runtime, token registration, server-issued media credential request, LiveKit/MatrixRTC media connection, Matrix event emission, Element Call route change, signing change, bundle change, entitlement change, or project setting change was added by this proof path.
+
+## 2026-06-09 — 2.40K Incoming Call State Machine Routing Proof
+
+- Added a disabled local incoming-call state-machine action surface for synthetic CallKit answer/end/mute callbacks.
+- Answer now routes through a synthetic action handler into `answerRequested`, which is the safe local state before any future server-issued media credential authority step.
+- End routes through the same local surface and clears the synthetic incoming state.
+- Mute remains local and diagnostic-only.
+- Added unit coverage for direct synthetic coordinator routing and isolated synthetic CallKit UI adapter callback routing.
+- The proof records only redacted lifecycle diagnostics; media credential request and media connection flags remain false.
+- No PushKit runtime, APNs runtime, APNs/VoIP value registration, background incoming handling, server-issued media credential request, media connection, Matrix event emission, Element Call route change, LiveKit/MatrixRTC production path change, signing change, bundle change, entitlement change, project setting change, production UI, video, broad rollout, or production/public rollout was added.
+- Added `docs/direct-call/INCOMING_CALL_STATE_MACHINE_PROOF.md`.

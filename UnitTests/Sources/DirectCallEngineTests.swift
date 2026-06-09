@@ -1345,6 +1345,88 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func syntheticAnswerRoutesToIncomingStateMachineSurface() {
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let actionRouter = DisabledNativeIncomingCallStateMachineActionRouter(stateStore: dependencies.stateStore,
+                                                                              diagnosticsRecorder: dependencies.diagnosticsRecorder)
+        let actionHandler = NativeIncomingCallStateMachineSyntheticActionHandler(actionRouter: actionRouter)
+        let coordinator = makeSyntheticCallKitProofCoordinator(dependencies: dependencies,
+                                                               actionHandler: actionHandler)
+        guard let identity = reportedIncomingIdentity(dependencies: dependencies) else {
+            return
+        }
+        _ = coordinator.reportSyntheticIncomingCall(identity: identity,
+                                                    displayMetadata: NativeIncomingCallKitDisplayMetadata("Pilot Participant"))
+
+        let result = coordinator.answerSyntheticCall(handle: "safe-local-call")
+
+        #expect(result == .answered)
+        #expect(dependencies.stateStore.state(for: identity.handle) == .answerRequested)
+        #expect(actionRouter.answerRequestCount == 1)
+        #expect(actionRouter.endCount == 0)
+        #expect(actionRouter.muteCount == 0)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.contains { diagnostics in
+            diagnostics.lifecycleState == .answerRequested &&
+                diagnostics.mediaCredentialRequested == false &&
+                diagnostics.mediaConnectAttempted == false
+        })
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !String(describing: actionHandler).contains($0) })
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !String(describing: actionRouter).contains($0) })
+    }
+
+    @Test
+    func syntheticEndRoutesToIncomingStateMachineAndClearsLocalState() {
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let actionRouter = DisabledNativeIncomingCallStateMachineActionRouter(stateStore: dependencies.stateStore,
+                                                                              diagnosticsRecorder: dependencies.diagnosticsRecorder)
+        let actionHandler = NativeIncomingCallStateMachineSyntheticActionHandler(actionRouter: actionRouter)
+        let coordinator = makeSyntheticCallKitProofCoordinator(dependencies: dependencies,
+                                                               actionHandler: actionHandler)
+        guard let identity = reportedIncomingIdentity(dependencies: dependencies) else {
+            return
+        }
+        _ = coordinator.reportSyntheticIncomingCall(identity: identity,
+                                                    displayMetadata: NativeIncomingCallKitDisplayMetadata("Pilot Participant"))
+
+        let result = coordinator.endSyntheticCall(handle: "safe-local-call")
+        let secondEnd = coordinator.endSyntheticCall(handle: "safe-local-call")
+
+        #expect(result == .ended)
+        #expect(secondEnd == .failed(.unverifiable))
+        #expect(actionRouter.endCount == 1)
+        #expect(dependencies.stateStore.state(for: identity.handle) == nil)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.contains { diagnostics in
+            diagnostics.lifecycleState == .ended &&
+                diagnostics.mediaCredentialRequested == false &&
+                diagnostics.mediaConnectAttempted == false
+        })
+    }
+
+    @Test
+    func syntheticMuteRoutesToIncomingStateMachineAsLocalDiagnosticOnly() {
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let actionRouter = DisabledNativeIncomingCallStateMachineActionRouter(stateStore: dependencies.stateStore,
+                                                                              diagnosticsRecorder: dependencies.diagnosticsRecorder)
+        let actionHandler = NativeIncomingCallStateMachineSyntheticActionHandler(actionRouter: actionRouter)
+        let coordinator = makeSyntheticCallKitProofCoordinator(dependencies: dependencies,
+                                                               actionHandler: actionHandler)
+        guard let identity = reportedIncomingIdentity(dependencies: dependencies) else {
+            return
+        }
+        _ = coordinator.reportSyntheticIncomingCall(identity: identity,
+                                                    displayMetadata: NativeIncomingCallKitDisplayMetadata("Pilot Participant"))
+
+        let result = coordinator.setSyntheticCallMuted(true, handle: "safe-local-call")
+
+        #expect(result == .muted(true))
+        #expect(actionRouter.muteCount == 1)
+        #expect(actionRouter.latestMuteValue == true)
+        #expect(dependencies.stateStore.state(for: identity.handle) == .reported)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaCredentialRequested == false)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaConnectAttempted == false)
+    }
+
+    @Test
     func syntheticUnknownHandleActionFailsClosed() {
         let dependencies = makeNativeIncomingLifecycleDependencies()
         let actionHandler = NativeIncomingSyntheticCallKitActionHandlerSpy()
@@ -1468,7 +1550,7 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     private func makeSyntheticCallKitProofCoordinator(dependencies: NativeIncomingLifecycleDependencies,
-                                                      actionHandler: NativeIncomingSyntheticCallKitActionHandlerSpy) -> DisabledNativeIncomingSyntheticCallKitProofCoordinator {
+                                                      actionHandler: NativeIncomingSyntheticCallKitActionHandling) -> DisabledNativeIncomingSyntheticCallKitProofCoordinator {
         DisabledNativeIncomingSyntheticCallKitProofCoordinator(isEnabled: true,
                                                                stateStore: dependencies.stateStore,
                                                                reportingAdapter: dependencies.reportingAdapter,

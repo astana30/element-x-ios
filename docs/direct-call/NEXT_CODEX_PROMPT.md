@@ -6,13 +6,13 @@ Repo:
 Branch:
 salemx-native-direct-calls
 
-Next recommended phase: 2.40K — incoming call state machine integration design/proof.
+Next recommended phase: 2.40L — PushKit registration dry-run design.
 
-Scope: design and prove how CallKit answer/end/mute callbacks will connect to the existing native direct audio state machine without enabling real PushKit/APNs background incoming calls yet.
+Scope: design a disabled, redacted PushKit registration dry-run boundary after the 2.40K local CallKit action routing proof. The next phase should not receive pushes, should not report real incoming calls, and should not connect media.
 
 Constraints:
 - Do not implement PushKit runtime.
-- Do not register APNs/VoIP tokens.
+- Do not register APNs or VoIP values.
 - Do not connect media from background.
 - Do not modify Element Call routing.
 - Keep token endpoint/server-issued media credential as final authority.

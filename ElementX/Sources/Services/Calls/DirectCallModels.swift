@@ -287,6 +287,7 @@ enum NativeIncomingCallLifecycleState: String, Codable, Equatable, CaseIterable,
     case reportable
     case reported
     case answered
+    case answerRequested
     case connecting
     case active
     case ended
@@ -637,6 +638,96 @@ protocol NativeIncomingSyntheticCallKitActionHandling: AnyObject {
     func answerSyntheticCall(identity: NativeIncomingCallIdentity)
     func endSyntheticCall(identity: NativeIncomingCallIdentity)
     func setSyntheticCallMuted(_ isMuted: Bool, identity: NativeIncomingCallIdentity)
+}
+
+protocol NativeIncomingCallStateMachineActionRouting: AnyObject {
+    func requestAnswer(identity: NativeIncomingCallIdentity)
+    func endIncomingCall(identity: NativeIncomingCallIdentity)
+    func setIncomingCallMuted(_ isMuted: Bool, identity: NativeIncomingCallIdentity)
+}
+
+final class DisabledNativeIncomingCallStateMachineActionRouter: NativeIncomingCallStateMachineActionRouting, CustomStringConvertible, CustomDebugStringConvertible {
+    private let stateStore: NativeIncomingCallStateStoring
+    private let diagnosticsRecorder: NativeIncomingCallDiagnosticsRecording
+    private(set) var answerRequestCount = 0
+    private(set) var endCount = 0
+    private(set) var muteCount = 0
+    private(set) var latestMuteValue: Bool?
+
+    init(stateStore: NativeIncomingCallStateStoring,
+         diagnosticsRecorder: NativeIncomingCallDiagnosticsRecording) {
+        self.stateStore = stateStore
+        self.diagnosticsRecorder = diagnosticsRecorder
+    }
+
+    func requestAnswer(identity: NativeIncomingCallIdentity) {
+        answerRequestCount += 1
+        stateStore.setState(.answerRequested, for: identity.handle)
+        diagnosticsRecorder.record(.init(lifecycleState: .answerRequested,
+                                         failClosedReason: nil,
+                                         reportAttempted: false,
+                                         reportSucceeded: nil,
+                                         mediaCredentialRequested: false,
+                                         mediaConnectAttempted: false))
+    }
+
+    func endIncomingCall(identity: NativeIncomingCallIdentity) {
+        endCount += 1
+        stateStore.setState(.ended, for: identity.handle)
+        diagnosticsRecorder.record(.init(lifecycleState: .ended,
+                                         failClosedReason: nil,
+                                         reportAttempted: false,
+                                         reportSucceeded: nil,
+                                         mediaCredentialRequested: false,
+                                         mediaConnectAttempted: false))
+    }
+
+    func setIncomingCallMuted(_ isMuted: Bool, identity: NativeIncomingCallIdentity) {
+        muteCount += 1
+        latestMuteValue = isMuted
+        diagnosticsRecorder.record(.init(lifecycleState: stateStore.state(for: identity.handle) ?? .reported,
+                                         failClosedReason: nil,
+                                         reportAttempted: false,
+                                         reportSucceeded: nil,
+                                         mediaCredentialRequested: false,
+                                         mediaConnectAttempted: false))
+    }
+
+    var description: String {
+        "DisabledNativeIncomingCallStateMachineActionRouter(answerRequestCount: \(answerRequestCount), endCount: \(endCount), muteCount: \(muteCount), latestMuteValue: \(latestMuteValue.map(String.init) ?? "none"), realRuntime: false)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+final class NativeIncomingCallStateMachineSyntheticActionHandler: NativeIncomingSyntheticCallKitActionHandling, CustomStringConvertible, CustomDebugStringConvertible {
+    private let actionRouter: NativeIncomingCallStateMachineActionRouting
+
+    init(actionRouter: NativeIncomingCallStateMachineActionRouting) {
+        self.actionRouter = actionRouter
+    }
+
+    func answerSyntheticCall(identity: NativeIncomingCallIdentity) {
+        actionRouter.requestAnswer(identity: identity)
+    }
+
+    func endSyntheticCall(identity: NativeIncomingCallIdentity) {
+        actionRouter.endIncomingCall(identity: identity)
+    }
+
+    func setSyntheticCallMuted(_ isMuted: Bool, identity: NativeIncomingCallIdentity) {
+        actionRouter.setIncomingCallMuted(isMuted, identity: identity)
+    }
+
+    var description: String {
+        "NativeIncomingCallStateMachineSyntheticActionHandler(realRuntime: false)"
+    }
+
+    var debugDescription: String {
+        description
+    }
 }
 
 final class DisabledNativeIncomingSyntheticCallKitProofCoordinator: CustomStringConvertible, CustomDebugStringConvertible {

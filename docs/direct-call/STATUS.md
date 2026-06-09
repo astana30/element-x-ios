@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.40J-B — isolated physical-device synthetic CallKit UI proof adapter.
+After 2.40K — incoming CallKit action routing proof.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,13 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.40K adds a disabled local incoming-call state-machine action surface for synthetic CallKit answer/end/mute callbacks:
+  - Answer routes to `answerRequested`, meaning the local incoming call is ready for the future server-issued media credential authority step.
+  - End routes to local termination and clears the synthetic incoming state.
+  - Mute remains local and diagnostic-only.
+  - Unit coverage verifies direct coordinator routing and isolated synthetic CallKit UI adapter callback routing.
+  - Diagnostics remain redacted, media credential request and media connection flags remain false, and Element Call route action names remain absent from proof diagnostics.
+  - No PushKit runtime, APNs runtime, APNs/VoIP value registration, background incoming handling, server-issued media credential request, media connection, Matrix event emission, Element Call route change, LiveKit/MatrixRTC production path change, signing/project setting change, production UI, video, broad rollout, or production/public rollout is introduced.
 - 2.40J-C closed: physical iPhone Debug build displayed the system CallKit incoming UI through the DEBUG-only Objective-C LLDB bridge. The proof remains synthetic/local-only; no PushKit/APNs/media/server credential/Element Call route/signing changes were added.
 - Isolated synthetic CallKit UI proof adapter is added:
   - 2.40J-B adds `ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift`.
