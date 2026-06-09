@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.41E - Element Call video remote rendering diagnosis.
+After 2.41F - redacted Element Call media diagnostics.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,12 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.41F adds redacted Element Call media diagnostics for the existing embedded call route:
+  - Native-shell diagnostics now record safe stage booleans/enums for URL generation, start mode, direct-room chrome, content loaded, media capture permission kind, and widget media state.
+  - A narrow injected web view diagnostic reports only schema, safe stage, elapsed bucket, video element counts, visible/playing/stream-backed/muted counts, and a derived remote-renderer-candidate boolean.
+  - The diagnostics intentionally omit raw room/user/device/event identifiers, URLs, credentials, media stream IDs, participant IDs, track IDs, Matrix event bodies, and raw widget messages.
+  - This can identify whether each device has only a self-view renderer or multiple video renderer candidates, but it cannot yet prove MatrixRTC same-session, publish, subscribe, grant, or participant-to-renderer mapping.
+  - No PushKit/APNs/background incoming, signing/project changes, Element Call route replacement, private native direct-call video implementation, broad rollout, or production/public rollout was added.
 - 2.41E inspected the Element Call / embedded call video path after the two-physical-iPhone self-view-only smoke:
   - The normal room video button flows through `displayCall(startMode: .video)`, `presentCallScreen(startMode: .video)`, `ElementCallConfiguration.roomCall`, `CallScreenViewModel`, `ElementCallWidgetDriver`, and the embedded Element Call web view.
   - Direct room video uses the SDK direct-message video call intent; direct room audio uses the separate voice intent.
@@ -1199,9 +1205,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.41F - redacted Element Call media diagnostics`
+`2.41G - Element Call MatrixRTC publish subscribe diagnosis`
 
-Goal: capture safe Element Call / MatrixRTC media diagnostics on two physical iPhones to verify same-session matching, local camera publish, remote participant presence, remote video subscription, and remote renderer attachment. Keep native audio as a regression guard and keep private native direct-call video implementation out of scope unless separately approved.
+Goal: add or collect safe Element Call / MatrixRTC-side diagnostics for same-session matching, local camera publish, remote participant observation, remote video subscription, and remote renderer attachment. Keep native audio as a regression guard and keep private native direct-call video implementation out of scope unless separately approved.
 
 ## Do-Not-Touch Constraints
 

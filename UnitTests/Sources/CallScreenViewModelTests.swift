@@ -14,6 +14,66 @@ import Testing
 @MainActor
 final class CallScreenViewModelTests {
     @Test
+    func elementCallWebMediaDiagnosticsPayloadDescriptionIsRedacted() throws {
+        let json = """
+        {
+            "schemaVersion": 1,
+            "stage": "interval",
+            "elapsedBucket": "under_10s",
+            "videoElementCount": 2,
+            "visibleVideoElementCount": 2,
+            "playingVideoElementCount": 1,
+            "streamBackedVideoElementCount": 2,
+            "mutedVideoElementCount": 1,
+            "ignored": "opaque-private-value"
+        }
+        """
+
+        let payload = try #require(ElementCallWebMediaDiagnosticsPayload.decode(message: json))
+
+        #expect(payload.hasRemoteRendererCandidate)
+        #expect(payload.description.contains("videos=2"))
+        #expect(payload.description.contains("remote_renderer_candidate=true"))
+        #expect(!payload.description.contains("opaque-private-value"))
+    }
+
+    @Test
+    func elementCallWebMediaDiagnosticsPayloadRejectsUnsupportedSchema() {
+        let json = """
+        {
+            "schemaVersion": 2,
+            "stage": "interval",
+            "elapsedBucket": "under_10s",
+            "videoElementCount": 1
+        }
+        """
+
+        #expect(ElementCallWebMediaDiagnosticsPayload.decode(message: json) == nil)
+    }
+
+    @Test
+    func elementCallWebMediaDiagnosticsPayloadClampsCounts() throws {
+        let json = """
+        {
+            "schemaVersion": 1,
+            "stage": "interval",
+            "elapsedBucket": "under_10s",
+            "videoElementCount": 120,
+            "visibleVideoElementCount": -1,
+            "playingVideoElementCount": 1,
+            "streamBackedVideoElementCount": 1,
+            "mutedVideoElementCount": 0
+        }
+        """
+
+        let payload = try #require(ElementCallWebMediaDiagnosticsPayload.decode(message: json))
+
+        #expect(payload.videoElementCount == 99)
+        #expect(payload.visibleVideoElementCount == 0)
+        #expect(!payload.hasRemoteRendererCandidate)
+    }
+
+    @Test
     func roomCallEndCallSendsHangupToWidgetAndMatrixTermination() async throws {
         let elementCallService = ElementCallServiceMock()
         elementCallService.underlyingActions = PassthroughSubject<ElementCallServiceAction, Never>()

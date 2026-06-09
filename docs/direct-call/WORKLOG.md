@@ -1927,3 +1927,14 @@ Confirmed on a physical iPhone Debug build that the isolated synthetic CallKit p
 - No app/runtime code changed. No PushKit/APNs runtime, background incoming, signing/project change, Element Call route replacement, private native direct-call video implementation, broad rollout, production/public rollout, or global activation was added.
 - Added `docs/direct-call/ELEMENT_CALL_VIDEO_REMOTE_RENDERING_DIAGNOSIS.md`.
 - Recommended next phase: `2.41F - redacted Element Call media diagnostics`.
+
+## 2026-06-09 - 2.41F Redacted Element Call Media Diagnostics
+
+- Added redacted native-shell diagnostics for the existing Element Call / embedded call route.
+- The call screen records safe stage booleans/enums for Element Call URL generation, start mode, direct-room chrome, content loaded, media capture permission kind, and widget media state.
+- Added a narrow injected web-view diagnostic payload that reports only schema, safe stage, elapsed bucket, video element counts, visible/playing/stream-backed/muted counts, and a derived remote-renderer-candidate boolean.
+- Added unit coverage for diagnostic payload schema rejection, count clamping, and redacted description output.
+- The diagnostics can identify whether the web view has only a self-view renderer or multiple video renderer candidates, but they do not yet prove MatrixRTC same-session, publish, subscribe, grant, or participant-to-renderer mapping.
+- No PushKit/APNs runtime, background incoming, signing/project change, Element Call route replacement, private native direct-call video implementation, broad rollout, production/public rollout, or global activation was added.
+- Added `docs/direct-call/ELEMENT_CALL_MEDIA_DIAGNOSTICS.md`.
+- Recommended next phase: `2.41G - Element Call MatrixRTC publish subscribe diagnosis`.

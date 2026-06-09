@@ -57,10 +57,100 @@ enum CallScreenViewAction {
     case mediaCapturePermissionGranted
     case outputDeviceSelected(deviceID: String)
     case widgetAction(message: String)
+    case elementCallMediaDiagnostics(message: String)
 }
 
 enum CallScreenError: Error {
     case pictureInPictureNotAvailable
+}
+
+enum ElementCallWebMediaDiagnosticsStage: String, Decodable, Equatable {
+    case installed
+    case loaded
+    case mutation
+    case interval
+    case unknown
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        self = Self(rawValue: rawValue) ?? .unknown
+    }
+}
+
+enum ElementCallWebMediaDiagnosticsElapsedBucket: String, Decodable, Equatable {
+    case underOneSecond = "under_1s"
+    case underFiveSeconds = "under_5s"
+    case underTenSeconds = "under_10s"
+    case overTenSeconds = "over_10s"
+    case unknown
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        self = Self(rawValue: rawValue) ?? .unknown
+    }
+}
+
+struct ElementCallWebMediaDiagnosticsPayload: Decodable, Equatable, CustomStringConvertible {
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case stage
+        case elapsedBucket
+        case videoElementCount
+        case visibleVideoElementCount
+        case playingVideoElementCount
+        case streamBackedVideoElementCount
+        case mutedVideoElementCount
+    }
+
+    static let supportedSchemaVersion = 1
+
+    let schemaVersion: Int
+    let stage: ElementCallWebMediaDiagnosticsStage
+    let elapsedBucket: ElementCallWebMediaDiagnosticsElapsedBucket
+    let videoElementCount: Int
+    let visibleVideoElementCount: Int
+    let playingVideoElementCount: Int
+    let streamBackedVideoElementCount: Int
+    let mutedVideoElementCount: Int
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 0
+        stage = try container.decodeIfPresent(ElementCallWebMediaDiagnosticsStage.self, forKey: .stage) ?? .unknown
+        elapsedBucket = try container.decodeIfPresent(ElementCallWebMediaDiagnosticsElapsedBucket.self, forKey: .elapsedBucket) ?? .unknown
+        videoElementCount = try Self.safeCount(container.decodeIfPresent(Int.self, forKey: .videoElementCount))
+        visibleVideoElementCount = try Self.safeCount(container.decodeIfPresent(Int.self, forKey: .visibleVideoElementCount))
+        playingVideoElementCount = try Self.safeCount(container.decodeIfPresent(Int.self, forKey: .playingVideoElementCount))
+        streamBackedVideoElementCount = try Self.safeCount(container.decodeIfPresent(Int.self, forKey: .streamBackedVideoElementCount))
+        mutedVideoElementCount = try Self.safeCount(container.decodeIfPresent(Int.self, forKey: .mutedVideoElementCount))
+    }
+
+    static func decode(message: String) -> ElementCallWebMediaDiagnosticsPayload? {
+        guard let data = message.data(using: .utf8),
+              let payload = try? JSONDecoder().decode(ElementCallWebMediaDiagnosticsPayload.self, from: data),
+              payload.schemaVersion == supportedSchemaVersion else {
+            return nil
+        }
+
+        return payload
+    }
+
+    var hasRemoteRendererCandidate: Bool {
+        visibleVideoElementCount > 1 || streamBackedVideoElementCount > 1
+    }
+
+    var description: String {
+        "schema=\(schemaVersion) stage=\(stage.rawValue) elapsed=\(elapsedBucket.rawValue) " +
+            "videos=\(videoElementCount) visible=\(visibleVideoElementCount) playing=\(playingVideoElementCount) " +
+            "stream_backed=\(streamBackedVideoElementCount) muted=\(mutedVideoElementCount) " +
+            "remote_renderer_candidate=\(hasRemoteRendererCandidate)"
+    }
+
+    private static func safeCount(_ count: Int?) -> Int {
+        min(max(count ?? 0, 0), 99)
+    }
 }
 
 /// Identifies each event handler used by the CallScreen webview
@@ -69,6 +159,8 @@ enum CallScreenError: Error {
 enum CallScreenJavaScriptMessageName: String, CaseIterable {
     /// Widget actions's handler.
     case widgetAction
+    /// Used for redacted Element Call web-side media diagnostics.
+    case elementCallMediaDiagnostics
     /// Used to show the native AVRoutePickerView.
     case showNativeOutputDevicePicker
     /// Used to determine if the webview has selected the earpiece or not.
@@ -93,6 +185,66 @@ enum CallScreenJavaScriptMessageName: String, CaseIterable {
                 },
                 false,
             );
+            """
+        case .elementCallMediaDiagnostics:
+            """
+            (() => {
+                const handler = window.webkit?.messageHandlers?.\(rawValue);
+                if (!handler || window.__elementXMediaDiagnosticsInstalled) {
+                    return;
+                }
+                window.__elementXMediaDiagnosticsInstalled = true;
+                const startedAt = Date.now();
+                let lastPayload = "";
+                const elapsedBucket = () => {
+                    const elapsed = Date.now() - startedAt;
+                    if (elapsed < 1000) { return "under_1s"; }
+                    if (elapsed < 5000) { return "under_5s"; }
+                    if (elapsed < 10000) { return "under_10s"; }
+                    return "over_10s";
+                };
+                const isVisible = (element) => {
+                    const rect = element.getBoundingClientRect();
+                    const style = window.getComputedStyle(element);
+                    return rect.width > 0
+                        && rect.height > 0
+                        && style.display !== "none"
+                        && style.visibility !== "hidden"
+                        && style.opacity !== "0";
+                };
+                const snapshot = (stage) => {
+                    const videos = Array.from(document.querySelectorAll("video"));
+                    return {
+                        schemaVersion: 1,
+                        stage,
+                        elapsedBucket: elapsedBucket(),
+                        videoElementCount: videos.length,
+                        visibleVideoElementCount: videos.filter(isVisible).length,
+                        playingVideoElementCount: videos.filter((video) => !video.paused && !video.ended && video.readyState > 2).length,
+                        streamBackedVideoElementCount: videos.filter((video) => !!video.srcObject).length,
+                        mutedVideoElementCount: videos.filter((video) => video.muted).length,
+                    };
+                };
+                const emit = (stage) => {
+                    try {
+                        const payload = JSON.stringify(snapshot(stage));
+                        if (payload !== lastPayload) {
+                            lastPayload = payload;
+                            handler.postMessage(payload);
+                        }
+                    } catch {
+                    }
+                };
+                window.addEventListener("load", () => emit("loaded"));
+                const observer = new MutationObserver(() => emit("mutation"));
+                observer.observe(document.documentElement, {
+                    attributes: true,
+                    childList: true,
+                    subtree: true,
+                });
+                window.setInterval(() => emit("interval"), 3000);
+                emit("installed");
+            })();
             """
         case .showNativeOutputDevicePicker:
             """
