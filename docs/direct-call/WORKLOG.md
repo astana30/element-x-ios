@@ -1823,3 +1823,14 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added `docs/direct-call/SYNTHETIC_CALLKIT_PROOF.md` with device-only manual proof steps.
 - Kept this phase disabled and local: no PushKit runtime, APNs runtime, push credential registration, push delivery, server push, media credential request, media connection, LiveKit, MatrixRTC, Element Call route, native audio gating, bundle ID, App Group, signing/provisioning/project setting, server, video, broad rollout, or production/public rollout changed.
 - Recommended next phase: `2.40K — PushKit registration dry run planning`.
+
+## 2026-06-08 — 2.40J-B Isolated Physical-Device Synthetic CallKit UI Proof Adapter
+
+- Added an isolated synthetic CallKit UI proof adapter under `ElementX/Sources/Services/Calls/SyntheticCallKitProof/`.
+- Kept the CallKit import inside the isolated proof-only file; no CallKit runtime was added to `DirectCallModels.swift`, app coordinators, Element Call, media setup, or feature gating.
+- Added a DEBUG-only local harness boundary for a developer-controlled physical-device synthetic incoming-call UI proof.
+- The adapter accepts only safe local incoming-call identity/display metadata and maps CallKit report, answer, end, and mute callbacks into disabled local callbacks plus redacted diagnostics.
+- Added unit coverage for unsafe display metadata rejection, injected reporter-only reporting, disabled answer/end/mute callbacks, unknown-handle fail-closed behavior, local state cleanup, and redacted diagnostics.
+- Added `docs/direct-call/SYNTHETIC_CALLKIT_UI_PROOF.md`.
+- Project-file changes are limited to adding the isolated proof Swift file to the app target. No bundle ID, App Group, signing, entitlement, Info.plist, app.yml, production distribution, Element Call, LiveKit, MatrixRTC, native audio gate, push delivery, server fanout, media credential request, media connection, video, broad rollout, or production/public rollout changed.
+- Recommended next phase: `2.40K — PushKit registration dry run planning`.

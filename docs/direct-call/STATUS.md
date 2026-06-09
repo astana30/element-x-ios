@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.40J — device-only synthetic CallKit proof.
+After 2.40J-B — isolated physical-device synthetic CallKit UI proof adapter.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- Isolated synthetic CallKit UI proof adapter is added:
+  - 2.40J-B adds `ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift`.
+  - The adapter imports CallKit only inside the isolated proof boundary and accepts only safe local synthetic identity/display metadata from the disabled incoming-call contracts.
+  - DEBUG-only local harness support can report one synthetic incoming call to the physical-device system call UI when explicitly invoked by a developer-only manual path.
+  - Answer, end, and mute callbacks map only into disabled local callbacks and redacted diagnostics.
+  - Unit coverage verifies safe display metadata rejection, injected reporter-only reporting, disabled answer/end/mute callback handling, unknown-handle fail-closed behavior, local state cleanup, and redacted diagnostics.
+  - `docs/direct-call/SYNTHETIC_CALLKIT_UI_PROOF.md` records the physical-device proof boundary and manual proof steps.
+  - No PushKit runtime, APNs runtime, push delivery, server fanout, media credential request, media connection, Element Call route change, native audio gate change, bundle/signing/entitlement/Info.plist/app.yml change, server change, video, or rollout expansion is introduced.
 - Device-only synthetic CallKit proof surface is added:
   - 2.40J adds a disabled synthetic proof coordinator and safe display metadata contract for future native direct-audio CallKit work.
   - The synthetic path accepts only safe local incoming-call identity data from the disabled 2.40H contracts and maps report, answer, end, and mute actions into disabled local callbacks and redacted diagnostics.
