@@ -224,6 +224,66 @@ final class NativeIncomingSyntheticCallKitUIProofAdapter: NativeIncomingSyntheti
 }
 
 #if DEBUG
+final class NativeIncomingSyntheticCallKitUIProofNoopActionHandler: NativeIncomingSyntheticCallKitActionHandling, CustomStringConvertible, CustomDebugStringConvertible {
+    private(set) var answeredCount = 0
+    private(set) var endedCount = 0
+    private(set) var mutedCount = 0
+    private(set) var latestMuteValue: Bool?
+
+    func answerSyntheticCall(identity: NativeIncomingCallIdentity) {
+        answeredCount += 1
+    }
+
+    func endSyntheticCall(identity: NativeIncomingCallIdentity) {
+        endedCount += 1
+    }
+
+    func setSyntheticCallMuted(_ isMuted: Bool, identity: NativeIncomingCallIdentity) {
+        mutedCount += 1
+        latestMuteValue = isMuted
+    }
+
+    var description: String {
+        "NativeIncomingSyntheticCallKitUIProofNoopActionHandler(answeredCount: \(answeredCount), endedCount: \(endedCount), mutedCount: \(mutedCount), latestMuteValue: \(latestMuteValue.map(String.init) ?? "none"))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+final class NativeIncomingSyntheticCallKitUIProofNoopDiagnosticsRecorder: NativeIncomingCallDiagnosticsRecording, CustomStringConvertible, CustomDebugStringConvertible {
+    private(set) var diagnostics = [NativeIncomingCallRedactedDiagnostics]()
+
+    func record(_ diagnostics: NativeIncomingCallRedactedDiagnostics) {
+        self.diagnostics.append(diagnostics)
+    }
+
+    var description: String {
+        "NativeIncomingSyntheticCallKitUIProofNoopDiagnosticsRecorder(diagnosticsCount: \(diagnostics.count))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+final class NativeIncomingSyntheticCallKitUIProofNoopEventRecorder: NativeIncomingSyntheticCallKitUIProofEventRecording, CustomStringConvertible, CustomDebugStringConvertible {
+    private(set) var events = [NativeIncomingSyntheticCallKitUIProofEvent]()
+
+    func recordSyntheticCallKitUIProofEvent(_ event: NativeIncomingSyntheticCallKitUIProofEvent) {
+        events.append(event)
+    }
+
+    var description: String {
+        "NativeIncomingSyntheticCallKitUIProofNoopEventRecorder(eventCount: \(events.count))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
 final class NativeIncomingSyntheticCallKitUIProofHarness {
     private let adapter: NativeIncomingSyntheticCallKitUIProofAdapter
     private let handle: String
@@ -246,6 +306,37 @@ final class NativeIncomingSyntheticCallKitUIProofHarness {
         return adapter.reportSyntheticIncomingCall(identity: identity, displayLabel: displayLabel)
     }
 }
+
+#if canImport(CallKit) && os(iOS)
+extension NativeIncomingSyntheticCallKitUIProofHarness {
+    static func makePhysicalDeviceProofHarness() -> NativeIncomingSyntheticCallKitUIProofHarness {
+        let reporter = NativeIncomingSyntheticCallKitUIProofReporter()
+        let adapter = NativeIncomingSyntheticCallKitUIProofAdapter(isEnabled: true,
+                                                                   reporter: reporter,
+                                                                   actionHandler: NativeIncomingSyntheticCallKitUIProofNoopActionHandler(),
+                                                                   diagnosticsRecorder: NativeIncomingSyntheticCallKitUIProofNoopDiagnosticsRecorder(),
+                                                                   eventRecorder: NativeIncomingSyntheticCallKitUIProofNoopEventRecorder())
+        return NativeIncomingSyntheticCallKitUIProofHarness(adapter: adapter)
+    }
+}
+
+@objc(SalemXSyntheticCallKitUIProofDebug)
+final class SalemXSyntheticCallKitUIProofDebug: NSObject {
+    private static var harness: NativeIncomingSyntheticCallKitUIProofHarness?
+
+    @objc static func report() {
+        DispatchQueue.main.async {
+            let proofHarness = NativeIncomingSyntheticCallKitUIProofHarness.makePhysicalDeviceProofHarness()
+            harness = proofHarness
+            _ = proofHarness.reportSyntheticIncomingCall()
+        }
+    }
+
+    @objc static func clear() {
+        harness = nil
+    }
+}
+#endif
 #endif
 
 #if canImport(CallKit) && os(iOS)

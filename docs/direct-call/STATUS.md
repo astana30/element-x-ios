@@ -39,6 +39,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.40J-C closed: physical iPhone Debug build displayed the system CallKit incoming UI through the DEBUG-only Objective-C LLDB bridge. The proof remains synthetic/local-only; no PushKit/APNs/media/server credential/Element Call route/signing changes were added.
 - Isolated synthetic CallKit UI proof adapter is added:
   - 2.40J-B adds `ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift`.
   - The adapter imports CallKit only inside the isolated proof boundary and accepts only safe local synthetic identity/display metadata from the disabled incoming-call contracts.
