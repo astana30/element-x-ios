@@ -489,6 +489,51 @@ enum NativeIncomingForegroundAcceptanceOutcome: Equatable, CustomStringConvertib
     }
 }
 
+enum NativeForegroundIncomingCallE2EOutcome: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case callKitReported(NativeIncomingCallIdentity)
+    case mediaConnected(NativeIncomingCallIdentity)
+    case ended
+    case muted(Bool)
+    case failClosed(NativeIncomingCallFailClosedReason)
+
+    var description: String {
+        switch self {
+        case .callKitReported:
+            "callKitReported(identity: <redacted>)"
+        case .mediaConnected:
+            "mediaConnected(identity: <redacted>)"
+        case .ended:
+            "ended"
+        case .muted(let isMuted):
+            "muted(\(isMuted))"
+        case .failClosed(let reason):
+            "failClosed(\(reason))"
+        }
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum NativeForegroundIncomingMediaConnectionOutcome: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case connected
+    case failClosed(NativeIncomingCallFailClosedReason)
+
+    var description: String {
+        switch self {
+        case .connected:
+            "connected"
+        case .failClosed(let reason):
+            "failClosed(\(reason))"
+        }
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
 struct NativeIncomingPushRegistrationCredential: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     enum Kind: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
         case standard
@@ -553,6 +598,11 @@ protocol NativeIncomingCallDiagnosticsRecording: AnyObject {
 
 protocol NativeIncomingForegroundAcceptanceAuthorizing: AnyObject {
     func foregroundAcceptanceDecision(for identity: NativeIncomingCallIdentity) -> NativeIncomingForegroundAcceptanceDecision
+}
+
+protocol NativeForegroundIncomingMediaConnecting: AnyObject {
+    func connectForegroundIncomingMedia(identity: NativeIncomingCallIdentity) async -> NativeForegroundIncomingMediaConnectionOutcome
+    func endForegroundIncomingMedia(identity: NativeIncomingCallIdentity) async
 }
 
 final class DisabledNativeIncomingCallLifecycleService: CustomStringConvertible, CustomDebugStringConvertible {
@@ -787,6 +837,184 @@ final class DisabledNativeIncomingForegroundAcceptanceGate: CustomStringConverti
 
     var description: String {
         "DisabledNativeIncomingForegroundAcceptanceGate(isEnabled: \(isEnabled), realRuntime: false)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+final class ForegroundNativeIncomingCallE2ECoordinator: CustomStringConvertible, CustomDebugStringConvertible {
+    private let isEnabled: Bool
+    private let stateStore: NativeIncomingCallStateStoring
+    private let callKitAdapter: NativeIncomingSyntheticCallKitUIProofAdapter
+    private let acceptanceGate: DisabledNativeIncomingForegroundAcceptanceGate
+    private let mediaConnector: NativeForegroundIncomingMediaConnecting
+    private let diagnosticsRecorder: NativeIncomingCallDiagnosticsRecording
+    private let now: () -> Date
+    private let staleInterval: TimeInterval
+    private var identitiesByHandle = [NativeIncomingCallHandle: NativeIncomingCallIdentity]()
+    private var mediaConnectedHandles = Set<NativeIncomingCallHandle>()
+
+    init(isEnabled: Bool = false,
+         stateStore: NativeIncomingCallStateStoring,
+         callKitAdapter: NativeIncomingSyntheticCallKitUIProofAdapter,
+         acceptanceGate: DisabledNativeIncomingForegroundAcceptanceGate,
+         mediaConnector: NativeForegroundIncomingMediaConnecting,
+         diagnosticsRecorder: NativeIncomingCallDiagnosticsRecording,
+         now: @escaping () -> Date = Date.init,
+         staleInterval: TimeInterval = 45) {
+        self.isEnabled = isEnabled
+        self.stateStore = stateStore
+        self.callKitAdapter = callKitAdapter
+        self.acceptanceGate = acceptanceGate
+        self.mediaConnector = mediaConnector
+        self.diagnosticsRecorder = diagnosticsRecorder
+        self.now = now
+        self.staleInterval = staleInterval
+    }
+
+    func receiveForegroundIncomingCall(session: DirectCallSession,
+                                       displayMetadata: NativeIncomingCallKitDisplayMetadata?,
+                                       context: NativeIncomingCallValidationContext = .valid) -> NativeForegroundIncomingCallE2EOutcome {
+        guard isEnabled else {
+            return failClosed(.dependencyUnavailable, identity: nil, mediaCredentialRequested: false, mediaConnectAttempted: false)
+        }
+        guard session.direction == .incoming,
+              session.state == .incomingRinging,
+              session.intent == .audio else {
+            return failClosed(.unverifiable, identity: nil, mediaCredentialRequested: false, mediaConnectAttempted: false)
+        }
+        guard let displayMetadata else {
+            return failClosed(.malformed, identity: nil, mediaCredentialRequested: false, mediaConnectAttempted: false)
+        }
+        guard now().timeIntervalSince(session.startedAt) <= staleInterval else {
+            return failClosed(.stale, identity: nil, mediaCredentialRequested: false, mediaConnectAttempted: false)
+        }
+        guard let handle = NativeIncomingCallHandle("foreground-\(session.callID)") else {
+            return failClosed(.malformed, identity: nil, mediaCredentialRequested: false, mediaConnectAttempted: false)
+        }
+        guard !stateStore.hasSeen(handle), identitiesByHandle[handle] == nil else {
+            return failClosed(.duplicate, identity: nil, mediaCredentialRequested: false, mediaConnectAttempted: false)
+        }
+        if let failClosedReason = context.failClosedReason {
+            return failClosed(failClosedReason, identity: nil, mediaCredentialRequested: false, mediaConnectAttempted: false)
+        }
+
+        let identity = NativeIncomingCallIdentity(handle: handle, receivedAt: session.startedAt)
+        stateStore.setState(.received, for: handle)
+        stateStore.setState(.validating, for: handle)
+        stateStore.setState(.reportable, for: handle)
+
+        switch callKitAdapter.reportSyntheticIncomingCall(identity: identity, displayMetadata: displayMetadata) {
+        case .reported:
+            identitiesByHandle[handle] = identity
+            stateStore.setState(.reported, for: handle)
+            return .callKitReported(identity)
+        case .failed(let reason):
+            stateStore.setState(.blocked, for: handle)
+            return failClosed(reason, identity: identity, mediaCredentialRequested: false, mediaConnectAttempted: false)
+        case .answered, .ended, .muted:
+            return failClosed(.unverifiable, identity: identity, mediaCredentialRequested: false, mediaConnectAttempted: false)
+        }
+    }
+
+    func connectAnsweredForegroundIncomingCall(handle rawHandle: String) async -> NativeForegroundIncomingCallE2EOutcome {
+        guard let identity = activeIdentity(for: rawHandle) else {
+            return failClosed(.unverifiable, identity: nil, mediaCredentialRequested: false, mediaConnectAttempted: false)
+        }
+
+        switch acceptanceGate.requestForegroundAcceptance(identity: identity) {
+        case .failClosed(let reason):
+            _ = callKitAdapter.endSyntheticCall(handle: identity.handle.value)
+            stateStore.setState(.failed, for: identity.handle)
+            diagnosticsRecorder.record(.init(lifecycleState: .failed,
+                                             failClosedReason: reason,
+                                             reportAttempted: false,
+                                             reportSucceeded: nil,
+                                             mediaCredentialRequested: reason != .foregroundCredentialAuthorityUnavailable,
+                                             mediaConnectAttempted: false))
+            return .failClosed(reason)
+        case .credentialAuthorized:
+            break
+        }
+
+        switch await mediaConnector.connectForegroundIncomingMedia(identity: identity) {
+        case .connected:
+            mediaConnectedHandles.insert(identity.handle)
+            stateStore.setState(.active, for: identity.handle)
+            diagnosticsRecorder.record(.init(lifecycleState: .active,
+                                             failClosedReason: nil,
+                                             reportAttempted: false,
+                                             reportSucceeded: nil,
+                                             mediaCredentialRequested: true,
+                                             mediaConnectAttempted: true))
+            return .mediaConnected(identity)
+        case .failClosed(let reason):
+            _ = callKitAdapter.endSyntheticCall(handle: identity.handle.value)
+            stateStore.setState(.failed, for: identity.handle)
+            diagnosticsRecorder.record(.init(lifecycleState: .failed,
+                                             failClosedReason: reason,
+                                             reportAttempted: false,
+                                             reportSucceeded: nil,
+                                             mediaCredentialRequested: true,
+                                             mediaConnectAttempted: true))
+            return .failClosed(reason)
+        }
+    }
+
+    func endForegroundIncomingCall(handle rawHandle: String) async -> NativeForegroundIncomingCallE2EOutcome {
+        guard let identity = activeIdentity(for: rawHandle) else {
+            return failClosed(.unverifiable, identity: nil, mediaCredentialRequested: false, mediaConnectAttempted: false)
+        }
+
+        _ = callKitAdapter.endSyntheticCall(handle: identity.handle.value)
+        if mediaConnectedHandles.contains(identity.handle) {
+            await mediaConnector.endForegroundIncomingMedia(identity: identity)
+            mediaConnectedHandles.remove(identity.handle)
+        }
+        acceptanceGate.endForegroundAcceptance(identity: identity)
+        identitiesByHandle[identity.handle] = nil
+        stateStore.clear(identity.handle)
+        return .ended
+    }
+
+    func setForegroundIncomingCallMuted(_ isMuted: Bool, handle rawHandle: String) -> NativeForegroundIncomingCallE2EOutcome {
+        guard let identity = activeIdentity(for: rawHandle) else {
+            return failClosed(.unverifiable, identity: nil, mediaCredentialRequested: false, mediaConnectAttempted: false)
+        }
+
+        _ = callKitAdapter.setSyntheticCallMuted(isMuted, handle: identity.handle.value)
+        return .muted(isMuted)
+    }
+
+    private func activeIdentity(for rawHandle: String) -> NativeIncomingCallIdentity? {
+        guard isEnabled,
+              let handle = NativeIncomingCallHandle(rawHandle) else {
+            return nil
+        }
+
+        return identitiesByHandle[handle]
+    }
+
+    private func failClosed(_ reason: NativeIncomingCallFailClosedReason,
+                            identity: NativeIncomingCallIdentity?,
+                            mediaCredentialRequested: Bool,
+                            mediaConnectAttempted: Bool) -> NativeForegroundIncomingCallE2EOutcome {
+        if let identity {
+            stateStore.setState(.failed, for: identity.handle)
+        }
+        diagnosticsRecorder.record(.init(lifecycleState: .failed,
+                                         failClosedReason: reason,
+                                         reportAttempted: false,
+                                         reportSucceeded: nil,
+                                         mediaCredentialRequested: mediaCredentialRequested,
+                                         mediaConnectAttempted: mediaConnectAttempted))
+        return .failClosed(reason)
+    }
+
+    var description: String {
+        "ForegroundNativeIncomingCallE2ECoordinator(isEnabled: \(isEnabled), activeIdentityCount: \(identitiesByHandle.count), mediaConnectedCount: \(mediaConnectedHandles.count), pushRuntime: false, backgroundRuntime: false, realRuntime: false)"
     }
 
     var debugDescription: String {
