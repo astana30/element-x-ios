@@ -28,9 +28,11 @@ Context:
 - 2.40G added the CallKit / PushKit / APNs design plan.
 - 2.40H added disabled native incoming lifecycle contracts and mocks.
 - 2.40I added the push and CallKit payload contract.
-- 2.40J added the disabled synthetic CallKit proof surface and manual device proof contract.
+- 2.40J-A added the disabled synthetic CallKit proof contracts.
+- 2.40J-B added the isolated physical-device synthetic CallKit UI proof adapter and DEBUG-only local harness boundary.
 - Current proven native audio remains foreground/open encrypted direct 1:1 only.
 - Push delivery, background incoming, missed-call UX, video, broad rollout, production/public rollout, and Element Call replacement remain blocked.
+- The synthetic CallKit UI proof does not implement real incoming calls, PushKit/APNs delivery, server fanout, media credential requests, media connection, or production UI.
 
 Goal:
 Prepare a registration-only PushKit dry run that can prove physical-device registration lifecycle and redacted diagnostics without delivering pushes or contacting media/session services.
@@ -40,6 +42,7 @@ Inspect:
 - `docs/direct-call/NATIVE_INCOMING_CONTRACTS.md`
 - `docs/direct-call/PUSH_CALLKIT_PAYLOAD_CONTRACT.md`
 - `docs/direct-call/SYNTHETIC_CALLKIT_PROOF.md`
+- `docs/direct-call/SYNTHETIC_CALLKIT_UI_PROOF.md`
 - `docs/direct-call/STATUS.md`
 - `docs/direct-call/WORKLOG.md`
 - existing Element Call PushKit surfaces only for separation review

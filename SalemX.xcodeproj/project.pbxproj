@@ -285,6 +285,8 @@
 		303FD7EC2A9DA64C02B84C0A /* RoomDetailsScreenViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F615127EE2700CFD6EDC1A8 /* RoomDetailsScreenViewModelTests.swift */; };
 		305E9FCC0B8BC31C02EA900F /* AppLockSetupPINScreenViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0F2288C029900C23BC252A /* AppLockSetupPINScreenViewModelTests.swift */; };
 		306C1CB9890B6674B79665DD /* DirectCallModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0BA3DF65C53AD0238BBA612 /* DirectCallModels.swift */; };
+		A240B0000000000000000001 /* NativeIncomingSyntheticCallKitUIProofAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A240B0000000000000000002 /* NativeIncomingSyntheticCallKitUIProofAdapter.swift */; };
+		A240B0000000000000000006 /* NativeIncomingSyntheticCallKitUIProofTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A240B0000000000000000007 /* NativeIncomingSyntheticCallKitUIProofTests.swift */; };
 		308DAF7C5E406E5C5D4809EC /* UITestsScreenIdentifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7158304F09E8FDF7A1E25DD2 /* UITestsScreenIdentifier.swift */; };
 		31067FC9BBC2D1387663CE1B /* RoomPollsHistoryScreenViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D2A448F61856B40FD536F4D /* RoomPollsHistoryScreenViewModel.swift */; };
 		3142991A852F2427892B39E8 /* NoticeRoomTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1740093653B20657732972DB /* NoticeRoomTimelineView.swift */; };
@@ -2576,6 +2578,8 @@
 		B060602490F1AF8BBCF77FA2 /* UnitTestsAppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnitTestsAppCoordinator.swift; sourceTree = "<group>"; };
 		B075BDD87425D69CD7AFBA3D /* KeychainControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainControllerTests.swift; sourceTree = "<group>"; };
 		B0BA3DF65C53AD0238BBA612 /* DirectCallModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectCallModels.swift; sourceTree = "<group>"; };
+		A240B0000000000000000002 /* NativeIncomingSyntheticCallKitUIProofAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeIncomingSyntheticCallKitUIProofAdapter.swift; sourceTree = "<group>"; };
+		A240B0000000000000000007 /* NativeIncomingSyntheticCallKitUIProofTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeIncomingSyntheticCallKitUIProofTests.swift; sourceTree = "<group>"; };
 		B0C25FA7CF992D4AB3A7DE41 /* CreateRoomScreenModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateRoomScreenModels.swift; sourceTree = "<group>"; };
 		B0D56E1364D5C904AC5308EB /* BlurEffectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlurEffectView.swift; sourceTree = "<group>"; };
 		B0F5DF29F9834978E897C7EA /* Observable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Observable.swift; sourceTree = "<group>"; };
@@ -3227,6 +3231,7 @@
 				9455A2D3EEB2AEB82F421520 /* DirectCallMediaEngineProtocol.swift */,
 				DDB7A4D93C4C14E188C3664D /* DirectCallMediaModels.swift */,
 				B0BA3DF65C53AD0238BBA612 /* DirectCallModels.swift */,
+				A240B0000000000000000003 /* SyntheticCallKitProof */,
 				00E3AEF46A0ECB55A388804E /* DirectCallSignalTransport.swift */,
 				BFE5D88B12B3142D7D30268B /* LiveKitDirectCallClient.swift */,
 				8ED0010AA472E6BF4CF29A0E /* LiveKitDirectCallMediaEngine.swift */,
@@ -3237,6 +3242,14 @@
 				8E5E72F3677F7B24929AE258 /* RoomCallEvent.swift */,
 			);
 			path = Calls;
+			sourceTree = "<group>";
+		};
+		A240B0000000000000000003 /* SyntheticCallKitProof */ = {
+			isa = PBXGroup;
+			children = (
+				A240B0000000000000000002 /* NativeIncomingSyntheticCallKitUIProofAdapter.swift */,
+			);
+			path = SyntheticCallKitProof;
 			sourceTree = "<group>";
 		};
 		05734052521B85B6742593B2 /* Emojis */ = {
@@ -6485,6 +6498,7 @@
 				C6C1911CE06945DCE677BDDE /* DirectCallMediaEngineTests.swift */,
 				D8700F80F74EA4EFE3F3E9DB /* DirectCallProductionCapabilitySourceTests.swift */,
 				D5A1BC32328A4C0F8B1BD1BB /* DirectCallProductionKeyWrappingTests.swift */,
+				A240B0000000000000000007 /* NativeIncomingSyntheticCallKitUIProofTests.swift */,
 				4C32CAF0343C7330058CF646 /* EditRoomAddressScreenViewModelTests.swift */,
 				5120B4BA5662E97750E2C6B4 /* ElementCallServiceTests.swift */,
 				AC688FC7F7B01C139C0B2037 /* EmojiPickerScreenViewModelTests.swift */,
@@ -8102,6 +8116,7 @@
 				9410B1310C89BF81C62BADC8 /* DirectCallMediaEngineProtocol.swift in Sources */,
 				CE16C68210091E7AEB6342C7 /* DirectCallMediaModels.swift in Sources */,
 				306C1CB9890B6674B79665DD /* DirectCallModels.swift in Sources */,
+				A240B0000000000000000001 /* NativeIncomingSyntheticCallKitUIProofAdapter.swift in Sources */,
 				441146D3F2E96AFFC8B5454B /* DirectCallSignalTransport.swift in Sources */,
 				A758BE5152318D881151D406 /* DocumentPicker.swift in Sources */,
 				10FE3E8CCBAC5D4F4EE4CE61 /* Duration.swift in Sources */,
@@ -8976,6 +8991,7 @@
 				7DC737A3E0C88D1289821C43 /* DirectCallMediaEngineTests.swift in Sources */,
 				E0A23D8082D11886888A1FC4 /* DirectCallProductionCapabilitySourceTests.swift in Sources */,
 				EA1D87C3AC5A0C1564F8CFB2 /* DirectCallProductionKeyWrappingTests.swift in Sources */,
+				A240B0000000000000000006 /* NativeIncomingSyntheticCallKitUIProofTests.swift in Sources */,
 				DFDA41373014B1B9FDC84BE2 /* EditRoomAddressScreenViewModelTests.swift in Sources */,
 				A8D5DB14590F9A7306C49E51 /* ElementCallServiceTests.swift in Sources */,
 				6B84FE0F7678F4AE646A226E /* EmojiPickerScreenViewModelTests.swift in Sources */,
