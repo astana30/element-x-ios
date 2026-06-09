@@ -6,18 +6,27 @@ Repo:
 Branch:
 salemx-native-direct-calls
 
-Next phase: 2.41B — foreground audio and call lifecycle hardening.
+Next phase: 2.41B-S — foreground audio and call lifecycle hardening smoke.
 
 Goal:
-Stabilize the foreground native audio call path before PushKit/APNs/background incoming work.
+Run the next redacted physical smoke for the hardened foreground native audio lifecycle before PushKit/APNs/background incoming work.
 
-Carry-forward issues from 2.41A-S:
-- Repeating audio tick/click artifact during connected media.
-- Peer-side end cleanup delay of approximately 10 seconds.
+Carry-forward checks from 2.41B:
+- Verify whether the repeating audio tick/click artifact is fixed or still present.
+- Verify whether both sides clear promptly after End.
 - Full two-physical-device smoke remains pending.
 
 Scope:
-- Investigate audio session configuration, audio route, speaker/earpiece/Bluetooth behavior, mute/unmute, repeated calls, end propagation, teardown timing, and 5-10 minute foreground call stability.
+- Simulator caller plus physical iPhone callee with callee foreground/open.
+- CallKit UI appears.
+- Answer.
+- Media connects only after foreground authority approval.
+- End from each side in separate runs.
+- Repeat call 2-3 times.
+- Mute/unmute.
+- Speaker/earpiece route if available.
+- One 30-60 second call.
+- Record whether a longer 5-10 minute foreground call is ready.
 - Keep PushKit/APNs/background incoming out of scope.
 - Keep Element Call route intact.
 - Keep server-issued media credential authority as final authority.

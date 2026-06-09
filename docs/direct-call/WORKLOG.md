@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Hardened foreground native incoming audio lifecycle after the one-device smoke.
 - Added the foreground native incoming call E2E coordinator contract.
 - Recorded supervised narrow non-engineering pilot window 1.
 - Completed the label-only pilot checklist for execution approval re-review.
@@ -77,6 +78,23 @@ Observed follow-up items:
 - Full two-physical-device smoke remains pending.
 
 No raw runtime logs were added because they may contain private Matrix/runtime identifiers.
+
+### 2.41B — Foreground audio and call lifecycle hardening
+
+Implemented scoped lifecycle hardening for the foreground native incoming call path.
+
+Changes:
+- Duplicate answered-call handling no longer creates duplicate media connections once the call is already active.
+- A second connect attempt while media connection is already in progress fails closed with a safe local reason.
+- End is idempotent.
+- Local incoming state is cleared before async media teardown is awaited.
+- Repeated foreground incoming calls reset lifecycle state after End.
+
+The repeating audio tick/click artifact is not yet proven fixed. The next physical smoke must verify whether the lifecycle hardening removes it or whether a deeper audio route/session/WebRTC investigation is required.
+
+The peer-side cleanup delay is addressed locally in the foreground coordinator, but still needs physical smoke confirmation.
+
+No PushKit/APNs runtime, APNs/VoIP value registration, background incoming handling, server-issued media credential bypass, Matrix event emission, Element Call route change, LiveKit/MatrixRTC production path rewrite, signing change, bundle change, entitlement change, project setting change, video, broad rollout, or production/public rollout was added.
 
 ## 2026-06-09 — 2.41A Foreground Native Incoming Call E2E
 
