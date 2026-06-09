@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.40L — foreground incoming-call acceptance gate.
+After 2.41A — foreground native incoming call E2E.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,16 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.41A adds a foreground-only native incoming call E2E coordinator contract:
+  - A foreground incoming ringing audio `DirectCallSession` can be validated and reported through the isolated CallKit UI adapter.
+  - CallKit answer routes to `answerRequested`.
+  - The foreground acceptance gate is required before media can be attempted.
+  - Missing, denied, malformed, expired, and unverifiable authority decisions block media and fail closed.
+  - Authorized authority allows only the injected media connector to run; media is not attempted before authorization.
+  - End clears local incoming state and tears down started media through the injected connector.
+  - Mute remains local/diagnostic-only.
+  - Unit coverage verifies the foreground E2E coordinator path, redacted diagnostics, and absence of Element Call route action names.
+  - No PushKit runtime, APNs runtime, APNs/VoIP value registration, background incoming handling, signing/project setting change, production UI, Element Call route change, LiveKit/MatrixRTC production path change, video, broad rollout, or production/public rollout is introduced.
 - 2.40L adds a foreground-only acceptance gate after synthetic/local incoming CallKit answer routing:
   - Answer remains routed to `answerRequested`.
   - Media remains blocked until a mocked/test-safe foreground authority returns an authorized decision.

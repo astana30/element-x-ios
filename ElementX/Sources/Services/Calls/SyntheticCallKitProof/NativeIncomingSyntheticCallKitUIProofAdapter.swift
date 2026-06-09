@@ -132,6 +132,22 @@ final class NativeIncomingSyntheticCallKitUIProofAdapter: NativeIncomingSyntheti
         return record(.ended)
     }
 
+    func setSyntheticCallMuted(_ isMuted: Bool, handle rawHandle: String) -> NativeIncomingSyntheticCallKitUIProofEvent {
+        guard let callUUID = callUUID(for: rawHandle),
+              let identity = identitiesByUUID[callUUID] else {
+            return failClosed(.unverifiable)
+        }
+
+        actionHandler.setSyntheticCallMuted(isMuted, identity: identity)
+        diagnosticsRecorder.record(.init(lifecycleState: .reported,
+                                         failClosedReason: nil,
+                                         reportAttempted: false,
+                                         reportSucceeded: nil,
+                                         mediaCredentialRequested: false,
+                                         mediaConnectAttempted: false))
+        return record(.muted(isMuted))
+    }
+
     func syntheticCallKitUIReportingDidAnswer(callUUID: UUID) {
         guard let identity = identitiesByUUID[callUUID] else {
             _ = failClosed(.unverifiable)

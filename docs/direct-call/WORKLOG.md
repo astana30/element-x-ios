@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Added the foreground native incoming call E2E coordinator contract.
 - Recorded supervised narrow non-engineering pilot window 1.
 - Completed the label-only pilot checklist for execution approval re-review.
 - Recorded the incomplete pilot checklist completion attempt.
@@ -65,6 +66,19 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+## 2026-06-09 — 2.41A Foreground Native Incoming Call E2E
+
+- Added a foreground-only native incoming call E2E coordinator contract.
+- The coordinator accepts foreground incoming ringing audio sessions, safe CallKit display metadata, a validation context, the isolated CallKit adapter, the foreground acceptance gate, an injected media connector, and redacted diagnostics.
+- The CallKit UI path is requested only for valid foreground incoming ringing audio sessions.
+- CallKit answer routes to `answerRequested`, then the foreground acceptance gate must authorize before media can be attempted.
+- Missing, denied, malformed, expired, and unverifiable authority decisions fail closed and block media.
+- Authorized authority allows only the injected media connector to run; unit coverage verifies media is not attempted before authorization.
+- End clears local state and tears down started media through the injected connector.
+- Mute remains local and diagnostic-only.
+- Added `docs/direct-call/FOREGROUND_NATIVE_INCOMING_E2E.md` with a physical-device smoke checklist for a later supervised proof.
+- No PushKit/APNs runtime, value registration, background incoming handling, Element Call route change, LiveKit/MatrixRTC production path change, signing/project setting change, production UI, video, broad rollout, or production/public rollout was added.
 
 ## 2026-05-28 — 2.39I Supervised Narrow Non-Engineering Pilot Window 1
 

@@ -6,15 +6,14 @@ Repo:
 Branch:
 salemx-native-direct-calls
 
-Next recommended phase: 2.40M — PushKit registration dry-run design.
+Next recommended phase: 2.41B — foreground native incoming physical-device smoke.
 
-Scope: design a disabled, redacted PushKit registration dry-run boundary after the 2.40L foreground incoming acceptance gate. The next phase should not receive pushes, should not report real incoming calls, and should not connect media.
+Scope: run or record a supervised physical-device foreground/open-chat smoke for the 2.41A foreground native incoming E2E coordinator path. The proof should use the existing foreground native call path only and must not add background incoming behavior.
 
 Constraints:
 - Do not implement PushKit runtime.
 - Do not register APNs or VoIP values.
-- Do not connect media from background.
-- Do not request real server-issued media credentials from push receipt.
+- Do not add background incoming handling.
 - Do not modify Element Call routing.
 - Keep token endpoint/server-issued media credential as final authority.
 - Keep all proof logs redacted.
