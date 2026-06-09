@@ -319,6 +319,23 @@ extension NativeIncomingSyntheticCallKitUIProofHarness {
         return NativeIncomingSyntheticCallKitUIProofHarness(adapter: adapter)
     }
 }
+
+@objc(SalemXSyntheticCallKitUIProofDebug)
+final class SalemXSyntheticCallKitUIProofDebug: NSObject {
+    private static var harness: NativeIncomingSyntheticCallKitUIProofHarness?
+
+    @objc static func report() {
+        DispatchQueue.main.async {
+            let proofHarness = NativeIncomingSyntheticCallKitUIProofHarness.makePhysicalDeviceProofHarness()
+            harness = proofHarness
+            _ = proofHarness.reportSyntheticIncomingCall()
+        }
+    }
+
+    @objc static func clear() {
+        harness = nil
+    }
+}
 #endif
 #endif
 
