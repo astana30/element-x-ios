@@ -855,6 +855,8 @@ final class ForegroundNativeIncomingCallE2ECoordinator: CustomStringConvertible,
     private let staleInterval: TimeInterval
     private var identitiesByHandle = [NativeIncomingCallHandle: NativeIncomingCallIdentity]()
     private var mediaConnectedHandles = Set<NativeIncomingCallHandle>()
+    private var mediaConnectAttemptedHandles = Set<NativeIncomingCallHandle>()
+    private var endedHandles = Set<NativeIncomingCallHandle>()
 
     init(isEnabled: Bool = false,
          stateStore: NativeIncomingCallStateStoring,
@@ -924,6 +926,22 @@ final class ForegroundNativeIncomingCallE2ECoordinator: CustomStringConvertible,
             return failClosed(.unverifiable, identity: nil, mediaCredentialRequested: false, mediaConnectAttempted: false)
         }
 
+        if mediaConnectedHandles.contains(identity.handle) {
+            diagnosticsRecorder.record(.init(lifecycleState: .active,
+                                             failClosedReason: nil,
+                                             reportAttempted: false,
+                                             reportSucceeded: nil,
+                                             mediaCredentialRequested: true,
+                                             mediaConnectAttempted: false))
+            return .mediaConnected(identity)
+        }
+        guard !mediaConnectAttemptedHandles.contains(identity.handle) else {
+            return failClosed(.existingActiveNativeSession,
+                              identity: identity,
+                              mediaCredentialRequested: true,
+                              mediaConnectAttempted: false)
+        }
+
         switch acceptanceGate.requestForegroundAcceptance(identity: identity) {
         case .failClosed(let reason):
             _ = callKitAdapter.endSyntheticCall(handle: identity.handle.value)
@@ -939,6 +957,7 @@ final class ForegroundNativeIncomingCallE2ECoordinator: CustomStringConvertible,
             break
         }
 
+        mediaConnectAttemptedHandles.insert(identity.handle)
         switch await mediaConnector.connectForegroundIncomingMedia(identity: identity) {
         case .connected:
             mediaConnectedHandles.insert(identity.handle)
@@ -964,18 +983,24 @@ final class ForegroundNativeIncomingCallE2ECoordinator: CustomStringConvertible,
     }
 
     func endForegroundIncomingCall(handle rawHandle: String) async -> NativeForegroundIncomingCallE2EOutcome {
+        if let handle = NativeIncomingCallHandle(rawHandle),
+           endedHandles.contains(handle) {
+            return .ended
+        }
         guard let identity = activeIdentity(for: rawHandle) else {
             return failClosed(.unverifiable, identity: nil, mediaCredentialRequested: false, mediaConnectAttempted: false)
         }
 
         _ = callKitAdapter.endSyntheticCall(handle: identity.handle.value)
-        if mediaConnectedHandles.contains(identity.handle) {
-            await mediaConnector.endForegroundIncomingMedia(identity: identity)
-            mediaConnectedHandles.remove(identity.handle)
-        }
         acceptanceGate.endForegroundAcceptance(identity: identity)
         identitiesByHandle[identity.handle] = nil
         stateStore.clear(identity.handle)
+        endedHandles.insert(identity.handle)
+
+        if mediaConnectedHandles.remove(identity.handle) != nil {
+            await mediaConnector.endForegroundIncomingMedia(identity: identity)
+        }
+        mediaConnectAttemptedHandles.remove(identity.handle)
         return .ended
     }
 
@@ -1014,7 +1039,9 @@ final class ForegroundNativeIncomingCallE2ECoordinator: CustomStringConvertible,
     }
 
     var description: String {
-        "ForegroundNativeIncomingCallE2ECoordinator(isEnabled: \(isEnabled), activeIdentityCount: \(identitiesByHandle.count), mediaConnectedCount: \(mediaConnectedHandles.count), pushRuntime: false, backgroundRuntime: false, realRuntime: false)"
+        "ForegroundNativeIncomingCallE2ECoordinator(isEnabled: \(isEnabled), activeIdentityCount: \(identitiesByHandle.count), " +
+            "mediaConnectedCount: \(mediaConnectedHandles.count), mediaConnectAttemptedCount: \(mediaConnectAttemptedHandles.count), " +
+            "endedCount: \(endedHandles.count), pushRuntime: false, backgroundRuntime: false, realRuntime: false)"
     }
 
     var debugDescription: String {

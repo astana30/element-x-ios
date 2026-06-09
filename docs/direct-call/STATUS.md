@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.41A — foreground native incoming call E2E.
+After 2.41B — foreground audio and call lifecycle hardening.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.41B hardens the foreground native incoming lifecycle after the one-device smoke:
+  - Duplicate answered-call handling no longer creates a second media connection after the foreground authority path has already connected.
+  - End is idempotent in the foreground incoming coordinator.
+  - Local incoming state is cleared before async media teardown is awaited, reducing local cleanup delay risk.
+  - Repeated foreground incoming calls reset local lifecycle state after End.
+  - The repeating audio tick/click artifact is not yet proven fixed; the next physical smoke must verify whether it remains.
+  - The peer-side cleanup delay is addressed locally but still needs physical smoke confirmation.
+  - No PushKit runtime, APNs runtime, APNs/VoIP value registration, background incoming handling, signing/project setting change, Element Call route change, video, broad rollout, or production/public rollout is introduced.
 - 2.41A-S completed: one-device foreground smoke passed with Simulator caller and physical iPhone callee. CallKit UI appeared, Answer worked, media connected, End cleared the call. Carry-forward issues: repeating audio tick/click artifact and peer-side end cleanup delay of approximately 10 seconds. Full two-physical-device smoke remains pending.
 - 2.41A adds a foreground-only native incoming call E2E coordinator contract:
   - A foreground incoming ringing audio `DirectCallSession` can be validated and reported through the isolated CallKit UI adapter.

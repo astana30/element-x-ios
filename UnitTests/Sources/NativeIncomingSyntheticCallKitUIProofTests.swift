@@ -422,6 +422,31 @@ struct NativeIncomingSyntheticCallKitUIProofTests {
     }
 
     @Test
+    func foregroundNativeIncomingE2EDuplicateAnswerDoesNotCreateDuplicateMediaConnection() async {
+        let dependencies = makeDependencies()
+        let stateStore = NativeIncomingCallUIProofStateStoreSpy()
+        let reporter = NativeIncomingSyntheticCallKitUIReporterSpy()
+        let mediaConnector = NativeForegroundIncomingMediaConnectorSpy(outcome: .connected)
+        let e2e = makeForegroundE2E(dependencies: dependencies,
+                                    stateStore: stateStore,
+                                    reporter: reporter,
+                                    mediaConnector: mediaConnector)
+        let identity = receiveForegroundIncomingCall(e2e: e2e, stateStore: stateStore)
+        reporter.simulateAnswer()
+
+        let firstOutcome = await e2e.connectAnsweredForegroundIncomingCall(handle: identity.handle.value)
+        let duplicateOutcome = await e2e.connectAnsweredForegroundIncomingCall(handle: identity.handle.value)
+
+        #expect(firstOutcome == .mediaConnected(identity))
+        #expect(duplicateOutcome == .mediaConnected(identity))
+        #expect(stateStore.state(for: identity.handle) == .active)
+        #expect(mediaConnector.connectedIdentities == [identity])
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.lifecycleState == .active)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaCredentialRequested == true)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaConnectAttempted == false)
+    }
+
+    @Test
     func foregroundNativeIncomingE2EMediaFailureFailsClosedAfterAuthorityApproval() async {
         let dependencies = makeDependencies()
         let stateStore = NativeIncomingCallUIProofStateStoreSpy()
@@ -463,6 +488,60 @@ struct NativeIncomingSyntheticCallKitUIProofTests {
         #expect(stateStore.state(for: identity.handle) == nil)
         #expect(mediaConnector.endedIdentities == [identity])
         #expect(reporter.endedCalls.count == 1)
+    }
+
+    @Test
+    func foregroundNativeIncomingE2EEndIsIdempotent() async {
+        let dependencies = makeDependencies()
+        let stateStore = NativeIncomingCallUIProofStateStoreSpy()
+        let reporter = NativeIncomingSyntheticCallKitUIReporterSpy()
+        let mediaConnector = NativeForegroundIncomingMediaConnectorSpy(outcome: .connected)
+        let e2e = makeForegroundE2E(dependencies: dependencies,
+                                    stateStore: stateStore,
+                                    reporter: reporter,
+                                    mediaConnector: mediaConnector)
+        let identity = receiveForegroundIncomingCall(e2e: e2e, stateStore: stateStore)
+        reporter.simulateAnswer()
+        _ = await e2e.connectAnsweredForegroundIncomingCall(handle: identity.handle.value)
+
+        let firstOutcome = await e2e.endForegroundIncomingCall(handle: identity.handle.value)
+        let duplicateOutcome = await e2e.endForegroundIncomingCall(handle: identity.handle.value)
+
+        #expect(firstOutcome == .ended)
+        #expect(duplicateOutcome == .ended)
+        #expect(stateStore.state(for: identity.handle) == nil)
+        #expect(mediaConnector.endedIdentities == [identity])
+        #expect(reporter.endedCalls.count == 1)
+    }
+
+    @Test
+    func foregroundNativeIncomingE2ERepeatedCallsResetLifecycleState() async {
+        let dependencies = makeDependencies()
+        let stateStore = NativeIncomingCallUIProofStateStoreSpy()
+        let reporter = NativeIncomingSyntheticCallKitUIReporterSpy()
+        let mediaConnector = NativeForegroundIncomingMediaConnectorSpy(outcome: .connected)
+        let e2e = makeForegroundE2E(dependencies: dependencies,
+                                    stateStore: stateStore,
+                                    reporter: reporter,
+                                    mediaConnector: mediaConnector)
+        let firstIdentity = receiveForegroundIncomingCall(e2e: e2e,
+                                                          stateStore: stateStore,
+                                                          callID: "call-a")
+        reporter.simulateAnswer()
+        _ = await e2e.connectAnsweredForegroundIncomingCall(handle: firstIdentity.handle.value)
+        _ = await e2e.endForegroundIncomingCall(handle: firstIdentity.handle.value)
+
+        let secondIdentity = receiveForegroundIncomingCall(e2e: e2e,
+                                                           stateStore: stateStore,
+                                                           callID: "call-b")
+        reporter.simulateAnswer()
+        let secondOutcome = await e2e.connectAnsweredForegroundIncomingCall(handle: secondIdentity.handle.value)
+
+        #expect(secondOutcome == .mediaConnected(secondIdentity))
+        #expect(stateStore.state(for: firstIdentity.handle) == nil)
+        #expect(stateStore.state(for: secondIdentity.handle) == .active)
+        #expect(mediaConnector.connectedIdentities == [firstIdentity, secondIdentity])
+        #expect(mediaConnector.endedIdentities == [firstIdentity])
     }
 
     @Test
