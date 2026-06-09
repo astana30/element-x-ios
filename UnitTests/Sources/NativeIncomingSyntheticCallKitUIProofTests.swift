@@ -75,6 +75,37 @@ struct NativeIncomingSyntheticCallKitUIProofTests {
     }
 
     @Test
+    func answerCallbackRoutesToIncomingStateMachineSurface() {
+        let dependencies = makeDependencies()
+        let reporter = NativeIncomingSyntheticCallKitUIReporterSpy()
+        let stateStore = NativeIncomingCallUIProofStateStoreSpy()
+        let actionRouter = DisabledNativeIncomingCallStateMachineActionRouter(stateStore: stateStore,
+                                                                              diagnosticsRecorder: dependencies.diagnosticsRecorder)
+        let actionHandler = NativeIncomingCallStateMachineSyntheticActionHandler(actionRouter: actionRouter)
+        let eventRecorder = NativeIncomingSyntheticCallKitUIProofEventRecorderSpy()
+        let adapter = makeAdapter(reporter: reporter,
+                                  actionHandler: actionHandler,
+                                  diagnosticsRecorder: dependencies.diagnosticsRecorder,
+                                  eventRecorder: eventRecorder)
+        let identity = safeIdentity()
+
+        let result = adapter.reportSyntheticIncomingCall(identity: identity, displayLabel: "Pilot Participant")
+        reporter.simulateAnswer()
+
+        #expect(result == .reported)
+        #expect(stateStore.state(for: identity.handle) == .answerRequested)
+        #expect(actionRouter.answerRequestCount == 1)
+        #expect(eventRecorder.events == [.reported, .answered])
+        #expect(dependencies.diagnosticsRecorder.diagnostics.contains { diagnostics in
+            diagnostics.lifecycleState == .answerRequested &&
+                diagnostics.mediaCredentialRequested == false &&
+                diagnostics.mediaConnectAttempted == false
+        })
+        #expect(!String(describing: actionHandler).contains("displayCall"))
+        #expect(!String(describing: actionHandler).contains("presentCallScreen"))
+    }
+
+    @Test
     func endCallbackClearsLocalSyntheticState() {
         let dependencies = makeDependencies()
         let reporter = NativeIncomingSyntheticCallKitUIReporterSpy()
@@ -184,7 +215,7 @@ struct NativeIncomingSyntheticCallKitUIProofTests {
     }
 
     private func makeAdapter(reporter: NativeIncomingSyntheticCallKitUIReporterSpy,
-                             actionHandler: NativeIncomingSyntheticCallKitActionHandlerSpy,
+                             actionHandler: NativeIncomingSyntheticCallKitActionHandling,
                              diagnosticsRecorder: NativeIncomingCallDiagnosticsRecorderSpy,
                              eventRecorder: NativeIncomingSyntheticCallKitUIProofEventRecorderSpy) -> NativeIncomingSyntheticCallKitUIProofAdapter {
         NativeIncomingSyntheticCallKitUIProofAdapter(isEnabled: true,
@@ -192,6 +223,26 @@ struct NativeIncomingSyntheticCallKitUIProofTests {
                                                      actionHandler: actionHandler,
                                                      diagnosticsRecorder: diagnosticsRecorder,
                                                      eventRecorder: eventRecorder)
+    }
+}
+
+private final class NativeIncomingCallUIProofStateStoreSpy: NativeIncomingCallStateStoring {
+    private var states = [NativeIncomingCallHandle: NativeIncomingCallLifecycleState]()
+
+    func state(for handle: NativeIncomingCallHandle) -> NativeIncomingCallLifecycleState? {
+        states[handle]
+    }
+
+    func hasSeen(_ handle: NativeIncomingCallHandle) -> Bool {
+        states[handle] != nil
+    }
+
+    func setState(_ state: NativeIncomingCallLifecycleState, for handle: NativeIncomingCallHandle) {
+        states[handle] = state
+    }
+
+    func clear(_ handle: NativeIncomingCallHandle) {
+        states[handle] = nil
     }
 }
 
