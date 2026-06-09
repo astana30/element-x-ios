@@ -106,6 +106,188 @@ struct NativeIncomingSyntheticCallKitUIProofTests {
     }
 
     @Test
+    func answerCallbackRequiresForegroundAcceptanceBeforeMediaAllowance() {
+        let dependencies = makeDependencies()
+        let reporter = NativeIncomingSyntheticCallKitUIReporterSpy()
+        let stateStore = NativeIncomingCallUIProofStateStoreSpy()
+        let actionRouter = DisabledNativeIncomingCallStateMachineActionRouter(stateStore: stateStore,
+                                                                              diagnosticsRecorder: dependencies.diagnosticsRecorder)
+        let actionHandler = NativeIncomingCallStateMachineSyntheticActionHandler(actionRouter: actionRouter)
+        let authorizer = NativeIncomingForegroundAcceptanceAuthorizerSpy(decision: .authorized)
+        let acceptanceGate = DisabledNativeIncomingForegroundAcceptanceGate(isEnabled: true,
+                                                                            stateStore: stateStore,
+                                                                            diagnosticsRecorder: dependencies.diagnosticsRecorder,
+                                                                            authorizer: authorizer)
+        let eventRecorder = NativeIncomingSyntheticCallKitUIProofEventRecorderSpy()
+        let adapter = makeAdapter(reporter: reporter,
+                                  actionHandler: actionHandler,
+                                  diagnosticsRecorder: dependencies.diagnosticsRecorder,
+                                  eventRecorder: eventRecorder)
+        let identity = safeIdentity()
+
+        _ = adapter.reportSyntheticIncomingCall(identity: identity, displayLabel: "Pilot Participant")
+        reporter.simulateAnswer()
+        let blockedBeforeDecision = acceptanceGate.isMediaAllowedAfterForegroundAcceptance(identity: identity)
+        let outcome = acceptanceGate.requestForegroundAcceptance(identity: identity)
+
+        #expect(stateStore.state(for: identity.handle) == .foregroundCredentialAuthorized)
+        #expect(blockedBeforeDecision == false)
+        #expect(outcome == .credentialAuthorized(identity))
+        #expect(authorizer.requestedIdentities == [identity])
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaCredentialRequested == true)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaConnectAttempted == false)
+    }
+
+    @Test
+    func foregroundAcceptanceGateBlocksMediaBeforeAuthorityAllows() {
+        let dependencies = makeDependencies()
+        let stateStore = NativeIncomingCallUIProofStateStoreSpy()
+        let authorizer = NativeIncomingForegroundAcceptanceAuthorizerSpy(decision: .authorized)
+        let acceptanceGate = makeAcceptanceGate(stateStore: stateStore,
+                                                diagnosticsRecorder: dependencies.diagnosticsRecorder,
+                                                authorizer: authorizer)
+        let identity = answerRequestedIdentity(stateStore: stateStore)
+
+        #expect(stateStore.state(for: identity.handle) == .answerRequested)
+        #expect(acceptanceGate.isMediaAllowedAfterForegroundAcceptance(identity: identity) == false)
+        #expect(authorizer.requestedIdentities.isEmpty)
+    }
+
+    @Test
+    func foregroundAcceptanceGateFailsClosedWithoutAuthority() {
+        let dependencies = makeDependencies()
+        let stateStore = NativeIncomingCallUIProofStateStoreSpy()
+        let acceptanceGate = makeAcceptanceGate(stateStore: stateStore,
+                                                diagnosticsRecorder: dependencies.diagnosticsRecorder,
+                                                authorizer: nil)
+        let identity = answerRequestedIdentity(stateStore: stateStore)
+
+        let outcome = acceptanceGate.requestForegroundAcceptance(identity: identity)
+
+        #expect(outcome == .failClosed(.foregroundCredentialAuthorityUnavailable))
+        #expect(stateStore.state(for: identity.handle) == .failed)
+        #expect(acceptanceGate.isMediaAllowedAfterForegroundAcceptance(identity: identity) == false)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.failClosedReason == .foregroundCredentialAuthorityUnavailable)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaCredentialRequested == false)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaConnectAttempted == false)
+    }
+
+    @Test
+    func foregroundAcceptanceGateFailsClosedForDeniedMalformedExpiredAndUnverifiableAuthority() {
+        let cases: [(NativeIncomingForegroundAcceptanceDecision, NativeIncomingCallFailClosedReason)] = [
+            (.denied, .foregroundCredentialDenied),
+            (.malformed, .foregroundCredentialMalformed),
+            (.expired, .foregroundCredentialExpired),
+            (.unverifiable, .foregroundCredentialUnverifiable)
+        ]
+
+        for (index, testCase) in cases.enumerated() {
+            let dependencies = makeDependencies()
+            let stateStore = NativeIncomingCallUIProofStateStoreSpy()
+            let authorizer = NativeIncomingForegroundAcceptanceAuthorizerSpy(decision: testCase.0)
+            let acceptanceGate = makeAcceptanceGate(stateStore: stateStore,
+                                                    diagnosticsRecorder: dependencies.diagnosticsRecorder,
+                                                    authorizer: authorizer)
+            let identity = answerRequestedIdentity(stateStore: stateStore,
+                                                   handle: "safe-local-call-\(index)")
+
+            let outcome = acceptanceGate.requestForegroundAcceptance(identity: identity)
+
+            #expect(outcome == .failClosed(testCase.1))
+            #expect(authorizer.requestedIdentities == [identity])
+            #expect(stateStore.state(for: identity.handle) == .failed)
+            #expect(acceptanceGate.isMediaAllowedAfterForegroundAcceptance(identity: identity) == false)
+            #expect(dependencies.diagnosticsRecorder.diagnostics.last?.failClosedReason == testCase.1)
+            #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaCredentialRequested == true)
+            #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaConnectAttempted == false)
+        }
+    }
+
+    @Test
+    func foregroundAcceptanceGateAuthorizesOnlySafeLocalStateWithoutConnectingMedia() {
+        let dependencies = makeDependencies()
+        let stateStore = NativeIncomingCallUIProofStateStoreSpy()
+        let authorizer = NativeIncomingForegroundAcceptanceAuthorizerSpy(decision: .authorized)
+        let acceptanceGate = makeAcceptanceGate(stateStore: stateStore,
+                                                diagnosticsRecorder: dependencies.diagnosticsRecorder,
+                                                authorizer: authorizer)
+        let identity = answerRequestedIdentity(stateStore: stateStore)
+
+        let outcome = acceptanceGate.requestForegroundAcceptance(identity: identity)
+
+        #expect(outcome == .credentialAuthorized(identity))
+        #expect(authorizer.requestedIdentities == [identity])
+        #expect(stateStore.state(for: identity.handle) == .foregroundCredentialAuthorized)
+        #expect(acceptanceGate.isMediaAllowedAfterForegroundAcceptance(identity: identity) == true)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.lifecycleState == .foregroundCredentialAuthorized)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaCredentialRequested == true)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaConnectAttempted == false)
+    }
+
+    @Test
+    func foregroundAcceptanceGateRequiresAnswerRequestedState() {
+        let dependencies = makeDependencies()
+        let stateStore = NativeIncomingCallUIProofStateStoreSpy()
+        let authorizer = NativeIncomingForegroundAcceptanceAuthorizerSpy(decision: .authorized)
+        let acceptanceGate = makeAcceptanceGate(stateStore: stateStore,
+                                                diagnosticsRecorder: dependencies.diagnosticsRecorder,
+                                                authorizer: authorizer)
+        let identity = safeIdentity()
+        stateStore.setState(.reported, for: identity.handle)
+
+        let outcome = acceptanceGate.requestForegroundAcceptance(identity: identity)
+
+        #expect(outcome == .failClosed(.unverifiable))
+        #expect(authorizer.requestedIdentities.isEmpty)
+        #expect(stateStore.state(for: identity.handle) == .failed)
+        #expect(acceptanceGate.isMediaAllowedAfterForegroundAcceptance(identity: identity) == false)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaCredentialRequested == false)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaConnectAttempted == false)
+    }
+
+    @Test
+    func foregroundAcceptanceEndClearsLocalState() {
+        let dependencies = makeDependencies()
+        let stateStore = NativeIncomingCallUIProofStateStoreSpy()
+        let authorizer = NativeIncomingForegroundAcceptanceAuthorizerSpy(decision: .authorized)
+        let acceptanceGate = makeAcceptanceGate(stateStore: stateStore,
+                                                diagnosticsRecorder: dependencies.diagnosticsRecorder,
+                                                authorizer: authorizer)
+        let identity = answerRequestedIdentity(stateStore: stateStore)
+        _ = acceptanceGate.requestForegroundAcceptance(identity: identity)
+
+        acceptanceGate.endForegroundAcceptance(identity: identity)
+
+        #expect(stateStore.state(for: identity.handle) == nil)
+        #expect(acceptanceGate.isMediaAllowedAfterForegroundAcceptance(identity: identity) == false)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.lifecycleState == .ended)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaCredentialRequested == false)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaConnectAttempted == false)
+    }
+
+    @Test
+    func foregroundAcceptanceDiagnosticsStayRedactedAndRouteFree() {
+        let dependencies = makeDependencies()
+        let stateStore = NativeIncomingCallUIProofStateStoreSpy()
+        let authorizer = NativeIncomingForegroundAcceptanceAuthorizerSpy(decision: .authorized)
+        let acceptanceGate = makeAcceptanceGate(stateStore: stateStore,
+                                                diagnosticsRecorder: dependencies.diagnosticsRecorder,
+                                                authorizer: authorizer)
+        let identity = answerRequestedIdentity(stateStore: stateStore)
+        _ = acceptanceGate.requestForegroundAcceptance(identity: identity)
+
+        let description = String(describing: acceptanceGate)
+            + " " + String(describing: authorizer)
+            + " " + dependencies.diagnosticsRecorder.diagnostics.map(String.init(describing:)).joined(separator: " ")
+
+        #expect(description.contains("realRuntime: false"))
+        #expect(Self.forbiddenFragments.allSatisfy { !description.contains($0) })
+        #expect(!description.contains("emitSignal"))
+        #expect(!description.contains("displayCall"))
+        #expect(!description.contains("presentCallScreen"))
+    }
+
+    @Test
     func endCallbackClearsLocalSyntheticState() {
         let dependencies = makeDependencies()
         let reporter = NativeIncomingSyntheticCallKitUIReporterSpy()
@@ -202,16 +384,32 @@ struct NativeIncomingSyntheticCallKitUIProofTests {
         "presentCallScreen"
     ]
 
-    private func safeIdentity() -> NativeIncomingCallIdentity {
-        guard let handle = NativeIncomingCallHandle("safe-local-call") else {
+    private func safeIdentity(handle rawHandle: String = "safe-local-call") -> NativeIncomingCallIdentity {
+        guard let handle = NativeIncomingCallHandle(rawHandle) else {
             fatalError("Expected safe local handle.")
         }
 
         return NativeIncomingCallIdentity(handle: handle, receivedAt: Date())
     }
 
+    private func answerRequestedIdentity(stateStore: NativeIncomingCallUIProofStateStoreSpy,
+                                         handle: String = "safe-local-call") -> NativeIncomingCallIdentity {
+        let identity = safeIdentity(handle: handle)
+        stateStore.setState(.answerRequested, for: identity.handle)
+        return identity
+    }
+
     private func makeDependencies() -> NativeIncomingSyntheticCallKitUIProofDependencies {
         .init(diagnosticsRecorder: NativeIncomingCallDiagnosticsRecorderSpy())
+    }
+
+    private func makeAcceptanceGate(stateStore: NativeIncomingCallUIProofStateStoreSpy,
+                                    diagnosticsRecorder: NativeIncomingCallDiagnosticsRecorderSpy,
+                                    authorizer: NativeIncomingForegroundAcceptanceAuthorizing?) -> DisabledNativeIncomingForegroundAcceptanceGate {
+        DisabledNativeIncomingForegroundAcceptanceGate(isEnabled: true,
+                                                       stateStore: stateStore,
+                                                       diagnosticsRecorder: diagnosticsRecorder,
+                                                       authorizer: authorizer)
     }
 
     private func makeAdapter(reporter: NativeIncomingSyntheticCallKitUIReporterSpy,
@@ -255,6 +453,28 @@ private final class NativeIncomingCallDiagnosticsRecorderSpy: NativeIncomingCall
 
     func record(_ diagnostics: NativeIncomingCallRedactedDiagnostics) {
         self.diagnostics.append(diagnostics)
+    }
+}
+
+private final class NativeIncomingForegroundAcceptanceAuthorizerSpy: NativeIncomingForegroundAcceptanceAuthorizing, CustomStringConvertible, CustomDebugStringConvertible {
+    private let decision: NativeIncomingForegroundAcceptanceDecision
+    private(set) var requestedIdentities = [NativeIncomingCallIdentity]()
+
+    init(decision: NativeIncomingForegroundAcceptanceDecision) {
+        self.decision = decision
+    }
+
+    func foregroundAcceptanceDecision(for identity: NativeIncomingCallIdentity) -> NativeIncomingForegroundAcceptanceDecision {
+        requestedIdentities.append(identity)
+        return decision
+    }
+
+    var description: String {
+        "NativeIncomingForegroundAcceptanceAuthorizerSpy(requestCount: \(requestedIdentities.count), decision: \(decision))"
+    }
+
+    var debugDescription: String {
+        description
     }
 }
 
