@@ -2035,3 +2035,15 @@ Confirmed on a physical iPhone Debug build that the isolated synthetic CallKit p
 - Documented that invite receipt must not request media credentials, connect media, emit Matrix events, or bypass the foreground authority gate.
 - Added `docs/direct-call/FOREGROUND_SIGNALING_SMOKE_WIRING.md`.
 - No Swift runtime code, PushKit/APNs runtime, background incoming, signing/project change, Element Call route replacement, hardcoded production URL, credential value, media behavior, broad rollout, production/public rollout, or global activation was added.
+
+## 2026-06-10 - 2.42H DEBUG/dev Foreground SSE Runtime Owner
+
+- Added `DebugForegroundCallSignalingSSERuntimeOwner` behind DEBUG-only compilation.
+- The owner can start and stop an injected foreground signaling transport only when explicitly enabled and an authenticated session is available.
+- The owner does not construct URLs, auth headers, credentials, or production configuration.
+- Added redacted diagnostics for configured, started, connected, invite received, invite valid, incoming requested, fallback de-duped, and stopped states.
+- Valid invites feed the existing `ForegroundCallInviteHandler`; stale, terminal, duplicate, and unsafe invites fail closed through existing guards.
+- Added fallback de-duplication after an SSE-delivered invite by safe local call handle.
+- Added unit coverage for disabled default, authenticated-session gating, configured start/stop, valid SSE invite forwarding, stale/terminal/duplicate suppression, fallback de-duplication, redacted diagnostics, and no media credential/media connect/Matrix event side effects.
+- Added `docs/direct-call/DEBUG_FOREGROUND_SSE_RUNTIME_OWNER.md`.
+- No PushKit/APNs runtime, background incoming, signing/project change, Element Call route replacement, hardcoded production URL, credential value, broad rollout, production/public rollout, or global activation was added.

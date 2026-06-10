@@ -1380,6 +1380,174 @@ final class ForegroundCallSignalingTransportPipeline: CustomStringConvertible, C
     }
 }
 
+#if DEBUG
+struct DebugForegroundCallSignalingSSERuntimeDiagnostics: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    var sseConfigured: Bool
+    var sseStarted: Bool
+    var sseConnected: Bool
+    var inviteReceived: Bool
+    var inviteValid: Bool
+    var incomingRequested: Bool
+    var fallbackDeduped: Bool
+    var transportStopped: Bool
+
+    static let disabled = Self(sseConfigured: false,
+                               sseStarted: false,
+                               sseConnected: false,
+                               inviteReceived: false,
+                               inviteValid: false,
+                               incomingRequested: false,
+                               fallbackDeduped: false,
+                               transportStopped: false)
+
+    var description: String {
+        "DebugForegroundCallSignalingSSERuntimeDiagnostics(" + [
+            "sse_configured=\(sseConfigured)",
+            "sse_started=\(sseStarted)",
+            "sse_connected=\(sseConnected)",
+            "invite_received=\(inviteReceived)",
+            "invite_valid=\(inviteValid)",
+            "incoming_requested=\(incomingRequested)",
+            "fallback_deduped=\(fallbackDeduped)",
+            "transport_stopped=\(transportStopped)"
+        ].joined(separator: ", ") + ")"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+final class DebugForegroundCallSignalingSSERuntimeOwner: CustomStringConvertible, CustomDebugStringConvertible {
+    private let isEnabled: Bool
+    private let transport: ForegroundCallSignalingTransport?
+    private let inviteHandler: ForegroundCallInviteHandler?
+    private let validationContext: () -> NativeIncomingCallValidationContext
+    private var handledHandles = Set<NativeIncomingCallHandle>()
+    private(set) var diagnostics: DebugForegroundCallSignalingSSERuntimeDiagnostics
+    private(set) var latestOutcome: ForegroundCallInviteHandlingOutcome?
+
+    init(isEnabled: Bool = false,
+         transport: ForegroundCallSignalingTransport? = nil,
+         inviteHandler: ForegroundCallInviteHandler? = nil,
+         validationContext: @escaping () -> NativeIncomingCallValidationContext = { .valid }) {
+        self.isEnabled = isEnabled
+        self.transport = transport
+        self.inviteHandler = inviteHandler
+        self.validationContext = validationContext
+        diagnostics = .disabled
+    }
+
+    func appDidEnterForeground(authenticatedSessionAvailable: Bool) {
+        start(authenticatedSessionAvailable: authenticatedSessionAvailable)
+    }
+
+    func appDidEnterBackground() {
+        stop()
+    }
+
+    func start(authenticatedSessionAvailable: Bool) {
+        guard isEnabled,
+              authenticatedSessionAvailable,
+              let transport,
+              let inviteHandler else {
+            diagnostics = .init(sseConfigured: false,
+                                sseStarted: false,
+                                sseConnected: false,
+                                inviteReceived: diagnostics.inviteReceived,
+                                inviteValid: diagnostics.inviteValid,
+                                incomingRequested: diagnostics.incomingRequested,
+                                fallbackDeduped: diagnostics.fallbackDeduped,
+                                transportStopped: diagnostics.transportStopped)
+            return
+        }
+
+        transport.start { [weak self, inviteHandler] event in
+            self?.handle(event, inviteHandler: inviteHandler)
+        }
+        diagnostics = .init(sseConfigured: true,
+                            sseStarted: transport.diagnostics.isStarted,
+                            sseConnected: transport.diagnostics.isStarted,
+                            inviteReceived: diagnostics.inviteReceived,
+                            inviteValid: diagnostics.inviteValid,
+                            incomingRequested: diagnostics.incomingRequested,
+                            fallbackDeduped: diagnostics.fallbackDeduped,
+                            transportStopped: false)
+    }
+
+    func stop() {
+        transport?.stop()
+        diagnostics = .init(sseConfigured: diagnostics.sseConfigured,
+                            sseStarted: false,
+                            sseConnected: false,
+                            inviteReceived: diagnostics.inviteReceived,
+                            inviteValid: diagnostics.inviteValid,
+                            incomingRequested: diagnostics.incomingRequested,
+                            fallbackDeduped: diagnostics.fallbackDeduped,
+                            transportStopped: true)
+    }
+
+    func handleFallbackInvite(_ signal: ForegroundCallInviteSignal,
+                              context: NativeIncomingCallValidationContext = .valid) -> ForegroundCallInviteHandlingOutcome? {
+        guard let inviteHandler else {
+            return nil
+        }
+
+        if handledHandles.contains(signal.handle) {
+            latestOutcome = .suppressed(.duplicate)
+            diagnostics = .init(sseConfigured: diagnostics.sseConfigured,
+                                sseStarted: diagnostics.sseStarted,
+                                sseConnected: diagnostics.sseConnected,
+                                inviteReceived: diagnostics.inviteReceived,
+                                inviteValid: diagnostics.inviteValid,
+                                incomingRequested: diagnostics.incomingRequested,
+                                fallbackDeduped: true,
+                                transportStopped: diagnostics.transportStopped)
+            return latestOutcome
+        }
+
+        latestOutcome = inviteHandler.handle(signal, context: context)
+        if case .reported = latestOutcome {
+            handledHandles.insert(signal.handle)
+        }
+        return latestOutcome
+    }
+
+    private func handle(_ event: ForegroundCallSignalingTransportEvent,
+                        inviteHandler: ForegroundCallInviteHandler) {
+        switch event {
+        case .invite(let signal):
+            let outcome = inviteHandler.handle(signal, context: validationContext())
+            latestOutcome = outcome
+            let wasReported: Bool
+            switch outcome {
+            case .reported:
+                handledHandles.insert(signal.handle)
+                wasReported = true
+            case .suppressed:
+                wasReported = false
+            }
+            diagnostics = .init(sseConfigured: diagnostics.sseConfigured,
+                                sseStarted: diagnostics.sseStarted,
+                                sseConnected: diagnostics.sseConnected,
+                                inviteReceived: true,
+                                inviteValid: wasReported,
+                                incomingRequested: wasReported,
+                                fallbackDeduped: diagnostics.fallbackDeduped,
+                                transportStopped: diagnostics.transportStopped)
+        }
+    }
+
+    var description: String {
+        "DebugForegroundCallSignalingSSERuntimeOwner(\(diagnostics), debugOnly: true, hardcodedEndpoint: false, mediaConnectRuntime: false)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+#endif
+
 struct ForegroundCallInviteValidator {
     var supportedKind: ForegroundCallInviteKind = .audio
 
