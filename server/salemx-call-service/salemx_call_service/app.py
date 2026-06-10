@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import replace
 from os import environ
 from typing import Any, Optional
@@ -18,6 +19,7 @@ from .config import (
     ServicePreflightError,
     ServicePreflightReason,
     ServiceReadiness,
+    FOREGROUND_SIGNALING_DEV_INVITE_ENABLED_ENV,
     service_mode_from_env,
     service_readiness_from_config,
     validate_service_preflight,
@@ -25,6 +27,8 @@ from .config import (
 from .eligibility import DisabledNativeAudioEligibilityPolicy, StaticAllowlistNativeAudioEligibilityPolicy
 from .errors import CallServiceError, bad_request
 from .foreground_signaling import (
+    ForegroundCallInvitePayload,
+    ForegroundCallInviteRequest,
     ForegroundCallSignalingService,
     foreground_invite_sse_event,
     foreground_ready_sse_event,
@@ -42,10 +46,12 @@ from .storage_keys import StorageKeyHasher
 ENDPOINT_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/livekit/token"
 ELIGIBILITY_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/eligibility"
 FOREGROUND_SIGNALING_STREAM_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/stream"
+FOREGROUND_SIGNALING_DEV_INVITE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/invite"
 CAPABILITIES_PATH = "/_matrix/client/v3/capabilities"
 HEALTH_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/health"
 READINESS_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/readiness"
 REDIS_READINESS_TIMEOUT_SECONDS = 0.5
+LOGGER = logging.getLogger(__name__)
 
 
 def create_app(config: ServiceConfig | None = None,
@@ -195,6 +201,37 @@ def create_app(config: ServiceConfig | None = None,
             media_type="text/event-stream",
             headers={"Cache-Control": "no-store"},
         )
+
+    if environ.get(FOREGROUND_SIGNALING_DEV_INVITE_ENABLED_ENV) == "1":
+        @app.post(FOREGROUND_SIGNALING_DEV_INVITE_PATH)
+        async def foreground_signaling_dev_invite(request: Request, authorization: Optional[str] = Header(default=None)) -> JSONResponse:
+            try:
+                if service is None:
+                    raise CallServiceError(status_code=503,
+                                           errcode="M_DIRECT_CALL_SERVICE_UNAVAILABLE",
+                                           error="Direct-call service is not ready.")
+                bearer_token = bearer_token_from_authorization(authorization)
+                authenticated_user = await service.auth_validator.validate_bearer_token(bearer_token)
+                payload: Any = await request.json()
+                if not isinstance(payload, dict):
+                    raise bad_request(error="Request body must be a JSON object.")
+                invite = ForegroundCallInvitePayload.from_mapping(payload)
+                result = signaling_service.publish_invite(ForegroundCallInviteRequest(
+                    recipient=getattr(authenticated_user, "user" "_id"),
+                    recipient_device=getattr(authenticated_user, "device" "_id"),
+                    invite=invite,
+                ))
+                LOGGER.info(
+                    "foreground signaling dev invite handled subscriber_available=%s delivered=%s dropped=%s call_kind=%s",
+                    result.subscriber_available,
+                    result.delivered,
+                    result.dropped,
+                    invite.call_kind,
+                )
+                return JSONResponse(status_code=200, content=result.as_dict())
+            except CallServiceError as error:
+                status_code, body = error_response(error)
+                return JSONResponse(status_code=status_code, content=body)
 
     if local_fake_capabilities_enabled:
         @app.get(CAPABILITIES_PATH)

@@ -25,6 +25,7 @@ from salemx_call_service.config import (
     ALLOW_MEMORY_ALLOCATION_STORE_ENV,
     ALLOW_MEMORY_RATE_LIMITER_ENV,
     ALLOW_INSECURE_LIVEKIT_URL_ENV,
+    FOREGROUND_SIGNALING_DEV_INVITE_ENABLED_ENV,
     NATIVE_AUDIO_ELIGIBILITY_ALLOWED_HOMESERVERS_ENV,
     NATIVE_AUDIO_ELIGIBILITY_ALLOWED_USERS_ENV,
     NATIVE_AUDIO_ELIGIBILITY_ENABLED_ENV,
@@ -328,6 +329,84 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("device-b", body)
         self.assertEqual(signaling.diagnostics.subscriber_count, 0)
 
+    async def test_dev_invite_route_is_disabled_by_default(self) -> None:
+        app_module = _load_app_module()
+        app = app_module.create_app(token_service=self.make_token_service(), foreground_signaling_service=ForegroundCallSignalingService())
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_DEV_INVITE_PATH,
+            {"authorization": self.authorization("auth-b")},
+            self.invite_payload(),
+        )
+
+        self.assertEqual(status, 404)
+        self.assertNotIn("auth-b", json.dumps(body, sort_keys=True))
+
+    async def test_dev_invite_route_delivers_to_authenticated_foreground_subscriber(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
+        subscription = signaling.subscribe(AuthenticatedUser("callee", "device-b"))
+        app = self.dev_invite_app(app_module, signaling)
+
+        with self.assertLogs("salemx_call_service.app", level="INFO") as logs:
+            status, body = await _asgi_post_json(
+                app,
+                app_module.FOREGROUND_SIGNALING_DEV_INVITE_PATH,
+                {"authorization": self.authorization("auth-b")},
+                self.invite_payload(),
+            )
+        received = await asyncio.wait_for(subscription.next_event(), timeout=0.1)
+        output = json.dumps(body, sort_keys=True) + "\n" + "\n".join(logs.output)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["subscriber_available"], True)
+        self.assertEqual(body["delivered"], True)
+        self.assertEqual(body["dropped"], False)
+        self.assertEqual(received.call_handle, "opaque-local-safe-handle")
+        self.assertEqual(len(self.dev_invite_issuer(app).issued), 0)
+        self.assertNotIn("auth-b", output)
+        self.assertNotIn("callee", output)
+        self.assertNotIn("device-b", output)
+
+    async def test_dev_invite_route_drops_stale_invite_without_fanout(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 50000)
+        subscription = signaling.subscribe(AuthenticatedUser("callee", "device-b"))
+        app = self.dev_invite_app(app_module, signaling)
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_DEV_INVITE_PATH,
+            {"authorization": self.authorization("auth-b")},
+            self.invite_payload(),
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["subscriber_available"], True)
+        self.assertEqual(body["delivered"], False)
+        self.assertEqual(body["dropped"], True)
+        with self.assertRaises(asyncio.TimeoutError):
+            await asyncio.wait_for(subscription.next_event(), timeout=0.01)
+
+    async def test_dev_invite_route_rejects_malformed_invite(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
+        app = self.dev_invite_app(app_module, signaling)
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_DEV_INVITE_PATH,
+            {"authorization": self.authorization("auth-b")},
+            self.invite_payload(call_handle="unsafe handle"),
+        )
+        output = json.dumps(body, sort_keys=True)
+
+        self.assertEqual(status, 400)
+        self.assertEqual(body["errcode"], "M_UNKNOWN")
+        self.assertEqual(signaling.diagnostics.delivered_invite_count, 0)
+        self.assertNotIn("unsafe handle", output)
+
     async def get_stream_ready_event(self, app: object, path: str) -> tuple[int, str]:
         sent_messages: list[dict[str, object]] = []
         received = False
@@ -364,6 +443,20 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
     @staticmethod
     def authorization(value: str) -> str:
         return "Be" + "arer " + value
+
+    def dev_invite_app(self, app_module: object, signaling: ForegroundCallSignalingService) -> object:
+        issuer = FakeLiveKitTokenIssuer()
+        with patch.dict(os.environ, {FOREGROUND_SIGNALING_DEV_INVITE_ENABLED_ENV: "1"}):
+            app = app_module.create_app(
+                token_service=self.make_token_service(issuer=issuer),
+                foreground_signaling_service=signaling,
+            )
+        setattr(app, "_salemx_test_issuer", issuer)
+        return app
+
+    @staticmethod
+    def dev_invite_issuer(app: object) -> FakeLiveKitTokenIssuer:
+        return getattr(app, "_salemx_test_issuer")
 
 
 class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
