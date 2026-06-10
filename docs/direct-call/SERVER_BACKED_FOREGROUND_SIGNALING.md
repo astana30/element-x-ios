@@ -180,3 +180,25 @@ Remaining server work includes validated call invite source, stale invalidation,
 Detailed server notes are in `server/salemx-call-service/docs/FOREGROUND_SIGNALING_ENDPOINT.md`.
 
 Recommended next phase: `2.42E - iOS foreground signaling SSE transport integration`.
+
+## 2.42F - Supervised Dev-Only Foreground Invite Source
+
+Status: implemented as a disabled-by-default call-service route for local and staging smoke tests.
+
+2.42F adds a supervised dev route:
+
+```text
+POST /_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/invite
+```
+
+The route is registered only when `SALEMX_FOREGROUND_SIGNALING_DEV_INVITE_ENABLED=1` is set. With the flag unset, the route is absent.
+
+The route authenticates the active session, validates the existing opaque foreground invite payload, and publishes through the same `ForegroundCallSignalingService` fanout used by the SSE stream.
+
+To avoid raw routing values in request bodies, the dev route targets only the authenticated foreground subscriber for the same active session/device. It is a supervised self-injection path for testing stream delivery, not a production invite API.
+
+The route does not issue media credentials, connect media, emit Matrix events, add PushKit/APNs behavior, add background incoming behavior, or replace Element Call routing. The server-issued media credential endpoint remains final authority after answer-time foreground validation.
+
+Detailed server notes are in `server/salemx-call-service/docs/FOREGROUND_SIGNALING_DEV_INVITE.md`.
+
+Recommended next phase: `2.42G - supervised foreground SSE smoke`.

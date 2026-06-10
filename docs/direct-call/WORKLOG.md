@@ -2014,3 +2014,14 @@ Confirmed on a physical iPhone Debug build that the isolated synthetic CallKit p
 - Unit coverage verifies disabled behavior, ready/malformed ignore behavior, valid invite reporting, stale/unsupported suppression, duplicate suppression, and no media credential/media connection/Matrix event side effects.
 - Added `docs/direct-call/IOS_FOREGROUND_SSE_TRANSPORT.md`.
 - No PushKit/APNs runtime, background incoming, signing/project change, Element Call route replacement, media behavior change, broad rollout, production/public rollout, or global activation was added.
+
+## 2026-06-10 - 2.42F Supervised Dev-Only Foreground Invite Source
+
+- Added a disabled-by-default call-service route for supervised local/staging foreground SSE smoke tests.
+- The route is `POST /_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/invite` and is registered only when `SALEMX_FOREGROUND_SIGNALING_DEV_INVITE_ENABLED=1` is set.
+- The route authenticates the active session, validates the existing opaque foreground invite payload, and publishes through `ForegroundCallSignalingService`.
+- To keep request bodies free of raw routing values, the route targets only the authenticated foreground subscriber for the same active session/device.
+- The route does not issue media credentials, allocate media rooms, connect media, emit Matrix events, add PushKit/APNs behavior, add background incoming behavior, or replace Element Call routing.
+- Added unit coverage for disabled route behavior, valid dev invite delivery, stale invite drop, malformed invite rejection, redacted logs, and no media credential issuance.
+- Added `server/salemx-call-service/docs/FOREGROUND_SIGNALING_DEV_INVITE.md`.
+- No iOS signing/project setting, PushKit/APNs runtime, background incoming, Element Call route, media behavior, broad rollout, production/public rollout, or global activation change was added.

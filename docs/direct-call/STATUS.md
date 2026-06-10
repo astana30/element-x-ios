@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.42C - server-backed foreground signaling transport review.
+After 2.42F - supervised dev-only foreground invite source.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,24 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.42F adds a supervised, dev-only foreground invite source to the call-service:
+  - The route is `POST /_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/invite`.
+  - It is registered only when `SALEMX_FOREGROUND_SIGNALING_DEV_INVITE_ENABLED=1` is set; default deployments do not expose it.
+  - The route authenticates the active session, validates the same opaque foreground invite payload used by the SSE stream, and publishes through the existing internal `ForegroundCallSignalingService` fanout.
+  - To avoid raw routing values in request bodies, it targets only the authenticated foreground subscriber for the same active session/device.
+  - It does not issue media credentials, connect media, emit Matrix events, add PushKit/APNs behavior, add background incoming behavior, replace Element Call routing, or change iOS signing/project settings.
+  - Server notes are documented in `server/salemx-call-service/docs/FOREGROUND_SIGNALING_DEV_INVITE.md`.
+- 2.42E added an iOS foreground SSE transport client boundary:
+  - The transport is disabled by default and requires explicit construction/configuration.
+  - The URLSession stream wrapper requires an injected request; no production URL or credential value is hardcoded.
+  - Valid `foreground.call.invite` SSE events feed the existing foreground signaling pipeline, while ready, malformed, stale, unsupported, and duplicate events fail closed or are ignored.
+  - Invite receipt does not request media credentials, connect media, emit Matrix events, or bypass foreground authority.
+  - No PushKit/APNs runtime, background incoming behavior, signing/project setting change, Element Call route replacement, media behavior change, broad rollout, or production/public rollout was added.
+- 2.42D added the call-service foreground signaling endpoint:
+  - The server exposes `GET /_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/stream` for authenticated foreground SSE subscribers.
+  - It emits a `foreground.ready` event and validated opaque `foreground.call.invite` events from an internal in-memory fanout boundary.
+  - Expired invites are dropped before fanout with redacted diagnostics.
+  - The stream does not issue media credentials, connect media, emit Matrix events, add PushKit/APNs behavior, or add background incoming behavior.
 - 2.42C inspected the SalemX call-service and app signaling boundary for a server-backed foreground invite transport:
   - The call-service currently exposes redacted health/readiness, native audio eligibility, server-issued media credential allocation, and local fake capability discovery only.
   - No foreground call invite subscription, fanout, acknowledgement, stale invalidation, reconnect/resume, or app runtime endpoint configuration exists yet.
