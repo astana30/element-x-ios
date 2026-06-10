@@ -2003,3 +2003,14 @@ Confirmed on a physical iPhone Debug build that the isolated synthetic CallKit p
 - Added unit coverage for safe payload validation, malformed/unsupported/expired-shape rejection, active-subscriber delivery, redacted SSE output, unauthenticated stream rejection, and subscription cleanup on disconnect.
 - Added `server/salemx-call-service/docs/FOREGROUND_SIGNALING_ENDPOINT.md` and updated the server-backed foreground signaling status docs.
 - No PushKit/APNs runtime, background incoming, signing/project change, Element Call route replacement, media behavior change, broad rollout, production/public rollout, or global activation was added.
+
+## 2026-06-10 - 2.42E iOS Foreground SSE Transport Client
+
+- Added a disabled/configured iOS SSE transport boundary for the 2.42D call-service foreground signaling stream.
+- Added an SSE parser that ignores `foreground.ready` and emits only validated opaque `foreground.call.invite` transport events.
+- Added a URLSession-backed stream wrapper that requires an injected request; no production URL or credential value is hardcoded.
+- Kept the default stream disabled/no-op and the transport disabled unless explicitly constructed with `isEnabled=true`.
+- Valid SSE invites feed the existing foreground signaling pipeline and `ForegroundCallInviteHandler`; malformed, stale, unsupported, and unsafe payloads fail closed or are ignored.
+- Unit coverage verifies disabled behavior, ready/malformed ignore behavior, valid invite reporting, stale/unsupported suppression, duplicate suppression, and no media credential/media connection/Matrix event side effects.
+- Added `docs/direct-call/IOS_FOREGROUND_SSE_TRANSPORT.md`.
+- No PushKit/APNs runtime, background incoming, signing/project change, Element Call route replacement, media behavior change, broad rollout, production/public rollout, or global activation was added.

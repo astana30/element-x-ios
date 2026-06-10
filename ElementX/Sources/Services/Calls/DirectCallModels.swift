@@ -1001,6 +1001,345 @@ final class InMemoryForegroundCallSignalingTransport: ForegroundCallSignalingTra
     }
 }
 
+enum ForegroundCallSignalingSSEStreamCompletion: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case ended
+    case failed
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+
+    private var rawValue: String {
+        switch self {
+        case .ended:
+            "ended"
+        case .failed:
+            "failed"
+        }
+    }
+}
+
+protocol ForegroundCallSignalingSSEStreaming: AnyObject {
+    func start(onChunk: @escaping (Data) -> Void,
+               onCompletion: @escaping (ForegroundCallSignalingSSEStreamCompletion) -> Void)
+    func stop()
+}
+
+final class DisabledForegroundCallSignalingSSEStream: ForegroundCallSignalingSSEStreaming, CustomStringConvertible, CustomDebugStringConvertible {
+    private(set) var isStarted = false
+
+    func start(onChunk: @escaping (Data) -> Void,
+               onCompletion: @escaping (ForegroundCallSignalingSSEStreamCompletion) -> Void) {
+        isStarted = false
+    }
+
+    func stop() {
+        isStarted = false
+    }
+
+    var description: String {
+        "DisabledForegroundCallSignalingSSEStream(isStarted: \(isStarted), realTransport: false)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+final class URLSessionForegroundCallSignalingSSEStream: ForegroundCallSignalingSSEStreaming, CustomStringConvertible, CustomDebugStringConvertible {
+    private let request: URLRequest
+    private let session: URLSession
+    private var task: Task<Void, Never>?
+
+    init(request: URLRequest, session: URLSession = .shared) {
+        self.request = request
+        self.session = session
+    }
+
+    func start(onChunk: @escaping (Data) -> Void,
+               onCompletion: @escaping (ForegroundCallSignalingSSEStreamCompletion) -> Void) {
+        stop()
+        task = Task {
+            do {
+                let (bytes, response) = try await session.bytes(for: request)
+                if let response = response as? HTTPURLResponse,
+                   !(200..<300).contains(response.statusCode) {
+                    onCompletion(.failed)
+                    return
+                }
+
+                for try await line in bytes.lines {
+                    guard !Task.isCancelled else {
+                        return
+                    }
+                    onChunk(Data("\(line)\n".utf8))
+                }
+
+                onCompletion(.ended)
+            } catch {
+                guard !Task.isCancelled else {
+                    return
+                }
+                onCompletion(.failed)
+            }
+        }
+    }
+
+    func stop() {
+        task?.cancel()
+        task = nil
+    }
+
+    var description: String {
+        "URLSessionForegroundCallSignalingSSEStream(realTransport: true, request: <redacted>)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct ForegroundCallSignalingSSEParser: CustomStringConvertible, CustomDebugStringConvertible {
+    private var bufferedLine = ""
+    private var currentEventType: String?
+    private var currentDataLines = [String]()
+    private let validator: ForegroundCallInviteValidator
+    private let now: () -> Date
+
+    init(validator: ForegroundCallInviteValidator = .init(), now: @escaping () -> Date = Date.init) {
+        self.validator = validator
+        self.now = now
+    }
+
+    mutating func consume(_ data: Data) -> [ForegroundCallSignalingTransportEvent] {
+        guard let text = String(data: data, encoding: .utf8) else {
+            return []
+        }
+
+        bufferedLine += text
+        var events = [ForegroundCallSignalingTransportEvent]()
+        while let newlineIndex = bufferedLine.firstIndex(of: "\n") {
+            let line = String(bufferedLine[..<newlineIndex]).trimmingCharacters(in: .newlines)
+            bufferedLine.removeSubrange(...newlineIndex)
+
+            if let event = consumeLine(line) {
+                events.append(event)
+            }
+        }
+        return events
+    }
+
+    mutating func finish() -> [ForegroundCallSignalingTransportEvent] {
+        guard !bufferedLine.isEmpty else {
+            return flushCurrentEvent()
+        }
+
+        let line = bufferedLine
+        bufferedLine = ""
+        if let event = consumeLine(line) {
+            return [event]
+        }
+        return flushCurrentEvent()
+    }
+
+    private mutating func consumeLine(_ line: String) -> ForegroundCallSignalingTransportEvent? {
+        let normalizedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalizedLine.isEmpty {
+            return flushCurrentEvent().first
+        }
+        if normalizedLine.hasPrefix(":") {
+            return nil
+        }
+        if normalizedLine.hasPrefix("event:") {
+            currentEventType = normalizedLine.dropPrefix("event:").trimmedSSEField
+            return nil
+        }
+        if normalizedLine.hasPrefix("data:") {
+            currentDataLines.append(normalizedLine.dropPrefix("data:").trimmedSSEField)
+            return nil
+        }
+        return nil
+    }
+
+    private mutating func flushCurrentEvent() -> [ForegroundCallSignalingTransportEvent] {
+        defer {
+            currentEventType = nil
+            currentDataLines = []
+        }
+
+        guard currentEventType == "foreground.call.invite",
+              !currentDataLines.isEmpty,
+              let payload = currentDataLines.joined(separator: "\n").data(using: .utf8),
+              let dto = try? JSONDecoder().decode(ForegroundCallInviteSSEPayload.self, from: payload) else {
+            return []
+        }
+
+        return dto.transportEvent(validator: validator, now: now()).map { [$0] } ?? []
+    }
+
+    var description: String {
+        "ForegroundCallSignalingSSEParser(buffered: \(bufferedLine.isEmpty ? "false" : "true"), realTransport: false)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+final class ForegroundCallSignalingSSETransport: ForegroundCallSignalingTransport, CustomStringConvertible, CustomDebugStringConvertible {
+    private let isEnabled: Bool
+    private let stream: ForegroundCallSignalingSSEStreaming
+    private var parser: ForegroundCallSignalingSSEParser
+    private var onEvent: ((ForegroundCallSignalingTransportEvent) -> Void)?
+    private(set) var diagnostics = ForegroundCallSignalingTransportDiagnostics.disabled
+
+    init(isEnabled: Bool = false,
+         stream: ForegroundCallSignalingSSEStreaming = DisabledForegroundCallSignalingSSEStream(),
+         validator: ForegroundCallInviteValidator = .init(),
+         now: @escaping () -> Date = Date.init) {
+        self.isEnabled = isEnabled
+        self.stream = stream
+        parser = ForegroundCallSignalingSSEParser(validator: validator, now: now)
+    }
+
+    func start(onEvent: @escaping (ForegroundCallSignalingTransportEvent) -> Void) {
+        guard isEnabled else {
+            diagnostics = .init(isStarted: false,
+                                deliveredInviteCount: diagnostics.deliveredInviteCount,
+                                latestEventKind: nil,
+                                latestResult: .ignored,
+                                realTransport: false)
+            return
+        }
+
+        self.onEvent = onEvent
+        diagnostics = .init(isStarted: true,
+                            deliveredInviteCount: diagnostics.deliveredInviteCount,
+                            latestEventKind: diagnostics.latestEventKind,
+                            latestResult: .started,
+                            realTransport: true)
+        stream.start { [weak self] chunk in
+            self?.handle(chunk)
+        } onCompletion: { [weak self] completion in
+            self?.handle(completion)
+        }
+    }
+
+    func stop() {
+        stream.stop()
+        onEvent = nil
+        parser = ForegroundCallSignalingSSEParser()
+        diagnostics = .init(isStarted: false,
+                            deliveredInviteCount: diagnostics.deliveredInviteCount,
+                            latestEventKind: diagnostics.latestEventKind,
+                            latestResult: .stopped,
+                            realTransport: isEnabled)
+    }
+
+    private func handle(_ chunk: Data) {
+        let events = parser.consume(chunk)
+        guard !events.isEmpty else {
+            diagnostics = .init(isStarted: diagnostics.isStarted,
+                                deliveredInviteCount: diagnostics.deliveredInviteCount,
+                                latestEventKind: diagnostics.latestEventKind,
+                                latestResult: .ignored,
+                                realTransport: isEnabled)
+            return
+        }
+
+        for event in events {
+            onEvent?(event)
+            diagnostics = .init(isStarted: diagnostics.isStarted,
+                                deliveredInviteCount: diagnostics.deliveredInviteCount + 1,
+                                latestEventKind: event.kind,
+                                latestResult: .delivered,
+                                realTransport: isEnabled)
+        }
+    }
+
+    private func handle(_ completion: ForegroundCallSignalingSSEStreamCompletion) {
+        let latestResult: ForegroundCallSignalingTransportResult = completion == .ended ? .stopped : .ignored
+        diagnostics = .init(isStarted: false,
+                            deliveredInviteCount: diagnostics.deliveredInviteCount,
+                            latestEventKind: diagnostics.latestEventKind,
+                            latestResult: latestResult,
+                            realTransport: isEnabled)
+    }
+
+    var description: String {
+        "ForegroundCallSignalingSSETransport(\(diagnostics), configured: \(isEnabled), mediaConnectRuntime: false)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+private struct ForegroundCallInviteSSEPayload: Decodable {
+    let type: String
+    let version: Int
+    let callHandle: String
+    let callKind: String
+    let createdAtMs: Int
+    let expiresAtMs: Int
+    let displayLabel: String
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case version
+        case callHandle = "call_handle"
+        case callKind = "call_kind"
+        case createdAtMs = "created_at_ms"
+        case expiresAtMs = "expires_at_ms"
+        case displayLabel = "display_label"
+    }
+
+    func transportEvent(validator: ForegroundCallInviteValidator, now: Date) -> ForegroundCallSignalingTransportEvent? {
+        guard type == "foreground.call.invite",
+              version == 1 else {
+            return nil
+        }
+
+        let kind = ForegroundCallInviteKind(rawValue: callKind) ?? .unsupported
+        let createdAt = Date(timeIntervalSince1970: TimeInterval(createdAtMs) / 1000)
+        let expiresAt = Date(timeIntervalSince1970: TimeInterval(expiresAtMs) / 1000)
+        let displayMetadata = NativeIncomingCallKitDisplayMetadata(displayLabel)
+
+        switch validator.validate(rawHandle: callHandle,
+                                  kind: kind,
+                                  state: .incoming,
+                                  createdAt: createdAt,
+                                  expiresAt: expiresAt,
+                                  displayMetadata: displayMetadata,
+                                  now: now) {
+        case .valid(let signal):
+            return .invite(signal)
+        case .failClosed:
+            return nil
+        }
+    }
+}
+
+private extension String {
+    func dropPrefix(_ prefix: String) -> String {
+        guard hasPrefix(prefix) else {
+            return self
+        }
+        return String(dropFirst(prefix.count))
+    }
+
+    var trimmedSSEField: String {
+        if hasPrefix(" ") {
+            return String(dropFirst())
+        }
+        return self
+    }
+}
+
 final class ForegroundCallSignalingTransportPipeline: CustomStringConvertible, CustomDebugStringConvertible {
     private let transport: ForegroundCallSignalingTransport
     private let inviteHandler: ForegroundCallInviteHandler
