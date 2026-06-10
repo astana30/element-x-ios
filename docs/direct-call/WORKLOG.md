@@ -2025,3 +2025,13 @@ Confirmed on a physical iPhone Debug build that the isolated synthetic CallKit p
 - Added unit coverage for disabled route behavior, valid dev invite delivery, stale invite drop, malformed invite rejection, redacted logs, and no media credential issuance.
 - Added `server/salemx-call-service/docs/FOREGROUND_SIGNALING_DEV_INVITE.md`.
 - No iOS signing/project setting, PushKit/APNs runtime, background incoming, Element Call route, media behavior, broad rollout, production/public rollout, or global activation change was added.
+
+## 2026-06-10 - 2.42G Supervised Foreground Signaling Smoke Wiring
+
+- Documented the supervised smoke wiring required to prove foreground SSE delivery on a physical iPhone.
+- Confirmed the iOS transport boundary already supports an injected `URLRequest` and remains disabled unless explicitly constructed with `isEnabled=true`.
+- Kept this phase docs-only because no safe app runtime owner exists yet for foreground start/stop lifecycle, authenticated request construction, reconnect/backoff, fallback de-duplication, or physical-path diagnostics.
+- Defined redacted smoke diagnostics: `sse_configured`, `sse_connected`, `invite_received`, `invite_valid`, and `incoming_requested`.
+- Documented that invite receipt must not request media credentials, connect media, emit Matrix events, or bypass the foreground authority gate.
+- Added `docs/direct-call/FOREGROUND_SIGNALING_SMOKE_WIRING.md`.
+- No Swift runtime code, PushKit/APNs runtime, background incoming, signing/project change, Element Call route replacement, hardcoded production URL, credential value, media behavior, broad rollout, production/public rollout, or global activation was added.
