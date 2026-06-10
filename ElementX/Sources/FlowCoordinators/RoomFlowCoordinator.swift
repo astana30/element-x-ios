@@ -1281,6 +1281,8 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
                                                                                                   timelineItemFactory: timelineItemFactory,
                                                                                                   mediaProvider: userSession.mediaProvider)
         self.timelineController = timelineController
+        flowParameters.elementCallService.observeForegroundRoom(roomProxy: roomProxy,
+                                                                roomDisplayName: roomProxy.infoPublisher.value.displayName)
         
         let completionSuggestionService = CompletionSuggestionService(roomProxy: roomProxy,
                                                                       roomListPublisher: userSession.clientProxy.staticRoomSummaryProvider.roomListPublisher.eraseToAnyPublisher())
@@ -1512,6 +1514,7 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
     
     private func dismissFlow(animated: Bool, continuingWith spaceRoomListProxy: SpaceRoomListProxyProtocol? = nil) {
         resetNativeDirectCallRoomFlowOwner()
+        flowParameters.elementCallService.stopObservingForegroundRoom(roomID: roomID)
         childRoomFlowCoordinator?.clearRoute(animated: animated)
         
         if isChildFlow {

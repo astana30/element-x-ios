@@ -23,6 +23,10 @@ protocol ElementCallServiceProtocol {
     var ongoingCallRoomIDPublisher: CurrentValuePublisher<String?, Never> { get }
     
     func setClientProxy(_ clientProxy: ClientProxyProtocol)
+
+    @MainActor func observeForegroundRoom(roomProxy: JoinedRoomProxyProtocol, roomDisplayName: String?)
+
+    @MainActor func stopObservingForegroundRoom(roomID: String)
     
     func setupCallSession(roomID: String, roomDisplayName: String, startMode: ElementCallStartMode) async
     
@@ -38,6 +42,10 @@ protocol ElementCallServiceProtocol {
 }
 
 extension ElementCallServiceProtocol {
+    @MainActor func observeForegroundRoom(roomProxy _: JoinedRoomProxyProtocol, roomDisplayName _: String?) { }
+
+    @MainActor func stopObservingForegroundRoom(roomID _: String) { }
+
     func setupCallSession(roomID: String, roomDisplayName: String) async {
         await setupCallSession(roomID: roomID, roomDisplayName: roomDisplayName, startMode: .video)
     }

@@ -5,6 +5,7 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
+import CallKit
 import Clocks
 import Combine
 @testable import ElementX
@@ -23,7 +24,7 @@ final class ElementCallServiceTests {
     private var service: ElementCallService!
     private let clientProxy = ClientProxyMock(.init(userID: "@test:user.net"))
     private var cancellables = Set<AnyCancellable>()
-    
+
     init() {
         AppSettings.resetAllSettings()
         pushRegistry = PKPushRegistry(queue: nil)
@@ -37,97 +38,79 @@ final class ElementCallServiceTests {
                                      callProvider: callProvider,
                                      timeProvider: TimeProvider(clock: testClock, now: dateProvider))
     }
-    
+
     deinit {
         callProvider = nil
         currentDate = nil
         testClock = nil
         pushRegistry = nil
     }
-    
+
     @Test
     func incomingCall() async {
         #expect(!callProvider.reportNewIncomingCallWithUpdateCompletionCalled)
-        
+
         await confirmation { confirmation in
             let pkPushPayloadMock = PKPushPayloadMock().updatingExpiration(currentDate, lifetime: 30)
-            
+
             service.pushRegistry(pushRegistry, didReceiveIncomingPushWith: pkPushPayloadMock, for: .voIP) {
                 confirmation()
             }
         }
-        
+
         #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCalled)
         await service.declineIncomingCall()
     }
-    
+
     @Test
     func callIsTimingOut() async {
         #expect(!callProvider.reportNewIncomingCallWithUpdateCompletionCalled)
-        
+
         await confirmation { confirmation in
             let pushPayload = PKPushPayloadMock().updatingExpiration(currentDate, lifetime: 20)
-            
+
             service.pushRegistry(pushRegistry,
                                  didReceiveIncomingPushWith: pushPayload,
                                  for: .voIP) {
                 confirmation()
             }
         }
-        
-        await confirmation { confirmation in
-            callProvider.reportCallWithEndedAtReasonClosure = { _, _, reason in
-                if reason == .unanswered {
-                    confirmation()
-                } else {
-                    Issue.record("Call should have ended as unanswered")
-                }
-            }
-            
-            // advance past the timeout
-            await testClock.advance(by: .seconds(30))
-        }
+
+        // advance past the timeout
+        await testClock.advance(by: .seconds(30))
+        #expect(await waitForEndedCall(reason: .unanswered))
     }
-    
+
     @Test
     func expiredRingLifetimeIsIgnored() async {
         #expect(!callProvider.reportNewIncomingCallWithUpdateCompletionCalled)
-        
+
         let pushPayload = PKPushPayloadMock().updatingExpiration(currentDate, lifetime: 20)
-        
+
         currentDate = currentDate.addingTimeInterval(60)
-        
+
         service.pushRegistry(pushRegistry,
                              didReceiveIncomingPushWith: pushPayload,
                              for: .voIP) { }
         sleep(20)
-        
+
         #expect(!callProvider.reportNewIncomingCallWithUpdateCompletionCalled)
         await service.declineIncomingCall()
     }
-    
+
     @Test
     func lifetimeIsCapped() async {
-        await confirmation { confirmation in
-            callProvider.reportCallWithEndedAtReasonClosure = { _, _, reason in
-                if reason == .unanswered {
-                    confirmation()
-                } else {
-                    Issue.record("Call should have ended as unanswered")
-                }
-            }
-            
-            #expect(!callProvider.reportNewIncomingCallWithUpdateCompletionCalled)
-            
-            let pushPayload = PKPushPayloadMock().updatingExpiration(currentDate, lifetime: 300)
-            
-            service.pushRegistry(pushRegistry,
-                                 didReceiveIncomingPushWith: pushPayload,
-                                 for: .voIP) { }
-            
-            // Advance past the max timeout but below the 300
-            await testClock.advance(by: .seconds(100))
-        }
+        #expect(!callProvider.reportNewIncomingCallWithUpdateCompletionCalled)
+
+        let pushPayload = PKPushPayloadMock().updatingExpiration(currentDate, lifetime: 300)
+
+        service.pushRegistry(pushRegistry,
+                             didReceiveIncomingPushWith: pushPayload,
+                             for: .voIP) { }
+
+        // Advance past the max timeout but below the 300
+        await testClock.advance(by: .seconds(100))
+        #expect(await waitForEndedCall(reason: .unanswered))
     }
 
     @Test
@@ -142,6 +125,7 @@ final class ElementCallServiceTests {
         clientProxy.roomForIdentifierClosure = { _ in
             .joined(room)
         }
+        configureLiveTimeline(for: room)
 
         let roomSummaryProvider = RoomSummaryProviderMock()
         roomSummaryProvider.statePublisher = CurrentValueSubject<RoomSummaryProviderState, Never>(.loaded(totalNumberOfRooms: 0)).asCurrentValuePublisher()
@@ -163,7 +147,7 @@ final class ElementCallServiceTests {
     @Test
     func declineIncomingCallSendsDeclineEventAndStopsRinging() async {
         service.setClientProxy(clientProxy)
-        
+
         let room = JoinedRoomProxyMock(.init(id: "!room:example.com",
                                              name: "Room",
                                              isDirect: true,
@@ -175,24 +159,24 @@ final class ElementCallServiceTests {
         room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerClosure = { _, _ in
             .failure(.missingTransactionID)
         }
-        
+
         room.declineCallNotificationIDClosure = { notificationID in
             #expect(notificationID == "$000")
             return .success(())
         }
-        
+
         await confirmation { confirmation in
             callProvider.reportCallWithEndedAtReasonClosure = { _, _, reason in
                 if reason == .declinedElsewhere {
                     confirmation()
                 }
             }
-            
+
             let payload = PKPushPayloadMock().updatingExpiration(currentDate, lifetime: 30)
             service.pushRegistry(pushRegistry, didReceiveIncomingPushWith: payload, for: .voIP) { }
             await service.declineIncomingCall()
         }
-        
+
         #expect(room.declineCallNotificationIDCalled)
         #expect(callProvider.reportCallWithEndedAtReasonCalled)
     }
@@ -209,6 +193,7 @@ final class ElementCallServiceTests {
         clientProxy.roomForIdentifierClosure = { _ in
             .joined(room)
         }
+        configureLiveTimeline(for: room)
 
         room.declineCallNotificationIDClosure = { notificationID in
             #expect(notificationID == "$000")
@@ -262,15 +247,15 @@ final class ElementCallServiceTests {
             declineListener?.call(declinerUserId: remoteUserID)
         }
     }
-    
+
     @Test
     func incomingDirectCallStopsRingingWhenRemoteLeavesCallMemberState() async {
         service.setClientProxy(clientProxy)
-        
+
         let roomID = "!room:example.com"
         let ownUserID = "@test:user.net"
         let remoteUserID = "@alice:example.com"
-        
+
         let room = JoinedRoomProxyMock(.init(id: roomID,
                                              name: "Room",
                                              isDirect: true,
@@ -283,24 +268,24 @@ final class ElementCallServiceTests {
         room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerClosure = { _, _ in
             .failure(.missingTransactionID)
         }
-        
+
         let roomInfoSubject = CurrentValueSubject<RoomInfoProxyProtocol, Never>(makeRoomInfo(id: roomID,
                                                                                              isDirect: true,
                                                                                              hasRoomCall: true,
                                                                                              participants: [remoteUserID]))
         room.infoPublisher = roomInfoSubject.asCurrentValuePublisher()
-        
+
         await confirmation { confirmation in
             callProvider.reportCallWithEndedAtReasonClosure = { _, _, reason in
                 if reason == .remoteEnded {
                     confirmation()
                 }
             }
-            
+
             let payload = PKPushPayloadMock().updatingExpiration(currentDate, lifetime: 30)
             service.pushRegistry(pushRegistry, didReceiveIncomingPushWith: payload, for: .voIP) { }
             try? await Task.sleep(for: .milliseconds(120))
-            
+
             roomInfoSubject.send(makeRoomInfo(id: roomID,
                                               isDirect: true,
                                               hasRoomCall: true,
@@ -324,6 +309,7 @@ final class ElementCallServiceTests {
         clientProxy.roomForIdentifierClosure = { _ in
             .joined(room)
         }
+        configureLiveTimeline(for: room)
         room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerClosure = { _, _ in
             .failure(.missingTransactionID)
         }
@@ -412,15 +398,15 @@ final class ElementCallServiceTests {
             ])
         }
     }
-    
+
     @Test
     func ongoingDirectCallEndsWhenRemoteLeavesCallMemberState() async {
         service.setClientProxy(clientProxy)
-        
+
         let roomID = "!room:example.com"
         let ownUserID = "@test:user.net"
         let remoteUserID = "@alice:example.com"
-        
+
         let room = JoinedRoomProxyMock(.init(id: roomID,
                                              name: "Room",
                                              isDirect: true,
@@ -433,15 +419,15 @@ final class ElementCallServiceTests {
         room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerClosure = { _, _ in
             .failure(.missingTransactionID)
         }
-        
+
         let roomInfoSubject = CurrentValueSubject<RoomInfoProxyProtocol, Never>(makeRoomInfo(id: roomID,
                                                                                              isDirect: true,
                                                                                              hasRoomCall: true,
                                                                                              participants: [ownUserID, remoteUserID]))
         room.infoPublisher = roomInfoSubject.asCurrentValuePublisher()
-        
+
         await service.setupCallSession(roomID: roomID, roomDisplayName: "Room")
-        
+
         await confirmation { confirmation in
             service.actions
                 .sink { action in
@@ -450,14 +436,14 @@ final class ElementCallServiceTests {
                     }
                 }
                 .store(in: &cancellables)
-            
+
             try? await Task.sleep(for: .milliseconds(120))
             roomInfoSubject.send(makeRoomInfo(id: roomID,
                                               isDirect: true,
                                               hasRoomCall: true,
                                               participants: [ownUserID]))
         }
-        
+
         #expect(service.ongoingCallRoomIDPublisher.value == nil)
     }
 
@@ -512,15 +498,15 @@ final class ElementCallServiceTests {
 
         #expect(observedRTCNotificationID == "$000")
     }
-    
+
     @Test
     func ongoingDirectCallFallsBackToRemoteRTCNotificationForDeclineListenerWhenOwnIsMissing() async {
         service.setClientProxy(clientProxy)
-        
+
         let roomID = "!room:example.com"
         let ownUserID = "@test:user.net"
         let remoteUserID = "@alice:example.com"
-        
+
         let room = JoinedRoomProxyMock(.init(id: roomID,
                                              name: "Room",
                                              isDirect: true,
@@ -529,19 +515,19 @@ final class ElementCallServiceTests {
         clientProxy.roomForIdentifierClosure = { _ in
             .joined(room)
         }
-        
+
         let roomInfoSubject = CurrentValueSubject<RoomInfoProxyProtocol, Never>(makeRoomInfo(id: roomID,
                                                                                              isDirect: true,
                                                                                              hasRoomCall: true,
                                                                                              participants: [ownUserID, remoteUserID]))
         room.infoPublisher = roomInfoSubject.asCurrentValuePublisher()
-        
+
         guard let timelineProxy = room.timeline as? TimelineProxyMock,
               let timelineItemProvider = timelineProxy.timelineItemProvider as? TimelineItemProviderMock else {
             Issue.record("Failed configuring timeline mocks.")
             return
         }
-        
+
         timelineItemProvider.itemProxies = [
             makeCallTimelineItem(eventID: "$remoteInvite",
                                  sender: remoteUserID,
@@ -551,27 +537,27 @@ final class ElementCallServiceTests {
         timelineItemProvider.updatePublisher = CurrentValueSubject<([TimelineItemProxy], TimelinePaginationState), Never>((timelineItemProvider.itemProxies, .initial)).eraseToAnyPublisher()
         timelineItemProvider.paginationState = .initial
         timelineItemProvider.kind = .live
-        
+
         var observedRTCNotificationID: String?
         room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerClosure = { rtcNotificationEventID, _ in
             observedRTCNotificationID = rtcNotificationEventID
             return .success(TaskHandle(noHandle: .init()))
         }
-        
+
         await service.setupCallSession(roomID: roomID, roomDisplayName: "Room")
         try? await Task.sleep(for: .milliseconds(120))
-        
+
         #expect(observedRTCNotificationID == "$remoteInvite")
     }
 
     @Test
     func ongoingDirectCallObservesDeclinesForOwnAndRemoteRTCNotifications() async {
         service.setClientProxy(clientProxy)
-        
+
         let roomID = "!room:example.com"
         let ownUserID = "@test:user.net"
         let remoteUserID = "@alice:example.com"
-        
+
         let room = JoinedRoomProxyMock(.init(id: roomID,
                                              name: "Room",
                                              isDirect: true,
@@ -580,13 +566,13 @@ final class ElementCallServiceTests {
         clientProxy.roomForIdentifierClosure = { _ in
             .joined(room)
         }
-        
+
         guard let timelineProxy = room.timeline as? TimelineProxyMock,
               let timelineItemProvider = timelineProxy.timelineItemProvider as? TimelineItemProviderMock else {
             Issue.record("Failed configuring timeline mocks.")
             return
         }
-        
+
         timelineItemProvider.itemProxies = [
             makeCallTimelineItem(eventID: "$ownInvite",
                                  sender: ownUserID,
@@ -600,20 +586,20 @@ final class ElementCallServiceTests {
         timelineItemProvider.updatePublisher = CurrentValueSubject<([TimelineItemProxy], TimelinePaginationState), Never>((timelineItemProvider.itemProxies, .initial)).eraseToAnyPublisher()
         timelineItemProvider.paginationState = .initial
         timelineItemProvider.kind = .live
-        
+
         let roomInfoSubject = CurrentValueSubject<RoomInfoProxyProtocol, Never>(makeRoomInfo(id: roomID,
                                                                                              isDirect: true,
                                                                                              hasRoomCall: true,
                                                                                              participants: [ownUserID, remoteUserID]))
         room.infoPublisher = roomInfoSubject.asCurrentValuePublisher()
-        
+
         room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerClosure = { _, _ in
             .success(TaskHandle(noHandle: .init()))
         }
-        
+
         await service.setupCallSession(roomID: roomID, roomDisplayName: "Room")
         try? await Task.sleep(for: .milliseconds(200))
-        
+
         let observedRTCNotificationIDs = Set(room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerReceivedInvocations.map(\.rtcNotificationEventID))
         #expect(observedRTCNotificationIDs == Set(["$ownInvite", "$remoteInvite"]))
     }
@@ -680,11 +666,11 @@ final class ElementCallServiceTests {
     @Test
     func requestCallTerminationSkipsDeclineForOutgoingCall() async {
         service.setClientProxy(clientProxy)
-        
+
         let roomID = "!room:example.com"
         let ownUserID = "@test:user.net"
         let remoteUserID = "@alice:example.com"
-        
+
         let room = JoinedRoomProxyMock(.init(id: roomID,
                                              name: "Room",
                                              isDirect: true,
@@ -693,13 +679,13 @@ final class ElementCallServiceTests {
         clientProxy.roomForIdentifierClosure = { _ in
             .joined(room)
         }
-        
+
         guard let timelineProxy = room.timeline as? TimelineProxyMock,
               let timelineItemProvider = timelineProxy.timelineItemProvider as? TimelineItemProviderMock else {
             Issue.record("Failed configuring timeline mocks.")
             return
         }
-        
+
         timelineItemProvider.itemProxies = [
             makeCallTimelineItem(eventID: "$ownInvite",
                                  sender: ownUserID,
@@ -713,25 +699,25 @@ final class ElementCallServiceTests {
         timelineItemProvider.updatePublisher = CurrentValueSubject<([TimelineItemProxy], TimelinePaginationState), Never>((timelineItemProvider.itemProxies, .initial)).eraseToAnyPublisher()
         timelineItemProvider.paginationState = .initial
         timelineItemProvider.kind = .live
-        
+
         let roomInfoSubject = CurrentValueSubject<RoomInfoProxyProtocol, Never>(makeRoomInfo(id: roomID,
                                                                                              isDirect: true,
                                                                                              hasRoomCall: true,
                                                                                              participants: [ownUserID, remoteUserID]))
         room.infoPublisher = roomInfoSubject.asCurrentValuePublisher()
-        
+
         room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerClosure = { _, _ in
             .success(TaskHandle(noHandle: .init()))
         }
         room.declineCallNotificationIDClosure = { _ in
             .success(())
         }
-        
+
         await service.setupCallSession(roomID: roomID, roomDisplayName: "Room")
         try? await Task.sleep(for: .milliseconds(200))
-        
+
         await service.requestCallTermination(roomID: roomID)
-        
+
         #expect(room.declineCallNotificationIDReceivedInvocations.isEmpty)
     }
 
@@ -950,49 +936,49 @@ final class ElementCallServiceTests {
 
         #expect(service.ongoingCallRoomIDPublisher.value == nil)
     }
-    
+
     @Test
     func whenVoIPPushTokenUpdatesAndClientProxyExists_voIPPusherIsRegistered() async throws {
         await service.declineIncomingCall()
         service.setClientProxy(clientProxy)
-        
+
         let pushCredentials = PKPushCredentialsMock(token: Data("1234".utf8))
-        
+
         await confirmation { confirmation in
             clientProxy.setPusherWithClosure = { _ in
                 confirmation()
             }
-            
+
             service.pushRegistry(pushRegistry, didUpdate: pushCredentials, for: .voIP)
             try? await Task.sleep(for: .milliseconds(100))
         }
-        
+
         let configuration = try #require(clientProxy.setPusherWithReceivedConfiguration)
         #expect(configuration.identifiers.pushkey == Data("1234".utf8).base64EncodedString())
         #expect(configuration.identifiers.appId == appSettings.voIPPusherAppID)
         #expect(configuration.profileTag == appSettings.voIPPusherProfileTag)
     }
-    
+
     @Test
     func whenClientProxyArrivesAfterVoIPPushToken_voIPPusherIsRegistered() async throws {
         await service.declineIncomingCall()
         let pushCredentials = PKPushCredentialsMock(token: Data("abcd".utf8))
         service.pushRegistry(pushRegistry, didUpdate: pushCredentials, for: .voIP)
-        
+
         await confirmation { confirmation in
             clientProxy.setPusherWithClosure = { _ in
                 confirmation()
             }
-            
+
             service.setClientProxy(clientProxy)
             try? await Task.sleep(for: .milliseconds(100))
         }
-        
+
         let configuration = try #require(clientProxy.setPusherWithReceivedConfiguration)
         #expect(configuration.identifiers.pushkey == Data("abcd".utf8).base64EncodedString())
         #expect(configuration.identifiers.appId == appSettings.voIPPusherAppID)
     }
-    
+
     private func makeRoomInfo(id: String,
                               isDirect: Bool,
                               hasRoomCall: Bool,
@@ -1036,18 +1022,30 @@ final class ElementCallServiceTests {
         let proxy = EventTimelineItemProxy(item: item, uniqueID: .init(UUID().uuidString))
         return .event(proxy)
     }
-    
+
     private func configureLiveTimeline(for room: JoinedRoomProxyMock) {
         guard let timelineProxy = room.timeline as? TimelineProxyMock,
               let timelineItemProvider = timelineProxy.timelineItemProvider as? TimelineItemProviderMock else {
             return
         }
-        
+
         let timelineUpdates = CurrentValueSubject<([TimelineItemProxy], TimelinePaginationState), Never>(([], .initial))
         timelineItemProvider.itemProxies = []
         timelineItemProvider.updatePublisher = timelineUpdates.eraseToAnyPublisher()
         timelineItemProvider.paginationState = .initial
         timelineItemProvider.kind = .live
+    }
+
+    private func waitForEndedCall(reason: CXCallEndedReason) async -> Bool {
+        for _ in 0..<10 {
+            if callProvider.reportCallWithEndedAtReasonReceivedArguments?.reason == reason {
+                return true
+            }
+
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+
+        return false
     }
 
     private func makeRoomSummary(id: String,
@@ -1226,6 +1224,141 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
         #expect(await waitForIncomingCallReports(count: 2) == false)
     }
 
+    @Test
+    func foregroundCurrentRoomCallEventReportsIncomingPromptly() async {
+        let roomID = "redacted-room"
+        let remoteUserID = "redacted-remote"
+        configureRoomSummaryProvider()
+        let room = configureJoinedRoomMock(roomID: roomID, activeParticipants: [remoteUserID])
+        service.setClientProxy(clientProxy)
+        service.observeForegroundRoom(roomProxy: room, roomDisplayName: "Room")
+
+        callProvider.reportNewIncomingCallWithUpdateCompletionClosure = { _, _, completion in
+            completion(nil)
+        }
+
+        handleForegroundCall(roomID: roomID, deduplicationID: "redacted-current-call-a")
+
+        #expect(await waitForIncomingCallReports(count: 1))
+        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionReceivedArguments?.update.hasVideo == false)
+    }
+
+    @Test
+    func foregroundCurrentRoomRepeatIncomingAfterEndReportsAgain() async {
+        let roomID = "redacted-room"
+        let remoteUserID = "redacted-remote"
+        configureRoomSummaryProvider()
+        let room = configureJoinedRoomMock(roomID: roomID, activeParticipants: [remoteUserID])
+        service.setClientProxy(clientProxy)
+        service.observeForegroundRoom(roomProxy: room, roomDisplayName: "Room")
+
+        callProvider.reportNewIncomingCallWithUpdateCompletionClosure = { _, _, completion in
+            completion(nil)
+        }
+
+        handleForegroundCall(roomID: roomID, deduplicationID: "redacted-current-call-a")
+        #expect(await waitForIncomingCallReports(count: 1))
+
+        await service.declineIncomingCall()
+
+        handleForegroundCall(roomID: roomID, deduplicationID: "redacted-current-call-b")
+
+        #expect(await waitForIncomingCallReports(count: 2))
+    }
+
+    @Test
+    func foregroundCurrentRoomTerminalEventRemainsSuppressed() async {
+        let roomID = "redacted-room"
+        configureRoomSummaryProvider()
+        let room = configureJoinedRoomMock(roomID: roomID, activeParticipants: [])
+        service.setClientProxy(clientProxy)
+        service.observeForegroundRoom(roomProxy: room, roomDisplayName: "Room")
+
+        handleForegroundCall(roomID: roomID,
+                             state: .ended,
+                             deduplicationID: "redacted-terminal-call")
+
+        #expect(await waitForIncomingCallReports(count: 1) == false)
+    }
+
+    @Test
+    func foregroundCurrentRoomActiveCallGuardBlocksConcurrentIncoming() async {
+        let roomID = "redacted-room"
+        let remoteUserID = "redacted-remote"
+        configureRoomSummaryProvider()
+        let room = configureJoinedRoomMock(roomID: roomID, activeParticipants: [remoteUserID])
+        service.setClientProxy(clientProxy)
+        service.observeForegroundRoom(roomProxy: room, roomDisplayName: "Room")
+
+        callProvider.reportNewIncomingCallWithUpdateCompletionClosure = { _, _, completion in
+            completion(nil)
+        }
+
+        handleForegroundCall(roomID: roomID, deduplicationID: "redacted-current-call-a")
+        #expect(await waitForIncomingCallReports(count: 1))
+
+        handleForegroundCall(roomID: roomID, deduplicationID: "redacted-current-call-b")
+
+        #expect(await waitForIncomingCallReports(count: 2) == false)
+    }
+
+    @Test
+    func foregroundCurrentRoomCallEventBypassesTimeBasedSuppression() async {
+        let roomID = "redacted-room"
+        let remoteUserID = "redacted-remote"
+        configureRoomSummaryProvider()
+        let room = configureJoinedRoomMock(roomID: roomID, activeParticipants: [remoteUserID])
+        service.setClientProxy(clientProxy)
+        service.observeForegroundRoom(roomProxy: room, roomDisplayName: "Room")
+
+        await service.requestCallTermination(roomID: roomID)
+
+        callProvider.reportNewIncomingCallWithUpdateCompletionClosure = { _, _, completion in
+            completion(nil)
+        }
+
+        handleForegroundCall(roomID: roomID, deduplicationID: "redacted-current-call-a")
+
+        #expect(await waitForIncomingCallReports(count: 1))
+    }
+
+    @Test
+    func foregroundCurrentRoomDuplicateCallEventDoesNotReportTwice() async {
+        let roomID = "redacted-room"
+        let remoteUserID = "redacted-remote"
+        configureRoomSummaryProvider()
+        let room = configureJoinedRoomMock(roomID: roomID, activeParticipants: [remoteUserID])
+        service.setClientProxy(clientProxy)
+        service.observeForegroundRoom(roomProxy: room, roomDisplayName: "Room")
+
+        callProvider.reportNewIncomingCallWithUpdateCompletionClosure = { _, _, completion in
+            completion(nil)
+        }
+
+        handleForegroundCall(roomID: roomID, deduplicationID: "redacted-current-call-a")
+        #expect(await waitForIncomingCallReports(count: 1))
+
+        await service.declineIncomingCall()
+
+        handleForegroundCall(roomID: roomID, deduplicationID: "redacted-current-call-a")
+
+        #expect(await waitForIncomingCallReports(count: 2) == false)
+    }
+
+    @Test
+    func foregroundCurrentRoomObservationDoesNotSubscribeTimelineAgain() {
+        let roomID = "redacted-room"
+        let room = configureJoinedRoomMock(roomID: roomID, activeParticipants: [])
+        guard let timeline = room.timeline as? TimelineProxyMock else {
+            Issue.record("Expected timeline mock")
+            return
+        }
+
+        service.observeForegroundRoom(roomProxy: room, roomDisplayName: "Room")
+
+        #expect(timeline.subscribeForUpdatesCallsCount == 0)
+    }
+
     private func waitForIncomingCallReports(count: Int) async -> Bool {
         for _ in 0..<10 {
             if callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount >= count {
@@ -1238,7 +1371,26 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
         return false
     }
 
-    private func configureJoinedRoomMock(roomID: String, activeParticipants: [String]) {
+    private func handleForegroundCall(roomID: String,
+                                      state: RoomCallEvent.State = .incoming,
+                                      deduplicationID: String) {
+        service.handleForegroundCurrentRoomCallEvent(.init(roomID: roomID,
+                                                           roomDisplayName: "Room",
+                                                           isDirect: true,
+                                                           isOwnEvent: false,
+                                                           callEvent: .init(state: state, intent: .audio),
+                                                           deduplicationID: deduplicationID))
+    }
+
+    private func configureRoomSummaryProvider() {
+        let roomSummaryProvider = RoomSummaryProviderMock()
+        roomSummaryProvider.statePublisher = CurrentValueSubject<RoomSummaryProviderState, Never>(.loaded(totalNumberOfRooms: 1)).asCurrentValuePublisher()
+        roomSummaryProvider.roomListPublisher = CurrentValueSubject<[RoomSummary], Never>([]).asCurrentValuePublisher()
+        clientProxy.roomSummaryProvider = roomSummaryProvider
+    }
+
+    @discardableResult
+    private func configureJoinedRoomMock(roomID: String, activeParticipants: [String]) -> JoinedRoomProxyMock {
         let room = JoinedRoomProxyMock(.init(id: roomID,
                                              name: "Room",
                                              isDirect: true,
@@ -1261,6 +1413,8 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
         clientProxy.roomForIdentifierClosure = { _ in
             .joined(room)
         }
+
+        return room
     }
 
     private func makeRoomInfo(id: String, activeParticipants: [String]) -> RoomInfoProxyProtocol {
@@ -1321,18 +1475,18 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
 
 private class PKPushPayloadMock: PKPushPayload {
     var dict: [AnyHashable: Any] = [:]
-    
+
     override init() {
         dict[ElementCallServiceNotificationKey.roomID.rawValue] = "!room:example.com"
         dict[ElementCallServiceNotificationKey.roomDisplayName.rawValue] = "welcome"
         dict[ElementCallServiceNotificationKey.rtcNotifyEventID.rawValue] = "$000"
         dict[ElementCallServiceNotificationKey.expirationDate.rawValue] = Date(timeIntervalSince1970: 10)
     }
-    
+
     override var dictionaryPayload: [AnyHashable: Any] {
         dict
     }
-    
+
     func updatingExpiration(_ from: Date, lifetime: TimeInterval) -> Self {
         dict[ElementCallServiceNotificationKey.expirationDate.rawValue] = from.addingTimeInterval(lifetime)
         return self
@@ -1346,12 +1500,12 @@ private class PKPushPayloadMock: PKPushPayload {
 
 private class PKPushCredentialsMock: PKPushCredentials {
     private let mockToken: Data
-    
+
     init(token: Data) {
         mockToken = token
         super.init()
     }
-    
+
     override var token: Data {
         mockToken
     }
