@@ -1109,6 +1109,216 @@ final class ElementCallServiceTests {
     }
 }
 
+@MainActor
+final class ElementCallServiceRepeatIncomingFastPathTests {
+    private let appSettings = AppSettings()
+    private var callProvider: CXProviderMock!
+    private var currentDate: Date!
+    private var testClock: TestClock<Duration>!
+    private var service: ElementCallService!
+    private let clientProxy = ClientProxyMock(.init(userID: "redacted-own"))
+
+    init() {
+        AppSettings.resetAllSettings()
+        callProvider = CXProviderMock(.init())
+        currentDate = Date()
+        testClock = TestClock()
+        let dateProvider: () -> Date = {
+            self.currentDate
+        }
+        service = ElementCallService(appSettings: appSettings,
+                                     callProvider: callProvider,
+                                     timeProvider: TimeProvider(clock: testClock, now: dateProvider))
+    }
+
+    deinit {
+        callProvider = nil
+        currentDate = nil
+        testClock = nil
+    }
+
+    @Test
+    func terminatedCallSuppressionDoesNotBlockFreshIncomingFallback() async {
+        let roomID = "redacted-room"
+        let remoteUserID = "redacted-remote"
+        let roomSummaryProvider = RoomSummaryProviderMock()
+        let roomSummaries = CurrentValueSubject<[RoomSummary], Never>([])
+        roomSummaryProvider.statePublisher = CurrentValueSubject<RoomSummaryProviderState, Never>(.loaded(totalNumberOfRooms: 1)).asCurrentValuePublisher()
+        roomSummaryProvider.roomListPublisher = roomSummaries.asCurrentValuePublisher()
+        clientProxy.roomSummaryProvider = roomSummaryProvider
+        configureJoinedRoomMock(roomID: roomID, activeParticipants: [remoteUserID])
+        service.setClientProxy(clientProxy)
+
+        await service.requestCallTermination(roomID: roomID)
+
+        callProvider.reportNewIncomingCallWithUpdateCompletionClosure = { _, _, completion in
+            completion(nil)
+        }
+
+        roomSummaries.send([
+            makeRoomSummary(id: roomID,
+                            isDirect: true,
+                            hasOngoingCall: true,
+                            participants: [remoteUserID],
+                            lastCallEvent: .init(state: .incoming, intent: .audio))
+        ])
+        #expect(await waitForIncomingCallReports(count: 1))
+        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionReceivedArguments?.update.hasVideo == false)
+    }
+
+    @Test
+    func terminatedCallSuppressionStillBlocksStaleIncomingFallback() async {
+        let roomID = "redacted-room"
+        let roomSummaryProvider = RoomSummaryProviderMock()
+        let roomSummaries = CurrentValueSubject<[RoomSummary], Never>([])
+        roomSummaryProvider.statePublisher = CurrentValueSubject<RoomSummaryProviderState, Never>(.loaded(totalNumberOfRooms: 1)).asCurrentValuePublisher()
+        roomSummaryProvider.roomListPublisher = roomSummaries.asCurrentValuePublisher()
+        clientProxy.roomSummaryProvider = roomSummaryProvider
+        service.setClientProxy(clientProxy)
+
+        await service.requestCallTermination(roomID: roomID)
+
+        roomSummaries.send([
+            makeRoomSummary(id: roomID,
+                            isDirect: true,
+                            hasOngoingCall: true,
+                            participants: [],
+                            lastCallEvent: nil)
+        ])
+
+        #expect(await waitForIncomingCallReports(count: 1) == false)
+    }
+
+    @Test
+    func activeCallGuardStillBlocksConcurrentIncomingFallback() async {
+        let roomID = "redacted-room"
+        let nextRoomID = "redacted-next-room"
+        let remoteUserID = "redacted-remote"
+        let roomSummaryProvider = RoomSummaryProviderMock()
+        let roomSummaries = CurrentValueSubject<[RoomSummary], Never>([])
+        roomSummaryProvider.statePublisher = CurrentValueSubject<RoomSummaryProviderState, Never>(.loaded(totalNumberOfRooms: 1)).asCurrentValuePublisher()
+        roomSummaryProvider.roomListPublisher = roomSummaries.asCurrentValuePublisher()
+        clientProxy.roomSummaryProvider = roomSummaryProvider
+        configureJoinedRoomMock(roomID: roomID, activeParticipants: [remoteUserID])
+        service.setClientProxy(clientProxy)
+
+        callProvider.reportNewIncomingCallWithUpdateCompletionClosure = { _, _, completion in
+            completion(nil)
+        }
+
+        roomSummaries.send([
+            makeRoomSummary(id: roomID,
+                            isDirect: true,
+                            hasOngoingCall: true,
+                            participants: [remoteUserID],
+                            lastCallEvent: .init(state: .incoming, intent: .audio))
+        ])
+        #expect(await waitForIncomingCallReports(count: 1))
+
+        roomSummaries.send([
+            makeRoomSummary(id: nextRoomID,
+                            isDirect: true,
+                            hasOngoingCall: true,
+                            participants: [remoteUserID],
+                            lastCallEvent: .init(state: .incoming, intent: .audio))
+        ])
+
+        #expect(await waitForIncomingCallReports(count: 2) == false)
+    }
+
+    private func waitForIncomingCallReports(count: Int) async -> Bool {
+        for _ in 0..<10 {
+            if callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount >= count {
+                return true
+            }
+
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+
+        return false
+    }
+
+    private func configureJoinedRoomMock(roomID: String, activeParticipants: [String]) {
+        let room = JoinedRoomProxyMock(.init(id: roomID,
+                                             name: "Room",
+                                             isDirect: true,
+                                             hasOngoingCall: true,
+                                             ownUserID: clientProxy.userID))
+        room.infoPublisher = CurrentValueSubject<RoomInfoProxyProtocol, Never>(makeRoomInfo(id: roomID,
+                                                                                            activeParticipants: activeParticipants)).asCurrentValuePublisher()
+        room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerClosure = { _, _ in
+            .success(TaskHandle(noHandle: .init()))
+        }
+
+        if let timelineProxy = room.timeline as? TimelineProxyMock,
+           let timelineItemProvider = timelineProxy.timelineItemProvider as? TimelineItemProviderMock {
+            timelineItemProvider.itemProxies = []
+            timelineItemProvider.updatePublisher = CurrentValueSubject<([TimelineItemProxy], TimelinePaginationState), Never>(([], .initial)).eraseToAnyPublisher()
+            timelineItemProvider.paginationState = .initial
+            timelineItemProvider.kind = .live
+        }
+
+        clientProxy.roomForIdentifierClosure = { _ in
+            .joined(room)
+        }
+    }
+
+    private func makeRoomInfo(id: String, activeParticipants: [String]) -> RoomInfoProxyProtocol {
+        let info = RoomInfoProxyMock()
+        info.id = id
+        info.isEncrypted = true
+        info.isDirect = true
+        info.isSpace = false
+        info.isFavourite = false
+        info.membership = .joined
+        info.activeMembersCount = 2
+        info.invitedMembersCount = 0
+        info.joinedMembersCount = 2
+        info.highlightCount = 0
+        info.notificationCount = 0
+        info.hasRoomCall = true
+        info.activeRoomCallParticipants = activeParticipants
+        info.isMarkedUnread = false
+        info.unreadMessagesCount = 0
+        info.unreadNotificationsCount = 0
+        info.unreadMentionsCount = 0
+        info.pinnedEventIDs = []
+        info.historyVisibility = .shared
+        return info
+    }
+
+    private func makeRoomSummary(id: String,
+                                 isDirect: Bool,
+                                 hasOngoingCall: Bool,
+                                 participants: [String],
+                                 lastCallEvent: RoomCallEvent? = nil) -> RoomSummary {
+        RoomSummary(room: RoomSDKMock(),
+                    id: id,
+                    joinRequestType: nil,
+                    name: "Room",
+                    isDirect: isDirect,
+                    isSpace: false,
+                    avatarURL: nil,
+                    heroes: [],
+                    activeMembersCount: 2,
+                    lastCallEvent: lastCallEvent,
+                    lastMessage: nil,
+                    lastMessageDate: .mock,
+                    lastMessageState: nil,
+                    unreadMessagesCount: 0,
+                    unreadMentionsCount: 0,
+                    unreadNotificationsCount: 0,
+                    notificationMode: nil,
+                    canonicalAlias: nil,
+                    alternativeAliases: [],
+                    hasOngoingCall: hasOngoingCall,
+                    isMarkedUnread: false,
+                    isFavourite: false,
+                    isTombstoned: false,
+                    activeRoomCallParticipants: participants)
+    }
+}
+
 private class PKPushPayloadMock: PKPushPayload {
     var dict: [AnyHashable: Any] = [:]
     

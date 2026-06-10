@@ -823,7 +823,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             return false
         }
 
-        guard !isIncomingFallbackSuppressed(roomID: roomSummary.id) else {
+        guard !isIncomingFallbackSuppressed(roomSummary: roomSummary, ownUserID: ownUserID) else {
             return false
         }
 
@@ -1008,7 +1008,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         return String(describing: startMode)
     }
 
-    private func isIncomingFallbackSuppressed(roomID: String) -> Bool {
+    private func isIncomingFallbackSuppressed(roomSummary: RoomSummary, ownUserID: String) -> Bool {
+        let roomID = roomSummary.id
         guard let expirationDate = incomingFallbackSuppressionByRoomID[roomID] else {
             return false
         }
@@ -1018,7 +1019,44 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             return false
         }
 
+        guard !shouldBypassIncomingFallbackSuppression(roomSummary: roomSummary, ownUserID: ownUserID) else {
+            incomingFallbackSuppressionByRoomID.removeValue(forKey: roomID)
+            MXLog.info("Element Call lifecycle diagnostics: incoming_fallback_suppression_cleared=true reason=fresh_foreground_call")
+            return false
+        }
+
         return true
+    }
+
+    private func shouldBypassIncomingFallbackSuppression(roomSummary: RoomSummary, ownUserID: String) -> Bool {
+        guard roomSummary.isDirect, roomSummary.hasOngoingCall else {
+            return false
+        }
+
+        guard !roomSummary.activeRoomCallParticipants.contains(ownUserID) else {
+            return false
+        }
+
+        guard !Self.isTerminalCallEvent(roomSummary.lastCallEvent) else {
+            return false
+        }
+
+        if roomSummary.lastCallEvent?.state == .outgoing {
+            return false
+        }
+
+        let hasRemoteParticipant = roomSummary.activeRoomCallParticipants.contains { $0 != ownUserID }
+        let hasIncomingCallEvent = roomSummary.lastCallEvent.map(Self.isIncomingFallbackStartEvent) ?? false
+        return hasRemoteParticipant || hasIncomingCallEvent
+    }
+
+    private static func isIncomingFallbackStartEvent(_ event: RoomCallEvent) -> Bool {
+        switch event.state {
+        case .incoming, .started, .answered, .legacyInvite:
+            return true
+        case .outgoing, .ended, .missed, .declined:
+            return false
+        }
     }
 
     private func pruneIncomingFallbackSuppression(using _: [RoomSummary]) {
