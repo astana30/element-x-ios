@@ -1961,3 +1961,13 @@ Confirmed on a physical iPhone Debug build that the isolated synthetic CallKit p
 - Classified the missing piece as a new foreground-only Element Call invite source/contract, likely at SDK timeline-diff, MatrixRTC call-member, or sliding-sync subscription level.
 - Kept this phase docs-only. No PushKit/APNs runtime, background incoming, signing/project change, Element Call route replacement, media behavior change, private native video implementation, broad rollout, production/public rollout, or global activation was added.
 - Added `docs/direct-call/FOREGROUND_CALL_INVITE_FAST_SOURCE_INVESTIGATION.md`.
+
+## 2026-06-10 - 2.42A Foreground Call Signaling Channel Prototype
+
+- Added an inert foreground call signaling channel contract and client boundary for future server-originated foreground call invites.
+- Added safe local invite models, a disabled mockable signaling client, an invite validator, and an invite handler that can request the existing foreground incoming/CallKit reporting abstraction.
+- The handler suppresses duplicate, stale, terminal, malformed, unsupported, active-session, and reporting-failure cases with redacted diagnostics.
+- Invite receipt does not request media credentials, connect media, emit Matrix events, or bypass the foreground acceptance gate.
+- Unit coverage verifies foreground invite reporting, duplicate/stale/terminal/malformed suppression, authority-gate separation after answer, and timeline fallback duplicate suppression.
+- Added `docs/direct-call/FOREGROUND_CALL_SIGNALING_CHANNEL.md`.
+- No production signaling transport, PushKit/APNs runtime, background incoming, signing/project change, Element Call route replacement, media behavior change, broad rollout, production/public rollout, or global activation was added.

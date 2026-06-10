@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.41G-A6 - foreground call invite fast source investigation.
+After 2.42A - foreground call signaling channel prototype.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.42A adds an inert foreground call signaling channel contract and client boundary:
+  - `ForegroundCallInviteSignal`, `ForegroundCallSignalingClientProtocol`, `DisabledForegroundCallSignalingClient`, `ForegroundCallInviteValidator`, and `ForegroundCallInviteHandler` define the future foreground invite path without adding a production transport.
+  - A validated foreground invite can request the existing foreground incoming/CallKit reporting abstraction through safe local identity data.
+  - Duplicate, stale, terminal, malformed, unsupported, active-session, and reporting-failure cases fail closed with redacted diagnostics.
+  - Invite receipt does not request media credentials, connect media, emit Matrix events, or bypass the foreground acceptance gate.
+  - Answer still requires server-issued media credential authority before any future media connection is allowed.
+  - Server requirements for a future authenticated foreground signaling channel are documented in `docs/direct-call/FOREGROUND_CALL_SIGNALING_CHANNEL.md`.
+  - No PushKit/APNs runtime, background incoming behavior, signing/project setting change, Element Call route replacement, media behavior change, broad rollout, or production/public rollout was added.
 - 2.41G-A6 investigated faster foreground call invite sources after current-room fast-path diagnostics showed repeated-call events arriving with `over10s` delay:
   - The open-room flow already subscribes the room and live timeline before the foreground observer attaches.
   - The current-room observer is useful but still depends on materialized timeline updates; physical diagnostics showed the event can reach that source too late.
