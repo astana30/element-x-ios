@@ -48,6 +48,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     private var hasRequestedLocalTermination = false
     private var shouldSendHangupOnStop = true
     private var isDismissingAfterLocalHangup = false
+    private var hasRequestedEmbeddedWebContentReset = false
     
     private let actionsSubject: PassthroughSubject<CallScreenViewModelAction, Never> = .init()
     var actions: AnyPublisher<CallScreenViewModelAction, Never> {
@@ -217,6 +218,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     func stop() {
         timeoutTask = nil
         audioRouteEnforcementTask = nil
+        resetEmbeddedWebContentIfNeeded()
         let pendingSetupCallTask = setupCallTask
         setupCallTask = nil
 
@@ -273,6 +275,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         timeoutTask = nil
         audioRouteEnforcementTask = nil
         setupCallTask = nil
+        resetEmbeddedWebContentIfNeeded()
         
         guard sendHangupMessage else {
             actionsSubject.send(.dismiss)
@@ -286,6 +289,27 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
 
             await self.sendCallTerminationSignal(waitingFor: pendingSetupCallTask)
             self.actionsSubject.send(.dismiss)
+        }
+    }
+
+    private func resetEmbeddedWebContentIfNeeded() {
+        guard !hasRequestedEmbeddedWebContentReset,
+              state.bindings.javaScriptEvaluator != nil else {
+            return
+        }
+
+        hasRequestedEmbeddedWebContentReset = true
+        Task { [weak self] in
+            await self?.resetEmbeddedWebContent()
+        }
+    }
+
+    private func resetEmbeddedWebContent() async {
+        do {
+            _ = try await state.bindings.javaScriptEvaluator?(Self.embeddedWebContentResetJavaScript)
+            MXLog.info("Element Call lifecycle diagnostics: web_content_reset=true start_mode=\(configuration.startMode)")
+        } catch {
+            MXLog.info("Element Call lifecycle diagnostics: web_content_reset=false reason=javascript_error start_mode=\(configuration.startMode)")
         }
     }
     
@@ -367,6 +391,24 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     
     /// This should always match the web app value
     private static let earpieceID = "earpiece-id"
+
+    private static let embeddedWebContentResetJavaScript = """
+    (() => {
+        const mediaElements = Array.from(document.querySelectorAll("audio, video"));
+        mediaElements.forEach((element) => {
+            const stream = element.srcObject;
+            if (stream && typeof stream.getTracks === "function") {
+                stream.getTracks().forEach((track) => track.stop());
+            }
+            element.pause();
+            element.srcObject = null;
+            element.removeAttribute("src");
+            element.load();
+        });
+        window.stop();
+        return true;
+    })()
+    """
 
     private var shouldControlAudioRoute: Bool {
         configuration.startMode == .audio

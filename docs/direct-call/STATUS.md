@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.41F - redacted Element Call media diagnostics.
+After 2.41G-A - repeat-call audio stutter and lifecycle stabilization.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,13 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.41G-A adds repeat-call audio lifecycle cleanup for the existing Embedded Element Call audio route:
+  - Foreground audio still uses the existing Element Call route with audio start mode.
+  - On call-screen stop or local termination, `CallScreenViewModel` now performs an idempotent embedded web content reset that stops audio/video element tracks, detaches stream-backed media, clears media sources, and stops the page load.
+  - Existing widget hangup, Matrix termination request, and Element Call service teardown paths remain in place.
+  - Unit coverage verifies End and stop reset embedded web content once, keep widget hangup/termination behavior, and tear down the Element Call session.
+  - Physical two-iPhone repeat-call smoke is still required to confirm whether the stutter/hesitation is fixed or only narrowed.
+  - No PushKit/APNs/background incoming, signing/project changes, Element Call route replacement, private native video implementation, credential-authority bypass, broad rollout, or production/public rollout was added.
 - 2.41F adds redacted Element Call media diagnostics for the existing embedded call route:
   - Native-shell diagnostics now record safe stage booleans/enums for URL generation, start mode, direct-room chrome, content loaded, media capture permission kind, and widget media state.
   - A narrow injected web view diagnostic reports only schema, safe stage, elapsed bucket, video element counts, visible/playing/stream-backed/muted counts, and a derived remote-renderer-candidate boolean.
@@ -1205,9 +1212,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.41G - Element Call MatrixRTC publish subscribe diagnosis`
+`2.41G-A-S - repeat-call audio stutter physical smoke`
 
-Goal: add or collect safe Element Call / MatrixRTC-side diagnostics for same-session matching, local camera publish, remote participant observation, remote video subscription, and remote renderer attachment. Keep native audio as a regression guard and keep private native direct-call video implementation out of scope unless separately approved.
+Goal: run a two-physical-iPhone repeat-call audio smoke to confirm whether the embedded web content reset removes repeat-call stutter/hesitation. Keep Element Call remote video renderer stabilization as a separate follow-up.
 
 ## Do-Not-Touch Constraints
 

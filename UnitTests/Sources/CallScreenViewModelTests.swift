@@ -75,29 +75,108 @@ final class CallScreenViewModelTests {
 
     @Test
     func roomCallEndCallSendsHangupToWidgetAndMatrixTermination() async throws {
+        let harness = try makeAudioRoomCallViewModel()
+
+        harness.viewModel.context.send(viewAction: .endCall)
+        await waitFor {
+            harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1
+        }
+
+        let rawMessage = try #require(harness.widgetDriver.handleMessageReceivedMessage)
+        let jsonData = try #require(rawMessage.data(using: .utf8))
+        let payload = try JSONDecoder().decode(ElementCallWidgetMessage.self, from: jsonData)
+
+        #expect(payload.direction == .toWidget)
+        #expect(payload.action == .hangup)
+        #expect(harness.elementCallService.requestCallTerminationRoomIDCalled)
+        #expect(harness.elementCallService.requestCallTerminationRoomIDReceivedRoomID == harness.roomProxy.id)
+
+        harness.viewModel.stop()
+    }
+
+    @Test
+    func roomCallEndCallResetsEmbeddedWebContentForRepeatCall() async throws {
+        let harness = try makeAudioRoomCallViewModel()
+        var evaluatedScripts = [String]()
+        harness.viewModel.context.javaScriptEvaluator = { script in
+            evaluatedScripts.append(script)
+            return true
+        }
+
+        harness.viewModel.context.send(viewAction: .endCall)
+        await waitFor {
+            harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1
+        }
+
+        let resetScript = try #require(evaluatedScripts.first)
+        #expect(resetScript.contains("querySelectorAll(\"audio, video\")"))
+        #expect(resetScript.contains("track.stop()"))
+        #expect(resetScript.contains("srcObject = null"))
+        #expect(resetScript.contains("window.stop()"))
+        #expect(evaluatedScripts.count == 1)
+
+        harness.viewModel.context.send(viewAction: .endCall)
+        try await Task.sleep(for: .milliseconds(100))
+
+        #expect(evaluatedScripts.count == 1)
+        #expect(harness.widgetDriver.handleMessageCallsCount == 1)
+        #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1)
+
+        harness.viewModel.stop()
+    }
+
+    @Test
+    func roomCallStopResetsEmbeddedWebContentAndTearsDownCallSession() async throws {
+        let harness = try makeAudioRoomCallViewModel()
+        var evaluatedScripts = [String]()
+        harness.viewModel.context.javaScriptEvaluator = { script in
+            evaluatedScripts.append(script)
+            return true
+        }
+
+        harness.viewModel.stop()
+        await waitFor {
+            harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1
+        }
+
+        let resetScript = try #require(evaluatedScripts.first)
+        #expect(resetScript.contains("querySelectorAll(\"audio, video\")"))
+        #expect(resetScript.contains("srcObject = null"))
+        #expect(evaluatedScripts.count == 1)
+        #expect(harness.elementCallService.tearDownCallSessionCalled)
+        #expect(harness.widgetDriver.handleMessageCallsCount == 1)
+        #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1)
+    }
+
+    private struct CallScreenHarness {
+        let viewModel: CallScreenViewModel
+        let elementCallService: ElementCallServiceMock
+        let roomProxy: JoinedRoomProxyMock
+        let widgetDriver: ElementCallWidgetDriverMock
+    }
+
+    private func makeAudioRoomCallViewModel() throws -> CallScreenHarness {
         let elementCallService = ElementCallServiceMock()
         elementCallService.underlyingActions = PassthroughSubject<ElementCallServiceAction, Never>()
             .eraseToAnyPublisher()
         elementCallService.underlyingOngoingCallRoomIDPublisher = CurrentValueSubject<String?, Never>(nil).asCurrentValuePublisher()
-        
-        let roomProxy = JoinedRoomProxyMock(.init(id: "!room:example.com",
+
+        let roomProxy = JoinedRoomProxyMock(.init(id: "redacted-room",
                                                   name: "Room",
                                                   isDirect: true))
-        let clientProxy = ClientProxyMock(.init(userID: "@me:example.com",
-                                                deviceID: "DEVICE"))
-        
-        guard let widgetDriver = roomProxy.elementCallWidgetDriverDeviceIDReturnValue as? ElementCallWidgetDriverMock else {
-            Issue.record("Expected an ElementCallWidgetDriverMock")
-            return
-        }
-        
+        let clientProxy = ClientProxyMock(.init(userID: "redacted-user",
+                                                deviceID: "redacted-device"))
+
+        let widgetDriver = try #require(roomProxy.elementCallWidgetDriverDeviceIDReturnValue as? ElementCallWidgetDriverMock)
+        widgetDriver.underlyingWidgetID = "call-widget"
         widgetDriver.handleMessageReturnValue = .success(true)
-        
+        let elementCallBaseURL = try #require(URL(string: "https://call.element.io"))
+        widgetDriver.startBaseURLClientIDColorSchemeRageshakeURLAnalyticsConfigurationReturnValue = .success(elementCallBaseURL)
+
         let appSettings = AppSettings()
         let analyticsService = AnalyticsService(client: AnalyticsClientMock(),
                                                 appSettings: appSettings)
-        let elementCallBaseURL = try #require(URL(string: "https://call.element.io"))
-        
+
         let viewModel = CallScreenViewModel(elementCallService: elementCallService,
                                             configuration: .init(roomProxy: roomProxy,
                                                                  clientProxy: clientProxy,
@@ -110,19 +189,19 @@ final class CallScreenViewModelTests {
                                             appHooks: AppHooks(),
                                             appSettings: appSettings,
                                             analyticsService: analyticsService)
-        
-        viewModel.context.send(viewAction: .endCall)
-        try await Task.sleep(for: .milliseconds(100))
-        
-        let rawMessage = try #require(widgetDriver.handleMessageReceivedMessage)
-        let jsonData = try #require(rawMessage.data(using: .utf8))
-        let payload = try JSONDecoder().decode(ElementCallWidgetMessage.self, from: jsonData)
-        
-        #expect(payload.direction == .toWidget)
-        #expect(payload.action == .hangup)
-        #expect(elementCallService.requestCallTerminationRoomIDCalled)
-        #expect(elementCallService.requestCallTerminationRoomIDReceivedRoomID == roomProxy.id)
-        
-        viewModel.stop()
+
+        return CallScreenHarness(viewModel: viewModel,
+                                 elementCallService: elementCallService,
+                                 roomProxy: roomProxy,
+                                 widgetDriver: widgetDriver)
+    }
+
+    private func waitFor(_ condition: @escaping @MainActor () -> Bool) async {
+        for _ in 0..<20 {
+            if condition() {
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
     }
 }
