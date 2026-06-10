@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.42G - supervised foreground signaling smoke wiring.
+After 2.42H - DEBUG/dev foreground SSE runtime owner.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.42H adds a DEBUG-only foreground SSE runtime owner:
+  - `DebugForegroundCallSignalingSSERuntimeOwner` can start/stop an injected foreground signaling transport when explicitly enabled and an authenticated session is available.
+  - The owner is DEBUG-only, disabled by default, and not wired into production app lifecycle.
+  - It does not construct URLs, auth headers, credentials, or production configuration.
+  - Redacted diagnostics cover `sse_configured`, `sse_started`, `sse_connected`, `invite_received`, `invite_valid`, `incoming_requested`, `fallback_deduped`, and `transport_stopped`.
+  - Valid invites feed the existing `ForegroundCallInviteHandler`; malformed, stale, terminal, duplicate, unsupported, or unverifiable invites still fail closed.
+  - Timeline/room-list fallback can be de-duplicated after an SSE-delivered invite by safe local call handle.
+  - Invite receipt does not request media credentials, connect media, emit Matrix events, add PushKit/APNs behavior, add background incoming behavior, or replace Element Call routing.
+  - Implementation details are documented in `docs/direct-call/DEBUG_FOREGROUND_SSE_RUNTIME_OWNER.md`.
 - 2.42G documents supervised foreground signaling smoke wiring:
   - The iOS side already has `ForegroundCallSignalingSSETransport`, `URLSessionForegroundCallSignalingSSEStream`, injected `URLRequest`, `ForegroundCallSignalingTransportPipeline`, and `ForegroundCallInviteHandler`.
   - The transport remains disabled by default and does not construct server URLs or auth headers.

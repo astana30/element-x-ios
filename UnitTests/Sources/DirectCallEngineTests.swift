@@ -1467,6 +1467,175 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func debugForegroundSSERuntimeOwnerDisabledDoesNotStartTransport() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let transport = InMemoryForegroundCallSignalingTransport()
+        let owner = DebugForegroundCallSignalingSSERuntimeOwner(transport: transport,
+                                                                inviteHandler: makeForegroundCallInviteHandler(dependencies: dependencies, now: now))
+
+        owner.appDidEnterForeground(authenticatedSessionAvailable: true)
+        transport.emitInvite(makeForegroundCallInviteSignal(now: now))
+
+        #expect(owner.diagnostics.sseConfigured == false)
+        #expect(owner.diagnostics.sseStarted == false)
+        #expect(owner.diagnostics.sseConnected == false)
+        #expect(owner.diagnostics.inviteReceived == false)
+        #expect(dependencies.reportingAdapter.reportedIdentities.isEmpty)
+        #expect(String(describing: owner).contains("debugOnly: true"))
+        #expect(String(describing: owner).contains("hardcodedEndpoint: false"))
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !String(describing: owner).contains($0) })
+    }
+
+    @Test
+    func debugForegroundSSERuntimeOwnerRequiresAuthenticatedSessionBeforeStart() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let stream = ForegroundCallSignalingSSEStreamSpy()
+        let transport = ForegroundCallSignalingSSETransport(isEnabled: true, stream: stream) {
+            now
+        }
+        let owner = DebugForegroundCallSignalingSSERuntimeOwner(isEnabled: true,
+                                                                transport: transport,
+                                                                inviteHandler: makeForegroundCallInviteHandler(dependencies: dependencies, now: now))
+
+        owner.appDidEnterForeground(authenticatedSessionAvailable: false)
+
+        #expect(stream.startCount == 0)
+        #expect(owner.diagnostics.sseConfigured == false)
+        #expect(owner.diagnostics.sseStarted == false)
+        #expect(owner.diagnostics.sseConnected == false)
+        #expect(dependencies.reportingAdapter.reportedIdentities.isEmpty)
+    }
+
+    @Test
+    func debugForegroundSSERuntimeOwnerUsesInjectedTransportStartState() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let transport = DisabledForegroundCallSignalingTransport()
+        let owner = DebugForegroundCallSignalingSSERuntimeOwner(isEnabled: true,
+                                                                transport: transport,
+                                                                inviteHandler: makeForegroundCallInviteHandler(dependencies: dependencies, now: now))
+
+        owner.appDidEnterForeground(authenticatedSessionAvailable: true)
+
+        #expect(owner.diagnostics.sseConfigured)
+        #expect(owner.diagnostics.sseStarted == false)
+        #expect(owner.diagnostics.sseConnected == false)
+        #expect(dependencies.reportingAdapter.reportedIdentities.isEmpty)
+    }
+
+    @Test
+    func debugForegroundSSERuntimeOwnerStartsAndStopsConfiguredTransport() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let stream = ForegroundCallSignalingSSEStreamSpy()
+        let transport = ForegroundCallSignalingSSETransport(isEnabled: true, stream: stream) {
+            now
+        }
+        let owner = DebugForegroundCallSignalingSSERuntimeOwner(isEnabled: true,
+                                                                transport: transport,
+                                                                inviteHandler: makeForegroundCallInviteHandler(dependencies: dependencies, now: now))
+
+        owner.appDidEnterForeground(authenticatedSessionAvailable: true)
+        owner.appDidEnterBackground()
+
+        #expect(stream.startCount == 1)
+        #expect(stream.stopCount == 1)
+        #expect(owner.diagnostics.sseConfigured)
+        #expect(owner.diagnostics.sseStarted == false)
+        #expect(owner.diagnostics.sseConnected == false)
+        #expect(owner.diagnostics.transportStopped)
+    }
+
+    @Test
+    func debugForegroundSSERuntimeOwnerForwardsValidInviteAndKeepsMediaBlocked() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let stream = ForegroundCallSignalingSSEStreamSpy()
+        let transport = ForegroundCallSignalingSSETransport(isEnabled: true, stream: stream) {
+            now
+        }
+        let owner = DebugForegroundCallSignalingSSERuntimeOwner(isEnabled: true,
+                                                                transport: transport,
+                                                                inviteHandler: makeForegroundCallInviteHandler(dependencies: dependencies, now: now))
+
+        owner.appDidEnterForeground(authenticatedSessionAvailable: true)
+        stream.emit(makeForegroundCallSSEInvite(handle: "safe-runtime-sse-call", now: now))
+
+        guard case .reported(let identity) = owner.latestOutcome else {
+            Issue.record("Expected DEBUG runtime owner to request foreground incoming reporting.")
+            return
+        }
+        #expect(dependencies.reportingAdapter.reportedIdentities == [identity])
+        #expect(owner.diagnostics.sseConfigured)
+        #expect(owner.diagnostics.sseStarted)
+        #expect(owner.diagnostics.sseConnected)
+        #expect(owner.diagnostics.inviteReceived)
+        #expect(owner.diagnostics.inviteValid)
+        #expect(owner.diagnostics.incomingRequested)
+        #expect(owner.diagnostics.fallbackDeduped == false)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaCredentialRequested == false)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaConnectAttempted == false)
+        #expect(dependencies.reportingAdapter.endedReasons.isEmpty)
+        #expect(String(describing: owner).contains("mediaConnectRuntime: false"))
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !String(describing: owner).contains($0) })
+    }
+
+    @Test
+    func debugForegroundSSERuntimeOwnerSuppressesStaleAndDuplicateInvites() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let transport = InMemoryForegroundCallSignalingTransport()
+        let owner = DebugForegroundCallSignalingSSERuntimeOwner(isEnabled: true,
+                                                                transport: transport,
+                                                                inviteHandler: makeForegroundCallInviteHandler(dependencies: dependencies, now: now))
+
+        owner.appDidEnterForeground(authenticatedSessionAvailable: true)
+        transport.emitInvite(makeForegroundCallInviteSignal(handle: "safe-runtime-stale",
+                                                            now: now,
+                                                            expiresAt: now.addingTimeInterval(-1)))
+        #expect(owner.latestOutcome == .suppressed(.stale))
+        #expect(owner.diagnostics.inviteReceived)
+        #expect(owner.diagnostics.inviteValid == false)
+        #expect(owner.diagnostics.incomingRequested == false)
+
+        transport.emitInvite(makeForegroundCallInviteSignal(handle: "safe-runtime-terminal",
+                                                            now: now,
+                                                            state: .terminal))
+        #expect(owner.latestOutcome == .suppressed(.stale))
+
+        transport.emitInvite(makeForegroundCallInviteSignal(handle: "safe-runtime-duplicate", now: now))
+        transport.emitInvite(makeForegroundCallInviteSignal(handle: "safe-runtime-duplicate", now: now))
+
+        #expect(owner.latestOutcome == .suppressed(.duplicate))
+        #expect(dependencies.reportingAdapter.reportedIdentities.count == 1)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.suffix(4).map(\.mediaCredentialRequested) == [false, false, false, false])
+        #expect(dependencies.diagnosticsRecorder.diagnostics.suffix(4).map(\.mediaConnectAttempted) == [false, false, false, false])
+    }
+
+    @Test
+    func debugForegroundSSERuntimeOwnerDedupesTimelineFallbackAfterSSEInvite() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let signal = makeForegroundCallInviteSignal(handle: "safe-runtime-fallback", now: now)
+        let transport = InMemoryForegroundCallSignalingTransport()
+        let owner = DebugForegroundCallSignalingSSERuntimeOwner(isEnabled: true,
+                                                                transport: transport,
+                                                                inviteHandler: makeForegroundCallInviteHandler(dependencies: dependencies, now: now))
+
+        owner.appDidEnterForeground(authenticatedSessionAvailable: true)
+        transport.emitInvite(signal)
+        let fallbackOutcome = owner.handleFallbackInvite(signal)
+
+        #expect(fallbackOutcome == .suppressed(.duplicate))
+        #expect(owner.diagnostics.fallbackDeduped)
+        #expect(dependencies.reportingAdapter.reportedIdentities.count == 1)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaCredentialRequested == false)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaConnectAttempted == false)
+    }
+
+    @Test
     func foregroundSignalingTransportPipelineReportsValidInvite() {
         let now = Date(timeIntervalSince1970: 1000)
         let dependencies = makeNativeIncomingLifecycleDependencies()
