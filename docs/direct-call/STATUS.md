@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.42B - foreground signaling transport prototype.
+After 2.42C - server-backed foreground signaling transport review.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,13 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.42C inspected the SalemX call-service and app signaling boundary for a server-backed foreground invite transport:
+  - The call-service currently exposes redacted health/readiness, native audio eligibility, server-issued media credential allocation, and local fake capability discovery only.
+  - No foreground call invite subscription, fanout, acknowledgement, stale invalidation, reconnect/resume, or app runtime endpoint configuration exists yet.
+  - Because no endpoint exists, 2.42C stays docs-only and does not add a production WebSocket/SSE/long-poll transport or hardcoded server URL.
+  - The 2.42B disabled/default transport and in-memory test transport remain the only executable foreground signaling transport proof.
+  - The required server endpoint contract, opaque invite payload, acknowledgement model, redacted diagnostics, and blockers are documented in `docs/direct-call/SERVER_BACKED_FOREGROUND_SIGNALING.md`.
+  - No PushKit/APNs runtime, background incoming behavior, signing/project setting change, Element Call route replacement, media behavior change, broad rollout, or production/public rollout was added.
 - 2.42B adds a foreground signaling transport prototype:
   - `ForegroundCallSignalingTransport`, `DisabledForegroundCallSignalingTransport`, `InMemoryForegroundCallSignalingTransport`, `ForegroundCallSignalingTransportEvent`, `ForegroundCallSignalingTransportDiagnostics`, and `ForegroundCallSignalingTransportPipeline` define a mockable transport layer for the 2.42A invite contract.
   - The disabled/default transport emits no invites. The in-memory transport can deliver safe invite signals immediately in tests.
