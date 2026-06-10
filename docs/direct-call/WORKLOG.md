@@ -2047,3 +2047,12 @@ Confirmed on a physical iPhone Debug build that the isolated synthetic CallKit p
 - Added unit coverage for disabled default, authenticated-session gating, configured start/stop, valid SSE invite forwarding, stale/terminal/duplicate suppression, fallback de-duplication, redacted diagnostics, and no media credential/media connect/Matrix event side effects.
 - Added `docs/direct-call/DEBUG_FOREGROUND_SSE_RUNTIME_OWNER.md`.
 - No PushKit/APNs runtime, background incoming, signing/project change, Element Call route replacement, hardcoded production URL, credential value, broad rollout, production/public rollout, or global activation was added.
+
+## 2026-06-10 - 2.42I Supervised Foreground SSE Smoke Preparation
+
+- Added `docs/direct-call/SUPERVISED_FOREGROUND_SSE_SMOKE.md`.
+- Kept this phase docs-only because the 2.42H DEBUG/dev runtime owner already provides the needed injected transport boundary for supervised smoke.
+- Documented local/staging server setup with `SALEMX_FOREGROUND_SIGNALING_DEV_INVITE_ENABLED=1`, the required disable/rollback step, iOS Debug configuration, and a placeholder dev invite shape with redacted auth placeholders.
+- Defined redacted diagnostics for configured, started, connected, invite received, invite valid, incoming requested, fallback de-duped, and stopped states.
+- Defined pass/fail criteria for 0-2 second CallKit appearance, no media credential request before Answer, no media connect before Answer, no Matrix event emission from invite receipt, no crash, and no raw runtime logs in docs.
+- No Swift code, PushKit/APNs runtime, background incoming, signing/project change, Element Call route replacement, hardcoded production URL, credential value, media behavior, broad rollout, production/public rollout, or global activation was added.

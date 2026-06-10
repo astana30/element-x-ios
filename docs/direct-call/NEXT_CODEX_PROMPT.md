@@ -4,27 +4,27 @@ Repo:
 /Users/aibattt/Movies/element-x-ios
 
 Branch:
-salemx-2.42i-supervised-foreground-sse-physical-smoke
+salemx-2.42i-s-supervised-foreground-sse-physical-smoke
 
-Next phase: 2.42I - supervised foreground SSE physical smoke.
+Next phase: 2.42I-S - supervised foreground SSE physical smoke.
 
 Goal:
-Run a supervised foreground SSE smoke using the DEBUG/dev runtime owner, a local or staging call-service stream, and the disabled-by-default dev invite route.
+Run the prepared supervised foreground SSE smoke on a physical iPhone using the DEBUG/dev runtime owner, local or staging call-service stream, and disabled-by-default dev invite route.
 
 Context:
 - 2.42D added the authenticated call-service foreground SSE stream endpoint.
 - 2.42E added the disabled/configured iOS SSE transport client boundary.
 - 2.42F added the disabled-by-default supervised dev invite source.
-- 2.42G documented supervised smoke wiring.
 - 2.42H added `DebugForegroundCallSignalingSSERuntimeOwner`.
-- The DEBUG owner starts only when explicitly enabled and an authenticated session is available.
+- 2.42I added `docs/direct-call/SUPERVISED_FOREGROUND_SSE_SMOKE.md` with smoke setup, rollback, diagnostics, and pass/fail criteria.
+- The DEBUG owner starts only when explicitly enabled, injected with transport/handler dependencies, and an authenticated session is available.
 - The owner does not construct URLs, auth headers, credentials, or production configuration.
 
 Scope:
 - Start the call-service in local or staging supervision.
-- Enable the dev invite route only for the supervised window.
-- Inject a safe `URLRequest` into the iOS SSE stream setup.
-- Start the DEBUG foreground SSE runtime owner while the callee app is foreground.
+- Enable `SALEMX_FOREGROUND_SIGNALING_DEV_INVITE_ENABLED=1` only for the supervised window.
+- Inject a safe request into the iOS SSE stream setup.
+- Start the DEBUG foreground SSE runtime owner while the callee app is foreground/open.
 - Submit one safe opaque dev invite from the same active callee session.
 - Confirm redacted diagnostics:
   - `sse_configured=true`
@@ -33,8 +33,11 @@ Scope:
   - `invite_received=true`
   - `invite_valid=true`
   - `incoming_requested=true`
-  - `fallback_deduped` result if timeline fallback later appears
+  - `fallback_deduped` result if Matrix fallback later appears
+  - `transport_stopped=true` after stop
+- Confirm CallKit appears within 0-2 seconds of invite delivery.
 - Confirm invite receipt does not request media credentials, connect media, or emit Matrix events.
+- Disable the dev invite route immediately after the supervised run.
 - Keep full runtime logs out of docs.
 
 Constraints:
@@ -51,8 +54,10 @@ Constraints:
 
 Expected output:
 - Redacted physical smoke report.
-- Timing for SSE connect, invite receipt, and incoming/CallKit request.
+- Timing bucket for SSE connect.
+- Timing bucket for invite receipt to incoming/CallKit request.
 - Whether fallback de-duplication occurred.
-- Whether media credential request and media connection stayed blocked before answer.
+- Whether media credential request and media connection stayed blocked before Answer.
+- Confirmation that the dev invite route was disabled after the smoke.
 - Updated docs/status/worklog/next prompt.
 - Confirmation that PushKit/APNs/background/signing/project/Element Call route remain unchanged.

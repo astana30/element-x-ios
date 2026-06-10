@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.42H - DEBUG/dev foreground SSE runtime owner.
+After 2.42I - supervised foreground SSE smoke preparation.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.42I prepares the supervised foreground SSE smoke:
+  - The smoke remains docs-only; no additional iOS runtime hook was needed because 2.42H already added the DEBUG/dev owner and injected transport boundary.
+  - `docs/direct-call/SUPERVISED_FOREGROUND_SSE_SMOKE.md` defines local/staging server enablement, rollback, iOS Debug configuration, safe placeholder invite shape, redacted diagnostics, pass/fail criteria, and raw-log handling.
+  - The server dev invite route remains disabled by default and must be enabled only with `SALEMX_FOREGROUND_SIGNALING_DEV_INVITE_ENABLED=1` during supervision.
+  - The iOS DEBUG owner remains disabled by default and requires explicit construction with injected request/transport/handler dependencies.
+  - The expected smoke checks `sse_configured`, `sse_started`, `sse_connected`, `invite_received`, `invite_valid`, `incoming_requested`, `fallback_deduped`, and `transport_stopped`.
+  - Invite receipt must still not request media credentials, connect media, emit Matrix events, add PushKit/APNs behavior, add background incoming behavior, or replace Element Call routing.
+  - No signing/project setting, bundle, entitlement, `Info.plist`, `app.yml`, production URL, credential, media behavior, broad rollout, production/public rollout, or global activation change was added.
 - 2.42H adds a DEBUG-only foreground SSE runtime owner:
   - `DebugForegroundCallSignalingSSERuntimeOwner` can start/stop an injected foreground signaling transport when explicitly enabled and an authenticated session is available.
   - The owner is DEBUG-only, disabled by default, and not wired into production app lifecycle.
