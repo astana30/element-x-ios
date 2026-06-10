@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.42F - supervised dev-only foreground invite source.
+After 2.42G - supervised foreground signaling smoke wiring.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.42G documents supervised foreground signaling smoke wiring:
+  - The iOS side already has `ForegroundCallSignalingSSETransport`, `URLSessionForegroundCallSignalingSSEStream`, injected `URLRequest`, `ForegroundCallSignalingTransportPipeline`, and `ForegroundCallInviteHandler`.
+  - The transport remains disabled by default and does not construct server URLs or auth headers.
+  - No runtime app owner was added because the app still needs a safe foreground-session lifecycle owner, authenticated request construction, reconnect/backoff, fallback de-duplication, and physical-path diagnostics.
+  - Required smoke diagnostics are safe booleans only: `sse_configured`, `sse_connected`, `invite_received`, `invite_valid`, and `incoming_requested`.
+  - Invite receipt must still not request media credentials, connect media, emit Matrix events, or bypass foreground authority.
+  - No PushKit/APNs runtime, background incoming behavior, signing/project setting change, Element Call route replacement, hardcoded production URL, credential value, media behavior change, broad rollout, or production/public rollout was added.
+  - Smoke wiring is documented in `docs/direct-call/FOREGROUND_SIGNALING_SMOKE_WIRING.md`.
 - 2.42F adds a supervised, dev-only foreground invite source to the call-service:
   - The route is `POST /_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/invite`.
   - It is registered only when `SALEMX_FOREGROUND_SIGNALING_DEV_INVITE_ENABLED=1` is set; default deployments do not expose it.
