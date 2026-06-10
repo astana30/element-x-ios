@@ -1950,3 +1950,14 @@ Confirmed on a physical iPhone Debug build that the isolated synthetic CallKit p
 - Added `docs/direct-call/REPEAT_CALL_AUDIO_STUTTER_INVESTIGATION.md`.
 - Physical two-iPhone repeat-call smoke remains required to prove whether the stutter is fixed or only narrowed.
 - No PushKit/APNs runtime, background incoming, signing/project change, Element Call route replacement, private native video implementation, credential-authority bypass, broad rollout, production/public rollout, or global activation was added.
+
+## 2026-06-10 - 2.41G-A6 Foreground Call Invite Fast Source Investigation
+
+- Investigated why the foreground current-room fast path can still request incoming/CallKit only after repeated-call delays have already exceeded the target.
+- Confirmed the open-room flow already subscribes the room and live timeline before `ElementCallService` observes the foreground room.
+- Confirmed the current-room observer is still fed by materialized timeline updates, and physical diagnostics showed this source can receive fresh incoming candidates in the `over10s` bucket.
+- Confirmed room-list fallback is not a faster source because it depends on room-summary/latest-event updates.
+- Inspected existing notification, Element Call PushKit, and native direct-call SDK timeline listener surfaces. PushKit is out of scope, notification manager is not a foreground Matrix call invite stream, and the native direct-call timeline listener is scoped to SalemX native direct-call custom envelopes.
+- Classified the missing piece as a new foreground-only Element Call invite source/contract, likely at SDK timeline-diff, MatrixRTC call-member, or sliding-sync subscription level.
+- Kept this phase docs-only. No PushKit/APNs runtime, background incoming, signing/project change, Element Call route replacement, media behavior change, private native video implementation, broad rollout, production/public rollout, or global activation was added.
+- Added `docs/direct-call/FOREGROUND_CALL_INVITE_FAST_SOURCE_INVESTIGATION.md`.

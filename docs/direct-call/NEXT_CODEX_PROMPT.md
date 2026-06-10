@@ -4,29 +4,29 @@ Repo:
 /Users/aibattt/Movies/element-x-ios
 
 Branch:
-salemx-2.41g-a-s-repeat-call-audio-smoke
+salemx-2.41g-b-element-call-foreground-invite-source
 
-Next phase: 2.41G-A-S - repeat-call audio stutter physical smoke.
+Next phase: 2.41G-B - Element Call foreground call invite source design.
 
 Goal:
-Run the foreground two-physical-iPhone repeat-call audio smoke after the 2.41G-A embedded web content cleanup.
+Design and prove a foreground-only Element Call invite source that receives call invite/member events before delayed timeline item rendering or room-list fallback.
 
 Context:
 - Foreground audio uses the existing Embedded Element Call route.
-- 2.41G-A added an idempotent embedded web content reset when the call screen stops or begins local termination.
-- The reset stops active audio/video element tracks, detaches stream-backed media, clears media sources, and stops the page load.
-- Existing widget hangup, Matrix termination request, and Element Call service teardown paths remain unchanged.
-- Physical smoke is required to confirm whether repeat-call stutter/hesitation is fixed or only narrowed.
-- Element Call remote video renderer stabilization remains a separate follow-up.
+- 2.41G-A4 added a foreground current-room observer and incoming/CallKit fast path.
+- 2.41G-A5 diagnostics showed the current-room observer can receive fresh repeated-call candidates only after the delay is already `over10s`.
+- Room-list fallback is also later and is not a faster source.
+- 2.41G-A6 found no existing safe app-side source earlier than Matrix sync/timeline or room-summary materialization.
+- The next phase must design a safe foreground-only Element Call invite source/contract, likely at SDK timeline-diff, MatrixRTC call-member, or sliding-sync subscription level.
 
 Scope:
 - Foreground only.
-- Two physical iPhones preferred.
-- Call #1 audio, answer, talk 30 seconds, end, wait 2 seconds.
-- Call #2 audio, answer, measure audio connection delay, check stutter/hesitation.
-- Repeat 3 times.
-- Check crash behavior.
-- Confirm Element Call route is unaffected.
+- Inspect SDK timeline-diff listener feasibility for Element Call call events.
+- Inspect whether a MatrixRTC call-member stream or notification ID stream is available without PushKit/APNs/background behavior.
+- Inspect whether sliding-sync/current-room subscription settings can prioritize call invite/member events for the open direct chat.
+- Preserve active-call, duplicate, own-event, terminal/stale, and fallback suppression guards.
+- Add redacted diagnostics if a safe source is implemented.
+- Add unit tests proving repeat incoming uses the faster source and room-list fallback does not double-trigger.
 - Keep logs/docs redacted.
 
 Constraints:
@@ -42,10 +42,8 @@ Constraints:
 - Do not paste full runtime logs into docs.
 
 Expected output:
-- Repeat-call smoke result.
-- Whether stutter/hesitation reproduced.
-- Audio connection delay per call row.
-- End/hangup cleanup timing.
-- Crash yes/no.
-- Element Call route regression yes/no.
-- Recommendation: proceed to `2.41G-B - Element Call remote video renderer stabilization`, continue audio hardening, or add narrower diagnostics.
+- Faster foreground invite source implemented with tests, or a design-only blocker if no safe source exists.
+- Classification of the exact source inspected.
+- Redacted diagnostics contract for source timing.
+- Physical smoke checklist for Call #1, Call #2, and Call #3 incoming/CallKit latency in the open direct chat.
+- Confirmation that PushKit/APNs/background/signing/project/Element Call route remain unchanged.

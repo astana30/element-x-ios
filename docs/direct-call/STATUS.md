@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.41G-A - repeat-call audio stutter and lifecycle stabilization.
+After 2.41G-A6 - foreground call invite fast source investigation.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.41G-A6 investigated faster foreground call invite sources after current-room fast-path diagnostics showed repeated-call events arriving with `over10s` delay:
+  - The open-room flow already subscribes the room and live timeline before the foreground observer attaches.
+  - The current-room observer is useful but still depends on materialized timeline updates; physical diagnostics showed the event can reach that source too late.
+  - Room-list fallback is not earlier because it depends on room-summary/latest-event updates.
+  - Notification manager surfaces are not a foreground Matrix call invite stream.
+  - Existing Element Call PushKit/VoIP handling is out of scope for this foreground-only phase.
+  - The native direct-call SDK timeline listener pattern is for SalemX native direct-call custom envelopes; using a similar source for Element Call requires a separate Element Call invite observer/contract.
+  - No safe existing app-side source was found that observes Element Call call invite/member events earlier than Matrix sync/timeline or room-summary materialization while keeping PushKit/APNs/background out of scope.
+  - This phase is docs-only: no runtime code, PushKit/APNs/background behavior, signing/project change, Element Call route change, media behavior change, broad rollout, or production/public rollout was added.
 - 2.41G-A adds repeat-call audio lifecycle cleanup for the existing Embedded Element Call audio route:
   - Foreground audio still uses the existing Element Call route with audio start mode.
   - On call-screen stop or local termination, `CallScreenViewModel` now performs an idempotent embedded web content reset that stops audio/video element tracks, detaches stream-backed media, clears media sources, and stops the page load.
@@ -1212,9 +1221,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.41G-A-S - repeat-call audio stutter physical smoke`
+`2.41G-B - Element Call foreground call invite source design`
 
-Goal: run a two-physical-iPhone repeat-call audio smoke to confirm whether the embedded web content reset removes repeat-call stutter/hesitation. Keep Element Call remote video renderer stabilization as a separate follow-up.
+Goal: design and prove a foreground-only Element Call invite source that receives call invite/member events before delayed timeline item rendering or room-list fallback, without PushKit/APNs/background behavior.
 
 ## Do-Not-Touch Constraints
 
