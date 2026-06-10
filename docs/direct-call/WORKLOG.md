@@ -1938,3 +1938,26 @@ Confirmed on a physical iPhone Debug build that the isolated synthetic CallKit p
 - No PushKit/APNs runtime, background incoming, signing/project change, Element Call route replacement, private native direct-call video implementation, broad rollout, production/public rollout, or global activation was added.
 - Added `docs/direct-call/ELEMENT_CALL_MEDIA_DIAGNOSTICS.md`.
 - Recommended next phase: `2.41G - Element Call MatrixRTC publish subscribe diagnosis`.
+
+## 2026-06-10 - 2.41G-A Repeat-call Audio Stutter And Lifecycle Stabilization
+
+- Investigated repeat-call stutter/hesitation on the existing Embedded Element Call audio route.
+- Confirmed the scoped native-shell path remains the Call screen / Element Call widget route with audio start mode; video remote rendering is a separate investigation.
+- Added an idempotent embedded web content reset from `CallScreenViewModel` when the call screen stops or begins local termination.
+- The reset stops active audio/video element tracks, detaches stream-backed media, clears media sources, and stops the page load before the next call can reuse stale WebContent media state.
+- Kept existing widget hangup, Matrix termination request, and Element Call service teardown behavior.
+- Added unit coverage for End and stop cleanup, including one-shot reset behavior and existing hangup/termination/teardown behavior.
+- Added `docs/direct-call/REPEAT_CALL_AUDIO_STUTTER_INVESTIGATION.md`.
+- Physical two-iPhone repeat-call smoke remains required to prove whether the stutter is fixed or only narrowed.
+- No PushKit/APNs runtime, background incoming, signing/project change, Element Call route replacement, private native video implementation, credential-authority bypass, broad rollout, production/public rollout, or global activation was added.
+
+## 2026-06-10 - 2.41G-A6 Foreground Call Invite Fast Source Investigation
+
+- Investigated why the foreground current-room fast path can still request incoming/CallKit only after repeated-call delays have already exceeded the target.
+- Confirmed the open-room flow already subscribes the room and live timeline before `ElementCallService` observes the foreground room.
+- Confirmed the current-room observer is still fed by materialized timeline updates, and physical diagnostics showed this source can receive fresh incoming candidates in the `over10s` bucket.
+- Confirmed room-list fallback is not a faster source because it depends on room-summary/latest-event updates.
+- Inspected existing notification, Element Call PushKit, and native direct-call SDK timeline listener surfaces. PushKit is out of scope, notification manager is not a foreground Matrix call invite stream, and the native direct-call timeline listener is scoped to SalemX native direct-call custom envelopes.
+- Classified the missing piece as a new foreground-only Element Call invite source/contract, likely at SDK timeline-diff, MatrixRTC call-member, or sliding-sync subscription level.
+- Kept this phase docs-only. No PushKit/APNs runtime, background incoming, signing/project change, Element Call route replacement, media behavior change, private native video implementation, broad rollout, production/public rollout, or global activation was added.
+- Added `docs/direct-call/FOREGROUND_CALL_INVITE_FAST_SOURCE_INVESTIGATION.md`.

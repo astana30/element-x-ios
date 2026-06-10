@@ -208,6 +208,15 @@ struct TimeProvider {
     var now: () -> Date
 }
 
+struct ForegroundCurrentRoomCallEvent {
+    let roomID: String
+    let roomDisplayName: String?
+    let isDirect: Bool
+    let isOwnEvent: Bool
+    let callEvent: RoomCallEvent
+    let deduplicationID: String
+}
+
 // swiftlint:disable type_body_length
 class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDelegate, CXProviderDelegate {
     private enum IncomingFallbackConstants {
@@ -237,6 +246,12 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         var hasSeenActiveCall = false
         var hasSeenRemoteParticipant = false
         var noForeignParticipantSince: Date?
+    }
+
+    private struct ForegroundRoomIncomingCallCandidate {
+        let callEvent: RoomCallEvent
+        let deduplicationID: String
+        let isOwnEvent: Bool
     }
 
     private enum DeclineAttemptResult {
@@ -305,6 +320,9 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     private var declineListenerHandle: TaskHandle?
     private var incomingCallFallbackCancellable: AnyCancellable?
     private var incomingFallbackSuppressionByRoomID: [String: Date] = [:]
+    private var foregroundRoomID: String?
+    private var foregroundRoomTimelineCancellable: AnyCancellable?
+    private var handledForegroundIncomingCallByRoomID: [String: String] = [:]
     private var ongoingDeclineListenerHandles: [String: TaskHandle] = [:]
     private var isResolvingOngoingDeclines = false
     private let ongoingDeclineObservationLock = NSLock()
@@ -349,6 +367,57 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     func setClientProxy(_ clientProxy: any ClientProxyProtocol) {
         self.clientProxy = clientProxy
         Task { await registerVoIPPusherIfNeeded() }
+    }
+
+    @MainActor func observeForegroundRoom(roomProxy: JoinedRoomProxyProtocol, roomDisplayName: String?) {
+        foregroundRoomTimelineCancellable = nil
+
+        guard roomProxy.infoPublisher.value.isDirect else {
+            clearForegroundRoomObservation()
+            return
+        }
+
+        foregroundRoomID = roomProxy.id
+        let timelineItemProvider = roomProxy.timeline.timelineItemProvider
+        handleForegroundRoomTimelineUpdate(itemProxies: timelineItemProvider.itemProxies,
+                                           roomProxy: roomProxy,
+                                           roomDisplayName: roomDisplayName)
+
+        foregroundRoomTimelineCancellable = timelineItemProvider.updatePublisher
+            .map(\.0)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self, roomProxy] itemProxies in
+                guard let self else { return }
+                self.handleForegroundRoomTimelineUpdate(itemProxies: itemProxies,
+                                                        roomProxy: roomProxy,
+                                                        roomDisplayName: roomDisplayName)
+            }
+    }
+
+    @MainActor func stopObservingForegroundRoom(roomID: String) {
+        guard foregroundRoomID == roomID else {
+            return
+        }
+
+        clearForegroundRoomObservation()
+    }
+
+    func handleForegroundCurrentRoomCallEvent(_ event: ForegroundCurrentRoomCallEvent) {
+        handleForegroundRoomIncomingCallCandidate(roomID: event.roomID,
+                                                  roomDisplayName: event.roomDisplayName,
+                                                  isDirect: event.isDirect,
+                                                  candidate: .init(callEvent: event.callEvent,
+                                                                   deduplicationID: event.deduplicationID,
+                                                                   isOwnEvent: event.isOwnEvent))
+    }
+
+    private func clearForegroundRoomObservation() {
+        if let foregroundRoomID {
+            handledForegroundIncomingCallByRoomID.removeValue(forKey: foregroundRoomID)
+        }
+
+        foregroundRoomID = nil
+        foregroundRoomTimelineCancellable = nil
     }
     
     func setupCallSession(roomID: String, roomDisplayName: String) async {
@@ -814,6 +883,79 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         }
     }
 
+    private func handleForegroundRoomTimelineUpdate(itemProxies: [TimelineItemProxy],
+                                                    roomProxy: JoinedRoomProxyProtocol,
+                                                    roomDisplayName: String?) {
+        let roomID = roomProxy.id
+        guard foregroundRoomID == roomID,
+              roomProxy.infoPublisher.value.isDirect else {
+            return
+        }
+
+        guard incomingCallID == nil, ongoingCallID == nil else {
+            return
+        }
+
+        guard let candidate = latestForegroundRoomIncomingCallCandidate(in: itemProxies) else {
+            return
+        }
+
+        handleForegroundRoomIncomingCallCandidate(roomID: roomID,
+                                                  roomDisplayName: roomDisplayName ?? roomProxy.infoPublisher.value.displayName,
+                                                  isDirect: roomProxy.infoPublisher.value.isDirect,
+                                                  candidate: candidate)
+    }
+
+    private func handleForegroundRoomIncomingCallCandidate(roomID: String,
+                                                           roomDisplayName: String?,
+                                                           isDirect: Bool,
+                                                           candidate: ForegroundRoomIncomingCallCandidate) {
+        guard foregroundRoomID == roomID,
+              isDirect,
+              incomingCallID == nil,
+              ongoingCallID == nil else {
+            return
+        }
+
+        guard !candidate.isOwnEvent,
+              !Self.isTerminalCallEvent(candidate.callEvent),
+              Self.isIncomingFallbackStartEvent(candidate.callEvent) else {
+            return
+        }
+
+        guard handledForegroundIncomingCallByRoomID[roomID] != candidate.deduplicationID else {
+            return
+        }
+
+        handledForegroundIncomingCallByRoomID[roomID] = candidate.deduplicationID
+        incomingFallbackSuppressionByRoomID.removeValue(forKey: roomID)
+
+        if let remoteCallID = candidate.callEvent.callID {
+            cacheRemoteCallID(remoteCallID, for: roomID)
+        }
+
+        Task { [weak self] in
+            await self?.reportIncomingCallFromForegroundRoom(roomID: roomID,
+                                                             roomDisplayName: roomDisplayName,
+                                                             isVideo: candidate.callEvent.intent != .audio)
+        }
+    }
+
+    private func latestForegroundRoomIncomingCallCandidate(in itemProxies: [TimelineItemProxy]) -> ForegroundRoomIncomingCallCandidate? {
+        for itemProxy in itemProxies.reversed() {
+            guard case let .event(eventProxy) = itemProxy,
+                  let callEvent = RoomCallEventParser.parse(from: eventProxy) else {
+                continue
+            }
+
+            return .init(callEvent: callEvent,
+                         deduplicationID: eventProxy.id.uniqueID.value,
+                         isOwnEvent: eventProxy.isOwn)
+        }
+
+        return nil
+    }
+
     private func isIncomingFallbackCandidate(roomSummary: RoomSummary, ownUserID: String) -> Bool {
         guard roomSummary.isDirect, roomSummary.hasOngoingCall else {
             return false
@@ -823,7 +965,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             return false
         }
 
-        guard !isIncomingFallbackSuppressed(roomID: roomSummary.id) else {
+        guard !isIncomingFallbackSuppressed(roomSummary: roomSummary, ownUserID: ownUserID) else {
             return false
         }
 
@@ -870,6 +1012,59 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         callProvider.reportNewIncomingCall(with: callID.callKitID, update: update) { [weak self] error in
             if let error {
                 MXLog.error("Fallback incoming call reporting failed: \(error)")
+                self?.clearIncomingCallState()
+                return
+            }
+
+            self?.actionsSubject.send(.receivedIncomingCallRequest)
+        }
+
+        endUnansweredCallTask?.cancel()
+        endUnansweredCallTask = Task { [weak self] in
+            try? await self?.timeProvider.clock.sleep(for: IncomingFallbackConstants.unansweredTimeout)
+
+            guard let self, !Task.isCancelled else {
+                return
+            }
+
+            guard let incomingCallID = self.incomingCallID, incomingCallID.callKitID == callID.callKitID else {
+                return
+            }
+
+            reportEndedCall(incomingCallID: incomingCallID, reason: .unanswered)
+        }
+    }
+
+    private func reportIncomingCallFromForegroundRoom(roomID: String, roomDisplayName: String?, isVideo: Bool) async {
+        guard incomingCallID == nil, ongoingCallID == nil else {
+            return
+        }
+
+        let nowDate = timeProvider.now()
+        let remoteCallID = cachedRemoteCallIDByRoomID[roomID]
+        let callID = CallID(callKitID: UUID(),
+                            roomID: roomID,
+                            rtcNotificationID: nil,
+                            remoteCallID: remoteCallID,
+                            startMode: isVideo ? .video : .audio,
+                            startedAt: nowDate)
+
+        incomingCallID = callID
+        openCallSession(roomID: roomID,
+                        callKitID: callID.callKitID,
+                        direction: .incoming,
+                        remoteCallID: callID.remoteCallID)
+
+        let update = CXCallUpdate()
+        update.hasVideo = isVideo
+        update.localizedCallerName = roomDisplayName
+        update.remoteHandle = .init(type: .generic, value: "salemx-call")
+
+        MXLog.info("Element Call lifecycle diagnostics: foreground_current_room_incoming=true start_mode=\(callID.startMode)")
+
+        callProvider.reportNewIncomingCall(with: callID.callKitID, update: update) { [weak self] error in
+            if let error {
+                MXLog.error("Foreground current-room incoming call reporting failed: \(error)")
                 self?.clearIncomingCallState()
                 return
             }
@@ -1008,7 +1203,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         return String(describing: startMode)
     }
 
-    private func isIncomingFallbackSuppressed(roomID: String) -> Bool {
+    private func isIncomingFallbackSuppressed(roomSummary: RoomSummary, ownUserID: String) -> Bool {
+        let roomID = roomSummary.id
         guard let expirationDate = incomingFallbackSuppressionByRoomID[roomID] else {
             return false
         }
@@ -1018,7 +1214,44 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             return false
         }
 
+        guard !shouldBypassIncomingFallbackSuppression(roomSummary: roomSummary, ownUserID: ownUserID) else {
+            incomingFallbackSuppressionByRoomID.removeValue(forKey: roomID)
+            MXLog.info("Element Call lifecycle diagnostics: incoming_fallback_suppression_cleared=true reason=fresh_foreground_call")
+            return false
+        }
+
         return true
+    }
+
+    private func shouldBypassIncomingFallbackSuppression(roomSummary: RoomSummary, ownUserID: String) -> Bool {
+        guard roomSummary.isDirect, roomSummary.hasOngoingCall else {
+            return false
+        }
+
+        guard !roomSummary.activeRoomCallParticipants.contains(ownUserID) else {
+            return false
+        }
+
+        guard !Self.isTerminalCallEvent(roomSummary.lastCallEvent) else {
+            return false
+        }
+
+        if roomSummary.lastCallEvent?.state == .outgoing {
+            return false
+        }
+
+        let hasRemoteParticipant = roomSummary.activeRoomCallParticipants.contains { $0 != ownUserID }
+        let hasIncomingCallEvent = roomSummary.lastCallEvent.map(Self.isIncomingFallbackStartEvent) ?? false
+        return hasRemoteParticipant || hasIncomingCallEvent
+    }
+
+    private static func isIncomingFallbackStartEvent(_ event: RoomCallEvent) -> Bool {
+        switch event.state {
+        case .incoming, .started, .answered, .legacyInvite:
+            return true
+        case .outgoing, .ended, .missed, .declined:
+            return false
+        }
     }
 
     private func pruneIncomingFallbackSuppression(using _: [RoomSummary]) {

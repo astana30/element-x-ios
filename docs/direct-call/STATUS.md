@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.41F - redacted Element Call media diagnostics.
+After 2.41G-A6 - foreground call invite fast source investigation.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,22 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.41G-A6 investigated faster foreground call invite sources after current-room fast-path diagnostics showed repeated-call events arriving with `over10s` delay:
+  - The open-room flow already subscribes the room and live timeline before the foreground observer attaches.
+  - The current-room observer is useful but still depends on materialized timeline updates; physical diagnostics showed the event can reach that source too late.
+  - Room-list fallback is not earlier because it depends on room-summary/latest-event updates.
+  - Notification manager surfaces are not a foreground Matrix call invite stream.
+  - Existing Element Call PushKit/VoIP handling is out of scope for this foreground-only phase.
+  - The native direct-call SDK timeline listener pattern is for SalemX native direct-call custom envelopes; using a similar source for Element Call requires a separate Element Call invite observer/contract.
+  - No safe existing app-side source was found that observes Element Call call invite/member events earlier than Matrix sync/timeline or room-summary materialization while keeping PushKit/APNs/background out of scope.
+  - This phase is docs-only: no runtime code, PushKit/APNs/background behavior, signing/project change, Element Call route change, media behavior change, broad rollout, or production/public rollout was added.
+- 2.41G-A adds repeat-call audio lifecycle cleanup for the existing Embedded Element Call audio route:
+  - Foreground audio still uses the existing Element Call route with audio start mode.
+  - On call-screen stop or local termination, `CallScreenViewModel` now performs an idempotent embedded web content reset that stops audio/video element tracks, detaches stream-backed media, clears media sources, and stops the page load.
+  - Existing widget hangup, Matrix termination request, and Element Call service teardown paths remain in place.
+  - Unit coverage verifies End and stop reset embedded web content once, keep widget hangup/termination behavior, and tear down the Element Call session.
+  - Physical two-iPhone repeat-call smoke is still required to confirm whether the stutter/hesitation is fixed or only narrowed.
+  - No PushKit/APNs/background incoming, signing/project changes, Element Call route replacement, private native video implementation, credential-authority bypass, broad rollout, or production/public rollout was added.
 - 2.41F adds redacted Element Call media diagnostics for the existing embedded call route:
   - Native-shell diagnostics now record safe stage booleans/enums for URL generation, start mode, direct-room chrome, content loaded, media capture permission kind, and widget media state.
   - A narrow injected web view diagnostic reports only schema, safe stage, elapsed bucket, video element counts, visible/playing/stream-backed/muted counts, and a derived remote-renderer-candidate boolean.
@@ -1205,9 +1221,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.41G - Element Call MatrixRTC publish subscribe diagnosis`
+`2.41G-B - Element Call foreground call invite source design`
 
-Goal: add or collect safe Element Call / MatrixRTC-side diagnostics for same-session matching, local camera publish, remote participant observation, remote video subscription, and remote renderer attachment. Keep native audio as a regression guard and keep private native direct-call video implementation out of scope unless separately approved.
+Goal: design and prove a foreground-only Element Call invite source that receives call invite/member events before delayed timeline item rendering or room-list fallback, without PushKit/APNs/background behavior.
 
 ## Do-Not-Touch Constraints
 

@@ -6316,6 +6316,90 @@ class ElementCallServiceMock: ElementCallServiceProtocol, @unchecked Sendable {
         }
         setClientProxyClosure?(clientProxy)
     }
+    //MARK: - observeForegroundRoom
+
+    var observeForegroundRoomRoomProxyRoomDisplayNameUnderlyingCallsCount = 0
+    var observeForegroundRoomRoomProxyRoomDisplayNameCallsCount: Int {
+        get {
+            if Thread.isMainThread {
+                return observeForegroundRoomRoomProxyRoomDisplayNameUnderlyingCallsCount
+            } else {
+                var returnValue: Int? = nil
+                DispatchQueue.main.sync {
+                    returnValue = observeForegroundRoomRoomProxyRoomDisplayNameUnderlyingCallsCount
+                }
+
+                return returnValue!
+            }
+        }
+        set {
+            if Thread.isMainThread {
+                observeForegroundRoomRoomProxyRoomDisplayNameUnderlyingCallsCount = newValue
+            } else {
+                DispatchQueue.main.sync {
+                    observeForegroundRoomRoomProxyRoomDisplayNameUnderlyingCallsCount = newValue
+                }
+            }
+        }
+    }
+    var observeForegroundRoomRoomProxyRoomDisplayNameCalled: Bool {
+        return observeForegroundRoomRoomProxyRoomDisplayNameCallsCount > 0
+    }
+    var observeForegroundRoomRoomProxyRoomDisplayNameReceivedArguments: (roomProxy: JoinedRoomProxyProtocol, roomDisplayName: String?)?
+    var observeForegroundRoomRoomProxyRoomDisplayNameReceivedInvocations: [(roomProxy: JoinedRoomProxyProtocol, roomDisplayName: String?)] = []
+    var observeForegroundRoomRoomProxyRoomDisplayNameClosure: ((JoinedRoomProxyProtocol, String?) -> Void)?
+
+    @MainActor
+    func observeForegroundRoom(roomProxy: JoinedRoomProxyProtocol, roomDisplayName: String?) {
+        observeForegroundRoomRoomProxyRoomDisplayNameCallsCount += 1
+        observeForegroundRoomRoomProxyRoomDisplayNameReceivedArguments = (roomProxy: roomProxy, roomDisplayName: roomDisplayName)
+        DispatchQueue.main.async {
+            self.observeForegroundRoomRoomProxyRoomDisplayNameReceivedInvocations.append((roomProxy: roomProxy, roomDisplayName: roomDisplayName))
+        }
+        observeForegroundRoomRoomProxyRoomDisplayNameClosure?(roomProxy, roomDisplayName)
+    }
+    //MARK: - stopObservingForegroundRoom
+
+    var stopObservingForegroundRoomRoomIDUnderlyingCallsCount = 0
+    var stopObservingForegroundRoomRoomIDCallsCount: Int {
+        get {
+            if Thread.isMainThread {
+                return stopObservingForegroundRoomRoomIDUnderlyingCallsCount
+            } else {
+                var returnValue: Int? = nil
+                DispatchQueue.main.sync {
+                    returnValue = stopObservingForegroundRoomRoomIDUnderlyingCallsCount
+                }
+
+                return returnValue!
+            }
+        }
+        set {
+            if Thread.isMainThread {
+                stopObservingForegroundRoomRoomIDUnderlyingCallsCount = newValue
+            } else {
+                DispatchQueue.main.sync {
+                    stopObservingForegroundRoomRoomIDUnderlyingCallsCount = newValue
+                }
+            }
+        }
+    }
+    var stopObservingForegroundRoomRoomIDCalled: Bool {
+        return stopObservingForegroundRoomRoomIDCallsCount > 0
+    }
+    var stopObservingForegroundRoomRoomIDReceivedRoomID: String?
+    var stopObservingForegroundRoomRoomIDReceivedInvocations: [String] = []
+    var stopObservingForegroundRoomRoomIDClosure: ((String) -> Void)?
+
+    @MainActor
+    func stopObservingForegroundRoom(roomID: String) {
+        stopObservingForegroundRoomRoomIDCallsCount += 1
+        stopObservingForegroundRoomRoomIDReceivedRoomID = roomID
+        DispatchQueue.main.async {
+            self.stopObservingForegroundRoomRoomIDReceivedInvocations.append(roomID)
+        }
+        stopObservingForegroundRoomRoomIDClosure?(roomID)
+    }
     //MARK: - setupCallSession
 
     var setupCallSessionRoomIDRoomDisplayNameStartModeUnderlyingCallsCount = 0
