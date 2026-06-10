@@ -1295,6 +1295,170 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func disabledForegroundCallSignalingTransportEmitsNoInvite() {
+        let transport = DisabledForegroundCallSignalingTransport()
+
+        transport.start { _ in
+            Issue.record("Disabled transport should not emit foreground invite signals.")
+        }
+        transport.stop()
+
+        #expect(!transport.diagnostics.isStarted)
+        #expect(transport.diagnostics.deliveredInviteCount == 0)
+        #expect(transport.diagnostics.latestResult == .stopped)
+        #expect(String(describing: transport).contains("realTransport: false"))
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !String(describing: transport).contains($0) })
+    }
+
+    @Test
+    func inMemoryForegroundCallSignalingTransportDeliversInviteImmediately() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let transport = InMemoryForegroundCallSignalingTransport()
+        let signal = makeForegroundCallInviteSignal(now: now)
+        var events = [ForegroundCallSignalingTransportEvent]()
+
+        transport.start { event in
+            events.append(event)
+        }
+        let delivered = transport.emitInvite(signal)
+
+        #expect(delivered)
+        #expect(events == [.invite(signal)])
+        #expect(transport.diagnostics.isStarted)
+        #expect(transport.diagnostics.deliveredInviteCount == 1)
+        #expect(transport.diagnostics.latestEventKind == .invite)
+        #expect(transport.diagnostics.latestResult == .delivered)
+        #expect(String(describing: transport).contains("realTransport: false"))
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !String(describing: transport).contains($0) })
+    }
+
+    @Test
+    func stoppedInMemoryForegroundCallSignalingTransportIgnoresInvite() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let transport = InMemoryForegroundCallSignalingTransport()
+        let signal = makeForegroundCallInviteSignal(now: now)
+
+        let delivered = transport.emitInvite(signal)
+
+        #expect(!delivered)
+        #expect(transport.diagnostics.deliveredInviteCount == 0)
+        #expect(transport.diagnostics.latestEventKind == .invite)
+        #expect(transport.diagnostics.latestResult == .ignored)
+    }
+
+    @Test
+    func foregroundSignalingTransportPipelineReportsValidInvite() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let transport = InMemoryForegroundCallSignalingTransport()
+        let pipeline = makeForegroundCallSignalingTransportPipeline(dependencies: dependencies,
+                                                                    transport: transport,
+                                                                    now: now)
+        let signal = makeForegroundCallInviteSignal(now: now)
+
+        pipeline.start()
+        transport.emitInvite(signal)
+
+        guard case .reported(let identity) = pipeline.latestOutcome else {
+            Issue.record("Expected in-memory transport invite to request incoming call reporting.")
+            return
+        }
+        #expect(dependencies.reportingAdapter.reportedIdentities == [identity])
+        #expect(dependencies.stateStore.state(for: identity.handle) == .reported)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaCredentialRequested == false)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaConnectAttempted == false)
+    }
+
+    @Test
+    func foregroundSignalingTransportPipelineSuppressesUnsafeInvites() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let transport = InMemoryForegroundCallSignalingTransport()
+        let handler = makeForegroundCallInviteHandler(dependencies: dependencies, now: now)
+        let pipeline = ForegroundCallSignalingTransportPipeline(transport: transport,
+                                                                inviteHandler: handler)
+        let signal = makeForegroundCallInviteSignal(now: now)
+
+        pipeline.start()
+        transport.emitInvite(signal)
+        transport.emitInvite(signal)
+        #expect(pipeline.latestOutcome == .suppressed(.duplicate))
+
+        transport.emitInvite(makeForegroundCallInviteSignal(handle: "safe-foreground-transport-stale",
+                                                            now: now,
+                                                            expiresAt: now.addingTimeInterval(-1)))
+        #expect(pipeline.latestOutcome == .suppressed(.stale))
+
+        transport.emitInvite(makeForegroundCallInviteSignal(handle: "safe-foreground-transport-terminal",
+                                                            now: now,
+                                                            state: .terminal))
+        #expect(pipeline.latestOutcome == .suppressed(.stale))
+
+        let malformed = handler.handle(rawHandle: "not safe",
+                                       kind: .audio,
+                                       state: .incoming,
+                                       createdAt: now,
+                                       expiresAt: now.addingTimeInterval(30),
+                                       displayMetadata: NativeIncomingCallKitDisplayMetadata("Pilot Participant"))
+
+        #expect(malformed == .suppressed(.malformed))
+        #expect(dependencies.reportingAdapter.reportedIdentities.count == 1)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.suffix(4).map(\.mediaCredentialRequested) == [false, false, false, false])
+        #expect(dependencies.diagnosticsRecorder.diagnostics.suffix(4).map(\.mediaConnectAttempted) == [false, false, false, false])
+    }
+
+    @Test
+    func foregroundSignalingTransportInviteDoesNotRequestCredentialConnectMediaOrEmitMatrixEvent() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let transport = InMemoryForegroundCallSignalingTransport()
+        let pipeline = makeForegroundCallSignalingTransportPipeline(dependencies: dependencies,
+                                                                    transport: transport,
+                                                                    now: now)
+
+        pipeline.start()
+        transport.emitInvite(makeForegroundCallInviteSignal(now: now))
+
+        #expect(dependencies.reportingAdapter.reportedIdentities.count == 1)
+        #expect(dependencies.reportingAdapter.endedReasons.isEmpty)
+        #expect(dependencies.timeoutScheduler.scheduledIdentities.isEmpty)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaCredentialRequested == false)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaConnectAttempted == false)
+        #expect(String(describing: pipeline).contains("mediaConnectRuntime: false"))
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !String(describing: pipeline).contains($0) })
+    }
+
+    @Test
+    func foregroundSignalingTransportAnswerStillRequiresAuthorityGate() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let transport = InMemoryForegroundCallSignalingTransport()
+        let pipeline = makeForegroundCallSignalingTransportPipeline(dependencies: dependencies,
+                                                                    transport: transport,
+                                                                    now: now)
+        let actionRouter = DisabledNativeIncomingCallStateMachineActionRouter(stateStore: dependencies.stateStore,
+                                                                              diagnosticsRecorder: dependencies.diagnosticsRecorder)
+        let acceptanceGate = DisabledNativeIncomingForegroundAcceptanceGate(isEnabled: true,
+                                                                            stateStore: dependencies.stateStore,
+                                                                            diagnosticsRecorder: dependencies.diagnosticsRecorder,
+                                                                            authorizer: nil)
+
+        pipeline.start()
+        transport.emitInvite(makeForegroundCallInviteSignal(now: now))
+        guard case .reported(let identity) = pipeline.latestOutcome else {
+            Issue.record("Expected transport invite to reach local incoming reporting.")
+            return
+        }
+
+        actionRouter.requestAnswer(identity: identity)
+        let acceptance = acceptanceGate.requestForegroundAcceptance(identity: identity)
+
+        #expect(acceptance == .failClosed(.foregroundCredentialAuthorityUnavailable))
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaCredentialRequested == false)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaConnectAttempted == false)
+    }
+
+    @Test
     func foregroundCallInviteReportsIncomingCallWithoutCredentialOrMedia() {
         let now = Date(timeIntervalSince1970: 1000)
         let dependencies = makeNativeIncomingLifecycleDependencies()
@@ -1709,6 +1873,14 @@ final class NativeIncomingCallLifecycleContractTests {
                                     diagnosticsRecorder: dependencies.diagnosticsRecorder) {
             now
         }
+    }
+
+    private func makeForegroundCallSignalingTransportPipeline(dependencies: NativeIncomingLifecycleDependencies,
+                                                              transport: ForegroundCallSignalingTransport,
+                                                              now: Date) -> ForegroundCallSignalingTransportPipeline {
+        ForegroundCallSignalingTransportPipeline(transport: transport,
+                                                 inviteHandler: makeForegroundCallInviteHandler(dependencies: dependencies,
+                                                                                                now: now))
     }
 
     private func makeForegroundCallInviteSignal(handle: String = "safe-foreground-call",

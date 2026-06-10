@@ -1971,3 +1971,14 @@ Confirmed on a physical iPhone Debug build that the isolated synthetic CallKit p
 - Unit coverage verifies foreground invite reporting, duplicate/stale/terminal/malformed suppression, authority-gate separation after answer, and timeline fallback duplicate suppression.
 - Added `docs/direct-call/FOREGROUND_CALL_SIGNALING_CHANNEL.md`.
 - No production signaling transport, PushKit/APNs runtime, background incoming, signing/project change, Element Call route replacement, media behavior change, broad rollout, production/public rollout, or global activation was added.
+
+## 2026-06-10 - 2.42B Foreground Signaling Transport Prototype
+
+- Added a mockable foreground signaling transport boundary on top of the 2.42A invite contract.
+- Added a disabled/default no-op transport, an in-memory test transport, safe transport event/diagnostic models, and a pipeline that feeds transport invite events into `ForegroundCallInviteHandler`.
+- The in-memory transport can deliver a safe invite immediately in tests without waiting for Matrix room-list or timeline materialization.
+- The pipeline preserves duplicate, stale, terminal, malformed, active-session, and reporting-failure guards.
+- Invite receipt still does not request media credentials, connect media, emit Matrix call events, or bypass the foreground acceptance gate.
+- Unit coverage verifies disabled/no-op transport behavior, immediate in-memory delivery, pipeline reporting, unsafe invite suppression, no credential/media side effects, and answer gate separation.
+- Added `docs/direct-call/FOREGROUND_SIGNALING_TRANSPORT_PROTOTYPE.md`.
+- No production WebSocket/SSE transport, PushKit/APNs runtime, background incoming, signing/project change, Element Call route replacement, media behavior change, broad rollout, production/public rollout, or global activation was added.
