@@ -1347,6 +1347,126 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func disabledForegroundCallSignalingSSETransportDoesNotStartStream() {
+        let stream = ForegroundCallSignalingSSEStreamSpy()
+        let transport = ForegroundCallSignalingSSETransport(isEnabled: false, stream: stream)
+
+        transport.start { _ in
+            Issue.record("Disabled SSE transport should not emit foreground invite signals.")
+        }
+
+        #expect(stream.startCount == 0)
+        #expect(!transport.diagnostics.isStarted)
+        #expect(transport.diagnostics.deliveredInviteCount == 0)
+        #expect(transport.diagnostics.latestResult == .ignored)
+        #expect(String(describing: transport).contains("configured: false"))
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !String(describing: transport).contains($0) })
+    }
+
+    @Test
+    func foregroundCallSignalingSSETransportIgnoresReadyAndMalformedEvents() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let stream = ForegroundCallSignalingSSEStreamSpy()
+        let transport = ForegroundCallSignalingSSETransport(isEnabled: true, stream: stream) {
+            now
+        }
+        var events = [ForegroundCallSignalingTransportEvent]()
+
+        transport.start { event in
+            events.append(event)
+        }
+        stream.emit("event: foreground.ready\ndata: {\"ready\":true}\n\n")
+        stream.emit("event: foreground.call.invite\ndata: {\"type\":\"foreground.call.invite\"}\n\n")
+
+        #expect(events.isEmpty)
+        #expect(transport.diagnostics.isStarted)
+        #expect(transport.diagnostics.deliveredInviteCount == 0)
+        #expect(transport.diagnostics.latestResult == .ignored)
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !String(describing: transport).contains($0) })
+    }
+
+    @Test
+    func foregroundCallSignalingSSETransportDeliversValidInviteToPipeline() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let stream = ForegroundCallSignalingSSEStreamSpy()
+        let transport = ForegroundCallSignalingSSETransport(isEnabled: true, stream: stream) {
+            now
+        }
+        let pipeline = makeForegroundCallSignalingTransportPipeline(dependencies: dependencies,
+                                                                    transport: transport,
+                                                                    now: now)
+
+        pipeline.start()
+        stream.emit(makeForegroundCallSSEInvite(handle: "safe-sse-call", now: now))
+
+        guard case .reported(let identity) = pipeline.latestOutcome else {
+            Issue.record("Expected SSE invite to request incoming call reporting.")
+            return
+        }
+        #expect(dependencies.reportingAdapter.reportedIdentities == [identity])
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaCredentialRequested == false)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaConnectAttempted == false)
+        #expect(transport.diagnostics.deliveredInviteCount == 1)
+        #expect(transport.diagnostics.latestEventKind == .invite)
+        #expect(transport.diagnostics.realTransport)
+    }
+
+    @Test
+    func foregroundCallSignalingSSETransportSuppressesStaleUnsupportedAndDuplicateInvites() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let stream = ForegroundCallSignalingSSEStreamSpy()
+        let transport = ForegroundCallSignalingSSETransport(isEnabled: true, stream: stream) {
+            now
+        }
+        let pipeline = makeForegroundCallSignalingTransportPipeline(dependencies: dependencies,
+                                                                    transport: transport,
+                                                                    now: now)
+
+        pipeline.start()
+        stream.emit(makeForegroundCallSSEInvite(handle: "safe-sse-repeat", now: now))
+        stream.emit(makeForegroundCallSSEInvite(handle: "safe-sse-repeat", now: now))
+        #expect(pipeline.latestOutcome == .suppressed(.duplicate))
+
+        stream.emit(makeForegroundCallSSEInvite(handle: "safe-sse-stale",
+                                                now: now,
+                                                expiresAt: now.addingTimeInterval(-1)))
+        stream.emit(makeForegroundCallSSEInvite(handle: "safe-sse-video",
+                                                kind: "video",
+                                                now: now))
+
+        #expect(pipeline.latestOutcome == .suppressed(.duplicate))
+        #expect(dependencies.reportingAdapter.reportedIdentities.count == 1)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.suffix(2).map(\.mediaCredentialRequested) == [false, false])
+        #expect(dependencies.diagnosticsRecorder.diagnostics.suffix(2).map(\.mediaConnectAttempted) == [false, false])
+    }
+
+    @Test
+    func foregroundCallSignalingSSETransportDoesNotRequestCredentialConnectMediaOrEmitMatrixEvent() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let stream = ForegroundCallSignalingSSEStreamSpy()
+        let transport = ForegroundCallSignalingSSETransport(isEnabled: true, stream: stream) {
+            now
+        }
+        let pipeline = makeForegroundCallSignalingTransportPipeline(dependencies: dependencies,
+                                                                    transport: transport,
+                                                                    now: now)
+
+        pipeline.start()
+        stream.emit(makeForegroundCallSSEInvite(now: now))
+
+        #expect(dependencies.reportingAdapter.reportedIdentities.count == 1)
+        #expect(dependencies.reportingAdapter.endedReasons.isEmpty)
+        #expect(dependencies.timeoutScheduler.scheduledIdentities.isEmpty)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaCredentialRequested == false)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaConnectAttempted == false)
+        #expect(String(describing: pipeline).contains("mediaConnectRuntime: false"))
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !String(describing: pipeline).contains($0) })
+    }
+
+    @Test
     func foregroundSignalingTransportPipelineReportsValidInvite() {
         let now = Date(timeIntervalSince1970: 1000)
         let dependencies = makeNativeIncomingLifecycleDependencies()
@@ -1900,6 +2020,19 @@ final class NativeIncomingCallLifecycleContractTests {
                      expiresAt: expiresAt ?? now.addingTimeInterval(30),
                      displayMetadata: displayMetadata)
     }
+
+    private func makeForegroundCallSSEInvite(handle: String = "safe-sse-call",
+                                             kind: String = "audio",
+                                             now: Date,
+                                             expiresAt: Date? = nil) -> String {
+        let createdAtMs = Int(now.timeIntervalSince1970 * 1000)
+        let expiresAtMs = Int((expiresAt ?? now.addingTimeInterval(30)).timeIntervalSince1970 * 1000)
+        let payload = """
+        {"type":"foreground.call.invite","version":1,"call_handle":"\(handle)","call_kind":"\(kind)","created_at_ms":\(createdAtMs),"expires_at_ms":\(expiresAtMs),"display_label":"Pilot Participant"}
+        """
+        return "event: foreground.call.invite\n" +
+            "data: \(payload)\n\n"
+    }
 }
 
 private struct NativeIncomingLifecycleDependencies {
@@ -1927,6 +2060,34 @@ private final class NativeIncomingCallStateStoreSpy: NativeIncomingCallStateStor
 
     func clear(_ handle: NativeIncomingCallHandle) {
         states[handle] = nil
+    }
+}
+
+private final class ForegroundCallSignalingSSEStreamSpy: ForegroundCallSignalingSSEStreaming {
+    private var onChunk: ((Data) -> Void)?
+    private var onCompletion: ((ForegroundCallSignalingSSEStreamCompletion) -> Void)?
+    private(set) var startCount = 0
+    private(set) var stopCount = 0
+
+    func start(onChunk: @escaping (Data) -> Void,
+               onCompletion: @escaping (ForegroundCallSignalingSSEStreamCompletion) -> Void) {
+        startCount += 1
+        self.onChunk = onChunk
+        self.onCompletion = onCompletion
+    }
+
+    func stop() {
+        stopCount += 1
+        onChunk = nil
+        onCompletion = nil
+    }
+
+    func emit(_ text: String) {
+        onChunk?(Data(text.utf8))
+    }
+
+    func complete(_ completion: ForegroundCallSignalingSSEStreamCompletion) {
+        onCompletion?(completion)
     }
 }
 
