@@ -1982,3 +1982,13 @@ Confirmed on a physical iPhone Debug build that the isolated synthetic CallKit p
 - Unit coverage verifies disabled/no-op transport behavior, immediate in-memory delivery, pipeline reporting, unsafe invite suppression, no credential/media side effects, and answer gate separation.
 - Added `docs/direct-call/FOREGROUND_SIGNALING_TRANSPORT_PROTOTYPE.md`.
 - No production WebSocket/SSE transport, PushKit/APNs runtime, background incoming, signing/project change, Element Call route replacement, media behavior change, broad rollout, production/public rollout, or global activation was added.
+
+## 2026-06-10 - 2.42C Server-Backed Foreground Signaling Transport Review
+
+- Inspected the SalemX call-service routes, service orchestration, DTOs, config, app media credential client boundary, and 2.42A/2.42B foreground signaling models.
+- Confirmed the call-service currently exposes redacted health/readiness, native audio eligibility, server-issued media credential allocation, and local fake capability discovery only.
+- Found no foreground call invite subscription, fanout, acknowledgement, stale invalidation stream, reconnect/resume contract, or app runtime endpoint configuration.
+- Kept this phase docs-only because adding a real app transport without a server endpoint would require hardcoded or fake production behavior.
+- Documented the required server endpoint contract, opaque invite payload, acknowledgement model, redacted diagnostics, server blockers, and client transport expectations in `docs/direct-call/SERVER_BACKED_FOREGROUND_SIGNALING.md`.
+- The 2.42B disabled/default transport and in-memory test transport remain the executable foreground signaling transport proof until the server endpoint exists.
+- No Swift runtime code, production WebSocket/SSE/long-poll transport, PushKit/APNs runtime, background incoming, signing/project change, Element Call route replacement, media behavior change, broad rollout, production/public rollout, or global activation was added.
