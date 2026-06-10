@@ -1992,3 +1992,14 @@ Confirmed on a physical iPhone Debug build that the isolated synthetic CallKit p
 - Documented the required server endpoint contract, opaque invite payload, acknowledgement model, redacted diagnostics, server blockers, and client transport expectations in `docs/direct-call/SERVER_BACKED_FOREGROUND_SIGNALING.md`.
 - The 2.42B disabled/default transport and in-memory test transport remain the executable foreground signaling transport proof until the server endpoint exists.
 - No Swift runtime code, production WebSocket/SSE/long-poll transport, PushKit/APNs runtime, background incoming, signing/project change, Element Call route replacement, media behavior change, broad rollout, production/public rollout, or global activation was added.
+
+## 2026-06-10 - 2.42D SalemX Call-Service Foreground Signaling Endpoint
+
+- Added a foreground-only call-service SSE stream endpoint for active app sessions.
+- Added an opaque foreground invite payload model, in-memory active subscriber registry, internal invite fanout boundary, and redacted delivery diagnostics.
+- Kept invite publishing internal to the server boundary; no public client publish route was added.
+- Expired invites are dropped before fanout with a safe stale result.
+- Invite stream receipt does not issue media credentials, connect media, emit Matrix events, or change Element Call routing.
+- Added unit coverage for safe payload validation, malformed/unsupported/expired-shape rejection, active-subscriber delivery, redacted SSE output, unauthenticated stream rejection, and subscription cleanup on disconnect.
+- Added `server/salemx-call-service/docs/FOREGROUND_SIGNALING_ENDPOINT.md` and updated the server-backed foreground signaling status docs.
+- No PushKit/APNs runtime, background incoming, signing/project change, Element Call route replacement, media behavior change, broad rollout, production/public rollout, or global activation was added.

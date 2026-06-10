@@ -147,3 +147,36 @@ Because this phase is docs-only, no Swift runtime path changed. The existing 2.4
 Recommended next phase: `2.42D - foreground signaling server endpoint prototype`.
 
 That phase should implement or mock the server endpoint contract in the call-service first, then add an app transport only behind explicit disabled-by-default configuration.
+
+## 2.42D - SalemX Call-Service Foreground Signaling Endpoint
+
+Status: implemented as a server-side foreground-only SSE subscription prototype.
+
+2.42D adds an authenticated call-service stream endpoint:
+
+```text
+GET /_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/stream
+```
+
+The endpoint returns a foreground stream with a `foreground.ready` event followed by validated opaque `foreground.call.invite` events. The active subscriber registry and invite fanout live in `ForegroundCallSignalingService`.
+
+The current phase intentionally keeps invite publishing as an internal server boundary rather than a public HTTP publish route. A future validated server source must perform membership, eligibility, freshness, and target checks before fanout.
+
+Invite receipt remains side-effect-free for media:
+
+- no media credentials in invite payloads;
+- no media credential issuance from stream receipt;
+- no media connection from stream receipt;
+- no Matrix event emission from stream receipt;
+- no background incoming behavior;
+- no PushKit/APNs implementation.
+
+Server diagnostics remain redacted to booleans, counters, and safe enums. The payload and logs must not include raw routing identifiers, Matrix event content, credentialed URLs, media-session names, auth credential values, or full request/response bodies.
+
+The server-issued media credential endpoint remains final authority after user answer and local foreground validation.
+
+Remaining server work includes validated call invite source, stale invalidation, acknowledgement states, reconnect/resume semantics, rate limiting, multi-worker/shared delivery backing, and redacted operational dashboards.
+
+Detailed server notes are in `server/salemx-call-service/docs/FOREGROUND_SIGNALING_ENDPOINT.md`.
+
+Recommended next phase: `2.42E - iOS foreground signaling SSE transport integration`.

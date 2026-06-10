@@ -4,31 +4,31 @@ Repo:
 /Users/aibattt/Movies/element-x-ios
 
 Branch:
-salemx-2.42d-foreground-signaling-server-endpoint
+salemx-2.42e-ios-foreground-signaling-sse-transport
 
-Next phase: 2.42D - foreground signaling server endpoint prototype.
+Next phase: 2.42E - iOS foreground signaling SSE transport integration.
 
 Goal:
-Implement or mock the call-service endpoint contract needed by the 2.42B foreground signaling transport before wiring a production app transport.
+Wire the iOS foreground signaling transport to the 2.42D call-service SSE endpoint behind explicit disabled-by-default configuration.
 
 Context:
-- Element Call room-list/timeline delivery can still delay repeat incoming calls by 10-30 seconds.
+- Element Call room-list/timeline delivery can delay repeat incoming calls by 10-30 seconds.
 - 2.42A added a foreground invite signal contract, validator, handler, and fail-closed tests.
 - 2.42B added a disabled/default transport boundary, in-memory transport, transport diagnostics, and a pipeline that feeds safe invite events into the existing handler.
-- 2.42C inspected the current call-service and found no foreground invite subscription, fanout, acknowledgement, stale invalidation, reconnect/resume, or app endpoint configuration.
-- The existing call-service still only exposes redacted health/readiness, native audio eligibility, server-issued media credential allocation, and local fake capability discovery.
+- 2.42C documented that no server endpoint existed yet.
+- 2.42D added an authenticated foreground-only call-service SSE stream and internal server fanout boundary.
+- The stream endpoint emits `foreground.ready` and opaque `foreground.call.invite` events.
+- Invite publishing remains internal to the server boundary until a validated server call source exists.
 
 Scope:
-- Add a server endpoint prototype or a fully mocked endpoint contract in `server/salemx-call-service`.
-- Keep the endpoint authenticated and foreground-only.
-- Define device/session-scoped subscription semantics.
-- Emit only minimal opaque invite payloads.
-- Define expiry, stale invalidation, duplicate handling, and acknowledgement behavior.
-- Define reconnect/retry/resume expectations.
-- Define redacted server and client diagnostics.
-- Keep timeline call cards as secondary/history.
-- Keep the media credential endpoint as final authority after answer.
-- Do not wire a production app transport until the server endpoint contract is proven.
+- Add an iOS SSE client transport behind explicit disabled-by-default configuration.
+- Parse only the minimal opaque invite schema.
+- Feed valid invites into the existing foreground invite handler.
+- Keep duplicate, stale, terminal, malformed, unsupported, and active-call guards.
+- Keep timeline fallback as secondary/history and prevent duplicate incoming UI.
+- Keep answer-time foreground authority as the only path that can allow media later.
+- Add redacted diagnostics for connect, ready, invite received, validation result, disconnect, retry, and fallback.
+- Add tests with a fake SSE stream/client boundary.
 
 Constraints:
 - Do not implement PushKit runtime.
@@ -43,9 +43,7 @@ Constraints:
 - Keep logs/docs redacted.
 
 Expected output:
-- Server endpoint prototype or explicit mocked contract.
-- Safe payload schema and acknowledgement model.
-- Tests for malformed, stale, duplicate, terminal, and valid invite behavior.
-- Redacted diagnostics and operational alert states.
+- Disabled-by-default iOS foreground signaling SSE transport.
+- Tests for valid invite, malformed invite, stale invite, duplicate invite, stream disconnect, retry state, and no media side effects.
 - Updated docs/status/worklog/next prompt.
 - Confirmation that PushKit/APNs/background/signing/project/Element Call route remain unchanged.

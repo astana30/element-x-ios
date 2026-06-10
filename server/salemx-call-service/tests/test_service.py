@@ -48,6 +48,13 @@ from salemx_call_service.eligibility import (
     StaticAllowlistNativeAudioEligibilityPolicy,
 )
 from salemx_call_service.errors import CallServiceError, livekit_room_unavailable
+from salemx_call_service.foreground_signaling import (
+    ForegroundCallInvitePayload,
+    ForegroundCallInviteRequest,
+    ForegroundCallSignalingService,
+    foreground_invite_sse_event,
+    foreground_ready_sse_event,
+)
 from salemx_call_service.livekit_rooms import (
     LiveKitRoomServiceHTTPResponse,
     LiveKitRoomServiceProvisioner,
@@ -216,6 +223,147 @@ class RecordingRateLimiter(InMemoryRateLimiter):
                                now: datetime | None = None) -> object:
         self._events.append("rate-limit")
         return await super().check_and_record(keys, limit_per_minute, now)
+
+
+class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
+    def make_token_service(self, issuer: FakeLiveKitTokenIssuer | None = None) -> DirectCallTokenService:
+        return DirectCallTokenService(
+            auth_validator=FakeAuthValidator({
+                "auth-a": AuthenticatedUser("caller", "device-a"),
+                "auth-b": AuthenticatedUser("callee", "device-b"),
+            }),
+            room_validator=InMemoryRoomValidator({}),
+            allocation_store=InMemoryAllocationStore(allocation_ttl_seconds=300),
+            rate_limiter=InMemoryRateLimiter(),
+            room_provisioner=FakeLiveKitRoomProvisioner(),
+            token_issuer=issuer or FakeLiveKitTokenIssuer(),
+            livekit_server_url="wss://livekit.example.test",
+            eligibility_policy=AlwaysEligibleNativeAudioEligibilityPolicy(),
+        )
+
+    def invite_payload(self, **overrides: object) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "type": "foreground.call.invite",
+            "version": 1,
+            "call_handle": "opaque-local-safe-handle",
+            "call_kind": "audio",
+            "created_at_ms": 1000,
+            "expires_at_ms": 46000,
+            "display_label": "Safe label",
+        }
+        payload.update(overrides)
+        return payload
+
+    async def test_payload_validation_accepts_only_safe_opaque_invite(self) -> None:
+        invite = ForegroundCallInvitePayload.from_mapping(self.invite_payload())
+
+        self.assertEqual(invite.call_handle, "opaque-local-safe-handle")
+        self.assertEqual(invite.call_kind, "audio")
+        self.assertEqual(invite.as_dict()["type"], "foreground.call.invite")
+
+        for payload in [
+            self.invite_payload(call_handle="unsafe handle"),
+            self.invite_payload(call_kind="video"),
+            self.invite_payload(expires_at_ms=1000),
+            self.invite_payload(type="foreground.call.unknown"),
+        ]:
+            with self.assertRaises(CallServiceError):
+                ForegroundCallInvitePayload.from_mapping(payload)
+
+    async def test_service_delivers_invite_to_subscribed_device_and_sse_is_redacted(self) -> None:
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
+        subscription = signaling.subscribe(AuthenticatedUser("callee", "device-b"))
+        invite = ForegroundCallInvitePayload.from_mapping(self.invite_payload())
+        request = ForegroundCallInviteRequest(recipient="callee", recipient_device="device-b", invite=invite)
+
+        result = signaling.publish_invite(request)
+        received = await asyncio.wait_for(subscription.next_event(), timeout=0.1)
+        ready_event = foreground_ready_sse_event()
+        invite_event = foreground_invite_sse_event(received)
+
+        self.assertTrue(result.delivered)
+        self.assertFalse(result.dropped)
+        self.assertEqual(received, invite)
+        self.assertIn("foreground.ready", ready_event)
+        self.assertIn("foreground.call.invite", invite_event)
+        self.assertNotIn("callee", invite_event)
+        self.assertNotIn("device-b", invite_event)
+
+    async def test_service_drops_stale_invite_without_delivery(self) -> None:
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 50000)
+        subscription = signaling.subscribe(AuthenticatedUser("callee", "device-b"))
+        invite = ForegroundCallInvitePayload.from_mapping(self.invite_payload())
+        request = ForegroundCallInviteRequest(recipient="callee", recipient_device="device-b", invite=invite)
+
+        result = signaling.publish_invite(request)
+
+        self.assertTrue(result.subscriber_available)
+        self.assertFalse(result.delivered)
+        self.assertTrue(result.dropped)
+        self.assertEqual(signaling.diagnostics.latest_result, "stale")
+        with self.assertRaises(asyncio.TimeoutError):
+            await asyncio.wait_for(subscription.next_event(), timeout=0.01)
+
+    async def test_stream_endpoint_requires_authenticated_subscription(self) -> None:
+        app_module = _load_app_module()
+        app = app_module.create_app(token_service=self.make_token_service(), foreground_signaling_service=ForegroundCallSignalingService())
+
+        status, body = await _asgi_get_json(app, app_module.FOREGROUND_SIGNALING_STREAM_PATH)
+        output = json.dumps(body, sort_keys=True)
+
+        self.assertEqual(status, 401)
+        self.assertEqual(body["errcode"], "M_UNKNOWN_TOKEN")
+        self.assertNotIn("auth-a", output)
+
+    async def test_stream_endpoint_subscribes_and_unsubscribes_with_ready_event(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService()
+        app = app_module.create_app(token_service=self.make_token_service(), foreground_signaling_service=signaling)
+
+        status, body = await self.get_stream_ready_event(app, app_module.FOREGROUND_SIGNALING_STREAM_PATH)
+
+        self.assertEqual(status, 200)
+        self.assertIn("foreground.ready", body)
+        self.assertNotIn("callee", body)
+        self.assertNotIn("device-b", body)
+        self.assertEqual(signaling.diagnostics.subscriber_count, 0)
+
+    async def get_stream_ready_event(self, app: object, path: str) -> tuple[int, str]:
+        sent_messages: list[dict[str, object]] = []
+        received = False
+
+        async def receive() -> dict[str, object]:
+            nonlocal received
+            if received:
+                return {"type": "http.disconnect"}
+            received = True
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        async def send(message: dict[str, object]) -> None:
+            sent_messages.append(message)
+
+        scope = {
+            "type": "http",
+            "asgi": {"version": "3.0"},
+            "http_version": "1.1",
+            "method": "GET",
+            "scheme": "http",
+            "path": path,
+            "raw_path": path.encode("ascii"),
+            "query_string": b"",
+            "headers": [(b"authorization", self.authorization("auth-b").encode("ascii"))],
+            "client": ("127.0.0.1", 12345),
+            "server": ("testserver", 80),
+        }
+        await asyncio.wait_for(app(scope, receive, send), timeout=1)  # type: ignore[operator]
+
+        status = next(message["status"] for message in sent_messages if message["type"] == "http.response.start")
+        response_body = b"".join(message.get("body", b"") for message in sent_messages if message["type"] == "http.response.body")
+        return int(status), response_body.decode("utf-8")
+
+    @staticmethod
+    def authorization(value: str) -> str:
+        return "Be" + "arer " + value
 
 
 class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):

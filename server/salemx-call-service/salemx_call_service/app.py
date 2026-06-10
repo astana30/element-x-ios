@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import replace
 from os import environ
 from typing import Any, Optional
 
 from fastapi import FastAPI, Header, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from .allocation import InMemoryAllocationStore, RedisAllocationClient, RedisAllocationStore, SharedAllocationStoreSkeleton
 from .auth import SynapseMatrixAuthValidator, bearer_token_from_authorization
@@ -23,6 +24,11 @@ from .config import (
 )
 from .eligibility import DisabledNativeAudioEligibilityPolicy, StaticAllowlistNativeAudioEligibilityPolicy
 from .errors import CallServiceError, bad_request
+from .foreground_signaling import (
+    ForegroundCallSignalingService,
+    foreground_invite_sse_event,
+    foreground_ready_sse_event,
+)
 from .livekit_rooms import DEFAULT_ROOM_DEPARTURE_TIMEOUT_SECONDS, LiveKitRoomServiceProvisioner
 from .livekit_tokens import LiveKitJWTTokenIssuer
 from .local_fake import make_fake_capabilities_payload, make_fake_local_service
@@ -35,6 +41,7 @@ from .storage_keys import StorageKeyHasher
 
 ENDPOINT_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/livekit/token"
 ELIGIBILITY_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/eligibility"
+FOREGROUND_SIGNALING_STREAM_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/stream"
 CAPABILITIES_PATH = "/_matrix/client/v3/capabilities"
 HEALTH_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/health"
 READINESS_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/readiness"
@@ -43,6 +50,7 @@ REDIS_READINESS_TIMEOUT_SECONDS = 0.5
 
 def create_app(config: ServiceConfig | None = None,
                token_service: DirectCallTokenService | None = None,
+               foreground_signaling_service: ForegroundCallSignalingService | None = None,
                strict_startup: bool = True) -> FastAPI:
     service: DirectCallTokenService | None
     readiness: ServiceReadiness
@@ -114,6 +122,7 @@ def create_app(config: ServiceConfig | None = None,
                 raise RuntimeError(str(error)) from error
 
     app = FastAPI(title="SalemX Direct Call Service", version="0.1.0")
+    signaling_service = foreground_signaling_service or ForegroundCallSignalingService()
 
     @app.get(HEALTH_PATH)
     async def health() -> JSONResponse:
@@ -155,6 +164,37 @@ def create_app(config: ServiceConfig | None = None,
         except CallServiceError as error:
             status_code, body = error_response(error)
             return JSONResponse(status_code=status_code, content=body)
+
+    @app.get(FOREGROUND_SIGNALING_STREAM_PATH)
+    async def foreground_signaling_stream(authorization: Optional[str] = Header(default=None)):
+        try:
+            if service is None:
+                raise CallServiceError(status_code=503,
+                                       errcode="M_DIRECT_CALL_SERVICE_UNAVAILABLE",
+                                       error="Direct-call service is not ready.")
+            bearer_token = bearer_token_from_authorization(authorization)
+            authenticated_user = await service.auth_validator.validate_bearer_token(bearer_token)
+            subscription = signaling_service.subscribe(authenticated_user)
+        except CallServiceError as error:
+            status_code, body = error_response(error)
+            return JSONResponse(status_code=status_code, content=body)
+
+        async def event_stream() -> object:
+            try:
+                yield foreground_ready_sse_event()
+                while True:
+                    invite = await subscription.next_event()
+                    yield foreground_invite_sse_event(invite)
+            except asyncio.CancelledError:
+                raise
+            finally:
+                signaling_service.unsubscribe(subscription)
+
+        return StreamingResponse(
+            event_stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-store"},
+        )
 
     if local_fake_capabilities_enabled:
         @app.get(CAPABILITIES_PATH)

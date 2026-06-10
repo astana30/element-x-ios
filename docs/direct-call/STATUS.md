@@ -1231,6 +1231,13 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - 2.40E records the required remediation: paid Apple Developer Program team, valid trusted Apple Development certificate, online registered physical iPhone, configured App IDs for main app/NSE/ShareExtension, App Group, Push Notifications for the main app, durable development provisioning profiles, redacted entitlement/profile inspection, and physical-device install proof.
   - NSE filtering entitlement remains absent and should be requested only if a later encrypted NSE-to-CallKit design chooses that path.
   - CallKit, PushKit/APNs, background incoming, missed-call UX, production/public rollout, broad rollout, participant/device expansion, Element Call replacement, video, and global activation remain blocked.
+- 2.42D call-service foreground signaling endpoint prototype is implemented:
+  - The call-service now exposes an authenticated foreground-only SSE stream at the SalemX direct-call foreground signaling path.
+  - The stream emits a ready event and can deliver opaque foreground invite events through an internal fanout service.
+  - Invite publishing remains an internal server boundary only; no public client publish route was added.
+  - Invite receipt does not issue media credentials, connect media, emit Matrix events, add background incoming behavior, or implement PushKit/APNs.
+  - Server diagnostics remain counters, booleans, and safe enums only. Raw routing identifiers, Matrix event content, credentialed URLs, media-session names, auth credential values, and full request/response bodies remain forbidden.
+  - Remaining work: validated server invite source, stale invalidation, acknowledgement states, reconnect/resume semantics, shared delivery backing, and iOS disabled-by-default SSE transport integration.
 - Pilot sessions must follow the 2.27A checkpoint, 2.28A operations checklist, and 2.33B expansion runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.
@@ -1243,9 +1250,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.41G-B - Element Call foreground call invite source design`
+`2.42E - iOS foreground signaling SSE transport integration`
 
-Goal: design and prove a foreground-only Element Call invite source that receives call invite/member events before delayed timeline item rendering or room-list fallback, without PushKit/APNs/background behavior.
+Goal: wire the iOS foreground signaling transport to the 2.42D call-service SSE endpoint behind explicit disabled-by-default configuration, without PushKit/APNs/background behavior and without media side effects before answer-time authority approval.
 
 ## Do-Not-Touch Constraints
 
