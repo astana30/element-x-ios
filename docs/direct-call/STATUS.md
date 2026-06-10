@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.42A - foreground call signaling channel prototype.
+After 2.42B - foreground signaling transport prototype.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,13 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.42B adds a foreground signaling transport prototype:
+  - `ForegroundCallSignalingTransport`, `DisabledForegroundCallSignalingTransport`, `InMemoryForegroundCallSignalingTransport`, `ForegroundCallSignalingTransportEvent`, `ForegroundCallSignalingTransportDiagnostics`, and `ForegroundCallSignalingTransportPipeline` define a mockable transport layer for the 2.42A invite contract.
+  - The disabled/default transport emits no invites. The in-memory transport can deliver safe invite signals immediately in tests.
+  - The transport pipeline feeds invite events into `ForegroundCallInviteHandler`, preserving duplicate, stale, terminal, malformed, active-session, and reporting-failure guards.
+  - Invite receipt still does not request media credentials, connect media, emit Matrix call events, or bypass the foreground acceptance gate.
+  - Server requirements for a future authenticated foreground transport are documented in `docs/direct-call/FOREGROUND_SIGNALING_TRANSPORT_PROTOTYPE.md`.
+  - No production WebSocket/SSE transport, PushKit/APNs runtime, background incoming behavior, signing/project setting change, Element Call route replacement, media behavior change, broad rollout, or production/public rollout was added.
 - 2.42A adds an inert foreground call signaling channel contract and client boundary:
   - `ForegroundCallInviteSignal`, `ForegroundCallSignalingClientProtocol`, `DisabledForegroundCallSignalingClient`, `ForegroundCallInviteValidator`, and `ForegroundCallInviteHandler` define the future foreground invite path without adding a production transport.
   - A validated foreground invite can request the existing foreground incoming/CallKit reporting abstraction through safe local identity data.

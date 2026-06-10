@@ -834,6 +834,213 @@ final class DisabledForegroundCallSignalingClient: ForegroundCallSignalingClient
     }
 }
 
+enum ForegroundCallSignalingTransportEventKind: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case invite
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum ForegroundCallSignalingTransportResult: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case started
+    case stopped
+    case delivered
+    case ignored
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum ForegroundCallSignalingTransportEvent: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case invite(ForegroundCallInviteSignal)
+
+    var kind: ForegroundCallSignalingTransportEventKind {
+        switch self {
+        case .invite:
+            .invite
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .invite:
+            "invite(signal: <redacted>)"
+        }
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct ForegroundCallSignalingTransportDiagnostics: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    var isStarted: Bool
+    var deliveredInviteCount: Int
+    var latestEventKind: ForegroundCallSignalingTransportEventKind?
+    var latestResult: ForegroundCallSignalingTransportResult
+    var realTransport: Bool
+
+    static let disabled = Self(isStarted: false,
+                               deliveredInviteCount: 0,
+                               latestEventKind: nil,
+                               latestResult: .ignored,
+                               realTransport: false)
+
+    var description: String {
+        "ForegroundCallSignalingTransportDiagnostics(" + [
+            "isStarted: \(isStarted)",
+            "deliveredInviteCount: \(deliveredInviteCount)",
+            "latestEventKind: \(latestEventKind?.description ?? "none")",
+            "latestResult: \(latestResult)",
+            "realTransport: \(realTransport)"
+        ].joined(separator: ", ") + ")"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+protocol ForegroundCallSignalingTransport: AnyObject {
+    var diagnostics: ForegroundCallSignalingTransportDiagnostics { get }
+    func start(onEvent: @escaping (ForegroundCallSignalingTransportEvent) -> Void)
+    func stop()
+}
+
+final class DisabledForegroundCallSignalingTransport: ForegroundCallSignalingTransport, CustomStringConvertible, CustomDebugStringConvertible {
+    private(set) var diagnostics = ForegroundCallSignalingTransportDiagnostics.disabled
+
+    func start(onEvent: @escaping (ForegroundCallSignalingTransportEvent) -> Void) {
+        diagnostics = .init(isStarted: false,
+                            deliveredInviteCount: 0,
+                            latestEventKind: nil,
+                            latestResult: .ignored,
+                            realTransport: false)
+    }
+
+    func stop() {
+        diagnostics = .init(isStarted: false,
+                            deliveredInviteCount: diagnostics.deliveredInviteCount,
+                            latestEventKind: diagnostics.latestEventKind,
+                            latestResult: .stopped,
+                            realTransport: false)
+    }
+
+    var description: String {
+        "DisabledForegroundCallSignalingTransport(\(diagnostics))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+final class InMemoryForegroundCallSignalingTransport: ForegroundCallSignalingTransport, CustomStringConvertible, CustomDebugStringConvertible {
+    private(set) var diagnostics = ForegroundCallSignalingTransportDiagnostics.disabled
+    private var onEvent: ((ForegroundCallSignalingTransportEvent) -> Void)?
+
+    func start(onEvent: @escaping (ForegroundCallSignalingTransportEvent) -> Void) {
+        self.onEvent = onEvent
+        diagnostics = .init(isStarted: true,
+                            deliveredInviteCount: diagnostics.deliveredInviteCount,
+                            latestEventKind: diagnostics.latestEventKind,
+                            latestResult: .started,
+                            realTransport: false)
+    }
+
+    func stop() {
+        onEvent = nil
+        diagnostics = .init(isStarted: false,
+                            deliveredInviteCount: diagnostics.deliveredInviteCount,
+                            latestEventKind: diagnostics.latestEventKind,
+                            latestResult: .stopped,
+                            realTransport: false)
+    }
+
+    @discardableResult
+    func emit(_ event: ForegroundCallSignalingTransportEvent) -> Bool {
+        guard let onEvent else {
+            diagnostics = .init(isStarted: false,
+                                deliveredInviteCount: diagnostics.deliveredInviteCount,
+                                latestEventKind: event.kind,
+                                latestResult: .ignored,
+                                realTransport: false)
+            return false
+        }
+
+        onEvent(event)
+        diagnostics = .init(isStarted: true,
+                            deliveredInviteCount: diagnostics.deliveredInviteCount + 1,
+                            latestEventKind: event.kind,
+                            latestResult: .delivered,
+                            realTransport: false)
+        return true
+    }
+
+    @discardableResult
+    func emitInvite(_ signal: ForegroundCallInviteSignal) -> Bool {
+        emit(.invite(signal))
+    }
+
+    var description: String {
+        "InMemoryForegroundCallSignalingTransport(\(diagnostics))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+final class ForegroundCallSignalingTransportPipeline: CustomStringConvertible, CustomDebugStringConvertible {
+    private let transport: ForegroundCallSignalingTransport
+    private let inviteHandler: ForegroundCallInviteHandler
+    private let validationContext: () -> NativeIncomingCallValidationContext
+    private(set) var latestOutcome: ForegroundCallInviteHandlingOutcome?
+
+    init(transport: ForegroundCallSignalingTransport,
+         inviteHandler: ForegroundCallInviteHandler,
+         validationContext: @escaping () -> NativeIncomingCallValidationContext = { .valid }) {
+        self.transport = transport
+        self.inviteHandler = inviteHandler
+        self.validationContext = validationContext
+    }
+
+    func start() {
+        transport.start { [weak self] event in
+            self?.handle(event)
+        }
+    }
+
+    func stop() {
+        transport.stop()
+    }
+
+    private func handle(_ event: ForegroundCallSignalingTransportEvent) {
+        switch event {
+        case .invite(let signal):
+            latestOutcome = inviteHandler.handle(signal, context: validationContext())
+        }
+    }
+
+    var description: String {
+        "ForegroundCallSignalingTransportPipeline(latestOutcome: \(latestOutcome?.description ?? "none"), realTransport: false, mediaConnectRuntime: false)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
 struct ForegroundCallInviteValidator {
     var supportedKind: ForegroundCallInviteKind = .audio
 
