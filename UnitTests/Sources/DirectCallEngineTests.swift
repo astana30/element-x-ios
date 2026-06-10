@@ -10,6 +10,8 @@ import Combine
 import Foundation
 import Testing
 
+// swiftlint:disable file_length
+
 @MainActor
 final class DirectCallEngineTests {
     private let ownUserID = "@me:example.com"
@@ -1279,6 +1281,147 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func disabledForegroundCallSignalingClientIsNoopAndRedacted() {
+        let client = DisabledForegroundCallSignalingClient()
+
+        client.startForegroundCallSignaling { _ in
+            Issue.record("Disabled client should not emit foreground invite signals.")
+        }
+        client.stopForegroundCallSignaling()
+
+        #expect(!client.isStarted)
+        #expect(String(describing: client).contains("realTransport: false"))
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !String(describing: client).contains($0) })
+    }
+
+    @Test
+    func foregroundCallInviteReportsIncomingCallWithoutCredentialOrMedia() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let handler = makeForegroundCallInviteHandler(dependencies: dependencies, now: now)
+        let signal = makeForegroundCallInviteSignal(now: now)
+
+        let outcome = handler.handle(signal)
+
+        guard case .reported(let identity) = outcome else {
+            Issue.record("Expected foreground signaling invite to request incoming call reporting.")
+            return
+        }
+        #expect(dependencies.reportingAdapter.reportedIdentities == [identity])
+        #expect(dependencies.stateStore.state(for: identity.handle) == .reported)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.reportAttempted == true)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaCredentialRequested == false)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaConnectAttempted == false)
+        #expect(String(describing: signal).contains("<redacted>"))
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !String(describing: handler).contains($0) })
+    }
+
+    @Test
+    func foregroundCallInviteSuppressesDuplicateStaleTerminalAndMalformedInvites() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let handler = makeForegroundCallInviteHandler(dependencies: dependencies, now: now)
+        let signal = makeForegroundCallInviteSignal(now: now)
+
+        _ = handler.handle(signal)
+        let duplicate = handler.handle(signal)
+        let stale = handler.handle(makeForegroundCallInviteSignal(handle: "safe-foreground-call-stale",
+                                                                  now: now,
+                                                                  expiresAt: now.addingTimeInterval(-1)))
+        let terminal = handler.handle(makeForegroundCallInviteSignal(handle: "safe-foreground-call-terminal",
+                                                                     now: now,
+                                                                     state: .terminal))
+        let malformed = handler.handle(rawHandle: "not safe",
+                                       kind: .audio,
+                                       state: .incoming,
+                                       createdAt: now,
+                                       expiresAt: now.addingTimeInterval(30),
+                                       displayMetadata: NativeIncomingCallKitDisplayMetadata("Pilot Participant"))
+
+        #expect(duplicate == .suppressed(.duplicate))
+        #expect(stale == .suppressed(.stale))
+        #expect(terminal == .suppressed(.stale))
+        #expect(malformed == .suppressed(.malformed))
+        #expect(dependencies.reportingAdapter.reportedIdentities.count == 1)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.suffix(4).map(\.mediaCredentialRequested) == [false, false, false, false])
+        #expect(dependencies.diagnosticsRecorder.diagnostics.suffix(4).map(\.mediaConnectAttempted) == [false, false, false, false])
+    }
+
+    @Test
+    func foregroundCallInviteValidationGuardsRemainFailClosed() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let handler = makeForegroundCallInviteHandler(dependencies: dependencies, now: now)
+
+        let video = handler.handle(makeForegroundCallInviteSignal(handle: "safe-foreground-call-video",
+                                                                  kind: .video,
+                                                                  now: now))
+        let active = handler.handle(makeForegroundCallInviteSignal(handle: "safe-foreground-call-active",
+                                                                   now: now),
+                                    context: .init(hasExistingActiveNativeSession: true))
+        let reportBlockedDependencies = makeNativeIncomingLifecycleDependencies(reportResult: false)
+        let reportBlockedHandler = makeForegroundCallInviteHandler(dependencies: reportBlockedDependencies, now: now)
+        let reportBlocked = reportBlockedHandler.handle(makeForegroundCallInviteSignal(handle: "safe-foreground-call-report-blocked",
+                                                                                       now: now))
+
+        #expect(video == .suppressed(.unverifiable))
+        #expect(active == .suppressed(.existingActiveNativeSession))
+        #expect(reportBlocked == .suppressed(.callReportingUnavailable))
+        #expect(dependencies.reportingAdapter.reportedIdentities.isEmpty)
+        #expect(reportBlockedDependencies.diagnosticsRecorder.diagnostics.last?.mediaCredentialRequested == false)
+        #expect(reportBlockedDependencies.diagnosticsRecorder.diagnostics.last?.mediaConnectAttempted == false)
+    }
+
+    @Test
+    func foregroundCallInviteAnswerStillRequiresAcceptanceGate() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let handler = makeForegroundCallInviteHandler(dependencies: dependencies, now: now)
+        let actionRouter = DisabledNativeIncomingCallStateMachineActionRouter(stateStore: dependencies.stateStore,
+                                                                              diagnosticsRecorder: dependencies.diagnosticsRecorder)
+        let acceptanceGate = DisabledNativeIncomingForegroundAcceptanceGate(isEnabled: true,
+                                                                            stateStore: dependencies.stateStore,
+                                                                            diagnosticsRecorder: dependencies.diagnosticsRecorder,
+                                                                            authorizer: nil)
+
+        let outcome = handler.handle(makeForegroundCallInviteSignal(now: now))
+        guard case .reported(let identity) = outcome else {
+            Issue.record("Expected foreground signaling invite to reach local incoming reporting.")
+            return
+        }
+
+        actionRouter.requestAnswer(identity: identity)
+        let acceptance = acceptanceGate.requestForegroundAcceptance(identity: identity)
+
+        #expect(dependencies.stateStore.state(for: identity.handle) == .failed)
+        #expect(actionRouter.answerRequestCount == 1)
+        #expect(acceptance == .failClosed(.foregroundCredentialAuthorityUnavailable))
+        #expect(dependencies.diagnosticsRecorder.diagnostics.contains { diagnostics in
+            diagnostics.lifecycleState == .answerRequested &&
+                diagnostics.mediaCredentialRequested == false &&
+                diagnostics.mediaConnectAttempted == false
+        })
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaCredentialRequested == false)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaConnectAttempted == false)
+    }
+
+    @Test
+    func foregroundCallInviteTimelineFallbackDoesNotDuplicateIncomingUI() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let handler = makeForegroundCallInviteHandler(dependencies: dependencies, now: now)
+        let signal = makeForegroundCallInviteSignal(now: now)
+
+        _ = handler.handle(signal)
+        dependencies.stateStore.clear(signal.handle)
+        let fallback = handler.handle(signal)
+
+        #expect(fallback == .suppressed(.duplicate))
+        #expect(dependencies.reportingAdapter.reportedIdentities.count == 1)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last == .failClosed(.duplicate))
+    }
+
+    @Test
     func disabledSyntheticCallKitProofFailsClosedByDefault() {
         let dependencies = makeNativeIncomingLifecycleDependencies()
         let actionHandler = NativeIncomingSyntheticCallKitActionHandlerSpy()
@@ -1556,6 +1699,34 @@ final class NativeIncomingCallLifecycleContractTests {
                                                                reportingAdapter: dependencies.reportingAdapter,
                                                                actionHandler: actionHandler,
                                                                diagnosticsRecorder: dependencies.diagnosticsRecorder)
+    }
+
+    private func makeForegroundCallInviteHandler(dependencies: NativeIncomingLifecycleDependencies,
+                                                 now: Date) -> ForegroundCallInviteHandler {
+        ForegroundCallInviteHandler(isEnabled: true,
+                                    stateStore: dependencies.stateStore,
+                                    reportingAdapter: dependencies.reportingAdapter,
+                                    diagnosticsRecorder: dependencies.diagnosticsRecorder) {
+            now
+        }
+    }
+
+    private func makeForegroundCallInviteSignal(handle: String = "safe-foreground-call",
+                                                kind: ForegroundCallInviteKind = .audio,
+                                                now: Date,
+                                                state: ForegroundCallInviteSignalState = .incoming,
+                                                expiresAt: Date? = nil) -> ForegroundCallInviteSignal {
+        guard let safeHandle = NativeIncomingCallHandle(handle),
+              let displayMetadata = NativeIncomingCallKitDisplayMetadata("Pilot Participant") else {
+            preconditionFailure("The local fixture should be valid.")
+        }
+
+        return .init(handle: safeHandle,
+                     kind: kind,
+                     state: state,
+                     createdAt: now,
+                     expiresAt: expiresAt ?? now.addingTimeInterval(30),
+                     displayMetadata: displayMetadata)
     }
 }
 

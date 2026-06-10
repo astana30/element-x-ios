@@ -7,6 +7,8 @@
 
 import Foundation
 
+// swiftlint:disable file_length
+
 enum DirectCallIntent: String, CaseIterable, Equatable {
     case audio
     case video
@@ -720,6 +722,251 @@ struct NativeIncomingCallKitDisplayMetadata: Equatable, CustomStringConvertible,
 
     var description: String {
         "NativeIncomingCallKitDisplayMetadata(label: <redacted>, isPresent: \(!label.isEmpty))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum ForegroundCallInviteKind: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case audio
+    case video
+    case unsupported
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum ForegroundCallInviteSignalState: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case incoming
+    case terminal
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct ForegroundCallInviteSignal: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let handle: NativeIncomingCallHandle
+    let kind: ForegroundCallInviteKind
+    let state: ForegroundCallInviteSignalState
+    let createdAt: Date
+    let expiresAt: Date
+    let displayMetadata: NativeIncomingCallKitDisplayMetadata
+
+    var description: String {
+        "ForegroundCallInviteSignal(handle: <redacted>, kind: \(kind), state: \(state), createdAt: <redacted>, expiresAt: <redacted>, displayMetadata: <redacted>)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum ForegroundCallInviteValidationResult: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case valid(ForegroundCallInviteSignal)
+    case failClosed(NativeIncomingCallFailClosedReason)
+
+    var description: String {
+        switch self {
+        case .valid:
+            "valid(signal: <redacted>)"
+        case .failClosed(let reason):
+            "failClosed(\(reason))"
+        }
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum ForegroundCallInviteHandlingOutcome: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case reported(NativeIncomingCallIdentity)
+    case suppressed(NativeIncomingCallFailClosedReason)
+
+    var description: String {
+        switch self {
+        case .reported:
+            "reported(identity: <redacted>)"
+        case .suppressed(let reason):
+            "suppressed(\(reason))"
+        }
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+protocol ForegroundCallSignalingClientProtocol: AnyObject {
+    func startForegroundCallSignaling(onSignal: @escaping (ForegroundCallInviteSignal) -> Void)
+    func stopForegroundCallSignaling()
+}
+
+final class DisabledForegroundCallSignalingClient: ForegroundCallSignalingClientProtocol, CustomStringConvertible, CustomDebugStringConvertible {
+    private(set) var isStarted = false
+
+    func startForegroundCallSignaling(onSignal: @escaping (ForegroundCallInviteSignal) -> Void) {
+        isStarted = true
+    }
+
+    func stopForegroundCallSignaling() {
+        isStarted = false
+    }
+
+    var description: String {
+        "DisabledForegroundCallSignalingClient(isStarted: \(isStarted), realTransport: false, backgroundRuntime: false)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct ForegroundCallInviteValidator {
+    var supportedKind: ForegroundCallInviteKind = .audio
+
+    func validate(rawHandle: String,
+                  kind: ForegroundCallInviteKind,
+                  state: ForegroundCallInviteSignalState,
+                  createdAt: Date,
+                  expiresAt: Date,
+                  displayMetadata: NativeIncomingCallKitDisplayMetadata?,
+                  now: Date) -> ForegroundCallInviteValidationResult {
+        guard let handle = NativeIncomingCallHandle(rawHandle),
+              let displayMetadata else {
+            return .failClosed(.malformed)
+        }
+
+        let signal = ForegroundCallInviteSignal(handle: handle,
+                                                kind: kind,
+                                                state: state,
+                                                createdAt: createdAt,
+                                                expiresAt: expiresAt,
+                                                displayMetadata: displayMetadata)
+        return validate(signal, now: now)
+    }
+
+    func validate(_ signal: ForegroundCallInviteSignal, now: Date) -> ForegroundCallInviteValidationResult {
+        guard signal.kind == supportedKind else {
+            return .failClosed(.unverifiable)
+        }
+        guard signal.state == .incoming else {
+            return .failClosed(.stale)
+        }
+        guard signal.createdAt <= now,
+              signal.expiresAt > now else {
+            return .failClosed(.stale)
+        }
+
+        return .valid(signal)
+    }
+}
+
+final class ForegroundCallInviteHandler: CustomStringConvertible, CustomDebugStringConvertible {
+    private let isEnabled: Bool
+    private let validator: ForegroundCallInviteValidator
+    private let stateStore: NativeIncomingCallStateStoring
+    private let reportingAdapter: NativeIncomingCallReportingAdapting
+    private let diagnosticsRecorder: NativeIncomingCallDiagnosticsRecording
+    private let now: () -> Date
+    private var handledHandles = Set<NativeIncomingCallHandle>()
+
+    init(isEnabled: Bool = false,
+         validator: ForegroundCallInviteValidator = .init(),
+         stateStore: NativeIncomingCallStateStoring,
+         reportingAdapter: NativeIncomingCallReportingAdapting,
+         diagnosticsRecorder: NativeIncomingCallDiagnosticsRecording,
+         now: @escaping () -> Date = Date.init) {
+        self.isEnabled = isEnabled
+        self.validator = validator
+        self.stateStore = stateStore
+        self.reportingAdapter = reportingAdapter
+        self.diagnosticsRecorder = diagnosticsRecorder
+        self.now = now
+    }
+
+    func handle(rawHandle: String,
+                kind: ForegroundCallInviteKind,
+                state: ForegroundCallInviteSignalState,
+                createdAt: Date,
+                expiresAt: Date,
+                displayMetadata: NativeIncomingCallKitDisplayMetadata?,
+                context: NativeIncomingCallValidationContext = .valid) -> ForegroundCallInviteHandlingOutcome {
+        switch validator.validate(rawHandle: rawHandle,
+                                  kind: kind,
+                                  state: state,
+                                  createdAt: createdAt,
+                                  expiresAt: expiresAt,
+                                  displayMetadata: displayMetadata,
+                                  now: now()) {
+        case .valid(let signal):
+            return handle(signal, context: context)
+        case .failClosed(let reason):
+            return failClosed(reason)
+        }
+    }
+
+    func handle(_ signal: ForegroundCallInviteSignal,
+                context: NativeIncomingCallValidationContext = .valid) -> ForegroundCallInviteHandlingOutcome {
+        guard isEnabled else {
+            return failClosed(.dependencyUnavailable)
+        }
+        switch validator.validate(signal, now: now()) {
+        case .valid:
+            break
+        case .failClosed(let reason):
+            return failClosed(reason)
+        }
+        guard !stateStore.hasSeen(signal.handle),
+              !handledHandles.contains(signal.handle) else {
+            return failClosed(.duplicate)
+        }
+        if let failClosedReason = context.failClosedReason {
+            return failClosed(failClosedReason)
+        }
+
+        let identity = NativeIncomingCallIdentity(handle: signal.handle, receivedAt: signal.createdAt)
+        stateStore.setState(.received, for: signal.handle)
+        stateStore.setState(.validating, for: signal.handle)
+        stateStore.setState(.reportable, for: signal.handle)
+        handledHandles.insert(signal.handle)
+
+        let reportSucceeded = reportingAdapter.reportIncomingCall(identity: identity)
+        diagnosticsRecorder.record(.init(lifecycleState: reportSucceeded ? .reported : .blocked,
+                                         failClosedReason: reportSucceeded ? nil : .callReportingUnavailable,
+                                         reportAttempted: true,
+                                         reportSucceeded: reportSucceeded,
+                                         mediaCredentialRequested: false,
+                                         mediaConnectAttempted: false))
+
+        guard reportSucceeded else {
+            stateStore.setState(.blocked, for: signal.handle)
+            return .suppressed(.callReportingUnavailable)
+        }
+
+        stateStore.setState(.reported, for: signal.handle)
+        return .reported(identity)
+    }
+
+    private func failClosed(_ reason: NativeIncomingCallFailClosedReason) -> ForegroundCallInviteHandlingOutcome {
+        diagnosticsRecorder.record(.failClosed(reason))
+        return .suppressed(reason)
+    }
+
+    var description: String {
+        "ForegroundCallInviteHandler(isEnabled: \(isEnabled), handledCount: \(handledHandles.count), realTransport: false, mediaConnectRuntime: false)"
     }
 
     var debugDescription: String {
