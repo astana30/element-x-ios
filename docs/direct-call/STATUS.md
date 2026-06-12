@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.42M - physical regression smoke after foreground real invite token guard.
+After 2.42N - DEBUG smoke tooling release-surface guard.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,13 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.42N verifies and hardens the DEBUG-only foreground smoke tooling release surface after the 2.42M pass at `bf9996ae0665ad3953fac3d7a838bfb619349dd1`:
+  - The M1-M4 sender bridge, receiver bridge, in-app foreground smoke controls, and Settings `Internal diagnostics` entry are local supervised smoke tooling only.
+  - Source-surface tests now guard that the smoke bridges, receiver proof controls, Settings Developer Options action, and session registration hook remain inside DEBUG compile gates.
+  - Proof summaries and sender diagnostics remain redacted booleans/status classes and must not expose access tokens, authorization headers, user IDs, device IDs, room IDs, recipients, call handles, request payloads, private logs, or secret-bearing URLs.
+  - The smoke tooling must not be used as production call behavior.
+  - The dev route remains disabled by default, and the real non-dev route remains auth-gated.
+  - Physical Debug builds should use `DEVELOPMENT_TEAM=M639Y9MFR2`; the old `83LGSC2QPV` team must not be used for current physical Debug builds.
 - 2.42M physical regression smoke passed after foreground real-invite token guard hardening:
   - Baseline token guard commit: `9544d85090bb152f5c28d5acd11f37815556e078`.
   - Sender bridge commit: `751316429c5476217f7b881d9a2f542a4e7e3b3b`.

@@ -1,5 +1,17 @@
 # Supervised Foreground SSE Smoke
 
+## 2.42N - DEBUG Smoke Tooling Release-Surface Guard
+
+Status: completed after the 2.42M physical regression smoke pass at `bf9996ae0665ad3953fac3d7a838bfb619349dd1`.
+
+The M1-M4 sender bridge, receiver bridge, in-app foreground smoke controls, and Settings `Internal diagnostics` entry are local supervised smoke tooling only. They must remain DEBUG-only and must not become production call behavior.
+
+2.42N adds focused source-surface coverage that guards the DEBUG compile gates around the smoke bridge classes, receiver proof controls, active-session registration hook, Settings Developer Options action, and flow-coordinator route.
+
+The smoke proof and diagnostics surface must remain limited to redacted booleans/status classes. It must not display, log, store, document, or commit access tokens, authorization headers, raw user IDs, raw device IDs, room IDs, recipients, call handles, request payloads, private logs, or secret-bearing URLs.
+
+The dev route remains disabled by default. The real non-dev route remains auth-gated. Physical Debug builds should use `DEVELOPMENT_TEAM=M639Y9MFR2`; do not use the old `83LGSC2QPV` team or persist signing changes.
+
 ## 2.42I - Supervised Foreground SSE Smoke Preparation
 
 Status: completed. Stream-open and local-only invite self-injection passed on a supervised physical iPhone smoke.

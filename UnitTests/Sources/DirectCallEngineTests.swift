@@ -2527,6 +2527,36 @@ final class ForegroundCallSignalingSSETraceTests {
     }
 
     @Test
+    func debugForegroundSSESmokeSurfaceIsCompileGuarded() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+        let appHookSource = try Self.sourceFile("ElementX/Sources/AppHooks/Hooks/DeveloperOptionsScreenHook.swift")
+        let userSessionSource = try Self.sourceFile("ElementX/Sources/Services/Session/UserSession.swift")
+        let settingsModelsSource = try Self.sourceFile("ElementX/Sources/Screens/Settings/SettingsScreen/SettingsScreenModels.swift")
+        let settingsCoordinatorSource = try Self.sourceFile("ElementX/Sources/Screens/Settings/SettingsScreen/SettingsScreenCoordinator.swift")
+        let settingsViewModelSource = try Self.sourceFile("ElementX/Sources/Screens/Settings/SettingsScreen/SettingsScreenViewModel.swift")
+        let settingsViewSource = try Self.sourceFile("ElementX/Sources/Screens/Settings/SettingsScreen/View/SettingsScreen.swift")
+        let settingsFlowSource = try Self.sourceFile("ElementX/Sources/FlowCoordinators/SettingsFlowCoordinator.swift")
+
+        #expect(Self.allOccurrences(of: "SalemXForegroundSSESmokeDebug", areInsideDebugBlockIn: adapterSource))
+        #expect(Self.allOccurrences(of: "SalemXForegroundSSESmokeDebugBridge", areInsideDebugBlockIn: adapterSource))
+        #expect(Self.allOccurrences(of: "SalemXForegroundSSEReceiverSmokeDebugBridge", areInsideDebugBlockIn: adapterSource))
+        #expect(Self.allOccurrences(of: "SalemXForegroundSSESmokeDebug.registerActiveUserSession", areInsideDebugBlockIn: userSessionSource))
+
+        #expect(Self.allOccurrences(of: "SalemXDeveloperOptionsScreenHook", areInsideDebugBlockIn: appHookSource))
+        #expect(Self.allOccurrences(of: "SalemXForegroundSSESmokeControls", areInsideDebugBlockIn: appHookSource))
+        #expect(Self.allOccurrences(of: "foregroundSSESmokeReceiverProof", areInsideDebugBlockIn: appHookSource))
+
+        #expect(Self.allOccurrences(of: "case developerOptions", areInsideDebugBlockIn: settingsModelsSource))
+        #expect(Self.allOccurrences(of: "case developerOptions", areInsideDebugBlockIn: settingsCoordinatorSource))
+        #expect(Self.allOccurrences(of: "case .developerOptions", areInsideDebugBlockIn: settingsCoordinatorSource))
+        #expect(Self.allOccurrences(of: "case .developerOptions", areInsideDebugBlockIn: settingsViewModelSource))
+        #expect(Self.allOccurrences(of: "L10n.commonDeveloperOptions", areInsideDebugBlockIn: settingsViewSource))
+        #expect(Self.allOccurrences(of: "context.send(viewAction: .developerOptions)", areInsideDebugBlockIn: settingsViewSource))
+        #expect(Self.allOccurrences(of: "case .developerOptions", areInsideDebugBlockIn: settingsFlowSource))
+        #expect(Self.allOccurrences(of: "presentDeveloperOptions", areInsideDebugBlockIn: settingsFlowSource))
+    }
+
+    @Test
     func foregroundCallSignalingSSETransportEmitsRedactedParserTraceForLineDelimitedInvite() {
         let now = Date(timeIntervalSince1970: 1000)
         let dependencies = makeNativeIncomingLifecycleDependencies()
@@ -2605,6 +2635,39 @@ final class ForegroundCallSignalingSSETraceTests {
         "displayCall",
         "presentCallScreen"
     ]
+
+    private static let repositoryRootURL = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+
+    private static func sourceFile(_ relativePath: String) throws -> String {
+        try String(contentsOf: repositoryRootURL.appendingPathComponent(relativePath), encoding: .utf8)
+    }
+
+    private static func allOccurrences(of symbol: String, areInsideDebugBlockIn source: String) -> Bool {
+        var searchRange = source.startIndex..<source.endIndex
+        var foundSymbol = false
+
+        while let symbolRange = source.range(of: symbol, range: searchRange) {
+            foundSymbol = true
+            guard isInsideDebugBlock(symbolRange, in: source) else {
+                return false
+            }
+            searchRange = symbolRange.upperBound..<source.endIndex
+        }
+
+        return foundSymbol
+    }
+
+    private static func isInsideDebugBlock(_ range: Range<String.Index>, in source: String) -> Bool {
+        guard let debugStart = source[..<range.lowerBound].range(of: "#if DEBUG", options: .backwards) else {
+            return false
+        }
+
+        return source[debugStart.upperBound..<range.lowerBound].range(of: "#endif") == nil
+            && source[range.upperBound...].range(of: "#endif") != nil
+    }
 
     private func makeNativeIncomingLifecycleDependencies() -> NativeIncomingLifecycleDependencies {
         let stateStore = NativeIncomingCallStateStoreSpy()

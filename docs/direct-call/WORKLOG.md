@@ -166,6 +166,21 @@ The real authenticated non-dev route was used. The dev route remained disabled, 
 
 Physical Debug builds for current supervised smokes should use `DEVELOPMENT_TEAM=M639Y9MFR2`. Do not use the old `83LGSC2QPV` team for current physical Debug builds, and do not persist signing changes.
 
+### 2.42N — DEBUG smoke tooling release-surface guard
+
+2.42M passed at `bf9996ae0665ad3953fac3d7a838bfb619349dd1`. 2.42N verifies and hardens the M1-M4 foreground smoke tooling release surface without rerunning physical smoke.
+
+Added focused source-surface coverage that guards the DEBUG compile gates around:
+
+- `SalemXForegroundSSESmokeDebug` and both Objective-C smoke bridge classes.
+- The active-session smoke registration hook.
+- The in-app foreground SSE smoke controls and proof accessibility surface.
+- The Settings `Internal diagnostics` entry, Developer Options action, and flow-coordinator route.
+
+The M1-M4 bridges and controls remain local supervised smoke tooling only and must not be used as production call behavior. Proof summaries and sender diagnostics remain redacted booleans/status classes only. They must not expose access tokens, authorization headers, raw user IDs, raw device IDs, room IDs, recipients, call handles, request payloads, private logs, or secret-bearing URLs.
+
+The dev route remains disabled by default, and the real non-dev route remains auth-gated. Physical Debug builds for current supervised smokes should use `DEVELOPMENT_TEAM=M639Y9MFR2`; do not use the old `83LGSC2QPV` team or persist signing changes.
+
 ### 2.42K — Supervised foreground real invite
 
 The two-device foreground real-invite smoke passed and was committed as:

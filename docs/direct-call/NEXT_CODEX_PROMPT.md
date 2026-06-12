@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.42m-foreground-real-invite-token-guard-smoke`
+`salemx-2.42n-debug-smoke-release-surface-guard`
 
-Next phase: continue after the 2.42M physical foreground real-invite regression smoke pass.
+Next phase: continue after the 2.42N DEBUG smoke tooling release-surface guard.
 
 ## Context
 
@@ -25,6 +25,10 @@ Next phase: continue after the 2.42M physical foreground real-invite regression 
 - 2.42M then hit `debug_smoke_controls_not_reachable_from_settings`: the 2.42M3 controls were present on Developer Options, but that screen was not reachable from the visible Settings UI.
 - 2.42M4 exposes a DEBUG-only `Internal diagnostics` row in Settings that opens the existing Developer Options screen.
 - 2.42M physical regression smoke passed on two physical iPhones after token guard hardening and M1-M4 DEBUG smoke tooling.
+- 2.42M passed at commit `bf9996ae0665ad3953fac3d7a838bfb619349dd1`.
+- 2.42N verifies and hardens the DEBUG-only release surface for the M1-M4 smoke tooling.
+- M1-M4 foreground smoke controls and bridges are local supervised smoke tooling only and must not be used as production call behavior.
+- Source-surface tests guard that the sender bridge, receiver bridge, in-app smoke controls, active-session registration hook, Settings Developer Options action, and flow-coordinator route remain DEBUG-gated.
 - Receiver pre-invite proof was collected through DEBUG in-app controls at `Settings -> Internal diagnostics -> General -> Foreground SSE smoke`.
 - The sender bridge was invoked locally only; receiver identifiers were typed locally and were not recorded, printed, stored, pasted into chat, documented, or committed.
 - The real authenticated non-dev invite route was used. The dev route remained disabled, unauthenticated non-dev invite remained `401`, and unauthenticated stream remained `401`.
