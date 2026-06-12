@@ -4,70 +4,92 @@ Repo:
 /Users/aibattt/Movies/element-x-ios
 
 Branch:
-salemx-2.42j-foreground-sse-repeat-call-validation
+salemx-2.42k-foreground-sse-repeat-call-validation
 
-Next phase: 2.42J - foreground SSE repeat-call validation and integration hardening.
+Next phase: 2.42K - foreground SSE repeat-call validation.
 
 Goal:
-Validate that the foreground SSE invite path can reduce repeated foreground incoming-call delay without regressing the existing Element Call route, foreground audio behavior, or server-issued media credential authority.
+Validate that the foreground SSE invite path reduces repeated foreground incoming-call delay while preserving Element Call routing, foreground audio behavior, fallback de-duplication, and server-issued media credential authority.
 
 Context:
-- 2.42D added the authenticated call-service foreground SSE stream endpoint.
-- 2.42E added the disabled/configured iOS SSE transport client boundary.
-- 2.42F added disabled-by-default supervised dev invite routes.
-- 2.42H added `DebugForegroundCallSignalingSSERuntimeOwner`.
-- 2.42I added the `SalemXForegroundSSESmokeDebug` active-session LLDB helper, local-only `dev/inject-active` route, stream failure diagnostics, parser diagnostics, and server stream/fanout diagnostics.
-- 2.42I-S physical smoke passed:
-  - iOS reached `helper_invoked=true`, `foreground_sse_start_requested=true`, `sse_connected=true`, and `stream_failure=none`.
-  - Server reached `stream_auth_ok`, `stream_registered`, `ready_sent`, and `active_subscriber_count=1`.
-  - Local-only self-injection returned `active_subscriber_count=1`, `delivered=true`, and `dropped=false`.
-  - Server emitted `invite_enqueued=true`, `invite_yielded=true`, and `sse_event_type=foreground.call.invite`.
-  - iOS emitted `raw_event_received=true`, `sse_event_type=foreground.call.invite`, `invite_parse_attempted=true`, `invite_parse_succeeded=true`, `pipeline_delivered=true`, `invite_received=true`, `invite_valid=true`, and `incoming_requested=true`.
-  - The dev route was disabled after the smoke and the public dev route returned `404`.
-- The invite validator now allows a small future-skew window for server/device clock drift while still rejecting larger future timestamps.
-- Invite receipt still does not request media credentials, connect media, emit Matrix events, add PushKit/APNs behavior, add background incoming behavior, or replace Element Call routing.
+- 2.42I passed and was committed as `a4d427f5b07e662695ce108530bbafc9bfdd9399` (`Validate supervised foreground SSE smoke`).
+- 2.42I-S physical smoke evidence:
+  - server `active_subscriber_count=1`;
+  - server `delivered=true`;
+  - server `dropped=false`;
+  - server `invite_enqueued=true`;
+  - server `invite_yielded=true`;
+  - server `sse_event_type=foreground.call.invite`;
+  - iOS `helper_invoked=true`;
+  - iOS `foreground_sse_start_requested=true`;
+  - iOS `sse_connected=true`;
+  - iOS `stream_failure=none`;
+  - iOS `raw_event_received=true`;
+  - iOS `invite_parse_succeeded=true`;
+  - iOS `pipeline_delivered=true`;
+  - iOS `invite_received=true`;
+  - iOS `invite_valid=true`;
+  - iOS `incoming_requested=true`.
+- The remaining 2.42I blocker was invite timestamp validation. iOS reached `invite_parse_attempted=true` but not parse success until a small future-skew allowance was added for minor server/device clock drift. Larger future timestamps still fail closed.
+- 2.42J added guardrail cleanup:
+  - disabled dev routes return not found;
+  - enabled dev invite remains authenticated;
+  - local-only self-injection remains localhost-only and exact-one-subscriber gated;
+  - `foreground.keepalive`, `invite_enqueued`, and `invite_yielded` diagnostics remain redacted;
+  - the DEBUG helper remains DEBUG-only and does not print, return, store, log, or document active credential values;
+  - timestamp tests cover current, small future skew, excessive future skew, and expired invites.
+- Physical Debug builds should use local command-line signing overrides only:
+  - `DEVELOPMENT_TEAM=M639Y9MFR2`;
+  - `CODE_SIGN_STYLE=Automatic`;
+  - `-allowProvisioningUpdates`;
+  - `-allowProvisioningDeviceRegistration`.
+- Do not use old Team ID `83LGSC2QPV` for current physical Debug builds.
+- Do not persist signing changes.
 
 Scope:
 - Foreground only.
-- Debug/dev supervised validation first.
+- Supervised physical validation first.
 - Keep SSE disabled by default unless explicitly configured.
 - Preserve Element Call route behavior.
 - Preserve server-issued media credential authority.
-- Preserve current fallback and duplicate guards.
+- Preserve fallback and duplicate guards.
 - Keep logs/docs redacted.
 - Do not hardcode production URLs or credential values.
 
 Primary questions:
-1. Can an SSE-delivered invite trigger foreground incoming UI within the target window during repeated foreground calls?
-2. Does the Matrix room-list/timeline fallback de-duplicate after an SSE-delivered invite?
+1. Does an SSE-delivered invite request foreground incoming UI within the target window across repeated calls?
+2. Does Matrix room-list/timeline fallback de-duplicate after an SSE-delivered invite?
 3. Does repeated SSE delivery avoid the previous 10-30 second repeated incoming delay?
-4. Does answer still require the existing credential authority path before media connects?
-5. Does repeated End leave the SSE runtime, Element Call route, and fallback state clean?
-6. What production configuration boundary is required before any non-debug rollout?
+4. Does Answer still require the existing credential authority path before media connects?
+5. Does repeated End leave SSE runtime, Element Call route, and fallback state clean?
+6. What production configuration boundary is required before non-debug rollout?
 
 Expected validation:
 - Physical iPhone foreground/open.
 - Start Debug SSE helper through the active-session path.
 - Confirm `sse_connected=true` and `stream_failure=none`.
-- Trigger repeated supervised invites through the local-only route while one subscriber is active.
-- Confirm each invite reports:
-  - server `active_subscriber_count=1`
-  - server `delivered=true`
-  - server `dropped=false`
-  - server `invite_yielded=true`
-  - iOS `invite_received=true`
-  - iOS `invite_valid=true`
-  - iOS `incoming_requested=true`
-- Measure invite-to-incoming request timing bucket.
-- Confirm fallback de-duplication if the Matrix fallback later observes the same call.
+- Trigger three supervised local-only invites while exactly one subscriber is active.
+- For each invite, confirm:
+  - server `active_subscriber_count=1`;
+  - server `delivered=true`;
+  - server `dropped=false`;
+  - server `invite_yielded=true`;
+  - iOS `raw_event_received=true`;
+  - iOS `invite_parse_succeeded=true`;
+  - iOS `pipeline_delivered=true`;
+  - iOS `invite_received=true`;
+  - iOS `invite_valid=true`;
+  - iOS `incoming_requested=true`.
+- Measure invite-to-incoming request timing bucket for each invite.
+- Confirm fallback de-duplication if Matrix fallback later observes the same call.
 - Confirm no media credential request or media connect happens before Answer.
-- Disable the dev route after each supervised run.
+- Disable the dev route after the supervised run and verify public dev route returns not found.
 
 Constraints:
 - Do not implement PushKit runtime.
 - Do not register APNs or VoIP values.
 - Do not add background incoming handling.
-- Do not change signing, bundle identifiers, entitlements, Info.plist, app.yml, project.yml, or project settings.
+- Do not change signing, bundle identifiers, entitlements, `Info.plist`, `app.yml`, `project.yml`, or project settings.
 - Do not replace Element Call routing.
 - Do not hardcode production server URLs or credential values.
 - Do not bypass server-issued media credential authority.

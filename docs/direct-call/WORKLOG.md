@@ -2129,3 +2129,13 @@ Confirmed on a physical iPhone Debug build that the isolated synthetic CallKit p
 - Narrowed the pre-pass failure to small server/device clock skew in the opaque invite timestamp; the validator now accepts a small future-skew window while still rejecting larger future timestamps.
 - Disabled the dev invite route after the smoke and verified the public dev route returned `404`.
 - Raw runtime logs remain omitted. No PushKit/APNs/background behavior, media credential request, media connection, Matrix event emission, Element Call route replacement, signing/project setting change, production URL, credential value, broad rollout, production/public rollout, or global activation was added.
+
+## 2026-06-12 - 2.42J Supervised Foreground SSE Guardrails
+
+- Started from 2.42I commit `a4d427f5b07e662695ce108530bbafc9bfdd9399`.
+- Strengthened server guardrail tests for disabled dev routes, enabled authenticated dev-invite gating, local-only self-injection, stream auth rejection, and redacted invite/fanout diagnostics.
+- Confirmed `foreground.keepalive` remains a comment-only SSE heartbeat with no identifiers.
+- Added explicit iOS timestamp validation coverage for expired SSE invites alongside current, small future-skew, and excessive future-skew cases.
+- Documented the correct physical Debug local signing override Team ID `M639Y9MFR2`; the old Team ID `83LGSC2QPV` must not be used for current physical Debug builds.
+- Lightly investigated the commit-hook `Package.resolved` warning: the root file exists, no build/test failure is associated with it, and no package resolution files were changed.
+- No PushKit/APNs/background behavior, media credential request, media connection, Matrix event emission, Element Call route replacement, signing/project setting change, production URL, credential value, broad rollout, production/public rollout, or global activation was added.

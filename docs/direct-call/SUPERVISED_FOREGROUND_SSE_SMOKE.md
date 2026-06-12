@@ -250,6 +250,12 @@ The next blocked stage was invite parsing: the server reported `active_subscribe
 
 Status: passed.
 
+2.42I passed and was committed as:
+
+```text
+a4d427f5b07e662695ce108530bbafc9bfdd9399 Validate supervised foreground SSE smoke
+```
+
 Redacted server evidence:
 
 - `stream_auth_ok=true`
@@ -290,7 +296,40 @@ The app later reported `transport_stopped=true` and `stream_failure=network` onl
 After the smoke, `SALEMX_FOREGROUND_SIGNALING_DEV_INVITE_ENABLED=0` was restored, the call-service was restarted, and the public dev invite route returned `404`.
 
 Raw runtime logs are intentionally omitted because they may contain private Matrix/runtime identifiers. The smoke did not request media credentials, connect media, emit Matrix events, add PushKit/APNs/background behavior, replace Element Call routing, or persist signing/project changes.
-- `transport_stopped=false`
+
+## 2.42J Guardrails
+
+Status: added.
+
+Server guardrails:
+
+- Dev routes remain absent unless `SALEMX_FOREGROUND_SIGNALING_DEV_INVITE_ENABLED=1`.
+- Disabled `dev/invite` and `dev/inject-active` routes return not found.
+- Enabled `dev/invite` still requires an authenticated session.
+- Local-only `dev/inject-active` still requires localhost and exactly one active foreground SSE subscriber.
+- Stream requests without auth return `401`, not a proxy or server routing failure.
+- Server diagnostics for `invite_enqueued`, `invite_yielded`, `foreground.keepalive`, active-subscriber counts, and route results remain redacted.
+
+iOS guardrails:
+
+- `SalemXForegroundSSESmokeDebug` remains DEBUG-only.
+- The active-session helper does not print, return, store, or document active credential values.
+- Helper diagnostics remain booleans and safe enums only.
+- Invite receipt still does not request media credentials, connect media, emit Matrix events, use PushKit/APNs/background behavior, or replace Element Call routing.
+
+Timestamp guardrails:
+
+- Current invites are accepted.
+- Small server/device future skew is accepted.
+- Excessive future timestamps are rejected.
+- Expired invites are rejected.
+
+Physical Debug build note:
+
+- Use local command-line signing overrides only for supervised physical Debug builds.
+- Current Team ID: `M639Y9MFR2`.
+- Do not use old Team ID `83LGSC2QPV` for current physical Debug builds.
+- Do not persist signing changes to `SalemX.xcodeproj/project.pbxproj`, `project.yml`, `app.yml`, `Info.plist`, or entitlements.
 
 This proves `foreground.ready` parsing and active app session request construction. The remaining supervised proof is invite self-injection into the active subscriber.
 
@@ -379,6 +418,6 @@ This phase does not add:
 
 ## Next Phase
 
-Recommended next phase: `2.42I-S - supervised foreground SSE physical smoke`.
+Recommended next phase: `2.42K - foreground SSE repeat-call validation`.
 
-That phase should run the prepared smoke, record only redacted diagnostics and timing buckets, then immediately disable the dev invite route.
+That phase should run repeated foreground supervised invites, measure invite-to-incoming timing buckets, confirm fallback de-duplication, and keep media credential request/media connection blocked until Answer.

@@ -294,6 +294,7 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(invite_event.endswith("\n\n"))
         self.assertEqual(heartbeat_event, ": foreground.keepalive\n\n")
         self.assertIn("invite_enqueued=True", output)
+        self.assertNotIn("opaque-local-safe-handle", output)
         self.assertNotIn("callee", invite_event)
         self.assertNotIn("device-b", invite_event)
 
@@ -434,6 +435,27 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(status, 404)
         self.assertNotIn("auth-b", json.dumps(body, sort_keys=True))
+
+    async def test_enabled_dev_invite_route_requires_authenticated_session(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
+        app = self.dev_invite_app(app_module, signaling)
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_DEV_INVITE_PATH,
+            {},
+            self.invite_payload(),
+        )
+        output = json.dumps(body, sort_keys=True)
+
+        self.assertEqual(status, 401)
+        self.assertEqual(body["errcode"], "M_UNKNOWN_TOKEN")
+        self.assertEqual(signaling.diagnostics.subscriber_count, 0)
+        self.assertEqual(signaling.diagnostics.delivered_invite_count, 0)
+        self.assertNotIn("opaque-local-safe-handle", output)
+        self.assertNotIn("callee", output)
+        self.assertNotIn("device-b", output)
 
     async def test_dev_invite_route_delivers_to_authenticated_foreground_subscriber(self) -> None:
         app_module = _load_app_module()

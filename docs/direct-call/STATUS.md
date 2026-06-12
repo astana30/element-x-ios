@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.42I-S - supervised foreground SSE physical smoke pass.
+After 2.42J - supervised foreground SSE guardrails and cleanup.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.42J hardens supervised foreground SSE smoke guardrails after the 2.42I pass at `a4d427f5b07e662695ce108530bbafc9bfdd9399`:
+  - Server tests explicitly cover disabled dev routes returning not found, enabled authenticated dev-invite requiring an active session, local-only self-injection fail-closed behavior, stream unauthenticated rejection, and redacted SSE/log diagnostics.
+  - The server stream and dev routes continue to emit only safe stage names, booleans, counts, hashes, and enums. `foreground.keepalive` remains a comment-only SSE heartbeat.
+  - The iOS DEBUG smoke helper remains DEBUG-only and does not print, return, store, document, or log active credential values.
+  - Invite receipt still does not request media credentials, connect media, emit Matrix events, add PushKit/APNs behavior, add background incoming behavior, or replace Element Call routing.
+  - Timestamp validation coverage confirms current invites and small future skew are accepted, while expired invites and excessive future timestamps fail closed.
+  - Physical Debug build documentation now records `DEVELOPMENT_TEAM=M639Y9MFR2` as the current local signing override and explicitly says not to use the old `83LGSC2QPV` team for current physical Debug builds.
+  - The `Package.resolved` hook warning was checked lightly; the root file exists, no package resolution change was needed, and no package file was changed.
+  - No signing/project setting, bundle, entitlement, `Info.plist`, `app.yml`, `project.yml`, production URL, credential, media behavior, broad rollout, production/public rollout, or global activation change was added.
 - 2.42I-S completed the supervised physical iPhone foreground SSE smoke:
   - A Debug physical iPhone build was installed using local command-line signing overrides only; no project signing files were intentionally changed.
   - The active-session LLDB helper emitted `helper_invoked=true`, found the active session credential internally, and reached `foreground_sse_start_requested=true` without printing, returning, writing, or documenting credential values.

@@ -1478,6 +1478,27 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func foregroundCallSignalingSSETransportRejectsExpiredInviteTimestamp() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let stream = ForegroundCallSignalingSSEStreamSpy()
+        let transport = ForegroundCallSignalingSSETransport(isEnabled: true, stream: stream, now: fixedDirectCallTestNow(now))
+        let pipeline = makeForegroundCallSignalingTransportPipeline(dependencies: dependencies,
+                                                                    transport: transport,
+                                                                    now: now)
+
+        pipeline.start()
+        stream.emit(makeForegroundCallSSEInvite(handle: "safe-sse-expired",
+                                                now: now,
+                                                createdAt: now.addingTimeInterval(-60),
+                                                expiresAt: now.addingTimeInterval(-1)))
+
+        #expect(pipeline.latestOutcome == nil)
+        #expect(dependencies.reportingAdapter.reportedIdentities.isEmpty)
+        #expect(transport.diagnostics.deliveredInviteCount == 0)
+    }
+
+    @Test
     func foregroundCallSignalingSSETransportSuppressesStaleUnsupportedAndDuplicateInvites() {
         let now = Date(timeIntervalSince1970: 1000)
         let dependencies = makeNativeIncomingLifecycleDependencies()
