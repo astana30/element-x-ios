@@ -82,6 +82,18 @@ New sender diagnostics remain safe classes and booleans:
 
 No token, recipient, recipient device, call handle, request payload, private URL, or raw runtime log is printed, returned, stored, or documented. The dev route remains disabled outside controlled smoke, and the real non-dev route remains auth-gated.
 
+### 2.42M1 — DEBUG real invite smoke bridge
+
+The 2.42M regression smoke was blocked by LLDB invocation friction around the existing sender helper, even though the helper symbols were present and the Objective-C runtime could find the smoke class. Added a DEBUG-only local bridge:
+
+```text
+SalemXForegroundSSESmokeDebugBridge
+```
+
+The bridge exposes a simple Objective-C selector for supervised physical smoke and delegates to the existing real-invite sender helper. It does not run automatically, store receiver identifiers, print credentials, weaken auth, use dev routes, request media credentials, connect media, emit Matrix events, add PushKit/APNs/background behavior, or replace Element Call routing.
+
+Receiver identifiers remain local-only sensitive inputs. They may be typed into LLDB on the operator machine, but must not be written to docs, terminal output, tracked files, or final reports. The 2.42M physical regression smoke is not marked passed yet.
+
 ### 2.42K — Supervised foreground real invite
 
 The two-device foreground real-invite smoke passed and was committed as:

@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.42L - foreground real invite stale-token retry guard and cleanup.
+After 2.42M1 - DEBUG-only local bridge for foreground real invite smoke invocation.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,12 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.42M1 adds a DEBUG-only local bridge for supervised foreground real-invite smoke invocation:
+  - The 2.42M regression smoke was blocked by LLDB invocation friction, not by server state, device availability, or the proven 2.42K route.
+  - `SalemXForegroundSSESmokeDebugBridge` forwards the local-only sender invocation to the existing DEBUG sender helper without changing production call behavior.
+  - Receiver identifiers remain local-only sensitive inputs and must not be recorded, logged, documented, or committed.
+  - The bridge does not store identifiers, expose tokens, weaken server auth, use dev routes, request media credentials, connect media, emit Matrix events, add PushKit/APNs/background behavior, or replace Element Call routing.
+  - The 2.42M physical regression smoke is still pending and must use the authenticated non-dev foreground invite route with the dev route disabled.
 - 2.42L hardens the supervised real foreground invite sender helper after the 2.42K pass at `00b7db4db914eed61bb45cc51fff7082d15da323`:
   - The DEBUG-only sender helper now treats a first authenticated real-invite `401` as a stale-token class and retries at most once after asking the active session token provider for a fresh value.
   - Retry diagnostics remain redacted booleans/enums: `sender_token_refresh_needed`, `sender_token_refresh_attempted`, `sender_token_refresh_succeeded`, `sender_invite_retry_requested`, and `sender_invite_retry_status`.

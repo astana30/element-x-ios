@@ -384,6 +384,27 @@ The first sender helper POST may hit a stale active-session token and return `ht
 
 No token, recipient, recipient device, call handle, request payload, private URL, or raw runtime log should be printed, returned, stored, or documented. If retry still does not reach `http_success`, keep the dev route disabled and rerun with the sender app foreground/authenticated after the SDK refresh settles.
 
+## 2.42M1 DEBUG Real Invite Bridge
+
+2.42M is a physical regression smoke after the 2.42L token guard. It is not marked passed yet.
+
+The initial 2.42M attempt was blocked by LLDB invocation friction around the existing sender helper, not by server route state or a failed real-invite delivery. 2.42M1 adds a DEBUG-only local bridge:
+
+```text
+SalemXForegroundSSESmokeDebugBridge
+```
+
+Use the bridge only from the local supervised debugging session after the receiver foreground SSE stream is connected. Receiver identifiers are local-only sensitive inputs: do not paste them into chat, docs, terminal logs, tracked files, or final reports.
+
+Command shape with placeholders only:
+
+```lldb
+expr -l objc++ -- [NSClassFromString(@"SalemXForegroundSSESmokeDebugBridge") sendRealInviteWithURLString:@"<REDACTED_REAL_INVITE_URL>" recipient:@"<LOCAL_RECIPIENT>" recipientDevice:@"<LOCAL_DEVICE>"]
+continue
+```
+
+The bridge delegates to the existing DEBUG sender helper. It does not run automatically, store identifiers, expose tokens, weaken auth, use `dev/invite`, use `dev/inject-active`, request media credentials, connect media, emit Matrix events, add PushKit/APNs/background behavior, or replace Element Call routing.
+
 ## Redacted Diagnostics To Collect
 
 Record only safe booleans and timing buckets:
