@@ -1690,6 +1690,131 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func backgroundRealCallKitAdapterCallsFakeProviderOnce() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let parser = DirectCallBackgroundInvitePayloadParser()
+        let intake = DirectCallBackgroundInviteIntake()
+        let parsed = parser.parse(makeBackgroundInvitePayload(now: now), now: now)
+        let intakeResult = intake.evaluate(parsed,
+                                           authenticatedSessionAvailable: true,
+                                           callKitReportAdapterAvailable: true)
+        let planner = DirectCallBackgroundCallKitReportPlanner {
+            UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 47))
+        }
+        let planningResult = planner.plan(from: intakeResult)
+        let provider = DirectCallBackgroundCallKitProviderSpy(reportResult: true)
+        let adapter = DirectCallBackgroundRealCallKitReportingAdapter(provider: provider)
+
+        let result = adapter.report(planningResult)
+
+        #expect(provider.reportRequests.count == 1)
+        #expect(result.status == .reportAttemptRecorded)
+        #expect(result.diagnostics.realCallKitAdapterInvoked == true)
+        #expect(result.diagnostics.callKitProviderReportAttempted == true)
+        #expect(result.diagnostics.callKitProviderReportResult == .reportAttemptRecorded)
+        #expect(result.diagnostics.providerFailureClass == nil)
+        #expect(result.diagnostics.mediaCredentialsRequested == false)
+        #expect(result.diagnostics.mediaConnectRequested == false)
+        #expect(result.diagnostics.matrixEventEmitRequested == false)
+        #expect(result.diagnostics.pushKitRegistrationRequested == false)
+        #expect(result.diagnostics.apnsRegistrationRequested == false)
+        #expect(result.diagnostics.blockedReason == nil)
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !String(describing: result).contains($0) })
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !String(describing: provider.reportRequests[0]).contains($0) })
+    }
+
+    @Test
+    func backgroundRealCallKitAdapterSkipsNonReportableRequest() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let parser = DirectCallBackgroundInvitePayloadParser()
+        let intake = DirectCallBackgroundInviteIntake()
+        let planner = DirectCallBackgroundCallKitReportPlanner()
+        var missingFieldPayload = makeBackgroundInvitePayload(now: now)
+        missingFieldPayload.removeValue(forKey: "call_handle")
+        let planningResult = planner.plan(from: intake.evaluate(parser.parse(missingFieldPayload, now: now),
+                                                                authenticatedSessionAvailable: true))
+        let provider = DirectCallBackgroundCallKitProviderSpy(reportResult: true)
+        let adapter = DirectCallBackgroundRealCallKitReportingAdapter(provider: provider)
+
+        let result = adapter.report(planningResult)
+
+        #expect(provider.reportRequests.isEmpty)
+        #expect(result.status == .notReportedNotReportable)
+        #expect(result.diagnostics.callKitProviderReportAttempted == false)
+        #expect(result.diagnostics.blockedReason == .notReportable)
+        #expect(result.diagnostics.mediaCredentialsRequested == false)
+        #expect(result.diagnostics.mediaConnectRequested == false)
+        #expect(result.diagnostics.matrixEventEmitRequested == false)
+        #expect(result.diagnostics.pushKitRegistrationRequested == false)
+        #expect(result.diagnostics.apnsRegistrationRequested == false)
+    }
+
+    @Test
+    func backgroundRealCallKitAdapterRedactsProviderFailure() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let parser = DirectCallBackgroundInvitePayloadParser()
+        let intake = DirectCallBackgroundInviteIntake()
+        let parsed = parser.parse(makeBackgroundInvitePayload(now: now), now: now)
+        let intakeResult = intake.evaluate(parsed,
+                                           authenticatedSessionAvailable: true,
+                                           callKitReportAdapterAvailable: true)
+        let planningResult = DirectCallBackgroundCallKitReportPlanner().plan(from: intakeResult)
+        let provider = DirectCallBackgroundCallKitProviderSpy(reportResult: false)
+        let adapter = DirectCallBackgroundRealCallKitReportingAdapter(provider: provider)
+
+        let result = adapter.report(planningResult)
+
+        #expect(provider.reportRequests.count == 1)
+        #expect(result.status == .reportFailedRedacted)
+        #expect(result.diagnostics.providerFailureClass == .providerFailedRedacted)
+        #expect(result.diagnostics.blockedReason == .providerFailedRedacted)
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !String(describing: result).contains($0) })
+    }
+
+    @Test
+    func backgroundRealCallKitAdapterKeepsDiagnosticsRedactedAndUnwiredFromPushCallbacks() throws {
+        let now = Date(timeIntervalSince1970: 1000)
+        let parser = DirectCallBackgroundInvitePayloadParser()
+        let intake = DirectCallBackgroundInviteIntake()
+        let parsed = parser.parse(makeBackgroundInvitePayload(now: now,
+                                                              createdAt: now.addingTimeInterval(3),
+                                                              expiresAt: now.addingTimeInterval(30)),
+                                  now: now)
+        let intakeResult = intake.evaluate(parsed,
+                                           authenticatedSessionAvailable: true,
+                                           callKitReportAdapterAvailable: true)
+        let planner = DirectCallBackgroundCallKitReportPlanner {
+            UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 48))
+        }
+        let planningResult = planner.plan(from: intakeResult)
+        let provider = DirectCallBackgroundCallKitProviderSpy(reportResult: true)
+        let adapter = DirectCallBackgroundRealCallKitReportingAdapter(provider: provider)
+
+        let result = adapter.report(planningResult)
+        let modelSource = try Self.sourceFile("ElementX/Sources/Services/Calls/DirectCallModels.swift")
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+        let description = String(describing: adapter) + " " + String(describing: provider) + " " + String(describing: result)
+
+        #expect(description.contains("real_callkit_adapter_invoked=true"))
+        #expect(description.contains("callkit_provider_report_attempted=true"))
+        #expect(description.contains("callkit_provider_report_result=report_attempt_recorded"))
+        #expect(description.contains("provider_failure_class=none"))
+        #expect(description.contains("media_credentials_requested=false"))
+        #expect(description.contains("media_connect_requested=false"))
+        #expect(description.contains("matrix_event_emit_requested=false"))
+        #expect(description.contains("pushkit_registration_requested=false"))
+        #expect(description.contains("apns_registration_requested=false"))
+        #expect(description.contains("realCallKitRuntime: true"))
+        #expect(description.contains("pushKitCallbackRuntime: false"))
+        #expect(!modelSource.contains("PKPushRegistry"))
+        #expect(!modelSource.contains("requestAuthorization"))
+        #expect(!adapterSource.contains("PKPushRegistry"))
+        #expect(!adapterSource.contains("didReceiveIncomingPush"))
+        #expect(!adapterSource.contains("registerForRemoteNotifications"))
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !description.contains($0) })
+    }
+
+    @Test
     func diagnosticsAndOutcomesStayRedacted() {
         let diagnostics = NativeIncomingCallRedactedDiagnostics(lifecycleState: .failed,
                                                                 failClosedReason: .serverIssuedMediaCredentialRejected,
@@ -3323,6 +3448,24 @@ private final class NativeIncomingSyntheticCallKitActionHandlerSpy: NativeIncomi
 
     var description: String {
         "NativeIncomingSyntheticCallKitActionHandlerSpy(answeredCount: \(answeredIdentities.count), endedCount: \(endedIdentities.count), mutedCount: \(mutedIdentities.count))"
+    }
+}
+
+private final class DirectCallBackgroundCallKitProviderSpy: DirectCallBackgroundCallKitProviderProtocol, CustomStringConvertible {
+    private let reportResult: Bool
+    private(set) var reportRequests = [DirectCallBackgroundCallKitProviderReportRequest]()
+
+    init(reportResult: Bool) {
+        self.reportResult = reportResult
+    }
+
+    func reportIncomingCall(_ request: DirectCallBackgroundCallKitProviderReportRequest) -> Bool {
+        reportRequests.append(request)
+        return reportResult
+    }
+
+    var description: String {
+        "DirectCallBackgroundCallKitProviderSpy(reportCount: \(reportRequests.count), pushKitRuntime: false, apnsRegistrationRuntime: false, mediaRuntime: false, matrixEventRuntime: false)"
     }
 }
 

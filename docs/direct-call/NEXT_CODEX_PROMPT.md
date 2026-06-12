@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.43e-background-callkit-adapter-boundary`
+`salemx-2.43f-controlled-real-callkit-adapter`
 
-Next phase: continue from the background CallKit adapter boundary.
+Next phase: continue from the controlled real CallKit adapter boundary.
 
 ## Baseline
 
@@ -141,11 +141,24 @@ Key findings:
 - No Matrix events are emitted.
 - Adapter diagnostics remain redacted booleans/status classes only.
 
+2.43F adds only a controlled real CallKit adapter behind the existing boundary:
+
+- It consumes the 2.43D report planning result and translates reportable requests into a CallKit-provider report request through an injected provider protocol.
+- Tests use a fake provider to prove exactly one report attempt for valid reportable requests, no provider call for non-reportable decisions, and redacted provider failures.
+- The iOS provider implementation can build a `CXCallUpdate` from safe internal request data, but it is not wired to PushKit/APNs/background callbacks, app launch, or production background behavior.
+- No PushKit registration was added.
+- No APNs registration was added.
+- No VoIP/background entitlement, provisioning, project, `Info.plist`, or `app.yml` file was changed.
+- Foreground real invite behavior remains unchanged.
+- No media credentials or media connection were introduced.
+- No Matrix events are emitted.
+- Real adapter diagnostics remain redacted booleans/status classes only.
+
 ## Guardrails
 
 - Do not implement PushKit/APNs/background incoming-call behavior without a separately scoped task.
 - Any future signing, entitlement, provisioning, project, `Info.plist`, or `app.yml` change requires explicit approval in that task.
-- Future 2.43F may add an explicitly gated real CallKit adapter implementation or PushKit lifecycle design, but not entitlement/signing/project changes unless separately authorized.
+- Future 2.43G may design PushKit lifecycle registration, but entitlement/signing/project changes remain separate and require explicit authorization.
 - Do not implement PushKit runtime inside foreground smoke tooling.
 - Do not register APNs or VoIP values inside foreground smoke tooling.
 - Do not add background incoming handling inside foreground smoke tooling.

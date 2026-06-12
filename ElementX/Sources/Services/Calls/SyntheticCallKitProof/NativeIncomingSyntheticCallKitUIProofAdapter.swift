@@ -421,6 +421,44 @@ final class NativeIncomingSyntheticCallKitUIProofReporter: NSObject, NativeIncom
     }
 }
 
+final class DirectCallBackgroundCallKitProvider: NSObject, DirectCallBackgroundCallKitProviderProtocol, CXProviderDelegate {
+    private let provider: CXProvider
+
+    override init() {
+        let configuration = CXProviderConfiguration()
+        configuration.maximumCallGroups = 1
+        configuration.maximumCallsPerCallGroup = 1
+        configuration.supportedHandleTypes = [.generic]
+        configuration.supportsVideo = false
+        provider = CXProvider(configuration: configuration)
+        super.init()
+        provider.setDelegate(self, queue: nil)
+    }
+
+    func reportIncomingCall(_ request: DirectCallBackgroundCallKitProviderReportRequest) -> Bool {
+        let update = CXCallUpdate()
+        update.remoteHandle = CXHandle(type: .generic, value: request.displayMetadata.label)
+        update.localizedCallerName = request.displayMetadata.label
+        update.hasVideo = false
+        update.supportsHolding = false
+        update.supportsGrouping = false
+        update.supportsUngrouping = false
+        update.supportsDTMF = false
+        provider.reportNewIncomingCall(with: request.callUUID, update: update) { _ in }
+        return true
+    }
+
+    func providerDidReset(_ provider: CXProvider) { }
+
+    override var description: String {
+        "DirectCallBackgroundCallKitProvider(realCallKitRuntime: true, pushKitRuntime: false, apnsRegistrationRuntime: false, mediaRuntime: false, matrixEventRuntime: false)"
+    }
+
+    override var debugDescription: String {
+        description
+    }
+}
+
 #if DEBUG
 private final class SalemXForegroundSSESmokeStateStore: NativeIncomingCallStateStoring {
     private var states = [NativeIncomingCallHandle: NativeIncomingCallLifecycleState]()

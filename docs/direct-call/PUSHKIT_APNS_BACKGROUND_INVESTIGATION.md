@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: 2.43E test-only CallKit adapter boundary added; production PushKit/APNs/background behavior remains unimplemented.
+Status: 2.43F controlled real CallKit adapter added behind the existing boundary; production PushKit/APNs/background behavior remains unimplemented.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -122,7 +122,32 @@ apns_registration_requested=false
 blocked_reason=<redacted_class>
 ```
 
-The default adapter remains inert unless a fake/test closure is injected. Tests can record a fake report attempt, but no real `CXProvider.reportNewIncomingCall` is called by this boundary and no PushKit/background callback is wired. A future 2.43F may add an explicitly gated real CallKit adapter implementation or PushKit lifecycle design, but not entitlement, signing, provisioning, project, `Info.plist`, or `app.yml` changes unless separately authorized.
+The default adapter remains inert unless a fake/test closure is injected. Tests can record a fake report attempt, but no real `CXProvider.reportNewIncomingCall` is called by this boundary and no PushKit/background callback is wired.
+
+## 2.43F Controlled Real CallKit Adapter
+
+2.43F adds only a controlled real CallKit adapter implementation behind the existing 2.43E boundary. It can translate a safe 2.43D background CallKit report request model into a CallKit-compatible provider report request, but it is not wired to PushKit/APNs/background callbacks, app launch, or production background behavior.
+
+The real adapter uses an injected provider protocol, so tests exercise the path with fakes. The iOS provider implementation can build a `CXCallUpdate` from already-safe display metadata and a redacted internal UUID, then hand it to CallKit when explicitly invoked by a future owner. No PushKit registration, VoIP token request, APNs registration, entitlement change, project/signing edit, media credential request, media connection, Matrix event emission, payload persistence, or Element Call route replacement is introduced by this task.
+
+Diagnostics are limited to redacted booleans/status classes:
+
+```text
+real_callkit_adapter_invoked=true/false
+callkit_provider_report_attempted=true/false
+callkit_provider_report_result=<redacted_result_class>
+provider_failure_class=<redacted_class>
+media_credentials_requested=false
+media_connect_requested=false
+matrix_event_emit_requested=false
+pushkit_registration_requested=false
+apns_registration_requested=false
+blocked_reason=<redacted_class>
+```
+
+Provider failures are reported only as redacted classes. The adapter must not expose raw access tokens, authorization headers, Matrix user IDs, device IDs, room IDs, call handles, request payloads, private logs, secret-bearing URLs, or provider-private error details.
+
+A future 2.43G may design PushKit lifecycle registration, but entitlement, signing, provisioning, project, `Info.plist`, and `app.yml` changes remain separate and require explicit authorization.
 
 ## Current State From Tracked Code
 
@@ -217,6 +242,8 @@ Any production native direct-call VoIP registration proof, APNs provider setup t
 - 2.43B adds only the background invite payload contract/parser seam.
 - 2.43C adds only the background invite intake seam.
 - 2.43D adds only the background CallKit report request/planner seam.
+- 2.43E adds only the background CallKit adapter boundary and fake/test reporting seam.
+- 2.43F adds only a controlled real CallKit adapter behind that boundary.
 - PushKit registration and APNs registration are still not implemented for native direct-call.
 - Foreground real-invite behavior must remain unchanged.
 - PushKit/APNs work must be separately scoped from foreground smoke tooling.
@@ -224,9 +251,9 @@ Any production native direct-call VoIP registration proof, APNs provider setup t
 - Future entitlement or signing changes require a separate explicit task.
 - No media credentials or media connection should be introduced during PushKit receipt.
 - PushKit should only wake/report incoming call and coordinate safely with the call pipeline.
-- No real CallKit reporting is performed by the 2.43C intake seam or the 2.43D planner seam.
+- No real CallKit reporting is wired from PushKit/APNs/background callbacks.
 - Dev routes must remain disabled.
 - Real non-dev routes must remain auth-gated.
 - DEBUG smoke tooling is not production behavior.
-- A future 2.43F may add an explicitly gated real CallKit adapter implementation or PushKit lifecycle design, still without PushKit registration unless explicitly allowed.
+- A future 2.43G may design PushKit lifecycle registration, still without entitlement/signing/project changes unless explicitly allowed.
 - Physical Debug builds should use `DEVELOPMENT_TEAM=M639Y9MFR2`; the old `83LGSC2QPV` team must not be used.

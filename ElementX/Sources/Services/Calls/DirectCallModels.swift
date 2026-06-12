@@ -1225,6 +1225,168 @@ struct DirectCallBackgroundCallKitReportingAdapter: DirectCallBackgroundCallKitR
     }
 }
 
+struct DirectCallBackgroundCallKitProviderReportRequest: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let callUUID: UUID
+    let kind: ForegroundCallInviteKind
+    let expiresAt: Date
+    let displayMetadata: NativeIncomingCallKitDisplayMetadata
+
+    var description: String {
+        "DirectCallBackgroundCallKitProviderReportRequest(callUUID: <redacted>, kind: \(kind), expiresAt: <redacted>, displayMetadata: <redacted>)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum DirectCallBackgroundRealCallKitReportStatus: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case notReportedNotReportable = "not_reported_not_reportable"
+    case notReportedMissingAuthenticatedContext = "not_reported_missing_authenticated_context"
+    case reportAttemptRecorded = "report_attempt_recorded"
+    case reportFailedRedacted = "report_failed_redacted"
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum DirectCallBackgroundRealCallKitReportFailure: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case notReportable = "not_reportable"
+    case authenticatedSessionUnavailable = "authenticated_session_unavailable"
+    case missingReportRequest = "missing_report_request"
+    case providerFailedRedacted = "provider_failed_redacted"
+    case redacted
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct DirectCallBackgroundRealCallKitReportDiagnostics: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let realCallKitAdapterInvoked: Bool
+    let callKitProviderReportAttempted: Bool
+    let callKitProviderReportResult: DirectCallBackgroundRealCallKitReportStatus
+    let providerFailureClass: DirectCallBackgroundRealCallKitReportFailure?
+    let mediaCredentialsRequested: Bool
+    let mediaConnectRequested: Bool
+    let matrixEventEmitRequested: Bool
+    let pushKitRegistrationRequested: Bool
+    let apnsRegistrationRequested: Bool
+    let blockedReason: DirectCallBackgroundRealCallKitReportFailure?
+
+    var description: String {
+        "DirectCallBackgroundRealCallKitReportDiagnostics(" + [
+            "real_callkit_adapter_invoked=\(realCallKitAdapterInvoked)",
+            "callkit_provider_report_attempted=\(callKitProviderReportAttempted)",
+            "callkit_provider_report_result=\(callKitProviderReportResult)",
+            "provider_failure_class=\(providerFailureClass?.description ?? "none")",
+            "media_credentials_requested=\(mediaCredentialsRequested)",
+            "media_connect_requested=\(mediaConnectRequested)",
+            "matrix_event_emit_requested=\(matrixEventEmitRequested)",
+            "pushkit_registration_requested=\(pushKitRegistrationRequested)",
+            "apns_registration_requested=\(apnsRegistrationRequested)",
+            "blocked_reason=\(blockedReason?.description ?? "none")"
+        ].joined(separator: ", ") + ")"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct DirectCallBackgroundCallKitReportResult: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let status: DirectCallBackgroundRealCallKitReportStatus
+    let diagnostics: DirectCallBackgroundRealCallKitReportDiagnostics
+
+    var description: String {
+        "DirectCallBackgroundCallKitReportResult(status: \(status), diagnostics: \(diagnostics))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+protocol DirectCallBackgroundCallKitProviderProtocol: AnyObject {
+    func reportIncomingCall(_ request: DirectCallBackgroundCallKitProviderReportRequest) -> Bool
+}
+
+struct DirectCallBackgroundRealCallKitReportingAdapter: CustomStringConvertible, CustomDebugStringConvertible {
+    let provider: DirectCallBackgroundCallKitProviderProtocol
+
+    func report(_ planningResult: DirectCallBackgroundCallKitReportPlanningResult) -> DirectCallBackgroundCallKitReportResult {
+        guard planningResult.decision == .reportableIncomingCallRequest else {
+            return result(status: planningResult.decision == .notReportableRequiresAuthenticatedSession ? .notReportedMissingAuthenticatedContext : .notReportedNotReportable,
+                          attempted: false,
+                          providerFailureClass: nil,
+                          blockedReason: reportingFailure(for: planningResult))
+        }
+        guard let request = planningResult.request else {
+            return result(status: .reportFailedRedacted,
+                          attempted: false,
+                          providerFailureClass: .missingReportRequest,
+                          blockedReason: .missingReportRequest)
+        }
+
+        let providerRequest = DirectCallBackgroundCallKitProviderReportRequest(callUUID: request.callUUID,
+                                                                               kind: request.kind,
+                                                                               expiresAt: request.expiresAt,
+                                                                               displayMetadata: request.displayMetadata)
+        let didReport = provider.reportIncomingCall(providerRequest)
+        return result(status: didReport ? .reportAttemptRecorded : .reportFailedRedacted,
+                      attempted: true,
+                      providerFailureClass: didReport ? nil : .providerFailedRedacted,
+                      blockedReason: didReport ? nil : .providerFailedRedacted)
+    }
+
+    private func reportingFailure(for planningResult: DirectCallBackgroundCallKitReportPlanningResult) -> DirectCallBackgroundRealCallKitReportFailure {
+        switch planningResult.decision {
+        case .notReportableRequiresAuthenticatedSession:
+            .authenticatedSessionUnavailable
+        case .notReportableInvalidPayload,
+             .notReportableExpiredPayload,
+             .notReportableFutureTimestampExcessive:
+            .notReportable
+        case .reportableIncomingCallRequest:
+            planningResult.request == nil ? .missingReportRequest : .redacted
+        }
+    }
+
+    private func result(status: DirectCallBackgroundRealCallKitReportStatus,
+                        attempted: Bool,
+                        providerFailureClass: DirectCallBackgroundRealCallKitReportFailure?,
+                        blockedReason: DirectCallBackgroundRealCallKitReportFailure?) -> DirectCallBackgroundCallKitReportResult {
+        .init(status: status,
+              diagnostics: .init(realCallKitAdapterInvoked: true,
+                                 callKitProviderReportAttempted: attempted,
+                                 callKitProviderReportResult: status,
+                                 providerFailureClass: providerFailureClass,
+                                 mediaCredentialsRequested: false,
+                                 mediaConnectRequested: false,
+                                 matrixEventEmitRequested: false,
+                                 pushKitRegistrationRequested: false,
+                                 apnsRegistrationRequested: false,
+                                 blockedReason: blockedReason))
+    }
+
+    var description: String {
+        "DirectCallBackgroundRealCallKitReportingAdapter(realCallKitRuntime: true, pushKitRuntime: false, apnsRegistrationRuntime: false, mediaRuntime: false, matrixEventRuntime: false, pushKitCallbackRuntime: false)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
 protocol NativeIncomingCallTimeoutScheduling: AnyObject {
     func scheduleTimeout(for identity: NativeIncomingCallIdentity, after timeout: Duration)
     func cancelTimeout(for identity: NativeIncomingCallIdentity)

@@ -253,7 +253,17 @@ The default boundary is inert unless a fake/test recorder is injected. It does n
 
 Focused tests cover a valid fake report attempt, non-reportable suppression, missing-session suppression, redacted diagnostics, and no media/Matrix/PushKit/APNs/runtime CallKit side effects. Existing 2.43B parser tests, 2.43C intake tests, 2.43D planner tests, foreground timestamp validation, and DEBUG smoke release-surface tests remain in the targeted suite.
 
-PushKit registration, APNs registration, VoIP/background entitlements, project/signing edits, real CallKit reporting from PushKit/background callbacks, media credentials, media connection, Matrix event emission, and production background behavior remain unimplemented. Future 2.43F may add an explicitly gated real CallKit adapter implementation or PushKit lifecycle design, but not entitlement/signing/project changes unless separately authorized.
+PushKit registration, APNs registration, VoIP/background entitlements, project/signing edits, real CallKit reporting from PushKit/background callbacks, media credentials, media connection, Matrix event emission, and production background behavior remain unimplemented. Future 2.43G may design PushKit lifecycle registration, but entitlement/signing/project changes remain separate and require explicit authorization.
+
+### 2.43F — Controlled real CallKit adapter
+
+Added a controlled native direct-call background CallKit adapter behind the 2.43E boundary. It consumes the 2.43D report planning result and translates reportable requests into a CallKit-provider report request through an injected provider protocol.
+
+The adapter remains isolated from PushKit/APNs/background callbacks and app launch. Tests use a fake provider to prove exactly one report attempt for valid reportable requests, no provider call for non-reportable decisions, and redacted provider failure diagnostics. The iOS provider implementation can build a `CXCallUpdate` from safe internal request data, but it is not connected to a production background owner in this task.
+
+Focused tests cover valid provider calls, non-reportable suppression, redacted provider failures, redacted diagnostics, and no media/Matrix/PushKit/APNs side effects. Existing 2.43B parser tests, 2.43C intake tests, 2.43D planner tests, 2.43E adapter-boundary tests, foreground timestamp validation, and DEBUG smoke release-surface tests remain in the targeted suite.
+
+PushKit registration, APNs registration, VoIP/background entitlements, project/signing edits, real CallKit reporting from PushKit/background callbacks, media credentials, media connection, Matrix event emission, Element Call route replacement, and production background behavior remain unimplemented. Future 2.43G may design PushKit lifecycle registration, but entitlement/signing/project changes remain separate and require explicit authorization.
 
 ### 2.42K — Supervised foreground real invite
 
