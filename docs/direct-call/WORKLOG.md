@@ -110,6 +110,18 @@ The bridge configures/starts/stops the existing active-session foreground SSE he
 
 Physical Debug builds for current supervised smokes should use `DEVELOPMENT_TEAM=M639Y9MFR2`. Do not use the old `83LGSC2QPV` team for current physical Debug builds, and do not persist signing changes.
 
+### 2.42M3 — DEBUG in-app foreground smoke controls
+
+The 2.42M physical regression smoke remains pending and is not marked passed. The latest blocker was `receiver_sse_proof_unavailable`: the receiver bridge existed, but receiver LLDB/CoreDevice expression evaluation was not reliable enough to activate the stream and collect proof.
+
+Added DEBUG-only in-app foreground smoke controls through Developer Options. The receiver can now start the current-session foreground SSE stream and refresh the existing redacted proof summary from inside the app, without receiver LLDB expression evaluation.
+
+The controls reuse the existing receiver SSE bridge/proof path and do not run automatically, persist identifiers, expose credentials, weaken auth, use dev routes, request media credentials, connect media, emit Matrix events, add PushKit/APNs/background behavior, or replace Element Call routing.
+
+Receiver identifiers remain local-only sensitive inputs and must not be written to docs, terminal output, tracked files, or final reports. The next 2.42M physical regression smoke must still use the authenticated real non-dev invite route with the dev route disabled.
+
+Physical Debug builds for current supervised smokes should use `DEVELOPMENT_TEAM=M639Y9MFR2`. Do not use the old `83LGSC2QPV` team for current physical Debug builds, and do not persist signing changes.
+
 ### 2.42K — Supervised foreground real invite
 
 The two-device foreground real-invite smoke passed and was committed as:

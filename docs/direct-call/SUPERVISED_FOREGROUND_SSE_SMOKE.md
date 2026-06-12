@@ -432,6 +432,25 @@ The receiver summary is limited to:
 - `invite_valid`
 - `incoming_requested`
 
+## 2.42M3 DEBUG In-App Receiver Smoke Controls
+
+2.42M remains pending and is not marked passed. The latest blocker was `receiver_sse_proof_unavailable`: receiver LLDB/CoreDevice expression evaluation was not reliable enough to activate the receiver stream and collect proof.
+
+2.42M3 adds DEBUG-only in-app foreground smoke controls under Developer Options. Use these controls on the receiver to start the current-session foreground SSE stream and refresh the redacted receiver proof summary without receiver LLDB expression evaluation.
+
+The controls use the real non-dev stream route and the existing active-session helper. They do not run automatically, persist identifiers, expose tokens, weaken auth, use `dev/invite`, use `dev/inject-active`, request media credentials, connect media, emit Matrix events, add PushKit/APNs/background behavior, or replace Element Call routing.
+
+Receiver identifiers remain local-only sensitive inputs and must not be pasted into chat, docs, terminal logs, tracked files, commits, or final reports. The sender still uses local-only receiver identifiers when invoking the real non-dev invite path.
+
+The next 2.42M physical regression smoke must:
+
+- keep the receiver app foreground and authenticated
+- start receiver SSE from the DEBUG-only in-app foreground smoke controls
+- prove `sse_connected=true` and `stream_failure=none` from the in-app redacted proof summary
+- invoke the sender bridge only after receiver proof is available
+- use the authenticated real non-dev invite route only
+- keep the dev route disabled
+
 ## Redacted Diagnostics To Collect
 
 Record only safe booleans and timing buckets:

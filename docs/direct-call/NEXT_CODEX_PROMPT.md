@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.42m2-debug-receiver-sse-smoke-bridge`
+`salemx-2.42m3-in-app-foreground-smoke-controls`
 
-Next phase: run 2.42M physical regression smoke after the DEBUG sender and receiver smoke bridges.
+Next phase: run 2.42M physical regression smoke after the DEBUG sender bridge, receiver bridge, and in-app receiver smoke controls.
 
 ## Context
 
@@ -20,6 +20,8 @@ Next phase: run 2.42M physical regression smoke after the DEBUG sender and recei
 - 2.42M1 bridge commit is `751316429c5476217f7b881d9a2f542a4e7e3b3b`.
 - 2.42M later hit `receiver_sse_proof_blocked_by_coredevice_lldb_handshake`, so receiver LLDB/CoreDevice attach is not a reliable proof source.
 - 2.42M2 adds `SalemXForegroundSSEReceiverSmokeDebugBridge`, a DEBUG-only receiver bridge/proof path that configures/starts/stops the existing active-session SSE helper and returns only redacted state summary fields.
+- 2.42M then hit `receiver_sse_proof_unavailable`: the receiver bridge existed, but receiver LLDB/CoreDevice expression evaluation was not reliable enough to activate the stream and collect proof.
+- 2.42M3 adds DEBUG-only in-app foreground smoke controls under Developer Options so the receiver can start foreground SSE and refresh redacted proof without receiver LLDB.
 - The 2.42M physical regression smoke is not marked passed yet.
 
 ## Required Smoke
@@ -39,17 +41,9 @@ Do not use:
 Receiver:
 
 - Keep the receiver app foreground and authenticated.
-- Open foreground SSE first with `SalemXForegroundSSEReceiverSmokeDebugBridge` or another existing redacted receiver proof path.
-- Confirm `sse_connected=true` and `stream_failure=none` from the redacted receiver state summary or other safe proof source.
+- Open foreground SSE first from the DEBUG-only in-app foreground smoke controls in Developer Options.
+- Confirm `sse_connected=true` and `stream_failure=none` from the in-app redacted receiver proof summary.
 - Do not record receiver identifiers, raw URLs with secrets, tokens, request payloads, or private logs.
-
-Receiver bridge command shape with placeholders only:
-
-```lldb
-expr -l objc++ -- [NSClassFromString(@"SalemXForegroundSSEReceiverSmokeDebugBridge") configureWithCurrentSessionStreamURLString:@"<REDACTED_REAL_STREAM_URL>"]
-expr -l objc++ -- [NSClassFromString(@"SalemXForegroundSSEReceiverSmokeDebugBridge") redactedStateSummary]
-continue
-```
 
 Sender:
 

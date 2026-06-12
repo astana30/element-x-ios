@@ -2479,6 +2479,18 @@ final class ForegroundCallSignalingSSETraceTests {
     }
 
     @Test
+    func debugForegroundSSESmokeDeveloperOptionsHookProvidesInAppControls() {
+        let appHooks = AppHooks()
+        appHooks.setUp()
+
+        #expect(appHooks.developerOptionsScreenHook.generalSectionRows() != nil)
+        #expect(SalemXDeveloperOptionsScreenHook().generalSectionRows() != nil)
+        #expect(SalemXForegroundSSESmokeControls.receiverStreamURLString.contains("foreground-signaling/stream"))
+        #expect(!SalemXForegroundSSESmokeControls.receiverStreamURLString.contains("/dev/"))
+        #expect(!SalemXForegroundSSESmokeControls.receiverStreamURLString.contains("8090"))
+    }
+
+    @Test
     func debugForegroundSSEReceiverSmokeStateSummaryIsRedacted() {
         SalemXForegroundSSESmokeDebug.clear()
 
@@ -2495,6 +2507,18 @@ final class ForegroundCallSignalingSSETraceTests {
             "invite_valid=false",
             "incoming_requested=false"
         ])
+        #expect(Self.forbiddenFragments.allSatisfy { !summary.contains($0) })
+        #expect(!summary.contains("Bearer"))
+        #expect(!summary.contains("Authorization"))
+        #expect(!summary.contains("foreground-signaling/stream"))
+        #expect(!summary.contains("foreground-signaling/invite"))
+    }
+
+    @Test
+    func debugForegroundSSEInAppSmokeControlsExposeOnlyRedactedSummary() {
+        SalemXForegroundSSESmokeDebug.clear()
+
+        let summary = SalemXForegroundSSESmokeControls.redactedReceiverStateSummary()
         #expect(Self.forbiddenFragments.allSatisfy { !summary.contains($0) })
         #expect(!summary.contains("Bearer"))
         #expect(!summary.contains("Authorization"))

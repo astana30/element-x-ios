@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.42M2 - DEBUG-only receiver SSE bridge/proof path.
+After 2.42M3 - DEBUG-only in-app foreground smoke controls.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.42M3 adds DEBUG-only in-app foreground smoke controls:
+  - The 2.42M physical regression smoke remains pending and is not marked passed.
+  - The latest blocker was `receiver_sse_proof_unavailable`; receiver LLDB/CoreDevice expression evaluation was not reliable enough for supervised smoke proof.
+  - The 2.42M1 sender bridge commit `751316429c5476217f7b881d9a2f542a4e7e3b3b` and 2.42M2 receiver bridge commit `6c1c47b5386ed5051cea8ee0277719b4d2bd4cce` remain reachable.
+  - Developer Options now exposes DEBUG-only foreground SSE smoke controls that start the current-session receiver stream and display the existing redacted receiver proof summary from inside the app.
+  - The in-app proof shows only safe booleans/status classes for connection, stream failure, event type, invite parsing, pipeline delivery, invite validity, and incoming request state.
+  - Receiver identifiers remain local-only sensitive inputs and must not be recorded, logged, documented, or committed.
+  - The physical regression smoke must still use the authenticated non-dev foreground invite route with the dev route disabled.
+  - Physical Debug builds should use `DEVELOPMENT_TEAM=M639Y9MFR2`; the old `83LGSC2QPV` team must not be used for current physical Debug builds.
 - 2.42M2 adds a DEBUG-only receiver SSE bridge/proof path:
   - The 2.42M physical regression smoke remains pending and is not marked passed.
   - The latest blocker was `receiver_sse_proof_blocked_by_coredevice_lldb_handshake`; receiver LLDB/CoreDevice handshakes were unstable, while no non-LLDB receiver proof path existed.
