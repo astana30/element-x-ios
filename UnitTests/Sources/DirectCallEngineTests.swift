@@ -1254,6 +1254,103 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func backgroundInvitePayloadParserAcceptsValidMinimalPayload() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let parser = DirectCallBackgroundInvitePayloadParser()
+
+        let result = parser.parse(makeBackgroundInvitePayload(now: now), now: now)
+
+        guard case .valid(let payload) = result else {
+            Issue.record("Expected background invite payload to parse.")
+            return
+        }
+        #expect(payload.kind == .audio)
+        #expect(String(describing: result) == "valid(payload: <redacted>)")
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !String(describing: payload).contains($0) })
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !String(describing: result).contains($0) })
+    }
+
+    @Test
+    func backgroundInvitePayloadParserRejectsMalformedMissingAndUnsupportedPayloads() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let parser = DirectCallBackgroundInvitePayloadParser()
+
+        #expect(parser.parse([:], now: now) == .invalid(.malformedPayload))
+
+        var missingFieldPayload = makeBackgroundInvitePayload(now: now)
+        missingFieldPayload.removeValue(forKey: "call_handle")
+        #expect(parser.parse(missingFieldPayload, now: now) == .invalid(.missingRequiredField))
+
+        var invalidTypePayload = makeBackgroundInvitePayload(now: now)
+        invalidTypePayload["created_at_ms"] = "not-a-timestamp"
+        #expect(parser.parse(invalidTypePayload, now: now) == .invalid(.invalidType))
+
+        var unsupportedVersionPayload = makeBackgroundInvitePayload(now: now)
+        unsupportedVersionPayload["version"] = 2
+        #expect(parser.parse(unsupportedVersionPayload, now: now) == .invalid(.unsupportedVersion))
+
+        var malformedPayload = makeBackgroundInvitePayload(now: now)
+        malformedPayload["call_handle"] = "!unsafe-room"
+        #expect(parser.parse(malformedPayload, now: now) == .invalid(.malformedPayload))
+    }
+
+    @Test
+    func backgroundInvitePayloadParserMatchesForegroundTimestampGuardrails() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let parser = DirectCallBackgroundInvitePayloadParser()
+
+        let current = parser.parse(makeBackgroundInvitePayload(now: now), now: now)
+        let smallFutureSkew = parser.parse(makeBackgroundInvitePayload(now: now,
+                                                                       createdAt: now.addingTimeInterval(3),
+                                                                       expiresAt: now.addingTimeInterval(30)),
+                                           now: now)
+        let excessiveFutureSkew = parser.parse(makeBackgroundInvitePayload(now: now,
+                                                                           createdAt: now.addingTimeInterval(10),
+                                                                           expiresAt: now.addingTimeInterval(30)),
+                                               now: now)
+        let expired = parser.parse(makeBackgroundInvitePayload(now: now,
+                                                               createdAt: now.addingTimeInterval(-60),
+                                                               expiresAt: now.addingTimeInterval(-1)),
+                                   now: now)
+        let invalidTimestamp = parser.parse(makeBackgroundInvitePayload(now: now,
+                                                                        createdAt: now.addingTimeInterval(10),
+                                                                        expiresAt: now.addingTimeInterval(5)),
+                                            now: now)
+
+        guard case .valid = current else {
+            Issue.record("Expected current timestamp payload to parse.")
+            return
+        }
+        guard case .valid = smallFutureSkew else {
+            Issue.record("Expected small future skew payload to parse.")
+            return
+        }
+        #expect(excessiveFutureSkew == .invalid(.futureTimestampExcessive))
+        #expect(expired == .invalid(.expired))
+        #expect(invalidTimestamp == .invalid(.invalidTimestamp))
+    }
+
+    @Test
+    func backgroundInvitePayloadParserDiagnosticsStayRedactedAndSideEffectFree() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let parser = DirectCallBackgroundInvitePayloadParser()
+        var payload = makeBackgroundInvitePayload(now: now)
+        payload["call_handle"] = "redacted-fixture-a"
+        payload["display_label"] = "unsafe/label"
+        payload["private_fixture"] = "redacted-fixture-b"
+
+        let result = parser.parse(payload, now: now)
+        let description = String(describing: parser) + " " + String(describing: result)
+
+        #expect(result == .invalid(.malformedPayload))
+        #expect(description.contains("pushRegistryRuntime: false"))
+        #expect(description.contains("apnsRegistrationRuntime: false"))
+        #expect(description.contains("mediaConnectRuntime: false"))
+        #expect(description.contains("matrixEventRuntime: false"))
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !description.contains($0) })
+    }
+
+    @Test
     func diagnosticsAndOutcomesStayRedacted() {
         let diagnostics = NativeIncomingCallRedactedDiagnostics(lifecycleState: .failed,
                                                                 failClosedReason: .serverIssuedMediaCredentialRejected,
@@ -2335,6 +2432,20 @@ final class NativeIncomingCallLifecycleContractTests {
         """
         return "event: foreground.call.invite\n" +
             "data: \(payload)\n\n"
+    }
+
+    private func makeBackgroundInvitePayload(now: Date,
+                                             createdAt: Date? = nil,
+                                             expiresAt: Date? = nil) -> [String: Any] {
+        [
+            "type": "salemx.direct_call.background.invite",
+            "version": 1,
+            "call_handle": "safe-background-call",
+            "call_kind": "audio",
+            "created_at_ms": Int((createdAt ?? now).timeIntervalSince1970 * 1000),
+            "expires_at_ms": Int((expiresAt ?? now.addingTimeInterval(30)).timeIntervalSince1970 * 1000),
+            "display_label": "Pilot Participant"
+        ]
     }
 }
 

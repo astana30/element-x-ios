@@ -589,6 +589,170 @@ protocol NativeIncomingPushRegistryManaging: AnyObject {
     func unregisterIncomingCallPushes()
 }
 
+struct DirectCallBackgroundInvitePayload: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let handle: NativeIncomingCallHandle
+    let kind: ForegroundCallInviteKind
+    let createdAt: Date
+    let expiresAt: Date
+    let displayMetadata: NativeIncomingCallKitDisplayMetadata
+
+    var description: String {
+        "DirectCallBackgroundInvitePayload(handle: <redacted>, kind: \(kind), createdAt: <redacted>, expiresAt: <redacted>, displayMetadata: <redacted>)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum DirectCallBackgroundInvitePayloadError: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case missingRequiredField = "missing_required_field"
+    case invalidType = "invalid_type"
+    case invalidTimestamp = "invalid_timestamp"
+    case expired
+    case futureTimestampExcessive = "future_timestamp_excessive"
+    case unsupportedVersion = "unsupported_version"
+    case malformedPayload = "malformed_payload"
+    case redacted
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum DirectCallBackgroundInvitePayloadValidationResult: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case valid(DirectCallBackgroundInvitePayload)
+    case invalid(DirectCallBackgroundInvitePayloadError)
+
+    var description: String {
+        switch self {
+        case .valid:
+            "valid(payload: <redacted>)"
+        case .invalid(let error):
+            error.description
+        }
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct DirectCallBackgroundInvitePayloadParser: CustomStringConvertible, CustomDebugStringConvertible {
+    private enum Constants {
+        static let expectedType = "salemx.direct_call.background.invite"
+        static let supportedVersion = 1
+    }
+
+    var futureSkewAllowance: TimeInterval = 5
+
+    func parse(_ payload: [String: Any], now: Date = .now) -> DirectCallBackgroundInvitePayloadValidationResult {
+        guard !payload.isEmpty else {
+            return .invalid(.malformedPayload)
+        }
+        guard let type = requiredString("type", in: payload),
+              let callHandle = requiredString("call_handle", in: payload),
+              let callKind = requiredString("call_kind", in: payload),
+              let displayLabel = requiredString("display_label", in: payload),
+              let version = requiredInteger("version", in: payload),
+              let createdAtMs = requiredInteger("created_at_ms", in: payload),
+              let expiresAtMs = requiredInteger("expires_at_ms", in: payload) else {
+            return missingOrInvalidRequiredField(in: payload)
+        }
+        guard type == Constants.expectedType else {
+            return .invalid(.invalidType)
+        }
+        guard version == Constants.supportedVersion else {
+            return .invalid(.unsupportedVersion)
+        }
+        guard createdAtMs >= 0,
+              expiresAtMs >= 0,
+              expiresAtMs > createdAtMs else {
+            return .invalid(.invalidTimestamp)
+        }
+
+        let createdAt = Date(timeIntervalSince1970: TimeInterval(createdAtMs) / 1000)
+        let expiresAt = Date(timeIntervalSince1970: TimeInterval(expiresAtMs) / 1000)
+
+        guard createdAt <= now.addingTimeInterval(futureSkewAllowance) else {
+            return .invalid(.futureTimestampExcessive)
+        }
+        guard expiresAt > now else {
+            return .invalid(.expired)
+        }
+        guard let handle = NativeIncomingCallHandle(callHandle),
+              let displayMetadata = NativeIncomingCallKitDisplayMetadata(displayLabel) else {
+            return .invalid(.malformedPayload)
+        }
+
+        let kind = ForegroundCallInviteKind(rawValue: callKind) ?? .unsupported
+        guard kind != .unsupported else {
+            return .invalid(.invalidType)
+        }
+
+        return .valid(.init(handle: handle,
+                            kind: kind,
+                            createdAt: createdAt,
+                            expiresAt: expiresAt,
+                            displayMetadata: displayMetadata))
+    }
+
+    private func requiredString(_ key: String, in payload: [String: Any]) -> String? {
+        guard let value = payload[key] as? String,
+              !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        return value
+    }
+
+    private func requiredInteger(_ key: String, in payload: [String: Any]) -> Int? {
+        if let value = payload[key] as? Int {
+            return value
+        }
+        if let value = payload[key] as? Int64,
+           value <= Int64(Int.max),
+           value >= Int64(Int.min) {
+            return Int(value)
+        }
+        if let value = payload[key] as? Double,
+           value.rounded(.towardZero) == value,
+           value <= Double(Int.max),
+           value >= Double(Int.min) {
+            return Int(value)
+        }
+        return nil
+    }
+
+    private func missingOrInvalidRequiredField(in payload: [String: Any]) -> DirectCallBackgroundInvitePayloadValidationResult {
+        let requiredFields = [
+            "type",
+            "version",
+            "call_handle",
+            "call_kind",
+            "created_at_ms",
+            "expires_at_ms",
+            "display_label"
+        ]
+
+        guard requiredFields.allSatisfy({ payload.keys.contains($0) }) else {
+            return .invalid(.missingRequiredField)
+        }
+        return .invalid(.invalidType)
+    }
+
+    var description: String {
+        "DirectCallBackgroundInvitePayloadParser(pushRegistryRuntime: false, apnsRegistrationRuntime: false, mediaConnectRuntime: false, matrixEventRuntime: false)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
 protocol NativeIncomingCallTimeoutScheduling: AnyObject {
     func scheduleTimeout(for identity: NativeIncomingCallIdentity, after timeout: Duration)
     func cancelTimeout(for identity: NativeIncomingCallIdentity)

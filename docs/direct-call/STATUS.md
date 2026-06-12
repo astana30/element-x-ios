@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.43A - PushKit/APNs background incoming-call investigation baseline.
+After 2.43B - background invite payload contract/parser seam.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.43B adds a safe background invite payload contract/parser seam:
+  - The parser is inert and side-effect free; it does not register PushKit, request a VoIP token, register APNs, report CallKit automatically, emit Matrix events, request media credentials, connect media, or change production call behavior.
+  - Parser diagnostics are redacted status classes only: `valid`, `missing_required_field`, `invalid_type`, `invalid_timestamp`, `expired`, `future_timestamp_excessive`, `unsupported_version`, `malformed_payload`, and `redacted`.
+  - Timestamp guardrails match the foreground invite path: current payloads and small future skew are accepted, while expired payloads and excessive future timestamps fail closed.
+  - Signing, provisioning, project files, `Info.plist`, `app.yml`, and entitlements remain untouched.
+  - The foreground real-invite path remains unchanged.
+  - Future 2.43C work should be separately scoped as PushKit registration/token-handling design or implementation only if explicitly allowed.
+  - Future entitlement/signing/project changes require a separate explicit task.
+  - Physical Debug builds should use `DEVELOPMENT_TEAM=M639Y9MFR2`; the old `83LGSC2QPV` team must not be used.
 - 2.43A documents the PushKit/APNs/background incoming-call investigation after the 2.42O foreground baseline:
   - The 2.42O validated foreground real-invite baseline remains unchanged.
   - Existing PushKit registration and VoIP push handling are present in the Element Call service path, not in SalemX native direct-call background behavior.

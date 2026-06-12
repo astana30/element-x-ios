@@ -10,6 +10,38 @@ The validated foreground real-invite token-guard baseline was consolidated in 2.
 
 Foreground real invite behavior must remain unchanged while PushKit/APNs/background incoming-call work is scoped separately. The M1-M4 smoke controls and bridges are local DEBUG tooling only and are not production call behavior.
 
+## 2.43B Payload Contract Seam
+
+2.43B adds only a safe background invite payload contract/parser seam for future native direct-call PushKit/APNs work. It does not register PushKit, request a VoIP token, register APNs, change entitlements, change provisioning, touch project files, report CallKit automatically, request media credentials, connect media, emit Matrix events, or change production call behavior.
+
+The parser accepts a minimal dictionary-shaped payload with:
+
+- `type`
+- `version`
+- `call_handle`
+- `call_kind`
+- `created_at_ms`
+- `expires_at_ms`
+- `display_label`
+
+The parser returns either a redacted valid payload value or a redacted failure class. Timestamp validation matches the foreground invite guardrail: current invites and small future clock skew are accepted, expired invites are rejected, excessive future timestamps are rejected, and malformed timestamp ordering is rejected.
+
+Allowed diagnostic classes are limited to:
+
+```text
+valid
+missing_required_field
+invalid_type
+invalid_timestamp
+expired
+future_timestamp_excessive
+unsupported_version
+malformed_payload
+redacted
+```
+
+The parser must not include raw access tokens, authorization headers, Matrix user IDs, device IDs, room IDs, call handles, request payloads, private logs, or secret-bearing URLs in descriptions, diagnostics, docs, or tests.
+
 ## Current State From Tracked Code
 
 ### Existing PushKit Surface
@@ -100,6 +132,8 @@ Any production native direct-call VoIP registration proof, APNs provider setup t
 
 - 2.42O remains the foreground real-invite baseline.
 - PushKit/APNs/background incoming is not implemented yet for SalemX native direct-call.
+- 2.43B adds only the background invite payload contract/parser seam.
+- PushKit registration and APNs registration are still not implemented for native direct-call.
 - Foreground real-invite behavior must remain unchanged.
 - PushKit/APNs work must be separately scoped from foreground smoke tooling.
 - Entitlements, provisioning, project settings, `Info.plist`, and `app.yml` are not changed by this investigation.
@@ -109,4 +143,5 @@ Any production native direct-call VoIP registration proof, APNs provider setup t
 - Dev routes must remain disabled.
 - Real non-dev routes must remain auth-gated.
 - DEBUG smoke tooling is not production behavior.
+- A future 2.43C may design or implement PushKit registration/token handling only if explicitly allowed and still separate from entitlement/signing changes.
 - Physical Debug builds should use `DEVELOPMENT_TEAM=M639Y9MFR2`; the old `83LGSC2QPV` team must not be used.

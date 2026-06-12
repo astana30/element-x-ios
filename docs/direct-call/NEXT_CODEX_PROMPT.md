@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.43a-pushkit-apns-background-investigation`
+`salemx-2.43b-background-invite-payload-contract`
 
-Next phase: continue from the PushKit/APNs background incoming-call investigation baseline.
+Next phase: continue from the background invite payload contract/parser seam.
 
 ## Baseline
 
@@ -87,10 +87,22 @@ Key findings:
 - Native direct-call background PushKit/APNs incoming-call support is not implemented yet.
 - Detailed notes are in `docs/direct-call/PUSHKIT_APNS_BACKGROUND_INVESTIGATION.md`.
 
+2.43B adds only an inert background invite payload contract/parser seam:
+
+- No PushKit registration was added.
+- No APNs registration was added.
+- No entitlement, provisioning, project, `Info.plist`, or `app.yml` file was changed.
+- Foreground real invite behavior remains unchanged.
+- No media credentials or media connection were introduced.
+- No Matrix events are emitted from background payload parsing.
+- Parser diagnostics remain redacted status classes only.
+- Timestamp validation matches the foreground invite path for current, small future skew, excessive future skew, and expired payloads.
+
 ## Guardrails
 
 - Do not implement PushKit/APNs/background incoming-call behavior without a separately scoped task.
 - Any future signing, entitlement, provisioning, project, `Info.plist`, or `app.yml` change requires explicit approval in that task.
+- Future 2.43C should be a separately scoped PushKit registration/token-handling design or implementation step only if explicitly allowed.
 - Do not implement PushKit runtime inside foreground smoke tooling.
 - Do not register APNs or VoIP values inside foreground smoke tooling.
 - Do not add background incoming handling inside foreground smoke tooling.

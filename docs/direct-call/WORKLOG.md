@@ -215,6 +215,16 @@ Findings:
 
 The detailed investigation lives in `docs/direct-call/PUSHKIT_APNS_BACKGROUND_INVESTIGATION.md`. Future PushKit/APNs work must be separately scoped and must not request media credentials, connect media, emit Matrix events from invite receipt, expose raw identifiers or payloads, or make DEBUG smoke tooling production behavior.
 
+### 2.43B — Background invite payload contract/parser seam
+
+Added a safe native direct-call background invite payload contract and parser seam for future PushKit/APNs background incoming-call support. The seam is inert: it performs no PushKit registration, APNs registration, CallKit reporting, Matrix event emission, network call, media credential request, or media connection.
+
+The parser accepts a minimal dictionary-shaped payload and returns either a redacted valid payload or a redacted failure class. It keeps timestamp validation aligned with the foreground invite path: current payloads and small future clock skew are accepted, while expired payloads, malformed timestamp ordering, and excessive future timestamps fail closed.
+
+Focused tests cover valid parsing, missing fields, invalid types, unsupported versions, malformed payloads, expired payloads, excessive future skew, small future skew, redacted diagnostics, and the no-side-effect runtime surface. The foreground invite timestamp tests and DEBUG smoke release-surface tests remain in the targeted suite.
+
+PushKit registration, APNs registration, entitlements/provisioning/project edits, media credentials, media connection, Matrix event emission from background payload parsing, and production background behavior remain unimplemented. Future 2.43C work should be separately scoped as PushKit registration/token-handling design or implementation only if explicitly allowed. Any future signing, entitlement, provisioning, project, `Info.plist`, or `app.yml` change requires a separate explicit task.
+
 ### 2.42K — Supervised foreground real invite
 
 The two-device foreground real-invite smoke passed and was committed as:
