@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.42M4 - DEBUG-only Developer Options entry for foreground smoke controls.
+After 2.42M - physical regression smoke after foreground real invite token guard.
 
 ## Latest App Code Checkpoint
 
@@ -39,8 +39,22 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.42M physical regression smoke passed after foreground real-invite token guard hardening:
+  - Baseline token guard commit: `9544d85090bb152f5c28d5acd11f37815556e078`.
+  - Sender bridge commit: `751316429c5476217f7b881d9a2f542a4e7e3b3b`.
+  - Receiver bridge commit: `6c1c47b5386ed5051cea8ee0277719b4d2bd4cce`.
+  - In-app receiver controls commit: `a579509c6ea7c294fa428370efa10bf875b053bb`.
+  - Developer Options entry commit: `26a07771c22c8c3d615b9c34552f3b811510b724`.
+  - Receiver pre-invite proof was collected through DEBUG in-app smoke controls at `Settings -> Internal diagnostics -> General -> Foreground SSE smoke`.
+  - The sender bridge was invoked locally only; receiver identifiers were typed locally and were not recorded, logged, documented, or committed.
+  - Redacted sender diagnostics reached `sender_invite_post_status=http_success`, `sender_invite_delivery_report_received=true`, and `sender_invite_blocked_reason=none`.
+  - Server diagnostics showed one active subscriber, `subscriber_available=True`, `invite_enqueued=True`, `delivered=True`, `dropped=False`, `invite_yielded`, and `sse_event_type=foreground.call.invite`.
+  - Receiver diagnostics reached `sse_connected=true`, `stream_failure=none`, `raw_event_received=true`, `sse_event_type=foreground.call.invite`, `invite_parse_succeeded=true`, `pipeline_delivered=true`, `invite_received=true`, `invite_valid=true`, and `incoming_requested=true`.
+  - The authenticated real non-dev invite route was used; the dev route remained disabled, unauthenticated non-dev invite remained `401`, and unauthenticated stream remained `401`.
+  - No media credentials, media connection, PushKit/APNs/background path, Matrix event emission from invite receipt, Element Call route replacement, signing/project setting, `app.yml`, `Info.plist`, or entitlement change was added.
+  - Physical Debug builds should use `DEVELOPMENT_TEAM=M639Y9MFR2`; the old `83LGSC2QPV` team must not be used for current physical Debug builds.
 - 2.42M4 exposes the DEBUG-only Developer Options entry:
-  - The 2.42M physical regression smoke remains pending and is not marked passed.
+  - This was the final reachability fix before the 2.42M physical regression smoke pass.
   - The latest blocker was `debug_smoke_controls_not_reachable_from_settings`; 2.42M3 controls were present on `DeveloperOptionsScreen`, but that screen was not reachable from the visible Settings UI.
   - Settings now exposes a DEBUG-only `Internal diagnostics` row that opens the existing Developer Options screen.
   - The receiver smoke path should now be reachable as `Settings -> Internal diagnostics -> General -> Foreground SSE smoke`.

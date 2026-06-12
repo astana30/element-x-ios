@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.42m4-debug-developer-options-entry`
+`salemx-2.42m-foreground-real-invite-token-guard-smoke`
 
-Next phase: run 2.42M physical regression smoke after the DEBUG sender bridge, receiver bridge, in-app receiver smoke controls, and DEBUG Settings entry.
+Next phase: continue after the 2.42M physical foreground real-invite regression smoke pass.
 
 ## Context
 
@@ -24,67 +24,52 @@ Next phase: run 2.42M physical regression smoke after the DEBUG sender bridge, r
 - 2.42M3 adds DEBUG-only in-app foreground smoke controls under Developer Options so the receiver can start foreground SSE and refresh redacted proof without receiver LLDB.
 - 2.42M then hit `debug_smoke_controls_not_reachable_from_settings`: the 2.42M3 controls were present on Developer Options, but that screen was not reachable from the visible Settings UI.
 - 2.42M4 exposes a DEBUG-only `Internal diagnostics` row in Settings that opens the existing Developer Options screen.
-- The 2.42M physical regression smoke is not marked passed yet.
+- 2.42M physical regression smoke passed on two physical iPhones after token guard hardening and M1-M4 DEBUG smoke tooling.
+- Receiver pre-invite proof was collected through DEBUG in-app controls at `Settings -> Internal diagnostics -> General -> Foreground SSE smoke`.
+- The sender bridge was invoked locally only; receiver identifiers were typed locally and were not recorded, printed, stored, pasted into chat, documented, or committed.
+- The real authenticated non-dev invite route was used. The dev route remained disabled, unauthenticated non-dev invite remained `401`, and unauthenticated stream remained `401`.
+- No media credentials, media connection, PushKit/APNs/background path, Matrix event emission from invite receipt, or Element Call route replacement was used.
 
-## Required Smoke
-
-Run the two-device physical foreground real-invite regression smoke using the authenticated non-dev route only:
-
-```text
-/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/invite
-```
-
-Do not use:
-
-- `dev/invite`
-- `dev/inject-active`
-- `SALEMX_FOREGROUND_SIGNALING_DEV_INVITE_ENABLED=1`
-
-Receiver:
-
-- Keep the receiver app foreground and authenticated.
-- Open foreground SSE first from `Settings -> Internal diagnostics -> General -> Foreground SSE smoke`.
-- Confirm `sse_connected=true` and `stream_failure=none` from the in-app redacted receiver proof summary.
-- Do not record receiver identifiers, raw URLs with secrets, tokens, request payloads, or private logs.
+## 2.42M Redacted Pass Evidence
 
 Sender:
 
-- Keep the sender app foreground and authenticated.
-- Use `SalemXForegroundSSESmokeDebugBridge` from local LLDB with receiver identifiers entered locally only.
-- Receiver identifiers must not be pasted into chat, terminal output, docs, tracked files, commits, or final reports.
-
-Command shape with placeholders only:
-
-```lldb
-expr -l objc++ -- [NSClassFromString(@"SalemXForegroundSSESmokeDebugBridge") sendRealInviteWithURLString:@"<REDACTED_REAL_INVITE_URL>" recipient:@"<LOCAL_RECIPIENT>" recipientDevice:@"<LOCAL_DEVICE>"]
-continue
+```text
+sender_helper_invoked=true
+sender_active_session_available=true
+sender_access_token_available=true
+sender_invite_post_requested=true
+sender_invite_post_status=http_success
+sender_invite_delivery_report_received=true
+sender_invite_blocked_reason=none
 ```
 
-## Pass Evidence
+Server:
 
-Collect only redacted diagnostics:
+```text
+stream_registered active_subscriber_count=1
+ready_sent active_subscriber_count=1
+subscriber_available=True
+invite_enqueued=True
+delivered=True
+dropped=False
+invite_yielded sse_event_type=foreground.call.invite active_subscriber_count=1
+```
 
-- sender `sender_helper_invoked=true`
-- sender `sender_active_session_available=true`
-- sender `sender_access_token_available=true`
-- sender `sender_invite_post_requested=true`
-- sender `sender_invite_post_status=http_success`, or `http_unauthorized` followed by `sender_invite_retry_status=http_success`
-- sender `sender_invite_delivery_report_received=true`
-- sender `sender_invite_blocked_reason=none`
-- server `delivered=True`
-- server `dropped=False`
-- server `invite_enqueued=True`
-- server `invite_yielded=True`
-- server `sse_event_type=foreground.call.invite`
-- receiver `sse_connected=true`
-- receiver `stream_failure=none`
-- receiver `raw_event_received=true`
-- receiver `sse_event_type=foreground.call.invite`
-- receiver `invite_parse_succeeded=true`
-- receiver `pipeline_delivered=true`
-- receiver `invite_received=true`
-- receiver `invite_valid=true`
-- receiver `incoming_requested=true`
+Receiver:
+
+```text
+sse_connected=true
+stream_failure=none
+raw_event_received=true
+sse_event_type=foreground.call.invite
+invite_parse_attempted=true
+invite_parse_succeeded=true
+pipeline_delivered=true
+invite_received=true
+invite_valid=true
+incoming_requested=true
+```
 
 ## Safety
 

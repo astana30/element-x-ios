@@ -138,6 +138,34 @@ Receiver identifiers remain local-only sensitive inputs and must not be written 
 
 Physical Debug builds for current supervised smokes should use `DEVELOPMENT_TEAM=M639Y9MFR2`. Do not use the old `83LGSC2QPV` team for current physical Debug builds, and do not persist signing changes.
 
+### 2.42M — Physical regression smoke after token guard
+
+The two-device physical regression smoke passed after the 2.42L token guard hardening and the M1-M4 DEBUG smoke tooling fixes.
+
+Relevant commits:
+
+```text
+9544d85090bb152f5c28d5acd11f37815556e078 Harden foreground real invite token handling
+751316429c5476217f7b881d9a2f542a4e7e3b3b Add debug real invite smoke bridge
+6c1c47b5386ed5051cea8ee0277719b4d2bd4cce Add debug receiver SSE smoke bridge
+a579509c6ea7c294fa428370efa10bf875b053bb Add debug in-app foreground smoke controls
+26a07771c22c8c3d615b9c34552f3b811510b724 Expose debug developer options entry
+```
+
+Receiver pre-invite proof was collected through the DEBUG in-app controls at `Settings -> Internal diagnostics -> General -> Foreground SSE smoke`, reaching `sse_connected=true` and `stream_failure=none`.
+
+The sender bridge was invoked locally only. Receiver identifiers were typed only into local Xcode/LLDB and were not recorded, printed, stored, pasted into chat, documented, or committed.
+
+Redacted pass result:
+
+- Sender reached `sender_helper_invoked=true`, `sender_active_session_available=true`, `sender_access_token_available=true`, `sender_invite_post_requested=true`, `sender_invite_post_status=http_success`, `sender_invite_delivery_report_received=true`, and `sender_invite_blocked_reason=none`.
+- Server showed `stream_registered active_subscriber_count=1`, `ready_sent active_subscriber_count=1`, `subscriber_available=True`, `invite_enqueued=True`, `delivered=True`, `dropped=False`, and `invite_yielded sse_event_type=foreground.call.invite active_subscriber_count=1`.
+- Receiver reached `raw_event_received=true`, `sse_event_type=foreground.call.invite`, `invite_parse_attempted=true`, `invite_parse_succeeded=true`, `pipeline_delivered=true`, `invite_received=true`, `invite_valid=true`, and `incoming_requested=true`.
+
+The real authenticated non-dev route was used. The dev route remained disabled, unauthenticated non-dev invite remained `401`, and unauthenticated stream remained `401`. No media credentials, media connection, PushKit/APNs/background path, Matrix event emission from invite receipt, Element Call route replacement, signing/project setting, `app.yml`, `Info.plist`, or entitlement change was added.
+
+Physical Debug builds for current supervised smokes should use `DEVELOPMENT_TEAM=M639Y9MFR2`. Do not use the old `83LGSC2QPV` team for current physical Debug builds, and do not persist signing changes.
+
 ### 2.42K — Supervised foreground real invite
 
 The two-device foreground real-invite smoke passed and was committed as:

@@ -465,6 +465,42 @@ The row and smoke controls are DEBUG-only. They reuse the existing Developer Opt
 
 Receiver identifiers remain local-only sensitive inputs and must not be pasted into chat, docs, terminal logs, tracked files, commits, or final reports. Correct physical Debug builds use `DEVELOPMENT_TEAM=M639Y9MFR2`; the old `83LGSC2QPV` team must not be used.
 
+## 2.42M Physical Regression Smoke Pass
+
+2.42M passed the two-device physical foreground real-invite regression smoke after token guard hardening.
+
+Relevant commits:
+
+```text
+9544d85090bb152f5c28d5acd11f37815556e078 Harden foreground real invite token handling
+751316429c5476217f7b881d9a2f542a4e7e3b3b Add debug real invite smoke bridge
+6c1c47b5386ed5051cea8ee0277719b4d2bd4cce Add debug receiver SSE smoke bridge
+a579509c6ea7c294fa428370efa10bf875b053bb Add debug in-app foreground smoke controls
+26a07771c22c8c3d615b9c34552f3b811510b724 Expose debug developer options entry
+```
+
+Receiver pre-invite proof was collected through DEBUG in-app controls:
+
+```text
+Settings -> Internal diagnostics -> General -> Foreground SSE smoke
+sse_connected=true
+stream_failure=none
+```
+
+The sender bridge was invoked locally only. Receiver identifiers were entered locally and were not printed, stored, pasted into chat, documented, committed, or otherwise recorded.
+
+The pass used the authenticated real non-dev foreground invite route only. The dev route stayed disabled, unauthenticated non-dev invite remained `401`, and unauthenticated stream remained `401`.
+
+Redacted pass evidence:
+
+- Sender: `sender_helper_invoked=true`, `sender_active_session_available=true`, `sender_access_token_available=true`, `sender_invite_post_requested=true`, `sender_invite_post_status=http_success`, `sender_invite_delivery_report_received=true`, `sender_invite_blocked_reason=none`.
+- Server: `stream_registered active_subscriber_count=1`, `ready_sent active_subscriber_count=1`, `subscriber_available=True`, `invite_enqueued=True`, `delivered=True`, `dropped=False`, `invite_yielded sse_event_type=foreground.call.invite active_subscriber_count=1`.
+- Receiver: `raw_event_received=true`, `sse_event_type=foreground.call.invite`, `invite_parse_attempted=true`, `invite_parse_succeeded=true`, `pipeline_delivered=true`, `invite_received=true`, `invite_valid=true`, `incoming_requested=true`.
+
+The smoke did not use `dev/invite`, `dev/inject-active`, `SALEMX_FOREGROUND_SIGNALING_DEV_INVITE_ENABLED=1`, media credentials, media connection, PushKit/APNs/background paths, or Matrix event emission from invite receipt.
+
+Correct physical Debug builds use `DEVELOPMENT_TEAM=M639Y9MFR2`; the old `83LGSC2QPV` team must not be used.
+
 ## Redacted Diagnostics To Collect
 
 Record only safe booleans and timing buckets:
