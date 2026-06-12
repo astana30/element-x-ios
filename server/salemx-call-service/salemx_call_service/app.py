@@ -47,6 +47,7 @@ from .storage_keys import StorageKeyHasher
 ENDPOINT_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/livekit/token"
 ELIGIBILITY_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/eligibility"
 FOREGROUND_SIGNALING_STREAM_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/stream"
+FOREGROUND_SIGNALING_INVITE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/invite"
 FOREGROUND_SIGNALING_DEV_INVITE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/invite"
 FOREGROUND_SIGNALING_DEV_INJECT_ACTIVE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/inject-active"
 CAPABILITIES_PATH = "/_matrix/client/v3/capabilities"
@@ -239,6 +240,34 @@ def create_app(config: ServiceConfig | None = None,
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
+    @app.post(FOREGROUND_SIGNALING_INVITE_PATH)
+    async def foreground_signaling_invite(request: Request, authorization: Optional[str] = Header(default=None)) -> JSONResponse:
+        try:
+            if service is None:
+                raise CallServiceError(status_code=503,
+                                       errcode="M_DIRECT_CALL_SERVICE_UNAVAILABLE",
+                                       error="Direct-call service is not ready.")
+            bearer_token = bearer_token_from_authorization(authorization)
+            await service.auth_validator.validate_bearer_token(bearer_token)
+            payload: Any = await request.json()
+            if not isinstance(payload, dict):
+                raise bad_request(error="Request body must be a JSON object.")
+            invite_request = ForegroundCallInviteRequest.from_mapping(payload)
+            result = signaling_service.publish_invite(invite_request)
+            result_body = result.as_dict()
+            result_body.update(_foreground_signaling_invite_diagnostics(invite_request, signaling_service))
+            LOGGER.info(
+                "foreground signaling invite handled subscriber_available=%s delivered=%s dropped=%s call_kind=%s",
+                result.subscriber_available,
+                result.delivered,
+                result.dropped,
+                invite_request.invite.call_kind,
+            )
+            return JSONResponse(status_code=200, content=result_body)
+        except CallServiceError as error:
+            status_code, body = error_response(error)
+            return JSONResponse(status_code=status_code, content=body)
+
     if environ.get(FOREGROUND_SIGNALING_DEV_INVITE_ENABLED_ENV) == "1":
         @app.post(FOREGROUND_SIGNALING_DEV_INVITE_PATH)
         async def foreground_signaling_dev_invite(request: Request, authorization: Optional[str] = Header(default=None)) -> JSONResponse:
@@ -368,13 +397,30 @@ def _foreground_signaling_dev_invite_diagnostics(
     target_device_key = getattr(authenticated_user, "device" "_id")
     target_device_hash = stable_redacted_id(target_device_key) if target_device_key is not None else "none"
     target_account_hash = stable_redacted_id(target_account_key)
+    target_subscriber_count = signaling_service.subscriber_count_for(target_account_key, target_device_key)
     return {
         "active_subscriber_count": signaling_service.diagnostics.subscriber_count,
-        "target_subscriber_count": signaling_service.subscriber_count_for(target_account_key, target_device_key),
+        "target_subscriber_count": target_subscriber_count,
+        "target_active_subscriber_count": target_subscriber_count,
         "auth_user_hash": target_account_hash,
         "auth_device_hash": target_device_hash,
         "target_user_hash": target_account_hash,
         "target_device_hash": target_device_hash,
+    }
+
+
+def _foreground_signaling_invite_diagnostics(
+    invite_request: ForegroundCallInviteRequest,
+    signaling_service: ForegroundCallSignalingService,
+) -> dict[str, object]:
+    target_subscriber_count = signaling_service.subscriber_count_for(
+        invite_request.recipient,
+        invite_request.recipient_device,
+    )
+    return {
+        "active_subscriber_count": signaling_service.diagnostics.subscriber_count,
+        "target_subscriber_count": target_subscriber_count,
+        "target_active_subscriber_count": target_subscriber_count,
     }
 
 

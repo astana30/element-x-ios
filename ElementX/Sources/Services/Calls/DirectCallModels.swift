@@ -1673,6 +1673,71 @@ struct DebugForegroundCallSignalingSSESmokeHelperDiagnostics: Equatable, CustomS
     }
 }
 
+enum DebugForegroundCallSignalingRealInviteSenderBlockedReason: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case none
+    case invalidInviteURL = "invalid_invite_url"
+    case missingActiveSession = "missing_active_session"
+    case missingAccessTokenProvider = "missing_access_token_provider"
+    case missingAccessToken = "missing_access_token"
+    case blankAccessToken = "blank_access_token"
+    case missingRecipient = "missing_recipient"
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum DebugForegroundCallSignalingRealInviteSenderPostStatus: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case notRequested = "not_requested"
+    case requested
+    case httpSuccess = "http_success"
+    case httpUnauthorized = "http_unauthorized"
+    case httpForbidden = "http_forbidden"
+    case httpClientError = "http_client_error"
+    case httpServerError = "http_server_error"
+    case httpUnexpected = "http_unexpected"
+    case nonHTTPResponse = "non_http_response"
+    case network
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct DebugForegroundCallSignalingRealInviteSenderDiagnostics: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    var senderHelperInvoked: Bool
+    var senderActiveSessionAvailable: Bool
+    var senderAccessTokenAvailable: Bool
+    var senderInvitePostRequested: Bool
+    var senderInvitePostStatus: DebugForegroundCallSignalingRealInviteSenderPostStatus
+    var senderInviteDeliveryReportReceived: Bool
+    var senderInviteBlockedReason: DebugForegroundCallSignalingRealInviteSenderBlockedReason
+
+    var description: String {
+        "DebugForegroundCallSignalingRealInviteSenderDiagnostics(" + [
+            "sender_helper_invoked=\(senderHelperInvoked)",
+            "sender_active_session_available=\(senderActiveSessionAvailable)",
+            "sender_access_token_available=\(senderAccessTokenAvailable)",
+            "sender_invite_post_requested=\(senderInvitePostRequested)",
+            "sender_invite_post_status=\(senderInvitePostStatus)",
+            "sender_invite_delivery_report_received=\(senderInviteDeliveryReportReceived)",
+            "sender_invite_blocked_reason=\(senderInviteBlockedReason)"
+        ].joined(separator: ", ") + ")"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
 struct DebugForegroundCallSignalingSSERuntimeDiagnostics: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     var sseConfigured: Bool
     var sseStarted: Bool
@@ -1742,11 +1807,27 @@ struct DebugForegroundCallSignalingSSESmokeDiagnosticsLogger {
         ]
     }
 
+    func redactedLines(for diagnostics: DebugForegroundCallSignalingRealInviteSenderDiagnostics) -> [String] {
+        [
+            "\(Self.prefix) sender_helper_invoked=\(diagnostics.senderHelperInvoked)",
+            "\(Self.prefix) sender_active_session_available=\(diagnostics.senderActiveSessionAvailable)",
+            "\(Self.prefix) sender_access_token_available=\(diagnostics.senderAccessTokenAvailable)",
+            "\(Self.prefix) sender_invite_post_requested=\(diagnostics.senderInvitePostRequested)",
+            "\(Self.prefix) sender_invite_post_status=\(diagnostics.senderInvitePostStatus)",
+            "\(Self.prefix) sender_invite_delivery_report_received=\(diagnostics.senderInviteDeliveryReportReceived)",
+            "\(Self.prefix) sender_invite_blocked_reason=\(diagnostics.senderInviteBlockedReason)"
+        ]
+    }
+
     func log(_ diagnostics: DebugForegroundCallSignalingSSERuntimeDiagnostics) {
         redactedLines(for: diagnostics).forEach { MXLog.info($0) }
     }
 
     func log(_ diagnostics: DebugForegroundCallSignalingSSESmokeHelperDiagnostics) {
+        redactedLines(for: diagnostics).forEach { MXLog.info($0) }
+    }
+
+    func log(_ diagnostics: DebugForegroundCallSignalingRealInviteSenderDiagnostics) {
         redactedLines(for: diagnostics).forEach { MXLog.info($0) }
     }
 

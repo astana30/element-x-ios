@@ -256,6 +256,15 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         payload.update(overrides)
         return payload
 
+    def targeted_invite_payload(self, **overrides: object) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "recipient": "callee",
+            "recipient_device": "device-b",
+        }
+        payload.update(self.invite_payload())
+        payload.update(overrides)
+        return payload
+
     async def test_payload_validation_accepts_only_safe_opaque_invite(self) -> None:
         invite = ForegroundCallInvitePayload.from_mapping(self.invite_payload())
 
@@ -339,6 +348,109 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("callee", body)
         self.assertNotIn("device-b", body)
         self.assertEqual(signaling.diagnostics.subscriber_count, 0)
+
+    async def test_real_invite_route_requires_authenticated_session(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
+        app = self.invite_app(app_module, signaling)
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_INVITE_PATH,
+            {},
+            self.targeted_invite_payload(),
+        )
+        output = json.dumps(body, sort_keys=True)
+
+        self.assertEqual(status, 401)
+        self.assertEqual(body["errcode"], "M_UNKNOWN_TOKEN")
+        self.assertEqual(signaling.diagnostics.delivered_invite_count, 0)
+        self.assertEqual(len(self.invite_issuer(app).issued), 0)
+        self.assertNotIn("opaque-local-safe-handle", output)
+        self.assertNotIn("caller", output)
+        self.assertNotIn("callee", output)
+        self.assertNotIn("device-b", output)
+
+    async def test_real_invite_route_delivers_to_target_without_dev_flag(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
+        subscription = signaling.subscribe(AuthenticatedUser("callee", "device-b"))
+        app = self.invite_app(app_module, signaling)
+
+        dev_status, dev_body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_DEV_INVITE_PATH,
+            {"authorization": self.authorization("auth-b")},
+            self.invite_payload(),
+        )
+
+        with self.assertLogs("salemx_call_service.app", level="INFO") as logs:
+            status, body = await _asgi_post_json(
+                app,
+                app_module.FOREGROUND_SIGNALING_INVITE_PATH,
+                {"authorization": self.authorization("auth-a")},
+                self.targeted_invite_payload(),
+            )
+        received = await asyncio.wait_for(subscription.next_event(), timeout=0.1)
+        output = json.dumps(body, sort_keys=True) + "\n" + "\n".join(logs.output) + "\n" + json.dumps(dev_body, sort_keys=True)
+
+        self.assertEqual(dev_status, 404)
+        self.assertEqual(status, 200)
+        self.assertEqual(body["subscriber_available"], True)
+        self.assertEqual(body["delivered"], True)
+        self.assertEqual(body["dropped"], False)
+        self.assertEqual(body["active_subscriber_count"], 1)
+        self.assertEqual(body["target_subscriber_count"], 1)
+        self.assertEqual(body["target_active_subscriber_count"], 1)
+        self.assertEqual(received.call_handle, "opaque-local-safe-handle")
+        self.assertEqual(len(self.invite_issuer(app).issued), 0)
+        self.assertIn("delivered=True", output)
+        self.assertNotIn("auth-a", output)
+        self.assertNotIn("auth-b", output)
+        self.assertNotIn("caller", output)
+        self.assertNotIn("callee", output)
+        self.assertNotIn("device-b", output)
+        self.assertNotIn("opaque-local-safe-handle", output)
+
+    async def test_real_invite_route_drops_stale_invite_without_fanout(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 50000)
+        subscription = signaling.subscribe(AuthenticatedUser("callee", "device-b"))
+        app = self.invite_app(app_module, signaling)
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_INVITE_PATH,
+            {"authorization": self.authorization("auth-a")},
+            self.targeted_invite_payload(),
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["subscriber_available"], True)
+        self.assertEqual(body["delivered"], False)
+        self.assertEqual(body["dropped"], True)
+        self.assertEqual(len(self.invite_issuer(app).issued), 0)
+        with self.assertRaises(asyncio.TimeoutError):
+            await asyncio.wait_for(subscription.next_event(), timeout=0.01)
+
+    async def test_real_invite_route_rejects_malformed_invite(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
+        app = self.invite_app(app_module, signaling)
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_INVITE_PATH,
+            {"authorization": self.authorization("auth-a")},
+            self.targeted_invite_payload(call_handle="unsafe handle"),
+        )
+        output = json.dumps(body, sort_keys=True)
+
+        self.assertEqual(status, 400)
+        self.assertEqual(body["errcode"], "M_UNKNOWN")
+        self.assertEqual(signaling.diagnostics.delivered_invite_count, 0)
+        self.assertEqual(len(self.invite_issuer(app).issued), 0)
+        self.assertNotIn("unsafe handle", output)
 
     async def test_stream_endpoint_yields_local_injected_invite_event(self) -> None:
         app_module = _load_app_module()
@@ -479,6 +591,7 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["dropped"], False)
         self.assertEqual(body["active_subscriber_count"], 1)
         self.assertEqual(body["target_subscriber_count"], 1)
+        self.assertEqual(body["target_active_subscriber_count"], 1)
         self.assertEqual(body["auth_user_hash"], body["target_user_hash"])
         self.assertEqual(body["auth_device_hash"], body["target_device_hash"])
         self.assertEqual(received.call_handle, "opaque-local-safe-handle")
@@ -507,6 +620,7 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["dropped"], False)
         self.assertEqual(body["active_subscriber_count"], 1)
         self.assertEqual(body["target_subscriber_count"], 0)
+        self.assertEqual(body["target_active_subscriber_count"], 0)
         self.assertEqual(body["auth_user_hash"], body["target_user_hash"])
         self.assertEqual(body["auth_device_hash"], body["target_device_hash"])
         self.assertNotIn("auth-b", output)
@@ -730,6 +844,15 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
     def authorization(value: str) -> str:
         return "Be" + "arer " + value
 
+    def invite_app(self, app_module: object, signaling: ForegroundCallSignalingService) -> object:
+        issuer = FakeLiveKitTokenIssuer()
+        app = app_module.create_app(
+            token_service=self.make_token_service(issuer=issuer),
+            foreground_signaling_service=signaling,
+        )
+        setattr(app, "_salemx_test_issuer", issuer)
+        return app
+
     def dev_invite_app(self, app_module: object, signaling: ForegroundCallSignalingService) -> object:
         issuer = FakeLiveKitTokenIssuer()
         with patch.dict(os.environ, {FOREGROUND_SIGNALING_DEV_INVITE_ENABLED_ENV: "1"}):
@@ -742,6 +865,10 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
 
     @staticmethod
     def dev_invite_issuer(app: object) -> FakeLiveKitTokenIssuer:
+        return getattr(app, "_salemx_test_issuer")
+
+    @staticmethod
+    def invite_issuer(app: object) -> FakeLiveKitTokenIssuer:
         return getattr(app, "_salemx_test_issuer")
 
 

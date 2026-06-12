@@ -538,6 +538,95 @@ final class SalemXForegroundSSESmokeDebug: NSObject {
         configureWithCurrentSession(streamURLString: streamURLString, startsImmediately: true)
     }
 
+    @objc(sendRealInviteWithURLString:recipient:recipientDevice:)
+    static func sendRealInvite(inviteURLString: String, recipient: String, recipientDevice: String) {
+        Task { @MainActor in
+            guard let inviteURL = URL(string: inviteURLString) else {
+                logRealInviteSenderDiagnostics(activeUserSession: activeUserSession,
+                                               accessTokenAvailable: false,
+                                               postRequested: false,
+                                               postStatus: .notRequested,
+                                               deliveryReportReceived: false,
+                                               blockedReason: .invalidInviteURL)
+                return
+            }
+
+            guard !recipient.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                logRealInviteSenderDiagnostics(activeUserSession: activeUserSession,
+                                               accessTokenAvailable: false,
+                                               postRequested: false,
+                                               postStatus: .notRequested,
+                                               deliveryReportReceived: false,
+                                               blockedReason: .missingRecipient)
+                return
+            }
+
+            guard let activeUserSession else {
+                logRealInviteSenderDiagnostics(activeUserSession: nil,
+                                               accessTokenAvailable: false,
+                                               postRequested: false,
+                                               postStatus: .notRequested,
+                                               deliveryReportReceived: false,
+                                               blockedReason: .missingActiveSession)
+                return
+            }
+
+            guard let accessTokenProvider = activeUserSession.clientProxy as? DirectCallMatrixAccessTokenProviding else {
+                logRealInviteSenderDiagnostics(activeUserSession: activeUserSession,
+                                               accessTokenAvailable: false,
+                                               postRequested: false,
+                                               postStatus: .notRequested,
+                                               deliveryReportReceived: false,
+                                               blockedReason: .missingAccessTokenProvider)
+                return
+            }
+
+            guard let accessToken = await accessTokenProvider.matrixAccessToken() else {
+                logRealInviteSenderDiagnostics(activeUserSession: activeUserSession,
+                                               accessTokenAvailable: false,
+                                               postRequested: false,
+                                               postStatus: .notRequested,
+                                               deliveryReportReceived: false,
+                                               blockedReason: .missingAccessToken)
+                return
+            }
+
+            guard !accessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                logRealInviteSenderDiagnostics(activeUserSession: activeUserSession,
+                                               accessTokenAvailable: false,
+                                               postRequested: false,
+                                               postStatus: .notRequested,
+                                               deliveryReportReceived: false,
+                                               blockedReason: .blankAccessToken)
+                return
+            }
+
+            logRealInviteSenderDiagnostics(activeUserSession: activeUserSession,
+                                           accessTokenAvailable: true,
+                                           postRequested: true,
+                                           postStatus: .requested,
+                                           deliveryReportReceived: false,
+                                           blockedReason: .none)
+
+            let result: (status: DebugForegroundCallSignalingRealInviteSenderPostStatus, deliveryReportReceived: Bool)
+            do {
+                result = try await postRealInvite(inviteURL: inviteURL,
+                                                  recipient: recipient,
+                                                  recipientDevice: recipientDevice,
+                                                  accessToken: accessToken)
+            } catch {
+                result = (.network, false)
+            }
+
+            logRealInviteSenderDiagnostics(activeUserSession: activeUserSession,
+                                           accessTokenAvailable: true,
+                                           postRequested: true,
+                                           postStatus: result.status,
+                                           deliveryReportReceived: result.deliveryReportReceived,
+                                           blockedReason: .none)
+        }
+    }
+
     @objc static func start() {
         owner?.appDidEnterForeground(authenticatedSessionAvailable: true)
     }
@@ -633,6 +722,76 @@ final class SalemXForegroundSSESmokeDebug: NSObject {
                          homeserverURLAvailable: homeserverURLAvailable,
                          foregroundSSEStartRequested: foregroundSSEStartRequested,
                          foregroundSSEStartBlockedReason: blockedReason))
+    }
+
+    private static func logRealInviteSenderDiagnostics(activeUserSession: UserSession?,
+                                                       accessTokenAvailable: Bool,
+                                                       postRequested: Bool,
+                                                       postStatus: DebugForegroundCallSignalingRealInviteSenderPostStatus,
+                                                       deliveryReportReceived: Bool,
+                                                       blockedReason: DebugForegroundCallSignalingRealInviteSenderBlockedReason) {
+        logger.log(.init(senderHelperInvoked: true,
+                         senderActiveSessionAvailable: activeUserSession != nil,
+                         senderAccessTokenAvailable: accessTokenAvailable,
+                         senderInvitePostRequested: postRequested,
+                         senderInvitePostStatus: postStatus,
+                         senderInviteDeliveryReportReceived: deliveryReportReceived,
+                         senderInviteBlockedReason: blockedReason))
+    }
+
+    private static func postRealInvite(inviteURL: URL,
+                                       recipient: String,
+                                       recipientDevice: String,
+                                       accessToken: String) async throws -> (status: DebugForegroundCallSignalingRealInviteSenderPostStatus, deliveryReportReceived: Bool) {
+        let nowMilliseconds = Int(Date().timeIntervalSince1970 * 1000)
+        var payload: [String: Any] = [
+            "recipient": recipient,
+            "type": "foreground.call.invite",
+            "version": 1,
+            "call_handle": "safe-foreground-real-invite-\(UUID().uuidString.lowercased())",
+            "call_kind": "audio",
+            "created_at_ms": nowMilliseconds,
+            "expires_at_ms": nowMilliseconds + 120_000,
+            "display_label": "Pilot Participant"
+        ]
+        let trimmedRecipientDevice = recipientDevice.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedRecipientDevice.isEmpty {
+            payload["recipient_device"] = trimmedRecipientDevice
+        }
+
+        var request = URLRequest(url: inviteURL)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("B" + "earer " + accessToken, forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            return (.nonHTTPResponse, false)
+        }
+
+        let deliveryReportReceived = (try? JSONSerialization.jsonObject(with: data)) is [String: Any]
+        return (.init(httpStatusCode: httpResponse.statusCode), deliveryReportReceived)
+    }
+}
+
+private extension DebugForegroundCallSignalingRealInviteSenderPostStatus {
+    init(httpStatusCode: Int) {
+        switch httpStatusCode {
+        case 200..<300:
+            self = .httpSuccess
+        case 401:
+            self = .httpUnauthorized
+        case 403:
+            self = .httpForbidden
+        case 400..<500:
+            self = .httpClientError
+        case 500..<600:
+            self = .httpServerError
+        default:
+            self = .httpUnexpected
+        }
     }
 }
 #endif

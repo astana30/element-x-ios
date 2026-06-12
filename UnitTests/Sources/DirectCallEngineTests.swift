@@ -2392,6 +2392,35 @@ final class ForegroundCallSignalingSSETraceTests {
     }
 
     @Test
+    func debugForegroundSSESmokeDiagnosticsLoggerUsesRedactedSenderFields() {
+        let logger = DebugForegroundCallSignalingSSESmokeDiagnosticsLogger()
+        let diagnostics = DebugForegroundCallSignalingRealInviteSenderDiagnostics(senderHelperInvoked: true,
+                                                                                  senderActiveSessionAvailable: true,
+                                                                                  senderAccessTokenAvailable: true,
+                                                                                  senderInvitePostRequested: true,
+                                                                                  senderInvitePostStatus: .httpSuccess,
+                                                                                  senderInviteDeliveryReportReceived: true,
+                                                                                  senderInviteBlockedReason: .none)
+        let lines = logger.redactedLines(for: diagnostics)
+
+        #expect(lines == [
+            "[SSE-SMOKE-DIAG] sender_helper_invoked=true",
+            "[SSE-SMOKE-DIAG] sender_active_session_available=true",
+            "[SSE-SMOKE-DIAG] sender_access_token_available=true",
+            "[SSE-SMOKE-DIAG] sender_invite_post_requested=true",
+            "[SSE-SMOKE-DIAG] sender_invite_post_status=http_success",
+            "[SSE-SMOKE-DIAG] sender_invite_delivery_report_received=true",
+            "[SSE-SMOKE-DIAG] sender_invite_blocked_reason=none"
+        ])
+        #expect(lines.allSatisfy { line in
+            Self.forbiddenFragments.allSatisfy { !line.contains($0) }
+        })
+        #expect(lines.allSatisfy { !$0.contains("safe-foreground-real-invite") })
+        #expect(lines.allSatisfy { !$0.contains("Pilot Participant") })
+        #expect(lines.allSatisfy { !$0.contains("foreground-signaling/invite") })
+    }
+
+    @Test
     func foregroundCallSignalingSSETransportEmitsRedactedParserTraceForLineDelimitedInvite() {
         let now = Date(timeIntervalSince1970: 1000)
         let dependencies = makeNativeIncomingLifecycleDependencies()
