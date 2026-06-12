@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.42O - consolidated foreground token-guard baseline.
+After 2.43A - PushKit/APNs background incoming-call investigation baseline.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,17 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.43A documents the PushKit/APNs/background incoming-call investigation after the 2.42O foreground baseline:
+  - The 2.42O validated foreground real-invite baseline remains unchanged.
+  - Existing PushKit registration and VoIP push handling are present in the Element Call service path, not in SalemX native direct-call background behavior.
+  - Normal APNs registration exists through `AppDelegate`, `AppCoordinator`, and `NotificationManager`.
+  - Tracked app files already contain development APNs and background-mode assumptions, but this investigation does not change signing, provisioning, project settings, `Info.plist`, `app.yml`, or entitlements.
+  - Native direct-call background PushKit/APNs incoming-call support is not implemented yet.
+  - Future PushKit/APNs work must be separately scoped and must not alter the validated foreground real-invite path.
+  - PushKit receipt must not request media credentials, connect media, emit Matrix events from invite receipt, use dev routes, or expose raw identifiers, tokens, request payloads, private logs, or secret-bearing URLs.
+  - Dev routes remain disabled and real non-dev routes remain auth-gated.
+  - Direct `systemctl` SSH checks may be blocked by host-key/auth and must be reported separately from route-level safety checks.
+  - Physical Debug builds should use `DEVELOPMENT_TEAM=M639Y9MFR2`; the old `83LGSC2QPV` team must not be used.
 - 2.42O consolidates the validated foreground real-invite token-guard baseline:
   - 2.42L hardened stale-token/`401` sender diagnostics at `9544d85090bb152f5c28d5acd11f37815556e078`.
   - 2.42M1 added the DEBUG-only sender bridge at `751316429c5476217f7b881d9a2f542a4e7e3b3b`.

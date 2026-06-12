@@ -4,15 +4,16 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.42o-consolidate-foreground-token-guard-baseline`
+`salemx-2.43a-pushkit-apns-background-investigation`
 
-Next phase: continue from the consolidated foreground real-invite token-guard baseline.
+Next phase: continue from the PushKit/APNs background incoming-call investigation baseline.
 
 ## Baseline
 
-Current validated foreground real-invite baseline:
+Foreground real-invite baseline:
 
 ```text
+e7b9428db20892a3e3cb27c15933b786883757f4 Consolidate foreground token guard baseline
 26e520b6f6ec0220ce118051f5acac36ed40bfba Guard debug foreground smoke surface
 ```
 
@@ -26,6 +27,7 @@ a579509c6ea7c294fa428370efa10bf875b053bb Add debug in-app foreground smoke contr
 26a07771c22c8c3d615b9c34552f3b811510b724 Expose debug developer options entry
 bf9996ae0665ad3953fac3d7a838bfb619349dd1 Validate foreground real invite token guard smoke
 26e520b6f6ec0220ce118051f5acac36ed40bfba Guard debug foreground smoke surface
+e7b9428db20892a3e3cb27c15933b786883757f4 Consolidate foreground token guard baseline
 ```
 
 ## Proven Result
@@ -75,10 +77,20 @@ incoming_requested=true
 
 2.42N targeted iOS tests passed on `iPhone 17 Pro` simulator: 81 tests passed.
 
+2.43A is a docs-only investigation of PushKit/APNs/background incoming-call requirements. It does not implement production background behavior.
+
+Key findings:
+
+- Existing PushKit registration and VoIP push handling are present in the Element Call service path, not in SalemX native direct-call background behavior.
+- Existing normal APNs registration flows through `AppDelegate`, `AppCoordinator`, and `NotificationManager`.
+- Tracked app files already contain development APNs and background-mode assumptions, but 2.43A does not change signing, provisioning, project files, `Info.plist`, `app.yml`, or entitlements.
+- Native direct-call background PushKit/APNs incoming-call support is not implemented yet.
+- Detailed notes are in `docs/direct-call/PUSHKIT_APNS_BACKGROUND_INVESTIGATION.md`.
+
 ## Guardrails
 
-- Do not start PushKit/APNs/background incoming-call work until this consolidated baseline is clean.
-- The likely next phase is a separately scoped PushKit/APNs/background incoming-call investigation, not mixed with foreground real-invite smoke tooling.
+- Do not implement PushKit/APNs/background incoming-call behavior without a separately scoped task.
+- Any future signing, entitlement, provisioning, project, `Info.plist`, or `app.yml` change requires explicit approval in that task.
 - Do not implement PushKit runtime inside foreground smoke tooling.
 - Do not register APNs or VoIP values inside foreground smoke tooling.
 - Do not add background incoming handling inside foreground smoke tooling.

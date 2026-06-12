@@ -201,6 +201,20 @@ The M1-M4 smoke controls and bridges are DEBUG-only local supervised tooling, no
 
 `docs/direct-call/REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` remains intentionally untracked and must not be staged or committed. Physical Debug builds should use `DEVELOPMENT_TEAM=M639Y9MFR2`; do not use the old `83LGSC2QPV` team or persist signing changes.
 
+### 2.43A — PushKit/APNs background incoming-call investigation
+
+Started the background incoming-call phase as a docs-only investigation from the 2.42O foreground baseline. No production PushKit/APNs behavior, signing, provisioning, project, `Info.plist`, `app.yml`, entitlement, media, or Element Call route replacement change was added.
+
+Findings:
+
+- Existing PushKit registration and VoIP push handling already exist in the Element Call service path.
+- Existing normal APNs registration flows through `AppDelegate`, `AppCoordinator`, and `NotificationManager`.
+- Tracked app files already include development APNs and background-mode assumptions, but actual native direct-call background support still requires a separately approved capability/provisioning plan.
+- The native direct-call path has a redacted push-registration seam and foreground CallKit reporting proof, but no production native direct-call PushKit registry or VoIP payload handler.
+- The validated foreground real-invite route remains unchanged, the dev route remains disabled, and the real non-dev route remains auth-gated.
+
+The detailed investigation lives in `docs/direct-call/PUSHKIT_APNS_BACKGROUND_INVESTIGATION.md`. Future PushKit/APNs work must be separately scoped and must not request media credentials, connect media, emit Matrix events from invite receipt, expose raw identifiers or payloads, or make DEBUG smoke tooling production behavior.
+
 ### 2.42K — Supervised foreground real invite
 
 The two-device foreground real-invite smoke passed and was committed as:
