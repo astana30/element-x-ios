@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.42I - supervised foreground SSE smoke preparation.
+After 2.42I-S - supervised foreground SSE physical smoke pass.
 
 ## Latest App Code Checkpoint
 
@@ -39,12 +39,27 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
-- 2.42I prepares the supervised foreground SSE smoke:
-  - The smoke remains docs-only; no additional iOS runtime hook was needed because 2.42H already added the DEBUG/dev owner and injected transport boundary.
+- 2.42I-S completed the supervised physical iPhone foreground SSE smoke:
+  - A Debug physical iPhone build was installed using local command-line signing overrides only; no project signing files were intentionally changed.
+  - The active-session LLDB helper emitted `helper_invoked=true`, found the active session credential internally, and reached `foreground_sse_start_requested=true` without printing, returning, writing, or documenting credential values.
+  - The call-service stream emitted `stream_auth_ok`, `stream_registered`, and `ready_sent` with `active_subscriber_count=1`.
+  - The iOS stream reached `sse_connected=true` and `stream_failure=none`.
+  - The local-only self-injection route returned `active_subscriber_count=1`, `delivered=true`, and `dropped=false`.
+  - Server diagnostics confirmed `invite_enqueued=true`, `invite_yielded=true`, and `sse_event_type=foreground.call.invite`.
+  - iOS diagnostics confirmed `raw_event_received=true`, `sse_event_type=foreground.call.invite`, `invite_parse_attempted=true`, `invite_parse_succeeded=true`, `pipeline_delivered=true`, `invite_received=true`, `invite_valid=true`, and `incoming_requested=true`.
+  - The invite validator now allows a small future-skew window for server/device clock drift while still rejecting larger future timestamps.
+  - After the smoke, `SALEMX_FOREGROUND_SIGNALING_DEV_INVITE_ENABLED=0` was restored and the public dev invite route returned `404`.
+  - Raw runtime logs remain intentionally omitted.
+  - Invite receipt still does not request media credentials, connect media, emit Matrix events, add PushKit/APNs behavior, add background incoming behavior, or replace Element Call routing.
+  - No signing/project setting, bundle, entitlement, `Info.plist`, `app.yml`, production URL, credential, media behavior, broad rollout, production/public rollout, or global activation change was added.
+- 2.42I prepared and hardened the supervised foreground SSE smoke:
+  - The physical iPhone active-session helper reached `sse_connected=true`, proving `foreground.ready` parsing and active app session request construction without copying the app credential into LLDB.
+  - A local-only call-service self-injection route was added for the remaining invite delivery proof: `POST /_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/inject-active`.
+  - The self-injection route is registered only when `SALEMX_FOREGROUND_SIGNALING_DEV_INVITE_ENABLED=1`, accepts only localhost requests, requires exactly one active foreground SSE subscriber, and returns only redacted active-subscriber count plus delivered/dropped booleans.
   - `docs/direct-call/SUPERVISED_FOREGROUND_SSE_SMOKE.md` defines local/staging server enablement, rollback, iOS Debug configuration, safe placeholder invite shape, redacted diagnostics, pass/fail criteria, and raw-log handling.
   - The server dev invite route remains disabled by default and must be enabled only with `SALEMX_FOREGROUND_SIGNALING_DEV_INVITE_ENABLED=1` during supervision.
   - The iOS DEBUG owner remains disabled by default and requires explicit construction with injected request/transport/handler dependencies.
-  - The expected smoke checks `sse_configured`, `sse_started`, `sse_connected`, `invite_received`, `invite_valid`, `incoming_requested`, `fallback_deduped`, and `transport_stopped`.
+  - The expected smoke checks `sse_configured`, `sse_started`, `sse_connected`, `invite_received`, `invite_valid`, `incoming_requested`, `fallback_deduped`, `transport_stopped`, and safe `stream_failure`.
   - Invite receipt must still not request media credentials, connect media, emit Matrix events, add PushKit/APNs behavior, add background incoming behavior, or replace Element Call routing.
   - No signing/project setting, bundle, entitlement, `Info.plist`, `app.yml`, production URL, credential, media behavior, broad rollout, production/public rollout, or global activation change was added.
 - 2.42H adds a DEBUG-only foreground SSE runtime owner:
@@ -1289,6 +1304,22 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Ready, malformed, stale, unsupported, and unsafe events fail closed or are ignored; duplicates remain suppressed by the existing handler.
   - Invite receipt still does not request server-issued media credentials, connect media, emit Matrix events, register push values, add background incoming behavior, or alter Element Call routing.
   - Remaining work: runtime lifecycle ownership, safe endpoint configuration, authenticated request construction, reconnect/backoff, fallback coordination, and physical two-device repeat incoming smoke.
+- 2.42I supervised foreground SSE smoke now has a DEBUG-only LLDB bridge:
+  - `SalemXForegroundSSESmokeDebug` can configure the existing DEBUG SSE runtime owner with supervised placeholder values at runtime and start/stop it on a physical iPhone.
+  - The bridge can also start from the Debug app's active `UserSession` via `startWithCurrentSessionURLString:` so the current app credential is inserted into the stream request internally without being printed, logged, written, or returned to LLDB.
+  - The bridge emits grep-able `[SSE-SMOKE-DIAG]` one-line diagnostics for configured, started, connected, invite received, invite valid, incoming requested, fallback de-duped, and stopped states.
+  - The bridge remains disabled unless explicitly configured in a Debug build. It does not hardcode production endpoints or credential values, request media credentials, connect media from invite receipt, emit Matrix events, add PushKit/APNs/background behavior, or change signing/project settings.
+- 2.42I smoke diagnosis update:
+  - `sse_connected=true` now requires the server `foreground.ready` SSE event or a valid invite event; starting the URLSession task alone no longer marks the smoke connected.
+  - The supervised dev invite response includes redacted active/target subscriber counts and stable account/device hashes so same-session, stale-token, and target-mismatch cases can be distinguished without raw IDs.
+  - The supervised smoke must use the same active Matrix bearer session for `/account/whoami`, the iOS SSE stream, and the dev invite POST. Any credential exposed during manual supervision must be treated as compromised and rotated outside docs.
+- 2.42I stream-open diagnosis update:
+  - The iOS URLSession SSE reader now preserves raw line breaks instead of relying on line iteration, so blank-line SSE delimiters can flush `foreground.ready`.
+  - The server stream response now uses `Cache-Control: no-cache` and `X-Accel-Buffering: no`.
+  - Redacted stream lifecycle logs cover `stream_auth_ok`, `stream_registered`, `ready_sent`, and `stream_closed` with safe status/count fields only.
+- 2.42I DEBUG helper invocation diagnosis update:
+  - The active-session LLDB bridge now emits redacted helper-start diagnostics before stream startup: `helper_invoked`, `active_session_available`, `access_token_available`, `device_id_available`, `homeserver_url_available`, `foreground_sse_start_requested`, and `foreground_sse_start_blocked_reason`.
+  - The physical smoke must first prove `helper_invoked=true` and `foreground_sse_start_requested=true`; otherwise the failure is the installed Debug build, attached process, foreground app state, or helper invocation, not server fanout or invite parsing.
 - Pilot sessions must follow the 2.27A checkpoint, 2.28A operations checklist, and 2.33B expansion runbook in `docs/direct-call/PRIVATE_NATIVE_AUDIO_DOGFOOD.md`, plus the 2.27E split-brain regression guardrail and 2.27F runner-assisted matrix caveat.
 - Production rollout and server capability sources remain fail-closed by default.
 - Broad internal dogfood, product beta, public rollout, and Element Call replacement remain blocked.

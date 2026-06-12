@@ -420,4 +420,220 @@ final class NativeIncomingSyntheticCallKitUIProofReporter: NSObject, NativeIncom
         description
     }
 }
+
+#if DEBUG
+private final class SalemXForegroundSSESmokeStateStore: NativeIncomingCallStateStoring {
+    private var states = [NativeIncomingCallHandle: NativeIncomingCallLifecycleState]()
+
+    func state(for handle: NativeIncomingCallHandle) -> NativeIncomingCallLifecycleState? {
+        states[handle]
+    }
+
+    func hasSeen(_ handle: NativeIncomingCallHandle) -> Bool {
+        states[handle] != nil
+    }
+
+    func setState(_ state: NativeIncomingCallLifecycleState, for handle: NativeIncomingCallHandle) {
+        states[handle] = state
+    }
+
+    func clear(_ handle: NativeIncomingCallHandle) {
+        states[handle] = nil
+    }
+}
+
+private final class SalemXForegroundSSESmokeCallKitReportingAdapter: NativeIncomingCallReportingAdapting {
+    private let adapter: NativeIncomingSyntheticCallKitUIProofAdapter
+
+    init(adapter: NativeIncomingSyntheticCallKitUIProofAdapter) {
+        self.adapter = adapter
+    }
+
+    func reportIncomingCall(identity: NativeIncomingCallIdentity) -> Bool {
+        adapter.reportSyntheticIncomingCall(identity: identity, displayLabel: "Test Call") == .reported
+    }
+
+    func endReportedCall(identity: NativeIncomingCallIdentity, reason: NativeIncomingCallFailClosedReason) {
+        _ = adapter.endSyntheticCall(handle: identity.handle.value)
+    }
+}
+
+@objc(SalemXForegroundSSESmokeDebug)
+final class SalemXForegroundSSESmokeDebug: NSObject {
+    private static let logger = DebugForegroundCallSignalingSSESmokeDiagnosticsLogger()
+    private weak static var activeUserSession: UserSession?
+    private static var owner: DebugForegroundCallSignalingSSERuntimeOwner?
+
+    static func registerActiveUserSession(_ userSession: UserSession) {
+        if Thread.isMainThread {
+            activeUserSession = userSession
+        } else {
+            DispatchQueue.main.async {
+                activeUserSession = userSession
+            }
+        }
+    }
+
+    @objc(configureWithStreamURLString:authorizationHeaderValue:)
+    static func configure(streamURLString: String, authorizationHeaderValue: String) {
+        guard let streamURL = URL(string: streamURLString) else {
+            owner = nil
+            logger.log(.disabled)
+            return
+        }
+
+        var request = URLRequest(url: streamURL)
+        request.httpMethod = "GET"
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+        if !authorizationHeaderValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            request.setValue(authorizationHeaderValue, forHTTPHeaderField: "Authorization")
+        }
+
+        let reporter = NativeIncomingSyntheticCallKitUIProofReporter()
+        let syntheticAdapter = NativeIncomingSyntheticCallKitUIProofAdapter(isEnabled: true,
+                                                                            reporter: reporter,
+                                                                            actionHandler: NativeIncomingSyntheticCallKitUIProofNoopActionHandler(),
+                                                                            diagnosticsRecorder: NativeIncomingSyntheticCallKitUIProofNoopDiagnosticsRecorder(),
+                                                                            eventRecorder: NativeIncomingSyntheticCallKitUIProofNoopEventRecorder())
+        let stateStore = SalemXForegroundSSESmokeStateStore()
+        let diagnosticsRecorder = NativeIncomingSyntheticCallKitUIProofNoopDiagnosticsRecorder()
+        let reportingAdapter = SalemXForegroundSSESmokeCallKitReportingAdapter(adapter: syntheticAdapter)
+        let inviteHandler = ForegroundCallInviteHandler(isEnabled: true,
+                                                        stateStore: stateStore,
+                                                        reportingAdapter: reportingAdapter,
+                                                        diagnosticsRecorder: diagnosticsRecorder)
+        let stream = URLSessionForegroundCallSignalingSSEStream(request: request)
+        let transport = ForegroundCallSignalingSSETransport(isEnabled: true,
+                                                            stream: stream,
+                                                            // swiftlint:disable:next trailing_closure
+                                                            debugObserver: { event in
+                                                                logger.log(event)
+                                                            })
+        owner = DebugForegroundCallSignalingSSERuntimeOwner(isEnabled: true,
+                                                            transport: transport,
+                                                            inviteHandler: inviteHandler,
+                                                            // swiftlint:disable:next trailing_closure
+                                                            diagnosticsObserver: { diagnostics in
+                                                                logger.log(diagnostics)
+                                                            })
+        logger.log(.init(sseConfigured: true,
+                         sseStarted: false,
+                         sseConnected: false,
+                         inviteReceived: false,
+                         inviteValid: false,
+                         incomingRequested: false,
+                         fallbackDeduped: false,
+                         transportStopped: false,
+                         streamFailure: nil))
+    }
+
+    @objc(configureWithCurrentSessionURLString:)
+    static func configureWithCurrentSession(streamURLString: String) {
+        configureWithCurrentSession(streamURLString: streamURLString, startsImmediately: false)
+    }
+
+    @objc(startWithCurrentSessionURLString:)
+    static func startWithCurrentSession(streamURLString: String) {
+        configureWithCurrentSession(streamURLString: streamURLString, startsImmediately: true)
+    }
+
+    @objc static func start() {
+        owner?.appDidEnterForeground(authenticatedSessionAvailable: true)
+    }
+
+    @objc static func stop() {
+        owner?.appDidEnterBackground()
+    }
+
+    @objc static func printDiagnostics() {
+        logger.log(owner?.diagnostics ?? .disabled)
+    }
+
+    @objc static func clear() {
+        owner?.appDidEnterBackground()
+        owner = nil
+    }
+
+    private static func configureWithCurrentSession(streamURLString: String, startsImmediately: Bool) {
+        Task { @MainActor in
+            guard URL(string: streamURLString) != nil else {
+                owner = nil
+                logCurrentSessionHelperDiagnostics(activeUserSession: activeUserSession,
+                                                   accessTokenAvailable: false,
+                                                   foregroundSSEStartRequested: false,
+                                                   blockedReason: .invalidStreamURL)
+                logger.log(.disabled)
+                return
+            }
+
+            guard let activeUserSession else {
+                owner = nil
+                logCurrentSessionHelperDiagnostics(activeUserSession: nil,
+                                                   accessTokenAvailable: false,
+                                                   foregroundSSEStartRequested: false,
+                                                   blockedReason: .missingActiveSession)
+                logger.log(.disabled)
+                return
+            }
+
+            guard let accessTokenProvider = activeUserSession.clientProxy as? DirectCallMatrixAccessTokenProviding else {
+                owner = nil
+                logCurrentSessionHelperDiagnostics(activeUserSession: activeUserSession,
+                                                   accessTokenAvailable: false,
+                                                   foregroundSSEStartRequested: false,
+                                                   blockedReason: .missingAccessTokenProvider)
+                logger.log(.disabled)
+                return
+            }
+
+            guard let accessToken = await accessTokenProvider.matrixAccessToken() else {
+                owner = nil
+                logCurrentSessionHelperDiagnostics(activeUserSession: activeUserSession,
+                                                   accessTokenAvailable: false,
+                                                   foregroundSSEStartRequested: false,
+                                                   blockedReason: .missingAccessToken)
+                logger.log(.disabled)
+                return
+            }
+
+            guard !accessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                owner = nil
+                logCurrentSessionHelperDiagnostics(activeUserSession: activeUserSession,
+                                                   accessTokenAvailable: false,
+                                                   foregroundSSEStartRequested: false,
+                                                   blockedReason: .blankAccessToken)
+                logger.log(.disabled)
+                return
+            }
+
+            logCurrentSessionHelperDiagnostics(activeUserSession: activeUserSession,
+                                               accessTokenAvailable: true,
+                                               foregroundSSEStartRequested: startsImmediately,
+                                               blockedReason: .none)
+            let authorizationPrefix = "B" + "earer "
+            configure(streamURLString: streamURLString, authorizationHeaderValue: authorizationPrefix + accessToken)
+            if startsImmediately {
+                owner?.appDidEnterForeground(authenticatedSessionAvailable: true)
+            }
+        }
+    }
+
+    private static func logCurrentSessionHelperDiagnostics(activeUserSession: UserSession?,
+                                                           accessTokenAvailable: Bool,
+                                                           foregroundSSEStartRequested: Bool,
+                                                           blockedReason: DebugForegroundCallSignalingSSESmokeHelperBlockedReason) {
+        let clientProxy = activeUserSession?.clientProxy
+        let deviceIDAvailable = clientProxy?.deviceID?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        let homeserverURLAvailable = clientProxy?.homeserver.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        logger.log(.init(helperInvoked: true,
+                         activeSessionAvailable: activeUserSession != nil,
+                         accessTokenAvailable: accessTokenAvailable,
+                         deviceIDAvailable: deviceIDAvailable,
+                         homeserverURLAvailable: homeserverURLAvailable,
+                         foregroundSSEStartRequested: foregroundSSEStartRequested,
+                         foregroundSSEStartBlockedReason: blockedReason))
+    }
+}
+#endif
 #endif

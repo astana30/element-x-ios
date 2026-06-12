@@ -68,6 +68,20 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
 
+### 2.42I — Supervised foreground SSE smoke self-injection
+
+The physical iPhone active-session SSE helper reached `sse_connected=true`, proving that the app can open the supervised foreground SSE stream and parse the server `foreground.ready` event without copying the current app credential into LLDB.
+
+The remaining blocker was invite injection: the authenticated dev invite route still required an external current app credential, while manual credential copying was unreliable and unsafe. Added a local-only supervised self-injection route on the call-service:
+
+- `POST /_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/inject-active`
+- registered only when `SALEMX_FOREGROUND_SIGNALING_DEV_INVITE_ENABLED=1`
+- accepts only localhost requests on the call-service host
+- requires exactly one active foreground SSE subscriber
+- returns only `version`, `active_subscriber_count`, `delivered`, and `dropped`
+
+The route publishes through the existing `ForegroundCallSignalingService` fanout and does not issue media credentials, connect media, emit Matrix events, add PushKit/APNs/background behavior, or change Element Call routing. The final physical invite-delivery smoke is still pending until the route is deployed and called while the iPhone SSE stream is connected.
+
 ### 2.41A-S — One-device foreground native incoming smoke
 
 Ran a supervised foreground smoke using an iOS Simulator caller and a physical iPhone callee. The callee app was open in foreground. The physical iPhone displayed the system CallKit incoming-call UI, Answer worked, media connected, and End cleared the call. No app crash was observed.
@@ -2056,3 +2070,62 @@ Confirmed on a physical iPhone Debug build that the isolated synthetic CallKit p
 - Defined redacted diagnostics for configured, started, connected, invite received, invite valid, incoming requested, fallback de-duped, and stopped states.
 - Defined pass/fail criteria for 0-2 second CallKit appearance, no media credential request before Answer, no media connect before Answer, no Matrix event emission from invite receipt, no crash, and no raw runtime logs in docs.
 - No Swift code, PushKit/APNs runtime, background incoming, signing/project change, Element Call route replacement, hardcoded production URL, credential value, media behavior, broad rollout, production/public rollout, or global activation was added.
+
+## 2026-06-10 - 2.42I DEBUG SSE Smoke Hook
+
+- Added a DEBUG-only `SalemXForegroundSSESmokeDebug` Objective-C runtime bridge for supervised physical-device SSE smoke.
+- The bridge configures the existing `DebugForegroundCallSignalingSSERuntimeOwner` from LLDB using placeholder values resolved locally during supervision.
+- The bridge constructs an injected `URLRequest`, URLSession SSE stream, configured SSE transport, existing foreground invite handler, and isolated synthetic CallKit reporting proof adapter.
+- Added `[SSE-SMOKE-DIAG]` one-line diagnostics for `sse_configured`, `sse_started`, `sse_connected`, `invite_received`, `invite_valid`, `incoming_requested`, `fallback_deduped`, and `transport_stopped`.
+- The bridge remains disabled unless explicitly configured in a Debug build and does not hardcode production endpoints or credential values.
+- Invite receipt still does not request media credentials, connect media, emit Matrix events, add PushKit/APNs behavior, add background incoming behavior, or replace Element Call routing.
+
+## 2026-06-11 - 2.42I Supervised SSE smoke diagnosis hardening
+
+- Corrected the DEBUG SSE smoke connection diagnostic so `sse_connected=true` requires the server `foreground.ready` SSE event or a valid invite event. Starting the URLSession task alone no longer marks the stream connected.
+- Added a stopped-stream diagnostic path so failed or ended SSE streams can emit `[SSE-SMOKE-DIAG] transport_stopped=true`.
+- Added redacted server dev-invite diagnostics for active subscriber count, target subscriber count, authenticated account/device hashes, and target account/device hashes.
+- Documented that `/account/whoami`, the iOS SSE stream, and the dev invite POST must use the same active Matrix bearer session during supervised smoke. Any manually exposed credential must be treated as compromised and rotated outside repo docs.
+- No raw runtime logs, credential values, raw account/device IDs, media credentials, media connection, Matrix event emission, PushKit/APNs behavior, background incoming behavior, signing/project change, or Element Call route replacement was added.
+
+## 2026-06-11 - 2.42I Stream-open diagnosis hardening
+
+- Narrowed the latest smoke failure to the stream path: the dev invite route authenticated and matched the same redacted account/device, but no active subscriber existed when the invite was posted.
+- Updated the iOS URLSession SSE reader to preserve raw line breaks, including blank-line SSE delimiters, before feeding the parser.
+- Added redacted server lifecycle logs for stream auth success, subscriber registration, ready-event send, and stream close reason.
+- Updated stream headers to `Cache-Control: no-cache` and `X-Accel-Buffering: no` to reduce proxy buffering risk.
+- No raw runtime logs, auth values, raw account/device IDs, PushKit/APNs behavior, background incoming behavior, media credential request, media connection, Matrix event emission, signing/project change, or Element Call route replacement was added.
+
+## 2026-06-11 - 2.42I Stream-stop failure diagnostics
+
+- Added safe iOS stream-stop diagnostics so `[SSE-SMOKE-DIAG] stream_failure=...` can distinguish unauthorized/stale credentials, forbidden/client/server HTTP failures, non-SSE content type, non-HTTP response, and network failure.
+- Kept the diagnostic enum redacted: no URL, auth value, response body, account/device ID, room ID, Matrix event body, or private runtime log is emitted.
+- Added unit coverage for redacted stream failure reporting and smoke diagnostic lines.
+- No PushKit/APNs behavior, background incoming behavior, media credential request, media connection, Matrix event emission, signing/project change, or Element Call route replacement was added.
+
+## 2026-06-11 - 2.42I Active-session SSE smoke helper
+
+- Added a DEBUG-only active-session helper for `SalemXForegroundSSESmokeDebug`.
+- `UserSession` registers itself weakly with the smoke bridge in Debug builds, and LLDB can call `startWithCurrentSessionURLString:` to configure and start the SSE runtime from the app's current session.
+- The current app credential is only inserted into the in-memory stream request. It is not printed, logged, written to disk, returned to LLDB, or documented.
+- Manual credential copying remains a fallback only; the physical smoke should prefer the active-session helper to avoid stale OAuth/MAS values.
+- The helper still does not request media credentials, connect media from invite receipt, emit Matrix events, add PushKit/APNs behavior, add background incoming behavior, hardcode production endpoints, change signing/project settings, or replace Element Call routing.
+
+## 2026-06-11 - 2.42I DEBUG SSE helper invocation diagnostics
+
+- Added redacted helper invocation diagnostics to the active-session LLDB path.
+- The bridge now reports whether the helper was invoked, whether an active session is registered, whether the access credential is available, whether device and homeserver fields are present, whether foreground SSE start was requested, and a safe blocked-reason enum.
+- The diagnostics are one-line `[SSE-SMOKE-DIAG]` booleans or safe enum values only. They do not print or return the credential, raw account values, device values, URLs with secrets, request bodies, payloads, or private logs.
+- The next physical smoke must prove `helper_invoked=true` and `foreground_sse_start_requested=true` before any server invite or parser diagnosis.
+
+## 2026-06-11 - 2.42I-S Supervised Foreground SSE Physical Smoke
+
+- Built and installed a physical iPhone Debug build using local command-line signing overrides only; no project signing files were intentionally changed.
+- Confirmed the active-session LLDB helper emitted `helper_invoked=true`, found the active app session prerequisites, requested foreground SSE start, and reached `sse_connected=true` with `stream_failure=none`.
+- Confirmed server stream-open diagnostics reached `stream_auth_ok`, `stream_registered`, `ready_sent`, and `active_subscriber_count=1`.
+- Triggered one local-only supervised `dev/inject-active` invite while exactly one foreground SSE subscriber was active.
+- Confirmed the server returned `active_subscriber_count=1`, `delivered=true`, and `dropped=false`, and logged `invite_enqueued=true`, `invite_yielded=true`, and `sse_event_type=foreground.call.invite`.
+- Confirmed iOS reported `raw_event_received=true`, `sse_event_type=foreground.call.invite`, `invite_parse_attempted=true`, `invite_parse_succeeded=true`, `pipeline_delivered=true`, `invite_received=true`, `invite_valid=true`, and `incoming_requested=true`.
+- Narrowed the pre-pass failure to small server/device clock skew in the opaque invite timestamp; the validator now accepts a small future-skew window while still rejecting larger future timestamps.
+- Disabled the dev invite route after the smoke and verified the public dev route returned `404`.
+- Raw runtime logs remain omitted. No PushKit/APNs/background behavior, media credential request, media connection, Matrix event emission, Element Call route replacement, signing/project setting change, production URL, credential value, broad rollout, production/public rollout, or global activation was added.

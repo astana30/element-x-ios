@@ -20,6 +20,7 @@ FOREGROUND_CALL_READY_TYPE = "foreground.ready"
 MAX_CALL_HANDLE_LENGTH = 128
 MAX_DISPLAY_LABEL_LENGTH = 120
 DEFAULT_QUEUE_SIZE = 16
+DEFAULT_HEARTBEAT_COMMENT = "foreground.keepalive"
 
 
 @dataclass(frozen=True)
@@ -218,8 +219,9 @@ class ForegroundCallSignalingService:
         self._latest_result = "delivered" if delivered > 0 else "dropped" if dropped > 0 else "unavailable"
 
         LOGGER.info(
-            "foreground signaling invite handled subscriber_available=%s delivered=%s dropped=%s call_kind=%s",
+            "foreground signaling invite handled subscriber_available=%s invite_enqueued=%s delivered=%s dropped=%s call_kind=%s",
             subscriber_available,
+            delivered > 0,
             delivered > 0,
             dropped > 0,
             invite_request.invite.call_kind,
@@ -229,6 +231,35 @@ class ForegroundCallSignalingService:
             delivered=delivered > 0,
             dropped=dropped > 0,
         )
+
+    def publish_invite_to_single_active_subscriber(
+        self,
+        invite: ForegroundCallInvitePayload,
+    ) -> tuple[int, ForegroundCallSignalingPublishResult]:
+        subscriptions = [
+            subscription
+            for current_subscriptions in self._subscriptions.values()
+            for subscription in current_subscriptions
+        ]
+        active_subscriber_count = len(subscriptions)
+        if active_subscriber_count != 1:
+            self._latest_result = "active_subscriber_mismatch"
+            return active_subscriber_count, ForegroundCallSignalingPublishResult(
+                subscriber_available=False,
+                delivered=False,
+                dropped=False,
+            )
+
+        subscription = subscriptions[0]
+        result = self.publish_invite(ForegroundCallInviteRequest(
+            recipient=subscription.account_key,
+            recipient_device=subscription.device_key,
+            invite=invite,
+        ))
+        return active_subscriber_count, result
+
+    def subscriber_count_for(self, recipient: str, recipient_device: str | None) -> int:
+        return len(self._target_subscriptions(recipient, recipient_device))
 
     def _target_subscriptions(self, recipient: str, recipient_device: str | None) -> list[ForegroundCallSignalingSubscription]:
         if recipient_device is not None:
@@ -247,6 +278,10 @@ def foreground_ready_sse_event() -> str:
 
 def foreground_invite_sse_event(invite: ForegroundCallInvitePayload) -> str:
     return _sse_event(FOREGROUND_CALL_INVITE_TYPE, invite.as_dict())
+
+
+def foreground_heartbeat_sse_event() -> str:
+    return f": {DEFAULT_HEARTBEAT_COMMENT}\n\n"
 
 
 def _sse_event(event_type: str, data: dict[str, object]) -> str:

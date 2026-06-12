@@ -12,6 +12,7 @@ import Testing
 
 // swiftlint:disable file_length
 
+// swiftlint:disable type_body_length
 @MainActor
 final class DirectCallEngineTests {
     private let ownUserID = "@me:example.com"
@@ -1364,24 +1365,47 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
-    func foregroundCallSignalingSSETransportIgnoresReadyAndMalformedEvents() {
+    func foregroundCallSignalingSSETransportSurfacesReadyAndIgnoresMalformedEvents() {
         let now = Date(timeIntervalSince1970: 1000)
         let stream = ForegroundCallSignalingSSEStreamSpy()
-        let transport = ForegroundCallSignalingSSETransport(isEnabled: true, stream: stream) {
-            now
-        }
+        let transport = ForegroundCallSignalingSSETransport(isEnabled: true, stream: stream, now: fixedDirectCallTestNow(now))
         var events = [ForegroundCallSignalingTransportEvent]()
 
         transport.start { event in
             events.append(event)
         }
         stream.emit("event: foreground.ready\ndata: {\"ready\":true}\n\n")
-        stream.emit("event: foreground.call.invite\ndata: {\"type\":\"foreground.call.invite\"}\n\n")
 
-        #expect(events.isEmpty)
+        #expect(events == [.ready])
         #expect(transport.diagnostics.isStarted)
         #expect(transport.diagnostics.deliveredInviteCount == 0)
+        #expect(transport.diagnostics.latestEventKind == .ready)
+        #expect(transport.diagnostics.latestResult == .connected)
+
+        stream.emit("event: foreground.call.invite\ndata: {\"type\":\"foreground.call.invite\"}\n\n")
+
+        #expect(events == [.ready])
+        #expect(transport.diagnostics.isStarted)
+        #expect(transport.diagnostics.deliveredInviteCount == 0)
+        #expect(transport.diagnostics.latestEventKind == .ready)
         #expect(transport.diagnostics.latestResult == .ignored)
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !String(describing: transport).contains($0) })
+    }
+
+    @Test
+    func foregroundCallSignalingSSETransportReportsRedactedStreamFailureReason() {
+        let stream = ForegroundCallSignalingSSEStreamSpy()
+        let transport = ForegroundCallSignalingSSETransport(isEnabled: true, stream: stream)
+        var events = [ForegroundCallSignalingTransportEvent]()
+
+        transport.start { event in
+            events.append(event)
+        }
+        stream.complete(.failed(.httpStatus(.unauthorized)))
+
+        #expect(events == [.stopped])
+        #expect(transport.diagnostics.latestFailureReason == .httpStatus(.unauthorized))
+        #expect(String(describing: transport).contains("latestFailureReason: http_unauthorized"))
         #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !String(describing: transport).contains($0) })
     }
 
@@ -1390,9 +1414,7 @@ final class NativeIncomingCallLifecycleContractTests {
         let now = Date(timeIntervalSince1970: 1000)
         let dependencies = makeNativeIncomingLifecycleDependencies()
         let stream = ForegroundCallSignalingSSEStreamSpy()
-        let transport = ForegroundCallSignalingSSETransport(isEnabled: true, stream: stream) {
-            now
-        }
+        let transport = ForegroundCallSignalingSSETransport(isEnabled: true, stream: stream, now: fixedDirectCallTestNow(now))
         let pipeline = makeForegroundCallSignalingTransportPipeline(dependencies: dependencies,
                                                                     transport: transport,
                                                                     now: now)
@@ -1413,13 +1435,54 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func foregroundCallSignalingSSETransportAllowsSmallServerClockSkew() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let stream = ForegroundCallSignalingSSEStreamSpy()
+        let transport = ForegroundCallSignalingSSETransport(isEnabled: true, stream: stream, now: fixedDirectCallTestNow(now))
+        let pipeline = makeForegroundCallSignalingTransportPipeline(dependencies: dependencies,
+                                                                    transport: transport,
+                                                                    now: now)
+
+        pipeline.start()
+        stream.emit(makeForegroundCallSSEInvite(handle: "safe-sse-skew",
+                                                now: now,
+                                                createdAt: now.addingTimeInterval(3)))
+
+        guard case .reported(let identity) = pipeline.latestOutcome else {
+            Issue.record("Expected small server clock skew to remain eligible for incoming reporting.")
+            return
+        }
+        #expect(dependencies.reportingAdapter.reportedIdentities == [identity])
+        #expect(transport.diagnostics.deliveredInviteCount == 1)
+    }
+
+    @Test
+    func foregroundCallSignalingSSETransportRejectsLargeServerClockSkew() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let stream = ForegroundCallSignalingSSEStreamSpy()
+        let transport = ForegroundCallSignalingSSETransport(isEnabled: true, stream: stream, now: fixedDirectCallTestNow(now))
+        let pipeline = makeForegroundCallSignalingTransportPipeline(dependencies: dependencies,
+                                                                    transport: transport,
+                                                                    now: now)
+
+        pipeline.start()
+        stream.emit(makeForegroundCallSSEInvite(handle: "safe-sse-large-skew",
+                                                now: now,
+                                                createdAt: now.addingTimeInterval(10)))
+
+        #expect(pipeline.latestOutcome == nil)
+        #expect(dependencies.reportingAdapter.reportedIdentities.isEmpty)
+        #expect(transport.diagnostics.deliveredInviteCount == 0)
+    }
+
+    @Test
     func foregroundCallSignalingSSETransportSuppressesStaleUnsupportedAndDuplicateInvites() {
         let now = Date(timeIntervalSince1970: 1000)
         let dependencies = makeNativeIncomingLifecycleDependencies()
         let stream = ForegroundCallSignalingSSEStreamSpy()
-        let transport = ForegroundCallSignalingSSETransport(isEnabled: true, stream: stream) {
-            now
-        }
+        let transport = ForegroundCallSignalingSSETransport(isEnabled: true, stream: stream, now: fixedDirectCallTestNow(now))
         let pipeline = makeForegroundCallSignalingTransportPipeline(dependencies: dependencies,
                                                                     transport: transport,
                                                                     now: now)
@@ -1447,9 +1510,7 @@ final class NativeIncomingCallLifecycleContractTests {
         let now = Date(timeIntervalSince1970: 1000)
         let dependencies = makeNativeIncomingLifecycleDependencies()
         let stream = ForegroundCallSignalingSSEStreamSpy()
-        let transport = ForegroundCallSignalingSSETransport(isEnabled: true, stream: stream) {
-            now
-        }
+        let transport = ForegroundCallSignalingSSETransport(isEnabled: true, stream: stream, now: fixedDirectCallTestNow(now))
         let pipeline = makeForegroundCallSignalingTransportPipeline(dependencies: dependencies,
                                                                     transport: transport,
                                                                     now: now)
@@ -1492,9 +1553,7 @@ final class NativeIncomingCallLifecycleContractTests {
         let now = Date(timeIntervalSince1970: 1000)
         let dependencies = makeNativeIncomingLifecycleDependencies()
         let stream = ForegroundCallSignalingSSEStreamSpy()
-        let transport = ForegroundCallSignalingSSETransport(isEnabled: true, stream: stream) {
-            now
-        }
+        let transport = ForegroundCallSignalingSSETransport(isEnabled: true, stream: stream, now: fixedDirectCallTestNow(now))
         let owner = DebugForegroundCallSignalingSSERuntimeOwner(isEnabled: true,
                                                                 transport: transport,
                                                                 inviteHandler: makeForegroundCallInviteHandler(dependencies: dependencies, now: now))
@@ -1530,9 +1589,7 @@ final class NativeIncomingCallLifecycleContractTests {
         let now = Date(timeIntervalSince1970: 1000)
         let dependencies = makeNativeIncomingLifecycleDependencies()
         let stream = ForegroundCallSignalingSSEStreamSpy()
-        let transport = ForegroundCallSignalingSSETransport(isEnabled: true, stream: stream) {
-            now
-        }
+        let transport = ForegroundCallSignalingSSETransport(isEnabled: true, stream: stream, now: fixedDirectCallTestNow(now))
         let owner = DebugForegroundCallSignalingSSERuntimeOwner(isEnabled: true,
                                                                 transport: transport,
                                                                 inviteHandler: makeForegroundCallInviteHandler(dependencies: dependencies, now: now))
@@ -1540,8 +1597,7 @@ final class NativeIncomingCallLifecycleContractTests {
         owner.appDidEnterForeground(authenticatedSessionAvailable: true)
         owner.appDidEnterBackground()
 
-        #expect(stream.startCount == 1)
-        #expect(stream.stopCount == 1)
+        #expect(stream.startCount == 1 && stream.stopCount == 1)
         #expect(owner.diagnostics.sseConfigured)
         #expect(owner.diagnostics.sseStarted == false)
         #expect(owner.diagnostics.sseConnected == false)
@@ -1549,13 +1605,69 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func debugForegroundSSESmokeDiagnosticsLoggerUsesRedactedPrefixAndFields() {
+        let diagnostics = DebugForegroundCallSignalingSSERuntimeDiagnostics(sseConfigured: true,
+                                                                            sseStarted: true,
+                                                                            sseConnected: true,
+                                                                            inviteReceived: true,
+                                                                            inviteValid: true,
+                                                                            incomingRequested: true,
+                                                                            fallbackDeduped: true,
+                                                                            transportStopped: true,
+                                                                            streamFailure: .network)
+        let lines = DebugForegroundCallSignalingSSESmokeDiagnosticsLogger().redactedLines(for: diagnostics)
+
+        #expect(lines.count == 9)
+        #expect(lines.allSatisfy { $0.hasPrefix("[SSE-SMOKE-DIAG]") })
+        let expectedLines = ["sse_configured", "sse_started", "sse_connected", "invite_received", "invite_valid",
+                             "incoming_requested", "fallback_deduped", "transport_stopped", "stream_failure=network"]
+        #expect(expectedLines.allSatisfy { expectedLine in lines.contains { $0.contains(expectedLine) } })
+        #expect(lines.allSatisfy { line in
+            Self.forbiddenNativeIncomingFragments.allSatisfy { !line.contains($0) }
+        })
+    }
+
+    @Test
+    func debugForegroundSSERuntimeOwnerEmitsSmokeDiagnosticsWhenStartedInviteAndStopped() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let stream = ForegroundCallSignalingSSEStreamSpy()
+        let transport = ForegroundCallSignalingSSETransport(isEnabled: true, stream: stream, now: fixedDirectCallTestNow(now))
+        let logger = DebugForegroundCallSignalingSSESmokeDiagnosticsLogger()
+        var lines = [String]()
+        let owner = DebugForegroundCallSignalingSSERuntimeOwner(isEnabled: true,
+                                                                transport: transport,
+                                                                inviteHandler: makeForegroundCallInviteHandler(dependencies: dependencies, now: now),
+                                                                // swiftlint:disable:next trailing_closure
+                                                                diagnosticsObserver: { diagnostics in
+                                                                    lines.append(contentsOf: logger.redactedLines(for: diagnostics))
+                                                                })
+
+        owner.appDidEnterForeground(authenticatedSessionAvailable: true)
+        stream.emit(makeForegroundCallSSEInvite(handle: "safe-runtime-smoke", now: now))
+        owner.appDidEnterBackground()
+
+        #expect(lines.contains("[SSE-SMOKE-DIAG] sse_configured=true"))
+        #expect(lines.contains("[SSE-SMOKE-DIAG] sse_started=true"))
+        #expect(lines.contains("[SSE-SMOKE-DIAG] sse_connected=true"))
+        #expect(lines.contains("[SSE-SMOKE-DIAG] invite_received=true"))
+        #expect(lines.contains("[SSE-SMOKE-DIAG] invite_valid=true"))
+        #expect(lines.contains("[SSE-SMOKE-DIAG] incoming_requested=true"))
+        #expect(lines.contains("[SSE-SMOKE-DIAG] transport_stopped=true"))
+        #expect(dependencies.reportingAdapter.reportedIdentities.count == 1)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaCredentialRequested == false)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaConnectAttempted == false)
+        #expect(lines.allSatisfy { line in
+            Self.forbiddenNativeIncomingFragments.allSatisfy { !line.contains($0) }
+        })
+    }
+
+    @Test
     func debugForegroundSSERuntimeOwnerForwardsValidInviteAndKeepsMediaBlocked() {
         let now = Date(timeIntervalSince1970: 1000)
         let dependencies = makeNativeIncomingLifecycleDependencies()
         let stream = ForegroundCallSignalingSSEStreamSpy()
-        let transport = ForegroundCallSignalingSSETransport(isEnabled: true, stream: stream) {
-            now
-        }
+        let transport = ForegroundCallSignalingSSETransport(isEnabled: true, stream: stream, now: fixedDirectCallTestNow(now))
         let owner = DebugForegroundCallSignalingSSERuntimeOwner(isEnabled: true,
                                                                 transport: transport,
                                                                 inviteHandler: makeForegroundCallInviteHandler(dependencies: dependencies, now: now))
@@ -2193,11 +2305,192 @@ final class NativeIncomingCallLifecycleContractTests {
     private func makeForegroundCallSSEInvite(handle: String = "safe-sse-call",
                                              kind: String = "audio",
                                              now: Date,
+                                             createdAt: Date? = nil,
                                              expiresAt: Date? = nil) -> String {
-        let createdAtMs = Int(now.timeIntervalSince1970 * 1000)
+        let createdAtMs = Int((createdAt ?? now).timeIntervalSince1970 * 1000)
         let expiresAtMs = Int((expiresAt ?? now.addingTimeInterval(30)).timeIntervalSince1970 * 1000)
         let payload = """
         {"type":"foreground.call.invite","version":1,"call_handle":"\(handle)","call_kind":"\(kind)","created_at_ms":\(createdAtMs),"expires_at_ms":\(expiresAtMs),"display_label":"Pilot Participant"}
+        """
+        return "event: foreground.call.invite\n" +
+            "data: \(payload)\n\n"
+    }
+}
+
+// swiftlint:enable type_body_length
+
+@MainActor
+final class ForegroundCallSignalingSSETraceTests {
+    @Test
+    func debugForegroundSSESmokeDiagnosticsLoggerUsesRedactedHelperFields() {
+        let logger = DebugForegroundCallSignalingSSESmokeDiagnosticsLogger()
+        let diagnostics = DebugForegroundCallSignalingSSESmokeHelperDiagnostics(helperInvoked: true,
+                                                                                activeSessionAvailable: true,
+                                                                                accessTokenAvailable: false,
+                                                                                deviceIDAvailable: true,
+                                                                                homeserverURLAvailable: true,
+                                                                                foregroundSSEStartRequested: false,
+                                                                                foregroundSSEStartBlockedReason: .missingAccessToken)
+        let lines = logger.redactedLines(for: diagnostics)
+
+        #expect(lines == [
+            "[SSE-SMOKE-DIAG] helper_invoked=true",
+            "[SSE-SMOKE-DIAG] active_session_available=true",
+            "[SSE-SMOKE-DIAG] access_token_available=false",
+            "[SSE-SMOKE-DIAG] device_id_available=true",
+            "[SSE-SMOKE-DIAG] homeserver_url_available=true",
+            "[SSE-SMOKE-DIAG] foreground_sse_start_requested=false",
+            "[SSE-SMOKE-DIAG] foreground_sse_start_blocked_reason=missing_access_token"
+        ])
+        #expect(lines.allSatisfy { line in
+            Self.forbiddenFragments.allSatisfy { !line.contains($0) }
+        })
+    }
+
+    @Test
+    func debugForegroundSSESmokeDiagnosticsLoggerUsesRedactedParserTraceFields() {
+        let logger = DebugForegroundCallSignalingSSESmokeDiagnosticsLogger()
+        let lines = [
+            logger.redactedLine(for: .rawEventReceived),
+            logger.redactedLine(for: .sseEventType(.invite)),
+            logger.redactedLine(for: .inviteParseAttempted),
+            logger.redactedLine(for: .inviteParseSucceeded(true)),
+            logger.redactedLine(for: .pipelineDelivered(true))
+        ]
+
+        #expect(lines == [
+            "[SSE-SMOKE-DIAG] raw_event_received=true",
+            "[SSE-SMOKE-DIAG] sse_event_type=foreground.call.invite",
+            "[SSE-SMOKE-DIAG] invite_parse_attempted=true",
+            "[SSE-SMOKE-DIAG] invite_parse_succeeded=true",
+            "[SSE-SMOKE-DIAG] pipeline_delivered=true"
+        ])
+        #expect(lines.allSatisfy { line in
+            Self.forbiddenFragments.allSatisfy { !line.contains($0) }
+        })
+    }
+
+    @Test
+    func foregroundCallSignalingSSETransportEmitsRedactedParserTraceForLineDelimitedInvite() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let stream = ForegroundCallSignalingSSEStreamSpy()
+        var traceEvents = [DebugForegroundCallSignalingSSESmokeTraceEvent]()
+        let transport = ForegroundCallSignalingSSETransport(isEnabled: true,
+                                                            stream: stream,
+                                                            debugObserver: { event in
+                                                                traceEvents.append(event)
+                                                            },
+                                                            now: fixedDirectCallTestNow(now))
+        let pipeline = makeForegroundCallSignalingTransportPipeline(dependencies: dependencies,
+                                                                    transport: transport,
+                                                                    now: now)
+
+        pipeline.start()
+        makeForegroundCallSSEInvite(handle: "safe-sse-trace", now: now)
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .forEach { line in
+                stream.emit(String(line) + "\n")
+            }
+
+        #expect(traceEvents.contains(.rawEventReceived))
+        #expect(traceEvents.contains(.sseEventType(.invite)))
+        #expect(traceEvents.contains(.inviteParseAttempted))
+        #expect(traceEvents.contains(.inviteParseSucceeded(true)))
+        #expect(traceEvents.contains(.pipelineDelivered(true)))
+        #expect(dependencies.reportingAdapter.reportedIdentities.count == 1)
+        let traceDescription = traceEvents.map(\.description).joined(separator: " ")
+        #expect(Self.forbiddenFragments.allSatisfy { !traceDescription.contains($0) })
+    }
+
+    @Test
+    func foregroundCallSignalingSSETransportEmitsRedactedParserTraceForRejectedInvite() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let dependencies = makeNativeIncomingLifecycleDependencies()
+        let stream = ForegroundCallSignalingSSEStreamSpy()
+        var traceEvents = [DebugForegroundCallSignalingSSESmokeTraceEvent]()
+        let transport = ForegroundCallSignalingSSETransport(isEnabled: true,
+                                                            stream: stream,
+                                                            debugObserver: { event in
+                                                                traceEvents.append(event)
+                                                            },
+                                                            now: fixedDirectCallTestNow(now))
+        let pipeline = makeForegroundCallSignalingTransportPipeline(dependencies: dependencies,
+                                                                    transport: transport,
+                                                                    now: now)
+
+        pipeline.start()
+        makeForegroundCallSSEInvite(handle: String(repeating: "a", count: 65), now: now)
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .forEach { line in
+                stream.emit(String(line) + "\n")
+            }
+
+        #expect(traceEvents.contains(.rawEventReceived))
+        #expect(traceEvents.contains(.sseEventType(.invite)))
+        #expect(traceEvents.contains(.inviteParseAttempted))
+        #expect(traceEvents.contains(.inviteParseSucceeded(false)))
+        #expect(!traceEvents.contains(.pipelineDelivered(true)))
+        #expect(dependencies.reportingAdapter.reportedIdentities.isEmpty)
+        let traceDescription = traceEvents.map(\.description).joined(separator: " ")
+        #expect(Self.forbiddenFragments.allSatisfy { !traceDescription.contains($0) })
+    }
+
+    private static let forbiddenFragments = [
+        "!unsafe-room",
+        "@unsafe-user",
+        "DEVICE-SECRET",
+        "redacted-fixture-a",
+        "sensitive-incoming-credential-a",
+        "sensitive-incoming-credential-b",
+        "sample-media-credential",
+        "redacted-fixture-b",
+        "redacted-fixture-c",
+        "displayCall",
+        "presentCallScreen"
+    ]
+
+    private func makeNativeIncomingLifecycleDependencies() -> NativeIncomingLifecycleDependencies {
+        let stateStore = NativeIncomingCallStateStoreSpy()
+        let reportingAdapter = NativeIncomingCallReportingAdapterSpy(reportResult: true)
+        let timeoutScheduler = NativeIncomingCallTimeoutSchedulerSpy()
+        let diagnosticsRecorder = NativeIncomingCallDiagnosticsRecorderSpy()
+        let service = DisabledNativeIncomingCallLifecycleService(isEnabled: true,
+                                                                 stateStore: stateStore,
+                                                                 reportingAdapter: reportingAdapter,
+                                                                 timeoutScheduler: timeoutScheduler,
+                                                                 diagnosticsRecorder: diagnosticsRecorder)
+        return .init(service: service,
+                     stateStore: stateStore,
+                     reportingAdapter: reportingAdapter,
+                     timeoutScheduler: timeoutScheduler,
+                     diagnosticsRecorder: diagnosticsRecorder)
+    }
+
+    private func makeForegroundCallInviteHandler(dependencies: NativeIncomingLifecycleDependencies,
+                                                 now: Date) -> ForegroundCallInviteHandler {
+        ForegroundCallInviteHandler(isEnabled: true,
+                                    stateStore: dependencies.stateStore,
+                                    reportingAdapter: dependencies.reportingAdapter,
+                                    diagnosticsRecorder: dependencies.diagnosticsRecorder) {
+            now
+        }
+    }
+
+    private func makeForegroundCallSignalingTransportPipeline(dependencies: NativeIncomingLifecycleDependencies,
+                                                              transport: ForegroundCallSignalingTransport,
+                                                              now: Date) -> ForegroundCallSignalingTransportPipeline {
+        ForegroundCallSignalingTransportPipeline(transport: transport,
+                                                 inviteHandler: makeForegroundCallInviteHandler(dependencies: dependencies,
+                                                                                                now: now))
+    }
+
+    private func makeForegroundCallSSEInvite(handle: String,
+                                             now: Date) -> String {
+        let createdAtMs = Int(now.timeIntervalSince1970 * 1000)
+        let expiresAtMs = Int(now.addingTimeInterval(30).timeIntervalSince1970 * 1000)
+        let payload = """
+        {"type":"foreground.call.invite","version":1,"call_handle":"\(handle)","call_kind":"audio","created_at_ms":\(createdAtMs),"expires_at_ms":\(expiresAtMs),"display_label":"Pilot Participant"}
         """
         return "event: foreground.call.invite\n" +
             "data: \(payload)\n\n"
@@ -2258,6 +2551,10 @@ private final class ForegroundCallSignalingSSEStreamSpy: ForegroundCallSignaling
     func complete(_ completion: ForegroundCallSignalingSSEStreamCompletion) {
         onCompletion?(completion)
     }
+}
+
+private func fixedDirectCallTestNow(_ date: Date) -> () -> Date {
+    { date }
 }
 
 private final class NativeIncomingCallReportingAdapterSpy: NativeIncomingCallReportingAdapting {

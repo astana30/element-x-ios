@@ -835,6 +835,8 @@ final class DisabledForegroundCallSignalingClient: ForegroundCallSignalingClient
 }
 
 enum ForegroundCallSignalingTransportEventKind: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case ready
+    case stopped
     case invite
 
     var description: String {
@@ -848,6 +850,7 @@ enum ForegroundCallSignalingTransportEventKind: String, Equatable, CustomStringC
 
 enum ForegroundCallSignalingTransportResult: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     case started
+    case connected
     case stopped
     case delivered
     case ignored
@@ -862,10 +865,16 @@ enum ForegroundCallSignalingTransportResult: String, Equatable, CustomStringConv
 }
 
 enum ForegroundCallSignalingTransportEvent: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case ready
+    case stopped
     case invite(ForegroundCallInviteSignal)
 
     var kind: ForegroundCallSignalingTransportEventKind {
         switch self {
+        case .ready:
+            .ready
+        case .stopped:
+            .stopped
         case .invite:
             .invite
         }
@@ -873,6 +882,10 @@ enum ForegroundCallSignalingTransportEvent: Equatable, CustomStringConvertible, 
 
     var description: String {
         switch self {
+        case .ready:
+            "ready"
+        case .stopped:
+            "stopped"
         case .invite:
             "invite(signal: <redacted>)"
         }
@@ -889,12 +902,14 @@ struct ForegroundCallSignalingTransportDiagnostics: Equatable, CustomStringConve
     var latestEventKind: ForegroundCallSignalingTransportEventKind?
     var latestResult: ForegroundCallSignalingTransportResult
     var realTransport: Bool
+    var latestFailureReason: ForegroundCallSignalingSSEStreamFailureReason?
 
     static let disabled = Self(isStarted: false,
                                deliveredInviteCount: 0,
                                latestEventKind: nil,
                                latestResult: .ignored,
-                               realTransport: false)
+                               realTransport: false,
+                               latestFailureReason: nil)
 
     var description: String {
         "ForegroundCallSignalingTransportDiagnostics(" + [
@@ -902,7 +917,8 @@ struct ForegroundCallSignalingTransportDiagnostics: Equatable, CustomStringConve
             "deliveredInviteCount: \(deliveredInviteCount)",
             "latestEventKind: \(latestEventKind?.description ?? "none")",
             "latestResult: \(latestResult)",
-            "realTransport: \(realTransport)"
+            "realTransport: \(realTransport)",
+            "latestFailureReason: \(latestFailureReason?.description ?? "none")"
         ].joined(separator: ", ") + ")"
     }
 
@@ -925,7 +941,8 @@ final class DisabledForegroundCallSignalingTransport: ForegroundCallSignalingTra
                             deliveredInviteCount: 0,
                             latestEventKind: nil,
                             latestResult: .ignored,
-                            realTransport: false)
+                            realTransport: false,
+                            latestFailureReason: nil)
     }
 
     func stop() {
@@ -933,7 +950,8 @@ final class DisabledForegroundCallSignalingTransport: ForegroundCallSignalingTra
                             deliveredInviteCount: diagnostics.deliveredInviteCount,
                             latestEventKind: diagnostics.latestEventKind,
                             latestResult: .stopped,
-                            realTransport: false)
+                            realTransport: false,
+                            latestFailureReason: diagnostics.latestFailureReason)
     }
 
     var description: String {
@@ -955,7 +973,8 @@ final class InMemoryForegroundCallSignalingTransport: ForegroundCallSignalingTra
                             deliveredInviteCount: diagnostics.deliveredInviteCount,
                             latestEventKind: diagnostics.latestEventKind,
                             latestResult: .started,
-                            realTransport: false)
+                            realTransport: false,
+                            latestFailureReason: nil)
     }
 
     func stop() {
@@ -964,7 +983,8 @@ final class InMemoryForegroundCallSignalingTransport: ForegroundCallSignalingTra
                             deliveredInviteCount: diagnostics.deliveredInviteCount,
                             latestEventKind: diagnostics.latestEventKind,
                             latestResult: .stopped,
-                            realTransport: false)
+                            realTransport: false,
+                            latestFailureReason: diagnostics.latestFailureReason)
     }
 
     @discardableResult
@@ -974,7 +994,8 @@ final class InMemoryForegroundCallSignalingTransport: ForegroundCallSignalingTra
                                 deliveredInviteCount: diagnostics.deliveredInviteCount,
                                 latestEventKind: event.kind,
                                 latestResult: .ignored,
-                                realTransport: false)
+                                realTransport: false,
+                                latestFailureReason: diagnostics.latestFailureReason)
             return false
         }
 
@@ -983,7 +1004,8 @@ final class InMemoryForegroundCallSignalingTransport: ForegroundCallSignalingTra
                             deliveredInviteCount: diagnostics.deliveredInviteCount + 1,
                             latestEventKind: event.kind,
                             latestResult: .delivered,
-                            realTransport: false)
+                            realTransport: false,
+                            latestFailureReason: nil)
         return true
     }
 
@@ -1001,9 +1023,75 @@ final class InMemoryForegroundCallSignalingTransport: ForegroundCallSignalingTra
     }
 }
 
+enum ForegroundCallSignalingSSEHTTPStatusClass: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case unauthorized
+    case forbidden
+    case clientError
+    case serverError
+    case unexpected
+
+    init(statusCode: Int) {
+        switch statusCode {
+        case 401:
+            self = .unauthorized
+        case 403:
+            self = .forbidden
+        case 400..<500:
+            self = .clientError
+        case 500..<600:
+            self = .serverError
+        default:
+            self = .unexpected
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .unauthorized:
+            "unauthorized"
+        case .forbidden:
+            "forbidden"
+        case .clientError:
+            "client_error"
+        case .serverError:
+            "server_error"
+        case .unexpected:
+            "unexpected"
+        }
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum ForegroundCallSignalingSSEStreamFailureReason: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case httpStatus(ForegroundCallSignalingSSEHTTPStatusClass)
+    case nonHTTPResponse
+    case unsupportedContentType
+    case network
+
+    var description: String {
+        switch self {
+        case .httpStatus(let statusClass):
+            "http_\(statusClass)"
+        case .nonHTTPResponse:
+            "non_http_response"
+        case .unsupportedContentType:
+            "unsupported_content_type"
+        case .network:
+            "network"
+        }
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
 enum ForegroundCallSignalingSSEStreamCompletion: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     case ended
-    case failed
+    case failed(ForegroundCallSignalingSSEStreamFailureReason)
 
     var description: String {
         rawValue
@@ -1017,8 +1105,17 @@ enum ForegroundCallSignalingSSEStreamCompletion: Equatable, CustomStringConverti
         switch self {
         case .ended:
             "ended"
-        case .failed:
-            "failed"
+        case .failed(let reason):
+            "failed(\(reason))"
+        }
+    }
+
+    var failureReason: ForegroundCallSignalingSSEStreamFailureReason? {
+        switch self {
+        case .ended:
+            nil
+        case .failed(let reason):
+            reason
         }
     }
 }
@@ -1066,17 +1163,35 @@ final class URLSessionForegroundCallSignalingSSEStream: ForegroundCallSignalingS
         task = Task {
             do {
                 let (bytes, response) = try await session.bytes(for: request)
-                if let response = response as? HTTPURLResponse,
-                   !(200..<300).contains(response.statusCode) {
-                    onCompletion(.failed)
+                guard let response = response as? HTTPURLResponse else {
+                    onCompletion(.failed(.nonHTTPResponse))
                     return
                 }
 
-                for try await line in bytes.lines {
+                guard (200..<300).contains(response.statusCode) else {
+                    onCompletion(.failed(.httpStatus(.init(statusCode: response.statusCode))))
+                    return
+                }
+
+                guard response.safeSSEContentTypeIsSupported else {
+                    onCompletion(.failed(.unsupportedContentType))
+                    return
+                }
+
+                var currentLine = Data()
+                for try await byte in bytes {
                     guard !Task.isCancelled else {
                         return
                     }
-                    onChunk(Data("\(line)\n".utf8))
+                    currentLine.append(byte)
+                    if byte == UInt8(ascii: "\n") {
+                        onChunk(currentLine)
+                        currentLine.removeAll(keepingCapacity: true)
+                    }
+                }
+
+                if !currentLine.isEmpty {
+                    onChunk(currentLine)
                 }
 
                 onCompletion(.ended)
@@ -1084,7 +1199,7 @@ final class URLSessionForegroundCallSignalingSSEStream: ForegroundCallSignalingS
                 guard !Task.isCancelled else {
                     return
                 }
-                onCompletion(.failed)
+                onCompletion(.failed(.network))
             }
         }
     }
@@ -1100,6 +1215,14 @@ final class URLSessionForegroundCallSignalingSSEStream: ForegroundCallSignalingS
 
     var debugDescription: String {
         description
+    }
+}
+
+private extension HTTPURLResponse {
+    var safeSSEContentTypeIsSupported: Bool {
+        value(forHTTPHeaderField: "Content-Type")?
+            .lowercased()
+            .hasPrefix("text/event-stream") == true
     }
 }
 
@@ -1171,6 +1294,10 @@ struct ForegroundCallSignalingSSEParser: CustomStringConvertible, CustomDebugStr
             currentDataLines = []
         }
 
+        if currentEventType == "foreground.ready" {
+            return [.ready]
+        }
+
         guard currentEventType == "foreground.call.invite",
               !currentDataLines.isEmpty,
               let payload = currentDataLines.joined(separator: "\n").data(using: .utf8),
@@ -1196,7 +1323,25 @@ final class ForegroundCallSignalingSSETransport: ForegroundCallSignalingTranspor
     private var parser: ForegroundCallSignalingSSEParser
     private var onEvent: ((ForegroundCallSignalingTransportEvent) -> Void)?
     private(set) var diagnostics = ForegroundCallSignalingTransportDiagnostics.disabled
+    #if DEBUG
+    private var debugPendingInviteParse = false
+    #endif
+    #if DEBUG
+    private let debugObserver: (DebugForegroundCallSignalingSSESmokeTraceEvent) -> Void
+    #endif
 
+    #if DEBUG
+    init(isEnabled: Bool = false,
+         stream: ForegroundCallSignalingSSEStreaming = DisabledForegroundCallSignalingSSEStream(),
+         validator: ForegroundCallInviteValidator = .init(),
+         debugObserver: @escaping (DebugForegroundCallSignalingSSESmokeTraceEvent) -> Void = { _ in },
+         now: @escaping () -> Date = Date.init) {
+        self.isEnabled = isEnabled
+        self.stream = stream
+        parser = ForegroundCallSignalingSSEParser(validator: validator, now: now)
+        self.debugObserver = debugObserver
+    }
+    #else
     init(isEnabled: Bool = false,
          stream: ForegroundCallSignalingSSEStreaming = DisabledForegroundCallSignalingSSEStream(),
          validator: ForegroundCallInviteValidator = .init(),
@@ -1205,6 +1350,7 @@ final class ForegroundCallSignalingSSETransport: ForegroundCallSignalingTranspor
         self.stream = stream
         parser = ForegroundCallSignalingSSEParser(validator: validator, now: now)
     }
+    #endif
 
     func start(onEvent: @escaping (ForegroundCallSignalingTransportEvent) -> Void) {
         guard isEnabled else {
@@ -1212,7 +1358,8 @@ final class ForegroundCallSignalingSSETransport: ForegroundCallSignalingTranspor
                                 deliveredInviteCount: diagnostics.deliveredInviteCount,
                                 latestEventKind: nil,
                                 latestResult: .ignored,
-                                realTransport: false)
+                                realTransport: false,
+                                latestFailureReason: nil)
             return
         }
 
@@ -1221,7 +1368,8 @@ final class ForegroundCallSignalingSSETransport: ForegroundCallSignalingTranspor
                             deliveredInviteCount: diagnostics.deliveredInviteCount,
                             latestEventKind: diagnostics.latestEventKind,
                             latestResult: .started,
-                            realTransport: true)
+                            realTransport: true,
+                            latestFailureReason: nil)
         stream.start { [weak self] chunk in
             self?.handle(chunk)
         } onCompletion: { [weak self] completion in
@@ -1233,31 +1381,67 @@ final class ForegroundCallSignalingSSETransport: ForegroundCallSignalingTranspor
         stream.stop()
         onEvent = nil
         parser = ForegroundCallSignalingSSEParser()
+        #if DEBUG
+        debugPendingInviteParse = false
+        #endif
         diagnostics = .init(isStarted: false,
                             deliveredInviteCount: diagnostics.deliveredInviteCount,
                             latestEventKind: diagnostics.latestEventKind,
                             latestResult: .stopped,
-                            realTransport: isEnabled)
+                            realTransport: isEnabled,
+                            latestFailureReason: diagnostics.latestFailureReason)
     }
 
     private func handle(_ chunk: Data) {
+        #if DEBUG
+        let isEventDelimiter = String(data: chunk, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .isEmpty == true
+        if !chunk.isEmpty {
+            debugObserver(.rawEventReceived)
+            if let eventType = ForegroundCallSignalingSSESafeEventType(chunk: chunk) {
+                debugObserver(.sseEventType(eventType))
+                if eventType == .invite {
+                    debugObserver(.inviteParseAttempted)
+                    debugPendingInviteParse = true
+                }
+            }
+        }
+        #endif
         let events = parser.consume(chunk)
         guard !events.isEmpty else {
+            #if DEBUG
+            if isEventDelimiter, debugPendingInviteParse {
+                debugObserver(.inviteParseSucceeded(false))
+                debugPendingInviteParse = false
+            }
+            #endif
             diagnostics = .init(isStarted: diagnostics.isStarted,
                                 deliveredInviteCount: diagnostics.deliveredInviteCount,
                                 latestEventKind: diagnostics.latestEventKind,
                                 latestResult: .ignored,
-                                realTransport: isEnabled)
+                                realTransport: isEnabled,
+                                latestFailureReason: diagnostics.latestFailureReason)
             return
         }
 
         for event in events {
             onEvent?(event)
+            #if DEBUG
+            if event.kind == .invite {
+                debugObserver(.inviteParseSucceeded(true))
+                debugObserver(.pipelineDelivered(true))
+                debugPendingInviteParse = false
+            }
+            #endif
+            let deliveredInviteCount = event.kind == .invite ? diagnostics.deliveredInviteCount + 1 : diagnostics.deliveredInviteCount
+            let latestResult: ForegroundCallSignalingTransportResult = event.kind == .ready ? .connected : .delivered
             diagnostics = .init(isStarted: diagnostics.isStarted,
-                                deliveredInviteCount: diagnostics.deliveredInviteCount + 1,
+                                deliveredInviteCount: deliveredInviteCount,
                                 latestEventKind: event.kind,
-                                latestResult: .delivered,
-                                realTransport: isEnabled)
+                                latestResult: latestResult,
+                                realTransport: isEnabled,
+                                latestFailureReason: nil)
         }
     }
 
@@ -1267,7 +1451,9 @@ final class ForegroundCallSignalingSSETransport: ForegroundCallSignalingTranspor
                             deliveredInviteCount: diagnostics.deliveredInviteCount,
                             latestEventKind: diagnostics.latestEventKind,
                             latestResult: latestResult,
-                            realTransport: isEnabled)
+                            realTransport: isEnabled,
+                            latestFailureReason: completion.failureReason)
+        onEvent?(.stopped)
     }
 
     var description: String {
@@ -1366,6 +1552,8 @@ final class ForegroundCallSignalingTransportPipeline: CustomStringConvertible, C
 
     private func handle(_ event: ForegroundCallSignalingTransportEvent) {
         switch event {
+        case .ready, .stopped:
+            break
         case .invite(let signal):
             latestOutcome = inviteHandler.handle(signal, context: validationContext())
         }
@@ -1381,6 +1569,110 @@ final class ForegroundCallSignalingTransportPipeline: CustomStringConvertible, C
 }
 
 #if DEBUG
+enum ForegroundCallSignalingSSESafeEventType: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case ready = "foreground.ready"
+    case invite = "foreground.call.invite"
+    case other
+
+    init?(chunk: Data) {
+        guard let text = String(data: chunk, encoding: .utf8),
+              let eventLine = text.split(separator: "\n").first(where: { $0.trimmingCharacters(in: .whitespaces).hasPrefix("event:") }) else {
+            return nil
+        }
+
+        let eventType = eventLine
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .dropPrefix("event:")
+            .trimmedSSEField
+        switch eventType {
+        case Self.ready.rawValue:
+            self = .ready
+        case Self.invite.rawValue:
+            self = .invite
+        default:
+            self = .other
+        }
+    }
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum DebugForegroundCallSignalingSSESmokeTraceEvent: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case rawEventReceived
+    case sseEventType(ForegroundCallSignalingSSESafeEventType)
+    case inviteParseAttempted
+    case inviteParseSucceeded(Bool)
+    case pipelineDelivered(Bool)
+
+    var description: String {
+        switch self {
+        case .rawEventReceived:
+            "raw_event_received=true"
+        case .sseEventType(let eventType):
+            "sse_event_type=\(eventType)"
+        case .inviteParseAttempted:
+            "invite_parse_attempted=true"
+        case .inviteParseSucceeded(let succeeded):
+            "invite_parse_succeeded=\(succeeded)"
+        case .pipelineDelivered(let delivered):
+            "pipeline_delivered=\(delivered)"
+        }
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum DebugForegroundCallSignalingSSESmokeHelperBlockedReason: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case none
+    case invalidStreamURL = "invalid_stream_url"
+    case missingActiveSession = "missing_active_session"
+    case missingAccessTokenProvider = "missing_access_token_provider"
+    case missingAccessToken = "missing_access_token"
+    case blankAccessToken = "blank_access_token"
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct DebugForegroundCallSignalingSSESmokeHelperDiagnostics: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    var helperInvoked: Bool
+    var activeSessionAvailable: Bool
+    var accessTokenAvailable: Bool
+    var deviceIDAvailable: Bool
+    var homeserverURLAvailable: Bool
+    var foregroundSSEStartRequested: Bool
+    var foregroundSSEStartBlockedReason: DebugForegroundCallSignalingSSESmokeHelperBlockedReason
+
+    var description: String {
+        "DebugForegroundCallSignalingSSESmokeHelperDiagnostics(" + [
+            "helper_invoked=\(helperInvoked)",
+            "active_session_available=\(activeSessionAvailable)",
+            "access_token_available=\(accessTokenAvailable)",
+            "device_id_available=\(deviceIDAvailable)",
+            "homeserver_url_available=\(homeserverURLAvailable)",
+            "foreground_sse_start_requested=\(foregroundSSEStartRequested)",
+            "foreground_sse_start_blocked_reason=\(foregroundSSEStartBlockedReason)"
+        ].joined(separator: ", ") + ")"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
 struct DebugForegroundCallSignalingSSERuntimeDiagnostics: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     var sseConfigured: Bool
     var sseStarted: Bool
@@ -1390,6 +1682,7 @@ struct DebugForegroundCallSignalingSSERuntimeDiagnostics: Equatable, CustomStrin
     var incomingRequested: Bool
     var fallbackDeduped: Bool
     var transportStopped: Bool
+    var streamFailure: ForegroundCallSignalingSSEStreamFailureReason?
 
     static let disabled = Self(sseConfigured: false,
                                sseStarted: false,
@@ -1398,7 +1691,8 @@ struct DebugForegroundCallSignalingSSERuntimeDiagnostics: Equatable, CustomStrin
                                inviteValid: false,
                                incomingRequested: false,
                                fallbackDeduped: false,
-                               transportStopped: false)
+                               transportStopped: false,
+                               streamFailure: nil)
 
     var description: String {
         "DebugForegroundCallSignalingSSERuntimeDiagnostics(" + [
@@ -1409,7 +1703,8 @@ struct DebugForegroundCallSignalingSSERuntimeDiagnostics: Equatable, CustomStrin
             "invite_valid=\(inviteValid)",
             "incoming_requested=\(incomingRequested)",
             "fallback_deduped=\(fallbackDeduped)",
-            "transport_stopped=\(transportStopped)"
+            "transport_stopped=\(transportStopped)",
+            "stream_failure=\(streamFailure?.description ?? "none")"
         ].joined(separator: ", ") + ")"
     }
 
@@ -1418,23 +1713,77 @@ struct DebugForegroundCallSignalingSSERuntimeDiagnostics: Equatable, CustomStrin
     }
 }
 
+struct DebugForegroundCallSignalingSSESmokeDiagnosticsLogger {
+    static let prefix = "[SSE-SMOKE-DIAG]"
+
+    func redactedLines(for diagnostics: DebugForegroundCallSignalingSSERuntimeDiagnostics) -> [String] {
+        [
+            "\(Self.prefix) sse_configured=\(diagnostics.sseConfigured)",
+            "\(Self.prefix) sse_started=\(diagnostics.sseStarted)",
+            "\(Self.prefix) sse_connected=\(diagnostics.sseConnected)",
+            "\(Self.prefix) invite_received=\(diagnostics.inviteReceived)",
+            "\(Self.prefix) invite_valid=\(diagnostics.inviteValid)",
+            "\(Self.prefix) incoming_requested=\(diagnostics.incomingRequested)",
+            "\(Self.prefix) fallback_deduped=\(diagnostics.fallbackDeduped)",
+            "\(Self.prefix) transport_stopped=\(diagnostics.transportStopped)",
+            "\(Self.prefix) stream_failure=\(diagnostics.streamFailure?.description ?? "none")"
+        ]
+    }
+
+    func redactedLines(for diagnostics: DebugForegroundCallSignalingSSESmokeHelperDiagnostics) -> [String] {
+        [
+            "\(Self.prefix) helper_invoked=\(diagnostics.helperInvoked)",
+            "\(Self.prefix) active_session_available=\(diagnostics.activeSessionAvailable)",
+            "\(Self.prefix) access_token_available=\(diagnostics.accessTokenAvailable)",
+            "\(Self.prefix) device_id_available=\(diagnostics.deviceIDAvailable)",
+            "\(Self.prefix) homeserver_url_available=\(diagnostics.homeserverURLAvailable)",
+            "\(Self.prefix) foreground_sse_start_requested=\(diagnostics.foregroundSSEStartRequested)",
+            "\(Self.prefix) foreground_sse_start_blocked_reason=\(diagnostics.foregroundSSEStartBlockedReason)"
+        ]
+    }
+
+    func log(_ diagnostics: DebugForegroundCallSignalingSSERuntimeDiagnostics) {
+        redactedLines(for: diagnostics).forEach { MXLog.info($0) }
+    }
+
+    func log(_ diagnostics: DebugForegroundCallSignalingSSESmokeHelperDiagnostics) {
+        redactedLines(for: diagnostics).forEach { MXLog.info($0) }
+    }
+
+    func redactedLine(for event: DebugForegroundCallSignalingSSESmokeTraceEvent) -> String {
+        "\(Self.prefix) \(event)"
+    }
+
+    func log(_ event: DebugForegroundCallSignalingSSESmokeTraceEvent) {
+        MXLog.info(redactedLine(for: event))
+    }
+}
+
 final class DebugForegroundCallSignalingSSERuntimeOwner: CustomStringConvertible, CustomDebugStringConvertible {
     private let isEnabled: Bool
     private let transport: ForegroundCallSignalingTransport?
     private let inviteHandler: ForegroundCallInviteHandler?
     private let validationContext: () -> NativeIncomingCallValidationContext
+    private let diagnosticsObserver: (DebugForegroundCallSignalingSSERuntimeDiagnostics) -> Void
     private var handledHandles = Set<NativeIncomingCallHandle>()
-    private(set) var diagnostics: DebugForegroundCallSignalingSSERuntimeDiagnostics
+    private(set) var diagnostics: DebugForegroundCallSignalingSSERuntimeDiagnostics {
+        didSet {
+            diagnosticsObserver(diagnostics)
+        }
+    }
+
     private(set) var latestOutcome: ForegroundCallInviteHandlingOutcome?
 
     init(isEnabled: Bool = false,
          transport: ForegroundCallSignalingTransport? = nil,
          inviteHandler: ForegroundCallInviteHandler? = nil,
-         validationContext: @escaping () -> NativeIncomingCallValidationContext = { .valid }) {
+         validationContext: @escaping () -> NativeIncomingCallValidationContext = { .valid },
+         diagnosticsObserver: @escaping (DebugForegroundCallSignalingSSERuntimeDiagnostics) -> Void = { _ in }) {
         self.isEnabled = isEnabled
         self.transport = transport
         self.inviteHandler = inviteHandler
         self.validationContext = validationContext
+        self.diagnosticsObserver = diagnosticsObserver
         diagnostics = .disabled
     }
 
@@ -1458,7 +1807,8 @@ final class DebugForegroundCallSignalingSSERuntimeOwner: CustomStringConvertible
                                 inviteValid: diagnostics.inviteValid,
                                 incomingRequested: diagnostics.incomingRequested,
                                 fallbackDeduped: diagnostics.fallbackDeduped,
-                                transportStopped: diagnostics.transportStopped)
+                                transportStopped: diagnostics.transportStopped,
+                                streamFailure: diagnostics.streamFailure)
             return
         }
 
@@ -1467,12 +1817,13 @@ final class DebugForegroundCallSignalingSSERuntimeOwner: CustomStringConvertible
         }
         diagnostics = .init(sseConfigured: true,
                             sseStarted: transport.diagnostics.isStarted,
-                            sseConnected: transport.diagnostics.isStarted,
+                            sseConnected: false,
                             inviteReceived: diagnostics.inviteReceived,
                             inviteValid: diagnostics.inviteValid,
                             incomingRequested: diagnostics.incomingRequested,
                             fallbackDeduped: diagnostics.fallbackDeduped,
-                            transportStopped: false)
+                            transportStopped: false,
+                            streamFailure: nil)
     }
 
     func stop() {
@@ -1484,7 +1835,8 @@ final class DebugForegroundCallSignalingSSERuntimeOwner: CustomStringConvertible
                             inviteValid: diagnostics.inviteValid,
                             incomingRequested: diagnostics.incomingRequested,
                             fallbackDeduped: diagnostics.fallbackDeduped,
-                            transportStopped: true)
+                            transportStopped: true,
+                            streamFailure: diagnostics.streamFailure)
     }
 
     func handleFallbackInvite(_ signal: ForegroundCallInviteSignal,
@@ -1502,7 +1854,8 @@ final class DebugForegroundCallSignalingSSERuntimeOwner: CustomStringConvertible
                                 inviteValid: diagnostics.inviteValid,
                                 incomingRequested: diagnostics.incomingRequested,
                                 fallbackDeduped: true,
-                                transportStopped: diagnostics.transportStopped)
+                                transportStopped: diagnostics.transportStopped,
+                                streamFailure: diagnostics.streamFailure)
             return latestOutcome
         }
 
@@ -1516,6 +1869,26 @@ final class DebugForegroundCallSignalingSSERuntimeOwner: CustomStringConvertible
     private func handle(_ event: ForegroundCallSignalingTransportEvent,
                         inviteHandler: ForegroundCallInviteHandler) {
         switch event {
+        case .ready:
+            diagnostics = .init(sseConfigured: diagnostics.sseConfigured,
+                                sseStarted: diagnostics.sseStarted,
+                                sseConnected: true,
+                                inviteReceived: diagnostics.inviteReceived,
+                                inviteValid: diagnostics.inviteValid,
+                                incomingRequested: diagnostics.incomingRequested,
+                                fallbackDeduped: diagnostics.fallbackDeduped,
+                                transportStopped: diagnostics.transportStopped,
+                                streamFailure: diagnostics.streamFailure)
+        case .stopped:
+            diagnostics = .init(sseConfigured: diagnostics.sseConfigured,
+                                sseStarted: false,
+                                sseConnected: false,
+                                inviteReceived: diagnostics.inviteReceived,
+                                inviteValid: diagnostics.inviteValid,
+                                incomingRequested: diagnostics.incomingRequested,
+                                fallbackDeduped: diagnostics.fallbackDeduped,
+                                transportStopped: true,
+                                streamFailure: transport?.diagnostics.latestFailureReason)
         case .invite(let signal):
             let outcome = inviteHandler.handle(signal, context: validationContext())
             latestOutcome = outcome
@@ -1529,12 +1902,13 @@ final class DebugForegroundCallSignalingSSERuntimeOwner: CustomStringConvertible
             }
             diagnostics = .init(sseConfigured: diagnostics.sseConfigured,
                                 sseStarted: diagnostics.sseStarted,
-                                sseConnected: diagnostics.sseConnected,
+                                sseConnected: true,
                                 inviteReceived: true,
                                 inviteValid: wasReported,
                                 incomingRequested: wasReported,
                                 fallbackDeduped: diagnostics.fallbackDeduped,
-                                transportStopped: diagnostics.transportStopped)
+                                transportStopped: diagnostics.transportStopped,
+                                streamFailure: diagnostics.streamFailure)
         }
     }
 
@@ -1550,6 +1924,7 @@ final class DebugForegroundCallSignalingSSERuntimeOwner: CustomStringConvertible
 
 struct ForegroundCallInviteValidator {
     var supportedKind: ForegroundCallInviteKind = .audio
+    var futureSkewAllowance: TimeInterval = 5
 
     func validate(rawHandle: String,
                   kind: ForegroundCallInviteKind,
@@ -1579,7 +1954,7 @@ struct ForegroundCallInviteValidator {
         guard signal.state == .incoming else {
             return .failClosed(.stale)
         }
-        guard signal.createdAt <= now,
+        guard signal.createdAt <= now.addingTimeInterval(futureSkewAllowance),
               signal.expiresAt > now else {
             return .failClosed(.stale)
         }

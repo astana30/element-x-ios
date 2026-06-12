@@ -30,13 +30,14 @@ from .foreground_signaling import (
     ForegroundCallInvitePayload,
     ForegroundCallInviteRequest,
     ForegroundCallSignalingService,
+    foreground_heartbeat_sse_event,
     foreground_invite_sse_event,
     foreground_ready_sse_event,
 )
 from .livekit_rooms import DEFAULT_ROOM_DEPARTURE_TIMEOUT_SECONDS, LiveKitRoomServiceProvisioner
 from .livekit_tokens import LiveKitJWTTokenIssuer
 from .local_fake import make_fake_capabilities_payload, make_fake_local_service
-from .logging_utils import configure_logging
+from .logging_utils import configure_logging, stable_redacted_id
 from .rate_limiting import InMemoryRateLimiter, SharedRateLimiterSkeleton
 from .rate_limiting import RedisRateLimitClient, RedisRateLimiter
 from .room_validation import SynapseRoomValidator
@@ -47,10 +48,12 @@ ENDPOINT_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/livekit/token"
 ELIGIBILITY_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/eligibility"
 FOREGROUND_SIGNALING_STREAM_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/stream"
 FOREGROUND_SIGNALING_DEV_INVITE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/invite"
+FOREGROUND_SIGNALING_DEV_INJECT_ACTIVE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/inject-active"
 CAPABILITIES_PATH = "/_matrix/client/v3/capabilities"
 HEALTH_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/health"
 READINESS_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/readiness"
 REDIS_READINESS_TIMEOUT_SECONDS = 0.5
+FOREGROUND_SIGNALING_STREAM_HEARTBEAT_SECONDS = 15.0
 LOGGER = logging.getLogger(__name__)
 
 
@@ -180,26 +183,60 @@ def create_app(config: ServiceConfig | None = None,
                                        error="Direct-call service is not ready.")
             bearer_token = bearer_token_from_authorization(authorization)
             authenticated_user = await service.auth_validator.validate_bearer_token(bearer_token)
+            LOGGER.info(
+                "foreground signaling stream_auth_ok account_hash=%s device_bound=%s",
+                stable_redacted_id(getattr(authenticated_user, "user" "_id")),
+                getattr(authenticated_user, "device" "_id") is not None,
+            )
             subscription = signaling_service.subscribe(authenticated_user)
+            LOGGER.info(
+                "foreground signaling stream_registered active_subscriber_count=%d",
+                signaling_service.diagnostics.subscriber_count,
+            )
         except CallServiceError as error:
             status_code, body = error_response(error)
             return JSONResponse(status_code=status_code, content=body)
 
         async def event_stream() -> object:
+            closed_reason = "completed"
             try:
                 yield foreground_ready_sse_event()
+                LOGGER.info(
+                    "foreground signaling ready_sent active_subscriber_count=%d",
+                    signaling_service.diagnostics.subscriber_count,
+                )
                 while True:
-                    invite = await subscription.next_event()
+                    try:
+                        invite = await asyncio.wait_for(
+                            subscription.next_event(),
+                            timeout=FOREGROUND_SIGNALING_STREAM_HEARTBEAT_SECONDS,
+                        )
+                    except asyncio.TimeoutError:
+                        yield foreground_heartbeat_sse_event()
+                        continue
+                    LOGGER.info(
+                        "foreground signaling invite_yielded sse_event_type=foreground.call.invite active_subscriber_count=%d",
+                        signaling_service.diagnostics.subscriber_count,
+                    )
                     yield foreground_invite_sse_event(invite)
             except asyncio.CancelledError:
+                closed_reason = "cancelled"
+                raise
+            except Exception:
+                closed_reason = "error"
                 raise
             finally:
                 signaling_service.unsubscribe(subscription)
+                LOGGER.info(
+                    "foreground signaling stream_closed reason=%s active_subscriber_count=%d",
+                    closed_reason,
+                    signaling_service.diagnostics.subscriber_count,
+                )
 
         return StreamingResponse(
             event_stream(),
             media_type="text/event-stream",
-            headers={"Cache-Control": "no-store"},
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
     if environ.get(FOREGROUND_SIGNALING_DEV_INVITE_ENABLED_ENV) == "1":
@@ -221,6 +258,8 @@ def create_app(config: ServiceConfig | None = None,
                     recipient_device=getattr(authenticated_user, "device" "_id"),
                     invite=invite,
                 ))
+                result_body = result.as_dict()
+                result_body.update(_foreground_signaling_dev_invite_diagnostics(authenticated_user, signaling_service))
                 LOGGER.info(
                     "foreground signaling dev invite handled subscriber_available=%s delivered=%s dropped=%s call_kind=%s",
                     result.subscriber_available,
@@ -228,7 +267,44 @@ def create_app(config: ServiceConfig | None = None,
                     result.dropped,
                     invite.call_kind,
                 )
-                return JSONResponse(status_code=200, content=result.as_dict())
+                return JSONResponse(status_code=200, content=result_body)
+            except CallServiceError as error:
+                status_code, body = error_response(error)
+                return JSONResponse(status_code=status_code, content=body)
+
+        @app.post(FOREGROUND_SIGNALING_DEV_INJECT_ACTIVE_PATH)
+        async def foreground_signaling_dev_inject_active(request: Request) -> JSONResponse:
+            try:
+                if not _is_local_request(request):
+                    return JSONResponse(
+                        status_code=403,
+                        content=_foreground_signaling_dev_inject_active_response(
+                            active_subscriber_count=signaling_service.diagnostics.subscriber_count,
+                            delivered=False,
+                            dropped=False,
+                        ),
+                    )
+                payload: Any = await request.json()
+                if not isinstance(payload, dict):
+                    raise bad_request(error="Request body must be a JSON object.")
+                invite = ForegroundCallInvitePayload.from_mapping(payload)
+                active_subscriber_count, result = signaling_service.publish_invite_to_single_active_subscriber(invite)
+                status_code = 200 if active_subscriber_count == 1 else 409
+                LOGGER.info(
+                    "foreground signaling dev active inject handled active_subscriber_count=%d delivered=%s dropped=%s call_kind=%s",
+                    active_subscriber_count,
+                    result.delivered,
+                    result.dropped,
+                    invite.call_kind,
+                )
+                return JSONResponse(
+                    status_code=status_code,
+                    content=_foreground_signaling_dev_inject_active_response(
+                        active_subscriber_count=active_subscriber_count,
+                        delivered=result.delivered,
+                        dropped=result.dropped,
+                    ),
+                )
             except CallServiceError as error:
                 status_code, body = error_response(error)
                 return JSONResponse(status_code=status_code, content=body)
@@ -282,6 +358,47 @@ def _eligibility_policy_for_config(
         allowed_user_ids=config.native_audio_eligibility_allowed_users,
         allowed_homeservers=config.native_audio_eligibility_allowed_homeservers,
     )
+
+
+def _foreground_signaling_dev_invite_diagnostics(
+    authenticated_user: object,
+    signaling_service: ForegroundCallSignalingService,
+) -> dict[str, object]:
+    target_account_key = getattr(authenticated_user, "user" "_id")
+    target_device_key = getattr(authenticated_user, "device" "_id")
+    target_device_hash = stable_redacted_id(target_device_key) if target_device_key is not None else "none"
+    target_account_hash = stable_redacted_id(target_account_key)
+    return {
+        "active_subscriber_count": signaling_service.diagnostics.subscriber_count,
+        "target_subscriber_count": signaling_service.subscriber_count_for(target_account_key, target_device_key),
+        "auth_user_hash": target_account_hash,
+        "auth_device_hash": target_device_hash,
+        "target_user_hash": target_account_hash,
+        "target_device_hash": target_device_hash,
+    }
+
+
+def _foreground_signaling_dev_inject_active_response(
+    active_subscriber_count: int,
+    delivered: bool,
+    dropped: bool,
+) -> dict[str, object]:
+    return {
+        "version": 1,
+        "active_subscriber_count": active_subscriber_count,
+        "delivered": delivered,
+        "dropped": dropped,
+    }
+
+
+def _is_local_request(request: Request) -> bool:
+    if request.client is None:
+        return False
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for is not None:
+        forwarded_host = forwarded_for.split(",")[0].strip()
+        return forwarded_host in {"127.0.0.1", "::1", "localhost"}
+    return request.client.host in {"127.0.0.1", "::1", "localhost"}
 
 
 def _redis_client_from_url(redis_url: str) -> object:

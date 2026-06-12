@@ -53,6 +53,7 @@ from salemx_call_service.foreground_signaling import (
     ForegroundCallInvitePayload,
     ForegroundCallInviteRequest,
     ForegroundCallSignalingService,
+    foreground_heartbeat_sse_event,
     foreground_invite_sse_event,
     foreground_ready_sse_event,
 )
@@ -277,16 +278,22 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         invite = ForegroundCallInvitePayload.from_mapping(self.invite_payload())
         request = ForegroundCallInviteRequest(recipient="callee", recipient_device="device-b", invite=invite)
 
-        result = signaling.publish_invite(request)
+        with self.assertLogs("salemx_call_service.foreground_signaling", level="INFO") as logs:
+            result = signaling.publish_invite(request)
         received = await asyncio.wait_for(subscription.next_event(), timeout=0.1)
         ready_event = foreground_ready_sse_event()
         invite_event = foreground_invite_sse_event(received)
+        heartbeat_event = foreground_heartbeat_sse_event()
+        output = "\n".join(logs.output)
 
         self.assertTrue(result.delivered)
         self.assertFalse(result.dropped)
         self.assertEqual(received, invite)
-        self.assertIn("foreground.ready", ready_event)
-        self.assertIn("foreground.call.invite", invite_event)
+        self.assertEqual(ready_event, "event: foreground.ready\ndata: {\"ready\":true}\n\n")
+        self.assertTrue(invite_event.startswith("event: foreground.call.invite\ndata: "))
+        self.assertTrue(invite_event.endswith("\n\n"))
+        self.assertEqual(heartbeat_event, ": foreground.keepalive\n\n")
+        self.assertIn("invite_enqueued=True", output)
         self.assertNotIn("callee", invite_event)
         self.assertNotIn("device-b", invite_event)
 
@@ -321,13 +328,88 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         signaling = ForegroundCallSignalingService()
         app = app_module.create_app(token_service=self.make_token_service(), foreground_signaling_service=signaling)
 
-        status, body = await self.get_stream_ready_event(app, app_module.FOREGROUND_SIGNALING_STREAM_PATH)
+        status, body, headers = await self.get_stream_ready_event(app, app_module.FOREGROUND_SIGNALING_STREAM_PATH)
 
         self.assertEqual(status, 200)
         self.assertIn("foreground.ready", body)
+        self.assertEqual(headers["content-type"], "text/event-stream; charset=utf-8")
+        self.assertEqual(headers["cache-control"], "no-cache")
+        self.assertEqual(headers["x-accel-buffering"], "no")
         self.assertNotIn("callee", body)
         self.assertNotIn("device-b", body)
         self.assertEqual(signaling.diagnostics.subscriber_count, 0)
+
+    async def test_stream_endpoint_yields_local_injected_invite_event(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
+        app = self.dev_invite_app(app_module, signaling)
+        sent_messages: list[dict[str, object]] = []
+        ready_seen = asyncio.Event()
+        invite_seen = asyncio.Event()
+        disconnect_allowed = asyncio.Event()
+        request_sent = False
+
+        async def receive() -> dict[str, object]:
+            nonlocal request_sent
+            if not request_sent:
+                request_sent = True
+                return {"type": "http.request", "body": b"", "more_body": False}
+            await disconnect_allowed.wait()
+            return {"type": "http.disconnect"}
+
+        async def send(message: dict[str, object]) -> None:
+            sent_messages.append(message)
+            if message["type"] != "http.response.body":
+                return
+            body = message.get("body", b"")
+            if b"foreground.ready" in body:
+                ready_seen.set()
+            if b"foreground.call.invite" in body:
+                invite_seen.set()
+                disconnect_allowed.set()
+
+        scope = {
+            "type": "http",
+            "asgi": {"version": "3.0"},
+            "http_version": "1.1",
+            "method": "GET",
+            "scheme": "http",
+            "path": app_module.FOREGROUND_SIGNALING_STREAM_PATH,
+            "raw_path": app_module.FOREGROUND_SIGNALING_STREAM_PATH.encode("ascii"),
+            "query_string": b"",
+            "headers": [(b"authorization", self.authorization("auth-b").encode("ascii"))],
+            "client": ("127.0.0.1", 12345),
+            "server": ("testserver", 80),
+        }
+
+        with self.assertLogs("salemx_call_service.app", level="INFO") as logs:
+            stream_task = asyncio.create_task(app(scope, receive, send))  # type: ignore[operator]
+            try:
+                await asyncio.wait_for(ready_seen.wait(), timeout=1)
+                status, body = await _asgi_post_json(
+                    app,
+                    app_module.FOREGROUND_SIGNALING_DEV_INJECT_ACTIVE_PATH,
+                    {},
+                    self.invite_payload(),
+                )
+                await asyncio.wait_for(invite_seen.wait(), timeout=1)
+            finally:
+                disconnect_allowed.set()
+                await asyncio.wait_for(stream_task, timeout=1)
+
+        response_body = b"".join(message.get("body", b"") for message in sent_messages if message["type"] == "http.response.body")
+        output = response_body.decode("utf-8") + "\n" + json.dumps(body, sort_keys=True) + "\n" + "\n".join(logs.output)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["active_subscriber_count"], 1)
+        self.assertEqual(body["delivered"], True)
+        self.assertEqual(body["dropped"], False)
+        self.assertIn("event: foreground.ready", output)
+        self.assertIn("event: foreground.call.invite", output)
+        self.assertIn("invite_yielded", output)
+        self.assertNotIn("auth-b", output)
+        self.assertNotIn("callee", output)
+        self.assertNotIn("device-b", output)
 
     async def test_dev_invite_route_is_disabled_by_default(self) -> None:
         app_module = _load_app_module()
@@ -337,6 +419,16 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
             app,
             app_module.FOREGROUND_SIGNALING_DEV_INVITE_PATH,
             {"authorization": self.authorization("auth-b")},
+            self.invite_payload(),
+        )
+
+        self.assertEqual(status, 404)
+        self.assertNotIn("auth-b", json.dumps(body, sort_keys=True))
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_DEV_INJECT_ACTIVE_PATH,
+            {},
             self.invite_payload(),
         )
 
@@ -363,11 +455,42 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["subscriber_available"], True)
         self.assertEqual(body["delivered"], True)
         self.assertEqual(body["dropped"], False)
+        self.assertEqual(body["active_subscriber_count"], 1)
+        self.assertEqual(body["target_subscriber_count"], 1)
+        self.assertEqual(body["auth_user_hash"], body["target_user_hash"])
+        self.assertEqual(body["auth_device_hash"], body["target_device_hash"])
         self.assertEqual(received.call_handle, "opaque-local-safe-handle")
         self.assertEqual(len(self.dev_invite_issuer(app).issued), 0)
         self.assertNotIn("auth-b", output)
         self.assertNotIn("callee", output)
         self.assertNotIn("device-b", output)
+
+    async def test_dev_invite_route_reports_redacted_subscriber_mismatch(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
+        signaling.subscribe(AuthenticatedUser("other-callee", "device-b"))
+        app = self.dev_invite_app(app_module, signaling)
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_DEV_INVITE_PATH,
+            {"authorization": self.authorization("auth-b")},
+            self.invite_payload(),
+        )
+        output = json.dumps(body, sort_keys=True)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["subscriber_available"], False)
+        self.assertEqual(body["delivered"], False)
+        self.assertEqual(body["dropped"], False)
+        self.assertEqual(body["active_subscriber_count"], 1)
+        self.assertEqual(body["target_subscriber_count"], 0)
+        self.assertEqual(body["auth_user_hash"], body["target_user_hash"])
+        self.assertEqual(body["auth_device_hash"], body["target_device_hash"])
+        self.assertNotIn("auth-b", output)
+        self.assertNotIn("callee", output)
+        self.assertNotIn("device-b", output)
+        self.assertNotIn("other-callee", output)
 
     async def test_dev_invite_route_drops_stale_invite_without_fanout(self) -> None:
         app_module = _load_app_module()
@@ -407,7 +530,143 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(signaling.diagnostics.delivered_invite_count, 0)
         self.assertNotIn("unsafe handle", output)
 
-    async def get_stream_ready_event(self, app: object, path: str) -> tuple[int, str]:
+    async def test_dev_inject_active_route_delivers_to_single_local_subscriber(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
+        subscription = signaling.subscribe(AuthenticatedUser("callee", "device-b"))
+        app = self.dev_invite_app(app_module, signaling)
+
+        with self.assertLogs("salemx_call_service.app", level="INFO") as logs:
+            status, body = await _asgi_post_json(
+                app,
+                app_module.FOREGROUND_SIGNALING_DEV_INJECT_ACTIVE_PATH,
+                {},
+                self.invite_payload(),
+            )
+        received = await asyncio.wait_for(subscription.next_event(), timeout=0.1)
+        output = json.dumps(body, sort_keys=True) + "\n" + "\n".join(logs.output)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["active_subscriber_count"], 1)
+        self.assertEqual(body["delivered"], True)
+        self.assertEqual(body["dropped"], False)
+        self.assertEqual(received.call_handle, "opaque-local-safe-handle")
+        self.assertEqual(len(self.dev_invite_issuer(app).issued), 0)
+        self.assertIn("delivered=True", output)
+        self.assertNotIn("auth-b", output)
+        self.assertNotIn("callee", output)
+        self.assertNotIn("device-b", output)
+
+    async def test_dev_inject_active_route_fails_closed_without_exactly_one_subscriber(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
+        app = self.dev_invite_app(app_module, signaling)
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_DEV_INJECT_ACTIVE_PATH,
+            {},
+            self.invite_payload(),
+        )
+
+        self.assertEqual(status, 409)
+        self.assertEqual(body["active_subscriber_count"], 0)
+        self.assertEqual(body["delivered"], False)
+        self.assertEqual(body["dropped"], False)
+
+        first_subscription = signaling.subscribe(AuthenticatedUser("callee", "device-b"))
+        second_subscription = signaling.subscribe(AuthenticatedUser("other-callee", "device-c"))
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_DEV_INJECT_ACTIVE_PATH,
+            {},
+            self.invite_payload(),
+        )
+        output = json.dumps(body, sort_keys=True)
+
+        self.assertEqual(status, 409)
+        self.assertEqual(body["active_subscriber_count"], 2)
+        self.assertEqual(body["delivered"], False)
+        self.assertEqual(body["dropped"], False)
+        self.assertNotIn("callee", output)
+        self.assertNotIn("device-b", output)
+        self.assertNotIn("other-callee", output)
+        with self.assertRaises(asyncio.TimeoutError):
+            await asyncio.wait_for(first_subscription.next_event(), timeout=0.01)
+        with self.assertRaises(asyncio.TimeoutError):
+            await asyncio.wait_for(second_subscription.next_event(), timeout=0.01)
+
+    async def test_dev_inject_active_route_requires_local_request(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
+        signaling.subscribe(AuthenticatedUser("callee", "device-b"))
+        app = self.dev_invite_app(app_module, signaling)
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_DEV_INJECT_ACTIVE_PATH,
+            {},
+            self.invite_payload(),
+            client_host="203.0.113.10",
+        )
+
+        self.assertEqual(status, 403)
+        self.assertEqual(body["active_subscriber_count"], 1)
+        self.assertEqual(body["delivered"], False)
+        self.assertEqual(body["dropped"], False)
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_DEV_INJECT_ACTIVE_PATH,
+            {"x-forwarded-for": "203.0.113.10"},
+            self.invite_payload(),
+        )
+
+        self.assertEqual(status, 403)
+        self.assertEqual(body["active_subscriber_count"], 1)
+        self.assertEqual(body["delivered"], False)
+        self.assertEqual(body["dropped"], False)
+
+    async def test_dev_inject_active_route_drops_stale_invite_without_fanout(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 50000)
+        subscription = signaling.subscribe(AuthenticatedUser("callee", "device-b"))
+        app = self.dev_invite_app(app_module, signaling)
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_DEV_INJECT_ACTIVE_PATH,
+            {},
+            self.invite_payload(),
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["active_subscriber_count"], 1)
+        self.assertEqual(body["delivered"], False)
+        self.assertEqual(body["dropped"], True)
+        with self.assertRaises(asyncio.TimeoutError):
+            await asyncio.wait_for(subscription.next_event(), timeout=0.01)
+
+    async def test_dev_inject_active_route_rejects_malformed_invite(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
+        app = self.dev_invite_app(app_module, signaling)
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_DEV_INJECT_ACTIVE_PATH,
+            {},
+            self.invite_payload(call_handle="unsafe handle"),
+        )
+        output = json.dumps(body, sort_keys=True)
+
+        self.assertEqual(status, 400)
+        self.assertEqual(body["errcode"], "M_UNKNOWN")
+        self.assertEqual(signaling.diagnostics.delivered_invite_count, 0)
+        self.assertNotIn("unsafe handle", output)
+
+    async def get_stream_ready_event(self, app: object, path: str) -> tuple[int, str, dict[str, str]]:
         sent_messages: list[dict[str, object]] = []
         received = False
 
@@ -436,9 +695,14 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         }
         await asyncio.wait_for(app(scope, receive, send), timeout=1)  # type: ignore[operator]
 
-        status = next(message["status"] for message in sent_messages if message["type"] == "http.response.start")
+        response_start = next(message for message in sent_messages if message["type"] == "http.response.start")
+        status = response_start["status"]
+        headers = {
+            key.decode("ascii").lower(): value.decode("ascii")
+            for key, value in response_start["headers"]
+        }
         response_body = b"".join(message.get("body", b"") for message in sent_messages if message["type"] == "http.response.body")
-        return int(status), response_body.decode("utf-8")
+        return int(status), response_body.decode("utf-8"), headers
 
     @staticmethod
     def authorization(value: str) -> str:
@@ -2065,8 +2329,8 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
 
         with patch.dict(os.environ, env | {ALLOW_INSECURE_LIVEKIT_URL_ENV: "1"}, clear=True), _patch_redis_ping(app_module):
             app = app_module.create_app()
+            status_code, body = await _asgi_get_json(app, app_module.READINESS_PATH)
 
-        status_code, body = await _asgi_get_json(app, app_module.READINESS_PATH)
         self.assertEqual(status_code, 200)
         self.assertTrue(body["ready"])
         self.assertEqual(body["reason"], "ok")
@@ -2109,8 +2373,8 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
 
         with patch.dict(os.environ, env, clear=True), _patch_redis_ping(app_module):
             app = app_module.create_app()
+            status_code, body = await _asgi_get_json(app, app_module.READINESS_PATH)
 
-        status_code, body = await _asgi_get_json(app, app_module.READINESS_PATH)
         output = json.dumps(body, sort_keys=True)
 
         self.assertEqual(status_code, 200)
@@ -2142,8 +2406,8 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
 
         with patch.dict(os.environ, env, clear=True), _patch_redis_ping(app_module):
             app = app_module.create_app()
+            status_code, body = await _asgi_get_json(app, app_module.READINESS_PATH)
 
-        status_code, body = await _asgi_get_json(app, app_module.READINESS_PATH)
         self.assertEqual(status_code, 200)
         self.assertTrue(body["ready"])
         self.assertTrue(body["allocationStoreConfigured"])
@@ -2160,8 +2424,8 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
 
         with patch.dict(os.environ, env, clear=True), _patch_redis_ping(app_module):
             app = app_module.create_app()
+            status_code, body = await _asgi_get_json(app, app_module.READINESS_PATH)
 
-        status_code, body = await _asgi_get_json(app, app_module.READINESS_PATH)
         output = json.dumps(body, sort_keys=True)
 
         self.assertEqual(status_code, 200)
@@ -2335,7 +2599,13 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
                 app_module.create_app()
 
 
-async def _asgi_post_json(app: object, path: str, headers: dict[str, str], payload: dict[str, object]) -> tuple[int, dict[str, object]]:
+async def _asgi_post_json(
+    app: object,
+    path: str,
+    headers: dict[str, str],
+    payload: dict[str, object],
+    client_host: str = "127.0.0.1",
+) -> tuple[int, dict[str, object]]:
     body = json.dumps(payload).encode("utf-8")
     sent_messages: list[dict[str, object]] = []
     received = False
@@ -2360,7 +2630,7 @@ async def _asgi_post_json(app: object, path: str, headers: dict[str, str], paylo
         "raw_path": path.encode("ascii"),
         "query_string": b"",
         "headers": [(key.encode("ascii"), value.encode("utf-8")) for key, value in headers.items()],
-        "client": ("127.0.0.1", 12345),
+        "client": (client_host, 12345),
         "server": ("testserver", 80),
     }
     await app(scope, receive, send)  # type: ignore[operator]

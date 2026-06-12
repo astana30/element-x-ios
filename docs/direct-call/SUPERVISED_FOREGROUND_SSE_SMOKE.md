@@ -2,7 +2,7 @@
 
 ## 2.42I - Supervised Foreground SSE Smoke Preparation
 
-Status: prepared; physical-device smoke pending.
+Status: completed. Stream-open and local-only invite self-injection passed on a supervised physical iPhone smoke.
 
 ## Scope
 
@@ -32,6 +32,14 @@ The supervised dev invite endpoint is:
 POST /_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/invite
 ```
 
+The preferred supervised self-injection endpoint for this smoke is:
+
+```text
+POST /_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/inject-active
+```
+
+The self-injection endpoint is registered only under the same explicit flag, accepts only local requests on the call-service host, requires exactly one active foreground SSE subscriber, and returns only a redacted active-subscriber count plus delivered/dropped booleans.
+
 ## Server Disable And Rollback
 
 After the supervised smoke, disable the dev invite route by unsetting the flag and restarting/redeploying the call-service:
@@ -58,9 +66,121 @@ The app must not hardcode production URLs, auth header values, or credential sto
 
 The DEBUG owner must stay disabled by default and must be started only for the supervised foreground run.
 
-## Placeholder Dev Invite Command
+## DEBUG LLDB Smoke Hook
 
-This is a placeholder shape only. Replace placeholders locally during supervision and do not paste the resolved command or raw output into docs.
+For supervised physical-device smoke, the Debug app exposes an Objective-C runtime bridge:
+
+```text
+SalemXForegroundSSESmokeDebug
+```
+
+Configure it only during the supervised window with placeholder values resolved locally. Do not paste resolved values into docs or reports.
+
+Preferred active-session path:
+
+```lldb
+expr -l objc++ -O -- [(Class)NSClassFromString(@"SalemXForegroundSSESmokeDebug") stop]
+expr -l objc++ -O -- [(Class)NSClassFromString(@"SalemXForegroundSSESmokeDebug") clear]
+expr -l objc++ -O -- [(Class)NSClassFromString(@"SalemXForegroundSSESmokeDebug") startWithCurrentSessionURLString:@"<REDACTED_SSE_STREAM_URL>"]
+continue
+```
+
+This path uses the Debug app's currently active `UserSession` to construct the stream request inside the app process. The credential value is not returned to LLDB, logged, written to disk, or documented. If no active session or current app credential is available, the bridge emits disabled redacted diagnostics and does not start the stream.
+
+Before any server invite testing, confirm the helper was actually invoked by the Debug app process:
+
+- `[SSE-SMOKE-DIAG] helper_invoked=true`
+- `[SSE-SMOKE-DIAG] active_session_available=true`
+- `[SSE-SMOKE-DIAG] access_token_available=true`
+- `[SSE-SMOKE-DIAG] device_id_available=true`
+- `[SSE-SMOKE-DIAG] homeserver_url_available=true`
+- `[SSE-SMOKE-DIAG] foreground_sse_start_requested=true`
+- `[SSE-SMOKE-DIAG] foreground_sse_start_blocked_reason=none`
+
+If `helper_invoked=true` does not appear, the LLDB expression, attached process, installed build, or foreground app state is wrong. Do not debug server fanout, invite delivery, or parser stages until this line appears.
+
+Manual injected-header fallback:
+
+```lldb
+expr -l objc++ -O -- [(Class)NSClassFromString(@"SalemXForegroundSSESmokeDebug") configureWithStreamURLString:@"<REDACTED_SSE_STREAM_URL>" authorizationHeaderValue:@"<REDACTED_AUTH_HEADER_VALUE>"]
+expr -l objc++ -O -- [(Class)NSClassFromString(@"SalemXForegroundSSESmokeDebug") start]
+continue
+```
+
+Stop and clear the supervised runtime after the smoke:
+
+```lldb
+expr -l objc++ -O -- [(Class)NSClassFromString(@"SalemXForegroundSSESmokeDebug") stop]
+expr -l objc++ -O -- [(Class)NSClassFromString(@"SalemXForegroundSSESmokeDebug") clear]
+continue
+```
+
+The bridge constructs the existing DEBUG SSE runtime owner with an injected request, the URLSession SSE transport, the existing invite handler, and the isolated synthetic CallKit reporting proof adapter. It does not hardcode an endpoint or credential value, and it remains disabled unless configured through LLDB. The active-session helper removes the need to copy the current app credential into LLDB.
+
+The bridge emits grep-able one-line diagnostics with this prefix:
+
+```text
+[SSE-SMOKE-DIAG]
+```
+
+Expected fields:
+
+- `[SSE-SMOKE-DIAG] helper_invoked=true`
+- `[SSE-SMOKE-DIAG] active_session_available=true/false`
+- `[SSE-SMOKE-DIAG] access_token_available=true/false`
+- `[SSE-SMOKE-DIAG] device_id_available=true/false`
+- `[SSE-SMOKE-DIAG] homeserver_url_available=true/false`
+- `[SSE-SMOKE-DIAG] foreground_sse_start_requested=true/false`
+- `[SSE-SMOKE-DIAG] foreground_sse_start_blocked_reason=none/invalid_stream_url/missing_active_session/missing_access_token_provider/missing_access_token/blank_access_token`
+- `[SSE-SMOKE-DIAG] sse_configured=true`
+- `[SSE-SMOKE-DIAG] sse_started=true`
+- `[SSE-SMOKE-DIAG] sse_connected=true`
+- `[SSE-SMOKE-DIAG] invite_received=true`
+- `[SSE-SMOKE-DIAG] invite_valid=true`
+- `[SSE-SMOKE-DIAG] incoming_requested=true`
+- `[SSE-SMOKE-DIAG] fallback_deduped=true/false`
+- `[SSE-SMOKE-DIAG] transport_stopped=true`
+- `[SSE-SMOKE-DIAG] stream_failure=none/http_unauthorized/http_forbidden/http_client_error/http_server_error/http_unexpected/non_http_response/unsupported_content_type/network`
+- `[SSE-SMOKE-DIAG] raw_event_received=true`
+- `[SSE-SMOKE-DIAG] sse_event_type=foreground.call.invite`
+- `[SSE-SMOKE-DIAG] invite_parse_attempted=true`
+- `[SSE-SMOKE-DIAG] invite_parse_succeeded=true`
+- `[SSE-SMOKE-DIAG] pipeline_delivered=true`
+
+The diagnostic lines contain booleans and safe enum values only. They must not include raw URLs, account values, room values, device values, event values, credential values, request bodies, media-session names, or private runtime logs.
+
+## Placeholder Dev Invite Commands
+
+This is a placeholder shape only. Replace placeholders locally during supervision and do not paste resolved commands or raw output into docs.
+
+Preferred local-only self-injection command on the call-service host:
+
+```bash
+curl -X POST "http://127.0.0.1:8091/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/inject-active" \
+  -H "Content-Type: application/json" \
+  --data '{
+    "type": "foreground.call.invite",
+    "version": 1,
+    "call_handle": "safe-foreground-smoke-<timestamp>",
+    "call_kind": "audio",
+    "created_at_ms": 0,
+    "expires_at_ms": 0,
+    "display_label": "Pilot Participant"
+  }'
+```
+
+Expected redacted response on pass:
+
+```json
+{
+  "version": 1,
+  "active_subscriber_count": 1,
+  "delivered": true,
+  "dropped": false
+}
+```
+
+The older authenticated dev invite command remains useful for targeted server tests, but it is no longer required for the supervised iPhone smoke when the active-session SSE helper is used:
 
 ```bash
 curl -X POST "https://<CALL_SERVICE_HOST>/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/invite" \
@@ -79,6 +199,101 @@ curl -X POST "https://<CALL_SERVICE_HOST>/_matrix/client/unstable/kz.salemx.dire
 
 The dev invite must be submitted from the same active callee session while the foreground SSE stream is connected.
 
+The local-only self-injection route avoids copying the active app credential out of the app. It must be used only while exactly one supervised foreground SSE subscriber is connected.
+
+## 2.42I Smoke Troubleshooting Update
+
+The supervised smoke requires the same active app Matrix session for the stream and invite delivery checks:
+
+- the iOS DEBUG SSE stream request;
+- the supervised dev invite POST.
+
+An OAuth/MAS value, stale Matrix bearer, refreshed-out bearer, or bearer copied from a different device/session can make the stream or dev invite authenticate as a different principal/device, or fail with an inactive-token response. If any real credential value is exposed during manual supervision, treat it as compromised and rotate or revoke it outside the repo and docs.
+
+Prefer `startWithCurrentSessionURLString:` for the physical iPhone smoke because the Debug app reads its active session credential internally and does not expose it through LLDB. If the dev invite still requires an external authenticated POST, use only a locally verified current credential outside chat/docs, or stop and add a supervised server-side self-injection route tied to the active SSE subscriber.
+
+`[SSE-SMOKE-DIAG] sse_connected=true` now means the app received the server `foreground.ready` SSE event or a valid invite event. A started URLSession task alone is not enough to mark the smoke connected.
+
+If the iOS diagnostics show `sse_started=true`, `sse_connected=false`, and `transport_stopped=true`, diagnose the stream path before retrying dev invite delivery. Use `stream_failure` to distinguish stale/unauthorized credentials, non-SSE responses, network failure, and early stream end. The expected redacted server stream lifecycle is:
+
+- `stream_auth_ok`
+- `stream_registered`
+- `ready_sent`
+- `stream_closed`
+
+The stream response should use `Content-Type: text/event-stream`, `Cache-Control: no-cache`, and `X-Accel-Buffering: no`. The iOS URLSession SSE reader preserves raw line breaks so the blank-line SSE delimiter can flush `foreground.ready`.
+
+The supervised dev invite response may include redacted troubleshooting fields:
+
+- `active_subscriber_count`
+- `target_subscriber_count`
+- `auth_user_hash`
+- `auth_device_hash`
+- `target_user_hash`
+- `target_device_hash`
+
+These fields are hashes and counters only. They exist to distinguish no active subscriber, target mismatch, and successful target delivery without exposing raw account or device values.
+
+The active-session helper first proved stream-open on physical iPhone. The observed redacted iOS state was:
+
+- `stream_failure=none`
+- `sse_configured=true`
+- `sse_started=true`
+- `sse_connected=true`
+- `invite_received=false`
+- `invite_valid=false`
+- `incoming_requested=false`
+
+The next blocked stage was invite parsing: the server reported `active_subscriber_count=1`, `delivered=true`, `dropped=false`, and `invite_yielded=true`, while iOS observed `sse_event_type=foreground.call.invite` and `invite_parse_attempted=true` but did not complete invite parsing. The likely cause was small device/server clock skew in the invite timestamp. The validator now allows a small future-skew window while still rejecting larger future timestamps.
+
+## 2.42I-S Physical Smoke Result
+
+Status: passed.
+
+Redacted server evidence:
+
+- `stream_auth_ok=true`
+- `stream_registered=true`
+- `ready_sent=true`
+- `active_subscriber_count=1`
+- `delivered=true`
+- `dropped=false`
+- `invite_enqueued=true`
+- `invite_yielded=true`
+- `sse_event_type=foreground.call.invite`
+
+Redacted iOS evidence:
+
+- `[SSE-SMOKE-DIAG] helper_invoked=true`
+- `[SSE-SMOKE-DIAG] active_session_available=true`
+- `[SSE-SMOKE-DIAG] access_token_available=true`
+- `[SSE-SMOKE-DIAG] device_id_available=true`
+- `[SSE-SMOKE-DIAG] homeserver_url_available=true`
+- `[SSE-SMOKE-DIAG] foreground_sse_start_requested=true`
+- `[SSE-SMOKE-DIAG] foreground_sse_start_blocked_reason=none`
+- `[SSE-SMOKE-DIAG] sse_configured=true`
+- `[SSE-SMOKE-DIAG] sse_started=true`
+- `[SSE-SMOKE-DIAG] sse_connected=true`
+- `[SSE-SMOKE-DIAG] stream_failure=none`
+- `[SSE-SMOKE-DIAG] raw_event_received=true`
+- `[SSE-SMOKE-DIAG] sse_event_type=foreground.call.invite`
+- `[SSE-SMOKE-DIAG] invite_parse_attempted=true`
+- `[SSE-SMOKE-DIAG] invite_parse_succeeded=true`
+- `[SSE-SMOKE-DIAG] pipeline_delivered=true`
+- `[SSE-SMOKE-DIAG] invite_received=true`
+- `[SSE-SMOKE-DIAG] invite_valid=true`
+- `[SSE-SMOKE-DIAG] incoming_requested=true`
+- `[SSE-SMOKE-DIAG] fallback_deduped=false`
+
+The app later reported `transport_stopped=true` and `stream_failure=network` only after the supervised server restart used to disable the dev route. That late stop does not invalidate the invite-delivery pass.
+
+After the smoke, `SALEMX_FOREGROUND_SIGNALING_DEV_INVITE_ENABLED=0` was restored, the call-service was restarted, and the public dev invite route returned `404`.
+
+Raw runtime logs are intentionally omitted because they may contain private Matrix/runtime identifiers. The smoke did not request media credentials, connect media, emit Matrix events, add PushKit/APNs/background behavior, replace Element Call routing, or persist signing/project changes.
+- `transport_stopped=false`
+
+This proves `foreground.ready` parsing and active app session request construction. The remaining supervised proof is invite self-injection into the active subscriber.
+
 ## Redacted Diagnostics To Collect
 
 Record only safe booleans and timing buckets:
@@ -91,6 +306,7 @@ Record only safe booleans and timing buckets:
 - `incoming_requested`
 - `fallback_deduped`
 - `transport_stopped`
+- `stream_failure`
 - SSE connect elapsed bucket
 - invite-to-incoming elapsed bucket
 
@@ -101,18 +317,20 @@ Full runtime logs must not be pasted into docs because they can contain private 
 1. Start the call-service in local or staging supervision.
 2. Enable the dev invite route for the supervised window.
 3. Launch the iPhone Debug app in foreground with an authenticated session.
-4. Explicitly configure and start the DEBUG foreground SSE runtime owner.
-5. Confirm `sse_configured=true`.
-6. Confirm `sse_started=true`.
-7. Confirm `sse_connected=true`.
-8. Submit one opaque dev invite through the supervised route.
-9. Confirm `invite_received=true`.
-10. Confirm `invite_valid=true`.
-11. Confirm `incoming_requested=true`.
-12. Confirm CallKit appears within 0-2 seconds of invite delivery.
-13. Confirm invite receipt does not request media credentials before Answer.
-14. Confirm invite receipt does not connect media before Answer.
-15. Stop the DEBUG owner and confirm `transport_stopped=true`.
+4. Explicitly start the DEBUG foreground SSE runtime owner through the active-session LLDB smoke bridge.
+5. Confirm `helper_invoked=true`.
+6. Confirm `foreground_sse_start_requested=true`.
+7. Confirm `sse_configured=true`.
+8. Confirm `sse_started=true`.
+9. Confirm `sse_connected=true`.
+10. Submit one opaque dev invite through the local-only self-injection route while exactly one foreground SSE subscriber is active.
+11. Confirm `invite_received=true`.
+12. Confirm `invite_valid=true`.
+13. Confirm `incoming_requested=true`.
+14. Confirm CallKit appears within 0-2 seconds of invite delivery.
+15. Confirm invite receipt does not request media credentials before Answer.
+16. Confirm invite receipt does not connect media before Answer.
+17. Stop the DEBUG owner and confirm `transport_stopped=true`.
 16. Disable the dev invite route.
 
 ## Pass Criteria

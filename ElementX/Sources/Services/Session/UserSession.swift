@@ -30,6 +30,10 @@ class UserSession: UserSessionProtocol {
         self.mediaProvider = mediaProvider
         self.voiceMessageMediaManager = voiceMessageMediaManager
         
+        #if DEBUG && canImport(CallKit) && os(iOS)
+        SalemXForegroundSSESmokeDebug.registerActiveUserSession(self)
+        #endif
+
         authErrorCancellable = clientProxy.actionsPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] callback in
