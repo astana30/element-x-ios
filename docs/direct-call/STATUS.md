@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.42N - DEBUG smoke tooling release-surface guard.
+After 2.42O - consolidated foreground token-guard baseline.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,21 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.42O consolidates the validated foreground real-invite token-guard baseline:
+  - 2.42L hardened stale-token/`401` sender diagnostics at `9544d85090bb152f5c28d5acd11f37815556e078`.
+  - 2.42M1 added the DEBUG-only sender bridge at `751316429c5476217f7b881d9a2f542a4e7e3b3b`.
+  - 2.42M2 added the DEBUG-only receiver SSE bridge/proof path at `6c1c47b5386ed5051cea8ee0277719b4d2bd4cce`.
+  - 2.42M3 added DEBUG-only in-app foreground smoke controls at `a579509c6ea7c294fa428370efa10bf875b053bb`.
+  - 2.42M4 exposed the DEBUG-only `Internal diagnostics` entry at `26a07771c22c8c3d615b9c34552f3b811510b724`.
+  - 2.42M physical two-device foreground real-invite smoke passed at `bf9996ae0665ad3953fac3d7a838bfb619349dd1`.
+  - 2.42N guarded the DEBUG smoke tooling release surface at `26e520b6f6ec0220ce118051f5acac36ed40bfba`.
+  - Current validated foreground real-invite baseline is `26e520b6f6ec0220ce118051f5acac36ed40bfba`; future branches should start from that validated head or a documented descendant.
+  - `docs/direct-call/REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` remains intentionally untracked and must not be staged or committed.
+  - The dev route remains disabled by default, and the real non-dev route remains auth-gated.
+  - Receiver identifiers were used locally only during smoke and were not recorded.
+  - No media credentials, media connection, PushKit/APNs/background behavior, Matrix event emission from invite receipt, Element Call route replacement, signing/project setting, `app.yml`, `Info.plist`, or entitlement change was added.
+  - Route-level safety checks can confirm `dev/invite=404`, unauthenticated non-dev invite `401`, and unauthenticated stream `401`; direct `systemctl` SSH checks may be blocked by host-key/auth and must be reported separately when not verified.
+  - Physical Debug builds should use `DEVELOPMENT_TEAM=M639Y9MFR2`; the old `83LGSC2QPV` team must not be used for current physical Debug builds.
 - 2.42N verifies and hardens the DEBUG-only foreground smoke tooling release surface after the 2.42M pass at `bf9996ae0665ad3953fac3d7a838bfb619349dd1`:
   - The M1-M4 sender bridge, receiver bridge, in-app foreground smoke controls, and Settings `Internal diagnostics` entry are local supervised smoke tooling only.
   - Source-surface tests now guard that the smoke bridges, receiver proof controls, Settings Developer Options action, and session registration hook remain inside DEBUG compile gates.

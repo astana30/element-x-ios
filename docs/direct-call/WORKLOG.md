@@ -181,6 +181,26 @@ The M1-M4 bridges and controls remain local supervised smoke tooling only and mu
 
 The dev route remains disabled by default, and the real non-dev route remains auth-gated. Physical Debug builds for current supervised smokes should use `DEVELOPMENT_TEAM=M639Y9MFR2`; do not use the old `83LGSC2QPV` team or persist signing changes.
 
+### 2.42O — Consolidated foreground token-guard baseline
+
+Consolidated the validated foreground real-invite token-guard baseline after the L-N chain:
+
+```text
+9544d85090bb152f5c28d5acd11f37815556e078 Harden foreground real invite token handling
+751316429c5476217f7b881d9a2f542a4e7e3b3b Add debug real invite smoke bridge
+6c1c47b5386ed5051cea8ee0277719b4d2bd4cce Add debug receiver SSE smoke bridge
+a579509c6ea7c294fa428370efa10bf875b053bb Add debug in-app foreground smoke controls
+26a07771c22c8c3d615b9c34552f3b811510b724 Expose debug developer options entry
+bf9996ae0665ad3953fac3d7a838bfb619349dd1 Validate foreground real invite token guard smoke
+26e520b6f6ec0220ce118051f5acac36ed40bfba Guard debug foreground smoke surface
+```
+
+The current validated foreground real-invite baseline is `26e520b6f6ec0220ce118051f5acac36ed40bfba`. The 2.42M physical two-device smoke passed on the authenticated real non-dev route, with receiver identifiers used locally only and not recorded. The dev route remained disabled, unauthenticated non-dev invite remained `401`, and unauthenticated stream remained `401`.
+
+The M1-M4 smoke controls and bridges are DEBUG-only local supervised tooling, not production call behavior. Invite receipt still does not request media credentials, connect media, emit Matrix events, add PushKit/APNs/background behavior, or replace Element Call routing. Direct `systemctl` SSH checks may be blocked by host-key/auth; distinguish that from route-level safety checks in future reports.
+
+`docs/direct-call/REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` remains intentionally untracked and must not be staged or committed. Physical Debug builds should use `DEVELOPMENT_TEAM=M639Y9MFR2`; do not use the old `83LGSC2QPV` team or persist signing changes.
+
 ### 2.42K — Supervised foreground real invite
 
 The two-device foreground real-invite smoke passed and was committed as:

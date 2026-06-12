@@ -1,5 +1,27 @@
 # Supervised Foreground SSE Smoke
 
+## 2.42O - Consolidated Foreground Token-Guard Baseline
+
+Status: completed as a docs-only baseline consolidation after the 2.42M pass and 2.42N release-surface guard.
+
+The current validated foreground real-invite baseline is `26e520b6f6ec0220ce118051f5acac36ed40bfba`. It includes:
+
+- 2.42L stale-token/`401` sender diagnostic hardening.
+- 2.42M1 DEBUG-only sender bridge.
+- 2.42M2 DEBUG-only receiver SSE bridge/proof path.
+- 2.42M3 DEBUG-only in-app foreground smoke controls.
+- 2.42M4 DEBUG-only `Internal diagnostics` entry.
+- 2.42M physical two-device foreground real-invite smoke pass at `bf9996ae0665ad3953fac3d7a838bfb619349dd1`.
+- 2.42N DEBUG smoke tooling release-surface guard at `26e520b6f6ec0220ce118051f5acac36ed40bfba`.
+
+Future work should start from this baseline or a documented descendant. Do not mix PushKit/APNs/background incoming-call investigation, video work, or production call behavior changes into foreground real-invite smoke tooling changes.
+
+The dev route remains disabled by default, and the real non-dev route remains auth-gated. Receiver identifiers were used locally only during smoke and were not recorded. `docs/direct-call/REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` remains intentionally untracked and must not be staged or committed.
+
+No media credentials, media connection, PushKit/APNs/background behavior, Matrix event emission from invite receipt, or Element Call route replacement was added. Physical Debug builds should use `DEVELOPMENT_TEAM=M639Y9MFR2`; do not use the old `83LGSC2QPV` team or persist signing changes.
+
+Route-level safety checks should confirm `dev/invite=404`, unauthenticated non-dev invite `401`, and unauthenticated stream `401`. Claim direct `salemx-call-service active` only when a direct service check such as `systemctl` actually succeeds; SSH host-key/auth blocks should be reported honestly.
+
 ## 2.42N - DEBUG Smoke Tooling Release-Surface Guard
 
 Status: completed after the 2.42M physical regression smoke pass at `bf9996ae0665ad3953fac3d7a838bfb619349dd1`.
