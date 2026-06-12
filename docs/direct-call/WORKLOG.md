@@ -245,6 +245,16 @@ Focused tests cover reportable request planning, invalid/expired/excessive-futur
 
 PushKit registration, APNs registration, VoIP/background entitlements, project/signing edits, real CallKit reporting from PushKit/background callbacks, media credentials, media connection, Matrix event emission from background planning, and production background behavior remain unimplemented. Future 2.43E may add a fake/test-only CallKit adapter boundary or a controlled real CallKit adapter, still without PushKit registration unless explicitly allowed. Any future signing, entitlement, provisioning, project, `Info.plist`, or `app.yml` change requires a separate explicit task.
 
+### 2.43E — Background CallKit adapter boundary
+
+Added a safe native direct-call background CallKit adapter boundary and fake/test reporting seam. It consumes the 2.43D report planning result and returns redacted statuses for reportable, non-reportable, missing-session, and failed-recording outcomes.
+
+The default boundary is inert unless a fake/test recorder is injected. It does not call `CXProvider.reportNewIncomingCall`, wire into a PushKit/background callback, register PushKit, register APNs, access tokens, persist payloads, request media credentials, connect media, emit Matrix events, or change production call behavior.
+
+Focused tests cover a valid fake report attempt, non-reportable suppression, missing-session suppression, redacted diagnostics, and no media/Matrix/PushKit/APNs/runtime CallKit side effects. Existing 2.43B parser tests, 2.43C intake tests, 2.43D planner tests, foreground timestamp validation, and DEBUG smoke release-surface tests remain in the targeted suite.
+
+PushKit registration, APNs registration, VoIP/background entitlements, project/signing edits, real CallKit reporting from PushKit/background callbacks, media credentials, media connection, Matrix event emission, and production background behavior remain unimplemented. Future 2.43F may add an explicitly gated real CallKit adapter implementation or PushKit lifecycle design, but not entitlement/signing/project changes unless separately authorized.
+
 ### 2.42K — Supervised foreground real invite
 
 The two-device foreground real-invite smoke passed and was committed as:

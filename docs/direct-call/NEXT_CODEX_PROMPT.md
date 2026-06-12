@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.43d-background-callkit-reporting-seam`
+`salemx-2.43e-background-callkit-adapter-boundary`
 
-Next phase: continue from the background CallKit report request planner seam.
+Next phase: continue from the background CallKit adapter boundary.
 
 ## Baseline
 
@@ -126,11 +126,26 @@ Key findings:
 - No Matrix events are emitted from background CallKit planning.
 - Planner diagnostics remain redacted booleans/status classes only.
 
+2.43E adds only an inert background CallKit adapter boundary and fake/test reporting seam:
+
+- It consumes the 2.43D report planning result and returns redacted statuses such as `not_reported_not_reportable`, `not_reported_missing_authenticated_context`, `report_attempt_recorded`, and `report_failed_redacted`.
+- A fake/test recorder can record one redacted report attempt for a reportable request.
+- Non-reportable and missing-session decisions record no report attempt.
+- No real `CXProvider.reportNewIncomingCall` is called by this boundary.
+- No PushKit/background callback is wired to this boundary.
+- No PushKit registration was added.
+- No APNs registration was added.
+- No VoIP/background entitlement, provisioning, project, `Info.plist`, or `app.yml` file was changed.
+- Foreground real invite behavior remains unchanged.
+- No media credentials or media connection were introduced.
+- No Matrix events are emitted.
+- Adapter diagnostics remain redacted booleans/status classes only.
+
 ## Guardrails
 
 - Do not implement PushKit/APNs/background incoming-call behavior without a separately scoped task.
 - Any future signing, entitlement, provisioning, project, `Info.plist`, or `app.yml` change requires explicit approval in that task.
-- Future 2.43E may add a fake/test-only CallKit adapter boundary or a controlled real CallKit adapter, still without PushKit registration unless explicitly allowed.
+- Future 2.43F may add an explicitly gated real CallKit adapter implementation or PushKit lifecycle design, but not entitlement/signing/project changes unless separately authorized.
 - Do not implement PushKit runtime inside foreground smoke tooling.
 - Do not register APNs or VoIP values inside foreground smoke tooling.
 - Do not add background incoming handling inside foreground smoke tooling.

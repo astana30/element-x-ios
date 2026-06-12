@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.43D - background CallKit report request planner seam.
+After 2.43E - background CallKit adapter boundary.
 
 ## Latest App Code Checkpoint
 
@@ -63,6 +63,17 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - PushKit registration, APNs registration, VoIP/background entitlements, project/signing files, media credentials, media connection, Matrix event emission, and production background behavior remain unimplemented.
   - The foreground real-invite path remains unchanged.
   - Future 2.43E may add a fake/test-only CallKit adapter boundary or a controlled real CallKit adapter, still without PushKit registration unless explicitly allowed.
+  - Any future signing, entitlement, provisioning, project, `Info.plist`, or `app.yml` change requires a separate explicit task.
+  - Physical Debug builds should use `DEVELOPMENT_TEAM=M639Y9MFR2`; the old `83LGSC2QPV` team must not be used.
+- 2.43E adds a safe background CallKit adapter boundary and fake/test reporting seam:
+  - The adapter consumes the 2.43D report planning result and returns redacted statuses such as `not_reported_not_reportable`, `not_reported_missing_authenticated_context`, `report_attempt_recorded`, and `report_failed_redacted`.
+  - Tests can inject a fake recorder and prove one redacted report attempt is recorded for a reportable request.
+  - Non-reportable and missing-session decisions record no report attempt and expose only redacted blocked reasons.
+  - Adapter diagnostics keep `media_credentials_requested=false`, `media_connect_requested=false`, `matrix_event_emit_requested=false`, `pushkit_registration_requested=false`, and `apns_registration_requested=false`.
+  - No real PushKit/background callback is wired to this adapter, and no real `CXProvider.reportNewIncomingCall` call is introduced in this task.
+  - PushKit registration, APNs registration, VoIP/background entitlements, project/signing files, media credentials, media connection, Matrix event emission, and production background behavior remain unimplemented.
+  - The foreground real-invite path remains unchanged.
+  - Future 2.43F may add an explicitly gated real CallKit adapter implementation or PushKit lifecycle design, but not entitlement/signing/project changes unless separately authorized.
   - Any future signing, entitlement, provisioning, project, `Info.plist`, or `app.yml` change requires a separate explicit task.
   - Physical Debug builds should use `DEVELOPMENT_TEAM=M639Y9MFR2`; the old `83LGSC2QPV` team must not be used.
 - 2.43A documents the PushKit/APNs/background incoming-call investigation after the 2.42O foreground baseline:

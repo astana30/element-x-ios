@@ -1564,6 +1564,132 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func backgroundCallKitReportingAdapterRecordsOneFakeReportAttempt() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let parser = DirectCallBackgroundInvitePayloadParser()
+        let intake = DirectCallBackgroundInviteIntake()
+        let parsed = parser.parse(makeBackgroundInvitePayload(now: now), now: now)
+        let intakeResult = intake.evaluate(parsed,
+                                           authenticatedSessionAvailable: true,
+                                           callKitReportAdapterAvailable: true)
+        let planner = DirectCallBackgroundCallKitReportPlanner {
+            UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 45))
+        }
+        let planningResult = planner.plan(from: intakeResult)
+        var recordedRequests = [DirectCallBackgroundCallKitReportRequest]()
+        let adapter = DirectCallBackgroundCallKitReportingAdapter { request in
+            recordedRequests.append(request)
+            return true
+        }
+
+        let result = adapter.report(planningResult)
+
+        #expect(recordedRequests.count == 1)
+        #expect(result.status == .reportAttemptRecorded)
+        #expect(result.diagnostics.callKitAdapterInvoked == true)
+        #expect(result.diagnostics.callKitReportAttempted == true)
+        #expect(result.diagnostics.callKitReportResult == .reportAttemptRecorded)
+        #expect(result.diagnostics.mediaCredentialsRequested == false)
+        #expect(result.diagnostics.mediaConnectRequested == false)
+        #expect(result.diagnostics.matrixEventEmitRequested == false)
+        #expect(result.diagnostics.pushKitRegistrationRequested == false)
+        #expect(result.diagnostics.apnsRegistrationRequested == false)
+        #expect(result.diagnostics.blockedReason == nil)
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !String(describing: result).contains($0) })
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !String(describing: recordedRequests[0]).contains($0) })
+    }
+
+    @Test
+    func backgroundCallKitReportingAdapterSkipsNonReportableDecisions() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let parser = DirectCallBackgroundInvitePayloadParser()
+        let intake = DirectCallBackgroundInviteIntake()
+        let planner = DirectCallBackgroundCallKitReportPlanner()
+        var missingFieldPayload = makeBackgroundInvitePayload(now: now)
+        missingFieldPayload.removeValue(forKey: "call_handle")
+        let planningResult = planner.plan(from: intake.evaluate(parser.parse(missingFieldPayload, now: now),
+                                                                authenticatedSessionAvailable: true))
+        var recordedRequests = [DirectCallBackgroundCallKitReportRequest]()
+        let adapter = DirectCallBackgroundCallKitReportingAdapter { request in
+            recordedRequests.append(request)
+            return true
+        }
+
+        let result = adapter.report(planningResult)
+
+        #expect(recordedRequests.isEmpty)
+        #expect(result.status == .notReportedNotReportable)
+        #expect(result.diagnostics.callKitReportAttempted == false)
+        #expect(result.diagnostics.blockedReason == .notReportable)
+        #expect(result.diagnostics.mediaCredentialsRequested == false)
+        #expect(result.diagnostics.mediaConnectRequested == false)
+        #expect(result.diagnostics.matrixEventEmitRequested == false)
+        #expect(result.diagnostics.pushKitRegistrationRequested == false)
+        #expect(result.diagnostics.apnsRegistrationRequested == false)
+    }
+
+    @Test
+    func backgroundCallKitReportingAdapterRepresentsMissingAuthenticatedContextSafely() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let parser = DirectCallBackgroundInvitePayloadParser()
+        let intake = DirectCallBackgroundInviteIntake()
+        let parsed = parser.parse(makeBackgroundInvitePayload(now: now), now: now)
+        let intakeResult = intake.evaluate(parsed)
+        let planningResult = DirectCallBackgroundCallKitReportPlanner().plan(from: intakeResult)
+        let adapter = DirectCallBackgroundCallKitReportingAdapter { _ in
+            Issue.record("Non-reportable missing-session decisions must not record a report attempt.")
+            return true
+        }
+
+        let result = adapter.report(planningResult)
+
+        #expect(result.status == .notReportedMissingAuthenticatedContext)
+        #expect(result.diagnostics.callKitReportAttempted == false)
+        #expect(result.diagnostics.blockedReason == .authenticatedSessionUnavailable)
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !String(describing: result).contains($0) })
+    }
+
+    @Test
+    func backgroundCallKitReportingAdapterKeepsDiagnosticsRedactedAndRuntimeFree() throws {
+        let now = Date(timeIntervalSince1970: 1000)
+        let parser = DirectCallBackgroundInvitePayloadParser()
+        let intake = DirectCallBackgroundInviteIntake()
+        let parsed = parser.parse(makeBackgroundInvitePayload(now: now,
+                                                              createdAt: now.addingTimeInterval(3),
+                                                              expiresAt: now.addingTimeInterval(30)),
+                                  now: now)
+        let intakeResult = intake.evaluate(parsed,
+                                           authenticatedSessionAvailable: true,
+                                           callKitReportAdapterAvailable: true)
+        let planner = DirectCallBackgroundCallKitReportPlanner {
+            UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 46))
+        }
+        let planningResult = planner.plan(from: intakeResult)
+        let adapter = DirectCallBackgroundCallKitReportingAdapter { _ in true }
+
+        let result = adapter.report(planningResult)
+        let source = try Self.sourceFile("ElementX/Sources/Services/Calls/DirectCallModels.swift")
+        let description = String(describing: adapter) + " " + String(describing: result)
+
+        #expect(description.contains("callkit_adapter_invoked=true"))
+        #expect(description.contains("callkit_report_attempted=true"))
+        #expect(description.contains("callkit_report_result=report_attempt_recorded"))
+        #expect(description.contains("media_credentials_requested=false"))
+        #expect(description.contains("media_connect_requested=false"))
+        #expect(description.contains("matrix_event_emit_requested=false"))
+        #expect(description.contains("pushkit_registration_requested=false"))
+        #expect(description.contains("apns_registration_requested=false"))
+        #expect(description.contains("realCallKitRuntime: false"))
+        #expect(description.contains("pushKitRuntime: false"))
+        #expect(description.contains("apnsRegistrationRuntime: false"))
+        #expect(description.contains("mediaRuntime: false"))
+        #expect(description.contains("matrixEventRuntime: false"))
+        #expect(!source.contains("PKPushRegistry"))
+        #expect(!source.contains("reportNewIncomingCall"))
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !description.contains($0) })
+    }
+
+    @Test
     func diagnosticsAndOutcomesStayRedacted() {
         let diagnostics = NativeIncomingCallRedactedDiagnostics(lifecycleState: .failed,
                                                                 failClosedReason: .serverIssuedMediaCredentialRejected,
@@ -2558,6 +2684,15 @@ final class NativeIncomingCallLifecycleContractTests {
         "displayCall",
         "presentCallScreen"
     ]
+
+    private static let repositoryRootURL = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+
+    private static func sourceFile(_ relativePath: String) throws -> String {
+        try String(contentsOf: repositoryRootURL.appendingPathComponent(relativePath), encoding: .utf8)
+    }
 
     private func reportedIncomingIdentity(dependencies: NativeIncomingLifecycleDependencies) -> NativeIncomingCallIdentity? {
         let outcome = dependencies.service.receiveIncomingCall(handle: "safe-local-call",
