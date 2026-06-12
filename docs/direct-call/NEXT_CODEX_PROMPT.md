@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.43c-background-invite-intake-seam`
+`salemx-2.43d-background-callkit-reporting-seam`
 
-Next phase: continue from the background invite intake seam.
+Next phase: continue from the background CallKit report request planner seam.
 
 ## Baseline
 
@@ -112,11 +112,25 @@ Key findings:
 - No Matrix events are emitted from background intake.
 - Intake diagnostics remain redacted booleans/status classes only.
 
+2.43D adds only an inert background CallKit report request planner seam:
+
+- It consumes the 2.43C intake result and returns a redacted internal `reportable_incoming_call_request` model or a non-reportable decision.
+- Invalid, expired, excessive-future, and missing-session decisions remain non-reportable with redacted blocked reasons.
+- The report request model is not handed to a real CallKit provider in 2.43D.
+- No PushKit registration was added.
+- No APNs registration was added.
+- No VoIP/background entitlement, provisioning, project, `Info.plist`, or `app.yml` file was changed.
+- Foreground real invite behavior remains unchanged.
+- No real CallKit reporting from PushKit or background callbacks was introduced.
+- No media credentials or media connection were introduced.
+- No Matrix events are emitted from background CallKit planning.
+- Planner diagnostics remain redacted booleans/status classes only.
+
 ## Guardrails
 
 - Do not implement PushKit/APNs/background incoming-call behavior without a separately scoped task.
 - Any future signing, entitlement, provisioning, project, `Info.plist`, or `app.yml` change requires explicit approval in that task.
-- Future 2.43D may design or implement a CallKit reporting adapter seam for background invite decisions, still without PushKit registration unless explicitly allowed.
+- Future 2.43E may add a fake/test-only CallKit adapter boundary or a controlled real CallKit adapter, still without PushKit registration unless explicitly allowed.
 - Do not implement PushKit runtime inside foreground smoke tooling.
 - Do not register APNs or VoIP values inside foreground smoke tooling.
 - Do not add background incoming handling inside foreground smoke tooling.

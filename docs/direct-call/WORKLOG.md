@@ -235,6 +235,16 @@ Focused tests cover valid parsed payload intake, invalid/expired/excessive-futur
 
 PushKit registration, APNs registration, VoIP/background entitlements, project/signing edits, CallKit reporting, media credentials, media connection, Matrix event emission from background intake, and production background behavior remain unimplemented. Future 2.43D may design or implement a CallKit reporting adapter seam for background invite decisions, still without PushKit registration unless explicitly allowed. Any future signing, entitlement, provisioning, project, `Info.plist`, or `app.yml` change requires a separate explicit task.
 
+### 2.43D — Background CallKit report request planner seam
+
+Added a safe native direct-call background CallKit report request planner seam. It consumes the 2.43C intake result and returns either a redacted internal `reportable_incoming_call_request` model or a non-reportable decision for invalid payloads, expired payloads, excessive future timestamps, missing authenticated session state, or malformed report planning state.
+
+The planner is model-only. It does not call `CXProvider`, report from a PushKit/background callback, register PushKit, register APNs, access tokens, persist payloads, request media credentials, connect media, emit Matrix events, or change production call behavior. Report request and planner descriptions keep safe internal identity/display metadata redacted.
+
+Focused tests cover reportable request planning, invalid/expired/excessive-future non-reportable decisions, missing-session handling, redacted diagnostics, and no media/Matrix/runtime CallKit side effects. Existing 2.43B parser tests, 2.43C intake tests, foreground timestamp validation, and DEBUG smoke release-surface tests remain in the targeted suite.
+
+PushKit registration, APNs registration, VoIP/background entitlements, project/signing edits, real CallKit reporting from PushKit/background callbacks, media credentials, media connection, Matrix event emission from background planning, and production background behavior remain unimplemented. Future 2.43E may add a fake/test-only CallKit adapter boundary or a controlled real CallKit adapter, still without PushKit registration unless explicitly allowed. Any future signing, entitlement, provisioning, project, `Info.plist`, or `app.yml` change requires a separate explicit task.
+
 ### 2.42K — Supervised foreground real invite
 
 The two-device foreground real-invite smoke passed and was committed as:

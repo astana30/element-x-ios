@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: 2.43C intake seam added; production PushKit/APNs/background behavior remains unimplemented.
+Status: 2.43D CallKit report request planner seam added; production PushKit/APNs/background behavior remains unimplemented.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -69,6 +69,33 @@ blocked_reason=<redacted_class>
 ```
 
 The intake seam deliberately models what a later background owner should do without doing it. No CallKit report occurs in 2.43C; a future 2.43D may design or implement a CallKit reporting adapter seam for background invite decisions, still without PushKit registration unless that is explicitly allowed. Any future PushKit/APNs registration, entitlement, signing, provisioning, project, `Info.plist`, or `app.yml` change requires a separate explicit task.
+
+## 2.43D Background CallKit Report Request Seam
+
+2.43D adds only a safe planner that maps a valid 2.43C background invite intake decision to a redacted internal CallKit report request model. It does not register PushKit, request a VoIP token, register APNs, change entitlements, change provisioning, touch project files, call a real CallKit provider, report from a PushKit callback, request media credentials, connect media, emit Matrix events, persist payload data, or change production call behavior.
+
+The planner can classify outcomes as:
+
+- `not_reportable_invalid_payload`
+- `not_reportable_expired_payload`
+- `not_reportable_future_timestamp_excessive`
+- `not_reportable_requires_authenticated_session`
+- `reportable_incoming_call_request`
+
+Diagnostics are limited to redacted booleans/status classes:
+
+```text
+callkit_planner_invoked=true/false
+intake_decision=<redacted_decision_class>
+callkit_report_decision=<redacted_decision_class>
+callkit_report_requested=true/false
+media_credentials_requested=false
+media_connect_requested=false
+matrix_event_emit_requested=false
+blocked_reason=<redacted_class>
+```
+
+The report request model may carry safe internal identity and display metadata for a later adapter, but its descriptions remain redacted and it is not handed to a real `CXProvider` in 2.43D. A future 2.43E may add a fake/test-only CallKit adapter boundary or a controlled real CallKit adapter, still without PushKit registration unless explicitly allowed. Any future PushKit/APNs registration, entitlement, signing, provisioning, project, `Info.plist`, or `app.yml` change requires a separate explicit task.
 
 ## Current State From Tracked Code
 
@@ -162,6 +189,7 @@ Any production native direct-call VoIP registration proof, APNs provider setup t
 - PushKit/APNs/background incoming is not implemented yet for SalemX native direct-call.
 - 2.43B adds only the background invite payload contract/parser seam.
 - 2.43C adds only the background invite intake seam.
+- 2.43D adds only the background CallKit report request/planner seam.
 - PushKit registration and APNs registration are still not implemented for native direct-call.
 - Foreground real-invite behavior must remain unchanged.
 - PushKit/APNs work must be separately scoped from foreground smoke tooling.
@@ -169,9 +197,9 @@ Any production native direct-call VoIP registration proof, APNs provider setup t
 - Future entitlement or signing changes require a separate explicit task.
 - No media credentials or media connection should be introduced during PushKit receipt.
 - PushKit should only wake/report incoming call and coordinate safely with the call pipeline.
-- No CallKit reporting is performed by the 2.43C intake seam.
+- No real CallKit reporting is performed by the 2.43C intake seam or the 2.43D planner seam.
 - Dev routes must remain disabled.
 - Real non-dev routes must remain auth-gated.
 - DEBUG smoke tooling is not production behavior.
-- A future 2.43D may design or implement a CallKit reporting adapter seam for background invite decisions, still without PushKit registration unless explicitly allowed.
+- A future 2.43E may add a fake/test-only CallKit adapter boundary or a controlled real CallKit adapter, still without PushKit registration unless explicitly allowed.
 - Physical Debug builds should use `DEVELOPMENT_TEAM=M639Y9MFR2`; the old `83LGSC2QPV` team must not be used.

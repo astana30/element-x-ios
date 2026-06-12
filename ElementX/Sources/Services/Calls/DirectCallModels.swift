@@ -922,6 +922,173 @@ struct DirectCallBackgroundInviteIntake: CustomStringConvertible, CustomDebugStr
     }
 }
 
+struct DirectCallBackgroundCallKitReportRequest: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let callUUID: UUID
+    let identity: NativeIncomingCallIdentity
+    let kind: ForegroundCallInviteKind
+    let expiresAt: Date
+    let displayMetadata: NativeIncomingCallKitDisplayMetadata
+
+    var description: String {
+        "DirectCallBackgroundCallKitReportRequest(callUUID: <redacted>, identity: <redacted>, kind: \(kind), expiresAt: <redacted>, displayMetadata: <redacted>)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum DirectCallBackgroundCallKitReportDecision: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case notReportableInvalidPayload = "not_reportable_invalid_payload"
+    case notReportableExpiredPayload = "not_reportable_expired_payload"
+    case notReportableFutureTimestampExcessive = "not_reportable_future_timestamp_excessive"
+    case notReportableRequiresAuthenticatedSession = "not_reportable_requires_authenticated_session"
+    case reportableIncomingCallRequest = "reportable_incoming_call_request"
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum DirectCallBackgroundCallKitReportFailure: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case invalidPayload = "invalid_payload"
+    case expiredPayload = "expired"
+    case futureTimestampExcessive = "future_timestamp_excessive"
+    case authenticatedSessionUnavailable = "authenticated_session_unavailable"
+    case missingPreparedIncoming = "missing_prepared_incoming"
+    case redacted
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct DirectCallBackgroundCallKitReportDiagnostics: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let callKitPlannerInvoked: Bool
+    let intakeDecision: DirectCallBackgroundInviteIntakeDecision
+    let callKitReportDecision: DirectCallBackgroundCallKitReportDecision
+    let callKitReportRequested: Bool
+    let mediaCredentialsRequested: Bool
+    let mediaConnectRequested: Bool
+    let matrixEventEmitRequested: Bool
+    let blockedReason: DirectCallBackgroundCallKitReportFailure?
+
+    var description: String {
+        "DirectCallBackgroundCallKitReportDiagnostics(" + [
+            "callkit_planner_invoked=\(callKitPlannerInvoked)",
+            "intake_decision=\(intakeDecision)",
+            "callkit_report_decision=\(callKitReportDecision)",
+            "callkit_report_requested=\(callKitReportRequested)",
+            "media_credentials_requested=\(mediaCredentialsRequested)",
+            "media_connect_requested=\(mediaConnectRequested)",
+            "matrix_event_emit_requested=\(matrixEventEmitRequested)",
+            "blocked_reason=\(blockedReason?.description ?? "none")"
+        ].joined(separator: ", ") + ")"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct DirectCallBackgroundCallKitReportPlanningResult: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let decision: DirectCallBackgroundCallKitReportDecision
+    let request: DirectCallBackgroundCallKitReportRequest?
+    let diagnostics: DirectCallBackgroundCallKitReportDiagnostics
+
+    var description: String {
+        "DirectCallBackgroundCallKitReportPlanningResult(decision: \(decision), request: <redacted>, diagnostics: \(diagnostics))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct DirectCallBackgroundCallKitReportPlanner: CustomStringConvertible, CustomDebugStringConvertible {
+    var makeCallUUID: () -> UUID = UUID.init
+
+    func plan(from intakeResult: DirectCallBackgroundInviteIntakeResult) -> DirectCallBackgroundCallKitReportPlanningResult {
+        switch intakeResult.decision {
+        case .prepareForegroundEquivalentIncoming, .requiresCallKitReportLater:
+            guard let preparedIncoming = intakeResult.preparedIncoming else {
+                return nonReportableResult(intakeDecision: intakeResult.decision,
+                                           decision: .notReportableInvalidPayload,
+                                           blockedReason: .missingPreparedIncoming)
+            }
+
+            let request = DirectCallBackgroundCallKitReportRequest(callUUID: makeCallUUID(),
+                                                                   identity: preparedIncoming.identity,
+                                                                   kind: preparedIncoming.kind,
+                                                                   expiresAt: preparedIncoming.expiresAt,
+                                                                   displayMetadata: preparedIncoming.displayMetadata)
+            return .init(decision: .reportableIncomingCallRequest,
+                         request: request,
+                         diagnostics: diagnostics(intakeDecision: intakeResult.decision,
+                                                  reportDecision: .reportableIncomingCallRequest,
+                                                  reportRequested: true,
+                                                  blockedReason: nil))
+        case .ignoreInvalidPayload:
+            return nonReportableResult(intakeDecision: .ignoreInvalidPayload,
+                                       decision: .notReportableInvalidPayload,
+                                       blockedReason: .invalidPayload)
+        case .ignoreExpiredPayload:
+            return nonReportableResult(intakeDecision: .ignoreExpiredPayload,
+                                       decision: .notReportableExpiredPayload,
+                                       blockedReason: .expiredPayload)
+        case .ignoreFutureTimestampExcessive:
+            return nonReportableResult(intakeDecision: .ignoreFutureTimestampExcessive,
+                                       decision: .notReportableFutureTimestampExcessive,
+                                       blockedReason: .futureTimestampExcessive)
+        case .requiresAuthenticatedSession:
+            return nonReportableResult(intakeDecision: .requiresAuthenticatedSession,
+                                       decision: .notReportableRequiresAuthenticatedSession,
+                                       blockedReason: .authenticatedSessionUnavailable)
+        }
+    }
+
+    private func nonReportableResult(intakeDecision: DirectCallBackgroundInviteIntakeDecision,
+                                     decision: DirectCallBackgroundCallKitReportDecision,
+                                     blockedReason: DirectCallBackgroundCallKitReportFailure) -> DirectCallBackgroundCallKitReportPlanningResult {
+        .init(decision: decision,
+              request: nil,
+              diagnostics: diagnostics(intakeDecision: intakeDecision,
+                                       reportDecision: decision,
+                                       reportRequested: false,
+                                       blockedReason: blockedReason))
+    }
+
+    private func diagnostics(intakeDecision: DirectCallBackgroundInviteIntakeDecision,
+                             reportDecision: DirectCallBackgroundCallKitReportDecision,
+                             reportRequested: Bool,
+                             blockedReason: DirectCallBackgroundCallKitReportFailure?) -> DirectCallBackgroundCallKitReportDiagnostics {
+        .init(callKitPlannerInvoked: true,
+              intakeDecision: intakeDecision,
+              callKitReportDecision: reportDecision,
+              callKitReportRequested: reportRequested,
+              mediaCredentialsRequested: false,
+              mediaConnectRequested: false,
+              matrixEventEmitRequested: false,
+              blockedReason: blockedReason)
+    }
+
+    var description: String {
+        "DirectCallBackgroundCallKitReportPlanner(callKitRuntime: false, pushRegistryRuntime: false, apnsRegistrationRuntime: false, mediaConnectRuntime: false, matrixEventRuntime: false)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
 protocol NativeIncomingCallTimeoutScheduling: AnyObject {
     func scheduleTimeout(for identity: NativeIncomingCallIdentity, after timeout: Duration)
     func cancelTimeout(for identity: NativeIncomingCallIdentity)

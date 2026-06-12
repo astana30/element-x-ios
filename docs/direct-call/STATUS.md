@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.43C - background invite intake seam.
+After 2.43D - background CallKit report request planner seam.
 
 ## Latest App Code Checkpoint
 
@@ -54,6 +54,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - PushKit registration, APNs registration, VoIP/background entitlements, project/signing files, CallKit reporting, media credentials, media connection, Matrix event emission, and production background behavior remain unimplemented.
   - The foreground real-invite path remains unchanged.
   - Future 2.43D may design or implement a CallKit reporting adapter seam for background invite decisions, still without PushKit registration unless explicitly allowed.
+  - Any future signing, entitlement, provisioning, project, `Info.plist`, or `app.yml` change requires a separate explicit task.
+  - Physical Debug builds should use `DEVELOPMENT_TEAM=M639Y9MFR2`; the old `83LGSC2QPV` team must not be used.
+- 2.43D adds a safe background CallKit report request planner seam:
+  - The planner consumes the 2.43C intake result and returns either a redacted internal `reportable_incoming_call_request` model or non-reportable decisions for invalid, expired, excessive-future, and missing-session cases.
+  - Planner diagnostics are redacted booleans/status classes only and keep `media_credentials_requested=false`, `media_connect_requested=false`, and `matrix_event_emit_requested=false`.
+  - No real `CXProvider` or PushKit/background callback reports a CallKit incoming call in this task.
+  - PushKit registration, APNs registration, VoIP/background entitlements, project/signing files, media credentials, media connection, Matrix event emission, and production background behavior remain unimplemented.
+  - The foreground real-invite path remains unchanged.
+  - Future 2.43E may add a fake/test-only CallKit adapter boundary or a controlled real CallKit adapter, still without PushKit registration unless explicitly allowed.
   - Any future signing, entitlement, provisioning, project, `Info.plist`, or `app.yml` change requires a separate explicit task.
   - Physical Debug builds should use `DEVELOPMENT_TEAM=M639Y9MFR2`; the old `83LGSC2QPV` team must not be used.
 - 2.43A documents the PushKit/APNs/background incoming-call investigation after the 2.42O foreground baseline:

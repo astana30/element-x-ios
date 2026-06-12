@@ -1453,6 +1453,117 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func backgroundCallKitReportPlannerProducesReportableRequestForValidIntake() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let parser = DirectCallBackgroundInvitePayloadParser()
+        let intake = DirectCallBackgroundInviteIntake()
+        let parsed = parser.parse(makeBackgroundInvitePayload(now: now), now: now)
+        let intakeResult = intake.evaluate(parsed,
+                                           authenticatedSessionAvailable: true,
+                                           callKitReportAdapterAvailable: true)
+        let planner = DirectCallBackgroundCallKitReportPlanner {
+            UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 43))
+        }
+
+        let result = planner.plan(from: intakeResult)
+
+        #expect(result.decision == .reportableIncomingCallRequest)
+        #expect(result.request?.kind == .audio)
+        #expect(result.diagnostics.callKitReportRequested == true)
+        #expect(result.diagnostics.mediaCredentialsRequested == false)
+        #expect(result.diagnostics.mediaConnectRequested == false)
+        #expect(result.diagnostics.matrixEventEmitRequested == false)
+        #expect(result.diagnostics.blockedReason == nil)
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !String(describing: result).contains($0) })
+    }
+
+    @Test
+    func backgroundCallKitReportPlannerRejectsInvalidExpiredAndFutureIntake() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let parser = DirectCallBackgroundInvitePayloadParser()
+        let intake = DirectCallBackgroundInviteIntake()
+        let planner = DirectCallBackgroundCallKitReportPlanner()
+
+        var missingFieldPayload = makeBackgroundInvitePayload(now: now)
+        missingFieldPayload.removeValue(forKey: "call_handle")
+        let invalid = planner.plan(from: intake.evaluate(parser.parse(missingFieldPayload, now: now),
+                                                         authenticatedSessionAvailable: true))
+        let expired = planner.plan(from: intake.evaluate(parser.parse(makeBackgroundInvitePayload(now: now,
+                                                                                                  createdAt: now.addingTimeInterval(-60),
+                                                                                                  expiresAt: now.addingTimeInterval(-1)),
+                                                                      now: now),
+                                                         authenticatedSessionAvailable: true))
+        let excessiveFuture = planner.plan(from: intake.evaluate(parser.parse(makeBackgroundInvitePayload(now: now,
+                                                                                                          createdAt: now.addingTimeInterval(10),
+                                                                                                          expiresAt: now.addingTimeInterval(30)),
+                                                                              now: now),
+                                                                 authenticatedSessionAvailable: true))
+
+        #expect(invalid.decision == .notReportableInvalidPayload)
+        #expect(invalid.diagnostics.blockedReason == .invalidPayload)
+        #expect(expired.decision == .notReportableExpiredPayload)
+        #expect(expired.diagnostics.blockedReason == .expiredPayload)
+        #expect(excessiveFuture.decision == .notReportableFutureTimestampExcessive)
+        #expect(excessiveFuture.diagnostics.blockedReason == .futureTimestampExcessive)
+        #expect(invalid.request == nil)
+        #expect(expired.request == nil)
+        #expect(excessiveFuture.request == nil)
+        #expect(invalid.diagnostics.callKitReportRequested == false)
+        #expect(expired.diagnostics.callKitReportRequested == false)
+        #expect(excessiveFuture.diagnostics.callKitReportRequested == false)
+    }
+
+    @Test
+    func backgroundCallKitReportPlannerRepresentsMissingSessionSafely() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let parser = DirectCallBackgroundInvitePayloadParser()
+        let intake = DirectCallBackgroundInviteIntake()
+        let parsed = parser.parse(makeBackgroundInvitePayload(now: now), now: now)
+        let intakeResult = intake.evaluate(parsed)
+        let planner = DirectCallBackgroundCallKitReportPlanner()
+
+        let result = planner.plan(from: intakeResult)
+
+        #expect(result.decision == .notReportableRequiresAuthenticatedSession)
+        #expect(result.request == nil)
+        #expect(result.diagnostics.blockedReason == .authenticatedSessionUnavailable)
+        #expect(result.diagnostics.callKitReportRequested == false)
+    }
+
+    @Test
+    func backgroundCallKitReportPlannerKeepsDiagnosticsRedactedAndRuntimeFree() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let parser = DirectCallBackgroundInvitePayloadParser()
+        let intake = DirectCallBackgroundInviteIntake()
+        let parsed = parser.parse(makeBackgroundInvitePayload(now: now,
+                                                              createdAt: now.addingTimeInterval(3),
+                                                              expiresAt: now.addingTimeInterval(30)),
+                                  now: now)
+        let intakeResult = intake.evaluate(parsed,
+                                           authenticatedSessionAvailable: true,
+                                           callKitReportAdapterAvailable: true)
+        let planner = DirectCallBackgroundCallKitReportPlanner {
+            UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 44))
+        }
+
+        let result = planner.plan(from: intakeResult)
+        let description = String(describing: planner) + " " + String(describing: result)
+
+        #expect(description.contains("callkit_planner_invoked=true"))
+        #expect(description.contains("callkit_report_decision=reportable_incoming_call_request"))
+        #expect(description.contains("callkit_report_requested=true"))
+        #expect(description.contains("media_credentials_requested=false"))
+        #expect(description.contains("media_connect_requested=false"))
+        #expect(description.contains("matrix_event_emit_requested=false"))
+        #expect(description.contains("callKitRuntime: false"))
+        #expect(description.contains("pushRegistryRuntime: false"))
+        #expect(description.contains("apnsRegistrationRuntime: false"))
+        #expect(description.contains("mediaConnectRuntime: false"))
+        #expect(description.contains("matrixEventRuntime: false"))
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !description.contains($0) })
+    }
+
+    @Test
     func diagnosticsAndOutcomesStayRedacted() {
         let diagnostics = NativeIncomingCallRedactedDiagnostics(lifecycleState: .failed,
                                                                 failClosedReason: .serverIssuedMediaCredentialRejected,
