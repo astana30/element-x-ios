@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: 2.43A docs-only investigation.
+Status: 2.43C intake seam added; production PushKit/APNs/background behavior remains unimplemented.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -41,6 +41,34 @@ redacted
 ```
 
 The parser must not include raw access tokens, authorization headers, Matrix user IDs, device IDs, room IDs, call handles, request payloads, private logs, or secret-bearing URLs in descriptions, diagnostics, docs, or tests.
+
+## 2.43C Background Invite Intake Seam
+
+2.43C adds only a safe intake seam that consumes the 2.43B parser result and returns a redacted internal decision for future native direct-call background incoming-call handling. It does not register PushKit, request a VoIP token, register APNs, change entitlements, change provisioning, touch project files, report CallKit, request media credentials, connect media, emit Matrix events, persist payload data, or change production call behavior.
+
+The intake seam can classify parsed payload outcomes as:
+
+- `ignore_invalid_payload`
+- `ignore_expired_payload`
+- `ignore_future_timestamp_excessive`
+- `requires_authenticated_session`
+- `prepare_foreground_equivalent_incoming`
+- `requires_callkit_report_later`
+
+Diagnostics are limited to redacted booleans/status classes:
+
+```text
+intake_invoked=true/false
+payload_parse_status=valid/<redacted_failure_class>
+intake_decision=<redacted_decision_class>
+callkit_report_requested=false
+media_credentials_requested=false
+media_connect_requested=false
+matrix_event_emit_requested=false
+blocked_reason=<redacted_class>
+```
+
+The intake seam deliberately models what a later background owner should do without doing it. No CallKit report occurs in 2.43C; a future 2.43D may design or implement a CallKit reporting adapter seam for background invite decisions, still without PushKit registration unless that is explicitly allowed. Any future PushKit/APNs registration, entitlement, signing, provisioning, project, `Info.plist`, or `app.yml` change requires a separate explicit task.
 
 ## Current State From Tracked Code
 
@@ -133,6 +161,7 @@ Any production native direct-call VoIP registration proof, APNs provider setup t
 - 2.42O remains the foreground real-invite baseline.
 - PushKit/APNs/background incoming is not implemented yet for SalemX native direct-call.
 - 2.43B adds only the background invite payload contract/parser seam.
+- 2.43C adds only the background invite intake seam.
 - PushKit registration and APNs registration are still not implemented for native direct-call.
 - Foreground real-invite behavior must remain unchanged.
 - PushKit/APNs work must be separately scoped from foreground smoke tooling.
@@ -140,8 +169,9 @@ Any production native direct-call VoIP registration proof, APNs provider setup t
 - Future entitlement or signing changes require a separate explicit task.
 - No media credentials or media connection should be introduced during PushKit receipt.
 - PushKit should only wake/report incoming call and coordinate safely with the call pipeline.
+- No CallKit reporting is performed by the 2.43C intake seam.
 - Dev routes must remain disabled.
 - Real non-dev routes must remain auth-gated.
 - DEBUG smoke tooling is not production behavior.
-- A future 2.43C may design or implement PushKit registration/token handling only if explicitly allowed and still separate from entitlement/signing changes.
+- A future 2.43D may design or implement a CallKit reporting adapter seam for background invite decisions, still without PushKit registration unless explicitly allowed.
 - Physical Debug builds should use `DEVELOPMENT_TEAM=M639Y9MFR2`; the old `83LGSC2QPV` team must not be used.

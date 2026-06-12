@@ -225,6 +225,16 @@ Focused tests cover valid parsing, missing fields, invalid types, unsupported ve
 
 PushKit registration, APNs registration, entitlements/provisioning/project edits, media credentials, media connection, Matrix event emission from background payload parsing, and production background behavior remain unimplemented. Future 2.43C work should be separately scoped as PushKit registration/token-handling design or implementation only if explicitly allowed. Any future signing, entitlement, provisioning, project, `Info.plist`, or `app.yml` change requires a separate explicit task.
 
+### 2.43C — Background invite intake seam
+
+Added a safe native direct-call background invite intake seam that consumes the 2.43B parser result and returns a redacted internal decision for future background incoming-call handling. The seam is inert: it performs no PushKit registration, APNs registration, CallKit reporting, Matrix event emission, network call, token access, persistent storage, media credential request, or media connection.
+
+The intake classifies invalid, expired, excessive-future, missing-session, foreground-equivalent preparation, and later-CallKit-report decisions using redacted status classes only. Diagnostics keep `callkit_report_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, and `matrix_event_emit_requested=false`.
+
+Focused tests cover valid parsed payload intake, invalid/expired/excessive-future ignores, small future-skew acceptance through parser plus intake, redacted diagnostics, and the no-side-effect runtime surface. Existing 2.43B parser timestamp tests, foreground timestamp validation, and DEBUG smoke release-surface tests remain in the targeted suite.
+
+PushKit registration, APNs registration, VoIP/background entitlements, project/signing edits, CallKit reporting, media credentials, media connection, Matrix event emission from background intake, and production background behavior remain unimplemented. Future 2.43D may design or implement a CallKit reporting adapter seam for background invite decisions, still without PushKit registration unless explicitly allowed. Any future signing, entitlement, provisioning, project, `Info.plist`, or `app.yml` change requires a separate explicit task.
+
 ### 2.42K — Supervised foreground real invite
 
 The two-device foreground real-invite smoke passed and was committed as:

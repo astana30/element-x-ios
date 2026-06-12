@@ -753,6 +753,175 @@ struct DirectCallBackgroundInvitePayloadParser: CustomStringConvertible, CustomD
     }
 }
 
+struct DirectCallBackgroundInvitePreparedIncoming: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let identity: NativeIncomingCallIdentity
+    let kind: ForegroundCallInviteKind
+    let expiresAt: Date
+    let displayMetadata: NativeIncomingCallKitDisplayMetadata
+
+    var description: String {
+        "DirectCallBackgroundInvitePreparedIncoming(identity: <redacted>, kind: \(kind), expiresAt: <redacted>, displayMetadata: <redacted>)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum DirectCallBackgroundInviteIntakeDecision: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case ignoreInvalidPayload = "ignore_invalid_payload"
+    case ignoreExpiredPayload = "ignore_expired_payload"
+    case ignoreFutureTimestampExcessive = "ignore_future_timestamp_excessive"
+    case prepareForegroundEquivalentIncoming = "prepare_foreground_equivalent_incoming"
+    case requiresAuthenticatedSession = "requires_authenticated_session"
+    case requiresCallKitReportLater = "requires_callkit_report_later"
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum DirectCallBackgroundInviteIntakeFailure: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case invalidPayload = "invalid_payload"
+    case expiredPayload = "expired"
+    case futureTimestampExcessive = "future_timestamp_excessive"
+    case authenticatedSessionUnavailable = "authenticated_session_unavailable"
+    case redacted
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct DirectCallBackgroundInviteIntakeDiagnostics: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let intakeInvoked: Bool
+    let payloadParseStatus: String
+    let intakeDecision: DirectCallBackgroundInviteIntakeDecision
+    let callKitReportRequested: Bool
+    let mediaCredentialsRequested: Bool
+    let mediaConnectRequested: Bool
+    let matrixEventEmitRequested: Bool
+    let blockedReason: DirectCallBackgroundInviteIntakeFailure?
+
+    var description: String {
+        "DirectCallBackgroundInviteIntakeDiagnostics(" + [
+            "intake_invoked=\(intakeInvoked)",
+            "payload_parse_status=\(payloadParseStatus)",
+            "intake_decision=\(intakeDecision)",
+            "callkit_report_requested=\(callKitReportRequested)",
+            "media_credentials_requested=\(mediaCredentialsRequested)",
+            "media_connect_requested=\(mediaConnectRequested)",
+            "matrix_event_emit_requested=\(matrixEventEmitRequested)",
+            "blocked_reason=\(blockedReason?.description ?? "none")"
+        ].joined(separator: ", ") + ")"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct DirectCallBackgroundInviteIntakeResult: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let decision: DirectCallBackgroundInviteIntakeDecision
+    let preparedIncoming: DirectCallBackgroundInvitePreparedIncoming?
+    let diagnostics: DirectCallBackgroundInviteIntakeDiagnostics
+
+    var description: String {
+        "DirectCallBackgroundInviteIntakeResult(decision: \(decision), preparedIncoming: <redacted>, diagnostics: \(diagnostics))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct DirectCallBackgroundInviteIntake: CustomStringConvertible, CustomDebugStringConvertible {
+    func evaluate(_ validationResult: DirectCallBackgroundInvitePayloadValidationResult,
+                  authenticatedSessionAvailable: Bool = false,
+                  callKitReportAdapterAvailable: Bool = false) -> DirectCallBackgroundInviteIntakeResult {
+        switch validationResult {
+        case .invalid(let error):
+            let decision = decision(for: error)
+            return .init(decision: decision,
+                         preparedIncoming: nil,
+                         diagnostics: diagnostics(parseStatus: error.description,
+                                                  decision: decision,
+                                                  blockedReason: failure(for: error)))
+        case .valid(let payload):
+            guard authenticatedSessionAvailable else {
+                return .init(decision: .requiresAuthenticatedSession,
+                             preparedIncoming: nil,
+                             diagnostics: diagnostics(parseStatus: "valid",
+                                                      decision: .requiresAuthenticatedSession,
+                                                      blockedReason: .authenticatedSessionUnavailable))
+            }
+
+            let preparedIncoming = DirectCallBackgroundInvitePreparedIncoming(identity: .init(handle: payload.handle,
+                                                                                              receivedAt: payload.createdAt),
+                                                                              kind: payload.kind,
+                                                                              expiresAt: payload.expiresAt,
+                                                                              displayMetadata: payload.displayMetadata)
+            let decision: DirectCallBackgroundInviteIntakeDecision = callKitReportAdapterAvailable ? .requiresCallKitReportLater : .prepareForegroundEquivalentIncoming
+            return .init(decision: decision,
+                         preparedIncoming: preparedIncoming,
+                         diagnostics: diagnostics(parseStatus: "valid",
+                                                  decision: decision,
+                                                  blockedReason: nil))
+        }
+    }
+
+    private func decision(for error: DirectCallBackgroundInvitePayloadError) -> DirectCallBackgroundInviteIntakeDecision {
+        switch error {
+        case .expired:
+            .ignoreExpiredPayload
+        case .futureTimestampExcessive:
+            .ignoreFutureTimestampExcessive
+        case .missingRequiredField, .invalidType, .invalidTimestamp, .unsupportedVersion, .malformedPayload, .redacted:
+            .ignoreInvalidPayload
+        }
+    }
+
+    private func failure(for error: DirectCallBackgroundInvitePayloadError) -> DirectCallBackgroundInviteIntakeFailure {
+        switch error {
+        case .expired:
+            .expiredPayload
+        case .futureTimestampExcessive:
+            .futureTimestampExcessive
+        case .missingRequiredField, .invalidType, .invalidTimestamp, .unsupportedVersion, .malformedPayload, .redacted:
+            .invalidPayload
+        }
+    }
+
+    private func diagnostics(parseStatus: String,
+                             decision: DirectCallBackgroundInviteIntakeDecision,
+                             blockedReason: DirectCallBackgroundInviteIntakeFailure?) -> DirectCallBackgroundInviteIntakeDiagnostics {
+        .init(intakeInvoked: true,
+              payloadParseStatus: parseStatus,
+              intakeDecision: decision,
+              callKitReportRequested: false,
+              mediaCredentialsRequested: false,
+              mediaConnectRequested: false,
+              matrixEventEmitRequested: false,
+              blockedReason: blockedReason)
+    }
+
+    var description: String {
+        "DirectCallBackgroundInviteIntake(pushRegistryRuntime: false, apnsRegistrationRuntime: false, callKitReportRuntime: false, mediaConnectRuntime: false, matrixEventRuntime: false)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
 protocol NativeIncomingCallTimeoutScheduling: AnyObject {
     func scheduleTimeout(for identity: NativeIncomingCallIdentity, after timeout: Duration)
     func cancelTimeout(for identity: NativeIncomingCallIdentity)

@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.43B - background invite payload contract/parser seam.
+After 2.43C - background invite intake seam.
 
 ## Latest App Code Checkpoint
 
@@ -47,6 +47,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - The foreground real-invite path remains unchanged.
   - Future 2.43C work should be separately scoped as PushKit registration/token-handling design or implementation only if explicitly allowed.
   - Future entitlement/signing/project changes require a separate explicit task.
+  - Physical Debug builds should use `DEVELOPMENT_TEAM=M639Y9MFR2`; the old `83LGSC2QPV` team must not be used.
+- 2.43C adds a safe background invite intake seam:
+  - The intake consumes the 2.43B parser result and returns only redacted internal decisions such as `ignore_invalid_payload`, `ignore_expired_payload`, `ignore_future_timestamp_excessive`, `requires_authenticated_session`, `prepare_foreground_equivalent_incoming`, and `requires_callkit_report_later`.
+  - Intake diagnostics are redacted booleans/status classes only and keep `callkit_report_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, and `matrix_event_emit_requested=false`.
+  - PushKit registration, APNs registration, VoIP/background entitlements, project/signing files, CallKit reporting, media credentials, media connection, Matrix event emission, and production background behavior remain unimplemented.
+  - The foreground real-invite path remains unchanged.
+  - Future 2.43D may design or implement a CallKit reporting adapter seam for background invite decisions, still without PushKit registration unless explicitly allowed.
+  - Any future signing, entitlement, provisioning, project, `Info.plist`, or `app.yml` change requires a separate explicit task.
   - Physical Debug builds should use `DEVELOPMENT_TEAM=M639Y9MFR2`; the old `83LGSC2QPV` team must not be used.
 - 2.43A documents the PushKit/APNs/background incoming-call investigation after the 2.42O foreground baseline:
   - The 2.42O validated foreground real-invite baseline remains unchanged.
