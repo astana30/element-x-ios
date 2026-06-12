@@ -2462,6 +2462,13 @@ final class ForegroundCallSignalingSSETraceTests {
     }
 
     @Test
+    func debugForegroundSSESmokeBridgeExposesObjCRealInviteSelector() {
+        let bridgeClass: AnyClass? = NSClassFromString("SalemXForegroundSSESmokeDebugBridge")
+        #expect(bridgeClass != nil)
+        #expect((bridgeClass as? NSObject.Type)?.responds(to: Selector(("sendRealInviteWithURLString:recipient:recipientDevice:"))) == true)
+    }
+
+    @Test
     func foregroundCallSignalingSSETransportEmitsRedactedParserTraceForLineDelimitedInvite() {
         let now = Date(timeIntervalSince1970: 1000)
         let dependencies = makeNativeIncomingLifecycleDependencies()

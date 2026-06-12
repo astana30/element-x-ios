@@ -882,6 +882,17 @@ final class SalemXForegroundSSESmokeDebug: NSObject {
     }
 }
 
+@objcMembers
+final class SalemXForegroundSSESmokeDebugBridge: NSObject {
+    static func sendRealInviteWithURLString(_ inviteURLString: String,
+                                            recipient: String,
+                                            recipientDevice: String) {
+        SalemXForegroundSSESmokeDebug.sendRealInvite(inviteURLString: inviteURLString,
+                                                     recipient: recipient,
+                                                     recipientDevice: recipientDevice)
+    }
+}
+
 private extension DebugForegroundCallSignalingRealInviteSenderPostStatus {
     init(httpStatusCode: Int) {
         switch httpStatusCode {
