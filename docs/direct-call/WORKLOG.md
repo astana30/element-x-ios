@@ -122,6 +122,22 @@ Receiver identifiers remain local-only sensitive inputs and must not be written 
 
 Physical Debug builds for current supervised smokes should use `DEVELOPMENT_TEAM=M639Y9MFR2`. Do not use the old `83LGSC2QPV` team for current physical Debug builds, and do not persist signing changes.
 
+### 2.42M4 — DEBUG Developer Options entry
+
+The 2.42M physical regression smoke remains pending and is not marked passed. The latest blocker was `debug_smoke_controls_not_reachable_from_settings`: 2.42M3 added the in-app foreground smoke controls to Developer Options, but the existing Developer Options screen was not reachable from the visible Settings UI.
+
+Added a DEBUG-only `Internal diagnostics` row in Settings that opens the existing Developer Options screen. The receiver smoke path should now be reachable as:
+
+```text
+Settings -> Internal diagnostics -> General -> Foreground SSE smoke
+```
+
+The entry is DEBUG-only and reuses the existing Developer Options screen. It does not alter production UI, persist identifiers, expose credentials, weaken auth, use dev routes, request media credentials, connect media, emit Matrix events, add PushKit/APNs/background behavior, or replace Element Call routing.
+
+Receiver identifiers remain local-only sensitive inputs and must not be written to docs, terminal output, tracked files, or final reports. The next 2.42M physical regression smoke must still use the authenticated real non-dev invite route with the dev route disabled.
+
+Physical Debug builds for current supervised smokes should use `DEVELOPMENT_TEAM=M639Y9MFR2`. Do not use the old `83LGSC2QPV` team for current physical Debug builds, and do not persist signing changes.
+
 ### 2.42K — Supervised foreground real invite
 
 The two-device foreground real-invite smoke passed and was committed as:

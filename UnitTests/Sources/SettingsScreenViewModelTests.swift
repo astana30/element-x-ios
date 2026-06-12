@@ -43,4 +43,13 @@ struct SettingsScreenViewModelTests {
         context.send(viewAction: .analytics)
         try await deferred.fulfill()
     }
+
+    #if DEBUG
+    @Test
+    func developerOptions() async throws {
+        let deferred = deferFulfillment(viewModel.actions) { $0 == .developerOptions }
+        context.send(viewAction: .developerOptions)
+        try await deferred.fulfill()
+    }
+    #endif
 }

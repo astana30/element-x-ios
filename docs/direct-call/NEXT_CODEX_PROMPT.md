@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.42m3-in-app-foreground-smoke-controls`
+`salemx-2.42m4-debug-developer-options-entry`
 
-Next phase: run 2.42M physical regression smoke after the DEBUG sender bridge, receiver bridge, and in-app receiver smoke controls.
+Next phase: run 2.42M physical regression smoke after the DEBUG sender bridge, receiver bridge, in-app receiver smoke controls, and DEBUG Settings entry.
 
 ## Context
 
@@ -22,6 +22,8 @@ Next phase: run 2.42M physical regression smoke after the DEBUG sender bridge, r
 - 2.42M2 adds `SalemXForegroundSSEReceiverSmokeDebugBridge`, a DEBUG-only receiver bridge/proof path that configures/starts/stops the existing active-session SSE helper and returns only redacted state summary fields.
 - 2.42M then hit `receiver_sse_proof_unavailable`: the receiver bridge existed, but receiver LLDB/CoreDevice expression evaluation was not reliable enough to activate the stream and collect proof.
 - 2.42M3 adds DEBUG-only in-app foreground smoke controls under Developer Options so the receiver can start foreground SSE and refresh redacted proof without receiver LLDB.
+- 2.42M then hit `debug_smoke_controls_not_reachable_from_settings`: the 2.42M3 controls were present on Developer Options, but that screen was not reachable from the visible Settings UI.
+- 2.42M4 exposes a DEBUG-only `Internal diagnostics` row in Settings that opens the existing Developer Options screen.
 - The 2.42M physical regression smoke is not marked passed yet.
 
 ## Required Smoke
@@ -41,7 +43,7 @@ Do not use:
 Receiver:
 
 - Keep the receiver app foreground and authenticated.
-- Open foreground SSE first from the DEBUG-only in-app foreground smoke controls in Developer Options.
+- Open foreground SSE first from `Settings -> Internal diagnostics -> General -> Foreground SSE smoke`.
 - Confirm `sse_connected=true` and `stream_failure=none` from the in-app redacted receiver proof summary.
 - Do not record receiver identifiers, raw URLs with secrets, tokens, request payloads, or private logs.
 

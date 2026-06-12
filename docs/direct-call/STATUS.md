@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.42M3 - DEBUG-only in-app foreground smoke controls.
+After 2.42M4 - DEBUG-only Developer Options entry for foreground smoke controls.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.42M4 exposes the DEBUG-only Developer Options entry:
+  - The 2.42M physical regression smoke remains pending and is not marked passed.
+  - The latest blocker was `debug_smoke_controls_not_reachable_from_settings`; 2.42M3 controls were present on `DeveloperOptionsScreen`, but that screen was not reachable from the visible Settings UI.
+  - Settings now exposes a DEBUG-only `Internal diagnostics` row that opens the existing Developer Options screen.
+  - The receiver smoke path should now be reachable as `Settings -> Internal diagnostics -> General -> Foreground SSE smoke`.
+  - Receiver identifiers remain local-only sensitive inputs and must not be recorded, logged, documented, or committed.
+  - The physical regression smoke must still use the authenticated non-dev foreground invite route with the dev route disabled.
+  - Physical Debug builds should use `DEVELOPMENT_TEAM=M639Y9MFR2`; the old `83LGSC2QPV` team must not be used for current physical Debug builds.
 - 2.42M3 adds DEBUG-only in-app foreground smoke controls:
   - The 2.42M physical regression smoke remains pending and is not marked passed.
   - The latest blocker was `receiver_sse_proof_unavailable`; receiver LLDB/CoreDevice expression evaluation was not reliable enough for supervised smoke proof.

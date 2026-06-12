@@ -113,6 +113,10 @@ class SettingsScreenViewModel: SettingsScreenViewModelType, SettingsScreenViewMo
             actionsSubject.send(.notifications)
         case .advancedSettings:
             actionsSubject.send(.advancedSettings)
+        #if DEBUG
+        case .developerOptions:
+            actionsSubject.send(.developerOptions)
+        #endif
         case .about:
             actionsSubject.send(.about)
         case .labs:

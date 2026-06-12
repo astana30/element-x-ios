@@ -451,6 +451,20 @@ The next 2.42M physical regression smoke must:
 - use the authenticated real non-dev invite route only
 - keep the dev route disabled
 
+## 2.42M4 DEBUG Developer Options Entry
+
+2.42M remains pending and is not marked passed. The latest blocker was `debug_smoke_controls_not_reachable_from_settings`: the 2.42M3 controls were present on Developer Options, but that screen was not reachable from the visible Settings UI.
+
+2.42M4 exposes a DEBUG-only `Internal diagnostics` row in Settings that opens the existing Developer Options screen. Use this receiver path for the next physical smoke:
+
+```text
+Settings -> Internal diagnostics -> General -> Foreground SSE smoke
+```
+
+The row and smoke controls are DEBUG-only. They reuse the existing Developer Options and foreground SSE smoke proof path, and do not add production UI, persist identifiers, expose tokens, weaken auth, use `dev/invite`, use `dev/inject-active`, request media credentials, connect media, emit Matrix events, add PushKit/APNs/background behavior, or replace Element Call routing.
+
+Receiver identifiers remain local-only sensitive inputs and must not be pasted into chat, docs, terminal logs, tracked files, commits, or final reports. Correct physical Debug builds use `DEVELOPMENT_TEAM=M639Y9MFR2`; the old `83LGSC2QPV` team must not be used.
+
 ## Redacted Diagnostics To Collect
 
 Record only safe booleans and timing buckets:

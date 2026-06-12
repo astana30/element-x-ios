@@ -107,6 +107,10 @@ class SettingsFlowCoordinator: FlowCoordinatorProtocol {
                     presentNotificationSettings()
                 case .advancedSettings:
                     presentAdvancedSettings()
+                #if DEBUG
+                case .developerOptions:
+                    presentDeveloperOptions()
+                #endif
                 case .labs:
                     presentLabs()
                 case .deactivateAccount:
@@ -248,6 +252,24 @@ class SettingsFlowCoordinator: FlowCoordinatorProtocol {
                                                                               userIndicatorController: flowParameters.userIndicatorController))
         navigationStackCoordinator.push(coordinator)
     }
+
+    #if DEBUG
+    private func presentDeveloperOptions() {
+        let coordinator = DeveloperOptionsScreenCoordinator(appSettings: flowParameters.appSettings,
+                                                            appHooks: flowParameters.appHooks,
+                                                            clientProxy: flowParameters.userSession.clientProxy)
+        coordinator.actions
+            .sink { [weak self] action in
+                switch action {
+                case .clearCache:
+                    self?.actionsSubject.send(.clearCache)
+                }
+            }
+            .store(in: &cancellables)
+
+        navigationStackCoordinator.push(coordinator)
+    }
+    #endif
 
     private func presentDeactivateAccount() {
         let parameters = DeactivateAccountScreenCoordinatorParameters(clientProxy: flowParameters.userSession.clientProxy,

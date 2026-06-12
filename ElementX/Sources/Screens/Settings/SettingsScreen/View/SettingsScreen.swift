@@ -227,6 +227,16 @@ struct SettingsScreen: View {
                     })
                     .accessibilityIdentifier(A11yIdentifiers.settingsScreen.advancedSettings)
 
+            #if DEBUG
+            ListRow(label: .default(title: L10n.commonDeveloperOptions,
+                                    icon: SettingsTintedIcon(icon: \.settings,
+                                                             palette: .cyan)),
+                    kind: .navigationLink {
+                        context.send(viewAction: .developerOptions)
+                    })
+                    .accessibilityIdentifier(A11yIdentifiers.settingsScreen.developerOptions)
+            #endif
+
             ListRow(label: .default(title: L10n.screenAboutSalemxTitle,
                                     icon: SettingsTintedIcon(icon: \.info,
                                                              palette: .slate)),
