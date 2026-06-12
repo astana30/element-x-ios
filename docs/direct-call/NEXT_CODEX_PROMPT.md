@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.42m1-debug-real-invite-smoke-bridge`
+`salemx-2.42m2-debug-receiver-sse-smoke-bridge`
 
-Next phase: run 2.42M physical regression smoke after the DEBUG real-invite bridge.
+Next phase: run 2.42M physical regression smoke after the DEBUG sender and receiver smoke bridges.
 
 ## Context
 
@@ -17,6 +17,9 @@ Next phase: run 2.42M physical regression smoke after the DEBUG real-invite brid
 - 2.42L added a DEBUG-only stale-token guard for the sender helper. If the first real-invite POST returns `http_unauthorized`, it asks the active session token provider again and retries at most once. Diagnostics remain redacted.
 - 2.42M was blocked by LLDB invocation friction, not by server route state or a failed real-invite delivery.
 - 2.42M1 adds `SalemXForegroundSSESmokeDebugBridge`, a DEBUG-only local bridge that forwards to the existing sender helper with an easier Objective-C selector.
+- 2.42M1 bridge commit is `751316429c5476217f7b881d9a2f542a4e7e3b3b`.
+- 2.42M later hit `receiver_sse_proof_blocked_by_coredevice_lldb_handshake`, so receiver LLDB/CoreDevice attach is not a reliable proof source.
+- 2.42M2 adds `SalemXForegroundSSEReceiverSmokeDebugBridge`, a DEBUG-only receiver bridge/proof path that configures/starts/stops the existing active-session SSE helper and returns only redacted state summary fields.
 - The 2.42M physical regression smoke is not marked passed yet.
 
 ## Required Smoke
@@ -36,8 +39,17 @@ Do not use:
 Receiver:
 
 - Keep the receiver app foreground and authenticated.
-- Open foreground SSE first with the active-session helper.
-- Confirm `sse_connected=true` and `stream_failure=none`.
+- Open foreground SSE first with `SalemXForegroundSSEReceiverSmokeDebugBridge` or another existing redacted receiver proof path.
+- Confirm `sse_connected=true` and `stream_failure=none` from the redacted receiver state summary or other safe proof source.
+- Do not record receiver identifiers, raw URLs with secrets, tokens, request payloads, or private logs.
+
+Receiver bridge command shape with placeholders only:
+
+```lldb
+expr -l objc++ -- [NSClassFromString(@"SalemXForegroundSSEReceiverSmokeDebugBridge") configureWithCurrentSessionStreamURLString:@"<REDACTED_REAL_STREAM_URL>"]
+expr -l objc++ -- [NSClassFromString(@"SalemXForegroundSSEReceiverSmokeDebugBridge") redactedStateSummary]
+continue
+```
 
 Sender:
 
@@ -112,3 +124,22 @@ dev/invite=404
 unauthenticated non-dev invite=401
 unauthenticated stream=401
 ```
+
+## 2.42M2 DEBUG Receiver SSE Bridge
+
+The receiver bridge is DEBUG-only and local to supervised smoke. It does not run automatically, store identifiers, expose tokens, weaken auth, use `dev/invite`, use `dev/inject-active`, request media credentials, connect media, emit Matrix events, add PushKit/APNs/background behavior, or replace Element Call routing.
+
+Its redacted state summary may include only:
+
+- `sse_connected`
+- `stream_failure`
+- `raw_event_received`
+- `sse_event_type`
+- `invite_parse_attempted`
+- `invite_parse_succeeded`
+- `pipeline_delivered`
+- `invite_received`
+- `invite_valid`
+- `incoming_requested`
+
+Full runtime logs must not be pasted into docs because they can contain private Matrix/runtime values. The 2.42M physical regression smoke is still pending until a two-device real non-dev route pass is collected.

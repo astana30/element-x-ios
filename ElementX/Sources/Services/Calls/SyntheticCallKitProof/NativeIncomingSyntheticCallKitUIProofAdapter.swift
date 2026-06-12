@@ -467,9 +467,54 @@ final class SalemXForegroundSSESmokeDebug: NSObject {
         let accessToken: String
     }
 
+    private struct RedactedStateSummary {
+        var runtimeDiagnostics = DebugForegroundCallSignalingSSERuntimeDiagnostics.disabled
+        var rawEventReceived = false
+        var sseEventType: ForegroundCallSignalingSSESafeEventType?
+        var inviteParseAttempted = false
+        var inviteParseSucceeded = false
+        var pipelineDelivered = false
+
+        mutating func record(_ diagnostics: DebugForegroundCallSignalingSSERuntimeDiagnostics) {
+            runtimeDiagnostics = diagnostics
+        }
+
+        mutating func record(_ event: DebugForegroundCallSignalingSSESmokeTraceEvent) {
+            switch event {
+            case .rawEventReceived:
+                rawEventReceived = true
+            case .sseEventType(let eventType):
+                sseEventType = eventType
+            case .inviteParseAttempted:
+                inviteParseAttempted = true
+            case .inviteParseSucceeded(let succeeded):
+                inviteParseSucceeded = succeeded
+            case .pipelineDelivered(let delivered):
+                pipelineDelivered = delivered
+            }
+        }
+
+        var redactedLines: [String] {
+            [
+                "sse_connected=\(runtimeDiagnostics.sseConnected)",
+                "stream_failure=\(runtimeDiagnostics.streamFailure?.description ?? "none")",
+                "raw_event_received=\(rawEventReceived)",
+                "sse_event_type=\(sseEventType?.description ?? "none")",
+                "invite_parse_attempted=\(inviteParseAttempted)",
+                "invite_parse_succeeded=\(inviteParseSucceeded)",
+                "pipeline_delivered=\(pipelineDelivered)",
+                "invite_received=\(runtimeDiagnostics.inviteReceived)",
+                "invite_valid=\(runtimeDiagnostics.inviteValid)",
+                "incoming_requested=\(runtimeDiagnostics.incomingRequested)"
+            ]
+        }
+    }
+
     private static let logger = DebugForegroundCallSignalingSSESmokeDiagnosticsLogger()
+    private static let redactedStateSummaryLock = NSLock()
     private weak static var activeUserSession: UserSession?
     private static var owner: DebugForegroundCallSignalingSSERuntimeOwner?
+    private static var redactedStateSummarySnapshot = RedactedStateSummary()
 
     static func registerActiveUserSession(_ userSession: UserSession) {
         if Thread.isMainThread {
@@ -485,6 +530,7 @@ final class SalemXForegroundSSESmokeDebug: NSObject {
     static func configure(streamURLString: String, authorizationHeaderValue: String) {
         guard let streamURL = URL(string: streamURLString) else {
             owner = nil
+            resetRedactedStateSummary()
             logger.log(.disabled)
             return
         }
@@ -515,6 +561,7 @@ final class SalemXForegroundSSESmokeDebug: NSObject {
                                                             stream: stream,
                                                             // swiftlint:disable:next trailing_closure
                                                             debugObserver: { event in
+                                                                recordRedactedStateSummary(event)
                                                                 logger.log(event)
                                                             })
         owner = DebugForegroundCallSignalingSSERuntimeOwner(isEnabled: true,
@@ -522,17 +569,21 @@ final class SalemXForegroundSSESmokeDebug: NSObject {
                                                             inviteHandler: inviteHandler,
                                                             // swiftlint:disable:next trailing_closure
                                                             diagnosticsObserver: { diagnostics in
+                                                                recordRedactedStateSummary(diagnostics)
                                                                 logger.log(diagnostics)
                                                             })
-        logger.log(.init(sseConfigured: true,
-                         sseStarted: false,
-                         sseConnected: false,
-                         inviteReceived: false,
-                         inviteValid: false,
-                         incomingRequested: false,
-                         fallbackDeduped: false,
-                         transportStopped: false,
-                         streamFailure: nil))
+        let initialDiagnostics = DebugForegroundCallSignalingSSERuntimeDiagnostics(sseConfigured: true,
+                                                                                   sseStarted: false,
+                                                                                   sseConnected: false,
+                                                                                   inviteReceived: false,
+                                                                                   inviteValid: false,
+                                                                                   incomingRequested: false,
+                                                                                   fallbackDeduped: false,
+                                                                                   transportStopped: false,
+                                                                                   streamFailure: nil)
+        resetRedactedStateSummary()
+        recordRedactedStateSummary(initialDiagnostics)
+        logger.log(initialDiagnostics)
     }
 
     @objc(configureWithCurrentSessionURLString:)
@@ -542,6 +593,11 @@ final class SalemXForegroundSSESmokeDebug: NSObject {
 
     @objc(startWithCurrentSessionURLString:)
     static func startWithCurrentSession(streamURLString: String) {
+        configureWithCurrentSession(streamURLString: streamURLString, startsImmediately: true)
+    }
+
+    @objc(configureWithCurrentSessionStreamURLString:)
+    static func configureWithCurrentSessionStreamURLString(_ streamURLString: String) {
         configureWithCurrentSession(streamURLString: streamURLString, startsImmediately: true)
     }
 
@@ -569,10 +625,18 @@ final class SalemXForegroundSSESmokeDebug: NSObject {
     @objc static func clear() {
         owner?.appDidEnterBackground()
         owner = nil
+        resetRedactedStateSummary()
+    }
+
+    @objc static func redactedStateSummary() -> String {
+        redactedStateSummaryLock.lock()
+        defer { redactedStateSummaryLock.unlock() }
+        return redactedStateSummarySnapshot.redactedLines.joined(separator: "\n")
     }
 
     private static func configureWithCurrentSession(streamURLString: String, startsImmediately: Bool) {
         Task { @MainActor in
+            resetRedactedStateSummary()
             guard URL(string: streamURLString) != nil else {
                 owner = nil
                 logCurrentSessionHelperDiagnostics(activeUserSession: activeUserSession,
@@ -633,6 +697,24 @@ final class SalemXForegroundSSESmokeDebug: NSObject {
                 owner?.appDidEnterForeground(authenticatedSessionAvailable: true)
             }
         }
+    }
+
+    private static func resetRedactedStateSummary() {
+        redactedStateSummaryLock.lock()
+        defer { redactedStateSummaryLock.unlock() }
+        redactedStateSummarySnapshot = RedactedStateSummary()
+    }
+
+    private static func recordRedactedStateSummary(_ diagnostics: DebugForegroundCallSignalingSSERuntimeDiagnostics) {
+        redactedStateSummaryLock.lock()
+        defer { redactedStateSummaryLock.unlock() }
+        redactedStateSummarySnapshot.record(diagnostics)
+    }
+
+    private static func recordRedactedStateSummary(_ event: DebugForegroundCallSignalingSSESmokeTraceEvent) {
+        redactedStateSummaryLock.lock()
+        defer { redactedStateSummaryLock.unlock() }
+        redactedStateSummarySnapshot.record(event)
     }
 
     private static func logCurrentSessionHelperDiagnostics(activeUserSession: UserSession?,
@@ -883,6 +965,7 @@ final class SalemXForegroundSSESmokeDebug: NSObject {
 }
 
 @objcMembers
+@objc(SalemXForegroundSSESmokeDebugBridge)
 final class SalemXForegroundSSESmokeDebugBridge: NSObject {
     static func sendRealInviteWithURLString(_ inviteURLString: String,
                                             recipient: String,
@@ -890,6 +973,26 @@ final class SalemXForegroundSSESmokeDebugBridge: NSObject {
         SalemXForegroundSSESmokeDebug.sendRealInvite(inviteURLString: inviteURLString,
                                                      recipient: recipient,
                                                      recipientDevice: recipientDevice)
+    }
+}
+
+@objcMembers
+@objc(SalemXForegroundSSEReceiverSmokeDebugBridge)
+final class SalemXForegroundSSEReceiverSmokeDebugBridge: NSObject {
+    static func configureWithCurrentSessionStreamURLString(_ streamURLString: String) {
+        SalemXForegroundSSESmokeDebug.configureWithCurrentSessionStreamURLString(streamURLString)
+    }
+
+    static func start() {
+        SalemXForegroundSSESmokeDebug.start()
+    }
+
+    static func stop() {
+        SalemXForegroundSSESmokeDebug.stop()
+    }
+
+    static func redactedStateSummary() -> String {
+        SalemXForegroundSSESmokeDebug.redactedStateSummary()
     }
 }
 

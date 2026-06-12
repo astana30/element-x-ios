@@ -94,6 +94,22 @@ The bridge exposes a simple Objective-C selector for supervised physical smoke a
 
 Receiver identifiers remain local-only sensitive inputs. They may be typed into LLDB on the operator machine, but must not be written to docs, terminal output, tracked files, or final reports. The 2.42M physical regression smoke is not marked passed yet.
 
+### 2.42M2 — DEBUG receiver SSE smoke bridge
+
+The 2.42M regression smoke remains pending. The latest blocker was `receiver_sse_proof_blocked_by_coredevice_lldb_handshake`: receiver LLDB/CoreDevice handshakes were unstable, and no existing app-visible receiver SSE proof path was available.
+
+Added a DEBUG-only receiver bridge:
+
+```text
+SalemXForegroundSSEReceiverSmokeDebugBridge
+```
+
+The bridge configures/starts/stops the existing active-session foreground SSE helper and exposes a redacted state summary for supervised proof. The summary includes only safe booleans/status classes for connection, stream failure, event type, invite parsing, pipeline delivery, invite validity, and incoming request state.
+
+2.42M1 sender bridge commit `751316429c5476217f7b881d9a2f542a4e7e3b3b` remains the sender invocation bridge. Receiver identifiers remain local-only sensitive inputs and must not be written to docs, terminal output, tracked files, or final reports. The real non-dev invite route remains required, and the dev route must remain disabled. No physical smoke is marked passed by this task.
+
+Physical Debug builds for current supervised smokes should use `DEVELOPMENT_TEAM=M639Y9MFR2`. Do not use the old `83LGSC2QPV` team for current physical Debug builds, and do not persist signing changes.
+
 ### 2.42K — Supervised foreground real invite
 
 The two-device foreground real-invite smoke passed and was committed as:

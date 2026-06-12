@@ -2462,10 +2462,44 @@ final class ForegroundCallSignalingSSETraceTests {
     }
 
     @Test
-    func debugForegroundSSESmokeBridgeExposesObjCRealInviteSelector() {
-        let bridgeClass: AnyClass? = NSClassFromString("SalemXForegroundSSESmokeDebugBridge")
-        #expect(bridgeClass != nil)
-        #expect((bridgeClass as? NSObject.Type)?.responds(to: Selector(("sendRealInviteWithURLString:recipient:recipientDevice:"))) == true)
+    func debugForegroundSSESmokeBridgeExposesObjCRealInviteSelector() throws {
+        let bridgeClass = try #require(NSClassFromString("SalemXForegroundSSESmokeDebugBridge") as? NSObject.Type)
+
+        #expect(bridgeClass.responds(to: #selector(SalemXForegroundSSESmokeDebugBridge.sendRealInviteWithURLString(_:recipient:recipientDevice:))))
+    }
+
+    @Test
+    func debugForegroundSSEReceiverSmokeBridgeExposesRedactedProofSelectors() throws {
+        let bridgeClass = try #require(NSClassFromString("SalemXForegroundSSEReceiverSmokeDebugBridge") as? NSObject.Type)
+
+        #expect(bridgeClass.responds(to: #selector(SalemXForegroundSSEReceiverSmokeDebugBridge.configureWithCurrentSessionStreamURLString(_:))))
+        #expect(bridgeClass.responds(to: #selector(SalemXForegroundSSEReceiverSmokeDebugBridge.start)))
+        #expect(bridgeClass.responds(to: #selector(SalemXForegroundSSEReceiverSmokeDebugBridge.stop)))
+        #expect(bridgeClass.responds(to: #selector(SalemXForegroundSSEReceiverSmokeDebugBridge.redactedStateSummary)))
+    }
+
+    @Test
+    func debugForegroundSSEReceiverSmokeStateSummaryIsRedacted() {
+        SalemXForegroundSSESmokeDebug.clear()
+
+        let summary = SalemXForegroundSSESmokeDebug.redactedStateSummary()
+        #expect(summary.split(separator: "\n").map(String.init) == [
+            "sse_connected=false",
+            "stream_failure=none",
+            "raw_event_received=false",
+            "sse_event_type=none",
+            "invite_parse_attempted=false",
+            "invite_parse_succeeded=false",
+            "pipeline_delivered=false",
+            "invite_received=false",
+            "invite_valid=false",
+            "incoming_requested=false"
+        ])
+        #expect(Self.forbiddenFragments.allSatisfy { !summary.contains($0) })
+        #expect(!summary.contains("Bearer"))
+        #expect(!summary.contains("Authorization"))
+        #expect(!summary.contains("foreground-signaling/stream"))
+        #expect(!summary.contains("foreground-signaling/invite"))
     }
 
     @Test

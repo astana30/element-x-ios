@@ -405,6 +405,33 @@ continue
 
 The bridge delegates to the existing DEBUG sender helper. It does not run automatically, store identifiers, expose tokens, weaken auth, use `dev/invite`, use `dev/inject-active`, request media credentials, connect media, emit Matrix events, add PushKit/APNs/background behavior, or replace Element Call routing.
 
+## 2.42M2 DEBUG Receiver SSE Bridge
+
+2.42M remains a pending physical regression smoke after the 2.42L token guard and the 2.42M1 sender bridge commit `751316429c5476217f7b881d9a2f542a4e7e3b3b`.
+
+The latest 2.42M blocker was `receiver_sse_proof_blocked_by_coredevice_lldb_handshake`: receiver LLDB/CoreDevice handshakes were unstable, and no existing app-visible receiver SSE proof path was available. 2.42M2 adds a DEBUG-only receiver bridge:
+
+```text
+SalemXForegroundSSEReceiverSmokeDebugBridge
+```
+
+The bridge configures/starts/stops the existing active-session foreground SSE helper and returns a redacted state summary for supervised proof. It does not run automatically, store identifiers, expose tokens, weaken auth, use `dev/invite`, use `dev/inject-active`, request media credentials, connect media, emit Matrix events, add PushKit/APNs/background behavior, or replace Element Call routing.
+
+Receiver identifiers remain local-only sensitive inputs and must not be pasted into chat, docs, terminal logs, tracked files, commits, or final reports. The next 2.42M physical regression smoke must still use the authenticated real non-dev invite route with the dev route disabled. Correct physical Debug builds use `DEVELOPMENT_TEAM=M639Y9MFR2`; the old `83LGSC2QPV` team must not be used.
+
+The receiver summary is limited to:
+
+- `sse_connected`
+- `stream_failure`
+- `raw_event_received`
+- `sse_event_type`
+- `invite_parse_attempted`
+- `invite_parse_succeeded`
+- `pipeline_delivered`
+- `invite_received`
+- `invite_valid`
+- `incoming_requested`
+
 ## Redacted Diagnostics To Collect
 
 Record only safe booleans and timing buckets:
