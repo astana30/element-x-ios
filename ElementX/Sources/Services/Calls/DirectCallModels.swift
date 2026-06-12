@@ -1696,6 +1696,7 @@ enum DebugForegroundCallSignalingRealInviteSenderPostStatus: String, Equatable, 
     case requested
     case httpSuccess = "http_success"
     case httpUnauthorized = "http_unauthorized"
+    case httpFailed = "http_failed"
     case httpForbidden = "http_forbidden"
     case httpClientError = "http_client_error"
     case httpServerError = "http_server_error"
@@ -1719,6 +1720,11 @@ struct DebugForegroundCallSignalingRealInviteSenderDiagnostics: Equatable, Custo
     var senderInvitePostRequested: Bool
     var senderInvitePostStatus: DebugForegroundCallSignalingRealInviteSenderPostStatus
     var senderInviteDeliveryReportReceived: Bool
+    var senderTokenRefreshNeeded = false
+    var senderTokenRefreshAttempted = false
+    var senderTokenRefreshSucceeded = false
+    var senderInviteRetryRequested = false
+    var senderInviteRetryStatus: DebugForegroundCallSignalingRealInviteSenderPostStatus = .notRequested
     var senderInviteBlockedReason: DebugForegroundCallSignalingRealInviteSenderBlockedReason
 
     var description: String {
@@ -1729,6 +1735,11 @@ struct DebugForegroundCallSignalingRealInviteSenderDiagnostics: Equatable, Custo
             "sender_invite_post_requested=\(senderInvitePostRequested)",
             "sender_invite_post_status=\(senderInvitePostStatus)",
             "sender_invite_delivery_report_received=\(senderInviteDeliveryReportReceived)",
+            "sender_token_refresh_needed=\(senderTokenRefreshNeeded)",
+            "sender_token_refresh_attempted=\(senderTokenRefreshAttempted)",
+            "sender_token_refresh_succeeded=\(senderTokenRefreshSucceeded)",
+            "sender_invite_retry_requested=\(senderInviteRetryRequested)",
+            "sender_invite_retry_status=\(senderInviteRetryStatus)",
             "sender_invite_blocked_reason=\(senderInviteBlockedReason)"
         ].joined(separator: ", ") + ")"
     }
@@ -1815,6 +1826,11 @@ struct DebugForegroundCallSignalingSSESmokeDiagnosticsLogger {
             "\(Self.prefix) sender_invite_post_requested=\(diagnostics.senderInvitePostRequested)",
             "\(Self.prefix) sender_invite_post_status=\(diagnostics.senderInvitePostStatus)",
             "\(Self.prefix) sender_invite_delivery_report_received=\(diagnostics.senderInviteDeliveryReportReceived)",
+            "\(Self.prefix) sender_token_refresh_needed=\(diagnostics.senderTokenRefreshNeeded)",
+            "\(Self.prefix) sender_token_refresh_attempted=\(diagnostics.senderTokenRefreshAttempted)",
+            "\(Self.prefix) sender_token_refresh_succeeded=\(diagnostics.senderTokenRefreshSucceeded)",
+            "\(Self.prefix) sender_invite_retry_requested=\(diagnostics.senderInviteRetryRequested)",
+            "\(Self.prefix) sender_invite_retry_status=\(diagnostics.senderInviteRetryStatus)",
             "\(Self.prefix) sender_invite_blocked_reason=\(diagnostics.senderInviteBlockedReason)"
         ]
     }

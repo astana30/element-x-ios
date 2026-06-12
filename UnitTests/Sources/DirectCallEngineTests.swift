@@ -2410,6 +2410,47 @@ final class ForegroundCallSignalingSSETraceTests {
             "[SSE-SMOKE-DIAG] sender_invite_post_requested=true",
             "[SSE-SMOKE-DIAG] sender_invite_post_status=http_success",
             "[SSE-SMOKE-DIAG] sender_invite_delivery_report_received=true",
+            "[SSE-SMOKE-DIAG] sender_token_refresh_needed=false",
+            "[SSE-SMOKE-DIAG] sender_token_refresh_attempted=false",
+            "[SSE-SMOKE-DIAG] sender_token_refresh_succeeded=false",
+            "[SSE-SMOKE-DIAG] sender_invite_retry_requested=false",
+            "[SSE-SMOKE-DIAG] sender_invite_retry_status=not_requested",
+            "[SSE-SMOKE-DIAG] sender_invite_blocked_reason=none"
+        ])
+        #expect(lines.allSatisfy { line in
+            Self.forbiddenFragments.allSatisfy { !line.contains($0) }
+        })
+    }
+
+    @Test
+    func debugForegroundSSESmokeDiagnosticsLoggerUsesRedactedSenderRetryFields() {
+        let logger = DebugForegroundCallSignalingSSESmokeDiagnosticsLogger()
+        let diagnostics = DebugForegroundCallSignalingRealInviteSenderDiagnostics(senderHelperInvoked: true,
+                                                                                  senderActiveSessionAvailable: true,
+                                                                                  senderAccessTokenAvailable: true,
+                                                                                  senderInvitePostRequested: true,
+                                                                                  senderInvitePostStatus: .httpUnauthorized,
+                                                                                  senderInviteDeliveryReportReceived: false,
+                                                                                  senderTokenRefreshNeeded: true,
+                                                                                  senderTokenRefreshAttempted: true,
+                                                                                  senderTokenRefreshSucceeded: true,
+                                                                                  senderInviteRetryRequested: true,
+                                                                                  senderInviteRetryStatus: .httpFailed,
+                                                                                  senderInviteBlockedReason: .none)
+        let lines = logger.redactedLines(for: diagnostics)
+
+        #expect(lines == [
+            "[SSE-SMOKE-DIAG] sender_helper_invoked=true",
+            "[SSE-SMOKE-DIAG] sender_active_session_available=true",
+            "[SSE-SMOKE-DIAG] sender_access_token_available=true",
+            "[SSE-SMOKE-DIAG] sender_invite_post_requested=true",
+            "[SSE-SMOKE-DIAG] sender_invite_post_status=http_unauthorized",
+            "[SSE-SMOKE-DIAG] sender_invite_delivery_report_received=false",
+            "[SSE-SMOKE-DIAG] sender_token_refresh_needed=true",
+            "[SSE-SMOKE-DIAG] sender_token_refresh_attempted=true",
+            "[SSE-SMOKE-DIAG] sender_token_refresh_succeeded=true",
+            "[SSE-SMOKE-DIAG] sender_invite_retry_requested=true",
+            "[SSE-SMOKE-DIAG] sender_invite_retry_status=http_failed",
             "[SSE-SMOKE-DIAG] sender_invite_blocked_reason=none"
         ])
         #expect(lines.allSatisfy { line in

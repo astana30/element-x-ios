@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.42J - supervised foreground SSE guardrails and cleanup.
+After 2.42L - foreground real invite stale-token retry guard and cleanup.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,20 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.42L hardens the supervised real foreground invite sender helper after the 2.42K pass at `00b7db4db914eed61bb45cc51fff7082d15da323`:
+  - The DEBUG-only sender helper now treats a first authenticated real-invite `401` as a stale-token class and retries at most once after asking the active session token provider for a fresh value.
+  - Retry diagnostics remain redacted booleans/enums: `sender_token_refresh_needed`, `sender_token_refresh_attempted`, `sender_token_refresh_succeeded`, `sender_invite_retry_requested`, and `sender_invite_retry_status`.
+  - The helper still does not print, return, store, document, or log access token values, recipient identifiers, device identifiers, call handles, request payloads, or private URLs.
+  - The real non-dev invite route remains authenticated and independent from `SALEMX_FOREGROUND_SIGNALING_DEV_INVITE_ENABLED`.
+  - The dev route must remain disabled outside controlled smoke; disabled public dev routes return `404`.
+  - Physical Debug builds should use `DEVELOPMENT_TEAM=M639Y9MFR2`; the old `83LGSC2QPV` team must not be used for current physical Debug builds.
+  - Invite receipt still does not request media credentials, connect media, emit Matrix events, add PushKit/APNs behavior, add background incoming behavior, or replace Element Call routing.
+- 2.42K validated the supervised foreground real invite path at `00b7db4db914eed61bb45cc51fff7082d15da323`:
+  - The sender used the DEBUG-only active-session helper against the authenticated non-dev route `/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/invite`.
+  - The dev route stayed disabled; no `dev/invite`, no `dev/inject-active`, and no `SALEMX_FOREGROUND_SIGNALING_DEV_INVITE_ENABLED=1` were used.
+  - Server diagnostics confirmed one active target subscriber, delivery, enqueue, yield, and `sse_event_type=foreground.call.invite`.
+  - Receiver diagnostics confirmed `sse_connected=true`, `stream_failure=none`, `raw_event_received=true`, `invite_parse_succeeded=true`, `pipeline_delivered=true`, `invite_received=true`, `invite_valid=true`, and `incoming_requested=true`.
+  - No media credential request, media connect, Matrix event emission, Element Call route replacement, PushKit/APNs behavior, background incoming behavior, signing/project setting change, or raw runtime log documentation was added.
 - 2.42J hardens supervised foreground SSE smoke guardrails after the 2.42I pass at `a4d427f5b07e662695ce108530bbafc9bfdd9399`:
   - Server tests explicitly cover disabled dev routes returning not found, enabled authenticated dev-invite requiring an active session, local-only self-injection fail-closed behavior, stream unauthenticated rejection, and redacted SSE/log diagnostics.
   - The server stream and dev routes continue to emit only safe stage names, booleans, counts, hashes, and enums. `foreground.keepalive` remains a comment-only SSE heartbeat.

@@ -68,6 +68,40 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
 
+### 2.42L — Foreground real invite stale-token retry guard
+
+Added a DEBUG-only stale-token guard to the supervised foreground real-invite sender helper. If the first authenticated non-dev real-invite POST returns `http_unauthorized`, the helper asks the active session token provider for a value again and retries at most once. If the provider cannot supply a usable value or the retry still fails, the helper reports only redacted retry diagnostics and leaves server auth unchanged.
+
+New sender diagnostics remain safe classes and booleans:
+
+- `sender_token_refresh_needed`
+- `sender_token_refresh_attempted`
+- `sender_token_refresh_succeeded`
+- `sender_invite_retry_requested`
+- `sender_invite_retry_status`
+
+No token, recipient, recipient device, call handle, request payload, private URL, or raw runtime log is printed, returned, stored, or documented. The dev route remains disabled outside controlled smoke, and the real non-dev route remains auth-gated.
+
+### 2.42K — Supervised foreground real invite
+
+The two-device foreground real-invite smoke passed and was committed as:
+
+```text
+00b7db4db914eed61bb45cc51fff7082d15da323 Validate supervised foreground real invite
+```
+
+The sender used the DEBUG-only active-session helper to POST the authenticated non-dev route. The receiver had an active foreground SSE subscription and received the `foreground.call.invite` event through the already-proven SSE receive/parser/pipeline path.
+
+Redacted result:
+
+- Sender diagnostics reached `sender_invite_post_status=http_success` and `sender_invite_delivery_report_received=true`.
+- Server diagnostics showed one active target subscriber, `delivered=true`, `dropped=false`, `invite_enqueued=true`, `invite_yielded=true`, and `sse_event_type=foreground.call.invite`.
+- Receiver diagnostics reached `raw_event_received=true`, `sse_event_type=foreground.call.invite`, `invite_parse_succeeded=true`, `pipeline_delivered=true`, `invite_received=true`, `invite_valid=true`, and `incoming_requested=true`.
+
+The dev route stayed disabled throughout the real-invite smoke. No `dev/invite`, no `dev/inject-active`, and no `SALEMX_FOREGROUND_SIGNALING_DEV_INVITE_ENABLED=1` were used. Invite receipt still did not request media credentials, connect media, emit Matrix events, add PushKit/APNs/background behavior, or replace Element Call routing.
+
+Physical Debug builds for current supervised smokes should use `DEVELOPMENT_TEAM=M639Y9MFR2`. Do not use the old `83LGSC2QPV` team for current physical Debug builds, and do not persist signing changes.
+
 ### 2.42I — Supervised foreground SSE smoke self-injection
 
 The physical iPhone active-session SSE helper reached `sse_connected=true`, proving that the app can open the supervised foreground SSE stream and parse the server `foreground.ready` event without copying the current app credential into LLDB.

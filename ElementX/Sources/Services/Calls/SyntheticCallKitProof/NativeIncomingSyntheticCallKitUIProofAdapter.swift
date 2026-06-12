@@ -460,6 +460,13 @@ private final class SalemXForegroundSSESmokeCallKitReportingAdapter: NativeIncom
 
 @objc(SalemXForegroundSSESmokeDebug)
 final class SalemXForegroundSSESmokeDebug: NSObject {
+    private struct RealInviteSenderContext {
+        let inviteURL: URL
+        let activeUserSession: UserSession
+        let accessTokenProvider: DirectCallMatrixAccessTokenProviding
+        let accessToken: String
+    }
+
     private static let logger = DebugForegroundCallSignalingSSESmokeDiagnosticsLogger()
     private weak static var activeUserSession: UserSession?
     private static var owner: DebugForegroundCallSignalingSSERuntimeOwner?
@@ -541,89 +548,9 @@ final class SalemXForegroundSSESmokeDebug: NSObject {
     @objc(sendRealInviteWithURLString:recipient:recipientDevice:)
     static func sendRealInvite(inviteURLString: String, recipient: String, recipientDevice: String) {
         Task { @MainActor in
-            guard let inviteURL = URL(string: inviteURLString) else {
-                logRealInviteSenderDiagnostics(activeUserSession: activeUserSession,
-                                               accessTokenAvailable: false,
-                                               postRequested: false,
-                                               postStatus: .notRequested,
-                                               deliveryReportReceived: false,
-                                               blockedReason: .invalidInviteURL)
-                return
-            }
-
-            guard !recipient.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                logRealInviteSenderDiagnostics(activeUserSession: activeUserSession,
-                                               accessTokenAvailable: false,
-                                               postRequested: false,
-                                               postStatus: .notRequested,
-                                               deliveryReportReceived: false,
-                                               blockedReason: .missingRecipient)
-                return
-            }
-
-            guard let activeUserSession else {
-                logRealInviteSenderDiagnostics(activeUserSession: nil,
-                                               accessTokenAvailable: false,
-                                               postRequested: false,
-                                               postStatus: .notRequested,
-                                               deliveryReportReceived: false,
-                                               blockedReason: .missingActiveSession)
-                return
-            }
-
-            guard let accessTokenProvider = activeUserSession.clientProxy as? DirectCallMatrixAccessTokenProviding else {
-                logRealInviteSenderDiagnostics(activeUserSession: activeUserSession,
-                                               accessTokenAvailable: false,
-                                               postRequested: false,
-                                               postStatus: .notRequested,
-                                               deliveryReportReceived: false,
-                                               blockedReason: .missingAccessTokenProvider)
-                return
-            }
-
-            guard let accessToken = await accessTokenProvider.matrixAccessToken() else {
-                logRealInviteSenderDiagnostics(activeUserSession: activeUserSession,
-                                               accessTokenAvailable: false,
-                                               postRequested: false,
-                                               postStatus: .notRequested,
-                                               deliveryReportReceived: false,
-                                               blockedReason: .missingAccessToken)
-                return
-            }
-
-            guard !accessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                logRealInviteSenderDiagnostics(activeUserSession: activeUserSession,
-                                               accessTokenAvailable: false,
-                                               postRequested: false,
-                                               postStatus: .notRequested,
-                                               deliveryReportReceived: false,
-                                               blockedReason: .blankAccessToken)
-                return
-            }
-
-            logRealInviteSenderDiagnostics(activeUserSession: activeUserSession,
-                                           accessTokenAvailable: true,
-                                           postRequested: true,
-                                           postStatus: .requested,
-                                           deliveryReportReceived: false,
-                                           blockedReason: .none)
-
-            let result: (status: DebugForegroundCallSignalingRealInviteSenderPostStatus, deliveryReportReceived: Bool)
-            do {
-                result = try await postRealInvite(inviteURL: inviteURL,
+            await sendRealInviteWithActiveSession(inviteURLString: inviteURLString,
                                                   recipient: recipient,
-                                                  recipientDevice: recipientDevice,
-                                                  accessToken: accessToken)
-            } catch {
-                result = (.network, false)
-            }
-
-            logRealInviteSenderDiagnostics(activeUserSession: activeUserSession,
-                                           accessTokenAvailable: true,
-                                           postRequested: true,
-                                           postStatus: result.status,
-                                           deliveryReportReceived: result.deliveryReportReceived,
-                                           blockedReason: .none)
+                                                  recipientDevice: recipientDevice)
         }
     }
 
@@ -724,11 +651,170 @@ final class SalemXForegroundSSESmokeDebug: NSObject {
                          foregroundSSEStartBlockedReason: blockedReason))
     }
 
+    private static func sendRealInviteWithActiveSession(inviteURLString: String,
+                                                        recipient: String,
+                                                        recipientDevice: String) async {
+        guard let context = await realInviteSenderContext(inviteURLString: inviteURLString, recipient: recipient) else {
+            return
+        }
+
+        logRealInviteSenderDiagnostics(activeUserSession: context.activeUserSession,
+                                       accessTokenAvailable: true,
+                                       postRequested: true,
+                                       postStatus: .requested,
+                                       deliveryReportReceived: false,
+                                       blockedReason: .none)
+
+        let result = await postRealInviteSafely(inviteURL: context.inviteURL,
+                                                recipient: recipient,
+                                                recipientDevice: recipientDevice,
+                                                accessToken: context.accessToken)
+        guard result.status == .httpUnauthorized else {
+            logRealInviteSenderDiagnostics(activeUserSession: context.activeUserSession,
+                                           accessTokenAvailable: true,
+                                           postRequested: true,
+                                           postStatus: result.status,
+                                           deliveryReportReceived: result.deliveryReportReceived,
+                                           blockedReason: .none)
+            return
+        }
+
+        await retryRealInviteAfterUnauthorized(inviteURL: context.inviteURL,
+                                               recipient: recipient,
+                                               recipientDevice: recipientDevice,
+                                               firstResult: result,
+                                               context: context)
+    }
+
+    private static func realInviteSenderContext(inviteURLString: String,
+                                                recipient: String) async -> RealInviteSenderContext? {
+        guard let inviteURL = URL(string: inviteURLString) else {
+            logRealInviteSenderDiagnostics(activeUserSession: activeUserSession,
+                                           accessTokenAvailable: false,
+                                           postRequested: false,
+                                           postStatus: .notRequested,
+                                           deliveryReportReceived: false,
+                                           blockedReason: .invalidInviteURL)
+            return nil
+        }
+
+        guard !recipient.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            logRealInviteSenderDiagnostics(activeUserSession: activeUserSession,
+                                           accessTokenAvailable: false,
+                                           postRequested: false,
+                                           postStatus: .notRequested,
+                                           deliveryReportReceived: false,
+                                           blockedReason: .missingRecipient)
+            return nil
+        }
+
+        guard let activeUserSession else {
+            logRealInviteSenderDiagnostics(activeUserSession: nil,
+                                           accessTokenAvailable: false,
+                                           postRequested: false,
+                                           postStatus: .notRequested,
+                                           deliveryReportReceived: false,
+                                           blockedReason: .missingActiveSession)
+            return nil
+        }
+
+        guard let accessTokenProvider = activeUserSession.clientProxy as? DirectCallMatrixAccessTokenProviding else {
+            logRealInviteSenderDiagnostics(activeUserSession: activeUserSession,
+                                           accessTokenAvailable: false,
+                                           postRequested: false,
+                                           postStatus: .notRequested,
+                                           deliveryReportReceived: false,
+                                           blockedReason: .missingAccessTokenProvider)
+            return nil
+        }
+
+        guard let accessToken = await accessTokenProvider.matrixAccessToken() else {
+            logRealInviteSenderDiagnostics(activeUserSession: activeUserSession,
+                                           accessTokenAvailable: false,
+                                           postRequested: false,
+                                           postStatus: .notRequested,
+                                           deliveryReportReceived: false,
+                                           blockedReason: .missingAccessToken)
+            return nil
+        }
+
+        guard !accessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            logRealInviteSenderDiagnostics(activeUserSession: activeUserSession,
+                                           accessTokenAvailable: false,
+                                           postRequested: false,
+                                           postStatus: .notRequested,
+                                           deliveryReportReceived: false,
+                                           blockedReason: .blankAccessToken)
+            return nil
+        }
+
+        return RealInviteSenderContext(inviteURL: inviteURL,
+                                       activeUserSession: activeUserSession,
+                                       accessTokenProvider: accessTokenProvider,
+                                       accessToken: accessToken)
+    }
+
+    private static func retryRealInviteAfterUnauthorized(inviteURL: URL,
+                                                         recipient: String,
+                                                         recipientDevice: String,
+                                                         firstResult: (status: DebugForegroundCallSignalingRealInviteSenderPostStatus,
+                                                                       deliveryReportReceived: Bool),
+                                                         context: RealInviteSenderContext) async {
+        guard let retryAccessToken = await context.accessTokenProvider.matrixAccessToken(),
+              !retryAccessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            logRealInviteSenderDiagnostics(activeUserSession: context.activeUserSession,
+                                           accessTokenAvailable: true,
+                                           postRequested: true,
+                                           postStatus: firstResult.status,
+                                           deliveryReportReceived: firstResult.deliveryReportReceived,
+                                           tokenRefreshNeeded: true,
+                                           tokenRefreshAttempted: true,
+                                           tokenRefreshSucceeded: false,
+                                           retryRequested: false,
+                                           retryStatus: .notRequested,
+                                           blockedReason: .none)
+            return
+        }
+
+        logRealInviteSenderDiagnostics(activeUserSession: context.activeUserSession,
+                                       accessTokenAvailable: true,
+                                       postRequested: true,
+                                       postStatus: firstResult.status,
+                                       deliveryReportReceived: firstResult.deliveryReportReceived,
+                                       tokenRefreshNeeded: true,
+                                       tokenRefreshAttempted: true,
+                                       tokenRefreshSucceeded: true,
+                                       retryRequested: true,
+                                       retryStatus: .requested,
+                                       blockedReason: .none)
+
+        let retryResult = await postRealInviteSafely(inviteURL: inviteURL,
+                                                     recipient: recipient,
+                                                     recipientDevice: recipientDevice,
+                                                     accessToken: retryAccessToken)
+        logRealInviteSenderDiagnostics(activeUserSession: context.activeUserSession,
+                                       accessTokenAvailable: true,
+                                       postRequested: true,
+                                       postStatus: firstResult.status,
+                                       deliveryReportReceived: retryResult.deliveryReportReceived,
+                                       tokenRefreshNeeded: true,
+                                       tokenRefreshAttempted: true,
+                                       tokenRefreshSucceeded: true,
+                                       retryRequested: true,
+                                       retryStatus: retryResult.status,
+                                       blockedReason: .none)
+    }
+
     private static func logRealInviteSenderDiagnostics(activeUserSession: UserSession?,
                                                        accessTokenAvailable: Bool,
                                                        postRequested: Bool,
                                                        postStatus: DebugForegroundCallSignalingRealInviteSenderPostStatus,
                                                        deliveryReportReceived: Bool,
+                                                       tokenRefreshNeeded: Bool = false,
+                                                       tokenRefreshAttempted: Bool = false,
+                                                       tokenRefreshSucceeded: Bool = false,
+                                                       retryRequested: Bool = false,
+                                                       retryStatus: DebugForegroundCallSignalingRealInviteSenderPostStatus = .notRequested,
                                                        blockedReason: DebugForegroundCallSignalingRealInviteSenderBlockedReason) {
         logger.log(.init(senderHelperInvoked: true,
                          senderActiveSessionAvailable: activeUserSession != nil,
@@ -736,7 +822,27 @@ final class SalemXForegroundSSESmokeDebug: NSObject {
                          senderInvitePostRequested: postRequested,
                          senderInvitePostStatus: postStatus,
                          senderInviteDeliveryReportReceived: deliveryReportReceived,
+                         senderTokenRefreshNeeded: tokenRefreshNeeded,
+                         senderTokenRefreshAttempted: tokenRefreshAttempted,
+                         senderTokenRefreshSucceeded: tokenRefreshSucceeded,
+                         senderInviteRetryRequested: retryRequested,
+                         senderInviteRetryStatus: retryStatus,
                          senderInviteBlockedReason: blockedReason))
+    }
+
+    private static func postRealInviteSafely(inviteURL: URL,
+                                             recipient: String,
+                                             recipientDevice: String,
+                                             accessToken: String) async -> (status: DebugForegroundCallSignalingRealInviteSenderPostStatus,
+                                                                            deliveryReportReceived: Bool) {
+        do {
+            return try await postRealInvite(inviteURL: inviteURL,
+                                            recipient: recipient,
+                                            recipientDevice: recipientDevice,
+                                            accessToken: accessToken)
+        } catch {
+            return (.network, false)
+        }
     }
 
     private static func postRealInvite(inviteURL: URL,
@@ -783,14 +889,8 @@ private extension DebugForegroundCallSignalingRealInviteSenderPostStatus {
             self = .httpSuccess
         case 401:
             self = .httpUnauthorized
-        case 403:
-            self = .httpForbidden
-        case 400..<500:
-            self = .httpClientError
-        case 500..<600:
-            self = .httpServerError
         default:
-            self = .httpUnexpected
+            self = .httpFailed
         }
     }
 }

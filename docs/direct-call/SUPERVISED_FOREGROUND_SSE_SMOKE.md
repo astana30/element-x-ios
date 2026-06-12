@@ -331,7 +331,58 @@ Physical Debug build note:
 - Do not use old Team ID `83LGSC2QPV` for current physical Debug builds.
 - Do not persist signing changes to `SalemX.xcodeproj/project.pbxproj`, `project.yml`, `app.yml`, `Info.plist`, or entitlements.
 
-This proves `foreground.ready` parsing and active app session request construction. The remaining supervised proof is invite self-injection into the active subscriber.
+This proves `foreground.ready` parsing and active app session request construction.
+
+## 2.42K Real Invite Result
+
+Status: passed.
+
+2.42K passed and was committed as:
+
+```text
+00b7db4db914eed61bb45cc51fff7082d15da323 Validate supervised foreground real invite
+```
+
+The pass used the authenticated non-dev foreground invite route:
+
+```text
+POST /_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/invite
+```
+
+The dev route stayed disabled throughout the real-invite smoke. The run did not use `dev/invite`, `dev/inject-active`, or `SALEMX_FOREGROUND_SIGNALING_DEV_INVITE_ENABLED=1`.
+
+Redacted pass evidence:
+
+- sender `sender_invite_post_status=http_success`
+- sender `sender_invite_delivery_report_received=true`
+- server `active_subscriber_count=1`
+- server `delivered=true`
+- server `dropped=false`
+- server `invite_enqueued=true`
+- server `invite_yielded=true`
+- server `sse_event_type=foreground.call.invite`
+- receiver `sse_connected=true`
+- receiver `stream_failure=none`
+- receiver `raw_event_received=true`
+- receiver `sse_event_type=foreground.call.invite`
+- receiver `invite_parse_succeeded=true`
+- receiver `pipeline_delivered=true`
+- receiver `invite_received=true`
+- receiver `invite_valid=true`
+- receiver `incoming_requested=true`
+
+Invite receipt did not request media credentials, connect media, emit Matrix events, add PushKit/APNs/background behavior, or replace Element Call routing.
+
+## 2.42L Sender Token Guard
+
+The first sender helper POST may hit a stale active-session token and return `http_unauthorized`. The 2.42L DEBUG-only guard handles this without exposing credentials:
+
+- marks `sender_token_refresh_needed=true`
+- asks the active session token provider for a value again
+- retries the real non-dev invite route at most once
+- reports only `sender_invite_retry_requested` and `sender_invite_retry_status`
+
+No token, recipient, recipient device, call handle, request payload, private URL, or raw runtime log should be printed, returned, stored, or documented. If retry still does not reach `http_success`, keep the dev route disabled and rerun with the sender app foreground/authenticated after the SDK refresh settles.
 
 ## Redacted Diagnostics To Collect
 
@@ -346,6 +397,11 @@ Record only safe booleans and timing buckets:
 - `fallback_deduped`
 - `transport_stopped`
 - `stream_failure`
+- `sender_token_refresh_needed`
+- `sender_token_refresh_attempted`
+- `sender_token_refresh_succeeded`
+- `sender_invite_retry_requested`
+- `sender_invite_retry_status`
 - SSE connect elapsed bucket
 - invite-to-incoming elapsed bucket
 
@@ -418,6 +474,6 @@ This phase does not add:
 
 ## Next Phase
 
-Recommended next phase: `2.42K - foreground SSE repeat-call validation`.
+Recommended next phase: production configuration and rollout design for the authenticated foreground SSE path.
 
-That phase should run repeated foreground supervised invites, measure invite-to-incoming timing buckets, confirm fallback de-duplication, and keep media credential request/media connection blocked until Answer.
+That phase should define a non-DEBUG configuration boundary for foreground-only SSE startup, keep the dev routes disabled by default, preserve server-issued media credential authority, and keep media credential request/media connection blocked until Answer.
