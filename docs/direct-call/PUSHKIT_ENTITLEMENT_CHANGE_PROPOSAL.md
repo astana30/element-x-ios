@@ -1,6 +1,6 @@
 # PushKit Entitlement Change Proposal
 
-Status: proposal-only for 2.43K. No project, signing, provisioning, entitlement, `Info.plist`, `app.yml`, PushKit registration, APNs registration, token request, media, or production background behavior is changed by this document.
+Status: 2.43L applied the minimum tracked project signing references for PushKit capability readiness. No provisioning, entitlement, `Info.plist`, `app.yml`, PushKit registration, APNs registration, token request, media, or production background behavior is changed by this document.
 
 ## 1. Current Tracked State
 
@@ -29,7 +29,8 @@ Tracked `Info.plist` and XcodeGen state:
 Tracked signing/team state:
 
 - `app.yml` contains `DEVELOPMENT_TEAM: 83LGSC2QPV`.
-- `SalemX.xcodeproj/project.pbxproj` contains generated references to `83LGSC2QPV` and `$(DEVELOPMENT_TEAM)`.
+- `SalemX.xcodeproj/project.pbxproj` generated references that previously used `83LGSC2QPV` now use `M639Y9MFR2`.
+- `SalemX.xcodeproj/project.pbxproj` also contains target settings that refer to `$(DEVELOPMENT_TEAM)` and inherit the project-level value.
 - Current physical Debug work must use `M639Y9MFR2`.
 - The old team ID `83LGSC2QPV` must not be used for future PushKit physical smokes.
 
@@ -39,6 +40,22 @@ Runtime state:
 - No native direct-call PushKit registration is enabled.
 - No native direct-call PushKit token request is wired to app startup.
 - Existing Element Call PushKit/VoIP code remains a separate product path and is not this native direct-call background implementation.
+
+## 2.43L Applied Minimum Tracked Capability Readiness Changes
+
+2.43L applies only the narrow tracked project signing-reference change needed before a future controlled physical PushKit registration smoke:
+
+- `SalemX.xcodeproj/project.pbxproj` generated `DevelopmentTeam` references that were set to `83LGSC2QPV` now use `M639Y9MFR2`.
+- Project-level generated `DEVELOPMENT_TEAM` build settings that were set to `83LGSC2QPV` now use `M639Y9MFR2`.
+
+No entitlement or plist capability key was added in 2.43L because the current tracked app state already contains:
+
+- `ElementX/SupportingFiles/ElementX.entitlements` with development `aps-environment`.
+- `ElementX/SupportingFiles/Info.plist` and `ElementX/SupportingFiles/target.yml` with `UIBackgroundModes` including `voip`.
+
+No `com.apple.developer.pushkit.unrestricted-voip` key was added. That key remains absent because the current proposal does not prove it is required for this app ID/account, and speculative entitlement keys can break signing or reviewability.
+
+`app.yml` still contains the old team value and was intentionally not edited in 2.43L because the task's allowed-file audit did not permit `app.yml` changes. Do not regenerate the Xcode project from `app.yml` for PushKit physical smoke readiness until a separate explicit task authorizes the source XcodeGen config/signing remediation.
 
 ## 2. Minimum Future Changes Required
 

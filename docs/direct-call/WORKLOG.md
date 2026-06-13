@@ -331,6 +331,24 @@ This was proposal-only. No `.entitlements`, `Info.plist`, `SalemX.xcodeproj/proj
 
 Future work may touch `.entitlements`, `Info.plist`, `SalemX.xcodeproj/project.pbxproj`, `app.yml`, or signing/provisioning settings only after the user explicitly authorizes those files/settings in that task.
 
+### 2.43L — Minimal PushKit capability files
+
+Applied the minimum tracked capability-file readiness change from the 2.43K proposal. The only non-doc tracked capability/signing file changed is:
+
+```text
+SalemX.xcodeproj/project.pbxproj
+```
+
+The project change replaces generated Development Team references from old `83LGSC2QPV` to `M639Y9MFR2`. This aligns the checked-in project with the required physical Debug team for future controlled PushKit build/profile validation.
+
+No entitlement or plist capability key was added. The main app entitlement already includes development `aps-environment`, and the main app `Info.plist`/target config already includes `UIBackgroundModes` with `voip`. No `com.apple.developer.pushkit.unrestricted-voip` or other speculative PushKit/VoIP-specific entitlement key was added. NSE and Share Extension entitlements were not touched.
+
+`app.yml` remains unchanged and still contains the old team value; do not regenerate the project from it for PushKit physical smoke readiness until a separate explicit source-config signing remediation task is approved.
+
+Real PushKit registration remains disabled by default. No PushKit/APNs token was requested, logged, or persisted. No APNs registration, real PushKit/background callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, or production background behavior was introduced.
+
+The next step should be controlled build/profile validation against the checked-in project and Apple Developer/profile state. It should not request a PushKit token or wire runtime registration unless that is explicitly scoped and capability signing is confirmed.
+
 ### 2.42K — Supervised foreground real invite
 
 The two-device foreground real-invite smoke passed and was committed as:

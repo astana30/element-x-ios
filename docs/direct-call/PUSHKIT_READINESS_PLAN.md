@@ -1,6 +1,6 @@
 # PushKit Readiness Plan
 
-Status: 2.43K PushKit entitlement/provisioning change proposal documented. No PushKit/APNs registration is enabled by default, and no entitlement, provisioning, project, signing, media, or production background behavior is implemented by this document.
+Status: 2.43L minimal PushKit capability files applied. No PushKit/APNs registration is enabled by default, and no runtime registration, provisioning, media, or production background behavior is implemented by this document.
 
 ## 1. Current Safe Baseline
 
@@ -18,6 +18,7 @@ The 2.43B-I background chain exists only as safe seams:
 - 2.43I gated PushKit registrar scaffold.
 - 2.43J capability readiness verification.
 - 2.43K entitlement/provisioning change proposal.
+- 2.43L minimal tracked capability-file readiness update.
 
 The 2.43I registrar scaffold imports PushKit through an isolated real registry factory, but its feature gate defaults disabled and it is not wired to app startup. There is no enabled native direct-call PushKit registration, no native direct-call APNs token request, and no native direct-call PushKit/background callback wiring. Entitlements, provisioning, project files, signing settings, `Info.plist`, and `app.yml` have not been changed for the native direct-call background path. No media credentials, media connection, Matrix event emission from invite receipt, Element Call route replacement, or production background behavior has been added.
 
@@ -35,7 +36,7 @@ This matrix records tracked-source and local route-level evidence for whether th
 | Actual PushKit runtime registration | blocked | `DirectCallRealPushKitRegistryFactory` exists behind the 2.43I boundary, but no app-start owner wires it and no real token request is allowed in normal runtime. | Require explicit task approval and capability/profile readiness before any controlled registration smoke. | Accidental runtime registration could request a VoIP token without approved entitlements/profiles. |
 | APNs/VoIP entitlements | not verified | Tracked `ElementX/SupportingFiles/ElementX.entitlements` contains development `aps-environment`; tracked `ElementX/SupportingFiles/Info.plist` includes `UIBackgroundModes` with `voip`. Apple Developer portal/profile state was not verified. | Verify Apple Developer capabilities and generated profiles before real PushKit smoke. | Tracked settings alone do not prove the installed app/profile can receive VoIP pushes. |
 | Provisioning profile readiness | not verified | No provisioning profiles were modified or inspected as an authoritative readiness source in 2.43J. | Perform a separately authorized profile/certificate/device readiness check. | A local build may compile but fail device token issuance or install capability checks. |
-| Physical Debug Team ID | blocked | Current physical Debug requirement is `M639Y9MFR2`, but tracked `app.yml` still references old `DEVELOPMENT_TEAM: 83LGSC2QPV`; 2.43J does not edit signing config. | Use only explicit physical build overrides or a separately authorized signing remediation task before device smoke. | Accidentally using `83LGSC2QPV` can produce the wrong profile/capability context. |
+| Physical Debug Team ID | partially ready | Current physical Debug requirement is `M639Y9MFR2`; 2.43L updates generated project signing references from `83LGSC2QPV` to `M639Y9MFR2`. Tracked `app.yml` still references old `DEVELOPMENT_TEAM: 83LGSC2QPV` and was not edited. | Do not regenerate from `app.yml` until a separate source-config remediation task is approved, or use the current checked-in project directly for controlled build/profile validation. | Regenerating the project from stale XcodeGen config can reintroduce the wrong team. |
 | Server token registration endpoint | not implemented | Docs contain only the planned server token registration contract; no native direct-call token upload endpoint is evidenced by this iOS verification. | Design/authenticate a server token registration contract in a separate task. | Without token registration, a VoIP provider cannot target native direct-call devices. |
 | Server VoIP push provider credentials | not verified | No server provider credential check was performed, and credentials must not be copied into docs or source. | Verify provider key/certificate handling out of band with redacted evidence only. | Misconfigured provider credentials can block delivery even if app registration succeeds. |
 | Route-level safety | verified | Live route checks returned `dev/invite=404`, unauthenticated non-dev invite `401`, and unauthenticated stream `401`. | Keep this as the fallback server safety check when direct service status is unavailable. | Route safety does not prove direct `systemctl` service status or push provider readiness. |
@@ -60,9 +61,22 @@ It records the current tracked state:
 - The NSE and Share Extension entitlement files contain app group and keychain access groups, but no APNs entitlement.
 - No tracked entitlement file contains `com.apple.developer.pushkit.unrestricted-voip` or another PushKit/VoIP-specific entitlement key.
 - The main app `Info.plist`/target config already includes `UIBackgroundModes` with `voip`.
-- `app.yml` and generated project state still reference old team `83LGSC2QPV`; physical Debug work must use `M639Y9MFR2`.
+- `app.yml` still references old team `83LGSC2QPV`; the checked-in project is updated in 2.43L, and physical Debug work must use `M639Y9MFR2`.
 
 The proposal does not apply any of those changes. A future task may edit `.entitlements`, `Info.plist`, `SalemX.xcodeproj/project.pbxproj`, `app.yml`, or signing/provisioning settings only after explicit user approval naming those files/settings.
+
+## 2.43L Minimal Capability Files Applied
+
+2.43L applies the minimum tracked capability-file readiness change that is safe from the 2.43K proposal:
+
+- Updated only `SalemX.xcodeproj/project.pbxproj` generated `DevelopmentTeam` / project-level `DEVELOPMENT_TEAM` references from `83LGSC2QPV` to `M639Y9MFR2`.
+- Left `ElementX/SupportingFiles/ElementX.entitlements` unchanged because development `aps-environment` is already present.
+- Left `ElementX/SupportingFiles/Info.plist` unchanged because `UIBackgroundModes` already includes `voip`.
+- Did not add `com.apple.developer.pushkit.unrestricted-voip` or any speculative PushKit/VoIP-specific entitlement key.
+- Did not edit extension entitlements.
+- Did not edit `app.yml`; it still contains the old team value and requires a separate explicit source-config remediation task before XcodeGen regeneration.
+
+Real PushKit registration remains disabled by default and is not wired to app startup. The next step should be controlled build/profile validation against the checked-in project and Apple Developer/profile state, not token registration.
 
 ## 2. Apple Capability And Provisioning Requirements
 

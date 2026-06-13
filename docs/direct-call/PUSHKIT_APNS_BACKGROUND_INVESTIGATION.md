@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: 2.43K PushKit entitlement/provisioning change proposal documented; production PushKit/APNs/background behavior remains disabled by default and unwired.
+Status: 2.43L minimal PushKit capability files applied; production PushKit/APNs/background behavior remains disabled by default and unwired.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -228,6 +228,16 @@ docs/direct-call/PUSHKIT_ENTITLEMENT_CHANGE_PROPOSAL.md
 Current tracked evidence remains: the main app entitlement file has development `aps-environment`; main app `Info.plist`/target config includes `UIBackgroundModes` with `voip`; no tracked entitlement file has `com.apple.developer.pushkit.unrestricted-voip`; and tracked signing config still references old `83LGSC2QPV` while physical Debug work must use `M639Y9MFR2`.
 
 A future implementation task must explicitly authorize touching `.entitlements`, `Info.plist`, `SalemX.xcodeproj/project.pbxproj`, `app.yml`, and signing/provisioning settings before any such edit is made.
+
+## 2.43L Minimal PushKit Capability Files
+
+2.43L applies only the minimum tracked project signing-reference readiness change for future controlled physical PushKit registration smoke. It updates generated `SalemX.xcodeproj/project.pbxproj` Development Team references from old `83LGSC2QPV` to `M639Y9MFR2`.
+
+No entitlement or plist capability keys were changed because the tracked app state already has development `aps-environment` in `ElementX/SupportingFiles/ElementX.entitlements` and `UIBackgroundModes` with `voip` in `ElementX/SupportingFiles/Info.plist` / target config. No `com.apple.developer.pushkit.unrestricted-voip` key was added, and extension entitlements were not touched.
+
+`app.yml` remains unchanged and still contains the old team value. Do not regenerate the Xcode project from that source config for PushKit physical smoke readiness until a separate explicit task authorizes `app.yml` signing remediation.
+
+Real native direct-call PushKit registration remains disabled by default, no token is requested, no APNs registration is added, no real PushKit/background callback is wired, and no media credential, media connection, Matrix event emission, Element Call route replacement, or production background behavior is introduced.
 
 ## Current State From Tracked Code
 

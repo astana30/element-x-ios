@@ -7286,21 +7286,21 @@
 				ORGANIZATIONNAME = Element;
 				TargetAttributes = {
 					0721BB2EE4FEC388DA4CA748 = {
-						DevelopmentTeam = 83LGSC2QPV;
+						DevelopmentTeam = M639Y9MFR2;
 						TestTargetID = 972666A09AFB6DEBC7F1343F;
 					};
 					0750EF7EE4F3079D28EF5B20 = {
-						DevelopmentTeam = 83LGSC2QPV;
+						DevelopmentTeam = M639Y9MFR2;
 					};
 					13871BBAD7310F1E14C1F7AF = {
-						DevelopmentTeam = 83LGSC2QPV;
+						DevelopmentTeam = M639Y9MFR2;
 					};
 					2A8391AA26F0A4A044F61C17 = {
-						DevelopmentTeam = 83LGSC2QPV;
+						DevelopmentTeam = M639Y9MFR2;
 						TestTargetID = 972666A09AFB6DEBC7F1343F;
 					};
 					4904E10E664422076CAFD71D = {
-						DevelopmentTeam = 83LGSC2QPV;
+						DevelopmentTeam = M639Y9MFR2;
 						TestTargetID = 972666A09AFB6DEBC7F1343F;
 					};
 					81D2DB92805A278D9863BFB2 = {
@@ -7313,10 +7313,10 @@
 						DevelopmentTeam = "$(DEVELOPMENT_TEAM)";
 					};
 					BDD5CA58FE2A95ED4C2DD495 = {
-						DevelopmentTeam = 83LGSC2QPV;
+						DevelopmentTeam = M639Y9MFR2;
 					};
 					D9DEE3B2DA4C978A84814894 = {
-						DevelopmentTeam = 83LGSC2QPV;
+						DevelopmentTeam = M639Y9MFR2;
 					};
 				};
 			};
@@ -9431,7 +9431,7 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = 83LGSC2QPV;
+				DEVELOPMENT_TEAM = M639Y9MFR2;
 				ENABLE_BITCODE = NO;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -9800,7 +9800,7 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = 83LGSC2QPV;
+				DEVELOPMENT_TEAM = M639Y9MFR2;
 				ENABLE_BITCODE = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
