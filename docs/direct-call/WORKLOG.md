@@ -315,6 +315,22 @@ Server token registration and VoIP push provider readiness remain not implemente
 
 No PushKit registration was enabled, no PushKit/APNs token was requested, no APNs registration was added, no entitlement/provisioning/project/signing file was touched, no physical smoke was rerun, no real PushKit/background callback was wired, and no media credential, media connection, Matrix event emission, Element Call route replacement, or production background behavior was introduced.
 
+### 2.43K — PushKit entitlement/provisioning change proposal
+
+Added a docs-first proposal for the minimum future entitlement, project, signing, and provisioning changes that may be required before a controlled native direct-call PushKit registration smoke. The proposal lives in:
+
+```text
+docs/direct-call/PUSHKIT_ENTITLEMENT_CHANGE_PROPOSAL.md
+```
+
+The proposal records the current tracked state: the main app, NSE, and Share Extension entitlement files exist and are referenced by target/project config; the main app has development `aps-environment`; the main app `Info.plist`/target config includes `UIBackgroundModes` with `voip`; and no tracked entitlement file includes `com.apple.developer.pushkit.unrestricted-voip` or another PushKit/VoIP-specific entitlement key.
+
+It also records the signing risk: tracked `app.yml` and generated project state still reference old team `83LGSC2QPV`, while physical Debug PushKit work must use `M639Y9MFR2`. Any remediation of that tracked signing state requires a separate explicit task.
+
+This was proposal-only. No `.entitlements`, `Info.plist`, `SalemX.xcodeproj/project.pbxproj`, `app.yml`, signing/provisioning setting, bundle ID, PushKit registration, APNs registration, token request, physical smoke, media credential, media connection, Matrix event emission, Element Call route replacement, or production background behavior was changed.
+
+Future work may touch `.entitlements`, `Info.plist`, `SalemX.xcodeproj/project.pbxproj`, `app.yml`, or signing/provisioning settings only after the user explicitly authorizes those files/settings in that task.
+
 ### 2.42K — Supervised foreground real invite
 
 The two-device foreground real-invite smoke passed and was committed as:

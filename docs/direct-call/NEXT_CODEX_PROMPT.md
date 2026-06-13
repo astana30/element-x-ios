@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.43j-pushkit-capability-readiness-verification`
+`salemx-2.43k-pushkit-entitlement-change-proposal`
 
-Next phase: continue from the PushKit capability readiness verification. Do not run physical PushKit registration smoke until explicit entitlement/profile readiness approval is present.
+Next phase: continue from the PushKit entitlement/provisioning change proposal. Do not edit entitlement, project, signing, `Info.plist`, or `app.yml` files unless the user explicitly authorizes those files/settings in the next task.
 
 ## Baseline
 
@@ -228,11 +228,26 @@ Key findings:
 - No media credentials or media connection were introduced.
 - No Matrix events are emitted.
 
+2.43K adds only a docs-first PushKit entitlement/provisioning change proposal:
+
+- The proposal lives in `docs/direct-call/PUSHKIT_ENTITLEMENT_CHANGE_PROPOSAL.md`.
+- It documents current tracked entitlement files for the main app, NSE, and Share Extension.
+- Main app entitlements include development `aps-environment`.
+- NSE and Share Extension entitlements include app group and keychain access groups but no APNs entitlement.
+- No tracked entitlement file includes `com.apple.developer.pushkit.unrestricted-voip` or another PushKit/VoIP-specific entitlement key.
+- Main app `Info.plist` and target config already include `UIBackgroundModes` with `voip`.
+- Target/project config references all three entitlement files.
+- Tracked `app.yml` and generated project state still reference old team `83LGSC2QPV`.
+- Future physical PushKit work must use `M639Y9MFR2`.
+- The proposal does not apply changes.
+- No `.entitlements`, `Info.plist`, `SalemX.xcodeproj/project.pbxproj`, `app.yml`, signing/provisioning setting, bundle ID, PushKit registration, APNs registration, token request, physical smoke, media credential, media connection, Matrix event emission, Element Call route replacement, or production background behavior was changed.
+
 ## Guardrails
 
 - Do not implement PushKit/APNs/background incoming-call behavior without a separately scoped task.
 - Any future signing, entitlement, provisioning, project, `Info.plist`, or `app.yml` change requires explicit approval in that task.
 - Future controlled local physical PushKit registrar smoke is blocked until explicit entitlement/profile readiness approval and signing/team readiness are present.
+- Do not edit `.entitlements`, `Info.plist`, `SalemX.xcodeproj/project.pbxproj`, `app.yml`, or signing/provisioning settings unless the next user prompt explicitly authorizes those exact files/settings.
 - Do not implement PushKit runtime inside foreground smoke tooling.
 - Do not register APNs or VoIP values inside foreground smoke tooling.
 - Do not add background incoming handling inside foreground smoke tooling.
@@ -266,3 +281,17 @@ CODE_SIGN_STYLE=Automatic
 ```
 
 Do not use old Team ID `83LGSC2QPV`. Do not persist signing changes.
+
+## Future Explicit Authorization Boundary
+
+A future entitlement/provisioning implementation task may proceed only if the user explicitly authorizes touching one or more of:
+
+```text
+.entitlements
+Info.plist
+SalemX.xcodeproj/project.pbxproj
+app.yml
+signing/provisioning settings
+```
+
+Without that explicit authorization, keep the next task docs/test-only and do not apply project, signing, capability, profile, entitlement, or `Info.plist` changes.

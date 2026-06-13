@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: 2.43J PushKit capability readiness verification documented; production PushKit/APNs/background behavior remains disabled by default and unwired.
+Status: 2.43K PushKit entitlement/provisioning change proposal documented; production PushKit/APNs/background behavior remains disabled by default and unwired.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -214,6 +214,20 @@ The matrix records that the foreground real-invite baseline is verified, the 2.4
 Tracked-source evidence shows `ElementX/SupportingFiles/ElementX.entitlements` contains development `aps-environment` and `ElementX/SupportingFiles/Info.plist` contains `UIBackgroundModes` including `voip`, but that is not the same as verifying Apple Developer portal capabilities or the active installed provisioning profile. Tracked `app.yml` still references old `DEVELOPMENT_TEAM: 83LGSC2QPV`, while physical Debug work must use `M639Y9MFR2`; 2.43J does not edit signing config.
 
 Server token registration and server VoIP push provider readiness remain not implemented or not verified from this iOS docs-first step. Live route-level safety remains the fallback server check: `dev/invite=404`, unauthenticated non-dev invite `401`, and unauthenticated stream `401`. Direct `systemctl` service status must not be claimed unless it is actually verified.
+
+## 2.43K PushKit Entitlement Change Proposal
+
+2.43K adds only a docs-first proposal for the minimum future project, entitlement, signing, and provisioning changes that may be needed before a controlled native direct-call PushKit registration smoke. It does not apply those changes and does not touch `.entitlements`, `Info.plist`, `SalemX.xcodeproj/project.pbxproj`, `app.yml`, signing settings, provisioning profiles, bundle IDs, PushKit registration, APNs registration, token requests, media, Matrix events, or production background behavior.
+
+The detailed proposal lives in:
+
+```text
+docs/direct-call/PUSHKIT_ENTITLEMENT_CHANGE_PROPOSAL.md
+```
+
+Current tracked evidence remains: the main app entitlement file has development `aps-environment`; main app `Info.plist`/target config includes `UIBackgroundModes` with `voip`; no tracked entitlement file has `com.apple.developer.pushkit.unrestricted-voip`; and tracked signing config still references old `83LGSC2QPV` while physical Debug work must use `M639Y9MFR2`.
+
+A future implementation task must explicitly authorize touching `.entitlements`, `Info.plist`, `SalemX.xcodeproj/project.pbxproj`, `app.yml`, and signing/provisioning settings before any such edit is made.
 
 ## Current State From Tracked Code
 

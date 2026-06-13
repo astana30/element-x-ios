@@ -1,6 +1,6 @@
 # PushKit Readiness Plan
 
-Status: 2.43J PushKit capability readiness verification documented. No PushKit/APNs registration is enabled by default, and no entitlement, provisioning, project, signing, media, or production background behavior is implemented by this document.
+Status: 2.43K PushKit entitlement/provisioning change proposal documented. No PushKit/APNs registration is enabled by default, and no entitlement, provisioning, project, signing, media, or production background behavior is implemented by this document.
 
 ## 1. Current Safe Baseline
 
@@ -17,6 +17,7 @@ The 2.43B-I background chain exists only as safe seams:
 - 2.43H entitlement/provisioning/server readiness plan.
 - 2.43I gated PushKit registrar scaffold.
 - 2.43J capability readiness verification.
+- 2.43K entitlement/provisioning change proposal.
 
 The 2.43I registrar scaffold imports PushKit through an isolated real registry factory, but its feature gate defaults disabled and it is not wired to app startup. There is no enabled native direct-call PushKit registration, no native direct-call APNs token request, and no native direct-call PushKit/background callback wiring. Entitlements, provisioning, project files, signing settings, `Info.plist`, and `app.yml` have not been changed for the native direct-call background path. No media credentials, media connection, Matrix event emission from invite receipt, Element Call route replacement, or production background behavior has been added.
 
@@ -43,6 +44,25 @@ This matrix records tracked-source and local route-level evidence for whether th
 | Rollback strategy | ready | The 2.43H rollback plan requires disabling the registrar gate, preserving foreground behavior, deleting/invalidation server tokens, route-safety checks, and privacy scans. | Keep future real registration behind a kill switch and reversible server token state. | No clean rollback exists if registration is wired directly at startup without a gate. |
 
 Readiness conclusion: a controlled real PushKit registration smoke is still blocked. The current code has only a disabled native direct-call registrar scaffold, tracked entitlement/config evidence is not equivalent to Apple Developer/profile readiness, the tracked team setting still needs explicit remediation or build overrides, and server token/provider readiness is not implemented or verified.
+
+## 2.43K Entitlement Change Proposal
+
+The reviewable proposal for future entitlement/provisioning changes lives in:
+
+```text
+docs/direct-call/PUSHKIT_ENTITLEMENT_CHANGE_PROPOSAL.md
+```
+
+It records the current tracked state:
+
+- The main app, NSE, and Share Extension entitlement files exist and are referenced by tracked target configuration/project files.
+- The main app entitlement file contains development `aps-environment`.
+- The NSE and Share Extension entitlement files contain app group and keychain access groups, but no APNs entitlement.
+- No tracked entitlement file contains `com.apple.developer.pushkit.unrestricted-voip` or another PushKit/VoIP-specific entitlement key.
+- The main app `Info.plist`/target config already includes `UIBackgroundModes` with `voip`.
+- `app.yml` and generated project state still reference old team `83LGSC2QPV`; physical Debug work must use `M639Y9MFR2`.
+
+The proposal does not apply any of those changes. A future task may edit `.entitlements`, `Info.plist`, `SalemX.xcodeproj/project.pbxproj`, `app.yml`, or signing/provisioning settings only after explicit user approval naming those files/settings.
 
 ## 2. Apple Capability And Provisioning Requirements
 

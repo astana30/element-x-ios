@@ -1,0 +1,131 @@
+# PushKit Entitlement Change Proposal
+
+Status: proposal-only for 2.43K. No project, signing, provisioning, entitlement, `Info.plist`, `app.yml`, PushKit registration, APNs registration, token request, media, or production background behavior is changed by this document.
+
+## 1. Current Tracked State
+
+Tracked entitlement files:
+
+- `ElementX/SupportingFiles/ElementX.entitlements` belongs to the main `SalemX` app target through `ElementX/SupportingFiles/target.yml` and `SalemX.xcodeproj/project.pbxproj`.
+- `NSE/SupportingFiles/NSE.entitlements` belongs to the Notification Service Extension target.
+- `ShareExtension/SupportingFiles/ShareExtension.entitlements` belongs to the Share Extension target.
+
+Current entitlement contents from tracked files:
+
+- The main app entitlement file contains `aps-environment=development`, app group, network client, and keychain access groups.
+- The NSE entitlement file contains app group and keychain access groups.
+- The Share Extension entitlement file contains app group and keychain access groups.
+- No tracked entitlement file contains `com.apple.developer.pushkit.unrestricted-voip`.
+- No other tracked PushKit/VoIP-specific entitlement key was found in the app, NSE, or Share Extension entitlement files.
+
+Tracked `Info.plist` and XcodeGen state:
+
+- `ElementX/SupportingFiles/Info.plist` contains `UIBackgroundModes` with `audio`, `fetch`, `processing`, and `voip`.
+- `ElementX/SupportingFiles/target.yml` also declares `UIBackgroundModes` with `voip` and the main app entitlements path `ElementX.entitlements`.
+- `NSE/SupportingFiles/target.yml` references `NSE.entitlements`.
+- `ShareExtension/SupportingFiles/target.yml` references `ShareExtension.entitlements`.
+- `SalemX.xcodeproj/project.pbxproj` references all three entitlement files and uses `CODE_SIGN_ENTITLEMENTS` for the app, NSE, and Share Extension targets.
+
+Tracked signing/team state:
+
+- `app.yml` contains `DEVELOPMENT_TEAM: 83LGSC2QPV`.
+- `SalemX.xcodeproj/project.pbxproj` contains generated references to `83LGSC2QPV` and `$(DEVELOPMENT_TEAM)`.
+- Current physical Debug work must use `M639Y9MFR2`.
+- The old team ID `83LGSC2QPV` must not be used for future PushKit physical smokes.
+
+Runtime state:
+
+- 2.43I adds only a disabled-by-default native direct-call PushKit registrar scaffold.
+- No native direct-call PushKit registration is enabled.
+- No native direct-call PushKit token request is wired to app startup.
+- Existing Element Call PushKit/VoIP code remains a separate product path and is not this native direct-call background implementation.
+
+## 2. Minimum Future Changes Required
+
+These changes are proposed for a later explicit task only. Do not apply them without user approval to touch forbidden files.
+
+Likely app-side tracked file changes:
+
+- `app.yml`: replace or override the old tracked team ID so physical Debug signing uses `M639Y9MFR2`, or document an explicit non-persistent command-line override if the tracked file is intentionally left unchanged.
+- `SalemX.xcodeproj/project.pbxproj`: regenerate or update from XcodeGen only after the signing/team and entitlement plan is approved; expect project serialization noise risk.
+- `ElementX/SupportingFiles/target.yml` and generated `ElementX/SupportingFiles/Info.plist`: confirm `UIBackgroundModes` includes `voip`; current tracked state already includes it, so no edit should be needed unless Apple/Xcode validation requires a different form.
+- `ElementX/SupportingFiles/target.yml` and generated `ElementX/SupportingFiles/ElementX.entitlements`: confirm APNs and any required VoIP/PushKit capability key for the approved Apple account and app identifier.
+- `.entitlements`: add a PushKit/VoIP-specific entitlement only if Apple Developer portal and Xcode capability validation explicitly require it for the current account/app ID. Do not add speculative entitlement keys.
+
+Apple Developer and provisioning work:
+
+- Enable or verify Push Notifications for the main app identifier.
+- Enable or verify VoIP/PushKit/background capability support for the main app identifier.
+- Regenerate development provisioning profiles for the main app using team `M639Y9MFR2`.
+- Install or refresh the profile on the local machine and physical device workflow.
+- Confirm the physical device is registered, trusted, unlocked, and online.
+
+Build and smoke readiness:
+
+- Keep the 2.43I registrar feature gate disabled by default.
+- Allow a later task to enable the registrar only in a controlled local smoke path.
+- Do not request APNs tokens as part of this native direct-call PushKit smoke unless a separate task explicitly scopes normal APNs behavior.
+- Do not wire native direct-call PushKit registration to app startup until a later rollout plan approves it.
+
+Server readiness:
+
+- Native direct-call token registration and token invalidation endpoints remain separate future work.
+- VoIP provider credentials remain server-side and must not be copied into source, docs, or app logs.
+- Real push delivery should not start until token storage, invalidation, provider credentials, and redacted logging are reviewed.
+
+## 3. Risks
+
+- Xcode project noise can modify `SalemX.xcodeproj/project.pbxproj` beyond the intended signing/capability change.
+- Using old team `83LGSC2QPV` can select the wrong App ID, profile, or entitlement set.
+- A stale provisioning profile can compile but fail install, registration, or token issuance.
+- APNs environment mismatch can produce a token that the server cannot use with the intended provider environment.
+- A missing or unsupported VoIP capability can prevent PushKit token delivery.
+- Apple policy requires VoIP pushes to be used for real incoming calls and reported through CallKit promptly; testing must stay narrow and compliant.
+- Mixing entitlement changes with foreground real-invite changes can regress the validated foreground path.
+- Logging or documenting token values, payloads, raw identifiers, private logs, or secret-bearing URLs would be a release blocker.
+
+## 4. Validation Gates Before Applying Future Changes
+
+Before any future task edits entitlement, project, signing, provisioning, `Info.plist`, or `app.yml` files:
+
+- The user explicitly authorizes touching the specific forbidden files.
+- Git status is clean except the intentionally untracked `docs/direct-call/REPEAT_CALL_FASTPATH_DIAGNOSTICS.md`.
+- `SalemX.xcodeproj/project.pbxproj` is clean before edits.
+- The proposed file list is stated before edits.
+- Targeted iOS tests pass before and after the change where practical.
+- Privacy scan passes.
+- Physical device is trusted, unlocked, online, and visible to Xcode/CoreDevice.
+- Apple Developer account and app profile readiness for team `M639Y9MFR2` is verified.
+- The old team `83LGSC2QPV` is not used.
+- Route-level server safety remains:
+  - `dev/invite=404`
+  - unauthenticated non-dev invite `401`
+  - unauthenticated stream `401`
+- Rollback plan is prepared and documented.
+
+## 5. Rollback Plan
+
+If a future entitlement/provisioning change fails or needs rollback:
+
+- Disable the native direct-call PushKit registrar feature gate.
+- Revert only the approved entitlement, project, signing, `Info.plist`, and `app.yml` changes.
+- Regenerate the Xcode project from approved XcodeGen config if XcodeGen files were the source of truth.
+- Confirm no native direct-call PushKit registration is requested after rollback.
+- Confirm no PushKit/APNs token is logged, persisted, uploaded, or documented.
+- Confirm route-level safety remains `dev/invite=404`, unauthenticated non-dev invite `401`, and unauthenticated stream `401`.
+- Run targeted tests and privacy scans.
+- Run foreground real-invite smoke again only if the future change touched runtime paths that can affect the validated foreground route.
+
+## 6. Future Task Authorization Boundary
+
+A future entitlement/provisioning task may proceed only if the user explicitly authorizes touching one or more of:
+
+```text
+.entitlements
+Info.plist
+SalemX.xcodeproj/project.pbxproj
+app.yml
+signing/provisioning settings
+```
+
+Without that explicit authorization, the next task must remain docs/test-only and must not apply project, signing, capability, profile, entitlement, or `Info.plist` changes.
