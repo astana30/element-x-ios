@@ -1,6 +1,6 @@
 # PushKit Entitlement Change Proposal
 
-Status: 2.43Q adds an auth-gated server token registration endpoint/contract after the 2.43P client seam. No entitlement, `Info.plist`, `app.yml`, APNs registration, app-runtime real token upload, durable token persistence, VoIP push delivery, media, or production background behavior is changed by this document.
+Status: 2.43R validates a local fake-token app/server registration smoke after the 2.43Q server endpoint/contract. No entitlement, `Info.plist`, `app.yml`, APNs registration, real PushKit token upload, durable token persistence, VoIP push delivery, media, or production background behavior is changed by this document.
 
 ## 1. Current Tracked State
 
@@ -146,12 +146,24 @@ No raw PushKit/APNs token is logged, persisted, uploaded, recorded, documented, 
 
 - `POST /_matrix/client/unstable/kz.salemx.direct_call/pushkit/token` is auth-gated and non-dev.
 - Tests use synthetic token payloads only.
-- Successful responses expose redacted status classes such as `accepted_redacted` and `not_persisted`.
+- Successful responses expose redacted status classes such as `registered` and `not_persisted`.
 - Malformed payloads fail closed without exposing raw token values.
 - The route does not depend on the foreground dev invite flag, and no dev token route is added.
 - No durable token storage, APNs provider call, VoIP push send, media credential request, media connection, or Matrix event emission is introduced.
 
 No real app-runtime PushKit token upload is enabled. No raw PushKit/APNs token is logged, persisted, uploaded from runtime, recorded, documented, or committed. No APNs registration is requested, no real PushKit/background callback is wired, no server VoIP push delivery is attempted, and no entitlement, `Info.plist`, `app.yml`, signing, provisioning, project, media, Matrix, or Element Call route behavior is changed.
+
+## 2.43R Fake-Token App/Server Registration Smoke
+
+2.43R validates the token-registration seam against the local changed server app only:
+
+- Client-side redacted proof reached `pushkit_token_upload_result=http_success`.
+- Server-side redacted proof reached `pushkit_token_registration_result=registered`.
+- The server kept `pushkit_token_store_requested=false` and `pushkit_token_store_result=not_persisted`.
+- No real PushKit token was used; the smoke used a synthetic fixture only.
+- Live staging token registration still requires server deployment before it can return the local 2.43Q/2.43R route behavior.
+
+No token is logged, persisted as raw, uploaded from actual PushKit runtime, recorded, documented, or committed. No APNs provider is requested, no VoIP push delivery is attempted, no real PushKit/background callback is wired, and no entitlement, `Info.plist`, `app.yml`, signing, provisioning, project, media, Matrix, or Element Call route behavior is changed.
 
 ## 2. Minimum Future Changes Required
 

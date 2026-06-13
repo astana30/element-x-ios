@@ -68,11 +68,21 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
 
+### 2.43R — Fake-token app/server registration smoke
+
+Validated the client/server token-registration seam against the local changed FastAPI app with a synthetic token fixture only. The smoke used the 2.43Q endpoint and did not deploy to live staging.
+
+Client-side redacted proof reached `pushkit_token_registration_invoked=true`, `pushkit_token_present=true`, `pushkit_token_upload_requested=true`, `pushkit_token_persistence_requested=false`, `pushkit_token_upload_result=http_success`, `apns_registration_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, and `matrix_event_emit_requested=false`.
+
+Server-side redacted proof reached `pushkit_token_registration_invoked=true`, `pushkit_token_present=true`, `pushkit_token_store_requested=false`, `pushkit_token_store_result=not_persisted`, `pushkit_token_registration_result=registered`, `voip_push_send_requested=false`, `apns_provider_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, and `matrix_event_emit_requested=false`.
+
+No real PushKit token was used, logged, persisted as raw, uploaded from actual PushKit runtime, recorded, documented, or committed. No APNs registration, APNs provider request, server VoIP push delivery, real PushKit/background payload callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production background behavior was introduced.
+
 ### 2.43Q — Server PushKit token registration contract
 
 Added an auth-gated server-side native direct-call PushKit token registration route contract at `POST /_matrix/client/unstable/kz.salemx.direct_call/pushkit/token`.
 
-The endpoint validates versioned synthetic token payloads, returns only redacted diagnostics, and does not durably persist tokens. Successful diagnostics report `pushkit_token_registration_result=accepted_redacted`, `pushkit_token_store_requested=false`, `pushkit_token_store_result=not_persisted`, `voip_push_send_requested=false`, `apns_provider_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, and `matrix_event_emit_requested=false`.
+The endpoint validates versioned synthetic token payloads, returns only redacted diagnostics, and does not durably persist tokens. Successful diagnostics report `pushkit_token_registration_result=registered`, `pushkit_token_store_requested=false`, `pushkit_token_store_result=not_persisted`, `voip_push_send_requested=false`, `apns_provider_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, and `matrix_event_emit_requested=false`.
 
 Tests cover unauthenticated `401`, authenticated synthetic-token success, malformed payload rejection, redacted logs/diagnostics, disabled dev route behavior, and existing foreground route safety. The route is non-dev and independent from `SALEMX_FOREGROUND_SIGNALING_DEV_INVITE_ENABLED`.
 

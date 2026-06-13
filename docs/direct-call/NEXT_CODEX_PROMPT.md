@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.43q-server-pushkit-token-registration-contract`
+`salemx-2.43r-fake-token-app-server-registration-smoke`
 
-Next phase: continue from the server PushKit token registration endpoint/contract. The likely next step is a separately authorized fake-token app-to-server registration smoke or durable storage/invalidation design. Do not upload real app-runtime tokens, send VoIP pushes, or wire background payload callbacks unless the user explicitly authorizes that exact step.
+Next phase: continue from the local fake-token app/server registration smoke. The likely next step is a separately authorized durable storage/invalidation design or deployment validation. Do not upload real app-runtime tokens, send VoIP pushes, or wire background payload callbacks unless the user explicitly authorizes that exact step.
 
 ## Baseline
 
@@ -37,30 +37,31 @@ adbabef9c1866a82c5e5e3b4ca787a510b3a98b4 Apply minimal PushKit capability files
 a12fb1f3206ce2e9cc68205d3995a983643c7503 Validate physical install capability state
 2823ae0ad3227c061c0ab3e2bf695075edac5ebf Validate controlled local PushKit registration smoke
 6c2f44b21a9b38a78a7a19f1f918534ae741e44f Add PushKit token registration contract
+5b6312451f9569f536cef05db25038d96926f603 Add server PushKit token registration contract
 ```
 
-## 2.43Q Result
+## 2.43R Result
 
-2.43Q adds only a server PushKit token registration endpoint/contract:
+2.43R validates only a local fake-token app/server registration smoke:
 
-- `POST /_matrix/client/unstable/kz.salemx.direct_call/pushkit/token` is auth-gated and non-dev.
-- Tests use synthetic token payloads only.
-- Unauthenticated requests return `401`.
-- Authenticated synthetic token registration returns redacted success.
-- Malformed payloads are rejected without exposing raw token values.
-- The route does not depend on the foreground dev invite flag and no dev token route is added.
+- The smoke uses the changed local FastAPI app only.
+- Client-side proof reaches `pushkit_token_upload_result=http_success`.
+- Server-side proof reaches `pushkit_token_registration_result=registered`.
+- Server token storage remains not durable: `pushkit_token_store_requested=false` and `pushkit_token_store_result=not_persisted`.
+- Route safety remains `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `401`.
+- Live staging token registration still requires deployment and should not be assumed from local validation.
 
-No real app-runtime token upload is enabled. No raw PushKit/APNs token is logged, durably persisted, uploaded from runtime, recorded, documented, or committed. No APNs registration is requested. No real PushKit/background callback is wired. No server VoIP push delivery, media credentials, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production background behavior was introduced.
+No real PushKit token is used. No raw PushKit/APNs token is logged, durably persisted, uploaded from actual PushKit runtime, recorded, documented, or committed. No APNs registration is requested. No real PushKit/background callback is wired. No server VoIP push delivery, media credentials, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production background behavior was introduced.
 
 ## Suggested Next Task
 
-Start `2.43R - controlled fake-token app-to-server registration smoke`.
+Start `2.43S - PushKit token storage and invalidation design`.
 
-Goal: connect the existing 2.43P client seam to the 2.43Q server route only through fake/synthetic token tests or a local controlled fake-token smoke. Keep real runtime PushKit token upload out of scope unless explicitly authorized.
+Goal: design or implement a redacted durable storage/invalidation contract for PushKit tokens, still using synthetic tokens only unless the user explicitly authorizes real runtime token upload.
 
 The next task must keep separate:
 
-- app-side token upload seam
+- deployment validation
 - server token storage/invalidation contract
 - provider credential readiness
 - later VoIP push delivery smoke

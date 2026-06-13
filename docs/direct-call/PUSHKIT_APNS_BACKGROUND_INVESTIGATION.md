@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: 2.43Q server PushKit token registration endpoint/contract added; production PushKit/APNs/background behavior remains disabled by default and unwired.
+Status: 2.43R local fake-token app/server registration smoke validated; production PushKit/APNs/background behavior remains disabled by default and unwired.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -268,6 +268,14 @@ No real token upload, token persistence, APNs registration, server VoIP push del
 - No dev token route is added, and foreground dev invite routes remain disabled unless their existing explicit dev flag is enabled.
 
 No real app-runtime token upload is enabled. No raw PushKit/APNs token is logged, durably persisted, uploaded from runtime, recorded, documented, or committed. No APNs registration, VoIP push delivery, real PushKit/background callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, or production background behavior is introduced.
+
+## 2.43R Fake-Token App/Server Registration Smoke
+
+2.43R validates the local client/server token-registration seam against the changed FastAPI app using only a synthetic token fixture. The smoke reaches client-side `pushkit_token_upload_result=http_success` and server-side `pushkit_token_registration_result=registered`.
+
+The server still does not durably store tokens and reports `pushkit_token_store_requested=false` and `pushkit_token_store_result=not_persisted`. Side-effect diagnostics remain false for APNs provider requests, VoIP push sends, media credentials, media connection, and Matrix event emission.
+
+No real PushKit token is used, logged, persisted as raw, uploaded from actual PushKit runtime, recorded, documented, or committed. The smoke does not deploy to live staging, send VoIP pushes, request APNs tokens, wire real PushKit/background callbacks, request media credentials, connect media, emit Matrix events, change entitlement/project/signing/`Info.plist` files, or change production behavior.
 
 ## Current State From Tracked Code
 

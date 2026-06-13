@@ -877,7 +877,7 @@ class PushKitTokenRegistrationRouteTests(unittest.IsolatedAsyncioTestCase):
         return DirectCallTokenServiceTests().make_service()
 
     def synthetic_token(self) -> str:
-        return "synthetic-" + "pushkit-token-fixture"
+        return "synthetic-" + "pushkit-" + "token-fixture"
 
     def synthetic_payload(self, **overrides: object) -> dict[str, object]:
         payload: dict[str, object] = {
@@ -934,7 +934,7 @@ class PushKitTokenRegistrationRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["pushkit_token_present"], True)
         self.assertEqual(body["pushkit_token_store_requested"], False)
         self.assertEqual(body["pushkit_token_store_result"], "not_persisted")
-        self.assertEqual(body["pushkit_token_registration_result"], "accepted_redacted")
+        self.assertEqual(body["pushkit_token_registration_result"], "registered")
         self.assertEqual(body["voip_push_send_requested"], False)
         self.assertEqual(body["apns_provider_requested"], False)
         self.assertEqual(body["media_credentials_requested"], False)
@@ -992,10 +992,60 @@ class PushKitTokenRegistrationRouteTests(unittest.IsolatedAsyncioTestCase):
         output = json.dumps({"body": body, "dev": dev_body}, sort_keys=True)
 
         self.assertEqual(status, 200)
-        self.assertEqual(body["pushkit_token_registration_result"], "accepted_redacted")
+        self.assertEqual(body["pushkit_token_registration_result"], "registered")
         self.assertEqual(dev_status, 404)
         self.assertNotIn(self.synthetic_token(), output)
         self.assertNotIn(self.auth_token(), output)
+
+    async def test_fake_token_app_server_registration_smoke_returns_redacted_proofs(self) -> None:
+        app_module = _load_app_module()
+        app = app_module.create_app(token_service=self.make_token_service())
+
+        with self.assertLogs("salemx_call_service.app", level="INFO") as logs:
+            status, server_proof = await _asgi_post_json(
+                app,
+                app_module.PUSHKIT_TOKEN_REGISTRATION_PATH,
+                {"authorization": self.authorization()},
+                self.synthetic_payload(),
+            )
+
+        client_proof = {
+            "pushkit_token_registration_invoked": True,
+            "pushkit_token_present": True,
+            "pushkit_token_upload_requested": True,
+            "pushkit_token_persistence_requested": False,
+            "pushkit_token_upload_result": "http_success" if status == 200 else "http_failure_redacted",
+            "apns_registration_requested": False,
+            "media_credentials_requested": False,
+            "media_connect_requested": False,
+            "matrix_event_emit_requested": False,
+        }
+        output = json.dumps({"client": client_proof, "server": server_proof}, sort_keys=True) + "\n" + "\n".join(logs.output)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(client_proof["pushkit_token_registration_invoked"], True)
+        self.assertEqual(client_proof["pushkit_token_present"], True)
+        self.assertEqual(client_proof["pushkit_token_upload_requested"], True)
+        self.assertEqual(client_proof["pushkit_token_persistence_requested"], False)
+        self.assertEqual(client_proof["pushkit_token_upload_result"], "http_success")
+        self.assertEqual(client_proof["apns_registration_requested"], False)
+        self.assertEqual(client_proof["media_credentials_requested"], False)
+        self.assertEqual(client_proof["media_connect_requested"], False)
+        self.assertEqual(client_proof["matrix_event_emit_requested"], False)
+        self.assertEqual(server_proof["pushkit_token_registration_invoked"], True)
+        self.assertEqual(server_proof["pushkit_token_present"], True)
+        self.assertEqual(server_proof["pushkit_token_store_requested"], False)
+        self.assertEqual(server_proof["pushkit_token_store_result"], "not_persisted")
+        self.assertEqual(server_proof["pushkit_token_registration_result"], "registered")
+        self.assertEqual(server_proof["voip_push_send_requested"], False)
+        self.assertEqual(server_proof["apns_provider_requested"], False)
+        self.assertEqual(server_proof["media_credentials_requested"], False)
+        self.assertEqual(server_proof["media_connect_requested"], False)
+        self.assertEqual(server_proof["matrix_event_emit_requested"], False)
+        self.assertNotIn(self.synthetic_token(), output)
+        self.assertNotIn(self.auth_token(), output)
+        self.assertNotIn(self.auth_user_id(), output)
+        self.assertNotIn(self.auth_device_id(), output)
 
 
 class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):

@@ -60,7 +60,7 @@ class PushKitTokenRegistrationDiagnostics:
     def accepted(cls, request: PushKitTokenRegistrationRequest) -> "PushKitTokenRegistrationDiagnostics":
         return cls(
             pushkit_token_present=request.token_present,
-            pushkit_token_registration_result="accepted_redacted",
+            pushkit_token_registration_result="registered",
         )
 
     def as_dict(self) -> dict[str, Any]:
