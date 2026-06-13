@@ -1851,6 +1851,173 @@ final class DirectCallPushKitRegistrar: DirectCallPushKitRegistrarRegistryDelega
     }
 }
 
+struct DirectCallPushKitTokenRegistrationRequest: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let tokenPresent: Bool
+    let environmentClass: String
+
+    var description: String {
+        "DirectCallPushKitTokenRegistrationRequest(token: <redacted>, tokenPresent: \(tokenPresent), environmentClass: \(environmentClass), payload: <redacted>)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum DirectCallPushKitTokenRegistrationTransportResult: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case success
+    case failure = "failure_redacted"
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+protocol DirectCallPushKitTokenRegistrationTransporting {
+    func register(_ request: DirectCallPushKitTokenRegistrationRequest) -> DirectCallPushKitTokenRegistrationTransportResult
+}
+
+enum DirectCallPushKitTokenRegistrationUploadResult: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case notRequested = "not_requested"
+    case fakeUploadSucceeded = "fake_upload_succeeded"
+    case failedRedacted = "failed_redacted"
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum DirectCallPushKitTokenRegistrationFailure: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case missingToken = "missing_token"
+    case transportUnavailable = "transport_unavailable"
+    case transportFailedRedacted = "transport_failed_redacted"
+    case redacted
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct DirectCallPushKitTokenRegistrationDiagnostics: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let pushKitTokenRegistrationInvoked: Bool
+    let pushKitTokenPresent: Bool
+    let pushKitTokenUploadRequested: Bool
+    let pushKitTokenPersistenceRequested: Bool
+    let pushKitTokenUploadResult: DirectCallPushKitTokenRegistrationUploadResult
+    let pushKitTokenRegistrationFailure: DirectCallPushKitTokenRegistrationFailure?
+    let apnsRegistrationRequested: Bool
+    let mediaCredentialsRequested: Bool
+    let mediaConnectRequested: Bool
+    let matrixEventEmitRequested: Bool
+    let blockedReason: DirectCallPushKitTokenRegistrationFailure?
+
+    var description: String {
+        "DirectCallPushKitTokenRegistrationDiagnostics(" + [
+            "pushkit_token_registration_invoked=\(pushKitTokenRegistrationInvoked)",
+            "pushkit_token_present=\(pushKitTokenPresent)",
+            "pushkit_token_upload_requested=\(pushKitTokenUploadRequested)",
+            "pushkit_token_persistence_requested=\(pushKitTokenPersistenceRequested)",
+            "pushkit_token_upload_result=\(pushKitTokenUploadResult)",
+            "pushkit_token_registration_failure=\(pushKitTokenRegistrationFailure?.description ?? "none")",
+            "apns_registration_requested=\(apnsRegistrationRequested)",
+            "media_credentials_requested=\(mediaCredentialsRequested)",
+            "media_connect_requested=\(mediaConnectRequested)",
+            "matrix_event_emit_requested=\(matrixEventEmitRequested)",
+            "blocked_reason=\(blockedReason?.description ?? "none")"
+        ].joined(separator: ", ") + ")"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct DirectCallPushKitTokenRegistrationResult: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let uploadResult: DirectCallPushKitTokenRegistrationUploadResult
+    let diagnostics: DirectCallPushKitTokenRegistrationDiagnostics
+
+    var description: String {
+        "DirectCallPushKitTokenRegistrationResult(uploadResult: \(uploadResult), diagnostics: \(diagnostics))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct DirectCallPushKitTokenRegistrationClient: CustomStringConvertible, CustomDebugStringConvertible {
+    var transport: DirectCallPushKitTokenRegistrationTransporting?
+    var environmentClass = "development"
+
+    func register(token: Data?) -> DirectCallPushKitTokenRegistrationResult {
+        guard let token, !token.isEmpty else {
+            return result(tokenPresent: false,
+                          uploadRequested: false,
+                          uploadResult: .notRequested,
+                          failure: .missingToken)
+        }
+        guard let transport else {
+            return result(tokenPresent: true,
+                          uploadRequested: false,
+                          uploadResult: .notRequested,
+                          failure: .transportUnavailable)
+        }
+
+        let request = DirectCallPushKitTokenRegistrationRequest(tokenPresent: true,
+                                                                environmentClass: environmentClass)
+        switch transport.register(request) {
+        case .success:
+            return result(tokenPresent: true,
+                          uploadRequested: true,
+                          uploadResult: .fakeUploadSucceeded,
+                          failure: nil)
+        case .failure:
+            return result(tokenPresent: true,
+                          uploadRequested: true,
+                          uploadResult: .failedRedacted,
+                          failure: .transportFailedRedacted)
+        }
+    }
+
+    private func result(tokenPresent: Bool,
+                        uploadRequested: Bool,
+                        uploadResult: DirectCallPushKitTokenRegistrationUploadResult,
+                        failure: DirectCallPushKitTokenRegistrationFailure?) -> DirectCallPushKitTokenRegistrationResult {
+        .init(uploadResult: uploadResult,
+              diagnostics: .init(pushKitTokenRegistrationInvoked: true,
+                                 pushKitTokenPresent: tokenPresent,
+                                 pushKitTokenUploadRequested: uploadRequested,
+                                 pushKitTokenPersistenceRequested: false,
+                                 pushKitTokenUploadResult: uploadResult,
+                                 pushKitTokenRegistrationFailure: failure,
+                                 apnsRegistrationRequested: false,
+                                 mediaCredentialsRequested: false,
+                                 mediaConnectRequested: false,
+                                 matrixEventEmitRequested: false,
+                                 blockedReason: failure))
+    }
+
+    var description: String {
+        "DirectCallPushKitTokenRegistrationClient(realNetworkRuntime: false, tokenPersistenceRuntime: false, apnsRegistrationRuntime: false, mediaRuntime: false, matrixEventRuntime: false, startupWiring: false, pushKitCallbackWiring: false)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
 protocol NativeIncomingCallTimeoutScheduling: AnyObject {
     func scheduleTimeout(for identity: NativeIncomingCallIdentity, after timeout: Duration)
     func cancelTimeout(for identity: NativeIncomingCallIdentity)

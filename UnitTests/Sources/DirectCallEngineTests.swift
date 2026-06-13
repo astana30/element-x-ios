@@ -2070,6 +2070,95 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func pushKitTokenRegistrationClientValidSyntheticTokenUsesFakeTransportOnly() {
+        let transport = DirectCallPushKitTokenRegistrationTransportSpy(result: .success)
+        let client = DirectCallPushKitTokenRegistrationClient(transport: transport)
+        let rawPushKitToken = Data("sensitive-incoming-credential-b".utf8)
+
+        let result = client.register(token: rawPushKitToken)
+
+        let description = String(describing: client)
+            + " " + String(describing: result)
+            + " " + String(describing: transport)
+            + " " + String(describing: transport.requests)
+        #expect(result.uploadResult == .fakeUploadSucceeded)
+        #expect(result.diagnostics.pushKitTokenRegistrationInvoked == true)
+        #expect(result.diagnostics.pushKitTokenPresent == true)
+        #expect(result.diagnostics.pushKitTokenUploadRequested == true)
+        #expect(result.diagnostics.pushKitTokenPersistenceRequested == false)
+        #expect(result.diagnostics.pushKitTokenRegistrationFailure == nil)
+        #expect(result.diagnostics.apnsRegistrationRequested == false)
+        #expect(result.diagnostics.mediaCredentialsRequested == false)
+        #expect(result.diagnostics.mediaConnectRequested == false)
+        #expect(result.diagnostics.matrixEventEmitRequested == false)
+        #expect(transport.requests == [.init(tokenPresent: true, environmentClass: "development")])
+        #expect(description.contains("realNetworkRuntime: false"))
+        #expect(!description.contains("sensitive-incoming-credential-b"))
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !description.contains($0) })
+    }
+
+    @Test
+    func pushKitTokenRegistrationClientRejectsEmptyTokenWithoutUpload() {
+        let transport = DirectCallPushKitTokenRegistrationTransportSpy(result: .success)
+        let client = DirectCallPushKitTokenRegistrationClient(transport: transport)
+
+        let result = client.register(token: Data())
+
+        #expect(result.uploadResult == .notRequested)
+        #expect(result.diagnostics.pushKitTokenPresent == false)
+        #expect(result.diagnostics.pushKitTokenUploadRequested == false)
+        #expect(result.diagnostics.pushKitTokenPersistenceRequested == false)
+        #expect(result.diagnostics.pushKitTokenRegistrationFailure == .missingToken)
+        #expect(result.diagnostics.blockedReason == .missingToken)
+        #expect(transport.requests.isEmpty)
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !String(describing: result).contains($0) })
+    }
+
+    @Test
+    func pushKitTokenRegistrationClientTransportFailureIsRedacted() {
+        let transport = DirectCallPushKitTokenRegistrationTransportSpy(result: .failure)
+        let client = DirectCallPushKitTokenRegistrationClient(transport: transport)
+
+        let result = client.register(token: Data("sensitive-incoming-credential-b".utf8))
+
+        let description = String(describing: result) + " " + String(describing: transport.requests)
+        #expect(result.uploadResult == .failedRedacted)
+        #expect(result.diagnostics.pushKitTokenPresent == true)
+        #expect(result.diagnostics.pushKitTokenUploadRequested == true)
+        #expect(result.diagnostics.pushKitTokenPersistenceRequested == false)
+        #expect(result.diagnostics.pushKitTokenRegistrationFailure == .transportFailedRedacted)
+        #expect(result.diagnostics.blockedReason == .transportFailedRedacted)
+        #expect(transport.requests.count == 1)
+        #expect(!description.contains("sensitive-incoming-credential-b"))
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !description.contains($0) })
+    }
+
+    @Test
+    func pushKitTokenRegistrationClientDefaultDoesNotUploadOrWireRuntime() throws {
+        let client = DirectCallPushKitTokenRegistrationClient()
+        let result = client.register(token: Data("sensitive-incoming-credential-b".utf8))
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+        let appSessionSource = try Self.sourceFile("ElementX/Sources/Services/Session/UserSession.swift")
+
+        let description = String(describing: client) + " " + String(describing: result)
+        #expect(result.uploadResult == .notRequested)
+        #expect(result.diagnostics.pushKitTokenPresent == true)
+        #expect(result.diagnostics.pushKitTokenUploadRequested == false)
+        #expect(result.diagnostics.pushKitTokenPersistenceRequested == false)
+        #expect(result.diagnostics.pushKitTokenRegistrationFailure == .transportUnavailable)
+        #expect(description.contains("startupWiring: false"))
+        #expect(description.contains("pushKitCallbackWiring: false"))
+        #expect(description.contains("apnsRegistrationRuntime: false"))
+        #expect(description.contains("mediaRuntime: false"))
+        #expect(description.contains("matrixEventRuntime: false"))
+        #expect(!adapterSource.contains("DirectCallPushKitTokenRegistrationClient"))
+        #expect(!appSessionSource.contains("DirectCallPushKitTokenRegistrationClient"))
+        #expect(!appSessionSource.contains("registerForRemoteNotifications"))
+        #expect(!description.contains("sensitive-incoming-credential-b"))
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !description.contains($0) })
+    }
+
+    @Test
     func diagnosticsAndOutcomesStayRedacted() {
         let diagnostics = NativeIncomingCallRedactedDiagnostics(lifecycleState: .failed,
                                                                 failClosedReason: .serverIssuedMediaCredentialRejected,
@@ -3750,6 +3839,32 @@ private final class DirectCallPushKitRegistryFactorySpy: DirectCallPushKitRegist
 
     var description: String {
         "DirectCallPushKitRegistryFactorySpy(makeRegistryCount: \(makeRegistryCount), fakeRegistryOnly: true, apnsRegistrationRuntime: false, mediaRuntime: false, matrixEventRuntime: false)"
+    }
+}
+
+private final class DirectCallPushKitTokenRegistrationTransportSpy: DirectCallPushKitTokenRegistrationTransporting, CustomStringConvertible {
+    private let result: DirectCallPushKitTokenRegistrationTransportResult
+    private(set) var requests = [DirectCallPushKitTokenRegistrationRequest]()
+
+    init(result: DirectCallPushKitTokenRegistrationTransportResult) {
+        self.result = result
+    }
+
+    func register(_ request: DirectCallPushKitTokenRegistrationRequest) -> DirectCallPushKitTokenRegistrationTransportResult {
+        requests.append(request)
+        return result
+    }
+
+    var description: String {
+        "DirectCallPushKitTokenRegistrationTransportSpy(" + [
+            "requestCount: \(requests.count)",
+            "fakeTransportOnly: true",
+            "realNetworkRuntime: false",
+            "tokenPersistenceRuntime: false",
+            "apnsRegistrationRuntime: false",
+            "mediaRuntime: false",
+            "matrixEventRuntime: false"
+        ].joined(separator: ", ") + ")"
     }
 }
 

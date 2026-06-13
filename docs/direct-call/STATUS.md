@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.43O - controlled local PushKit registration smoke passed on a physical iPhone; PushKit registration remains disabled by default outside the DEBUG-only manual smoke trigger.
+After 2.43P - PushKit token registration contract/client seam added; no real token upload is enabled and PushKit registration remains disabled by default outside the DEBUG-only manual smoke trigger.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,12 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.43P adds a PushKit token registration contract/client seam:
+  - The seam accepts token bytes only at the client boundary and reduces diagnostics to redacted presence/status classes.
+  - Tests use an injected fake transport to prove one redacted registration request can be produced for a synthetic token.
+  - Empty tokens fail closed before any upload attempt, and fake transport failures return redacted failure classes.
+  - No real network upload is implemented, no token is persisted, and no raw PushKit/APNs token appears in diagnostics.
+  - No APNs registration is requested, no real PushKit/background callback is wired, no server VoIP push delivery is attempted, and no media/Matrix/Element Call route behavior is changed.
 - 2.43O validates controlled local PushKit registration smoke:
   - The physical Debug build, install, and launch succeeded using `DEVELOPMENT_TEAM=M639Y9MFR2`.
   - PushKit registration was requested only through the DEBUG-only local manual smoke control while the app remained foreground.

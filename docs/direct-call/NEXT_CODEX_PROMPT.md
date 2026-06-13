@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.43o-controlled-local-pushkit-registration-smoke`
+`salemx-2.43p-pushkit-token-registration-contract`
 
-Next phase: continue from the successful controlled local PushKit registration smoke. The likely next step is a separately scoped token registration contract/upload-seam design. Do not upload tokens, send VoIP pushes, or wire background payload callbacks unless the user explicitly authorizes that exact step.
+Next phase: continue from the PushKit token registration contract/client seam. The likely next step is a separately authorized server token registration endpoint/client integration with fake-token tests first. Do not upload real tokens, send VoIP pushes, or wire background payload callbacks unless the user explicitly authorizes that exact step.
 
 ## Baseline
 
@@ -35,25 +35,26 @@ f8ad35ee1130b2a9eae6a7db8dfa9f8bb7242e66 Document PushKit entitlement change pro
 adbabef9c1866a82c5e5e3b4ca787a510b3a98b4 Apply minimal PushKit capability files
 11f64583b8be7aa505e3e7014f5fb7d2edc5927d Validate PushKit capability build profile
 a12fb1f3206ce2e9cc68205d3995a983643c7503 Validate physical install capability state
+2823ae0ad3227c061c0ab3e2bf695075edac5ebf Validate controlled local PushKit registration smoke
 ```
 
-## 2.43O Result
+## 2.43P Result
 
-2.43O validates controlled local PushKit registration smoke:
+2.43P adds only a PushKit token registration contract/client seam:
 
-- Physical Debug build, install, and launch succeeded on the physical iPhone with `DEVELOPMENT_TEAM=M639Y9MFR2`.
-- PushKit registration was requested only through the DEBUG-only manual local smoke trigger.
-- Redacted proof reached `pushkit_registration_requested=true`, `pushkit_feature_gate_enabled=true`, `pushkit_registry_create_requested=true`, `pushkit_token_update_received=true`, and `pushkit_registration_result=token_received`.
-- Redacted proof kept `pushkit_token_persistence_requested=false`, `pushkit_token_upload_requested=false`, `apns_registration_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, and `matrix_event_emit_requested=false`.
-- No raw PushKit/APNs token was copied, logged, pasted, persisted, uploaded, recorded, documented, or committed.
+- The client seam accepts token bytes only at the boundary and emits redacted diagnostics.
+- The default client has no transport and does not upload.
+- Tests inject a fake transport and verify one redacted registration request for a synthetic token.
+- Empty tokens fail closed before upload.
+- Fake transport failures return redacted failure classes.
 
-Real native direct-call PushKit registration remains disabled by default outside the DEBUG-only manual smoke path. No APNs registration was requested. No server token upload, real PushKit/background payload callback wiring, media credentials, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production background behavior was introduced.
+No real token upload is enabled. No raw PushKit/APNs token is logged, persisted, uploaded, recorded, documented, or committed. No APNs registration is requested. No real PushKit/background callback is wired. No server VoIP push delivery, media credentials, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production background behavior was introduced.
 
 ## Suggested Next Task
 
-Start `2.43P - PushKit token registration contract design`.
+Start `2.43Q - controlled token registration endpoint integration`.
 
-Goal: design the app/server token registration and invalidation contract for native direct-call VoIP pushes without uploading any real token yet.
+Goal: add a controlled server token registration endpoint/client integration or detailed implementation plan, using fake-token tests first and only uploading a real token if the user explicitly authorizes that validation.
 
 The next task must keep separate:
 

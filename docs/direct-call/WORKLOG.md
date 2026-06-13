@@ -68,6 +68,14 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
 
+### 2.43P — PushKit token registration contract/client seam
+
+Added a redacted app-side PushKit token registration request/client seam for future server work. The client accepts token bytes only at the boundary, does not persist them, and exposes only token-present, fake-upload-status, and failure classes.
+
+Tests cover synthetic-token fake transport success, empty-token fail-closed behavior, fake transport failure redaction, no real upload from the default client, no APNs registration, no media side effects, no Matrix event emission, and no startup or real PushKit callback wiring.
+
+No real PushKit token upload was enabled. No raw PushKit/APNs token was logged, persisted, uploaded, recorded, documented, or committed. No APNs registration, server VoIP push delivery, real PushKit/background payload callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production background behavior was introduced.
+
 ### 2.43O — Controlled local PushKit registration smoke
 
 Added the narrow DEBUG-only local smoke trigger needed to exercise the gated native direct-call PushKit registrar without wiring registration to normal app startup. The trigger reports only redacted registration state and token lifecycle classes.
