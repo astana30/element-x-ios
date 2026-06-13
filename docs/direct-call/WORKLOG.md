@@ -359,6 +359,18 @@ Physical install was blocked because CoreDevice listed the available physical ph
 
 `app.yml` remains unchanged and still contains the old team value; do not regenerate the project from it for PushKit physical smoke readiness until a separate explicit source-config signing remediation task is approved.
 
+### 2.43N — Physical install capability validation
+
+Resumed the physical install capability validation after the previous `developer_mode_disabled` blocker was cleared manually on the physical iPhone. The device was restarted, unlocked, trusted, reconnected, and available to Xcode/CoreDevice.
+
+Rebuilt the checked-in 2.43L project/capability state for the physical iPhone using `DEVELOPMENT_TEAM=M639Y9MFR2`, `CODE_SIGN_STYLE=Automatic`, `-allowProvisioningUpdates`, and `-allowProvisioningDeviceRegistration`. The physical Debug build, install, and launch all succeeded.
+
+Inspected the signed app bundle with redacted/safe output only. Effective signing uses Team ID / App Identifier prefix class `M639Y9MFR2`, the bundle ID class is `kz.salemx.msg`, development `aps-environment` is present, expected app group/keychain classes are present, `UIBackgroundModes` includes `voip`, and no unexpected unrestricted VoIP entitlement was present. The old team ID `83LGSC2QPV` was not present in the built app bundle.
+
+No physical PushKit registration smoke was run. Real native direct-call PushKit registration remains disabled by default, no PushKit/APNs token was requested/logged/persisted/uploaded, no APNs registration was added, no real PushKit/background callback was wired, and no media credential request, media connection, Matrix event emission, Element Call route replacement, or production background behavior was introduced.
+
+The next step may be a separately authorized controlled local PushKit registrar smoke that explicitly enables the existing gate only for that local validation. It must not add production startup wiring, server token registration, media behavior, or foreground route changes.
+
 ### 2.42K — Supervised foreground real invite
 
 The two-device foreground real-invite smoke passed and was committed as:

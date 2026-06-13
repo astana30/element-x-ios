@@ -1,6 +1,6 @@
 # PushKit Entitlement Change Proposal
 
-Status: 2.43M validated the current build/profile/codesign state after the 2.43L project signing-reference update. No entitlement, `Info.plist`, `app.yml`, PushKit registration, APNs registration, token request, media, or production background behavior is changed by this document.
+Status: 2.43N validated the current build/profile/codesign/install/launch state after the 2.43L project signing-reference update. No entitlement, `Info.plist`, `app.yml`, PushKit registration, APNs registration, token request, media, or production background behavior is changed by this document.
 
 ## 1. Current Tracked State
 
@@ -79,6 +79,29 @@ The physical-device build succeeded for the generic iOS device destination. The 
 Physical install was not validated in 2.43M because CoreDevice listed the available physical phones as unavailable. This is an install-availability blocker, not evidence that signing or capabilities failed.
 
 Real native direct-call PushKit registration remains disabled by default. No PushKit/APNs token was requested, logged, persisted, or uploaded. No APNs registration, real PushKit/background callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, or production background behavior was introduced.
+
+## 2.43N Physical Install/Launch Validation
+
+2.43N resumed the physical install capability validation after Developer Mode was enabled manually on the physical iPhone and the device was restarted, unlocked, trusted, and reconnected. Xcode/CoreDevice then listed the physical iPhone as available.
+
+The checked-in 2.43L capability/signing state was rebuilt for the physical iPhone with the approved physical Debug team:
+
+```text
+DEVELOPMENT_TEAM=M639Y9MFR2
+CODE_SIGN_STYLE=Automatic
+```
+
+The physical Debug build, install, and launch all succeeded. The resulting signed app bundle showed only redacted/safe capability facts:
+
+- Effective Team ID / App Identifier prefix class: `M639Y9MFR2`.
+- Bundle ID class: `kz.salemx.msg`.
+- Effective app entitlements include development `aps-environment`.
+- Effective app entitlements include the expected app group and keychain access group classes.
+- Effective `UIBackgroundModes` includes `voip`.
+- No unexpected unrestricted VoIP entitlement was present.
+- The old team ID `83LGSC2QPV` was not present in the built app bundle.
+
+This was install/launch capability validation only. No physical PushKit registration smoke was run. Real native direct-call PushKit registration remains disabled by default. No PushKit/APNs token was requested, logged, persisted, or uploaded. No APNs registration, real PushKit/background callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, or production background behavior was introduced.
 
 ## 2. Minimum Future Changes Required
 

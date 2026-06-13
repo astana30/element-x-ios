@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.43M - PushKit capability build/profile validation passed for build; physical install blocked by unavailable devices.
+After 2.43N - physical install capability validation passed on a physical iPhone; PushKit registration remains disabled by default.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,17 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.43N validates physical install capability state:
+  - Developer Mode was enabled manually on the physical iPhone; the device was restarted, unlocked, trusted, reconnected, and available to Xcode/CoreDevice.
+  - The physical iOS Debug build, install, and launch succeeded using the checked-in 2.43L capability/signing state and `DEVELOPMENT_TEAM=M639Y9MFR2`.
+  - Effective Team ID / App Identifier prefix class is `M639Y9MFR2`.
+  - Effective bundle ID class is `kz.salemx.msg`.
+  - Effective app entitlements include development `aps-environment` and the expected app group/keychain classes.
+  - Effective `UIBackgroundModes` includes `voip`.
+  - No unexpected unrestricted VoIP entitlement was present.
+  - The old team ID `83LGSC2QPV` was not present in the built app bundle.
+  - No physical PushKit registration smoke was run.
+  - Real PushKit registration remains disabled by default, no PushKit/APNs token was requested/logged/persisted, no APNs registration was added, no real PushKit/background callback was wired, and no media/Matrix/Element Call route behavior was changed.
 - 2.43B adds a safe background invite payload contract/parser seam:
   - The parser is inert and side-effect free; it does not register PushKit, request a VoIP token, register APNs, report CallKit automatically, emit Matrix events, request media credentials, connect media, or change production call behavior.
   - Parser diagnostics are redacted status classes only: `valid`, `missing_required_field`, `invalid_type`, `invalid_timestamp`, `expired`, `future_timestamp_excessive`, `unsupported_version`, `malformed_payload`, and `redacted`.
