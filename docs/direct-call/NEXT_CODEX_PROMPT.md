@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.43r-fake-token-app-server-registration-smoke`
+`salemx-2.43s-staging-pushkit-token-endpoint-smoke`
 
-Next phase: continue from the local fake-token app/server registration smoke. The likely next step is a separately authorized durable storage/invalidation design or deployment validation. Do not upload real app-runtime tokens, send VoIP pushes, or wire background payload callbacks unless the user explicitly authorizes that exact step.
+Next phase: continue from the blocked staging PushKit token endpoint deploy smoke. Restore/verify staging deploy access first, then deploy only the call-service token endpoint changes and rerun route safety plus synthetic-token staging smoke. Do not upload real app-runtime tokens, send VoIP pushes, or wire background payload callbacks unless the user explicitly authorizes that exact step.
 
 ## Baseline
 
@@ -38,26 +38,26 @@ a12fb1f3206ce2e9cc68205d3995a983643c7503 Validate physical install capability st
 2823ae0ad3227c061c0ab3e2bf695075edac5ebf Validate controlled local PushKit registration smoke
 6c2f44b21a9b38a78a7a19f1f918534ae741e44f Add PushKit token registration contract
 5b6312451f9569f536cef05db25038d96926f603 Add server PushKit token registration contract
+42e4e466eccb784b67e002c60dbdb742c8eae745 Validate fake-token PushKit registration smoke
 ```
 
-## 2.43R Result
+## 2.43S Result
 
-2.43R validates only a local fake-token app/server registration smoke:
+2.43S attempted staging deployment and smoke for the token-registration endpoint:
 
-- The smoke uses the changed local FastAPI app only.
-- Client-side proof reaches `pushkit_token_upload_result=http_success`.
-- Server-side proof reaches `pushkit_token_registration_result=registered`.
-- Server token storage remains not durable: `pushkit_token_store_requested=false` and `pushkit_token_store_result=not_persisted`.
-- Route safety remains `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `401`.
-- Live staging token registration still requires deployment and should not be assumed from local validation.
+- Pre-deploy server tests passed: `139 passed`.
+- Python compileall passed.
+- Staging deploy was blocked before any deployment by SSH timeout.
+- Redacted blocker: `staging_deploy_blocked_by_ssh_timeout`.
+- Live staging token registration still returns `404`, so no staging synthetic-token pass is claimed.
 
-No real PushKit token is used. No raw PushKit/APNs token is logged, durably persisted, uploaded from actual PushKit runtime, recorded, documented, or committed. No APNs registration is requested. No real PushKit/background callback is wired. No server VoIP push delivery, media credentials, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production background behavior was introduced.
+No real PushKit token was used. No raw PushKit/APNs token is logged, durably persisted, uploaded from actual PushKit runtime, recorded, documented, or committed. No APNs registration is requested. No real PushKit/background callback is wired. No server VoIP push delivery, media credentials, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production background behavior was introduced.
 
 ## Suggested Next Task
 
-Start `2.43S - PushKit token storage and invalidation design`.
+Start `2.43S retry - staging PushKit token endpoint deploy smoke`.
 
-Goal: design or implement a redacted durable storage/invalidation contract for PushKit tokens, still using synthetic tokens only unless the user explicitly authorizes real runtime token upload.
+Goal: restore/verify SSH deploy access, deploy the 2.43Q/2.43R call-service token endpoint to staging, and run a synthetic-token staging smoke. If access is still blocked, report only the redacted blocker and do not claim staging pass.
 
 The next task must keep separate:
 

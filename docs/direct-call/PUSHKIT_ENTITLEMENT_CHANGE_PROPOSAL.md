@@ -1,6 +1,6 @@
 # PushKit Entitlement Change Proposal
 
-Status: 2.43R validates a local fake-token app/server registration smoke after the 2.43Q server endpoint/contract. No entitlement, `Info.plist`, `app.yml`, APNs registration, real PushKit token upload, durable token persistence, VoIP push delivery, media, or production background behavior is changed by this document.
+Status: 2.43S staging deploy smoke is blocked by SSH timeout after the 2.43R local fake-token registration smoke. No entitlement, `Info.plist`, `app.yml`, APNs registration, real PushKit token upload, durable token persistence, VoIP push delivery, media, or production background behavior is changed by this document.
 
 ## 1. Current Tracked State
 
@@ -164,6 +164,12 @@ No real app-runtime PushKit token upload is enabled. No raw PushKit/APNs token i
 - Live staging token registration still requires server deployment before it can return the local 2.43Q/2.43R route behavior.
 
 No token is logged, persisted as raw, uploaded from actual PushKit runtime, recorded, documented, or committed. No APNs provider is requested, no VoIP push delivery is attempted, no real PushKit/background callback is wired, and no entitlement, `Info.plist`, `app.yml`, signing, provisioning, project, media, Matrix, or Element Call route behavior is changed.
+
+## 2.43S Staging Deploy Smoke Blocker
+
+2.43S pre-deploy checks passed locally, but staging deploy access was blocked by SSH timeout before any server deployment or restart. Redacted blocker: `staging_deploy_blocked_by_ssh_timeout`.
+
+Live staging token registration still returns `404`, so the 2.43Q/2.43R endpoint is not validated on staging. No staging synthetic-token pass is claimed. The next attempt must first restore deploy SSH access, then deploy only the call-service token endpoint changes and rerun route safety.
 
 ## 2. Minimum Future Changes Required
 

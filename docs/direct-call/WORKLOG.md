@@ -68,6 +68,18 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
 
+### 2.43S — Staging PushKit token endpoint deploy smoke
+
+Attempted the staging deploy smoke for the 2.43Q/2.43R server token-registration endpoint.
+
+Pre-deploy checks passed locally: server tests reported `139 passed`, Python compileall passed, `git diff --check` passed, the allowed-file audit found no unexpected changed file classes, and `docs/direct-call/REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` remained untracked.
+
+Staging deploy was blocked before any deployment by SSH timeout to the configured staging alias. Redacted blocker: `staging_deploy_blocked_by_ssh_timeout`.
+
+No server deploy, restart, or live staging token registration smoke was performed. Live staging token registration still returns `404`, as expected while the 2.43Q/2.43R endpoint is not deployed. No staging synthetic-token pass is claimed.
+
+No real PushKit/APNs token was used, logged, persisted, uploaded, or recorded. No APNs registration, APNs provider request, server VoIP push delivery, real PushKit/background payload callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production background behavior was introduced.
+
 ### 2.43R — Fake-token app/server registration smoke
 
 Validated the client/server token-registration seam against the local changed FastAPI app with a synthetic token fixture only. The smoke used the 2.43Q endpoint and did not deploy to live staging.

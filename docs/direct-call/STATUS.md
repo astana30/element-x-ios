@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.43R - local fake-token app/server registration smoke validated against the changed server endpoint; no real PushKit token upload is enabled and PushKit registration remains disabled by default outside the DEBUG-only manual smoke trigger.
+After 2.43S - staging PushKit token endpoint deploy smoke is blocked by SSH timeout; local fake-token app/server registration remains the latest passed token-registration proof.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.43S staging PushKit token endpoint deploy smoke is blocked:
+  - Pre-deploy local server tests still pass: `139 passed`.
+  - Python compileall passed.
+  - SSH to the staging deploy alias timed out, so no server deployment or restart was performed.
+  - Redacted blocker: `staging_deploy_blocked_by_ssh_timeout`.
+  - Live staging token registration remains `404` because 2.43Q/2.43R server code is not deployed there.
+  - No staging synthetic-token registration pass is claimed.
+  - No real PushKit/APNs token was used, logged, persisted, uploaded, or recorded. No APNs provider request, VoIP push delivery, real PushKit/background callback wiring, media behavior, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, or `app.yml` regeneration was introduced.
 - 2.43R validates local fake-token app/server registration:
   - The smoke uses the changed local server app only; no live staging deploy is performed.
   - Client-side proof reached `pushkit_token_registration_invoked=true`, `pushkit_token_present=true`, `pushkit_token_upload_requested=true`, `pushkit_token_persistence_requested=false`, `pushkit_token_upload_result=http_success`, `apns_registration_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, and `matrix_event_emit_requested=false`.

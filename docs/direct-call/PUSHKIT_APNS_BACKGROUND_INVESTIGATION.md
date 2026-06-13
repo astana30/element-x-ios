@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: 2.43R local fake-token app/server registration smoke validated; production PushKit/APNs/background behavior remains disabled by default and unwired.
+Status: 2.43S staging deploy smoke is blocked by SSH timeout; production PushKit/APNs/background behavior remains disabled by default and unwired.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -276,6 +276,12 @@ No real app-runtime token upload is enabled. No raw PushKit/APNs token is logged
 The server still does not durably store tokens and reports `pushkit_token_store_requested=false` and `pushkit_token_store_result=not_persisted`. Side-effect diagnostics remain false for APNs provider requests, VoIP push sends, media credentials, media connection, and Matrix event emission.
 
 No real PushKit token is used, logged, persisted as raw, uploaded from actual PushKit runtime, recorded, documented, or committed. The smoke does not deploy to live staging, send VoIP pushes, request APNs tokens, wire real PushKit/background callbacks, request media credentials, connect media, emit Matrix events, change entitlement/project/signing/`Info.plist` files, or change production behavior.
+
+## 2.43S Staging PushKit Token Endpoint Deploy Smoke
+
+2.43S attempted staging deployment for the 2.43Q/2.43R token-registration endpoint after local tests passed. SSH to the configured staging alias timed out before any deploy or restart could run. Redacted blocker: `staging_deploy_blocked_by_ssh_timeout`.
+
+Live staging still returns `404` for the token-registration route, so the endpoint remains locally validated only. No staging synthetic-token pass, service-active status, VoIP push delivery, APNs provider request, real token upload, media credential request, media connection, Matrix event emission, or production background behavior is claimed.
 
 ## Current State From Tracked Code
 
