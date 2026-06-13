@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: 2.43L minimal PushKit capability files applied; production PushKit/APNs/background behavior remains disabled by default and unwired.
+Status: 2.43Q server PushKit token registration endpoint/contract added; production PushKit/APNs/background behavior remains disabled by default and unwired.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -238,6 +238,36 @@ No entitlement or plist capability keys were changed because the tracked app sta
 `app.yml` remains unchanged and still contains the old team value. Do not regenerate the Xcode project from that source config for PushKit physical smoke readiness until a separate explicit task authorizes `app.yml` signing remediation.
 
 Real native direct-call PushKit registration remains disabled by default, no token is requested, no APNs registration is added, no real PushKit/background callback is wired, and no media credential, media connection, Matrix event emission, Element Call route replacement, or production background behavior is introduced.
+
+## 2.43M-N Capability Build/Profile And Physical Install Validation
+
+2.43M validates the checked-in `M639Y9MFR2` signing/capability state with a physical iOS Debug build. The built app bundle showed development `aps-environment`, `UIBackgroundModes` including `voip`, bundle ID class `kz.salemx.msg`, and no unexpected unrestricted VoIP entitlement. 2.43N then validated physical install and launch after the physical iPhone became available.
+
+These phases did not request PushKit/APNs tokens, enable native direct-call PushKit registration by default, wire background callbacks, change app/runtime code, request media credentials, connect media, emit Matrix events, send server pushes, or change Element Call routing.
+
+## 2.43O Controlled Local PushKit Registration Smoke
+
+2.43O used the existing gated registrar through a DEBUG-only manual local smoke trigger on a physical iPhone. The smoke reached redacted `pushkit_registration_result=token_received` while keeping `pushkit_token_persistence_requested=false`, `pushkit_token_upload_requested=false`, `apns_registration_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, and `matrix_event_emit_requested=false`.
+
+No raw PushKit/APNs token was copied, logged, persisted, uploaded, recorded, documented, or committed. Real native direct-call PushKit registration remains disabled by default outside the local smoke path, and no real PushKit/background payload callback is wired into the native direct-call flow.
+
+## 2.43P PushKit Token Registration Client Contract
+
+2.43P adds only an app-side token registration contract/client seam. The client can receive token bytes internally, but diagnostics expose only redacted token-present/upload-status/failure classes. The default client has no real transport and does not upload. Tests inject a fake transport and synthetic token only.
+
+No real token upload, token persistence, APNs registration, server VoIP push delivery, media credential request, media connection, Matrix event emission, background callback wiring, entitlement/project/signing/`Info.plist` change, or production behavior is introduced.
+
+## 2.43Q Server PushKit Token Registration Contract
+
+2.43Q adds only an auth-gated server endpoint/contract for future native direct-call PushKit token registration:
+
+- `POST /_matrix/client/unstable/kz.salemx.direct_call/pushkit/token` is non-dev and uses the existing Matrix bearer-token validator.
+- Tests use synthetic token payloads only.
+- Successful responses return redacted status classes and keep `pushkit_token_store_requested=false`, `pushkit_token_store_result=not_persisted`, `voip_push_send_requested=false`, `apns_provider_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, and `matrix_event_emit_requested=false`.
+- Malformed payloads fail closed.
+- No dev token route is added, and foreground dev invite routes remain disabled unless their existing explicit dev flag is enabled.
+
+No real app-runtime token upload is enabled. No raw PushKit/APNs token is logged, durably persisted, uploaded from runtime, recorded, documented, or committed. No APNs registration, VoIP push delivery, real PushKit/background callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, or production background behavior is introduced.
 
 ## Current State From Tracked Code
 

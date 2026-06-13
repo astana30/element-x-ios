@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.43p-pushkit-token-registration-contract`
+`salemx-2.43q-server-pushkit-token-registration-contract`
 
-Next phase: continue from the PushKit token registration contract/client seam. The likely next step is a separately authorized server token registration endpoint/client integration with fake-token tests first. Do not upload real tokens, send VoIP pushes, or wire background payload callbacks unless the user explicitly authorizes that exact step.
+Next phase: continue from the server PushKit token registration endpoint/contract. The likely next step is a separately authorized fake-token app-to-server registration smoke or durable storage/invalidation design. Do not upload real app-runtime tokens, send VoIP pushes, or wire background payload callbacks unless the user explicitly authorizes that exact step.
 
 ## Baseline
 
@@ -36,25 +36,27 @@ adbabef9c1866a82c5e5e3b4ca787a510b3a98b4 Apply minimal PushKit capability files
 11f64583b8be7aa505e3e7014f5fb7d2edc5927d Validate PushKit capability build profile
 a12fb1f3206ce2e9cc68205d3995a983643c7503 Validate physical install capability state
 2823ae0ad3227c061c0ab3e2bf695075edac5ebf Validate controlled local PushKit registration smoke
+6c2f44b21a9b38a78a7a19f1f918534ae741e44f Add PushKit token registration contract
 ```
 
-## 2.43P Result
+## 2.43Q Result
 
-2.43P adds only a PushKit token registration contract/client seam:
+2.43Q adds only a server PushKit token registration endpoint/contract:
 
-- The client seam accepts token bytes only at the boundary and emits redacted diagnostics.
-- The default client has no transport and does not upload.
-- Tests inject a fake transport and verify one redacted registration request for a synthetic token.
-- Empty tokens fail closed before upload.
-- Fake transport failures return redacted failure classes.
+- `POST /_matrix/client/unstable/kz.salemx.direct_call/pushkit/token` is auth-gated and non-dev.
+- Tests use synthetic token payloads only.
+- Unauthenticated requests return `401`.
+- Authenticated synthetic token registration returns redacted success.
+- Malformed payloads are rejected without exposing raw token values.
+- The route does not depend on the foreground dev invite flag and no dev token route is added.
 
-No real token upload is enabled. No raw PushKit/APNs token is logged, persisted, uploaded, recorded, documented, or committed. No APNs registration is requested. No real PushKit/background callback is wired. No server VoIP push delivery, media credentials, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production background behavior was introduced.
+No real app-runtime token upload is enabled. No raw PushKit/APNs token is logged, durably persisted, uploaded from runtime, recorded, documented, or committed. No APNs registration is requested. No real PushKit/background callback is wired. No server VoIP push delivery, media credentials, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production background behavior was introduced.
 
 ## Suggested Next Task
 
-Start `2.43Q - controlled token registration endpoint integration`.
+Start `2.43R - controlled fake-token app-to-server registration smoke`.
 
-Goal: add a controlled server token registration endpoint/client integration or detailed implementation plan, using fake-token tests first and only uploading a real token if the user explicitly authorizes that validation.
+Goal: connect the existing 2.43P client seam to the 2.43Q server route only through fake/synthetic token tests or a local controlled fake-token smoke. Keep real runtime PushKit token upload out of scope unless explicitly authorized.
 
 The next task must keep separate:
 
@@ -63,7 +65,7 @@ The next task must keep separate:
 - provider credential readiness
 - later VoIP push delivery smoke
 
-Do not proceed with real token upload, provider push delivery, or background payload callback wiring unless that authorization is explicit.
+Do not proceed with real token upload, durable token persistence, provider push delivery, or background payload callback wiring unless that authorization is explicit.
 
 Required guardrails:
 
@@ -84,6 +86,7 @@ Required route-level server safety:
 - `dev/invite=404`
 - unauthenticated non-dev invite `401`
 - unauthenticated stream `401`
+- unauthenticated token registration `401`
 
 Only claim direct `salemx-call-service active` if `systemctl` or an equivalent direct service check is actually verified. If SSH is blocked or times out, report it separately from route-level safety.
 

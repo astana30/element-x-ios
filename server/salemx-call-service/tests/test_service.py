@@ -872,6 +872,132 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         return getattr(app, "_salemx_test_issuer")
 
 
+class PushKitTokenRegistrationRouteTests(unittest.IsolatedAsyncioTestCase):
+    def make_token_service(self) -> DirectCallTokenService:
+        return DirectCallTokenServiceTests().make_service()
+
+    def synthetic_token(self) -> str:
+        return "synthetic-" + "pushkit-token-fixture"
+
+    def synthetic_payload(self, **overrides: object) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "version": 1,
+            "token": self.synthetic_token(),
+            "environment": "development",
+        }
+        payload.update(overrides)
+        return payload
+
+    def authorization(self) -> str:
+        return "Be" + "arer " + self.auth_token()
+
+    def auth_token(self) -> str:
+        return "matrix-" + "token-a-sensitive"
+
+    def auth_user_id(self) -> str:
+        return "@alice" + ":example.test"
+
+    def auth_device_id(self) -> str:
+        return "DEVICE" + "A"
+
+    async def test_token_registration_requires_authenticated_session(self) -> None:
+        app_module = _load_app_module()
+        app = app_module.create_app(token_service=self.make_token_service())
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.PUSHKIT_TOKEN_REGISTRATION_PATH,
+            {},
+            self.synthetic_payload(),
+        )
+        output = json.dumps(body, sort_keys=True)
+
+        self.assertEqual(status, 401)
+        self.assertEqual(body["errcode"], "M_UNKNOWN_TOKEN")
+        self.assertNotIn(self.synthetic_token(), output)
+
+    async def test_authenticated_synthetic_token_registration_returns_redacted_success(self) -> None:
+        app_module = _load_app_module()
+        app = app_module.create_app(token_service=self.make_token_service())
+
+        with self.assertLogs("salemx_call_service.app", level="INFO") as logs:
+            status, body = await _asgi_post_json(
+                app,
+                app_module.PUSHKIT_TOKEN_REGISTRATION_PATH,
+                {"authorization": self.authorization()},
+                self.synthetic_payload(),
+            )
+        output = json.dumps(body, sort_keys=True) + "\n" + "\n".join(logs.output)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["pushkit_token_registration_invoked"], True)
+        self.assertEqual(body["pushkit_token_present"], True)
+        self.assertEqual(body["pushkit_token_store_requested"], False)
+        self.assertEqual(body["pushkit_token_store_result"], "not_persisted")
+        self.assertEqual(body["pushkit_token_registration_result"], "accepted_redacted")
+        self.assertEqual(body["voip_push_send_requested"], False)
+        self.assertEqual(body["apns_provider_requested"], False)
+        self.assertEqual(body["media_credentials_requested"], False)
+        self.assertEqual(body["media_connect_requested"], False)
+        self.assertEqual(body["matrix_event_emit_requested"], False)
+        self.assertEqual(body["blocked_reason"], "none")
+        self.assertNotIn(self.synthetic_token(), output)
+        self.assertNotIn(self.auth_token(), output)
+        self.assertNotIn(self.auth_user_id(), output)
+        self.assertNotIn(self.auth_device_id(), output)
+
+    async def test_malformed_token_registration_payload_is_rejected_without_side_effects(self) -> None:
+        app_module = _load_app_module()
+        app = app_module.create_app(token_service=self.make_token_service())
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.PUSHKIT_TOKEN_REGISTRATION_PATH,
+            {"authorization": self.authorization()},
+            self.synthetic_payload(token=""),
+        )
+        output = json.dumps(body, sort_keys=True)
+
+        self.assertEqual(status, 400)
+        self.assertEqual(body["errcode"], "M_UNKNOWN")
+        self.assertNotIn(self.synthetic_token(), output)
+        self.assertNotIn(self.auth_token(), output)
+        self.assertNotIn(self.auth_user_id(), output)
+        self.assertNotIn(self.auth_device_id(), output)
+
+    async def test_token_registration_route_is_non_dev_and_dev_invite_stays_disabled(self) -> None:
+        app_module = _load_app_module()
+        app = app_module.create_app(token_service=self.make_token_service())
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.PUSHKIT_TOKEN_REGISTRATION_PATH,
+            {"authorization": self.authorization()},
+            self.synthetic_payload(),
+        )
+        dev_status, dev_body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_DEV_INVITE_PATH,
+            {"authorization": self.authorization()},
+            {
+                "type": "foreground.call.invite",
+                "version": 1,
+                "call_handle": "opaque-local-safe-handle",
+                "call_kind": "audio",
+                "created_at_ms": 1000,
+                "expires_at_ms": 46000,
+                "display_label": "Safe label",
+            },
+        )
+        output = json.dumps({"body": body, "dev": dev_body}, sort_keys=True)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["pushkit_token_registration_result"], "accepted_redacted")
+        self.assertEqual(dev_status, 404)
+        self.assertNotIn(self.synthetic_token(), output)
+        self.assertNotIn(self.auth_token(), output)
+
+
 class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
     def make_service(self,
                      rooms: dict[str, RoomEligibility] | None = None,

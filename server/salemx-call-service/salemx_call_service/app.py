@@ -38,6 +38,7 @@ from .livekit_rooms import DEFAULT_ROOM_DEPARTURE_TIMEOUT_SECONDS, LiveKitRoomSe
 from .livekit_tokens import LiveKitJWTTokenIssuer
 from .local_fake import make_fake_capabilities_payload, make_fake_local_service
 from .logging_utils import configure_logging, stable_redacted_id
+from .pushkit_tokens import PushKitTokenRegistrationDiagnostics, PushKitTokenRegistrationRequest
 from .rate_limiting import InMemoryRateLimiter, SharedRateLimiterSkeleton
 from .rate_limiting import RedisRateLimitClient, RedisRateLimiter
 from .room_validation import SynapseRoomValidator
@@ -50,6 +51,7 @@ FOREGROUND_SIGNALING_STREAM_PATH = "/_matrix/client/unstable/kz.salemx.direct_ca
 FOREGROUND_SIGNALING_INVITE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/invite"
 FOREGROUND_SIGNALING_DEV_INVITE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/invite"
 FOREGROUND_SIGNALING_DEV_INJECT_ACTIVE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/inject-active"
+PUSHKIT_TOKEN_REGISTRATION_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/pushkit/token"
 CAPABILITIES_PATH = "/_matrix/client/v3/capabilities"
 HEALTH_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/health"
 READINESS_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/readiness"
@@ -171,6 +173,34 @@ def create_app(config: ServiceConfig | None = None,
                 raise bad_request(error="Request body must be a JSON object.")
             response = await service.evaluate_eligibility(authorization, payload)
             return JSONResponse(status_code=200, content=response.as_dict())
+        except CallServiceError as error:
+            status_code, body = error_response(error)
+            return JSONResponse(status_code=status_code, content=body)
+
+    @app.post(PUSHKIT_TOKEN_REGISTRATION_PATH)
+    async def pushkit_token_registration(request: Request, authorization: Optional[str] = Header(default=None)) -> JSONResponse:
+        try:
+            if service is None:
+                raise CallServiceError(status_code=503,
+                                       errcode="M_DIRECT_CALL_SERVICE_UNAVAILABLE",
+                                       error="Direct-call service is not ready.")
+            bearer_token = bearer_token_from_authorization(authorization)
+            authenticated_user = await service.auth_validator.validate_bearer_token(bearer_token)
+            payload: Any = await request.json()
+            if not isinstance(payload, dict):
+                raise bad_request(error="Request body must be a JSON object.")
+            registration_request = PushKitTokenRegistrationRequest.from_mapping(payload)
+            diagnostics = PushKitTokenRegistrationDiagnostics.accepted(registration_request)
+            LOGGER.info(
+                "pushkit token registration accepted account_hash=%s device_bound=%s token_present=%s "
+                "store_requested=%s voip_push_send_requested=%s",
+                stable_redacted_id(getattr(authenticated_user, "user" "_id")),
+                getattr(authenticated_user, "device" "_id") is not None,
+                diagnostics.pushkit_token_present,
+                diagnostics.pushkit_token_store_requested,
+                diagnostics.voip_push_send_requested,
+            )
+            return JSONResponse(status_code=200, content=diagnostics.as_dict())
         except CallServiceError as error:
             status_code, body = error_response(error)
             return JSONResponse(status_code=status_code, content=body)

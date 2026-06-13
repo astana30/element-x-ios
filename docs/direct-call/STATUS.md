@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.43P - PushKit token registration contract/client seam added; no real token upload is enabled and PushKit registration remains disabled by default outside the DEBUG-only manual smoke trigger.
+After 2.43Q - server PushKit token registration endpoint/contract added; no real app-runtime token upload is enabled and PushKit registration remains disabled by default outside the DEBUG-only manual smoke trigger.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,11 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.43Q adds a server PushKit token registration endpoint/contract:
+  - `POST /_matrix/client/unstable/kz.salemx.direct_call/pushkit/token` is auth-gated through the existing Matrix bearer-token validator.
+  - Tests use synthetic token payloads only and verify unauthenticated `401`, authenticated redacted success, malformed-payload rejection, no raw token in logs/diagnostics, and disabled dev route behavior.
+  - Successful diagnostics include `pushkit_token_registration_result=accepted_redacted`, `pushkit_token_store_requested=false`, `pushkit_token_store_result=not_persisted`, `voip_push_send_requested=false`, `apns_provider_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, and `matrix_event_emit_requested=false`.
+  - No durable token persistence, real app-runtime token upload, APNs provider call, server VoIP push delivery, APNs registration, real PushKit/background callback wiring, media behavior, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, or `app.yml` regeneration is introduced.
 - 2.43P adds a PushKit token registration contract/client seam:
   - The seam accepts token bytes only at the client boundary and reduces diagnostics to redacted presence/status classes.
   - Tests use an injected fake transport to prove one redacted registration request can be produced for a synthetic token.

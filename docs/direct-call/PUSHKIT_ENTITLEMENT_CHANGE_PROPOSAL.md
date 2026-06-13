@@ -1,6 +1,6 @@
 # PushKit Entitlement Change Proposal
 
-Status: 2.43P adds a token registration contract/client seam after the 2.43O controlled local PushKit registration smoke. No entitlement, `Info.plist`, `app.yml`, APNs registration, real token upload, token persistence, media, or production background behavior is changed by this document.
+Status: 2.43Q adds an auth-gated server token registration endpoint/contract after the 2.43P client seam. No entitlement, `Info.plist`, `app.yml`, APNs registration, app-runtime real token upload, durable token persistence, VoIP push delivery, media, or production background behavior is changed by this document.
 
 ## 1. Current Tracked State
 
@@ -139,6 +139,19 @@ Real native direct-call PushKit registration remains disabled by default outside
 - Token persistence and real network upload remain absent.
 
 No raw PushKit/APNs token is logged, persisted, uploaded, recorded, documented, or committed. No APNs registration is requested, no real PushKit/background callback is wired, no server VoIP push delivery is attempted, and no entitlement, `Info.plist`, `app.yml`, signing, provisioning, project, media, Matrix, or Element Call route behavior is changed.
+
+## 2.43Q Server PushKit Token Registration Contract
+
+2.43Q adds a server-side native direct-call PushKit token registration route contract:
+
+- `POST /_matrix/client/unstable/kz.salemx.direct_call/pushkit/token` is auth-gated and non-dev.
+- Tests use synthetic token payloads only.
+- Successful responses expose redacted status classes such as `accepted_redacted` and `not_persisted`.
+- Malformed payloads fail closed without exposing raw token values.
+- The route does not depend on the foreground dev invite flag, and no dev token route is added.
+- No durable token storage, APNs provider call, VoIP push send, media credential request, media connection, or Matrix event emission is introduced.
+
+No real app-runtime PushKit token upload is enabled. No raw PushKit/APNs token is logged, persisted, uploaded from runtime, recorded, documented, or committed. No APNs registration is requested, no real PushKit/background callback is wired, no server VoIP push delivery is attempted, and no entitlement, `Info.plist`, `app.yml`, signing, provisioning, project, media, Matrix, or Element Call route behavior is changed.
 
 ## 2. Minimum Future Changes Required
 

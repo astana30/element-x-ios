@@ -1,6 +1,6 @@
 # PushKit Readiness Plan
 
-Status: 2.43P adds a PushKit token registration contract/client seam after the 2.43O controlled local registration smoke. PushKit registration remains disabled by default, and no real token upload, APNs registration, token persistence, media, or production background behavior is implemented by this document.
+Status: 2.43Q adds an auth-gated server PushKit token registration endpoint/contract with synthetic-token tests after the 2.43P client seam. PushKit registration remains disabled by default, and no real app-runtime token upload, APNs registration, durable token persistence, VoIP push delivery, media, or production background behavior is implemented by this document.
 
 ## 1. Current Safe Baseline
 
@@ -23,8 +23,9 @@ The 2.43B-I background chain exists only as safe seams:
 - 2.43N physical install/launch capability validation.
 - 2.43O controlled local PushKit registration smoke.
 - 2.43P token registration contract/client seam.
+- 2.43Q server token registration endpoint/contract.
 
-The 2.43I registrar scaffold imports PushKit through an isolated real registry factory, but its feature gate defaults disabled and it is not wired to app startup. 2.43O used a DEBUG-only manual smoke trigger to request local PushKit registration once and receive a redacted `token_received` result. 2.43P adds only an inert token registration contract/client seam with fake transport tests. There is still no default-enabled native direct-call PushKit registration, no native direct-call APNs token request, no real token upload, and no native direct-call PushKit/background payload callback wiring. Entitlements, provisioning, project files, signing settings, `Info.plist`, and `app.yml` have not been changed by 2.43O or 2.43P. No media credentials, media connection, Matrix event emission from invite receipt, Element Call route replacement, or production background behavior has been added.
+The 2.43I registrar scaffold imports PushKit through an isolated real registry factory, but its feature gate defaults disabled and it is not wired to app startup. 2.43O used a DEBUG-only manual smoke trigger to request local PushKit registration once and receive a redacted `token_received` result. 2.43P adds only an inert token registration contract/client seam with fake transport tests. 2.43Q adds only an auth-gated server endpoint/contract tested with synthetic tokens; it returns redacted status classes and does not durably persist tokens or send VoIP pushes. There is still no default-enabled native direct-call PushKit registration, no native direct-call APNs token request, no app-runtime real token upload, and no native direct-call PushKit/background payload callback wiring. Entitlements, provisioning, project files, signing settings, `Info.plist`, and `app.yml` have not been changed by 2.43O, 2.43P, or 2.43Q. No media credentials, media connection, Matrix event emission from invite receipt, Element Call route replacement, or production background behavior has been added.
 
 Existing Element Call PushKit/VoIP surfaces remain a separate product path and are not the SalemX native direct-call background implementation.
 
@@ -41,14 +42,14 @@ This matrix records tracked-source and local route-level evidence for whether th
 | APNs/VoIP entitlements | verified for built Debug app | 2.43M signed an iPhoneOS Debug app whose effective entitlements include development `aps-environment`; the built app `Info.plist` includes `UIBackgroundModes` with `voip`; no speculative unrestricted VoIP entitlement was present. | Keep registration disabled until a controlled physical install/registration smoke is explicitly approved. | Build/profile capability presence does not prove token issuance until a physical install/registration smoke runs. |
 | Provisioning profile readiness | verified for physical Debug install and local token receipt | 2.43N rebuilt, installed, and launched the signed Debug app on a physical iPhone after Developer Mode was enabled. 2.43O then used the DEBUG-only manual registrar smoke and received a redacted `token_received` result. | Keep registration disabled by default; next server token work must be separately scoped and must not record raw tokens. | Local token receipt does not prove token upload, invalidation, server provider credentials, or VoIP push delivery. |
 | Physical Debug Team ID | verified for checked-in project build | Current physical Debug requirement is `M639Y9MFR2`; 2.43L updates generated project signing references from `83LGSC2QPV` to `M639Y9MFR2`; 2.43M signed the Debug app with effective Team ID / prefix `M639Y9MFR2`. Tracked `app.yml` still references old `DEVELOPMENT_TEAM: 83LGSC2QPV` and was not edited. | Do not regenerate from `app.yml` until a separate source-config remediation task is approved. | Regenerating the project from stale XcodeGen config can reintroduce the wrong team. |
-| Server token registration endpoint | client contract scaffolded only | 2.43P adds an app-side token registration request/client seam with an injected fake transport. It does not implement a real server endpoint, real network upload, token persistence, or token upload from runtime PushKit callbacks. | Design/authenticate a real server endpoint and redacted client integration in a separate explicitly authorized task. | Without real authenticated upload and invalidation, a VoIP provider cannot target native direct-call devices. |
+| Server token registration endpoint | contract scaffolded | 2.43Q adds `POST /_matrix/client/unstable/kz.salemx.direct_call/pushkit/token`, auth-gated through the existing Matrix bearer validator and tested with synthetic tokens only. The endpoint returns redacted status classes, does not durably persist tokens, does not log raw tokens, and does not send VoIP pushes. | Add a separately scoped app-to-server fake-token smoke or durable storage/invalidation design only after explicit authorization. | Without durable storage and invalidation, a VoIP provider still cannot target native direct-call devices. |
 | Server VoIP push provider credentials | not verified | No server provider credential check was performed, and credentials must not be copied into docs or source. | Verify provider key/certificate handling out of band with redacted evidence only. | Misconfigured provider credentials can block delivery even if app registration succeeds. |
 | Route-level safety | verified | Live route checks returned `dev/invite=404`, unauthenticated non-dev invite `401`, and unauthenticated stream `401`. | Keep this as the fallback server safety check when direct service status is unavailable. | Route safety does not prove direct `systemctl` service status or push provider readiness. |
 | Direct service status | not verified | SSH to port 22 timed out in the latest direct service probes, so `systemctl` was not verified. | Only claim `salemx-call-service active` after a successful direct service check. | Overstating service-active status can hide host/auth/network failures. |
 | Privacy/logging policy | verified | 2.43B-I diagnostics are redacted; 2.43J changed docs only and privacy scans must reject raw PushKit/APNs tokens, identifiers, request payloads, private logs, and secret-bearing URLs. | Continue privacy scans on changed docs/code before every commit. | Token or payload leakage in logs/docs would be a release blocker. |
 | Rollback strategy | ready | The 2.43H rollback plan requires disabling the registrar gate, preserving foreground behavior, deleting/invalidation server tokens, route-safety checks, and privacy scans. | Keep future real registration behind a kill switch and reversible server token state. | No clean rollback exists if registration is wired directly at startup without a gate. |
 
-Readiness conclusion: build/profile/codesign/install/launch capability validation is ready for the checked-in project state, and 2.43O proved local PushKit token receipt through a DEBUG-only manual smoke trigger. 2.43P adds only the redacted client contract seam for future token registration. The current code still has only a disabled-by-default native direct-call registrar scaffold for normal runtime, `app.yml` remains a regeneration risk, and server token/provider readiness is not implemented or verified.
+Readiness conclusion: build/profile/codesign/install/launch capability validation is ready for the checked-in project state, and 2.43O proved local PushKit token receipt through a DEBUG-only manual smoke trigger. 2.43P adds only the redacted client contract seam for future token registration. 2.43Q adds only the server-side token registration endpoint contract with synthetic-token tests. The current app code still has only a disabled-by-default native direct-call registrar scaffold for normal runtime, `app.yml` remains a regeneration risk, and durable token storage, invalidation, provider credentials, and VoIP push delivery are not implemented or verified.
 
 ## 2.43K Entitlement Change Proposal
 
@@ -148,6 +149,19 @@ Real native direct-call PushKit registration remains disabled by default outside
 - APNs registration, media credentials, media connection, Matrix event emission, real PushKit/background callback wiring, and server VoIP push delivery remain absent.
 
 This seam does not upload a real PushKit token and does not record raw PushKit/APNs token values. Future 2.43Q work may add a controlled server token registration endpoint/client integration only if explicitly authorized, with redacted fake-token tests before any real token upload.
+
+## 2.43Q Server PushKit Token Registration Contract
+
+2.43Q adds only a server-side native direct-call PushKit token registration endpoint/contract:
+
+- `POST /_matrix/client/unstable/kz.salemx.direct_call/pushkit/token` is a non-dev route.
+- The route is auth-gated through the existing Matrix bearer-token validator.
+- The request contract accepts versioned synthetic token payloads for tests and reduces server responses to redacted status classes.
+- The endpoint does not durably persist tokens; `pushkit_token_store_requested=false` and `pushkit_token_store_result=not_persisted`.
+- Server diagnostics keep `voip_push_send_requested=false`, `apns_provider_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, and `matrix_event_emit_requested=false`.
+- Tests cover unauthenticated `401`, authenticated synthetic-token success, malformed payload rejection, disabled dev invite route behavior, redacted logs/diagnostics, and existing route-safety checks.
+
+No real app-runtime PushKit token upload is enabled. No raw PushKit/APNs token is logged, persisted, uploaded from runtime, recorded, documented, or committed. No APNs registration, VoIP push delivery, real PushKit/background callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production background behavior is introduced.
 
 ## 2. Apple Capability And Provisioning Requirements
 
