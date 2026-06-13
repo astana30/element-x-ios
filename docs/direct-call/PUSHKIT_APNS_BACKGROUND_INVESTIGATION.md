@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: 2.43F controlled real CallKit adapter added behind the existing boundary; production PushKit/APNs/background behavior remains unimplemented.
+Status: 2.43G PushKit lifecycle abstraction/fake seam added; production PushKit/APNs/background behavior remains unimplemented.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -147,7 +147,41 @@ blocked_reason=<redacted_class>
 
 Provider failures are reported only as redacted classes. The adapter must not expose raw access tokens, authorization headers, Matrix user IDs, device IDs, room IDs, call handles, request payloads, private logs, secret-bearing URLs, or provider-private error details.
 
-A future 2.43G may design PushKit lifecycle registration, but entitlement, signing, provisioning, project, `Info.plist`, and `app.yml` changes remain separate and require explicit authorization.
+## 2.43G PushKit Lifecycle Abstraction Seam
+
+2.43G adds only a safe PushKit lifecycle abstraction and fake/test manager for future native direct-call background incoming handling. It defines redacted lifecycle events for registration requests, token updates, token invalidation, payload receipt, and registration-unavailable states without creating a real `PKPushRegistry`, requesting PushKit/APNs tokens, wiring app startup, wiring background callbacks, or changing production behavior.
+
+For fake payload receipt, the seam composes the existing 2.43B-F pipeline:
+
+- The 2.43B parser validates the payload and timestamp guardrails.
+- The 2.43C intake seam classifies the parsed payload and session state.
+- The 2.43D planner builds or suppresses a CallKit report request.
+- The 2.43F adapter can be invoked only through an injected fake/test provider.
+
+Token update and invalidation events produce redacted decisions only. Raw PushKit/APNs tokens are not logged, persisted, sent to a server, or exposed in diagnostics.
+
+Diagnostics are limited to redacted booleans/status classes:
+
+```text
+pushkit_lifecycle_invoked=true/false
+pushkit_registration_requested=false
+apns_registration_requested=false
+token_update_received=true/false
+token_invalidated=true/false
+payload_received=true/false
+payload_parse_status=valid/<redacted_failure_class>
+intake_decision=<redacted_decision_class>
+callkit_report_decision=<redacted_decision_class>
+callkit_report_attempted=true/false
+media_credentials_requested=false
+media_connect_requested=false
+matrix_event_emit_requested=false
+blocked_reason=<redacted_class>
+```
+
+No PushKit registration, APNs registration, entitlement change, project/signing edit, media credential request, media connection, Matrix event emission, payload persistence, real PushKit/background callback, real app-start lifecycle wiring, or Element Call route replacement is introduced by this task.
+
+A future 2.43H may be an explicit PushKit registration design or implementation task, but entitlement, signing, provisioning, project, `Info.plist`, and `app.yml` changes remain separate and require explicit authorization.
 
 ## Current State From Tracked Code
 
@@ -244,7 +278,10 @@ Any production native direct-call VoIP registration proof, APNs provider setup t
 - 2.43D adds only the background CallKit report request/planner seam.
 - 2.43E adds only the background CallKit adapter boundary and fake/test reporting seam.
 - 2.43F adds only a controlled real CallKit adapter behind that boundary.
+- 2.43G adds only a PushKit lifecycle abstraction/fake seam.
 - PushKit registration and APNs registration are still not implemented for native direct-call.
+- No real `PKPushRegistry` is created by the native direct-call path.
+- Raw PushKit/APNs tokens are not logged or persisted.
 - Foreground real-invite behavior must remain unchanged.
 - PushKit/APNs work must be separately scoped from foreground smoke tooling.
 - Entitlements, provisioning, project settings, `Info.plist`, and `app.yml` are not changed by this investigation.
@@ -255,5 +292,5 @@ Any production native direct-call VoIP registration proof, APNs provider setup t
 - Dev routes must remain disabled.
 - Real non-dev routes must remain auth-gated.
 - DEBUG smoke tooling is not production behavior.
-- A future 2.43G may design PushKit lifecycle registration, still without entitlement/signing/project changes unless explicitly allowed.
+- A future 2.43H may design or implement PushKit registration, still without entitlement/signing/project changes unless explicitly allowed.
 - Physical Debug builds should use `DEVELOPMENT_TEAM=M639Y9MFR2`; the old `83LGSC2QPV` team must not be used.

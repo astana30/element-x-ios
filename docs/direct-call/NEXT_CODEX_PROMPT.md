@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.43f-controlled-real-callkit-adapter`
+`salemx-2.43g-pushkit-lifecycle-abstraction-seam`
 
-Next phase: continue from the controlled real CallKit adapter boundary.
+Next phase: continue from the PushKit lifecycle abstraction seam.
 
 ## Baseline
 
@@ -154,11 +154,28 @@ Key findings:
 - No Matrix events are emitted.
 - Real adapter diagnostics remain redacted booleans/status classes only.
 
+2.43G adds only a PushKit lifecycle abstraction/fake seam:
+
+- It defines redacted fake lifecycle events for registration requests, token updates, token invalidation, payload receipt, and registration-unavailable states.
+- Fake payload receipt composes the 2.43B parser, 2.43C intake, 2.43D planner, and an injected fake/test 2.43F CallKit adapter path.
+- Token update and invalidation events produce redacted decisions only.
+- Raw PushKit/APNs tokens are not logged, persisted, sent to a server, or exposed in diagnostics.
+- No real `PKPushRegistry` was created.
+- No PushKit registration was added.
+- No APNs registration was added.
+- No PushKit/APNs token was requested.
+- No real PushKit/background callback was wired.
+- No VoIP/background entitlement, provisioning, project, `Info.plist`, or `app.yml` file was changed.
+- Foreground real invite behavior remains unchanged.
+- No media credentials or media connection were introduced.
+- No Matrix events are emitted.
+- Lifecycle diagnostics remain redacted booleans/status classes only.
+
 ## Guardrails
 
 - Do not implement PushKit/APNs/background incoming-call behavior without a separately scoped task.
 - Any future signing, entitlement, provisioning, project, `Info.plist`, or `app.yml` change requires explicit approval in that task.
-- Future 2.43G may design PushKit lifecycle registration, but entitlement/signing/project changes remain separate and require explicit authorization.
+- Future 2.43H may be an explicit PushKit registration design or implementation task, but entitlement/signing/project changes remain separate and require explicit authorization.
 - Do not implement PushKit runtime inside foreground smoke tooling.
 - Do not register APNs or VoIP values inside foreground smoke tooling.
 - Do not add background incoming handling inside foreground smoke tooling.

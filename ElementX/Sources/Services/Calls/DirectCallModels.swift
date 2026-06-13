@@ -1387,6 +1387,265 @@ struct DirectCallBackgroundRealCallKitReportingAdapter: CustomStringConvertible,
     }
 }
 
+enum DirectCallPushKitLifecycleEvent: CustomStringConvertible, CustomDebugStringConvertible {
+    case registrationRequested
+    case tokenUpdated(Data)
+    case tokenInvalidated
+    case payloadReceived([String: Any])
+    case registrationUnavailable
+
+    var description: String {
+        switch self {
+        case .registrationRequested:
+            "registration_requested"
+        case .tokenUpdated:
+            "token_updated(value: <redacted>)"
+        case .tokenInvalidated:
+            "token_invalidated"
+        case .payloadReceived:
+            "payload_received(payload: <redacted>)"
+        case .registrationUnavailable:
+            "registration_unavailable"
+        }
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum DirectCallPushKitLifecycleDecision: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case registrationDeferred = "registration_deferred"
+    case registrationUnavailable = "registration_unavailable"
+    case tokenUpdateReceived = "token_update_received"
+    case tokenInvalidated = "token_invalidated"
+    case ignoreInvalidPayload = "ignore_invalid_payload"
+    case ignoreExpiredPayload = "ignore_expired_payload"
+    case ignoreFutureTimestampExcessive = "ignore_future_timestamp_excessive"
+    case requiresAuthenticatedSession = "requires_authenticated_session"
+    case callKitReportAttemptRecorded = "callkit_report_attempt_recorded"
+    case callKitReportFailedRedacted = "callkit_report_failed_redacted"
+    case callKitReporterUnavailable = "callkit_reporter_unavailable"
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum DirectCallPushKitLifecycleFailure: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case registrationUnavailable = "registration_unavailable"
+    case tokenNotPersisted = "token_not_persisted"
+    case invalidPayload = "invalid_payload"
+    case expiredPayload = "expired"
+    case futureTimestampExcessive = "future_timestamp_excessive"
+    case authenticatedSessionUnavailable = "authenticated_session_unavailable"
+    case callKitReporterUnavailable = "callkit_reporter_unavailable"
+    case callKitReportFailedRedacted = "callkit_report_failed_redacted"
+    case redacted
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct DirectCallPushKitLifecycleDiagnostics: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let pushKitLifecycleInvoked: Bool
+    let pushKitRegistrationRequested: Bool
+    let apnsRegistrationRequested: Bool
+    let tokenUpdateReceived: Bool
+    let tokenInvalidated: Bool
+    let payloadReceived: Bool
+    let payloadParseStatus: String
+    let intakeDecision: DirectCallBackgroundInviteIntakeDecision?
+    let callKitReportDecision: DirectCallBackgroundCallKitReportDecision?
+    let callKitReportAttempted: Bool
+    let mediaCredentialsRequested: Bool
+    let mediaConnectRequested: Bool
+    let matrixEventEmitRequested: Bool
+    let blockedReason: DirectCallPushKitLifecycleFailure?
+
+    var description: String {
+        "DirectCallPushKitLifecycleDiagnostics(" + [
+            "pushkit_lifecycle_invoked=\(pushKitLifecycleInvoked)",
+            "pushkit_registration_requested=\(pushKitRegistrationRequested)",
+            "apns_registration_requested=\(apnsRegistrationRequested)",
+            "token_update_received=\(tokenUpdateReceived)",
+            "token_invalidated=\(tokenInvalidated)",
+            "payload_received=\(payloadReceived)",
+            "payload_parse_status=\(payloadParseStatus)",
+            "intake_decision=\(intakeDecision?.description ?? "none")",
+            "callkit_report_decision=\(callKitReportDecision?.description ?? "none")",
+            "callkit_report_attempted=\(callKitReportAttempted)",
+            "media_credentials_requested=\(mediaCredentialsRequested)",
+            "media_connect_requested=\(mediaConnectRequested)",
+            "matrix_event_emit_requested=\(matrixEventEmitRequested)",
+            "blocked_reason=\(blockedReason?.description ?? "none")"
+        ].joined(separator: ", ") + ")"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct DirectCallPushKitLifecycleResult: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let decision: DirectCallPushKitLifecycleDecision
+    let diagnostics: DirectCallPushKitLifecycleDiagnostics
+
+    var description: String {
+        "DirectCallPushKitLifecycleResult(decision: \(decision), diagnostics: \(diagnostics))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+protocol DirectCallPushKitLifecycleManaging {
+    func handle(_ event: DirectCallPushKitLifecycleEvent,
+                now: Date,
+                authenticatedSessionAvailable: Bool) -> DirectCallPushKitLifecycleResult
+}
+
+struct DirectCallFakePushKitLifecycleManager: DirectCallPushKitLifecycleManaging, CustomStringConvertible, CustomDebugStringConvertible {
+    var parser = DirectCallBackgroundInvitePayloadParser()
+    var intake = DirectCallBackgroundInviteIntake()
+    var planner = DirectCallBackgroundCallKitReportPlanner()
+    var reportCallKit: ((DirectCallBackgroundCallKitReportPlanningResult) -> DirectCallBackgroundCallKitReportResult)?
+
+    func handle(_ event: DirectCallPushKitLifecycleEvent,
+                now: Date = .now,
+                authenticatedSessionAvailable: Bool = false) -> DirectCallPushKitLifecycleResult {
+        switch event {
+        case .registrationRequested:
+            return result(decision: .registrationDeferred,
+                          blockedReason: .registrationUnavailable)
+        case .registrationUnavailable:
+            return result(decision: .registrationUnavailable,
+                          blockedReason: .registrationUnavailable)
+        case .tokenUpdated:
+            return result(decision: .tokenUpdateReceived,
+                          tokenUpdateReceived: true,
+                          blockedReason: .tokenNotPersisted)
+        case .tokenInvalidated:
+            return result(decision: .tokenInvalidated,
+                          tokenInvalidated: true)
+        case .payloadReceived(let payload):
+            return handlePayload(payload,
+                                 now: now,
+                                 authenticatedSessionAvailable: authenticatedSessionAvailable)
+        }
+    }
+
+    private func handlePayload(_ payload: [String: Any],
+                               now: Date,
+                               authenticatedSessionAvailable: Bool) -> DirectCallPushKitLifecycleResult {
+        let parsed = parser.parse(payload, now: now)
+        let intakeResult = intake.evaluate(parsed,
+                                           authenticatedSessionAvailable: authenticatedSessionAvailable,
+                                           callKitReportAdapterAvailable: true)
+        let planningResult = planner.plan(from: intakeResult)
+
+        guard planningResult.decision == .reportableIncomingCallRequest else {
+            return result(decision: lifecycleDecision(for: planningResult),
+                          payloadReceived: true,
+                          payloadParseStatus: parsed.description,
+                          intakeDecision: intakeResult.decision,
+                          callKitReportDecision: planningResult.decision,
+                          blockedReason: lifecycleFailure(for: planningResult))
+        }
+        guard let reportCallKit else {
+            return result(decision: .callKitReporterUnavailable,
+                          payloadReceived: true,
+                          payloadParseStatus: parsed.description,
+                          intakeDecision: intakeResult.decision,
+                          callKitReportDecision: planningResult.decision,
+                          blockedReason: .callKitReporterUnavailable)
+        }
+
+        let reportResult = reportCallKit(planningResult)
+        return result(decision: reportResult.status == .reportAttemptRecorded ? .callKitReportAttemptRecorded : .callKitReportFailedRedacted,
+                      payloadReceived: true,
+                      payloadParseStatus: parsed.description,
+                      intakeDecision: intakeResult.decision,
+                      callKitReportDecision: planningResult.decision,
+                      callKitReportAttempted: reportResult.diagnostics.callKitProviderReportAttempted,
+                      blockedReason: reportResult.status == .reportAttemptRecorded ? nil : .callKitReportFailedRedacted)
+    }
+
+    private func lifecycleDecision(for planningResult: DirectCallBackgroundCallKitReportPlanningResult) -> DirectCallPushKitLifecycleDecision {
+        switch planningResult.decision {
+        case .notReportableExpiredPayload:
+            .ignoreExpiredPayload
+        case .notReportableFutureTimestampExcessive:
+            .ignoreFutureTimestampExcessive
+        case .notReportableRequiresAuthenticatedSession:
+            .requiresAuthenticatedSession
+        case .notReportableInvalidPayload:
+            .ignoreInvalidPayload
+        case .reportableIncomingCallRequest:
+            .callKitReporterUnavailable
+        }
+    }
+
+    private func lifecycleFailure(for planningResult: DirectCallBackgroundCallKitReportPlanningResult) -> DirectCallPushKitLifecycleFailure {
+        switch planningResult.decision {
+        case .notReportableExpiredPayload:
+            .expiredPayload
+        case .notReportableFutureTimestampExcessive:
+            .futureTimestampExcessive
+        case .notReportableRequiresAuthenticatedSession:
+            .authenticatedSessionUnavailable
+        case .notReportableInvalidPayload:
+            .invalidPayload
+        case .reportableIncomingCallRequest:
+            .callKitReporterUnavailable
+        }
+    }
+
+    private func result(decision: DirectCallPushKitLifecycleDecision,
+                        tokenUpdateReceived: Bool = false,
+                        tokenInvalidated: Bool = false,
+                        payloadReceived: Bool = false,
+                        payloadParseStatus: String = "none",
+                        intakeDecision: DirectCallBackgroundInviteIntakeDecision? = nil,
+                        callKitReportDecision: DirectCallBackgroundCallKitReportDecision? = nil,
+                        callKitReportAttempted: Bool = false,
+                        blockedReason: DirectCallPushKitLifecycleFailure? = nil) -> DirectCallPushKitLifecycleResult {
+        .init(decision: decision,
+              diagnostics: .init(pushKitLifecycleInvoked: true,
+                                 pushKitRegistrationRequested: false,
+                                 apnsRegistrationRequested: false,
+                                 tokenUpdateReceived: tokenUpdateReceived,
+                                 tokenInvalidated: tokenInvalidated,
+                                 payloadReceived: payloadReceived,
+                                 payloadParseStatus: payloadParseStatus,
+                                 intakeDecision: intakeDecision,
+                                 callKitReportDecision: callKitReportDecision,
+                                 callKitReportAttempted: callKitReportAttempted,
+                                 mediaCredentialsRequested: false,
+                                 mediaConnectRequested: false,
+                                 matrixEventEmitRequested: false,
+                                 blockedReason: blockedReason))
+    }
+
+    var description: String {
+        "DirectCallFakePushKitLifecycleManager(pushKitRuntime: false, apnsRegistrationRuntime: false, realCallKitRuntime: false, mediaRuntime: false, matrixEventRuntime: false, tokenPersistenceRuntime: false)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
 protocol NativeIncomingCallTimeoutScheduling: AnyObject {
     func scheduleTimeout(for identity: NativeIncomingCallIdentity, after timeout: Duration)
     func cancelTimeout(for identity: NativeIncomingCallIdentity)

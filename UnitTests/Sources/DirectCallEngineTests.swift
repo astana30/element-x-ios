@@ -1815,6 +1815,157 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func fakePushKitLifecyclePayloadFlowsThroughParserIntakePlannerAndFakeCallKit() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let provider = DirectCallBackgroundCallKitProviderSpy(reportResult: true)
+        let adapter = DirectCallBackgroundRealCallKitReportingAdapter(provider: provider)
+        var manager = DirectCallFakePushKitLifecycleManager()
+        manager.planner = DirectCallBackgroundCallKitReportPlanner {
+            UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 49))
+        }
+        manager.reportCallKit = { adapter.report($0) }
+
+        let result = manager.handle(.payloadReceived(makeBackgroundInvitePayload(now: now)),
+                                    now: now,
+                                    authenticatedSessionAvailable: true)
+
+        #expect(provider.reportRequests.count == 1)
+        #expect(result.decision == .callKitReportAttemptRecorded)
+        #expect(result.diagnostics.payloadReceived == true)
+        #expect(result.diagnostics.payloadParseStatus == "valid(payload: <redacted>)")
+        #expect(result.diagnostics.intakeDecision == .requiresCallKitReportLater)
+        #expect(result.diagnostics.callKitReportDecision == .reportableIncomingCallRequest)
+        #expect(result.diagnostics.callKitReportAttempted == true)
+        #expect(result.diagnostics.pushKitRegistrationRequested == false)
+        #expect(result.diagnostics.apnsRegistrationRequested == false)
+        #expect(result.diagnostics.mediaCredentialsRequested == false)
+        #expect(result.diagnostics.mediaConnectRequested == false)
+        #expect(result.diagnostics.matrixEventEmitRequested == false)
+        #expect(result.diagnostics.blockedReason == nil)
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !String(describing: result).contains($0) })
+    }
+
+    @Test
+    func fakePushKitLifecycleStopsInvalidExpiredAndFuturePayloadsSafely() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let provider = DirectCallBackgroundCallKitProviderSpy(reportResult: true)
+        let adapter = DirectCallBackgroundRealCallKitReportingAdapter(provider: provider)
+        var manager = DirectCallFakePushKitLifecycleManager()
+        manager.reportCallKit = { adapter.report($0) }
+
+        var missingFieldPayload = makeBackgroundInvitePayload(now: now)
+        missingFieldPayload.removeValue(forKey: "call_handle")
+        let invalid = manager.handle(.payloadReceived(missingFieldPayload),
+                                     now: now,
+                                     authenticatedSessionAvailable: true)
+        let expired = manager.handle(.payloadReceived(makeBackgroundInvitePayload(now: now,
+                                                                                  createdAt: now.addingTimeInterval(-60),
+                                                                                  expiresAt: now.addingTimeInterval(-1))),
+                                     now: now,
+                                     authenticatedSessionAvailable: true)
+        let excessiveFuture = manager.handle(.payloadReceived(makeBackgroundInvitePayload(now: now,
+                                                                                          createdAt: now.addingTimeInterval(10),
+                                                                                          expiresAt: now.addingTimeInterval(30))),
+                                             now: now,
+                                             authenticatedSessionAvailable: true)
+
+        #expect(provider.reportRequests.isEmpty)
+        #expect(invalid.decision == .ignoreInvalidPayload)
+        #expect(invalid.diagnostics.blockedReason == .invalidPayload)
+        #expect(expired.decision == .ignoreExpiredPayload)
+        #expect(expired.diagnostics.blockedReason == .expiredPayload)
+        #expect(excessiveFuture.decision == .ignoreFutureTimestampExcessive)
+        #expect(excessiveFuture.diagnostics.blockedReason == .futureTimestampExcessive)
+        #expect([invalid, expired, excessiveFuture].allSatisfy { $0.diagnostics.callKitReportAttempted == false })
+        #expect([invalid, expired, excessiveFuture].allSatisfy { $0.diagnostics.mediaCredentialsRequested == false })
+        #expect([invalid, expired, excessiveFuture].allSatisfy { $0.diagnostics.mediaConnectRequested == false })
+        #expect([invalid, expired, excessiveFuture].allSatisfy { $0.diagnostics.matrixEventEmitRequested == false })
+    }
+
+    @Test
+    func fakePushKitLifecycleRequiresSessionBeforeCallKitPlanning() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let provider = DirectCallBackgroundCallKitProviderSpy(reportResult: true)
+        let adapter = DirectCallBackgroundRealCallKitReportingAdapter(provider: provider)
+        var manager = DirectCallFakePushKitLifecycleManager()
+        manager.reportCallKit = { adapter.report($0) }
+
+        let result = manager.handle(.payloadReceived(makeBackgroundInvitePayload(now: now)), now: now)
+
+        #expect(provider.reportRequests.isEmpty)
+        #expect(result.decision == .requiresAuthenticatedSession)
+        #expect(result.diagnostics.intakeDecision == .requiresAuthenticatedSession)
+        #expect(result.diagnostics.callKitReportDecision == .notReportableRequiresAuthenticatedSession)
+        #expect(result.diagnostics.callKitReportAttempted == false)
+        #expect(result.diagnostics.blockedReason == .authenticatedSessionUnavailable)
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !String(describing: result).contains($0) })
+    }
+
+    @Test
+    func fakePushKitLifecycleTokenEventsStayRedactedAndUnpersisted() {
+        let manager = DirectCallFakePushKitLifecycleManager()
+        let tokenEvent = DirectCallPushKitLifecycleEvent.tokenUpdated(Data("sensitive-incoming-credential-a".utf8))
+        let tokenUpdated = manager.handle(tokenEvent, now: Date(timeIntervalSince1970: 1000))
+        let tokenInvalidated = manager.handle(.tokenInvalidated, now: Date(timeIntervalSince1970: 1000))
+        let registrationRequested = manager.handle(.registrationRequested, now: Date(timeIntervalSince1970: 1000))
+
+        let description = String(describing: manager)
+            + " " + String(describing: tokenEvent)
+            + " " + String(describing: tokenUpdated)
+            + " " + String(describing: tokenInvalidated)
+            + " " + String(describing: registrationRequested)
+
+        #expect(tokenUpdated.decision == .tokenUpdateReceived)
+        #expect(tokenUpdated.diagnostics.tokenUpdateReceived == true)
+        #expect(tokenUpdated.diagnostics.blockedReason == .tokenNotPersisted)
+        #expect(tokenInvalidated.decision == .tokenInvalidated)
+        #expect(tokenInvalidated.diagnostics.tokenInvalidated == true)
+        #expect(registrationRequested.decision == .registrationDeferred)
+        #expect(registrationRequested.diagnostics.pushKitRegistrationRequested == false)
+        #expect(registrationRequested.diagnostics.apnsRegistrationRequested == false)
+        #expect(description.contains("tokenPersistenceRuntime: false"))
+        #expect(description.contains("pushkit_registration_requested=false"))
+        #expect(description.contains("apns_registration_requested=false"))
+        #expect(!description.contains("sensitive-incoming-credential-a"))
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !description.contains($0) })
+    }
+
+    @Test
+    func fakePushKitLifecycleDiagnosticsStayRedactedAndRuntimeFree() throws {
+        let now = Date(timeIntervalSince1970: 1000)
+        let provider = DirectCallBackgroundCallKitProviderSpy(reportResult: false)
+        let adapter = DirectCallBackgroundRealCallKitReportingAdapter(provider: provider)
+        var manager = DirectCallFakePushKitLifecycleManager()
+        manager.reportCallKit = { adapter.report($0) }
+
+        let result = manager.handle(.payloadReceived(makeBackgroundInvitePayload(now: now)),
+                                    now: now,
+                                    authenticatedSessionAvailable: true)
+        let modelSource = try Self.sourceFile("ElementX/Sources/Services/Calls/DirectCallModels.swift")
+        let description = String(describing: manager) + " " + String(describing: result)
+
+        #expect(result.decision == .callKitReportFailedRedacted)
+        #expect(result.diagnostics.callKitReportAttempted == true)
+        #expect(result.diagnostics.blockedReason == .callKitReportFailedRedacted)
+        #expect(description.contains("pushkit_lifecycle_invoked=true"))
+        #expect(description.contains("payload_parse_status=valid(payload: <redacted>)"))
+        #expect(description.contains("intake_decision=requires_callkit_report_later"))
+        #expect(description.contains("callkit_report_decision=reportable_incoming_call_request"))
+        #expect(description.contains("media_credentials_requested=false"))
+        #expect(description.contains("media_connect_requested=false"))
+        #expect(description.contains("matrix_event_emit_requested=false"))
+        #expect(description.contains("pushKitRuntime: false"))
+        #expect(description.contains("apnsRegistrationRuntime: false"))
+        #expect(description.contains("realCallKitRuntime: false"))
+        #expect(!modelSource.contains("PKPushRegistry"))
+        #expect(!modelSource.contains("PKPushCredentials"))
+        #expect(!modelSource.contains("PKPushPayload"))
+        #expect(!modelSource.contains("requestAuthorization"))
+        #expect(!modelSource.contains("registerForRemoteNotifications"))
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !description.contains($0) })
+    }
+
+    @Test
     func diagnosticsAndOutcomesStayRedacted() {
         let diagnostics = NativeIncomingCallRedactedDiagnostics(lifecycleState: .failed,
                                                                 failClosedReason: .serverIssuedMediaCredentialRejected,

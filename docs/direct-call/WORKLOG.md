@@ -263,7 +263,17 @@ The adapter remains isolated from PushKit/APNs/background callbacks and app laun
 
 Focused tests cover valid provider calls, non-reportable suppression, redacted provider failures, redacted diagnostics, and no media/Matrix/PushKit/APNs side effects. Existing 2.43B parser tests, 2.43C intake tests, 2.43D planner tests, 2.43E adapter-boundary tests, foreground timestamp validation, and DEBUG smoke release-surface tests remain in the targeted suite.
 
-PushKit registration, APNs registration, VoIP/background entitlements, project/signing edits, real CallKit reporting from PushKit/background callbacks, media credentials, media connection, Matrix event emission, Element Call route replacement, and production background behavior remain unimplemented. Future 2.43G may design PushKit lifecycle registration, but entitlement/signing/project changes remain separate and require explicit authorization.
+PushKit registration, APNs registration, VoIP/background entitlements, project/signing edits, real CallKit reporting from PushKit/background callbacks, media credentials, media connection, Matrix event emission, Element Call route replacement, and production background behavior remain unimplemented. Future PushKit lifecycle work must keep entitlement/signing/project changes separate unless explicitly authorized.
+
+### 2.43G — PushKit lifecycle abstraction seam
+
+Added a safe native direct-call PushKit lifecycle abstraction and fake/test manager. It models registration-request, token-update, token-invalidation, payload-received, and registration-unavailable lifecycle events without creating a real `PKPushRegistry`, requesting PushKit/APNs tokens, wiring app startup, wiring background callbacks, or changing production behavior.
+
+The fake payload path composes the existing background pipeline: 2.43B parser, 2.43C intake, 2.43D CallKit planner, and an injected fake/test 2.43F CallKit adapter. Token update and invalidation events produce redacted decisions only; raw PushKit/APNs tokens are not persisted, sent to a server, logged, or exposed in diagnostics.
+
+Focused tests cover valid payload flow through parser/intake/planner/fake CallKit, invalid/expired/excessive-future payload suppression, missing-session suppression, token update and invalidation redaction, lifecycle diagnostics redaction, and no media/Matrix/PushKit/APNs registration side effects. Existing 2.43B-F tests, foreground timestamp validation, and DEBUG smoke release-surface tests remain in the targeted suite.
+
+PushKit registration, APNs registration, VoIP/background entitlements, project/signing edits, real PushKit/background callback wiring, media credentials, media connection, Matrix event emission, Element Call route replacement, and production background behavior remain unimplemented. Future 2.43H may be an explicit PushKit registration design or implementation task, but entitlement/signing/project changes remain separate and require explicit authorization.
 
 ### 2.42K — Supervised foreground real invite
 
