@@ -1,6 +1,6 @@
 # PushKit Entitlement Change Proposal
 
-Status: 2.43S staging deploy smoke is blocked by SSH timeout after the 2.43R local fake-token registration smoke. No entitlement, `Info.plist`, `app.yml`, APNs registration, real PushKit token upload, durable token persistence, VoIP push delivery, media, or production background behavior is changed by this document.
+Status: 2.43T staging deploy access remediation remains blocked by SSH timeout after the 2.43R local fake-token registration smoke. No entitlement, `Info.plist`, `app.yml`, APNs registration, real PushKit token upload, durable token persistence, VoIP push delivery, media, or production background behavior is changed by this document.
 
 ## 1. Current Tracked State
 
@@ -170,6 +170,20 @@ No token is logged, persisted as raw, uploaded from actual PushKit runtime, reco
 2.43S pre-deploy checks passed locally, but staging deploy access was blocked by SSH timeout before any server deployment or restart. Redacted blocker: `staging_deploy_blocked_by_ssh_timeout`.
 
 Live staging token registration still returns `404`, so the 2.43Q/2.43R endpoint is not validated on staging. No staging synthetic-token pass is claimed. The next attempt must first restore deploy SSH access, then deploy only the call-service token endpoint changes and rerun route safety.
+
+## 2.43T Staging Deploy Access Remediation
+
+2.43T inspected tracked docs/scripts plus local SSH configuration to recover the staging deploy path. Tracked files document local staging harnesses, route checks, and redaction rules, but no complete remote deployment recipe was found.
+
+The local machine has a staging SSH alias configured with a non-standard SSH port and a present identity file. Bounded connectivity checks to both the configured alias port and port 22 failed before authentication or host-key negotiation. A bounded SSH probe through the alias timed out before any direct `systemctl` status could run.
+
+Redacted blocker remains:
+
+```text
+staging_deploy_blocked_by_ssh_timeout
+```
+
+No deploy, restart, synthetic-token staging smoke, environment-variable change, entitlement change, app signing change, or route activation was performed. Live staging token registration remains `404`; the route is not yet deployed/auth-gated on staging.
 
 ## 2. Minimum Future Changes Required
 

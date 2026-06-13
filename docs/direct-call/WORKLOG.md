@@ -68,6 +68,18 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
 
+### 2.43T — Staging deploy access remediation
+
+Investigated the blocked staging deploy path for the 2.43Q/2.43R server token-registration endpoint.
+
+Tracked docs/scripts document local staging harnesses and route-level smokes, but no complete remote deployment recipe was found. The local SSH configuration contains a staging deploy alias using a non-standard SSH port, and the configured identity file is present.
+
+Bounded connectivity checks to the configured alias port and port 22 both failed from this machine before authentication or host-key negotiation. A bounded SSH probe through the configured alias timed out before `systemctl` could run. Redacted blocker remains `staging_deploy_blocked_by_ssh_timeout`.
+
+No server deployment, restart, synthetic-token staging smoke, server environment change, or route activation was performed. Live route checks remain `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
+
+No real PushKit/APNs token was used, logged, persisted, uploaded, or recorded. No APNs registration, APNs provider request, server VoIP push delivery, real PushKit/background payload callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production background behavior was introduced.
+
 ### 2.43S — Staging PushKit token endpoint deploy smoke
 
 Attempted the staging deploy smoke for the 2.43Q/2.43R server token-registration endpoint.

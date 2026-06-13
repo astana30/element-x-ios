@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.43s-staging-pushkit-token-endpoint-smoke`
+`salemx-2.43t-staging-deploy-access-remediation`
 
-Next phase: continue from the blocked staging PushKit token endpoint deploy smoke. Restore/verify staging deploy access first, then deploy only the call-service token endpoint changes and rerun route safety plus synthetic-token staging smoke. Do not upload real app-runtime tokens, send VoIP pushes, or wire background payload callbacks unless the user explicitly authorizes that exact step.
+Next phase: continue from the blocked staging deploy access remediation. Restore/verify the staging deploy access path first, then deploy only the call-service token endpoint changes and rerun route safety plus synthetic-token staging smoke. Do not upload real app-runtime tokens, send VoIP pushes, or wire background payload callbacks unless the user explicitly authorizes that exact step.
 
 ## Baseline
 
@@ -53,11 +53,25 @@ a12fb1f3206ce2e9cc68205d3995a983643c7503 Validate physical install capability st
 
 No real PushKit token was used. No raw PushKit/APNs token is logged, durably persisted, uploaded from actual PushKit runtime, recorded, documented, or committed. No APNs registration is requested. No real PushKit/background callback is wired. No server VoIP push delivery, media credentials, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production background behavior was introduced.
 
+## 2.43T Result
+
+2.43T investigated staging deploy access:
+
+- Tracked repo docs/scripts document local staging harnesses and route-level smokes, but no complete remote deployment recipe was found.
+- The local SSH configuration contains a staging deploy alias using a non-standard SSH port.
+- The configured identity file is present.
+- Bounded connectivity checks to both the configured alias port and port 22 failed before authentication or host-key negotiation.
+- A bounded SSH probe through the configured alias timed out before `systemctl` could run.
+- Redacted blocker remains `staging_deploy_blocked_by_ssh_timeout`.
+- No server deployment, restart, synthetic-token staging smoke, environment-variable change, or route activation was performed.
+- Live route status remains `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
+- Direct `salemx-call-service active` status is not verified.
+
 ## Suggested Next Task
 
-Start `2.43S retry - staging PushKit token endpoint deploy smoke`.
+Start `2.43U - staging deploy path recovery or replacement`.
 
-Goal: restore/verify SSH deploy access, deploy the 2.43Q/2.43R call-service token endpoint to staging, and run a synthetic-token staging smoke. If access is still blocked, report only the redacted blocker and do not claim staging pass.
+Goal: recover the staging deploy path or provide a verified replacement deploy path, then deploy the 2.43Q/2.43R call-service token endpoint to staging and run a synthetic-token staging smoke. If access is still blocked, report only the redacted blocker and do not claim staging pass.
 
 The next task must keep separate:
 
@@ -87,7 +101,7 @@ Required route-level server safety:
 - `dev/invite=404`
 - unauthenticated non-dev invite `401`
 - unauthenticated stream `401`
-- unauthenticated token registration `401`
+- unauthenticated token registration `401` after successful endpoint deploy; `404` still means the endpoint is not deployed
 
 Only claim direct `salemx-call-service active` if `systemctl` or an equivalent direct service check is actually verified. If SSH is blocked or times out, report it separately from route-level safety.
 

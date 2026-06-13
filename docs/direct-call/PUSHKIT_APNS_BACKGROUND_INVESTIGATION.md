@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: 2.43S staging deploy smoke is blocked by SSH timeout; production PushKit/APNs/background behavior remains disabled by default and unwired.
+Status: 2.43T staging deploy access remediation remains blocked by SSH timeout; production PushKit/APNs/background behavior remains disabled by default and unwired.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -282,6 +282,12 @@ No real PushKit token is used, logged, persisted as raw, uploaded from actual Pu
 2.43S attempted staging deployment for the 2.43Q/2.43R token-registration endpoint after local tests passed. SSH to the configured staging alias timed out before any deploy or restart could run. Redacted blocker: `staging_deploy_blocked_by_ssh_timeout`.
 
 Live staging still returns `404` for the token-registration route, so the endpoint remains locally validated only. No staging synthetic-token pass, service-active status, VoIP push delivery, APNs provider request, real token upload, media credential request, media connection, Matrix event emission, or production background behavior is claimed.
+
+## 2.43T Staging Deploy Access Remediation
+
+2.43T investigated the deploy access blocker. Tracked docs/scripts document local staging harnesses but no complete remote deployment recipe. The local staging SSH alias and identity file are present, but bounded connectivity to the configured alias path still times out before authentication or host-key negotiation; port 22 does not recover access from this machine.
+
+No `systemctl` service status was verified, no deploy was run, and no synthetic-token staging smoke was attempted. Redacted blocker remains `staging_deploy_blocked_by_ssh_timeout`. Live staging route checks remain `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
 
 ## Current State From Tracked Code
 

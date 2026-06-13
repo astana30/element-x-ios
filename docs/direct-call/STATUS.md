@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.43S - staging PushKit token endpoint deploy smoke is blocked by SSH timeout; local fake-token app/server registration remains the latest passed token-registration proof.
+After 2.43T - staging deploy access remediation remains blocked by SSH timeout; local fake-token app/server registration remains the latest passed token-registration proof.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.43T staging deploy access remediation is blocked:
+  - Existing repo docs/scripts describe local staging harnesses but do not provide a complete remote deployment recipe.
+  - The local SSH config contains a staging deploy alias using a non-standard SSH port, and the configured identity file is present.
+  - Bounded connectivity checks to the configured alias port and port 22 both failed from this machine before authentication or host-key negotiation.
+  - A bounded SSH probe to the configured staging alias timed out before `systemctl` could run.
+  - Redacted blocker: `staging_deploy_blocked_by_ssh_timeout`.
+  - No server deployment, restart, synthetic-token staging smoke, environment-variable change, or route activation was performed.
+  - Live route status remains `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
+  - Direct `salemx-call-service active` status is not verified.
 - 2.43S staging PushKit token endpoint deploy smoke is blocked:
   - Pre-deploy local server tests still pass: `139 passed`.
   - Python compileall passed.
