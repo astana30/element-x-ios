@@ -1,6 +1,6 @@
 # PushKit Entitlement Change Proposal
 
-Status: 2.43T staging deploy access remediation remains blocked by SSH timeout after the 2.43R local fake-token registration smoke. No entitlement, `Info.plist`, `app.yml`, APNs registration, real PushKit token upload, durable token persistence, VoIP push delivery, media, or production background behavior is changed by this document.
+Status: 2.43U staging SSH/network deploy path recovery remains blocked on the corrected port 71 path after the 2.43R local fake-token registration smoke. No entitlement, `Info.plist`, `app.yml`, APNs registration, real PushKit token upload, durable token persistence, VoIP push delivery, media, or production background behavior is changed by this document.
 
 ## 1. Current Tracked State
 
@@ -181,6 +181,18 @@ Redacted blocker remains:
 
 ```text
 staging_deploy_blocked_by_ssh_timeout
+```
+
+No deploy, restart, synthetic-token staging smoke, environment-variable change, entitlement change, app signing change, or route activation was performed. Live staging token registration remains `404`; the route is not yet deployed/auth-gated on staging.
+
+## 2.43U Corrected-Port Staging SSH Recovery
+
+2.43U retried staging deploy access using the corrected SSH port `71`. The staging alias resolves to port `71`, and port `22` is not the primary deploy check for this environment.
+
+A bounded port `71` connectivity check and a bounded SSH probe through the alias both failed before authentication or host-key negotiation. Redacted blocker:
+
+```text
+staging_deploy_blocked_by_firewall_or_network_path
 ```
 
 No deploy, restart, synthetic-token staging smoke, environment-variable change, entitlement change, app signing change, or route activation was performed. Live staging token registration remains `404`; the route is not yet deployed/auth-gated on staging.

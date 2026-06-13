@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: 2.43T staging deploy access remediation remains blocked by SSH timeout; production PushKit/APNs/background behavior remains disabled by default and unwired.
+Status: 2.43U staging SSH/network deploy path recovery remains blocked on the corrected port 71 path; production PushKit/APNs/background behavior remains disabled by default and unwired.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -288,6 +288,12 @@ Live staging still returns `404` for the token-registration route, so the endpoi
 2.43T investigated the deploy access blocker. Tracked docs/scripts document local staging harnesses but no complete remote deployment recipe. The local staging SSH alias and identity file are present, but bounded connectivity to the configured alias path still times out before authentication or host-key negotiation; port 22 does not recover access from this machine.
 
 No `systemctl` service status was verified, no deploy was run, and no synthetic-token staging smoke was attempted. Redacted blocker remains `staging_deploy_blocked_by_ssh_timeout`. Live staging route checks remain `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
+
+## 2.43U Staging SSH/Network Deploy Path Recovery
+
+2.43U retried access validation using the corrected staging SSH port. The staging alias resolves to port `71`, and port `22` is not the primary deploy path for this environment. A bounded port `71` connectivity check and bounded SSH probe through the alias both failed before authentication or host-key negotiation.
+
+No `systemctl` service status was verified, no deploy was run, and no synthetic-token staging smoke was attempted. Redacted blocker is `staging_deploy_blocked_by_firewall_or_network_path`. Live staging route checks remain `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
 
 ## Current State From Tracked Code
 

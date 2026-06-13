@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.43T - staging deploy access remediation remains blocked by SSH timeout; local fake-token app/server registration remains the latest passed token-registration proof.
+After 2.43U - staging SSH/network deploy path recovery remains blocked on the corrected port 71 path; local fake-token app/server registration remains the latest passed token-registration proof.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.43U staging SSH/network deploy path recovery is blocked:
+  - The staging SSH alias resolves to port `71`, which is the expected deploy port for this environment.
+  - Port `22` is not the primary deploy check for this environment.
+  - A bounded port `71` connectivity check failed before authentication or host-key negotiation.
+  - A bounded SSH probe through the port `71` alias timed out before `systemctl` could run.
+  - Redacted blocker: `staging_deploy_blocked_by_firewall_or_network_path`.
+  - No server deployment, restart, synthetic-token staging smoke, environment-variable change, or route activation was performed.
+  - Live route status remains `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
+  - Direct `salemx-call-service active` status is not verified.
 - 2.43T staging deploy access remediation is blocked:
   - Existing repo docs/scripts describe local staging harnesses but do not provide a complete remote deployment recipe.
   - The local SSH config contains a staging deploy alias using a non-standard SSH port, and the configured identity file is present.
