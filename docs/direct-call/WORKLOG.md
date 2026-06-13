@@ -68,6 +68,16 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
 
+### 2.43O — Controlled local PushKit registration smoke
+
+Added the narrow DEBUG-only local smoke trigger needed to exercise the gated native direct-call PushKit registrar without wiring registration to normal app startup. The trigger reports only redacted registration state and token lifecycle classes.
+
+Physical Debug build, install, and launch succeeded on the physical iPhone with the approved `M639Y9MFR2` signing state. The controlled local smoke reached `pushkit_registration_requested=true`, `pushkit_feature_gate_enabled=true`, `pushkit_registry_create_requested=true`, `pushkit_token_update_received=true`, and `pushkit_registration_result=token_received`.
+
+No raw PushKit/APNs token was copied, logged, pasted, persisted, uploaded, recorded, documented, or committed. The smoke proof kept `pushkit_token_persistence_requested=false`, `pushkit_token_upload_requested=false`, `apns_registration_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, and `matrix_event_emit_requested=false`.
+
+Real native direct-call PushKit registration remains disabled by default. No APNs registration, server token upload, real PushKit/background payload callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production background behavior was introduced.
+
 ### 2.42L — Foreground real invite stale-token retry guard
 
 Added a DEBUG-only stale-token guard to the supervised foreground real-invite sender helper. If the first authenticated non-dev real-invite POST returns `http_unauthorized`, the helper asks the active session token provider for a value again and retries at most once. If the provider cannot supply a usable value or the retry still fails, the helper reports only redacted retry diagnostics and leaves server auth unchanged.

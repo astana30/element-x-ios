@@ -517,6 +517,102 @@ private final class DirectCallRealPushKitRegistryController: NSObject, DirectCal
 }
 #endif
 
+#if DEBUG && canImport(PushKit) && os(iOS)
+@objc(SalemXPushKitRegistrationSmokeDebugBridge)
+final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
+    private static let lock = NSLock()
+    private static var registrar: DirectCallPushKitRegistrar?
+    private static var latestSummary = initialRedactedSummary()
+
+    @objc static func startRegistrationSmoke() -> String {
+        var configuration = DirectCallPushKitRegistrarConfiguration(featureGate: .init(isEnabled: true),
+                                                                    registryFactory: DirectCallRealPushKitRegistryFactory())
+        configuration.resultHandler = { result in
+            updateLatestSummary(with: result)
+        }
+
+        let registrar = DirectCallPushKitRegistrar(configuration: configuration)
+        self.registrar = registrar
+        let result = registrar.startRegistration()
+        updateLatestSummary(with: result)
+        return redactedStateSummary()
+    }
+
+    @objc static func redactedStateSummary() -> String {
+        lock.lock()
+        defer { lock.unlock() }
+        return latestSummary
+    }
+
+    private static func updateLatestSummary(with result: DirectCallPushKitRegistrarResult) {
+        lock.lock()
+        latestSummary = redactedSummary(for: result)
+        lock.unlock()
+    }
+
+    private static func redactedSummary(for result: DirectCallPushKitRegistrarResult? = nil) -> String {
+        guard let result else {
+            return initialRedactedSummary()
+        }
+
+        let diagnostics = result.diagnostics
+        return [
+            "pushkit_registration_requested=\(diagnostics.pushKitRegistryCreateRequested || diagnostics.pushKitTokenUpdateReceived)",
+            "pushkit_feature_gate_enabled=\(diagnostics.pushKitFeatureGateEnabled)",
+            "pushkit_registry_create_requested=\(diagnostics.pushKitRegistryCreateRequested)",
+            "pushkit_token_update_received=\(diagnostics.pushKitTokenUpdateReceived)",
+            "pushkit_registration_result=\(redactedRegistrationResult(for: result.status))",
+            "pushkit_token_persistence_requested=false",
+            "pushkit_token_upload_requested=false",
+            "apns_registration_requested=false",
+            "media_credentials_requested=false",
+            "media_connect_requested=false",
+            "matrix_event_emit_requested=false",
+            "blocked_reason=\(redactedBlockedReason(for: result))"
+        ].joined(separator: "\n")
+    }
+
+    private static func initialRedactedSummary() -> String {
+        [
+            "pushkit_registration_requested=false",
+            "pushkit_feature_gate_enabled=false",
+            "pushkit_registry_create_requested=false",
+            "pushkit_token_update_received=false",
+            "pushkit_registration_result=not_started",
+            "pushkit_token_persistence_requested=false",
+            "pushkit_token_upload_requested=false",
+            "apns_registration_requested=false",
+            "media_credentials_requested=false",
+            "media_connect_requested=false",
+            "matrix_event_emit_requested=false",
+            "blocked_reason=none"
+        ].joined(separator: "\n")
+    }
+
+    private static func redactedRegistrationResult(for status: DirectCallPushKitRegistrarStatus) -> String {
+        switch status {
+        case .tokenUpdateReceived:
+            "token_received"
+        case .registryCreated:
+            "registry_created"
+        case .registryUnavailable:
+            "registry_unavailable"
+        case .tokenInvalidated:
+            "token_invalidated"
+        case .disabled:
+            "disabled"
+        }
+    }
+
+    private static func redactedBlockedReason(for result: DirectCallPushKitRegistrarResult) -> String {
+        if result.status == .tokenUpdateReceived {
+            return "none"
+        }
+        return result.diagnostics.blockedReason?.description ?? "none"
+    }
+}
+#endif
+
 #if DEBUG
 private final class SalemXForegroundSSESmokeStateStore: NativeIncomingCallStateStoring {
     private var states = [NativeIncomingCallHandle: NativeIncomingCallLifecycleState]()

@@ -48,27 +48,50 @@ enum SalemXForegroundSSESmokeControls {
 
 private struct SalemXForegroundSSESmokeControlsView: View {
     @State private var receiverSummary = SalemXForegroundSSESmokeControls.redactedReceiverStateSummary()
+    #if canImport(PushKit)
+    @State private var pushKitSummary = SalemXPushKitRegistrationSmokeDebugBridge.redactedStateSummary()
+    #endif
 
     var body: some View {
-        DisclosureGroup("Foreground SSE smoke") {
-            Button("Start receiver SSE") {
-                SalemXForegroundSSESmokeControls.startReceiverSSE()
-                refreshReceiverSummary(after: .milliseconds(600))
+        VStack(alignment: .leading, spacing: 0) {
+            DisclosureGroup("Foreground SSE smoke") {
+                Button("Start receiver SSE") {
+                    SalemXForegroundSSESmokeControls.startReceiverSSE()
+                    refreshReceiverSummary(after: .milliseconds(600))
+                }
+
+                Button("Refresh receiver proof") {
+                    refreshReceiverSummary()
+                }
+
+                Button("Stop receiver SSE", role: .destructive) {
+                    SalemXForegroundSSESmokeControls.stopReceiverSSE()
+                    refreshReceiverSummary()
+                }
+
+                Text(receiverSummary)
+                    .font(.system(.caption, design: .monospaced))
+                    .textSelection(.enabled)
+                    .accessibilityIdentifier("foregroundSSESmokeReceiverProof")
             }
 
-            Button("Refresh receiver proof") {
-                refreshReceiverSummary()
-            }
+            #if canImport(PushKit)
+            DisclosureGroup("PushKit registration smoke") {
+                Button("Start PushKit registration smoke") {
+                    pushKitSummary = SalemXPushKitRegistrationSmokeDebugBridge.startRegistrationSmoke()
+                    refreshPushKitSummary(after: .seconds(2))
+                }
 
-            Button("Stop receiver SSE", role: .destructive) {
-                SalemXForegroundSSESmokeControls.stopReceiverSSE()
-                refreshReceiverSummary()
-            }
+                Button("Refresh PushKit proof") {
+                    refreshPushKitSummary()
+                }
 
-            Text(receiverSummary)
-                .font(.system(.caption, design: .monospaced))
-                .textSelection(.enabled)
-                .accessibilityIdentifier("foregroundSSESmokeReceiverProof")
+                Text(pushKitSummary)
+                    .font(.system(.caption, design: .monospaced))
+                    .textSelection(.enabled)
+                    .accessibilityIdentifier("pushKitRegistrationSmokeProof")
+            }
+            #endif
         }
     }
 
@@ -80,5 +103,16 @@ private struct SalemXForegroundSSESmokeControlsView: View {
             receiverSummary = SalemXForegroundSSESmokeControls.redactedReceiverStateSummary()
         }
     }
+
+    #if canImport(PushKit)
+    private func refreshPushKitSummary(after delay: Duration? = nil) {
+        Task { @MainActor in
+            if let delay {
+                try? await Task.sleep(for: delay)
+            }
+            pushKitSummary = SalemXPushKitRegistrationSmokeDebugBridge.redactedStateSummary()
+        }
+    }
+    #endif
 }
 #endif

@@ -1751,9 +1751,10 @@ protocol DirectCallPushKitRegistryMaking {
 struct DirectCallPushKitRegistrarConfiguration: CustomStringConvertible, CustomDebugStringConvertible {
     var featureGate: DirectCallPushKitRegistrarFeatureGate = .disabled
     var registryFactory: DirectCallPushKitRegistryMaking?
+    var resultHandler: ((DirectCallPushKitRegistrarResult) -> Void)?
 
     var description: String {
-        "DirectCallPushKitRegistrarConfiguration(featureGate: \(featureGate), registryFactoryConfigured: \(registryFactory != nil), defaultEnabled: false)"
+        "DirectCallPushKitRegistrarConfiguration(featureGate: \(featureGate), registryFactoryConfigured: \(registryFactory != nil), resultHandlerConfigured: \(resultHandler != nil), defaultEnabled: false)"
     }
 
     var debugDescription: String {
@@ -1798,17 +1799,21 @@ final class DirectCallPushKitRegistrar: DirectCallPushKitRegistrarRegistryDelega
     }
 
     func handleTokenUpdate(_ token: Data) -> DirectCallPushKitRegistrarResult {
-        result(status: .tokenUpdateReceived,
-               registryCreateRequested: false,
-               tokenUpdateReceived: true,
-               blockedReason: .tokenNotPersisted)
+        let result = result(status: .tokenUpdateReceived,
+                            registryCreateRequested: false,
+                            tokenUpdateReceived: true,
+                            blockedReason: .tokenNotPersisted)
+        configuration.resultHandler?(result)
+        return result
     }
 
     func handleTokenInvalidation() -> DirectCallPushKitRegistrarResult {
-        result(status: .tokenInvalidated,
-               registryCreateRequested: false,
-               tokenInvalidated: true,
-               blockedReason: nil)
+        let result = result(status: .tokenInvalidated,
+                            registryCreateRequested: false,
+                            tokenInvalidated: true,
+                            blockedReason: nil)
+        configuration.resultHandler?(result)
+        return result
     }
 
     private func result(status: DirectCallPushKitRegistrarStatus,

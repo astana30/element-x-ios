@@ -1,6 +1,6 @@
 # PushKit Entitlement Change Proposal
 
-Status: 2.43N validated the current build/profile/codesign/install/launch state after the 2.43L project signing-reference update. No entitlement, `Info.plist`, `app.yml`, PushKit registration, APNs registration, token request, media, or production background behavior is changed by this document.
+Status: 2.43O validated controlled local PushKit registration smoke after the 2.43L project signing-reference update and 2.43N physical install pass. No entitlement, `Info.plist`, `app.yml`, APNs registration, token persistence/upload, media, or production background behavior is changed by this document.
 
 ## 1. Current Tracked State
 
@@ -102,6 +102,30 @@ The physical Debug build, install, and launch all succeeded. The resulting signe
 - The old team ID `83LGSC2QPV` was not present in the built app bundle.
 
 This was install/launch capability validation only. No physical PushKit registration smoke was run. Real native direct-call PushKit registration remains disabled by default. No PushKit/APNs token was requested, logged, persisted, or uploaded. No APNs registration, real PushKit/background callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, or production background behavior was introduced.
+
+## 2.43O Controlled Local PushKit Registration Smoke
+
+2.43O used the existing capability/signing state and a DEBUG-only manual smoke trigger to request PushKit registration locally on the physical iPhone.
+
+Redacted smoke proof reached:
+
+```text
+pushkit_registration_requested=true
+pushkit_feature_gate_enabled=true
+pushkit_registry_create_requested=true
+pushkit_token_update_received=true
+pushkit_registration_result=token_received
+pushkit_token_persistence_requested=false
+pushkit_token_upload_requested=false
+apns_registration_requested=false
+media_credentials_requested=false
+media_connect_requested=false
+matrix_event_emit_requested=false
+```
+
+No raw PushKit/APNs token was copied, logged, pasted, persisted, uploaded, recorded, documented, or committed. No APNs registration was requested, no real PushKit/background payload callback was wired into the native direct-call flow, and no media credential request, media connection, Matrix event emission, Element Call route replacement, or production background behavior was introduced.
+
+Real native direct-call PushKit registration remains disabled by default outside the controlled local DEBUG smoke path. Server token registration, token invalidation, VoIP provider credentials, and push delivery remain separate future work.
 
 ## 2. Minimum Future Changes Required
 

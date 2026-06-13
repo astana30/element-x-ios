@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.43n-physical-install-capability-validation`
+`salemx-2.43o-controlled-local-pushkit-registration-smoke`
 
-Next phase: continue from the successful physical install/launch capability validation. The likely next step is a separately authorized controlled local PushKit registrar smoke using the existing disabled-by-default gate. Do not enable registration or request tokens unless the user explicitly authorizes that exact smoke step.
+Next phase: continue from the successful controlled local PushKit registration smoke. The likely next step is a separately scoped token registration contract/upload-seam design. Do not upload tokens, send VoIP pushes, or wire background payload callbacks unless the user explicitly authorizes that exact step.
 
 ## Baseline
 
@@ -34,47 +34,43 @@ ac0fa9ef32333fce7bfc3685a5088ef64a33323a Document PushKit readiness plan
 f8ad35ee1130b2a9eae6a7db8dfa9f8bb7242e66 Document PushKit entitlement change proposal
 adbabef9c1866a82c5e5e3b4ca787a510b3a98b4 Apply minimal PushKit capability files
 11f64583b8be7aa505e3e7014f5fb7d2edc5927d Validate PushKit capability build profile
+a12fb1f3206ce2e9cc68205d3995a983643c7503 Validate physical install capability state
 ```
 
-## 2.43N Result
+## 2.43O Result
 
-2.43N validates physical install/launch capability state only:
+2.43O validates controlled local PushKit registration smoke:
 
-- Developer Mode was enabled manually on the physical iPhone; the device was restarted, unlocked, trusted, reconnected, and available to Xcode/CoreDevice.
-- The checked-in 2.43L project built successfully for the physical iPhone Debug destination.
-- Build overrides used the correct physical Debug team: `DEVELOPMENT_TEAM=M639Y9MFR2`.
-- Physical install succeeded.
-- App launch succeeded.
-- Effective Team ID / App Identifier prefix class is `M639Y9MFR2`.
-- Effective bundle ID class is `kz.salemx.msg`.
-- Effective app entitlements include development `aps-environment`.
-- Effective `UIBackgroundModes` includes `voip`.
-- No speculative unrestricted VoIP entitlement was present.
-- The old Team ID `83LGSC2QPV` was not present in the built app bundle.
-- `app.yml` remains a regeneration risk and must not be used to regenerate the project until source-config signing remediation is separately approved.
+- Physical Debug build, install, and launch succeeded on the physical iPhone with `DEVELOPMENT_TEAM=M639Y9MFR2`.
+- PushKit registration was requested only through the DEBUG-only manual local smoke trigger.
+- Redacted proof reached `pushkit_registration_requested=true`, `pushkit_feature_gate_enabled=true`, `pushkit_registry_create_requested=true`, `pushkit_token_update_received=true`, and `pushkit_registration_result=token_received`.
+- Redacted proof kept `pushkit_token_persistence_requested=false`, `pushkit_token_upload_requested=false`, `apns_registration_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, and `matrix_event_emit_requested=false`.
+- No raw PushKit/APNs token was copied, logged, pasted, persisted, uploaded, recorded, documented, or committed.
 
-No physical PushKit registration smoke was run. Real native direct-call PushKit registration remains disabled by default. No PushKit/APNs token was requested, logged, persisted, or uploaded. No APNs registration was added. No real PushKit/background callback was wired. No media credentials, media connection, Matrix event emission, Element Call route replacement, or production background behavior was introduced.
+Real native direct-call PushKit registration remains disabled by default outside the DEBUG-only manual smoke path. No APNs registration was requested. No server token upload, real PushKit/background payload callback wiring, media credentials, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production background behavior was introduced.
 
 ## Suggested Next Task
 
-Start `2.43O - controlled gated PushKit registrar smoke`.
+Start `2.43P - PushKit token registration contract design`.
 
-Goal: if explicitly authorized by the user, enable the existing native direct-call PushKit registrar gate only for a narrow local physical smoke and collect redacted registration diagnostics. Keep the smoke local and reversible.
+Goal: design the app/server token registration and invalidation contract for native direct-call VoIP pushes without uploading any real token yet.
 
-The next task must explicitly authorize:
+The next task must keep separate:
 
-- enabling the existing disabled-by-default registrar gate for local smoke only
-- requesting a PushKit token for the controlled physical smoke
-- recording only redacted token lifecycle diagnostics
+- app-side token upload seam
+- server token storage/invalidation contract
+- provider credential readiness
+- later VoIP push delivery smoke
 
-Do not proceed with a token-registration smoke if that authorization is absent.
+Do not proceed with real token upload, provider push delivery, or background payload callback wiring unless that authorization is explicit.
 
 Required guardrails:
 
 - Do not wire PushKit registration to app startup by default.
 - Do not request an APNs token unless separately scoped.
 - Do not persist, upload, print, log, document, or commit raw PushKit/APNs tokens.
-- Do not add server token registration yet.
+- Do not upload a real PushKit token yet unless the task explicitly authorizes it.
+- Do not send a server VoIP push yet.
 - Do not use `dev/invite`, `dev/inject-active`, port `8090`, or `SALEMX_FOREGROUND_SIGNALING_DEV_INVITE_ENABLED=1`.
 - Do not request media credentials or connect media.
 - Do not emit Matrix events from invite receipt.

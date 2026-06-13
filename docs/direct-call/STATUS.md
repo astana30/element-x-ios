@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.43N - physical install capability validation passed on a physical iPhone; PushKit registration remains disabled by default.
+After 2.43O - controlled local PushKit registration smoke passed on a physical iPhone; PushKit registration remains disabled by default outside the DEBUG-only manual smoke trigger.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.43O validates controlled local PushKit registration smoke:
+  - The physical Debug build, install, and launch succeeded using `DEVELOPMENT_TEAM=M639Y9MFR2`.
+  - PushKit registration was requested only through the DEBUG-only local manual smoke control while the app remained foreground.
+  - Redacted smoke diagnostics reached `pushkit_registration_requested=true`, `pushkit_feature_gate_enabled=true`, `pushkit_registry_create_requested=true`, `pushkit_token_update_received=true`, and `pushkit_registration_result=token_received`.
+  - The smoke proof kept `pushkit_token_persistence_requested=false`, `pushkit_token_upload_requested=false`, `apns_registration_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, and `matrix_event_emit_requested=false`.
+  - No raw PushKit/APNs token was copied, logged, pasted, persisted, uploaded, recorded, documented, or committed.
+  - No APNs registration was requested, no real PushKit/background payload callback was wired into the native direct-call flow, no media credential or media connection behavior was introduced, and foreground real invite behavior remains unchanged.
+  - Real native direct-call PushKit registration remains disabled by default outside the controlled local DEBUG smoke.
 - 2.43N validates physical install capability state:
   - Developer Mode was enabled manually on the physical iPhone; the device was restarted, unlocked, trusted, reconnected, and available to Xcode/CoreDevice.
   - The physical iOS Debug build, install, and launch succeeded using the checked-in 2.43L capability/signing state and `DEVELOPMENT_TEAM=M639Y9MFR2`.

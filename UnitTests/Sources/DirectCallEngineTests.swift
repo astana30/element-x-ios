@@ -2013,8 +2013,13 @@ final class NativeIncomingCallLifecycleContractTests {
 
     @Test
     func gatedPushKitRegistrarTokenEventsStayRedactedAndUnpersisted() {
-        let registrar = DirectCallPushKitRegistrar(configuration: .init(featureGate: .init(isEnabled: true),
-                                                                        registryFactory: DirectCallPushKitRegistryFactorySpy()))
+        var handledResults = [DirectCallPushKitRegistrarResult]()
+        var configuration = DirectCallPushKitRegistrarConfiguration(featureGate: .init(isEnabled: true),
+                                                                    registryFactory: DirectCallPushKitRegistryFactorySpy())
+        configuration.resultHandler = { result in
+            handledResults.append(result)
+        }
+        let registrar = DirectCallPushKitRegistrar(configuration: configuration)
         let rawPushKitToken = Data("local-redacted-pushkit-token-fixture".utf8)
 
         let update = registrar.handleTokenUpdate(rawPushKitToken)
@@ -2030,6 +2035,7 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(invalidation.diagnostics.pushKitTokenInvalidated == true)
         #expect(invalidation.diagnostics.pushKitTokenPersistenceRequested == false)
         #expect(invalidation.diagnostics.pushKitTokenUploadRequested == false)
+        #expect(handledResults.map(\.status) == [.tokenUpdateReceived, .tokenInvalidated])
         #expect(!description.contains("local-redacted-pushkit-token-fixture"))
         #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !description.contains($0) })
     }
@@ -2040,6 +2046,7 @@ final class NativeIncomingCallLifecycleContractTests {
         let result = registrar.startRegistration()
         let modelSource = try Self.sourceFile("ElementX/Sources/Services/Calls/DirectCallModels.swift")
         let registrarSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+        let developerOptionsSource = try Self.sourceFile("ElementX/Sources/AppHooks/Hooks/DeveloperOptionsScreenHook.swift")
         let appSessionSource = try Self.sourceFile("ElementX/Sources/Services/Session/UserSession.swift")
 
         let description = String(describing: registrar) + " " + String(describing: result)
@@ -2051,6 +2058,11 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(description.contains("blocked_reason=feature_gate_disabled"))
         #expect(!modelSource.contains("PKPushRegistry"))
         #expect(registrarSource.contains("DirectCallRealPushKitRegistryFactory"))
+        #expect(registrarSource.contains("SalemXPushKitRegistrationSmokeDebugBridge"))
+        #expect(registrarSource.contains("pushkit_registration_result=\\("))
+        #expect(registrarSource.contains("\"token_received\""))
+        #expect(developerOptionsSource.contains("PushKit registration smoke"))
+        #expect(developerOptionsSource.contains("pushKitRegistrationSmokeProof"))
         #expect(!registrarSource.contains("didReceiveIncomingPush"))
         #expect(!registrarSource.contains("registerForRemoteNotifications"))
         #expect(!appSessionSource.contains("DirectCallPushKitRegistrar"))

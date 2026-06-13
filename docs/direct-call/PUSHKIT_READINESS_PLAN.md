@@ -1,6 +1,6 @@
 # PushKit Readiness Plan
 
-Status: 2.43N physical install/launch validation passed for the checked-in 2.43L capability state. No PushKit/APNs registration is enabled by default, and no runtime registration, token request, media, or production background behavior is implemented by this document.
+Status: 2.43O controlled local PushKit registration smoke passed through a DEBUG-only manual trigger. PushKit registration remains disabled by default, and no APNs registration, token persistence/upload, media, or production background behavior is implemented by this document.
 
 ## 1. Current Safe Baseline
 
@@ -21,8 +21,9 @@ The 2.43B-I background chain exists only as safe seams:
 - 2.43L minimal tracked capability-file readiness update.
 - 2.43M build/profile/codesign capability validation.
 - 2.43N physical install/launch capability validation.
+- 2.43O controlled local PushKit registration smoke.
 
-The 2.43I registrar scaffold imports PushKit through an isolated real registry factory, but its feature gate defaults disabled and it is not wired to app startup. There is no enabled native direct-call PushKit registration, no native direct-call APNs token request, and no native direct-call PushKit/background callback wiring. Entitlements, provisioning, project files, signing settings, `Info.plist`, and `app.yml` have not been changed for the native direct-call background path. No media credentials, media connection, Matrix event emission from invite receipt, Element Call route replacement, or production background behavior has been added.
+The 2.43I registrar scaffold imports PushKit through an isolated real registry factory, but its feature gate defaults disabled and it is not wired to app startup. 2.43O used a DEBUG-only manual smoke trigger to request local PushKit registration once and receive a redacted `token_received` result. There is still no default-enabled native direct-call PushKit registration, no native direct-call APNs token request, and no native direct-call PushKit/background payload callback wiring. Entitlements, provisioning, project files, signing settings, `Info.plist`, and `app.yml` have not been changed by 2.43O. No media credentials, media connection, Matrix event emission from invite receipt, Element Call route replacement, or production background behavior has been added.
 
 Existing Element Call PushKit/VoIP surfaces remain a separate product path and are not the SalemX native direct-call background implementation.
 
@@ -35,9 +36,9 @@ This matrix records tracked-source and local route-level evidence for whether th
 | Foreground real invite baseline | verified | 2.42M physical two-device foreground real-invite smoke passed at `bf9996ae0665ad3953fac3d7a838bfb619349dd1`; 2.42O consolidated the baseline. | Keep foreground path unchanged while background work stays separately scoped. | Regression risk if PushKit work is mixed into foreground signaling or smoke tooling. |
 | Background parser/intake/planner/adapters | scaffolded | 2.43B-F provide parser, intake, planner, fake adapter, and controlled real CallKit adapter seams with redacted diagnostics and tests. | Continue using these seams as the only future background invite pipeline entry. | Bypassing seams could expose raw identifiers or trigger media/Matrix side effects. |
 | Gated PushKit registrar scaffold | scaffolded | 2.43I adds `DirectCallPushKitRegistrar`; the feature gate defaults disabled, no startup wiring exists, and tests use fake registries. | Keep disabled by default until a separately authorized physical smoke task. | Enabling without profile/capability readiness can fail token issuance or create confusing device state. |
-| Actual PushKit runtime registration | blocked | `DirectCallRealPushKitRegistryFactory` exists behind the 2.43I boundary, but no app-start owner wires it and no real token request is allowed in normal runtime. | Require explicit task approval and capability/profile readiness before any controlled registration smoke. | Accidental runtime registration could request a VoIP token without approved entitlements/profiles. |
+| Actual PushKit runtime registration | verified for controlled local DEBUG smoke only | `DirectCallRealPushKitRegistryFactory` exists behind the 2.43I boundary. 2.43O triggered it manually from DEBUG-only diagnostics and reached redacted `token_received`; no app-start owner wires it and no real token request is allowed in normal runtime. | Keep registration disabled by default; design token registration/upload separately before any server push work. | Accidental startup registration could request a VoIP token outside the approved smoke path. |
 | APNs/VoIP entitlements | verified for built Debug app | 2.43M signed an iPhoneOS Debug app whose effective entitlements include development `aps-environment`; the built app `Info.plist` includes `UIBackgroundModes` with `voip`; no speculative unrestricted VoIP entitlement was present. | Keep registration disabled until a controlled physical install/registration smoke is explicitly approved. | Build/profile capability presence does not prove token issuance until a physical install/registration smoke runs. |
-| Provisioning profile readiness | verified for physical Debug install | 2.43N rebuilt, installed, and launched the signed Debug app on a physical iPhone after Developer Mode was enabled. The effective Team ID / App Identifier prefix class was `M639Y9MFR2`, development APNs entitlement was present, expected app group/keychain classes were present, and no unexpected unrestricted VoIP entitlement was present. | Keep registration disabled until a separately authorized controlled PushKit registrar smoke. | Install/launch validation does not prove PushKit token issuance because no registration smoke was run. |
+| Provisioning profile readiness | verified for physical Debug install and local token receipt | 2.43N rebuilt, installed, and launched the signed Debug app on a physical iPhone after Developer Mode was enabled. 2.43O then used the DEBUG-only manual registrar smoke and received a redacted `token_received` result. | Keep registration disabled by default; next server token work must be separately scoped and must not record raw tokens. | Local token receipt does not prove token upload, invalidation, server provider credentials, or VoIP push delivery. |
 | Physical Debug Team ID | verified for checked-in project build | Current physical Debug requirement is `M639Y9MFR2`; 2.43L updates generated project signing references from `83LGSC2QPV` to `M639Y9MFR2`; 2.43M signed the Debug app with effective Team ID / prefix `M639Y9MFR2`. Tracked `app.yml` still references old `DEVELOPMENT_TEAM: 83LGSC2QPV` and was not edited. | Do not regenerate from `app.yml` until a separate source-config remediation task is approved. | Regenerating the project from stale XcodeGen config can reintroduce the wrong team. |
 | Server token registration endpoint | not implemented | Docs contain only the planned server token registration contract; no native direct-call token upload endpoint is evidenced by this iOS verification. | Design/authenticate a server token registration contract in a separate task. | Without token registration, a VoIP provider cannot target native direct-call devices. |
 | Server VoIP push provider credentials | not verified | No server provider credential check was performed, and credentials must not be copied into docs or source. | Verify provider key/certificate handling out of band with redacted evidence only. | Misconfigured provider credentials can block delivery even if app registration succeeds. |
@@ -46,7 +47,7 @@ This matrix records tracked-source and local route-level evidence for whether th
 | Privacy/logging policy | verified | 2.43B-I diagnostics are redacted; 2.43J changed docs only and privacy scans must reject raw PushKit/APNs tokens, identifiers, request payloads, private logs, and secret-bearing URLs. | Continue privacy scans on changed docs/code before every commit. | Token or payload leakage in logs/docs would be a release blocker. |
 | Rollback strategy | ready | The 2.43H rollback plan requires disabling the registrar gate, preserving foreground behavior, deleting/invalidation server tokens, route-safety checks, and privacy scans. | Keep future real registration behind a kill switch and reversible server token state. | No clean rollback exists if registration is wired directly at startup without a gate. |
 
-Readiness conclusion: build/profile/codesign/install/launch capability validation is now ready for the checked-in project state. A controlled real PushKit registration smoke is still blocked until a later task explicitly permits enabling the gated registrar for a local smoke. The current code has only a disabled native direct-call registrar scaffold, `app.yml` remains a regeneration risk, and server token/provider readiness is not implemented or verified.
+Readiness conclusion: build/profile/codesign/install/launch capability validation is ready for the checked-in project state, and 2.43O proved local PushKit token receipt through a DEBUG-only manual smoke trigger. The current code still has only a disabled-by-default native direct-call registrar scaffold for normal runtime, `app.yml` remains a regeneration risk, and server token/provider readiness is not implemented or verified.
 
 ## 2.43K Entitlement Change Proposal
 
@@ -117,6 +118,21 @@ This is build/profile/codesign validation only. Real native direct-call PushKit 
 This is physical install/launch capability validation only. No physical PushKit registration smoke was run. Real native direct-call PushKit registration remains disabled by default; no PushKit/APNs token was requested, logged, persisted, or uploaded; no APNs registration was added; no real PushKit/background callback was wired; and no media credential request, media connection, Matrix event emission, Element Call route replacement, or production background behavior was introduced.
 
 The next step can be a separately authorized controlled local PushKit registrar smoke using the existing disabled-by-default gate, but only if the task explicitly permits enabling that gate locally and still keeps server token registration, production rollout wiring, media, and foreground signaling changes out of scope.
+
+## 2.43O Controlled Local PushKit Registration Smoke
+
+2.43O validates the current `M639Y9MFR2` physical Debug signing/capability state by requesting PushKit registration only from a DEBUG-only manual local smoke control:
+
+- Physical Debug build, install, and launch succeeded on the physical iPhone.
+- The local smoke control requested registration with `pushkit_feature_gate_enabled=true`.
+- Redacted diagnostics reached `pushkit_registry_create_requested=true`, `pushkit_token_update_received=true`, and `pushkit_registration_result=token_received`.
+- Token handling diagnostics kept `pushkit_token_persistence_requested=false` and `pushkit_token_upload_requested=false`.
+- APNs registration remained `apns_registration_requested=false`.
+- Media and Matrix side-effect diagnostics remained `media_credentials_requested=false`, `media_connect_requested=false`, and `matrix_event_emit_requested=false`.
+- No raw PushKit/APNs token was copied, logged, pasted, persisted, uploaded, recorded, documented, or committed.
+- No real PushKit/background payload callback was wired into the native direct-call flow.
+
+Real native direct-call PushKit registration remains disabled by default outside this local DEBUG smoke path. The next step should be a separately scoped token registration contract or upload-seam design; it must not send server VoIP pushes until token storage, invalidation, provider credentials, and redacted logging are approved.
 
 ## 2. Apple Capability And Provisioning Requirements
 
