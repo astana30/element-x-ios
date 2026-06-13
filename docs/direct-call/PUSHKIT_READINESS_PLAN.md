@@ -1,12 +1,12 @@
 # PushKit Readiness Plan
 
-Status: 2.43H readiness plan only. No PushKit/APNs registration, entitlement, provisioning, project, signing, media, or production background behavior is implemented by this document.
+Status: 2.43I gated registrar scaffold added. No PushKit/APNs registration is enabled by default, and no entitlement, provisioning, project, signing, media, or production background behavior is implemented by this document.
 
 ## 1. Current Safe Baseline
 
 The foreground real-invite path is validated. The 2.42M physical two-device foreground real-invite smoke passed at `bf9996ae0665ad3953fac3d7a838bfb619349dd1`, and 2.42O consolidated the current foreground token-guard baseline.
 
-The 2.43B-G background chain exists only as safe seams:
+The 2.43B-I background chain exists only as safe seams:
 
 - 2.43B payload contract/parser.
 - 2.43C intake decision seam.
@@ -14,8 +14,10 @@ The 2.43B-G background chain exists only as safe seams:
 - 2.43E fake/test CallKit adapter boundary.
 - 2.43F controlled real CallKit adapter behind the boundary.
 - 2.43G fake/test PushKit lifecycle abstraction.
+- 2.43H entitlement/provisioning/server readiness plan.
+- 2.43I gated PushKit registrar scaffold.
 
-There is no real native direct-call PushKit registration, no native direct-call APNs token request, and no native direct-call PushKit/background callback wiring. Entitlements, provisioning, project files, signing settings, `Info.plist`, and `app.yml` have not been changed for the native direct-call background path. No media credentials, media connection, Matrix event emission from invite receipt, Element Call route replacement, or production background behavior has been added.
+The 2.43I registrar scaffold imports PushKit through an isolated real registry factory, but its feature gate defaults disabled and it is not wired to app startup. There is no enabled native direct-call PushKit registration, no native direct-call APNs token request, and no native direct-call PushKit/background callback wiring. Entitlements, provisioning, project files, signing settings, `Info.plist`, and `app.yml` have not been changed for the native direct-call background path. No media credentials, media connection, Matrix event emission from invite receipt, Element Call route replacement, or production background behavior has been added.
 
 Existing Element Call PushKit/VoIP surfaces remain a separate product path and are not the SalemX native direct-call background implementation.
 
@@ -47,23 +49,19 @@ Any Apple Developer portal, profile, certificate, entitlement, signing, or proje
 
 Future work should stay staged and reversible:
 
-### 2.43I - Real PushKit Registrar Design
+### 2.43I - Gated PushKit Registrar Scaffold
 
-Design a real native direct-call registrar class behind an explicit feature gate. It should not be wired at app startup by default. It should depend on the 2.43G lifecycle seam, expose only redacted diagnostics, and keep raw token values out of logs, descriptions, docs, and tests.
+Add a real native direct-call registrar scaffold behind an explicit feature gate. The gate defaults disabled. The scaffold must not be wired at app startup by default. It should expose only redacted diagnostics and keep raw token values out of logs, descriptions, docs, and tests. Enabled tests must use fake registry/fake delegate only.
 
-### 2.43J - Token Lifecycle Redaction Tests
+### 2.43J - Controlled Physical Registrar Smoke
 
-Add tests for token update, token invalidation, failed registration, duplicate token handling, and no-token persistence. If server token upload is not explicitly in scope, tests must prove the token is not sent anywhere.
+Only after explicit approval and entitlement/profile readiness, run a local physical smoke for the gated registrar. This phase may prove whether capability/profile state is sufficient on a device, but it must remain controlled and reversible.
 
-### 2.43K - Controlled Physical PushKit Registration Smoke
-
-Run only after entitlements, profiles, and the physical Debug team are approved. The smoke should verify registration lifecycle and redacted diagnostics on a trusted physical device without sending native direct-call VoIP pushes yet.
-
-### 2.43L - Server Token Registration Contract
+### 2.43K - Token Lifecycle Server Contract
 
 Design or implement a server-side token registration endpoint or Matrix-backed metadata strategy. It must be authenticated, device-scoped, redacted in logs, and reversible. This phase should not send VoIP pushes until token storage, invalidation, and deletion are proven.
 
-### 2.43M+ - VoIP Push Delivery Smoke
+### 2.43L+ - VoIP Push Delivery Smoke
 
 Only after token registration and provider credentials are approved, map a real foreground-equivalent invite to the 2.43B payload contract and deliver a VoIP push to a physical device. The push callback should parse, intake, plan, and report through the existing seams without media connection or Matrix event emission from receipt.
 

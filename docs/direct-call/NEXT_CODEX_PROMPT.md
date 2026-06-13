@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.43h-pushkit-readiness-plan`
+`salemx-2.43i-gated-pushkit-registrar-scaffold`
 
-Next phase: continue from the PushKit readiness plan. Do not implement real PushKit/APNs registration until a separately scoped task explicitly authorizes it.
+Next phase: continue from the gated PushKit registrar scaffold. Do not run physical PushKit registration smoke until explicit entitlement/profile readiness approval is present.
 
 ## Baseline
 
@@ -188,11 +188,26 @@ Key findings:
 - No VoIP/background entitlement, provisioning, project, `Info.plist`, or `app.yml` file was changed.
 - Foreground real invite behavior remains unchanged.
 
+2.43I adds only a gated PushKit registrar scaffold:
+
+- The registrar feature gate defaults disabled.
+- Default configuration does not create a PushKit registry.
+- Default configuration does not request a PushKit token.
+- Default configuration does not persist or upload a token.
+- An isolated real PushKit registry factory exists behind the protocol boundary, but it is not wired to app startup or production background callbacks.
+- Enabled tests use fake registry/fake delegate only.
+- Token update and invalidation diagnostics are redacted and do not include raw PushKit/APNs token values.
+- No APNs registration was added.
+- No VoIP/background entitlement, provisioning, project, `Info.plist`, or `app.yml` file was changed.
+- Foreground real invite behavior remains unchanged.
+- No media credentials or media connection were introduced.
+- No Matrix events are emitted.
+
 ## Guardrails
 
 - Do not implement PushKit/APNs/background incoming-call behavior without a separately scoped task.
 - Any future signing, entitlement, provisioning, project, `Info.plist`, or `app.yml` change requires explicit approval in that task.
-- Future 2.43I may design a real native direct-call PushKit registrar behind an explicit feature gate, but entitlement/signing/project changes remain separate and require explicit authorization.
+- Future 2.43J may run a controlled local physical PushKit registrar smoke only after explicit approval and entitlement/profile readiness.
 - Do not implement PushKit runtime inside foreground smoke tooling.
 - Do not register APNs or VoIP values inside foreground smoke tooling.
 - Do not add background incoming handling inside foreground smoke tooling.

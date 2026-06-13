@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.43H - PushKit entitlement/provisioning/server readiness plan.
+After 2.43I - gated PushKit registrar scaffold.
 
 ## Latest App Code Checkpoint
 
@@ -105,7 +105,18 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - It requires any future entitlement, signing, provisioning, project, `Info.plist`, or `app.yml` change to be separately authorized.
   - It keeps raw PushKit/APNs tokens, identifiers, request payloads, private logs, and secret-bearing URLs out of diagnostics/docs/logs.
   - It preserves the validated foreground real-invite path, keeps dev routes disabled, keeps real non-dev routes auth-gated, and forbids media credentials, media connection, and Matrix event emission from push receipt.
-  - Future 2.43I may design a real native direct-call PushKit registrar behind an explicit feature gate, still without entitlement/signing/project changes unless explicitly authorized.
+  - Future PushKit registration work remains separate and must not touch entitlement/signing/project changes unless explicitly authorized.
+- 2.43I adds a gated PushKit registrar scaffold:
+  - The registrar feature gate defaults disabled.
+  - Default configuration does not create a PushKit registry, request a PushKit token, persist a token, or upload a token.
+  - The isolated real PushKit registry factory imports PushKit, but it is not wired to app startup or production background callbacks.
+  - Enabled tests use a fake registry/fake delegate only.
+  - Token update and invalidation diagnostics are redacted and never include raw PushKit/APNs tokens.
+  - APNs registration, VoIP/background entitlement changes, project/signing edits, media credentials, media connection, Matrix event emission, Element Call route replacement, and production background behavior remain unimplemented.
+  - The foreground real-invite path remains unchanged.
+  - Future 2.43J may run a controlled local physical PushKit registrar smoke only after explicit approval and entitlement/profile readiness.
+  - Any future signing, entitlement, provisioning, project, `Info.plist`, or `app.yml` change requires a separate explicit task.
+  - Physical Debug builds should use `DEVELOPMENT_TEAM=M639Y9MFR2`; the old `83LGSC2QPV` team must not be used.
 - 2.43A documents the PushKit/APNs/background incoming-call investigation after the 2.42O foreground baseline:
   - The 2.42O validated foreground real-invite baseline remains unchanged.
   - Existing PushKit registration and VoIP push handling are present in the Element Call service path, not in SalemX native direct-call background behavior.

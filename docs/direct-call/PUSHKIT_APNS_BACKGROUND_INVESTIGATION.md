@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: 2.43H PushKit entitlement/provisioning/server readiness plan added; production PushKit/APNs/background behavior remains unimplemented.
+Status: 2.43I gated PushKit registrar scaffold added; production PushKit/APNs/background behavior remains disabled by default and unwired.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -197,6 +197,14 @@ The concrete plan lives in `docs/direct-call/PUSHKIT_READINESS_PLAN.md` and cove
 
 Future 2.43I may design a real native direct-call PushKit registrar behind an explicit feature gate, still without touching entitlements, project files, signing, provisioning, `Info.plist`, or `app.yml` unless the task separately authorizes those changes.
 
+## 2.43I Gated PushKit Registrar Scaffold
+
+2.43I adds only a real native direct-call PushKit registrar scaffold behind an explicit disabled-by-default feature gate. The scaffold includes a registrar, gate/configuration seam, redacted diagnostics, fakeable registry factory/protocol boundary, and an isolated real PushKit registry factory. It does not enable PushKit registration by default, wire registration to app startup, request APNs tokens, change entitlements, change provisioning, touch project files, alter signing, request media credentials, connect media, emit Matrix events, or change production behavior.
+
+Default configuration stays disabled and does not create a registry or request a token. Enabled tests use a fake registry only. Token update and invalidation handling produces redacted diagnostics only; raw PushKit/APNs tokens are not logged, persisted, uploaded, documented, or exposed in descriptions.
+
+Future 2.43J may run a controlled local physical PushKit registrar smoke only after explicit approval and entitlement/profile readiness. Any future entitlement, signing, provisioning, project, `Info.plist`, or `app.yml` change requires a separate explicit task.
+
 ## Current State From Tracked Code
 
 ### Existing PushKit Surface
@@ -294,6 +302,7 @@ Any production native direct-call VoIP registration proof, APNs provider setup t
 - 2.43F adds only a controlled real CallKit adapter behind that boundary.
 - 2.43G adds only a PushKit lifecycle abstraction/fake seam.
 - 2.43H adds only a PushKit entitlement/provisioning/server readiness plan.
+- 2.43I adds only a gated PushKit registrar scaffold.
 - PushKit registration and APNs registration are still not implemented for native direct-call.
 - No real `PKPushRegistry` is created by the native direct-call path.
 - Raw PushKit/APNs tokens are not logged or persisted.
@@ -307,5 +316,5 @@ Any production native direct-call VoIP registration proof, APNs provider setup t
 - Dev routes must remain disabled.
 - Real non-dev routes must remain auth-gated.
 - DEBUG smoke tooling is not production behavior.
-- A future 2.43I may design a real native direct-call PushKit registrar behind an explicit feature gate, still without entitlement/signing/project changes unless explicitly allowed.
+- A future 2.43J may run a controlled local physical PushKit registrar smoke only after explicit approval and entitlement/profile readiness.
 - Physical Debug builds should use `DEVELOPMENT_TEAM=M639Y9MFR2`; the old `83LGSC2QPV` team must not be used.

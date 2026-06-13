@@ -289,6 +289,16 @@ The plan documents Apple capability and provisioning requirements, including APN
 
 No PushKit registration, APNs registration, token request, real background callback, entitlement change, provisioning change, project/signing edit, `Info.plist` edit, `app.yml` edit, media credential request, media connection, Matrix event emission, or production background behavior was introduced. Any future entitlement, signing, provisioning, project, `Info.plist`, or `app.yml` change requires a separate explicit task.
 
+### 2.43I — Gated PushKit registrar scaffold
+
+Added a real native direct-call PushKit registrar scaffold behind an explicit feature gate. The gate defaults disabled, and default registrar startup does not create a registry, request a PushKit token, persist a token, upload a token, request APNs registration, wire app startup, or wire a production background callback.
+
+The scaffold includes a registrar, feature gate/configuration seam, redacted diagnostics, fakeable registry protocol/factory boundary, and an isolated real PushKit registry factory. Tests use fakes/spies only. The enabled test configuration creates a fake registry and records a fake registration request without touching real device capabilities.
+
+Token update and invalidation handling is redacted only: raw PushKit/APNs tokens are not logged, persisted, uploaded, documented, or exposed in descriptions. No entitlement, provisioning, project/signing, `Info.plist`, `app.yml`, media credential, media connection, Matrix event emission, Element Call route replacement, APNs registration, or production background behavior was introduced.
+
+Future 2.43J may run a controlled local physical PushKit registrar smoke only after explicit approval and entitlement/profile readiness. Any future entitlement, signing, provisioning, project, `Info.plist`, or `app.yml` change requires a separate explicit task.
+
 ### 2.42K — Supervised foreground real invite
 
 The two-device foreground real-invite smoke passed and was committed as:

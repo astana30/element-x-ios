@@ -1646,6 +1646,206 @@ struct DirectCallFakePushKitLifecycleManager: DirectCallPushKitLifecycleManaging
     }
 }
 
+struct DirectCallPushKitRegistrarFeatureGate: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let isEnabled: Bool
+
+    static let disabled = Self(isEnabled: false)
+
+    var description: String {
+        "DirectCallPushKitRegistrarFeatureGate(enabled: \(isEnabled))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum DirectCallPushKitRegistrarStatus: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case disabled
+    case registryCreated = "registry_created"
+    case registryUnavailable = "registry_unavailable"
+    case tokenUpdateReceived = "token_update_received"
+    case tokenInvalidated = "token_invalidated"
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+enum DirectCallPushKitRegistrarFailure: String, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case featureGateDisabled = "feature_gate_disabled"
+    case registryUnavailable = "registry_unavailable"
+    case tokenNotPersisted = "token_not_persisted"
+    case tokenNotUploaded = "token_not_uploaded"
+    case redacted
+
+    var description: String {
+        rawValue
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct DirectCallPushKitRegistrarDiagnostics: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let pushKitRegistrarInvoked: Bool
+    let pushKitFeatureGateEnabled: Bool
+    let pushKitRegistryCreateRequested: Bool
+    let pushKitTokenUpdateReceived: Bool
+    let pushKitTokenInvalidated: Bool
+    let pushKitTokenPersistenceRequested: Bool
+    let pushKitTokenUploadRequested: Bool
+    let pushKitRegistrationResult: DirectCallPushKitRegistrarStatus
+    let blockedReason: DirectCallPushKitRegistrarFailure?
+
+    var description: String {
+        "DirectCallPushKitRegistrarDiagnostics(" + [
+            "pushkit_registrar_invoked=\(pushKitRegistrarInvoked)",
+            "pushkit_feature_gate_enabled=\(pushKitFeatureGateEnabled)",
+            "pushkit_registry_create_requested=\(pushKitRegistryCreateRequested)",
+            "pushkit_token_update_received=\(pushKitTokenUpdateReceived)",
+            "pushkit_token_invalidated=\(pushKitTokenInvalidated)",
+            "pushkit_token_persistence_requested=\(pushKitTokenPersistenceRequested)",
+            "pushkit_token_upload_requested=\(pushKitTokenUploadRequested)",
+            "pushkit_registration_result=\(pushKitRegistrationResult)",
+            "blocked_reason=\(blockedReason?.description ?? "none")"
+        ].joined(separator: ", ") + ")"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+struct DirectCallPushKitRegistrarResult: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let status: DirectCallPushKitRegistrarStatus
+    let diagnostics: DirectCallPushKitRegistrarDiagnostics
+
+    var description: String {
+        "DirectCallPushKitRegistrarResult(status: \(status), diagnostics: \(diagnostics))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+protocol DirectCallPushKitRegistrarRegistryDelegate: AnyObject {
+    func pushKitRegistrarDidUpdateToken(_ token: Data)
+    func pushKitRegistrarDidInvalidateToken()
+}
+
+protocol DirectCallPushKitRegistryControlling: AnyObject {
+    func requestVoIPPushRegistration()
+}
+
+protocol DirectCallPushKitRegistryMaking {
+    func makeRegistry(delegate: DirectCallPushKitRegistrarRegistryDelegate) -> DirectCallPushKitRegistryControlling?
+}
+
+struct DirectCallPushKitRegistrarConfiguration: CustomStringConvertible, CustomDebugStringConvertible {
+    var featureGate: DirectCallPushKitRegistrarFeatureGate = .disabled
+    var registryFactory: DirectCallPushKitRegistryMaking?
+
+    var description: String {
+        "DirectCallPushKitRegistrarConfiguration(featureGate: \(featureGate), registryFactoryConfigured: \(registryFactory != nil), defaultEnabled: false)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+final class DirectCallPushKitRegistrar: DirectCallPushKitRegistrarRegistryDelegate, CustomStringConvertible, CustomDebugStringConvertible {
+    private let configuration: DirectCallPushKitRegistrarConfiguration
+    private var registry: DirectCallPushKitRegistryControlling?
+
+    init(configuration: DirectCallPushKitRegistrarConfiguration = .init()) {
+        self.configuration = configuration
+    }
+
+    func startRegistration() -> DirectCallPushKitRegistrarResult {
+        guard configuration.featureGate.isEnabled else {
+            return result(status: .disabled,
+                          registryCreateRequested: false,
+                          blockedReason: .featureGateDisabled)
+        }
+        guard let registryFactory = configuration.registryFactory,
+              let registry = registryFactory.makeRegistry(delegate: self) else {
+            return result(status: .registryUnavailable,
+                          registryCreateRequested: true,
+                          blockedReason: .registryUnavailable)
+        }
+
+        self.registry = registry
+        registry.requestVoIPPushRegistration()
+        return result(status: .registryCreated,
+                      registryCreateRequested: true,
+                      blockedReason: nil)
+    }
+
+    func pushKitRegistrarDidUpdateToken(_ token: Data) {
+        _ = handleTokenUpdate(token)
+    }
+
+    func pushKitRegistrarDidInvalidateToken() {
+        _ = handleTokenInvalidation()
+    }
+
+    func handleTokenUpdate(_ token: Data) -> DirectCallPushKitRegistrarResult {
+        result(status: .tokenUpdateReceived,
+               registryCreateRequested: false,
+               tokenUpdateReceived: true,
+               blockedReason: .tokenNotPersisted)
+    }
+
+    func handleTokenInvalidation() -> DirectCallPushKitRegistrarResult {
+        result(status: .tokenInvalidated,
+               registryCreateRequested: false,
+               tokenInvalidated: true,
+               blockedReason: nil)
+    }
+
+    private func result(status: DirectCallPushKitRegistrarStatus,
+                        registryCreateRequested: Bool,
+                        tokenUpdateReceived: Bool = false,
+                        tokenInvalidated: Bool = false,
+                        blockedReason: DirectCallPushKitRegistrarFailure?) -> DirectCallPushKitRegistrarResult {
+        .init(status: status,
+              diagnostics: .init(pushKitRegistrarInvoked: true,
+                                 pushKitFeatureGateEnabled: configuration.featureGate.isEnabled,
+                                 pushKitRegistryCreateRequested: registryCreateRequested,
+                                 pushKitTokenUpdateReceived: tokenUpdateReceived,
+                                 pushKitTokenInvalidated: tokenInvalidated,
+                                 pushKitTokenPersistenceRequested: false,
+                                 pushKitTokenUploadRequested: false,
+                                 pushKitRegistrationResult: status,
+                                 blockedReason: blockedReason))
+    }
+
+    var description: String {
+        "DirectCallPushKitRegistrar(" + [
+            "featureGateEnabled: \(configuration.featureGate.isEnabled)",
+            "registryCreated: \(registry != nil)",
+            "startupWiring: false",
+            "apnsRegistrationRuntime: false",
+            "mediaRuntime: false",
+            "matrixEventRuntime: false",
+            "tokenPersistenceRuntime: false",
+            "tokenUploadRuntime: false"
+        ].joined(separator: ", ") + ")"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
 protocol NativeIncomingCallTimeoutScheduling: AnyObject {
     func scheduleTimeout(for identity: NativeIncomingCallIdentity, after timeout: Duration)
     func cancelTimeout(for identity: NativeIncomingCallIdentity)

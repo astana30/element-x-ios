@@ -11,6 +11,10 @@ import Foundation
 import CallKit
 #endif
 
+#if canImport(PushKit) && os(iOS)
+import PushKit
+#endif
+
 enum NativeIncomingSyntheticCallKitUIProofEvent: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     case reported
     case answered
@@ -458,6 +462,60 @@ final class DirectCallBackgroundCallKitProvider: NSObject, DirectCallBackgroundC
         description
     }
 }
+
+#if canImport(PushKit) && os(iOS)
+final class DirectCallRealPushKitRegistryFactory: DirectCallPushKitRegistryMaking, CustomStringConvertible, CustomDebugStringConvertible {
+    func makeRegistry(delegate: DirectCallPushKitRegistrarRegistryDelegate) -> DirectCallPushKitRegistryControlling? {
+        DirectCallRealPushKitRegistryController(delegate: delegate)
+    }
+
+    var description: String {
+        "DirectCallRealPushKitRegistryFactory(pushKitRuntimeAvailable: true, startupWiring: false, apnsRegistrationRuntime: false, mediaRuntime: false, matrixEventRuntime: false)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+private final class DirectCallRealPushKitRegistryController: NSObject, DirectCallPushKitRegistryControlling, PKPushRegistryDelegate {
+    private let registry: PKPushRegistry
+    private weak var delegate: DirectCallPushKitRegistrarRegistryDelegate?
+
+    init(queue: DispatchQueue? = nil, delegate: DirectCallPushKitRegistrarRegistryDelegate) {
+        registry = PKPushRegistry(queue: queue)
+        self.delegate = delegate
+        super.init()
+        registry.delegate = self
+    }
+
+    func requestVoIPPushRegistration() {
+        registry.desiredPushTypes = [.voIP]
+    }
+
+    func pushRegistry(_ registry: PKPushRegistry, didUpdate pushCredentials: PKPushCredentials, for type: PKPushType) {
+        guard type == .voIP else {
+            return
+        }
+        delegate?.pushKitRegistrarDidUpdateToken(pushCredentials.token)
+    }
+
+    func pushRegistry(_ registry: PKPushRegistry, didInvalidatePushTokenFor type: PKPushType) {
+        guard type == .voIP else {
+            return
+        }
+        delegate?.pushKitRegistrarDidInvalidateToken()
+    }
+
+    override var description: String {
+        "DirectCallRealPushKitRegistryController(pushKitRuntimeAvailable: true, startupWiring: false, apnsRegistrationRuntime: false, mediaRuntime: false, matrixEventRuntime: false)"
+    }
+
+    override var debugDescription: String {
+        description
+    }
+}
+#endif
 
 #if DEBUG
 private final class SalemXForegroundSSESmokeStateStore: NativeIncomingCallStateStoring {

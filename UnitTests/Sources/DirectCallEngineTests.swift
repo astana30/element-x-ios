@@ -1808,7 +1808,6 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(description.contains("pushKitCallbackRuntime: false"))
         #expect(!modelSource.contains("PKPushRegistry"))
         #expect(!modelSource.contains("requestAuthorization"))
-        #expect(!adapterSource.contains("PKPushRegistry"))
         #expect(!adapterSource.contains("didReceiveIncomingPush"))
         #expect(!adapterSource.contains("registerForRemoteNotifications"))
         #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !description.contains($0) })
@@ -1962,6 +1961,99 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(!modelSource.contains("PKPushPayload"))
         #expect(!modelSource.contains("requestAuthorization"))
         #expect(!modelSource.contains("registerForRemoteNotifications"))
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !description.contains($0) })
+    }
+
+    @Test
+    func gatedPushKitRegistrarDefaultDisabledDoesNotCreateRegistryOrRequestToken() {
+        let factory = DirectCallPushKitRegistryFactorySpy()
+        let registrar = DirectCallPushKitRegistrar(configuration: .init(registryFactory: factory))
+
+        let result = registrar.startRegistration()
+
+        let description = String(describing: registrar) + " " + String(describing: result)
+        #expect(result.status == .disabled)
+        #expect(result.diagnostics.pushKitFeatureGateEnabled == false)
+        #expect(result.diagnostics.pushKitRegistryCreateRequested == false)
+        #expect(result.diagnostics.pushKitTokenUpdateReceived == false)
+        #expect(result.diagnostics.pushKitTokenInvalidated == false)
+        #expect(result.diagnostics.pushKitTokenPersistenceRequested == false)
+        #expect(result.diagnostics.pushKitTokenUploadRequested == false)
+        #expect(result.diagnostics.blockedReason == .featureGateDisabled)
+        #expect(factory.makeRegistryCount == 0)
+        #expect(factory.registry?.requestRegistrationCount == nil)
+        #expect(description.contains("startupWiring: false"))
+        #expect(description.contains("apnsRegistrationRuntime: false"))
+        #expect(description.contains("mediaRuntime: false"))
+        #expect(description.contains("matrixEventRuntime: false"))
+        #expect(description.contains("tokenPersistenceRuntime: false"))
+        #expect(description.contains("tokenUploadRuntime: false"))
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !description.contains($0) })
+    }
+
+    @Test
+    func gatedPushKitRegistrarEnabledTestConfigurationCreatesOnlyFakeRegistry() {
+        let factory = DirectCallPushKitRegistryFactorySpy()
+        let registrar = DirectCallPushKitRegistrar(configuration: .init(featureGate: .init(isEnabled: true),
+                                                                        registryFactory: factory))
+
+        let result = registrar.startRegistration()
+
+        #expect(result.status == .registryCreated)
+        #expect(result.diagnostics.pushKitFeatureGateEnabled == true)
+        #expect(result.diagnostics.pushKitRegistryCreateRequested == true)
+        #expect(result.diagnostics.pushKitTokenPersistenceRequested == false)
+        #expect(result.diagnostics.pushKitTokenUploadRequested == false)
+        #expect(result.diagnostics.blockedReason == nil)
+        #expect(factory.makeRegistryCount == 1)
+        #expect(factory.registry?.requestRegistrationCount == 1)
+        #expect(String(describing: factory).contains("fakeRegistryOnly: true"))
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !String(describing: result).contains($0) })
+    }
+
+    @Test
+    func gatedPushKitRegistrarTokenEventsStayRedactedAndUnpersisted() {
+        let registrar = DirectCallPushKitRegistrar(configuration: .init(featureGate: .init(isEnabled: true),
+                                                                        registryFactory: DirectCallPushKitRegistryFactorySpy()))
+        let rawPushKitToken = Data("local-redacted-pushkit-token-fixture".utf8)
+
+        let update = registrar.handleTokenUpdate(rawPushKitToken)
+        let invalidation = registrar.handleTokenInvalidation()
+
+        let description = String(describing: update) + " " + String(describing: invalidation)
+        #expect(update.status == .tokenUpdateReceived)
+        #expect(update.diagnostics.pushKitTokenUpdateReceived == true)
+        #expect(update.diagnostics.pushKitTokenPersistenceRequested == false)
+        #expect(update.diagnostics.pushKitTokenUploadRequested == false)
+        #expect(update.diagnostics.blockedReason == .tokenNotPersisted)
+        #expect(invalidation.status == .tokenInvalidated)
+        #expect(invalidation.diagnostics.pushKitTokenInvalidated == true)
+        #expect(invalidation.diagnostics.pushKitTokenPersistenceRequested == false)
+        #expect(invalidation.diagnostics.pushKitTokenUploadRequested == false)
+        #expect(!description.contains("local-redacted-pushkit-token-fixture"))
+        #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !description.contains($0) })
+    }
+
+    @Test
+    func gatedPushKitRegistrarDiagnosticsStayRedactedAndUnwiredFromStartup() throws {
+        let registrar = DirectCallPushKitRegistrar()
+        let result = registrar.startRegistration()
+        let modelSource = try Self.sourceFile("ElementX/Sources/Services/Calls/DirectCallModels.swift")
+        let registrarSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+        let appSessionSource = try Self.sourceFile("ElementX/Sources/Services/Session/UserSession.swift")
+
+        let description = String(describing: registrar) + " " + String(describing: result)
+        #expect(description.contains("pushkit_registrar_invoked=true"))
+        #expect(description.contains("pushkit_feature_gate_enabled=false"))
+        #expect(description.contains("pushkit_registry_create_requested=false"))
+        #expect(description.contains("pushkit_token_persistence_requested=false"))
+        #expect(description.contains("pushkit_token_upload_requested=false"))
+        #expect(description.contains("blocked_reason=feature_gate_disabled"))
+        #expect(!modelSource.contains("PKPushRegistry"))
+        #expect(registrarSource.contains("DirectCallRealPushKitRegistryFactory"))
+        #expect(!registrarSource.contains("didReceiveIncomingPush"))
+        #expect(!registrarSource.contains("registerForRemoteNotifications"))
+        #expect(!appSessionSource.contains("DirectCallPushKitRegistrar"))
         #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !description.contains($0) })
     }
 
@@ -3617,6 +3709,35 @@ private final class DirectCallBackgroundCallKitProviderSpy: DirectCallBackground
 
     var description: String {
         "DirectCallBackgroundCallKitProviderSpy(reportCount: \(reportRequests.count), pushKitRuntime: false, apnsRegistrationRuntime: false, mediaRuntime: false, matrixEventRuntime: false)"
+    }
+}
+
+private final class DirectCallPushKitRegistrySpy: DirectCallPushKitRegistryControlling, CustomStringConvertible {
+    private(set) var requestRegistrationCount = 0
+
+    func requestVoIPPushRegistration() {
+        requestRegistrationCount += 1
+    }
+
+    var description: String {
+        "DirectCallPushKitRegistrySpy(requestRegistrationCount: \(requestRegistrationCount), fakeRegistryOnly: true, apnsRegistrationRuntime: false, mediaRuntime: false, matrixEventRuntime: false)"
+    }
+}
+
+private final class DirectCallPushKitRegistryFactorySpy: DirectCallPushKitRegistryMaking, CustomStringConvertible {
+    private(set) var makeRegistryCount = 0
+    private(set) var registry: DirectCallPushKitRegistrySpy?
+
+    func makeRegistry(delegate: DirectCallPushKitRegistrarRegistryDelegate) -> DirectCallPushKitRegistryControlling? {
+        _ = delegate
+        makeRegistryCount += 1
+        let registry = DirectCallPushKitRegistrySpy()
+        self.registry = registry
+        return registry
+    }
+
+    var description: String {
+        "DirectCallPushKitRegistryFactorySpy(makeRegistryCount: \(makeRegistryCount), fakeRegistryOnly: true, apnsRegistrationRuntime: false, mediaRuntime: false, matrixEventRuntime: false)"
     }
 }
 
