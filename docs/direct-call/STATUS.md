@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.43L - minimal PushKit capability files applied.
+After 2.43M - PushKit capability build/profile validation passed for build; physical install blocked by unavailable devices.
 
 ## Latest App Code Checkpoint
 
@@ -144,6 +144,17 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Did not edit `app.yml`; it still contains the old team value and must not be used to regenerate the project for PushKit physical smoke readiness until a separate source-config remediation task is approved.
   - Real PushKit registration remains disabled by default, no PushKit/APNs token is requested, no APNs registration is added, no real PushKit/background callback is wired, and no media/Matrix/Element Call route behavior is changed.
   - Next step should be controlled build/profile validation against the checked-in project and Apple Developer/profile state, not token registration.
+- 2.43M validates PushKit capability build/profile state:
+  - Built the checked-in 2.43L project for the generic physical iOS Debug destination using `DEVELOPMENT_TEAM=M639Y9MFR2`, `CODE_SIGN_STYLE=Automatic`, `-allowProvisioningUpdates`, and `-allowProvisioningDeviceRegistration`.
+  - The build succeeded and produced a signed `SalemX.app`.
+  - Effective Team ID / App Identifier prefix class is `M639Y9MFR2`.
+  - Effective bundle ID class is `kz.salemx.msg`.
+  - Effective app entitlements include development `aps-environment`, expected app group/keychain classes, and no unexpected unrestricted VoIP entitlement.
+  - Effective `UIBackgroundModes` includes `voip`.
+  - The old team ID `83LGSC2QPV` was not present in the built app bundle.
+  - Physical install was blocked because CoreDevice listed the available physical phones as unavailable.
+  - `app.yml` remains a regeneration risk and must not be used to regenerate the project until source-config signing remediation is separately approved.
+  - Real PushKit registration remains disabled by default, no PushKit/APNs token was requested/logged/persisted, no APNs registration was added, no real PushKit/background callback was wired, and no media/Matrix/Element Call route behavior was changed.
 - 2.43A documents the PushKit/APNs/background incoming-call investigation after the 2.42O foreground baseline:
   - The 2.42O validated foreground real-invite baseline remains unchanged.
   - Existing PushKit registration and VoIP push handling are present in the Element Call service path, not in SalemX native direct-call background behavior.

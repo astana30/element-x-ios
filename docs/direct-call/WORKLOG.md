@@ -349,6 +349,16 @@ Real PushKit registration remains disabled by default. No PushKit/APNs token was
 
 The next step should be controlled build/profile validation against the checked-in project and Apple Developer/profile state. It should not request a PushKit token or wire runtime registration unless that is explicitly scoped and capability signing is confirmed.
 
+### 2.43M — PushKit capability build/profile validation
+
+Validated the checked-in 2.43L project/capability state with an iPhoneOS Debug build for the generic physical device destination. The build used `DEVELOPMENT_TEAM=M639Y9MFR2`, `CODE_SIGN_STYLE=Automatic`, `-allowProvisioningUpdates`, and `-allowProvisioningDeviceRegistration`, and it succeeded without regenerating the project from `app.yml`.
+
+Inspected the signed app bundle with redacted/safe output only. Effective signing uses Team ID / App Identifier prefix class `M639Y9MFR2`, the bundle ID class is `kz.salemx.msg`, development `aps-environment` is present, expected app group/keychain classes are present, `UIBackgroundModes` includes `voip`, and no unexpected unrestricted VoIP entitlement was present. The old team ID `83LGSC2QPV` was not present in the built app bundle.
+
+Physical install was blocked because CoreDevice listed the available physical phones as unavailable. No physical PushKit registration smoke was run. Real native direct-call PushKit registration remains disabled by default, no PushKit/APNs token was requested/logged/persisted/uploaded, no APNs registration was added, no real PushKit/background callback was wired, and no media credential request, media connection, Matrix event emission, Element Call route replacement, or production background behavior was introduced.
+
+`app.yml` remains unchanged and still contains the old team value; do not regenerate the project from it for PushKit physical smoke readiness until a separate explicit source-config signing remediation task is approved.
+
 ### 2.42K — Supervised foreground real invite
 
 The two-device foreground real-invite smoke passed and was committed as:

@@ -1,6 +1,6 @@
 # PushKit Entitlement Change Proposal
 
-Status: 2.43L applied the minimum tracked project signing references for PushKit capability readiness. No provisioning, entitlement, `Info.plist`, `app.yml`, PushKit registration, APNs registration, token request, media, or production background behavior is changed by this document.
+Status: 2.43M validated the current build/profile/codesign state after the 2.43L project signing-reference update. No entitlement, `Info.plist`, `app.yml`, PushKit registration, APNs registration, token request, media, or production background behavior is changed by this document.
 
 ## 1. Current Tracked State
 
@@ -56,6 +56,29 @@ No entitlement or plist capability key was added in 2.43L because the current tr
 No `com.apple.developer.pushkit.unrestricted-voip` key was added. That key remains absent because the current proposal does not prove it is required for this app ID/account, and speculative entitlement keys can break signing or reviewability.
 
 `app.yml` still contains the old team value and was intentionally not edited in 2.43L because the task's allowed-file audit did not permit `app.yml` changes. Do not regenerate the Xcode project from `app.yml` for PushKit physical smoke readiness until a separate explicit task authorizes the source XcodeGen config/signing remediation.
+
+## 2.43M Build/Profile Validation
+
+2.43M validated the checked-in 2.43L capability/signing state with an iPhoneOS Debug build using the approved physical Debug team override:
+
+```text
+DEVELOPMENT_TEAM=M639Y9MFR2
+CODE_SIGN_STYLE=Automatic
+```
+
+The physical-device build succeeded for the generic iOS device destination. The resulting signed app bundle showed only redacted/safe capability facts:
+
+- Effective Team ID / App Identifier prefix class: `M639Y9MFR2`.
+- Bundle ID class: `kz.salemx.msg`.
+- Effective app entitlements include development `aps-environment`.
+- Effective app entitlements include the expected app group and keychain access group classes.
+- Effective `UIBackgroundModes` includes `voip`.
+- No unexpected unrestricted VoIP entitlement was present.
+- The old team ID `83LGSC2QPV` was not present in the built app bundle.
+
+Physical install was not validated in 2.43M because CoreDevice listed the available physical phones as unavailable. This is an install-availability blocker, not evidence that signing or capabilities failed.
+
+Real native direct-call PushKit registration remains disabled by default. No PushKit/APNs token was requested, logged, persisted, or uploaded. No APNs registration, real PushKit/background callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, or production background behavior was introduced.
 
 ## 2. Minimum Future Changes Required
 
