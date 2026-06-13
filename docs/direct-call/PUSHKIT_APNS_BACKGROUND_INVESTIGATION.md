@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: 2.43G PushKit lifecycle abstraction/fake seam added; production PushKit/APNs/background behavior remains unimplemented.
+Status: 2.43H PushKit entitlement/provisioning/server readiness plan added; production PushKit/APNs/background behavior remains unimplemented.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -181,7 +181,21 @@ blocked_reason=<redacted_class>
 
 No PushKit registration, APNs registration, entitlement change, project/signing edit, media credential request, media connection, Matrix event emission, payload persistence, real PushKit/background callback, real app-start lifecycle wiring, or Element Call route replacement is introduced by this task.
 
-A future 2.43H may be an explicit PushKit registration design or implementation task, but entitlement, signing, provisioning, project, `Info.plist`, and `app.yml` changes remain separate and require explicit authorization.
+## 2.43H PushKit Readiness Plan
+
+2.43H adds only a docs-first readiness plan for the first real native direct-call PushKit/APNs registration step. It does not create a real `PKPushRegistry`, request PushKit/APNs tokens, wire app startup, wire background callbacks, change entitlements, change provisioning, touch project files, alter signing, request media credentials, connect media, emit Matrix events, or change production behavior.
+
+The concrete plan lives in `docs/direct-call/PUSHKIT_READINESS_PLAN.md` and covers:
+
+- Current safe baseline after the validated foreground real-invite path and 2.43B-G seams.
+- Apple capability, APNs, VoIP/background, development team, provisioning, certificate, and signing prerequisites.
+- A staged app-side plan: 2.43I registrar design, 2.43J token redaction/lifecycle tests, 2.43K controlled physical registration smoke, 2.43L server token registration contract, and 2.43M+ delivery smoke.
+- Server-side token registration, invalidation, provider credential, redacted logging, payload mapping, and rollback requirements.
+- Security/privacy constraints for raw PushKit/APNs tokens, identifiers, payloads, dev routes, auth gates, media, and Matrix events.
+- Validation gates before any real PushKit task.
+- Rollback requirements that keep the validated foreground path unaffected.
+
+Future 2.43I may design a real native direct-call PushKit registrar behind an explicit feature gate, still without touching entitlements, project files, signing, provisioning, `Info.plist`, or `app.yml` unless the task separately authorizes those changes.
 
 ## Current State From Tracked Code
 
@@ -279,6 +293,7 @@ Any production native direct-call VoIP registration proof, APNs provider setup t
 - 2.43E adds only the background CallKit adapter boundary and fake/test reporting seam.
 - 2.43F adds only a controlled real CallKit adapter behind that boundary.
 - 2.43G adds only a PushKit lifecycle abstraction/fake seam.
+- 2.43H adds only a PushKit entitlement/provisioning/server readiness plan.
 - PushKit registration and APNs registration are still not implemented for native direct-call.
 - No real `PKPushRegistry` is created by the native direct-call path.
 - Raw PushKit/APNs tokens are not logged or persisted.
@@ -292,5 +307,5 @@ Any production native direct-call VoIP registration proof, APNs provider setup t
 - Dev routes must remain disabled.
 - Real non-dev routes must remain auth-gated.
 - DEBUG smoke tooling is not production behavior.
-- A future 2.43H may design or implement PushKit registration, still without entitlement/signing/project changes unless explicitly allowed.
+- A future 2.43I may design a real native direct-call PushKit registrar behind an explicit feature gate, still without entitlement/signing/project changes unless explicitly allowed.
 - Physical Debug builds should use `DEVELOPMENT_TEAM=M639Y9MFR2`; the old `83LGSC2QPV` team must not be used.

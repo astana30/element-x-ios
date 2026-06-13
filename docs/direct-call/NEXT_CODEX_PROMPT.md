@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.43g-pushkit-lifecycle-abstraction-seam`
+`salemx-2.43h-pushkit-readiness-plan`
 
-Next phase: continue from the PushKit lifecycle abstraction seam.
+Next phase: continue from the PushKit readiness plan. Do not implement real PushKit/APNs registration until a separately scoped task explicitly authorizes it.
 
 ## Baseline
 
@@ -171,11 +171,28 @@ Key findings:
 - No Matrix events are emitted.
 - Lifecycle diagnostics remain redacted booleans/status classes only.
 
+2.43H adds only a docs-first PushKit entitlement/provisioning/server readiness plan:
+
+- The plan lives in `docs/direct-call/PUSHKIT_READINESS_PLAN.md`.
+- It records the safe baseline after the validated foreground real-invite path and 2.43B-G seams.
+- It documents Apple APNs and VoIP/background capability assumptions, profile/certificate risks, and physical Debug team requirement `M639Y9MFR2`.
+- The old `83LGSC2QPV` team must not be used.
+- It separates future app-side work into registrar design, token redaction/lifecycle tests, controlled physical registration smoke, server token registration contract, and later VoIP push delivery smoke.
+- It documents server requirements for token registration, invalidation, provider credentials, redacted logs, payload mapping, auth gates, and rollback.
+- It documents security/privacy constraints: no raw PushKit/APNs tokens, raw identifiers, request payloads, private logs, secret-bearing URLs, media credentials, media connection, or Matrix event emission from push receipt.
+- It documents validation gates and rollback requirements before any real PushKit task.
+- No PushKit registration was added.
+- No APNs registration was added.
+- No PushKit/APNs token was requested.
+- No real PushKit/background callback was wired.
+- No VoIP/background entitlement, provisioning, project, `Info.plist`, or `app.yml` file was changed.
+- Foreground real invite behavior remains unchanged.
+
 ## Guardrails
 
 - Do not implement PushKit/APNs/background incoming-call behavior without a separately scoped task.
 - Any future signing, entitlement, provisioning, project, `Info.plist`, or `app.yml` change requires explicit approval in that task.
-- Future 2.43H may be an explicit PushKit registration design or implementation task, but entitlement/signing/project changes remain separate and require explicit authorization.
+- Future 2.43I may design a real native direct-call PushKit registrar behind an explicit feature gate, but entitlement/signing/project changes remain separate and require explicit authorization.
 - Do not implement PushKit runtime inside foreground smoke tooling.
 - Do not register APNs or VoIP values inside foreground smoke tooling.
 - Do not add background incoming handling inside foreground smoke tooling.

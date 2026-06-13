@@ -273,7 +273,21 @@ The fake payload path composes the existing background pipeline: 2.43B parser, 2
 
 Focused tests cover valid payload flow through parser/intake/planner/fake CallKit, invalid/expired/excessive-future payload suppression, missing-session suppression, token update and invalidation redaction, lifecycle diagnostics redaction, and no media/Matrix/PushKit/APNs registration side effects. Existing 2.43B-F tests, foreground timestamp validation, and DEBUG smoke release-surface tests remain in the targeted suite.
 
-PushKit registration, APNs registration, VoIP/background entitlements, project/signing edits, real PushKit/background callback wiring, media credentials, media connection, Matrix event emission, Element Call route replacement, and production background behavior remain unimplemented. Future 2.43H may be an explicit PushKit registration design or implementation task, but entitlement/signing/project changes remain separate and require explicit authorization.
+PushKit registration, APNs registration, VoIP/background entitlements, project/signing edits, real PushKit/background callback wiring, media credentials, media connection, Matrix event emission, Element Call route replacement, and production background behavior remain unimplemented. Future 2.43I may be an explicit PushKit registration design task, but entitlement/signing/project changes remain separate and require explicit authorization.
+
+### 2.43H — PushKit entitlement/provisioning/server readiness plan
+
+Added a docs-first readiness plan for the first real native direct-call PushKit/APNs registration step. The plan lives in:
+
+```text
+docs/direct-call/PUSHKIT_READINESS_PLAN.md
+```
+
+The plan records the safe baseline after the validated foreground real-invite path and the 2.43B-G background parser, intake, planner, adapter, real CallKit adapter, and fake lifecycle seams. It separates future app-side work into registrar design, token redaction/lifecycle tests, controlled physical registration smoke, server token registration contract, and later VoIP push delivery smoke.
+
+The plan documents Apple capability and provisioning requirements, including APNs and VoIP/background assumptions, profile/certificate risks, and the current physical Debug team requirement `M639Y9MFR2`. The old `83LGSC2QPV` team must not be used.
+
+No PushKit registration, APNs registration, token request, real background callback, entitlement change, provisioning change, project/signing edit, `Info.plist` edit, `app.yml` edit, media credential request, media connection, Matrix event emission, or production background behavior was introduced. Any future entitlement, signing, provisioning, project, `Info.plist`, or `app.yml` change requires a separate explicit task.
 
 ### 2.42K — Supervised foreground real invite
 
