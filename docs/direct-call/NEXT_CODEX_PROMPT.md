@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.43u-staging-ssh-network-deploy-path-recovery`
+`salemx-2.43v-manual-staging-deploy-package`
 
-Next phase: continue from the blocked staging SSH/network deploy path recovery. Restore network/firewall/VPN/bastion access to the corrected port 71 staging deploy path, then deploy only the call-service token endpoint changes and rerun route safety plus synthetic-token staging smoke. Do not upload real app-runtime tokens, send VoIP pushes, or wire background payload callbacks unless the user explicitly authorizes that exact step.
+Next phase: continue from the manual staging deploy package. Either deploy the 2.43Q/2.43R token-registration endpoint using restored port 71 access or an approved manual admin channel, or, if an operator has already manually deployed it, run only the synthetic-token staging registration smoke after route safety proves unauthenticated token registration is `401`. Do not upload real app-runtime tokens, send VoIP pushes, or wire background payload callbacks unless the user explicitly authorizes that exact step.
 
 ## Baseline
 
@@ -80,11 +80,26 @@ No real PushKit token was used. No raw PushKit/APNs token is logged, durably per
 - Live route status remains `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
 - Direct `salemx-call-service active` status is not verified.
 
+## 2.43V Result
+
+2.43V prepared a manual deployment package/runbook only:
+
+- Added `docs/direct-call/PUSHKIT_STAGING_MANUAL_DEPLOY_RUNBOOK.md`.
+- The package lists runtime files `server/salemx-call-service/salemx_call_service/app.py` and `server/salemx-call-service/salemx_call_service/pushkit_tokens.py`.
+- The package lists `server/salemx-call-service/tests/test_service.py` as the validation test file.
+- The runbook covers safe manual deployment options, pre-deploy checks, post-deploy route checks, synthetic-token staging proof, forbidden data, rollback, and next prompt choices.
+- No server deployment, restart, live smoke, environment-variable change, or route activation was performed.
+- Live route status remains `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
+- Direct `salemx-call-service active` status is not verified.
+
 ## Suggested Next Task
 
-Start `2.43V - staging network path recovery or replacement`.
+Start one of:
 
-Goal: restore network/firewall/VPN/bastion access to the port 71 staging deploy path or provide a verified replacement deploy path, then deploy the 2.43Q/2.43R call-service token endpoint to staging and run a synthetic-token staging smoke. If access is still blocked, report only the redacted blocker and do not claim staging pass.
+- `2.43W - staging deploy using restored access`, if the endpoint is still not deployed.
+- `2.43W - synthetic-token staging registration smoke after manual deploy`, if an operator has manually deployed the endpoint and unauthenticated token registration now returns `401`.
+
+Goal: use the manual runbook to deploy only the 2.43Q/2.43R call-service token endpoint, then verify route safety and run a synthetic-token staging smoke. If access is still blocked or the endpoint remains `404`, report only the redacted blocker/status and do not claim staging pass.
 
 The next task must keep separate:
 

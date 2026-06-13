@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.43U - staging SSH/network deploy path recovery remains blocked on the corrected port 71 path; local fake-token app/server registration remains the latest passed token-registration proof.
+After 2.43V - manual staging deploy package/runbook is documented; staging deploy remains blocked on the port 71 network path, and local fake-token app/server registration remains the latest passed token-registration proof.
 
 ## Latest App Code Checkpoint
 
@@ -48,6 +48,12 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - No server deployment, restart, synthetic-token staging smoke, environment-variable change, or route activation was performed.
   - Live route status remains `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
   - Direct `salemx-call-service active` status is not verified.
+- 2.43V manual staging deploy package is documented:
+  - Added `docs/direct-call/PUSHKIT_STAGING_MANUAL_DEPLOY_RUNBOOK.md`.
+  - The package lists only the 2.43Q/2.43R call-service endpoint files: runtime `app.py` and `pushkit_tokens.py`, plus `tests/test_service.py` for validation.
+  - The runbook covers safe manual deployment options, pre-deploy checks, post-deploy route checks, synthetic-token smoke proof, forbidden data, rollback, and next prompt constraints.
+  - No deploy, restart, live smoke, environment-variable change, or route activation was performed.
+  - Live route status remains `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
 - 2.43T staging deploy access remediation is blocked:
   - Existing repo docs/scripts describe local staging harnesses but do not provide a complete remote deployment recipe.
   - The local SSH config contains a staging deploy alias using a non-standard SSH port, and the configured identity file is present.

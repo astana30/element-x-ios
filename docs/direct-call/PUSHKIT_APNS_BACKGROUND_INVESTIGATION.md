@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: 2.43U staging SSH/network deploy path recovery remains blocked on the corrected port 71 path; production PushKit/APNs/background behavior remains disabled by default and unwired.
+Status: 2.43V documents a manual staging deploy package/runbook while production PushKit/APNs/background behavior remains disabled by default and unwired.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -294,6 +294,14 @@ No `systemctl` service status was verified, no deploy was run, and no synthetic-
 2.43U retried access validation using the corrected staging SSH port. The staging alias resolves to port `71`, and port `22` is not the primary deploy path for this environment. A bounded port `71` connectivity check and bounded SSH probe through the alias both failed before authentication or host-key negotiation.
 
 No `systemctl` service status was verified, no deploy was run, and no synthetic-token staging smoke was attempted. Redacted blocker is `staging_deploy_blocked_by_firewall_or_network_path`. Live staging route checks remain `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
+
+## 2.43V Manual Staging Deploy Package
+
+2.43V creates a manual staging deploy package/runbook at `docs/direct-call/PUSHKIT_STAGING_MANUAL_DEPLOY_RUNBOOK.md`.
+
+The package lists only the 2.43Q/2.43R call-service endpoint files, documents pre-deploy validation, post-deploy route safety, synthetic-token smoke proof, forbidden data, and rollback, and explicitly keeps VoIP push delivery and real app-runtime token upload out of scope.
+
+No deploy, restart, synthetic-token staging smoke, server environment change, route activation, APNs registration, APNs provider request, media credential request, media connection, Matrix event emission, or production background behavior is performed by 2.43V.
 
 ## Current State From Tracked Code
 
