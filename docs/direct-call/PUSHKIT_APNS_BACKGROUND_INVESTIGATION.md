@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: 2.43I gated PushKit registrar scaffold added; production PushKit/APNs/background behavior remains disabled by default and unwired.
+Status: 2.43J PushKit capability readiness verification documented; production PushKit/APNs/background behavior remains disabled by default and unwired.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -204,6 +204,16 @@ Future 2.43I may design a real native direct-call PushKit registrar behind an ex
 Default configuration stays disabled and does not create a registry or request a token. Enabled tests use a fake registry only. Token update and invalidation handling produces redacted diagnostics only; raw PushKit/APNs tokens are not logged, persisted, uploaded, documented, or exposed in descriptions.
 
 Future 2.43J may run a controlled local physical PushKit registrar smoke only after explicit approval and entitlement/profile readiness. Any future entitlement, signing, provisioning, project, `Info.plist`, or `app.yml` change requires a separate explicit task.
+
+## 2.43J PushKit Capability Readiness Verification
+
+2.43J adds only a docs-first readiness verification matrix for the first controlled native direct-call PushKit registration smoke. It does not enable PushKit registration, wire registration to app startup, request PushKit/APNs tokens, modify entitlements, modify provisioning profiles, touch project files, alter signing, request media credentials, connect media, emit Matrix events, or change production behavior.
+
+The matrix records that the foreground real-invite baseline is verified, the 2.43B-F parser/intake/planner/adapter chain is scaffolded, and the 2.43I registrar is scaffolded but disabled by default. Real PushKit runtime registration remains blocked until explicit approval, Apple Developer capability/profile readiness, and signing/team readiness are verified.
+
+Tracked-source evidence shows `ElementX/SupportingFiles/ElementX.entitlements` contains development `aps-environment` and `ElementX/SupportingFiles/Info.plist` contains `UIBackgroundModes` including `voip`, but that is not the same as verifying Apple Developer portal capabilities or the active installed provisioning profile. Tracked `app.yml` still references old `DEVELOPMENT_TEAM: 83LGSC2QPV`, while physical Debug work must use `M639Y9MFR2`; 2.43J does not edit signing config.
+
+Server token registration and server VoIP push provider readiness remain not implemented or not verified from this iOS docs-first step. Live route-level safety remains the fallback server check: `dev/invite=404`, unauthenticated non-dev invite `401`, and unauthenticated stream `401`. Direct `systemctl` service status must not be claimed unless it is actually verified.
 
 ## Current State From Tracked Code
 

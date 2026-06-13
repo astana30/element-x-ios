@@ -1,6 +1,6 @@
 # PushKit Readiness Plan
 
-Status: 2.43I gated registrar scaffold added. No PushKit/APNs registration is enabled by default, and no entitlement, provisioning, project, signing, media, or production background behavior is implemented by this document.
+Status: 2.43J PushKit capability readiness verification documented. No PushKit/APNs registration is enabled by default, and no entitlement, provisioning, project, signing, media, or production background behavior is implemented by this document.
 
 ## 1. Current Safe Baseline
 
@@ -16,10 +16,33 @@ The 2.43B-I background chain exists only as safe seams:
 - 2.43G fake/test PushKit lifecycle abstraction.
 - 2.43H entitlement/provisioning/server readiness plan.
 - 2.43I gated PushKit registrar scaffold.
+- 2.43J capability readiness verification.
 
 The 2.43I registrar scaffold imports PushKit through an isolated real registry factory, but its feature gate defaults disabled and it is not wired to app startup. There is no enabled native direct-call PushKit registration, no native direct-call APNs token request, and no native direct-call PushKit/background callback wiring. Entitlements, provisioning, project files, signing settings, `Info.plist`, and `app.yml` have not been changed for the native direct-call background path. No media credentials, media connection, Matrix event emission from invite receipt, Element Call route replacement, or production background behavior has been added.
 
 Existing Element Call PushKit/VoIP surfaces remain a separate product path and are not the SalemX native direct-call background implementation.
+
+## 2.43J Capability Readiness Verification Matrix
+
+This matrix records tracked-source and local route-level evidence for whether the current app/account/build environment is ready for a controlled native direct-call PushKit registration smoke. It is verification-only: no entitlement, project, signing, provisioning, `Info.plist`, `app.yml`, PushKit registration, APNs registration, token request, media, or production background behavior is changed.
+
+| Area | Status | Evidence | Next action | Risk |
+| --- | --- | --- | --- | --- |
+| Foreground real invite baseline | verified | 2.42M physical two-device foreground real-invite smoke passed at `bf9996ae0665ad3953fac3d7a838bfb619349dd1`; 2.42O consolidated the baseline. | Keep foreground path unchanged while background work stays separately scoped. | Regression risk if PushKit work is mixed into foreground signaling or smoke tooling. |
+| Background parser/intake/planner/adapters | scaffolded | 2.43B-F provide parser, intake, planner, fake adapter, and controlled real CallKit adapter seams with redacted diagnostics and tests. | Continue using these seams as the only future background invite pipeline entry. | Bypassing seams could expose raw identifiers or trigger media/Matrix side effects. |
+| Gated PushKit registrar scaffold | scaffolded | 2.43I adds `DirectCallPushKitRegistrar`; the feature gate defaults disabled, no startup wiring exists, and tests use fake registries. | Keep disabled by default until a separately authorized physical smoke task. | Enabling without profile/capability readiness can fail token issuance or create confusing device state. |
+| Actual PushKit runtime registration | blocked | `DirectCallRealPushKitRegistryFactory` exists behind the 2.43I boundary, but no app-start owner wires it and no real token request is allowed in normal runtime. | Require explicit task approval and capability/profile readiness before any controlled registration smoke. | Accidental runtime registration could request a VoIP token without approved entitlements/profiles. |
+| APNs/VoIP entitlements | not verified | Tracked `ElementX/SupportingFiles/ElementX.entitlements` contains development `aps-environment`; tracked `ElementX/SupportingFiles/Info.plist` includes `UIBackgroundModes` with `voip`. Apple Developer portal/profile state was not verified. | Verify Apple Developer capabilities and generated profiles before real PushKit smoke. | Tracked settings alone do not prove the installed app/profile can receive VoIP pushes. |
+| Provisioning profile readiness | not verified | No provisioning profiles were modified or inspected as an authoritative readiness source in 2.43J. | Perform a separately authorized profile/certificate/device readiness check. | A local build may compile but fail device token issuance or install capability checks. |
+| Physical Debug Team ID | blocked | Current physical Debug requirement is `M639Y9MFR2`, but tracked `app.yml` still references old `DEVELOPMENT_TEAM: 83LGSC2QPV`; 2.43J does not edit signing config. | Use only explicit physical build overrides or a separately authorized signing remediation task before device smoke. | Accidentally using `83LGSC2QPV` can produce the wrong profile/capability context. |
+| Server token registration endpoint | not implemented | Docs contain only the planned server token registration contract; no native direct-call token upload endpoint is evidenced by this iOS verification. | Design/authenticate a server token registration contract in a separate task. | Without token registration, a VoIP provider cannot target native direct-call devices. |
+| Server VoIP push provider credentials | not verified | No server provider credential check was performed, and credentials must not be copied into docs or source. | Verify provider key/certificate handling out of band with redacted evidence only. | Misconfigured provider credentials can block delivery even if app registration succeeds. |
+| Route-level safety | verified | Live route checks returned `dev/invite=404`, unauthenticated non-dev invite `401`, and unauthenticated stream `401`. | Keep this as the fallback server safety check when direct service status is unavailable. | Route safety does not prove direct `systemctl` service status or push provider readiness. |
+| Direct service status | not verified | SSH to port 22 timed out in the latest direct service probes, so `systemctl` was not verified. | Only claim `salemx-call-service active` after a successful direct service check. | Overstating service-active status can hide host/auth/network failures. |
+| Privacy/logging policy | verified | 2.43B-I diagnostics are redacted; 2.43J changed docs only and privacy scans must reject raw PushKit/APNs tokens, identifiers, request payloads, private logs, and secret-bearing URLs. | Continue privacy scans on changed docs/code before every commit. | Token or payload leakage in logs/docs would be a release blocker. |
+| Rollback strategy | ready | The 2.43H rollback plan requires disabling the registrar gate, preserving foreground behavior, deleting/invalidation server tokens, route-safety checks, and privacy scans. | Keep future real registration behind a kill switch and reversible server token state. | No clean rollback exists if registration is wired directly at startup without a gate. |
+
+Readiness conclusion: a controlled real PushKit registration smoke is still blocked. The current code has only a disabled native direct-call registrar scaffold, tracked entitlement/config evidence is not equivalent to Apple Developer/profile readiness, the tracked team setting still needs explicit remediation or build overrides, and server token/provider readiness is not implemented or verified.
 
 ## 2. Apple Capability And Provisioning Requirements
 

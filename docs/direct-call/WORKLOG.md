@@ -299,6 +299,22 @@ Token update and invalidation handling is redacted only: raw PushKit/APNs tokens
 
 Future 2.43J may run a controlled local physical PushKit registrar smoke only after explicit approval and entitlement/profile readiness. Any future entitlement, signing, provisioning, project, `Info.plist`, or `app.yml` change requires a separate explicit task.
 
+### 2.43J — PushKit capability readiness verification
+
+Added a docs-first readiness verification matrix to:
+
+```text
+docs/direct-call/PUSHKIT_READINESS_PLAN.md
+```
+
+The matrix records each required area as ready, scaffolded, blocked, not implemented, verified, or not verified. The foreground real-invite baseline remains verified, the 2.43B-F background parser/intake/planner/adapter chain remains scaffolded, and the 2.43I registrar remains a disabled-by-default scaffold.
+
+The verification confirms that real native direct-call PushKit runtime registration is still blocked. Tracked source shows development `aps-environment` in `ElementX/SupportingFiles/ElementX.entitlements` and `voip` in `ElementX/SupportingFiles/Info.plist`, but Apple Developer capability and installed provisioning profile readiness were not verified. Tracked `app.yml` still references old `DEVELOPMENT_TEAM: 83LGSC2QPV`; physical Debug work must use `M639Y9MFR2`, and any signing remediation requires a separate explicit task.
+
+Server token registration and VoIP push provider readiness remain not implemented or not verified. Route-level safety remains verified with `dev/invite=404`, unauthenticated non-dev invite `401`, and unauthenticated stream `401`; direct `systemctl` service status must not be claimed unless actually verified.
+
+No PushKit registration was enabled, no PushKit/APNs token was requested, no APNs registration was added, no entitlement/provisioning/project/signing file was touched, no physical smoke was rerun, no real PushKit/background callback was wired, and no media credential, media connection, Matrix event emission, Element Call route replacement, or production background behavior was introduced.
+
 ### 2.42K — Supervised foreground real invite
 
 The two-device foreground real-invite smoke passed and was committed as:

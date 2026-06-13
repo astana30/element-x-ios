@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.43i-gated-pushkit-registrar-scaffold`
+`salemx-2.43j-pushkit-capability-readiness-verification`
 
-Next phase: continue from the gated PushKit registrar scaffold. Do not run physical PushKit registration smoke until explicit entitlement/profile readiness approval is present.
+Next phase: continue from the PushKit capability readiness verification. Do not run physical PushKit registration smoke until explicit entitlement/profile readiness approval is present.
 
 ## Baseline
 
@@ -203,11 +203,36 @@ Key findings:
 - No media credentials or media connection were introduced.
 - No Matrix events are emitted.
 
+2.43J adds only a docs-first PushKit capability readiness verification:
+
+- The readiness matrix lives in `docs/direct-call/PUSHKIT_READINESS_PLAN.md`.
+- Foreground real invite remains verified at the 2.42M/2.42O baseline.
+- The 2.43B-F background parser/intake/planner/adapter chain remains scaffolded.
+- The 2.43I registrar remains a disabled-by-default scaffold.
+- Real PushKit runtime registration remains blocked.
+- Tracked `ElementX/SupportingFiles/ElementX.entitlements` contains development `aps-environment`.
+- Tracked `ElementX/SupportingFiles/Info.plist` contains `UIBackgroundModes` including `voip`.
+- Apple Developer capability and installed provisioning profile readiness were not verified by this docs-only task.
+- Tracked `app.yml` still references old `DEVELOPMENT_TEAM: 83LGSC2QPV`; physical Debug work must use `M639Y9MFR2`.
+- Any signing remediation requires a separate explicit task.
+- Server token registration endpoint work remains not implemented.
+- Server VoIP push provider credential readiness remains not verified.
+- Route-level safety remains the fallback server verification.
+- Direct `systemctl` service status must not be claimed unless actually verified.
+- No physical smoke was rerun.
+- No PushKit registration was enabled.
+- No PushKit/APNs token was requested, logged, or persisted.
+- No APNs registration was added.
+- No entitlement, provisioning, project, signing, `Info.plist`, or `app.yml` file was changed.
+- No real PushKit/background callback was wired to app startup.
+- No media credentials or media connection were introduced.
+- No Matrix events are emitted.
+
 ## Guardrails
 
 - Do not implement PushKit/APNs/background incoming-call behavior without a separately scoped task.
 - Any future signing, entitlement, provisioning, project, `Info.plist`, or `app.yml` change requires explicit approval in that task.
-- Future 2.43J may run a controlled local physical PushKit registrar smoke only after explicit approval and entitlement/profile readiness.
+- Future controlled local physical PushKit registrar smoke is blocked until explicit entitlement/profile readiness approval and signing/team readiness are present.
 - Do not implement PushKit runtime inside foreground smoke tooling.
 - Do not register APNs or VoIP values inside foreground smoke tooling.
 - Do not add background incoming handling inside foreground smoke tooling.

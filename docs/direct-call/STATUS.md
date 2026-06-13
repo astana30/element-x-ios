@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.43I - gated PushKit registrar scaffold.
+After 2.43J - PushKit capability readiness verification.
 
 ## Latest App Code Checkpoint
 
@@ -117,6 +117,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Future 2.43J may run a controlled local physical PushKit registrar smoke only after explicit approval and entitlement/profile readiness.
   - Any future signing, entitlement, provisioning, project, `Info.plist`, or `app.yml` change requires a separate explicit task.
   - Physical Debug builds should use `DEVELOPMENT_TEAM=M639Y9MFR2`; the old `83LGSC2QPV` team must not be used.
+- 2.43J documents PushKit capability readiness verification:
+  - The readiness matrix in `docs/direct-call/PUSHKIT_READINESS_PLAN.md` records foreground baseline, background seams, registrar scaffold, runtime registration, entitlements, provisioning, team ID, server token registration, provider credentials, route safety, privacy, and rollback status.
+  - Current code has a gated scaffold only; real PushKit registration remains disabled and is not wired to app startup.
+  - Tracked `ElementX/SupportingFiles/ElementX.entitlements` contains development `aps-environment`, and tracked `ElementX/SupportingFiles/Info.plist` includes `UIBackgroundModes` with `voip`; Apple Developer portal and installed provisioning profile readiness remain not verified by this docs-only task.
+  - Tracked `app.yml` still references old `DEVELOPMENT_TEAM: 83LGSC2QPV`; physical Debug work must use `M639Y9MFR2`, and any signing remediation requires a separate explicit task.
+  - Server token registration and VoIP push provider readiness remain not implemented or not verified.
+  - Route-level safety remains verified with `dev/invite=404`, unauthenticated non-dev invite `401`, and unauthenticated stream `401`.
+  - Direct `systemctl` service status must not be claimed unless it is actually verified.
+  - No PushKit/APNs token request, APNs registration, entitlement/profile/project/signing edit, media credential request, media connection, Matrix event emission, Element Call route replacement, physical smoke, or production background behavior was added.
 - 2.43A documents the PushKit/APNs/background incoming-call investigation after the 2.42O foreground baseline:
   - The 2.42O validated foreground real-invite baseline remains unchanged.
   - Existing PushKit registration and VoIP push handling are present in the Element Call service path, not in SalemX native direct-call background behavior.
