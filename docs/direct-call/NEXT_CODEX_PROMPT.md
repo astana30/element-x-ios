@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.43v-manual-staging-deploy-package`
+`salemx-2.43w-fail2ban-aware-staging-token-deploy-smoke`
 
-Next phase: continue from the manual staging deploy package. Either deploy the 2.43Q/2.43R token-registration endpoint using restored port 71 access or an approved manual admin channel, or, if an operator has already manually deployed it, run only the synthetic-token staging registration smoke after route safety proves unauthenticated token registration is `401`. Do not upload real app-runtime tokens, send VoIP pushes, or wire background payload callbacks unless the user explicitly authorizes that exact step.
+Next phase: continue from the fail2ban-aware staging deploy attempt. Port 71 is reachable now, but SSH authentication blocks deployment. Fix SSH key authorization or use the approved manual deploy channel, then deploy only the 2.43Q/2.43R token-registration endpoint and run route safety plus synthetic-token staging smoke. Do not upload real app-runtime tokens, send VoIP pushes, or wire background payload callbacks unless the user explicitly authorizes that exact step.
 
 ## Baseline
 
@@ -92,14 +92,26 @@ No real PushKit token was used. No raw PushKit/APNs token is logged, durably per
 - Live route status remains `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
 - Direct `salemx-call-service active` status is not verified.
 
+## 2.43W Result
+
+2.43W retried staging deploy after manual fail2ban unban:
+
+- The staging SSH alias resolves to port `71`.
+- Bounded port `71` connectivity is now open.
+- A bounded SSH probe reached authentication but was rejected before any remote command could run.
+- Redacted blocker: `staging_deploy_blocked_by_auth`.
+- No server deployment, restart, synthetic-token staging smoke, environment-variable change, or route activation was performed.
+- Live route status remains `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
+- Direct `salemx-call-service active` status is not verified.
+
 ## Suggested Next Task
 
 Start one of:
 
-- `2.43W - staging deploy using restored access`, if the endpoint is still not deployed.
-- `2.43W - synthetic-token staging registration smoke after manual deploy`, if an operator has manually deployed the endpoint and unauthenticated token registration now returns `401`.
+- `2.43X - staging deploy after SSH auth remediation`, if SSH key authorization is fixed and the endpoint is still not deployed.
+- `2.43X - synthetic-token staging registration smoke after manual deploy`, if an operator has manually deployed the endpoint and unauthenticated token registration now returns `401`.
 
-Goal: use the manual runbook to deploy only the 2.43Q/2.43R call-service token endpoint, then verify route safety and run a synthetic-token staging smoke. If access is still blocked or the endpoint remains `404`, report only the redacted blocker/status and do not claim staging pass.
+Goal: use the manual runbook to deploy only the 2.43Q/2.43R call-service token endpoint, then verify route safety and run a synthetic-token staging smoke. If SSH auth is still blocked or the endpoint remains `404`, report only the redacted blocker/status and do not claim staging pass.
 
 The next task must keep separate:
 

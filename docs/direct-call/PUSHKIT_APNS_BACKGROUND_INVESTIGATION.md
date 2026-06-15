@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: 2.43V documents a manual staging deploy package/runbook while production PushKit/APNs/background behavior remains disabled by default and unwired.
+Status: 2.43W confirms port 71 is reachable after fail2ban unban, but staging deploy is blocked by SSH authentication while production PushKit/APNs/background behavior remains disabled by default and unwired.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -302,6 +302,12 @@ No `systemctl` service status was verified, no deploy was run, and no synthetic-
 The package lists only the 2.43Q/2.43R call-service endpoint files, documents pre-deploy validation, post-deploy route safety, synthetic-token smoke proof, forbidden data, and rollback, and explicitly keeps VoIP push delivery and real app-runtime token upload out of scope.
 
 No deploy, restart, synthetic-token staging smoke, server environment change, route activation, APNs registration, APNs provider request, media credential request, media connection, Matrix event emission, or production background behavior is performed by 2.43V.
+
+## 2.43W Fail2ban-Aware Staging Deploy Smoke
+
+2.43W retried staging deploy access after the operator manually cleared fail2ban. Port `71` connectivity is now open, but the controlled SSH probe reached authentication and was rejected before `systemctl`, deployment, or restart could run.
+
+No staging synthetic-token smoke was attempted. Redacted blocker is `staging_deploy_blocked_by_auth`. Live staging route checks remain `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
 
 ## Current State From Tracked Code
 

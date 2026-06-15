@@ -68,6 +68,18 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
 
+### 2.43W — Fail2ban-aware staging token deploy smoke
+
+Retried staging deploy after the operator manually cleared fail2ban.
+
+The staging SSH alias still resolves to port `71`. Bounded port `71` connectivity is now open, so the previous network/firewall blocker is cleared for this source path. The controlled SSH probe reached authentication but was rejected before any remote command could run.
+
+Redacted blocker: `staging_deploy_blocked_by_auth`.
+
+No server deployment, restart, synthetic-token staging smoke, server environment change, or route activation was performed. Live route checks remain `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
+
+No real PushKit/APNs token was used, logged, persisted, uploaded, or recorded. No APNs registration, APNs provider request, server VoIP push delivery, real PushKit/background payload callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production background behavior was introduced.
+
 ### 2.43V — Manual staging deploy package
 
 Prepared a docs-only manual deployment package/runbook for the 2.43Q/2.43R server token-registration endpoint because the normal staging SSH/network path remains blocked on port `71`.

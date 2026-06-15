@@ -1,6 +1,6 @@
 # PushKit Entitlement Change Proposal
 
-Status: 2.43V documents a manual staging deploy package/runbook after the port 71 staging network path remained blocked. No entitlement, `Info.plist`, `app.yml`, APNs registration, real PushKit token upload, durable token persistence, VoIP push delivery, media, or production background behavior is changed by this document.
+Status: 2.43W confirms port 71 is reachable after fail2ban unban, but staging deploy is blocked by SSH authentication. No entitlement, `Info.plist`, `app.yml`, APNs registration, real PushKit token upload, durable token persistence, VoIP push delivery, media, or production background behavior is changed by this document.
 
 ## 1. Current Tracked State
 
@@ -196,6 +196,18 @@ docs/direct-call/PUSHKIT_STAGING_MANUAL_DEPLOY_RUNBOOK.md
 The runbook lists the server runtime files from 2.43Q/2.43R, the associated test file, safe manual deployment options, pre-deploy checks, post-deploy route checks, synthetic-token staging proof, forbidden data, and rollback.
 
 It does not deploy, restart, change server environment variables, run live smoke, change app signing, change entitlement/project/`Info.plist` files, or enable PushKit registration. Live staging token registration remains `404` until an operator deploys the endpoint and route checks prove it is auth-gated with unauthenticated `401`.
+
+## 2.43W Fail2ban-Aware Deploy Attempt
+
+After the operator manually cleared fail2ban, 2.43W retried the staging deploy path on port `71`.
+
+Port `71` connectivity is now open, but the bounded SSH probe reached authentication and was rejected before any remote command could run. Redacted blocker:
+
+```text
+staging_deploy_blocked_by_auth
+```
+
+No deploy, restart, synthetic-token staging smoke, environment-variable change, entitlement change, app signing change, or route activation was performed. Live staging token registration remains `404`; the route is not yet deployed/auth-gated on staging.
 
 ## 2.43U Corrected-Port Staging SSH Recovery
 

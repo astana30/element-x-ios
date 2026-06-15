@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.43V - manual staging deploy package/runbook is documented; staging deploy remains blocked on the port 71 network path, and local fake-token app/server registration remains the latest passed token-registration proof.
+After 2.43W - fail2ban-aware staging deploy smoke reached port 71 but is blocked by SSH authentication; local fake-token app/server registration remains the latest passed token-registration proof.
 
 ## Latest App Code Checkpoint
 
@@ -54,6 +54,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - The runbook covers safe manual deployment options, pre-deploy checks, post-deploy route checks, synthetic-token smoke proof, forbidden data, rollback, and next prompt constraints.
   - No deploy, restart, live smoke, environment-variable change, or route activation was performed.
   - Live route status remains `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
+- 2.43W fail2ban-aware staging deploy smoke is blocked by SSH auth:
+  - The operator manually cleared fail2ban before this attempt.
+  - The staging SSH alias still resolves to port `71`.
+  - Bounded port `71` connectivity is now open.
+  - A bounded SSH probe reached authentication but was rejected before any remote command could run.
+  - Redacted blocker: `staging_deploy_blocked_by_auth`.
+  - No server deployment, restart, synthetic-token staging smoke, environment-variable change, or route activation was performed.
+  - Live route status remains `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
+  - Direct `salemx-call-service active` status is not verified.
 - 2.43T staging deploy access remediation is blocked:
   - Existing repo docs/scripts describe local staging harnesses but do not provide a complete remote deployment recipe.
   - The local SSH config contains a staging deploy alias using a non-standard SSH port, and the configured identity file is present.
