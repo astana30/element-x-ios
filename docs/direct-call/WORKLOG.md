@@ -68,6 +68,47 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
 
+### 2.44B — Controlled Server-Side PushKit Token Persistence
+
+Implemented the minimal controlled server-side persistence layer for PushKit token registration.
+
+The storage design is a small file-backed store at `state/pushkit-tokens.json` under the `salemx-call-service` working directory. The store creates its directory with `0700`, writes the file with `0600`, and uses hashed user/device/environment keys so the storage key does not contain raw Matrix user or device identifiers. Raw PushKit token bytes are retained only inside the server-side store for future internal APNs send code; they are not returned by API, logged, printed, copied into docs, or exposed in diagnostics.
+
+Route diagnostics now include redacted persistence fields: `pushkit_token_store_requested=true`, `pushkit_token_store_result=persisted`, `pushkit_token_retrieval_internal_check=redacted_match`, and `pushkit_token_api_exposes_raw_token=false` when a store is enabled. Tests also preserve the disabled-store behavior as `not_persisted`.
+
+Local server validation passed:
+
+```text
+compileall=passed
+pytest=142 passed
+```
+
+Deployed only these runtime files to staging:
+
+```text
+server/salemx-call-service/salemx_call_service/app.py
+server/salemx-call-service/salemx_call_service/pushkit_tokens.py
+```
+
+Remote compileall passed. Restarted only `salemx-call-service`, and service active was verified after restart.
+
+Public route safety remained:
+
+```text
+dev/invite=404
+unauthenticated non-dev invite=401
+unauthenticated stream=401
+unauthenticated token registration=401
+```
+
+The controlled physical real-token persistence smoke was not rerun because CoreDevice listed physical iPhones as unavailable. Redacted blocker:
+
+```text
+physical_device_unavailable
+```
+
+No standard APNs token request, APNs provider request, server VoIP push delivery, real PushKit/background callback wiring into the call flow, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production startup registration was introduced.
+
 ### 2.44A — Controlled Physical PushKit Token Upload Smoke
 
 Ran the first controlled physical-device smoke that receives a real PushKit VoIP token and uploads it once to the public staging token-registration endpoint.

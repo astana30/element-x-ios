@@ -213,7 +213,11 @@ Synthetic-token public staging registration passed with redacted `http_success` 
 
 2.44A did not change entitlements, `Info.plist`, signing, project files, `app.yml`, provisioning settings, media behavior, Element Call route replacement, or production startup behavior. Real PushKit registration remains disabled by default outside the explicit DEBUG/manual smoke path. No standard APNs token was requested, no APNs provider was requested, no VoIP push delivery was attempted, and no real PushKit/background payload callback was wired into the call flow.
 
-The next required action is token storage/invalidation contract design with synthetic-token and redaction tests first. Do not move directly to VoIP push delivery.
+2.44B adds controlled server-side token persistence without any entitlement, project, signing, `Info.plist`, provisioning, or app configuration change. The server store is file-backed under the service working directory with restricted permissions and hashed identity keys. The API does not return the token; internal retrieval is represented only by redacted `redacted_match`.
+
+The 2.44B runtime files were deployed to staging, remote compileall passed, `salemx-call-service` restarted successfully, and public route safety stayed intact. The physical real-token persistence smoke was not rerun because physical iPhones are unavailable through CoreDevice. Redacted blocker: `physical_device_unavailable`.
+
+The next required action is to rerun the controlled physical upload persistence smoke after device availability is restored, then design token invalidation. Do not move directly to VoIP push delivery.
 
 ## 2.43V Manual Staging Deploy Package
 

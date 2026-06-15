@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import json
 import os
+import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
@@ -71,6 +72,7 @@ from salemx_call_service.local_fake import (
     FAKE_MODE_ENV,
     make_fake_capabilities_payload,
 )
+from salemx_call_service.pushkit_tokens import FilePushKitTokenStore, InMemoryPushKitTokenStore
 from salemx_call_service.room_validation import InMemoryRoomValidator, RoomEligibility, SynapseRoomValidator
 from salemx_call_service.rate_limiting import (
     InMemoryRateLimiter,
@@ -932,9 +934,12 @@ class PushKitTokenRegistrationRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(status, 200)
         self.assertEqual(body["pushkit_token_registration_invoked"], True)
         self.assertEqual(body["pushkit_token_present"], True)
+        self.assertEqual(body["pushkit_token_redacted"], True)
         self.assertEqual(body["pushkit_token_store_requested"], False)
         self.assertEqual(body["pushkit_token_store_result"], "not_persisted")
         self.assertEqual(body["pushkit_token_registration_result"], "registered")
+        self.assertEqual(body["pushkit_token_retrieval_internal_check"], "not_persisted")
+        self.assertEqual(body["pushkit_token_api_exposes_raw_token"], False)
         self.assertEqual(body["voip_push_send_requested"], False)
         self.assertEqual(body["apns_provider_requested"], False)
         self.assertEqual(body["media_credentials_requested"], False)
@@ -945,6 +950,89 @@ class PushKitTokenRegistrationRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(self.auth_token(), output)
         self.assertNotIn(self.auth_user_id(), output)
         self.assertNotIn(self.auth_device_id(), output)
+
+    async def test_authenticated_synthetic_token_registration_persists_with_injected_store(self) -> None:
+        app_module = _load_app_module()
+        store = InMemoryPushKitTokenStore()
+        app = app_module.create_app(token_service=self.make_token_service(), pushkit_token_store=store)
+
+        with self.assertLogs("salemx_call_service.app", level="INFO") as logs:
+            status, body = await _asgi_post_json(
+                app,
+                app_module.PUSHKIT_TOKEN_REGISTRATION_PATH,
+                {"authorization": self.authorization()},
+                self.synthetic_payload(),
+            )
+        output = json.dumps(body, sort_keys=True) + "\n" + "\n".join(logs.output)
+        stored = store.retrieve(self.auth_user_id(), self.auth_device_id(), "development")
+
+        self.assertEqual(status, 200)
+        self.assertIsNotNone(stored)
+        self.assertEqual(stored.token if stored is not None else None, self.synthetic_token())
+        self.assertEqual(body["pushkit_token_registration_result"], "registered")
+        self.assertEqual(body["pushkit_token_store_requested"], True)
+        self.assertEqual(body["pushkit_token_store_result"], "persisted")
+        self.assertEqual(body["pushkit_token_retrieval_internal_check"], "redacted_match")
+        self.assertEqual(body["pushkit_token_api_exposes_raw_token"], False)
+        self.assertEqual(body["voip_push_send_requested"], False)
+        self.assertEqual(body["apns_provider_requested"], False)
+        self.assertEqual(body["media_credentials_requested"], False)
+        self.assertEqual(body["media_connect_requested"], False)
+        self.assertEqual(body["matrix_event_emit_requested"], False)
+        self.assertNotIn(self.synthetic_token(), output)
+        self.assertNotIn(self.auth_token(), output)
+        self.assertNotIn(self.auth_user_id(), output)
+        self.assertNotIn(self.auth_device_id(), output)
+
+    async def test_same_user_device_synthetic_token_upload_replaces_previous_token(self) -> None:
+        app_module = _load_app_module()
+        store = InMemoryPushKitTokenStore()
+        app = app_module.create_app(token_service=self.make_token_service(), pushkit_token_store=store)
+        replacement_token = "replacement-" + "pushkit-" + "token-fixture"
+
+        first_status, first_body = await _asgi_post_json(
+            app,
+            app_module.PUSHKIT_TOKEN_REGISTRATION_PATH,
+            {"authorization": self.authorization()},
+            self.synthetic_payload(),
+        )
+        second_status, second_body = await _asgi_post_json(
+            app,
+            app_module.PUSHKIT_TOKEN_REGISTRATION_PATH,
+            {"authorization": self.authorization()},
+            self.synthetic_payload(token=replacement_token),
+        )
+        stored = store.retrieve(self.auth_user_id(), self.auth_device_id(), "development")
+        output = json.dumps({"first": first_body, "second": second_body}, sort_keys=True)
+
+        self.assertEqual(first_status, 200)
+        self.assertEqual(second_status, 200)
+        self.assertIsNotNone(stored)
+        self.assertEqual(stored.token if stored is not None else None, replacement_token)
+        self.assertNotEqual(stored.token if stored is not None else None, self.synthetic_token())
+        self.assertEqual(second_body["pushkit_token_store_result"], "persisted")
+        self.assertEqual(second_body["pushkit_token_retrieval_internal_check"], "redacted_match")
+        self.assertNotIn(self.synthetic_token(), output)
+        self.assertNotIn(replacement_token, output)
+
+    async def test_file_token_store_uses_restricted_permissions_and_hashed_identity_key(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "pushkit-tokens.json")
+            store = FilePushKitTokenStore(path)
+            request = _load_app_module().PushKitTokenRegistrationRequest.from_mapping(self.synthetic_payload())
+
+            result = store.store(self.auth_user_id(), self.auth_device_id(), request)
+            stored = store.retrieve(self.auth_user_id(), self.auth_device_id(), "development")
+
+            with open(path, encoding="utf-8") as file:
+                stored_payload = file.read()
+
+            self.assertEqual(result, "persisted")
+            self.assertIsNotNone(stored)
+            self.assertEqual(stored.token if stored is not None else None, self.synthetic_token())
+            self.assertEqual(oct(os.stat(path).st_mode & 0o777), "0o600")
+            self.assertNotIn(self.auth_user_id(), stored_payload)
+            self.assertNotIn(self.auth_device_id(), stored_payload)
 
     async def test_malformed_token_registration_payload_is_rejected_without_side_effects(self) -> None:
         app_module = _load_app_module()
@@ -1037,6 +1125,7 @@ class PushKitTokenRegistrationRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(server_proof["pushkit_token_store_requested"], False)
         self.assertEqual(server_proof["pushkit_token_store_result"], "not_persisted")
         self.assertEqual(server_proof["pushkit_token_registration_result"], "registered")
+        self.assertEqual(server_proof["pushkit_token_api_exposes_raw_token"], False)
         self.assertEqual(server_proof["voip_push_send_requested"], False)
         self.assertEqual(server_proof["apns_provider_requested"], False)
         self.assertEqual(server_proof["media_credentials_requested"], False)

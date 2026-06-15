@@ -3,7 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from dataclasses import field
+from datetime import datetime, timezone
+import hashlib
+import json
+import os
+from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Any
+from typing import Protocol
 
 from .errors import bad_request
 
@@ -18,6 +26,7 @@ def _required_string(payload: dict[str, Any], key: str) -> str:
 @dataclass(frozen=True)
 class PushKitTokenRegistrationRequest:
     version: int
+    token: str = field(repr=False)
     token_present: bool
     environment_class: str
 
@@ -37,18 +46,126 @@ class PushKitTokenRegistrationRequest:
 
         return cls(
             version=version,
+            token=token,
             token_present=True,
             environment_class=environment_class,
         )
 
 
 @dataclass(frozen=True)
+class PushKitTokenRecord:
+    token: str = field(repr=False)
+    environment_class: str
+    updated_at: datetime
+
+
+class PushKitTokenStoreProtocol(Protocol):
+    def store(self, user_id: str, device_id: str | None, request: PushKitTokenRegistrationRequest) -> str:
+        ...
+
+    def retrieve(self, user_id: str, device_id: str | None, environment_class: str) -> PushKitTokenRecord | None:
+        ...
+
+
+class DisabledPushKitTokenStore:
+    def store(self, user_id: str, device_id: str | None, request: PushKitTokenRegistrationRequest) -> str:
+        return "not_persisted"
+
+    def retrieve(self, user_id: str, device_id: str | None, environment_class: str) -> PushKitTokenRecord | None:
+        return None
+
+
+class InMemoryPushKitTokenStore:
+    def __init__(self) -> None:
+        self._records: dict[str, PushKitTokenRecord] = {}
+
+    def store(self, user_id: str, device_id: str | None, request: PushKitTokenRegistrationRequest) -> str:
+        self._records[_record_key(user_id, device_id, request.environment_class)] = PushKitTokenRecord(
+            token=request.token,
+            environment_class=request.environment_class,
+            updated_at=datetime.now(timezone.utc),
+        )
+        return "persisted"
+
+    def retrieve(self, user_id: str, device_id: str | None, environment_class: str) -> PushKitTokenRecord | None:
+        return self._records.get(_record_key(user_id, device_id, environment_class))
+
+
+class FilePushKitTokenStore:
+    """Small server-side token store.
+
+    The file contains raw PushKit tokens for future APNs provider use, so it must never be logged or exposed by API
+    responses. Keys are stable hashes of Matrix user/device/environment instead of raw identifiers.
+    """
+
+    def __init__(self, path: str) -> None:
+        self._path = Path(path)
+
+    def store(self, user_id: str, device_id: str | None, request: PushKitTokenRegistrationRequest) -> str:
+        records = self._read_records()
+        records[_record_key(user_id, device_id, request.environment_class)] = {
+            "token": request.token,
+            "environment": request.environment_class,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        self._write_records(records)
+        return "persisted"
+
+    def retrieve(self, user_id: str, device_id: str | None, environment_class: str) -> PushKitTokenRecord | None:
+        record = self._read_records().get(_record_key(user_id, device_id, environment_class))
+        if not isinstance(record, dict):
+            return None
+
+        token = record.get("token")
+        stored_environment = record.get("environment")
+        updated_at = record.get("updated_at")
+        if not isinstance(token, str) or not isinstance(stored_environment, str) or not isinstance(updated_at, str):
+            return None
+
+        try:
+            parsed_updated_at = datetime.fromisoformat(updated_at)
+        except ValueError:
+            parsed_updated_at = datetime.fromtimestamp(0, timezone.utc)
+
+        return PushKitTokenRecord(
+            token=token,
+            environment_class=stored_environment,
+            updated_at=parsed_updated_at,
+        )
+
+    def _read_records(self) -> dict[str, dict[str, str]]:
+        if not self._path.exists():
+            return {}
+        with self._path.open("r", encoding="utf-8") as file:
+            payload = json.load(file)
+        if not isinstance(payload, dict):
+            return {}
+        return {key: value for key, value in payload.items() if isinstance(key, str) and isinstance(value, dict)}
+
+    def _write_records(self, records: dict[str, dict[str, str]]) -> None:
+        self._path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        os.chmod(self._path.parent, 0o700)
+
+        with NamedTemporaryFile("w", encoding="utf-8", dir=str(self._path.parent), delete=False) as file:
+            json.dump(records, file, sort_keys=True)
+            file.write("\n")
+            temporary_path = file.name
+
+        os.chmod(temporary_path, 0o600)
+        os.replace(temporary_path, self._path)
+        os.chmod(self._path, 0o600)
+
+
+@dataclass(frozen=True)
 class PushKitTokenRegistrationDiagnostics:
     pushkit_token_registration_invoked: bool = True
     pushkit_token_present: bool = False
+    pushkit_token_redacted: bool = True
     pushkit_token_store_requested: bool = False
     pushkit_token_store_result: str = "not_persisted"
     pushkit_token_registration_result: str = "rejected_redacted"
+    pushkit_token_retrieval_internal_check: str = "not_requested"
+    pushkit_token_api_exposes_raw_token: bool = False
     voip_push_send_requested: bool = False
     apns_provider_requested: bool = False
     media_credentials_requested: bool = False
@@ -57,19 +174,28 @@ class PushKitTokenRegistrationDiagnostics:
     blocked_reason: str = "none"
 
     @classmethod
-    def accepted(cls, request: PushKitTokenRegistrationRequest) -> "PushKitTokenRegistrationDiagnostics":
+    def accepted(cls,
+                 request: PushKitTokenRegistrationRequest,
+                 store_result: str = "not_persisted",
+                 retrieval_internal_check: str = "not_requested") -> "PushKitTokenRegistrationDiagnostics":
         return cls(
             pushkit_token_present=request.token_present,
+            pushkit_token_store_requested=store_result == "persisted",
+            pushkit_token_store_result=store_result,
             pushkit_token_registration_result="registered",
+            pushkit_token_retrieval_internal_check=retrieval_internal_check,
         )
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "pushkit_token_registration_invoked": self.pushkit_token_registration_invoked,
             "pushkit_token_present": self.pushkit_token_present,
+            "pushkit_token_redacted": self.pushkit_token_redacted,
             "pushkit_token_store_requested": self.pushkit_token_store_requested,
             "pushkit_token_store_result": self.pushkit_token_store_result,
             "pushkit_token_registration_result": self.pushkit_token_registration_result,
+            "pushkit_token_retrieval_internal_check": self.pushkit_token_retrieval_internal_check,
+            "pushkit_token_api_exposes_raw_token": self.pushkit_token_api_exposes_raw_token,
             "voip_push_send_requested": self.voip_push_send_requested,
             "apns_provider_requested": self.apns_provider_requested,
             "media_credentials_requested": self.media_credentials_requested,
@@ -77,3 +203,8 @@ class PushKitTokenRegistrationDiagnostics:
             "matrix_event_emit_requested": self.matrix_event_emit_requested,
             "blocked_reason": self.blocked_reason,
         }
+
+
+def _record_key(user_id: str, device_id: str | None, environment_class: str) -> str:
+    device_component = device_id or "unbound"
+    return hashlib.sha256(f"{user_id}\n{device_component}\n{environment_class}".encode("utf-8")).hexdigest()

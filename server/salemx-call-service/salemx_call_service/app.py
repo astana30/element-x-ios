@@ -38,7 +38,13 @@ from .livekit_rooms import DEFAULT_ROOM_DEPARTURE_TIMEOUT_SECONDS, LiveKitRoomSe
 from .livekit_tokens import LiveKitJWTTokenIssuer
 from .local_fake import make_fake_capabilities_payload, make_fake_local_service
 from .logging_utils import configure_logging, stable_redacted_id
-from .pushkit_tokens import PushKitTokenRegistrationDiagnostics, PushKitTokenRegistrationRequest
+from .pushkit_tokens import (
+    DisabledPushKitTokenStore,
+    FilePushKitTokenStore,
+    PushKitTokenRegistrationDiagnostics,
+    PushKitTokenRegistrationRequest,
+    PushKitTokenStoreProtocol,
+)
 from .rate_limiting import InMemoryRateLimiter, SharedRateLimiterSkeleton
 from .rate_limiting import RedisRateLimitClient, RedisRateLimiter
 from .room_validation import SynapseRoomValidator
@@ -52,6 +58,8 @@ FOREGROUND_SIGNALING_INVITE_PATH = "/_matrix/client/unstable/kz.salemx.direct_ca
 FOREGROUND_SIGNALING_DEV_INVITE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/invite"
 FOREGROUND_SIGNALING_DEV_INJECT_ACTIVE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/inject-active"
 PUSHKIT_TOKEN_REGISTRATION_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/pushkit/token"
+PUSHKIT_TOKEN_STORE_PATH_ENV = "SALEMX_CALL_SERVICE_PUSHKIT_TOKEN_STORE_PATH"
+DEFAULT_PUSHKIT_TOKEN_STORE_PATH = "state/pushkit-tokens.json"
 CAPABILITIES_PATH = "/_matrix/client/v3/capabilities"
 HEALTH_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/health"
 READINESS_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/readiness"
@@ -63,6 +71,7 @@ LOGGER = logging.getLogger(__name__)
 def create_app(config: ServiceConfig | None = None,
                token_service: DirectCallTokenService | None = None,
                foreground_signaling_service: ForegroundCallSignalingService | None = None,
+               pushkit_token_store: PushKitTokenStoreProtocol | None = None,
                strict_startup: bool = True) -> FastAPI:
     service: DirectCallTokenService | None
     readiness: ServiceReadiness
@@ -135,6 +144,7 @@ def create_app(config: ServiceConfig | None = None,
 
     app = FastAPI(title="SalemX Direct Call Service", version="0.1.0")
     signaling_service = foreground_signaling_service or ForegroundCallSignalingService()
+    token_store = pushkit_token_store or _pushkit_token_store_for_runtime(runtime_config)
 
     @app.get(HEALTH_PATH)
     async def health() -> JSONResponse:
@@ -190,7 +200,14 @@ def create_app(config: ServiceConfig | None = None,
             if not isinstance(payload, dict):
                 raise bad_request(error="Request body must be a JSON object.")
             registration_request = PushKitTokenRegistrationRequest.from_mapping(payload)
-            diagnostics = PushKitTokenRegistrationDiagnostics.accepted(registration_request)
+            store_result = token_store.store(authenticated_user.user_id, authenticated_user.device_id, registration_request)
+            stored_record = token_store.retrieve(authenticated_user.user_id, authenticated_user.device_id, registration_request.environment_class)
+            retrieval_internal_check = "redacted_match" if stored_record is not None and stored_record.token == registration_request.token else "not_persisted"
+            diagnostics = PushKitTokenRegistrationDiagnostics.accepted(
+                registration_request,
+                store_result=store_result,
+                retrieval_internal_check=retrieval_internal_check,
+            )
             LOGGER.info(
                 "pushkit token registration accepted account_hash=%s device_bound=%s token_present=%s "
                 "store_requested=%s voip_push_send_requested=%s",
@@ -406,6 +423,12 @@ def _rate_limiter_for_config(config: ServiceConfig) -> InMemoryRateLimiter | Red
             StorageKeyHasher(config.storage_key_secret),
         )
     return SharedRateLimiterSkeleton(config.rate_limit_store)
+
+
+def _pushkit_token_store_for_runtime(config: ServiceConfig | None) -> PushKitTokenStoreProtocol:
+    if config is None:
+        return DisabledPushKitTokenStore()
+    return FilePushKitTokenStore(environ.get(PUSHKIT_TOKEN_STORE_PATH_ENV, DEFAULT_PUSHKIT_TOKEN_STORE_PATH))
 
 
 def _eligibility_policy_for_config(

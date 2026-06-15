@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.44A - controlled physical PushKit token upload smoke passed through an explicit DEBUG/manual path. A real PushKit VoIP token was received and uploaded once to the public staging token-registration endpoint, but it was never printed, logged, persisted, recorded, documented, or committed. Real PushKit registration remains disabled by default, and no server token persistence or VoIP push delivery is enabled.
+After 2.44B - controlled server-side PushKit token persistence is implemented, tested locally, deployed to staging, and the service was restarted. The follow-up physical real-token persistence smoke is blocked because CoreDevice lists physical iPhones as unavailable. Real PushKit registration remains disabled by default, iOS local token persistence remains disabled, and no APNs provider request or VoIP push delivery is enabled.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.44B controlled server-side PushKit token persistence is implemented and deployed, but physical smoke is blocked:
+  - Server persistence uses a minimal file-backed store at `state/pushkit-tokens.json` under the service working directory, with `0700` directory permissions, `0600` file permissions, and hashed user/device/environment keys.
+  - The raw token is stored only inside the server-side store for future internal APNs send code and is never returned by API, logged, printed, copied into docs, or exposed in diagnostics.
+  - Local server validation passed: compileall passed and pytest reported `142 passed`.
+  - Deployed only `server/salemx-call-service/salemx_call_service/app.py` and `server/salemx-call-service/salemx_call_service/pushkit_tokens.py` to staging.
+  - Remote compileall passed; `salemx-call-service` restart succeeded; service active was verified after restart.
+  - Public route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `401`.
+  - Physical real-token persistence smoke was not rerun because CoreDevice listed physical iPhones as unavailable; redacted blocker: `physical_device_unavailable`.
+  - No standard APNs token request, APNs provider request, server VoIP push delivery, real PushKit/background callback wiring into call flow, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, or `app.yml` regeneration was introduced.
 - 2.44A controlled physical PushKit token upload smoke passed:
   - Public route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `401`.
   - Physical iPhone availability, Debug build, install, and launch were verified with the current `M639Y9MFR2` signing state.

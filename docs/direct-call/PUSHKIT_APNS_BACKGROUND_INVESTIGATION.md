@@ -347,6 +347,18 @@ Public route safety remained `dev/invite=404`, unauthenticated non-dev invite `4
 
 This does not implement production native direct-call PushKit behavior. Registration remains disabled by default, no standard APNs token is requested, no APNs provider or VoIP push delivery is attempted, no PushKit/background payload callback is wired into the call flow, and no media credentials, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production background behavior is introduced.
 
+## 2.44B Controlled Server-Side Token Persistence
+
+2.44B adds controlled server-side persistence for PushKit token registration. The store is file-backed at `state/pushkit-tokens.json` under the service working directory, creates its directory with `0700`, writes the file with `0600`, and uses hashed authenticated user/device/environment keys rather than raw Matrix identifiers.
+
+The raw token is retained only inside the server-side store for future APNs send code. It is not returned by API, logged, printed, copied into docs, or exposed in diagnostics. Redacted diagnostics include `pushkit_token_store_requested=true`, `pushkit_token_store_result=persisted`, `pushkit_token_retrieval_internal_check=redacted_match`, and `pushkit_token_api_exposes_raw_token=false` when persistence is enabled.
+
+Local server validation passed with compileall and `142 passed`. The updated runtime files were deployed to staging, remote compileall passed, `salemx-call-service` was restarted, and active status was verified after restart. Public route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `401`.
+
+The physical real-token persistence smoke was not rerun because physical iPhones are unavailable through CoreDevice. Redacted blocker: `physical_device_unavailable`.
+
+No APNs provider request, VoIP push delivery, standard APNs token request, iOS local token persistence, real PushKit/background callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production background behavior is introduced.
+
 ## Current State From Tracked Code
 
 ### Existing PushKit Surface

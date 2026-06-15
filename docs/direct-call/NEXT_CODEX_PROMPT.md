@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.44a-controlled-physical-pushkit-token-upload-smoke`
+`salemx-2.44b-controlled-pushkit-token-persistence`
 
-Next phase: continue after controlled physical PushKit token upload passed. Do not move to VoIP push delivery yet. The next safe step should define durable token storage/invalidation with fake-token and redaction tests first.
+Next phase: continue after controlled server-side PushKit token persistence was implemented and deployed, but physical persistence smoke was blocked by unavailable CoreDevice phones. Do not move to VoIP push delivery yet. The next safe step should rerun the physical persistence smoke after device availability is restored, then design token invalidation.
 
 ## Baseline
 
@@ -40,6 +40,7 @@ a12fb1f3206ce2e9cc68205d3995a983643c7503 Validate physical install capability st
 5b6312451f9569f536cef05db25038d96926f603 Add server PushKit token registration contract
 42e4e466eccb784b67e002c60dbdb742c8eae745 Validate fake-token PushKit registration smoke
 63abcf838b030a480ef1a3b5c855db41cb2df371 Validate public token route proxy smoke
+ad16c70a480c44eab810e32a7fbf89aa820c33a5 Validate controlled physical PushKit token upload
 ```
 
 ## 2.43S Result
@@ -169,28 +170,48 @@ Resumed 2.43W after SSH auth recovery:
 - Redacted proof kept `pushkit_token_local_persistence_requested=false`, `pushkit_token_server_store_requested=false`, `pushkit_token_server_store_result=not_persisted`, `voip_push_send_requested=false`, `apns_provider_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, `matrix_event_emit_requested=false`, and `real_pushkit_background_callback_wired=false`.
 - No standard APNs token request, APNs provider request, server VoIP push delivery, real PushKit/background callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production startup registration was introduced.
 
+## 2.44B Result
+
+2.44B implemented controlled server-side PushKit token persistence:
+
+- Storage design: file-backed `state/pushkit-tokens.json` under the `salemx-call-service` working directory.
+- Store permissions: directory `0700`, file `0600`.
+- Store keys: hashed authenticated user/device/environment values, not raw Matrix identifiers.
+- Token API exposure: false; the raw token is never returned by API.
+- Internal retrieval is represented only by redacted `pushkit_token_retrieval_internal_check=redacted_match`.
+- Local server validation passed: compileall passed and pytest reported `142 passed`.
+- Deployed only `server/salemx-call-service/salemx_call_service/app.py` and `server/salemx-call-service/salemx_call_service/pushkit_tokens.py`.
+- Remote compileall passed.
+- Restarted only `salemx-call-service`; service active was verified after restart.
+- Public route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `401`.
+- Physical real-token persistence smoke was not rerun because CoreDevice listed physical iPhones as unavailable.
+- Redacted blocker: `physical_device_unavailable`.
+
+No standard APNs token request, APNs provider request, server VoIP push delivery, real PushKit/background callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production startup registration was introduced.
+
 ## Suggested Next Task
 
 Start:
 
-- `2.44B - PushKit token storage/invalidation contract`
+- `2.44C - controlled physical PushKit token persistence smoke rerun`
 
-Goal: define durable server token storage and invalidation semantics with fake-token tests and strict redaction before any VoIP push delivery work.
+Goal: recover physical device availability and rerun the existing DEBUG/manual physical token upload smoke against the now-persistent staging endpoint. Do not send a VoIP push.
 
 The next task must keep separate:
 
-- server token storage/invalidation contract
+- physical token persistence verification
+- server token invalidation contract
 - provider credential readiness
 - later VoIP push delivery smoke
 
-Do not proceed with durable real-token persistence, provider push delivery, or background payload callback wiring unless that authorization is explicit.
+Do not proceed with provider push delivery or background payload callback wiring unless that authorization is explicit.
 
 Required guardrails:
 
 - Do not wire PushKit registration to app startup by default.
 - Do not request an APNs token unless separately scoped.
 - Do not persist, upload, print, log, document, or commit raw PushKit/APNs tokens.
-- Do not upload another real PushKit token unless the task explicitly authorizes it.
+- Do not upload another real PushKit token unless the task explicitly authorizes the controlled physical smoke rerun.
 - Do not send a server VoIP push yet.
 - Do not use `dev/invite`, `dev/inject-active`, port `8090`, or `SALEMX_FOREGROUND_SIGNALING_DEV_INVITE_ENABLED=1`.
 - Do not request media credentials or connect media.
