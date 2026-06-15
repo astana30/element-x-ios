@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: 2.43Z exposes the staging token-registration route publicly through the reverse proxy and validates a synthetic-token staging registration smoke while production PushKit/APNs/background behavior remains disabled by default and unwired.
+Status: 2.44B1 validates a controlled physical real-token upload into the persisted staging PushKit token store while production PushKit/APNs/background behavior remains disabled by default and unwired.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -349,13 +349,17 @@ This does not implement production native direct-call PushKit behavior. Registra
 
 ## 2.44B Controlled Server-Side Token Persistence
 
-2.44B adds controlled server-side persistence for PushKit token registration. The store is file-backed at `state/pushkit-tokens.json` under the service working directory, creates its directory with `0700`, writes the file with `0600`, and uses hashed authenticated user/device/environment keys rather than raw Matrix identifiers.
+2.44B adds controlled server-side persistence for PushKit token registration. The store is file-backed at `/tmp/salemx-call-service-pushkit-token-store/pushkit-tokens.json`, creates its directory with `0700`, writes the file with `0600`, and uses hashed authenticated user/device/environment keys rather than raw Matrix identifiers.
 
 The raw token is retained only inside the server-side store for future APNs send code. It is not returned by API, logged, printed, copied into docs, or exposed in diagnostics. Redacted diagnostics include `pushkit_token_store_requested=true`, `pushkit_token_store_result=persisted`, `pushkit_token_retrieval_internal_check=redacted_match`, and `pushkit_token_api_exposes_raw_token=false` when persistence is enabled.
 
 Local server validation passed with compileall and `142 passed`. The updated runtime files were deployed to staging, remote compileall passed, `salemx-call-service` was restarted, and active status was verified after restart. Public route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `401`.
 
-The physical real-token persistence smoke was not rerun because physical iPhones are unavailable through CoreDevice. Redacted blocker: `physical_device_unavailable`.
+2.44B1 reran the controlled physical real-token persistence smoke after the iPhone became available through CoreDevice/Xcode. The first post-install URL trigger failed closed before session restoration with `pushkit_token_upload_blocked_by_auth` and did not upload. After normal launch restored the session, the DEBUG/manual smoke received a real PushKit token, redacted it, uploaded it to staging, and verified server persistence.
+
+Redacted proof reached `pushkit_token_upload_result=http_success`, `pushkit_token_registration_result=registered`, `pushkit_token_server_store_requested=true`, `pushkit_token_server_store_result=persisted`, `pushkit_token_retrieval_internal_check=redacted_match`, and `pushkit_token_api_exposes_raw_token=false`.
+
+The raw token was not printed, logged, copied into docs, persisted locally on iOS, returned by API, recorded, or committed. Token retrieval remains internal-only.
 
 No APNs provider request, VoIP push delivery, standard APNs token request, iOS local token persistence, real PushKit/background callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production background behavior is introduced.
 

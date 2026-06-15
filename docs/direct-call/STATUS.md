@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.44B - controlled server-side PushKit token persistence is implemented, tested locally, deployed to staging, and the service was restarted. The follow-up physical real-token persistence smoke is blocked because CoreDevice lists physical iPhones as unavailable. Real PushKit registration remains disabled by default, iOS local token persistence remains disabled, and no APNs provider request or VoIP push delivery is enabled.
+After 2.44B1 - the controlled physical real-token persistence smoke passed on a connected iPhone. The real PushKit token was received and uploaded through the explicit DEBUG/manual smoke path, staging persistence returned `persisted`, and the internal retrieval check returned only the redacted class `redacted_match`. Real PushKit registration remains disabled by default, iOS local token persistence remains disabled, and no APNs provider request or VoIP push delivery is enabled.
 
 ## Latest App Code Checkpoint
 
@@ -39,14 +39,20 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
-- 2.44B controlled server-side PushKit token persistence is implemented and deployed, but physical smoke is blocked:
-  - Server persistence uses a minimal file-backed store at `state/pushkit-tokens.json` under the service working directory, with `0700` directory permissions, `0600` file permissions, and hashed user/device/environment keys.
+- 2.44B1 physical persisted PushKit token upload smoke passed:
+  - A physical iPhone became available through CoreDevice/Xcode.
+  - Public route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `401`.
+  - The updated Debug build installed and the DEBUG/manual smoke control received a real PushKit token, redacted it, and uploaded it to staging.
+  - Redacted proof reached `pushkit_token_upload_result=http_success`, `pushkit_token_registration_result=registered`, `pushkit_token_server_store_requested=true`, `pushkit_token_server_store_result=persisted`, `pushkit_token_retrieval_internal_check=redacted_match`, and `pushkit_token_api_exposes_raw_token=false`.
+  - iOS local token persistence remained `false`; the API did not return the raw token; retrieval remains internal-only.
+  - No standard APNs token request, APNs provider request, server VoIP push delivery, real PushKit/background callback wiring into call flow, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, or `app.yml` regeneration was introduced.
+- 2.44B controlled server-side PushKit token persistence is implemented and deployed:
+  - Server persistence uses a minimal file-backed store at `/tmp/salemx-call-service-pushkit-token-store/pushkit-tokens.json`, with `0700` directory permissions, `0600` file permissions, and hashed user/device/environment keys.
   - The raw token is stored only inside the server-side store for future internal APNs send code and is never returned by API, logged, printed, copied into docs, or exposed in diagnostics.
   - Local server validation passed: compileall passed and pytest reported `142 passed`.
   - Deployed only `server/salemx-call-service/salemx_call_service/app.py` and `server/salemx-call-service/salemx_call_service/pushkit_tokens.py` to staging.
   - Remote compileall passed; `salemx-call-service` restart succeeded; service active was verified after restart.
   - Public route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `401`.
-  - Physical real-token persistence smoke was not rerun because CoreDevice listed physical iPhones as unavailable; redacted blocker: `physical_device_unavailable`.
   - No standard APNs token request, APNs provider request, server VoIP push delivery, real PushKit/background callback wiring into call flow, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, or `app.yml` regeneration was introduced.
 - 2.44A controlled physical PushKit token upload smoke passed:
   - Public route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `401`.

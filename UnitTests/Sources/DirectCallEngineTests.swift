@@ -2175,6 +2175,8 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("pushkit_token_redacted=true"))
         #expect(adapterSource.contains("pushkit_token_upload_result=\\(uploadResult)"))
         #expect(adapterSource.contains("pushkit_token_server_store_result=\\(serverStoreResult)"))
+        #expect(adapterSource.contains("pushkit_token_retrieval_internal_check=\\(retrievalInternalCheck)"))
+        #expect(adapterSource.contains("pushkit_token_api_exposes_raw_token=\\(tokenAPIExposesRawToken)"))
         #expect(adapterSource.contains("real_pushkit_background_callback_wired=false"))
         #expect(adapterSource.contains("voip_push_send_requested=false"))
         #expect(adapterSource.contains("apns_provider_requested=false"))

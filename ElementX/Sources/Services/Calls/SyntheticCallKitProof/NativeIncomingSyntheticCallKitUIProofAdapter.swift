@@ -527,6 +527,8 @@ private struct SalemXPushKitTokenUploadSmokeSummary {
     var registrationResult = "not_started"
     var serverStoreRequested = false
     var serverStoreResult = "not_requested"
+    var retrievalInternalCheck = "not_requested"
+    var tokenAPIExposesRawToken = false
     var blockedReason = "none"
 
     var redactedLines: [String] {
@@ -541,6 +543,8 @@ private struct SalemXPushKitTokenUploadSmokeSummary {
             "pushkit_token_local_persistence_requested=false",
             "pushkit_token_server_store_requested=\(serverStoreRequested)",
             "pushkit_token_server_store_result=\(serverStoreResult)",
+            "pushkit_token_retrieval_internal_check=\(retrievalInternalCheck)",
+            "pushkit_token_api_exposes_raw_token=\(tokenAPIExposesRawToken)",
             "voip_push_send_requested=false",
             "apns_provider_requested=false",
             "media_credentials_requested=false",
@@ -664,6 +668,8 @@ private final class SalemXPushKitTokenUploadSmoke: NSObject, DirectCallPushKitRe
         let registrationResult = body["pushkit_token_registration_result"] as? String ?? "upload_failed_redacted"
         let storeRequested = body["pushkit_token_store_requested"] as? Bool ?? false
         let storeResult = body["pushkit_token_store_result"] as? String ?? "redacted"
+        let retrievalInternalCheck = body["pushkit_token_retrieval_internal_check"] as? String ?? "redacted"
+        let tokenAPIExposesRawToken = body["pushkit_token_api_exposes_raw_token"] as? Bool ?? false
         let success = httpResponse.statusCode == 200 && registrationResult == "registered"
         updateSummary(.init(physicalDeviceAvailable: true,
                             manualInvoked: true,
@@ -673,6 +679,8 @@ private final class SalemXPushKitTokenUploadSmoke: NSObject, DirectCallPushKitRe
                             registrationResult: registrationResult,
                             serverStoreRequested: storeRequested,
                             serverStoreResult: storeResult,
+                            retrievalInternalCheck: retrievalInternalCheck,
+                            tokenAPIExposesRawToken: tokenAPIExposesRawToken,
                             blockedReason: success ? "none" : "pushkit_token_upload_http_failure"))
     }
 }

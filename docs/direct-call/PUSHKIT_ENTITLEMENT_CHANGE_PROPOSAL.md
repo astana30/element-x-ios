@@ -215,9 +215,11 @@ Synthetic-token public staging registration passed with redacted `http_success` 
 
 2.44B adds controlled server-side token persistence without any entitlement, project, signing, `Info.plist`, provisioning, or app configuration change. The server store is file-backed under the service working directory with restricted permissions and hashed identity keys. The API does not return the token; internal retrieval is represented only by redacted `redacted_match`.
 
-The 2.44B runtime files were deployed to staging, remote compileall passed, `salemx-call-service` restarted successfully, and public route safety stayed intact. The physical real-token persistence smoke was not rerun because physical iPhones are unavailable through CoreDevice. Redacted blocker: `physical_device_unavailable`.
+The 2.44B runtime files were deployed to staging, remote compileall passed, `salemx-call-service` restarted successfully, and public route safety stayed intact. 2.44B1 then reran the physical real-token persistence smoke after the iPhone became available and verified redacted persisted storage.
 
-The next required action is to rerun the controlled physical upload persistence smoke after device availability is restored, then design token invalidation. Do not move directly to VoIP push delivery.
+2.44B1 reran the controlled physical upload persistence smoke after device availability was restored. The smoke passed with redacted `pushkit_token_server_store_result=persisted`, `pushkit_token_retrieval_internal_check=redacted_match`, and `pushkit_token_api_exposes_raw_token=false`. The raw token was not exposed in docs, logs, proof, or API responses.
+
+The next required action is token invalidation/replacement design and tests. Do not move directly to VoIP push delivery.
 
 ## 2.43V Manual Staging Deploy Package
 

@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.44b-controlled-pushkit-token-persistence`
+`salemx-2.44b1-physical-persisted-token-upload-smoke`
 
-Next phase: continue after controlled server-side PushKit token persistence was implemented and deployed, but physical persistence smoke was blocked by unavailable CoreDevice phones. Do not move to VoIP push delivery yet. The next safe step should rerun the physical persistence smoke after device availability is restored, then design token invalidation.
+Next phase: continue after the controlled physical persisted PushKit token upload smoke passed. Do not move to VoIP push delivery yet. The next safe step should design and test token invalidation/replacement while keeping all token values redacted.
 
 ## Baseline
 
@@ -174,7 +174,7 @@ Resumed 2.43W after SSH auth recovery:
 
 2.44B implemented controlled server-side PushKit token persistence:
 
-- Storage design: file-backed `state/pushkit-tokens.json` under the `salemx-call-service` working directory.
+- Storage design: file-backed `/tmp/salemx-call-service-pushkit-token-store/pushkit-tokens.json` on the staging host.
 - Store permissions: directory `0700`, file `0600`.
 - Store keys: hashed authenticated user/device/environment values, not raw Matrix identifiers.
 - Token API exposure: false; the raw token is never returned by API.
@@ -184,8 +184,21 @@ Resumed 2.43W after SSH auth recovery:
 - Remote compileall passed.
 - Restarted only `salemx-call-service`; service active was verified after restart.
 - Public route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `401`.
-- Physical real-token persistence smoke was not rerun because CoreDevice listed physical iPhones as unavailable.
-- Redacted blocker: `physical_device_unavailable`.
+- Physical real-token persistence smoke was deferred to 2.44B1 because CoreDevice listed physical iPhones as unavailable during 2.44B.
+
+No standard APNs token request, APNs provider request, server VoIP push delivery, real PushKit/background callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production startup registration was introduced.
+
+## 2.44B1 Result
+
+2.44B1 reran the controlled physical persisted PushKit token upload smoke:
+
+- A physical iPhone was available through CoreDevice/Xcode.
+- Public route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `401`.
+- The updated Debug build installed on the physical iPhone.
+- The first post-install URL trigger failed closed before session restoration with `pushkit_token_upload_blocked_by_auth`; it did not upload.
+- After a normal app launch restored the session, the DEBUG/manual smoke received a real PushKit token and uploaded it to the persisted staging endpoint.
+- Redacted proof reached `physical_device_available=true`, `pushkit_registration_manual_invoked=true`, `pushkit_token_received=true`, `pushkit_token_redacted=true`, `pushkit_token_upload_requested=true`, `pushkit_token_upload_result=http_success`, `pushkit_token_registration_result=registered`, `pushkit_token_local_persistence_requested=false`, `pushkit_token_server_store_requested=true`, `pushkit_token_server_store_result=persisted`, `pushkit_token_retrieval_internal_check=redacted_match`, `pushkit_token_api_exposes_raw_token=false`, `voip_push_send_requested=false`, `apns_provider_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, `matrix_event_emit_requested=false`, and `real_pushkit_background_callback_wired=false`.
+- The raw token was never printed, logged, copied into docs, persisted locally on iOS, returned by API, recorded, or committed.
 
 No standard APNs token request, APNs provider request, server VoIP push delivery, real PushKit/background callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production startup registration was introduced.
 
@@ -193,13 +206,13 @@ No standard APNs token request, APNs provider request, server VoIP push delivery
 
 Start:
 
-- `2.44C - controlled physical PushKit token persistence smoke rerun`
+- `2.44C - PushKit token invalidation and replacement contract`
 
-Goal: recover physical device availability and rerun the existing DEBUG/manual physical token upload smoke against the now-persistent staging endpoint. Do not send a VoIP push.
+Goal: add a safe server/client contract for PushKit token invalidation and replacement using redacted diagnostics and synthetic tests first. Do not send a VoIP push.
 
 The next task must keep separate:
 
-- physical token persistence verification
+- token invalidation/replacement behavior
 - server token invalidation contract
 - provider credential readiness
 - later VoIP push delivery smoke
