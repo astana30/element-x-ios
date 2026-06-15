@@ -219,7 +219,9 @@ The 2.44B runtime files were deployed to staging, remote compileall passed, `sal
 
 2.44B1 reran the controlled physical upload persistence smoke after device availability was restored. The smoke passed with redacted `pushkit_token_server_store_result=persisted`, `pushkit_token_retrieval_internal_check=redacted_match`, and `pushkit_token_api_exposes_raw_token=false`. The raw token was not exposed in docs, logs, proof, or API responses.
 
-The next required action is token invalidation/replacement design and tests. Do not move directly to VoIP push delivery.
+2.44C adds a controlled APNs VoIP sandbox scaffold without changing entitlements, project, signing, `Info.plist`, or app configuration. The scaffold deployed to staging, but the live scaffold smoke was blocked before APNs by `persisted_pushkit_token_missing` for the available staging credential. APNs credentials/topic were not configured, and no real APNs send was attempted.
+
+The next required action is to provide a matching authenticated smoke path and server-local sandbox APNs credentials/topic, or to design token invalidation/replacement first. Do not move directly to VoIP push delivery.
 
 ## 2.43V Manual Staging Deploy Package
 

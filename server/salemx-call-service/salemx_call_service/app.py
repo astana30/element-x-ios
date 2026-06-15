@@ -12,6 +12,11 @@ from fastapi import FastAPI, Header, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from .allocation import InMemoryAllocationStore, RedisAllocationClient, RedisAllocationStore, SharedAllocationStoreSkeleton
+from .apns_voip import (
+    APNsVoIPSandboxConfig,
+    APNsVoIPSandboxSendRequest,
+    APNsVoIPSandboxSendService,
+)
 from .auth import SynapseMatrixAuthValidator, bearer_token_from_authorization
 from .config import (
     ServiceConfig,
@@ -58,6 +63,7 @@ FOREGROUND_SIGNALING_INVITE_PATH = "/_matrix/client/unstable/kz.salemx.direct_ca
 FOREGROUND_SIGNALING_DEV_INVITE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/invite"
 FOREGROUND_SIGNALING_DEV_INJECT_ACTIVE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/inject-active"
 PUSHKIT_TOKEN_REGISTRATION_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/pushkit/token"
+APNS_VOIP_SANDBOX_SEND_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/pushkit/apns/sandbox/send"
 PUSHKIT_TOKEN_STORE_PATH_ENV = "SALEMX_CALL_SERVICE_PUSHKIT_TOKEN_STORE_PATH"
 DEFAULT_PUSHKIT_TOKEN_STORE_PATH = "/tmp/salemx-call-service-pushkit-token-store/pushkit-tokens.json"
 CAPABILITIES_PATH = "/_matrix/client/v3/capabilities"
@@ -72,6 +78,7 @@ def create_app(config: ServiceConfig | None = None,
                token_service: DirectCallTokenService | None = None,
                foreground_signaling_service: ForegroundCallSignalingService | None = None,
                pushkit_token_store: PushKitTokenStoreProtocol | None = None,
+               apns_voip_send_service: APNsVoIPSandboxSendService | None = None,
                strict_startup: bool = True) -> FastAPI:
     service: DirectCallTokenService | None
     readiness: ServiceReadiness
@@ -145,6 +152,7 @@ def create_app(config: ServiceConfig | None = None,
     app = FastAPI(title="SalemX Direct Call Service", version="0.1.0")
     signaling_service = foreground_signaling_service or ForegroundCallSignalingService()
     token_store = pushkit_token_store or _pushkit_token_store_for_runtime(runtime_config)
+    voip_send_service = apns_voip_send_service or APNsVoIPSandboxSendService(APNsVoIPSandboxConfig.from_env())
 
     @app.get(HEALTH_PATH)
     async def health() -> JSONResponse:
@@ -216,6 +224,37 @@ def create_app(config: ServiceConfig | None = None,
                 diagnostics.pushkit_token_present,
                 diagnostics.pushkit_token_store_requested,
                 diagnostics.voip_push_send_requested,
+            )
+            return JSONResponse(status_code=200, content=diagnostics.as_dict())
+        except CallServiceError as error:
+            status_code, body = error_response(error)
+            return JSONResponse(status_code=status_code, content=body)
+
+    @app.post(APNS_VOIP_SANDBOX_SEND_PATH)
+    async def apns_voip_sandbox_send(request: Request, authorization: Optional[str] = Header(default=None)) -> JSONResponse:
+        try:
+            if service is None:
+                raise CallServiceError(status_code=503,
+                                       errcode="M_DIRECT_CALL_SERVICE_UNAVAILABLE",
+                                       error="Direct-call service is not ready.")
+            bearer_token = bearer_token_from_authorization(authorization)
+            authenticated_user = await service.auth_validator.validate_bearer_token(bearer_token)
+            payload: Any = await request.json()
+            if not isinstance(payload, dict):
+                raise bad_request(error="Request body must be a JSON object.")
+            send_request = APNsVoIPSandboxSendRequest.from_mapping(payload)
+            token_record = token_store.retrieve(
+                getattr(authenticated_user, "user" "_id"),
+                getattr(authenticated_user, "device" "_id"),
+                "development",
+            )
+            diagnostics = voip_send_service.send(send_request, token_record)
+            LOGGER.info(
+                "apns voip sandbox send handled token_lookup=%s provider_requested=%s send_requested=%s result=%s",
+                diagnostics.persisted_pushkit_token_lookup_result,
+                diagnostics.apns_provider_requested,
+                diagnostics.apns_voip_push_send_requested,
+                diagnostics.apns_voip_push_send_result,
             )
             return JSONResponse(status_code=200, content=diagnostics.as_dict())
         except CallServiceError as error:

@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.44B1 - the controlled physical real-token persistence smoke passed on a connected iPhone. The real PushKit token was received and uploaded through the explicit DEBUG/manual smoke path, staging persistence returned `persisted`, and the internal retrieval check returned only the redacted class `redacted_match`. Real PushKit registration remains disabled by default, iOS local token persistence remains disabled, and no APNs provider request or VoIP push delivery is enabled.
+After 2.44C - the controlled APNs VoIP sandbox send scaffold exists server-side and is deployed to staging, but the live scaffold smoke is blocked before APNs by `persisted_pushkit_token_missing` for the available staging credential. Real PushKit registration remains disabled by default, iOS local token persistence remains disabled, and no APNs provider request or VoIP push delivery is enabled.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.44C controlled APNs VoIP sandbox send scaffold is implemented and deployed:
+  - Added a server-side APNs VoIP sandbox scaffold with an explicit auth-gated control route and redacted diagnostics.
+  - APNs send remains disabled by default and production APNs environment is rejected in this scaffold.
+  - Local server validation passed: compileall passed and pytest reported `151 passed`.
+  - Deployed only `server/salemx-call-service/salemx_call_service/app.py` and `server/salemx-call-service/salemx_call_service/apns_voip.py` to staging.
+  - Remote compileall passed; `salemx-call-service` restart succeeded; service active was verified after restart.
+  - Public route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `401`.
+  - The controlled localhost scaffold invocation returned redacted `persisted_pushkit_token_lookup_result=missing` and `blocked_reason=persisted_pushkit_token_missing` for the available staging credential.
+  - APNs credentials/topic were not configured in the service environment; no APNs provider request, real sandbox send, production APNs send, repeated push, standard APNs token request, real PushKit/background callback wiring, CallKit report from PushKit, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, or `app.yml` regeneration was introduced.
 - 2.44B1 physical persisted PushKit token upload smoke passed:
   - A physical iPhone became available through CoreDevice/Xcode.
   - Public route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `401`.

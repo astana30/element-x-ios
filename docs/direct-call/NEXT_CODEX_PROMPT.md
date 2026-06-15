@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.44b1-physical-persisted-token-upload-smoke`
+`salemx-2.44c-controlled-apns-voip-sandbox-send-scaffold`
 
-Next phase: continue after the controlled physical persisted PushKit token upload smoke passed. Do not move to VoIP push delivery yet. The next safe step should design and test token invalidation/replacement while keeping all token values redacted.
+Next phase: continue after the controlled APNs VoIP sandbox send scaffold was added and deployed, but the live scaffold smoke was blocked before APNs by `persisted_pushkit_token_missing` for the available staging credential. Do not move to VoIP push delivery yet. The next safe step should provide a matching authenticated smoke path and server-local sandbox APNs credentials/topic, or design token invalidation/replacement first.
 
 ## Baseline
 
@@ -202,13 +202,32 @@ No standard APNs token request, APNs provider request, server VoIP push delivery
 
 No standard APNs token request, APNs provider request, server VoIP push delivery, real PushKit/background callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production startup registration was introduced.
 
+## 2.44C Result
+
+2.44C added the controlled server-side APNs VoIP sandbox send scaffold:
+
+- APNs send is disabled by default.
+- The control route is auth-gated and explicit.
+- Sandbox environment is enforced; production APNs is rejected for this scaffold.
+- The scaffold uses only internal persisted-token lookup and redacted diagnostics.
+- Local server validation passed: compileall passed and pytest reported `151 passed`.
+- Deployed only `server/salemx-call-service/salemx_call_service/app.py` and `server/salemx-call-service/salemx_call_service/apns_voip.py`.
+- Remote compileall passed.
+- Restarted only `salemx-call-service`; service active was verified after restart.
+- Route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `401`.
+- The controlled staging scaffold invocation over localhost returned `persisted_pushkit_token_lookup_result=missing` and `blocked_reason=persisted_pushkit_token_missing` for the available staging credential.
+- APNs credentials/topic were not configured in the service environment.
+- No APNs provider request, real sandbox APNs send, production APNs push, repeated push, standard APNs token request, real PushKit/background callback wiring, CallKit report from PushKit, media credential request, media connection, Matrix event emission, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production startup registration was introduced.
+
+No raw PushKit/APNs token, APNs auth key material, JWT, authorization header, access token, private key, request payload, private log, user ID, device ID, room ID, call handle, or secret-bearing URL was printed, logged, recorded, documented, or committed.
+
 ## Suggested Next Task
 
 Start:
 
-- `2.44C - PushKit token invalidation and replacement contract`
+- `2.44D - APNs sandbox credential and matching-auth smoke readiness`
 
-Goal: add a safe server/client contract for PushKit token invalidation and replacement using redacted diagnostics and synthetic tests first. Do not send a VoIP push.
+Goal: prepare the exact matching authenticated smoke path and server-local sandbox APNs credential/topic readiness needed to rerun the 2.44C scaffold. Do not send a VoIP push unless explicitly authorized for one sandbox attempt.
 
 The next task must keep separate:
 

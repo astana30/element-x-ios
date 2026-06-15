@@ -150,6 +150,62 @@ blocked_reason=none
 
 The raw PushKit token was never printed, logged, copied into docs, persisted locally on iOS, returned by API, recorded, or committed. Retrieval remains internal-only and represented in proof solely by `redacted_match`. No standard APNs token request, APNs provider request, server VoIP push delivery, real PushKit/background callback wiring into the call flow, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production startup registration was introduced.
 
+### 2.44C — Controlled APNs VoIP Sandbox Send Scaffold
+
+Added a controlled server-side APNs VoIP sandbox send scaffold.
+
+The scaffold is auth-gated and explicit. It can look up the internally persisted PushKit token for the authenticated user/device, build a minimal redacted sandbox VoIP payload, and return only status-class diagnostics. Real APNs send is disabled by default. The scaffold rejects production APNs environment, does not expose the raw token, does not expose APNs auth material, and never includes room IDs, call handles, user IDs, device IDs, media credentials, LiveKit credentials, request payload dumps, private logs, or secret-bearing URLs in proof output.
+
+Local validation passed:
+
+```text
+compileall=passed
+pytest=151 passed
+```
+
+Deployed only these runtime files to staging:
+
+```text
+server/salemx-call-service/salemx_call_service/app.py
+server/salemx-call-service/salemx_call_service/apns_voip.py
+```
+
+Remote compileall passed. Restarted only `salemx-call-service`, and service active was verified after restart.
+
+Public route safety remained:
+
+```text
+dev/invite=404
+unauthenticated non-dev invite=401
+unauthenticated stream=401
+unauthenticated token registration=401
+```
+
+The controlled staging scaffold invocation was run over localhost on the staging host. It did not contact APNs and returned this redacted blocker for the available staging credential:
+
+```text
+apns_voip_control_invoked=true
+persisted_pushkit_token_lookup_requested=true
+persisted_pushkit_token_lookup_result=missing
+pushkit_token_redacted=true
+apns_provider_requested=false
+apns_credentials_available=false
+apns_environment=sandbox
+apns_topic_resolved=false
+apns_voip_payload_built=false
+apns_voip_push_send_requested=false
+apns_voip_push_send_result=not_run
+apns_response_redacted=true
+voip_push_repeated_send_requested=false
+media_credentials_requested=false
+media_connect_requested=false
+matrix_event_emit_requested=false
+real_pushkit_background_callback_wired=false
+blocked_reason=persisted_pushkit_token_missing
+```
+
+The physical-device persisted token remains stored for the physical app user/device, but the available staging smoke credential does not map to that stored user/device record. APNs credentials/topic were also not configured in the service environment. No real sandbox APNs send, production APNs send, repeated push, APNs provider request, standard APNs token request, real PushKit/background callback wiring, CallKit report from PushKit, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production startup registration was introduced.
+
 ### 2.44A — Controlled Physical PushKit Token Upload Smoke
 
 Ran the first controlled physical-device smoke that receives a real PushKit VoIP token and uploads it once to the public staging token-registration endpoint.

@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: 2.44B1 validates a controlled physical real-token upload into the persisted staging PushKit token store while production PushKit/APNs/background behavior remains disabled by default and unwired.
+Status: 2.44C adds a controlled APNs VoIP sandbox send scaffold, but the live scaffold smoke is blocked before APNs by `persisted_pushkit_token_missing` for the available staging credential. Production PushKit/APNs/background behavior remains disabled by default and unwired.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -362,6 +362,16 @@ Redacted proof reached `pushkit_token_upload_result=http_success`, `pushkit_toke
 The raw token was not printed, logged, copied into docs, persisted locally on iOS, returned by API, recorded, or committed. Token retrieval remains internal-only.
 
 No APNs provider request, VoIP push delivery, standard APNs token request, iOS local token persistence, real PushKit/background callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production background behavior is introduced.
+
+## 2.44C Controlled APNs VoIP Sandbox Send Scaffold
+
+2.44C adds a server-side APNs VoIP sandbox scaffold for future one-shot provider smoke work. The scaffold is auth-gated, explicit, disabled for real sends by default, sandbox-only, and redacted. It looks up the persisted PushKit token internally, builds only a minimal test-safe VoIP payload, and reports status classes without exposing the token, APNs auth material, payload contents, user IDs, device IDs, room IDs, call handles, media credentials, or secret-bearing URLs.
+
+Local server validation passed with compileall and `151 passed`. The updated runtime files `app.py` and `apns_voip.py` were deployed to staging, remote compileall passed, `salemx-call-service` was restarted, and active status was verified after restart. Public route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `401`.
+
+The controlled staging scaffold invocation over localhost returned redacted `persisted_pushkit_token_lookup_result=missing` and `blocked_reason=persisted_pushkit_token_missing` for the available staging credential. It kept `apns_provider_requested=false`, `apns_credentials_available=false`, `apns_voip_push_send_requested=false`, `apns_voip_push_send_result=not_run`, `voip_push_repeated_send_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, `matrix_event_emit_requested=false`, and `real_pushkit_background_callback_wired=false`.
+
+No APNs credentials, JWTs, authorization headers, raw PushKit/APNs tokens, private keys, or request payloads were printed, logged, recorded, documented, or committed. No production APNs push, real sandbox APNs push, repeated push, standard APNs token request, real PushKit/background callback wiring, CallKit report from PushKit, media credential request, media connection, Matrix event emission, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production behavior was introduced.
 
 ## Current State From Tracked Code
 
