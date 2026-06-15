@@ -1,6 +1,6 @@
 # PushKit Entitlement Change Proposal
 
-Status: 2.43Y confirms the staging service has the token route active locally, but the public staging token route still returns `404`. No entitlement, `Info.plist`, `app.yml`, APNs registration, real PushKit token upload, durable token persistence, VoIP push delivery, media, or production background behavior is changed by this document.
+Status: 2.43Z confirms the staging token route is exposed publicly and auth-gated through the reverse proxy with synthetic-token registration validated. No entitlement, `Info.plist`, `app.yml`, APNs registration, real PushKit token upload, durable token persistence, VoIP push delivery, media, or production background behavior is changed by this document.
 
 ## 1. Current Tracked State
 
@@ -204,6 +204,10 @@ No restart, additional deploy, synthetic-token staging smoke, environment-variab
 ```text
 staging_token_registration_route_still_missing_after_restart
 ```
+
+2.43Z mapped the public token-registration route through the existing reverse proxy to the same `salemx-call-service` upstream used by foreground signaling. nginx syntax validation passed, nginx was reloaded, and nginx active status was verified after reload. Public unauthenticated token registration now returns `401`, not `404`.
+
+Synthetic-token public staging registration passed with redacted `http_success` and `registered` proof. The server did not persist the token, request an APNs provider, send a VoIP push, request media credentials, connect media, or emit Matrix events.
 
 The next required action is public reverse-proxy/path mapping for the token route, followed by route safety and synthetic-token staging smoke.
 

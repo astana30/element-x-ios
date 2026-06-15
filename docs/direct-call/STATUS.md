@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.43Y - staging service restart is active and the local token route is auth-gated, but the public staging token route still returns `404`; local fake-token app/server registration remains the latest passed end-to-end token-registration proof.
+After 2.43Z - public staging token route exposure is fixed and synthetic-token staging registration passed; real PushKit registration remains disabled by default and no real token upload or VoIP push delivery is enabled.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.43Z public token route proxy smoke passed:
+  - Staging localhost token registration remained unauthenticated `401`.
+  - Public staging token registration changed from unauthenticated `404` to `401`.
+  - Public `dev/invite=404`, unauthenticated non-dev invite `401`, and unauthenticated stream `401` remained intact.
+  - The public reverse proxy token-registration route was added to the same `salemx-call-service` upstream used by foreground signaling.
+  - nginx syntax validation passed, nginx was reloaded, and nginx active status was verified after reload.
+  - Synthetic-token public staging registration passed with client `pushkit_token_upload_result=http_success` and server `pushkit_token_registration_result=registered`.
+  - Server proof kept `pushkit_token_store_requested=false`, `pushkit_token_store_result=not_persisted`, `voip_push_send_requested=false`, `apns_provider_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, and `matrix_event_emit_requested=false`.
+  - No real PushKit/APNs token was used, logged, persisted, uploaded, or recorded.
 - 2.43U staging SSH/network deploy path recovery is blocked:
   - The staging SSH alias resolves to port `71`, which is the expected deploy port for this environment.
   - Port `22` is not the primary deploy check for this environment.

@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.43y-staging-token-endpoint-post-restart-smoke`
+`salemx-2.43z-public-token-route-proxy-smoke`
 
-Next phase: continue from the staging token endpoint post-restart blocker. The service has loaded the token endpoint locally and localhost returns unauthenticated `401`, but the public staging token route still returns `404`. Fix the public reverse-proxy/path mapping for the token route, then run route safety and synthetic-token staging smoke. Do not upload real app-runtime tokens, send VoIP pushes, or wire background payload callbacks unless the user explicitly authorizes that exact step.
+Next phase: continue after public staging token route exposure and synthetic-token registration passed. Do not move to VoIP push delivery yet. The next safe step should define durable token storage/invalidation or run a controlled fake app-to-staging token registration integration without using a real PushKit token.
 
 ## Baseline
 
@@ -141,14 +141,28 @@ Resumed 2.43W after SSH auth recovery:
 - Synthetic-token staging smoke was not run.
 - Public route status remains `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
 
+## 2.43Z Result
+
+2.43Z fixed public token route exposure and ran synthetic-token staging registration:
+
+- Staging localhost token registration remained unauthenticated `401`.
+- Public staging token registration changed from unauthenticated `404` to `401`.
+- Public `dev/invite=404`, unauthenticated non-dev invite `401`, and unauthenticated stream `401` remained intact.
+- The public reverse proxy token route was mapped to the same `salemx-call-service` upstream used by foreground signaling.
+- nginx syntax validation passed, nginx was reloaded, and nginx active status was verified after reload.
+- Synthetic-token public staging registration passed.
+- Client proof reached `pushkit_token_registration_invoked=true`, `pushkit_token_present=true`, `pushkit_token_upload_requested=true`, `pushkit_token_persistence_requested=false`, `pushkit_token_upload_result=http_success`, `apns_registration_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, and `matrix_event_emit_requested=false`.
+- Server proof reached `pushkit_token_registration_invoked=true`, `pushkit_token_present=true`, `pushkit_token_store_requested=false`, `pushkit_token_store_result=not_persisted`, `pushkit_token_registration_result=registered`, `voip_push_send_requested=false`, `apns_provider_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, and `matrix_event_emit_requested=false`.
+- No real PushKit/APNs token was used, logged, persisted, uploaded, or recorded.
+
 ## Suggested Next Task
 
 Start one of:
 
-- `2.43Z - public reverse-proxy token route mapping`, if the public token route still returns `404`.
-- `2.43Z - synthetic-token staging registration smoke after public route mapping`, if unauthenticated token registration now returns public `401`.
+- `2.43AA - token registration storage/invalidation design`, if the next phase should define durable storage and deletion without VoIP push delivery.
+- `2.43AA - controlled fake app-to-staging token registration integration`, if the next phase should connect the app client seam to staging with a fake token only.
 
-Goal: expose the already-active service token route through the public staging route, then verify route safety and run a synthetic-token staging smoke. If public token registration remains `404`, report only the redacted blocker/status and do not claim staging pass.
+Goal: build on the now-exposed staging token route without using a real PushKit token and without sending VoIP pushes.
 
 The next task must keep separate:
 
@@ -178,7 +192,7 @@ Required route-level server safety:
 - `dev/invite=404`
 - unauthenticated non-dev invite `401`
 - unauthenticated stream `401`
-- unauthenticated token registration `401` after successful endpoint deploy; `404` still means the endpoint is not deployed
+- unauthenticated token registration `401`
 
 Only claim direct `salemx-call-service active` if `systemctl` or an equivalent direct service check is actually verified. If SSH is blocked or times out, report it separately from route-level safety.
 

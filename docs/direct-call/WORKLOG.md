@@ -68,6 +68,24 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
 
+### 2.43Z — Public token route proxy smoke
+
+Investigated and fixed the public staging route split after 2.43Y.
+
+Staging localhost route checks still showed unauthenticated token registration returned `401`, so the `salemx-call-service` process already had the 2.43Q/2.43R endpoint active and auth-gated locally.
+
+Public route checks initially still showed unauthenticated token registration returned `404` while public `dev/invite=404`, unauthenticated non-dev invite `401`, and unauthenticated stream `401` remained intact.
+
+The public reverse proxy had an existing foreground-signaling mapping to the `salemx-call-service` upstream, but no corresponding public mapping for `/_matrix/client/unstable/kz.salemx.direct_call/pushkit/token`. Added the public token-registration route to the same call-service upstream, validated nginx syntax, reloaded only nginx, and verified nginx active after reload.
+
+After reload, public route safety passed: `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `401`.
+
+Ran a synthetic-token staging registration smoke against the public route. Client-side proof reached `pushkit_token_registration_invoked=true`, `pushkit_token_present=true`, `pushkit_token_upload_requested=true`, `pushkit_token_persistence_requested=false`, `pushkit_token_upload_result=http_success`, `apns_registration_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, and `matrix_event_emit_requested=false`.
+
+Server-side proof reached `pushkit_token_registration_invoked=true`, `pushkit_token_present=true`, `pushkit_token_store_requested=false`, `pushkit_token_store_result=not_persisted`, `pushkit_token_registration_result=registered`, `voip_push_send_requested=false`, `apns_provider_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, and `matrix_event_emit_requested=false`.
+
+No real PushKit/APNs token was used, logged, persisted, uploaded, or recorded. No APNs registration, APNs provider request, server VoIP push delivery, real PushKit/background payload callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production background behavior was introduced.
+
 ### 2.43Y — Staging token endpoint post-restart smoke
 
 Verified the manually restored restart/status path for `salemx-call-service`.

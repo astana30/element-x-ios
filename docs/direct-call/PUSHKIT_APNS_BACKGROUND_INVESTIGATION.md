@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: 2.43Y confirms the staging service has the token route active locally, but the public staging token route still returns `404` while production PushKit/APNs/background behavior remains disabled by default and unwired.
+Status: 2.43Z exposes the staging token-registration route publicly through the reverse proxy and validates a synthetic-token staging registration smoke while production PushKit/APNs/background behavior remains disabled by default and unwired.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -322,6 +322,18 @@ No synthetic-token staging smoke was attempted. Redacted blocker is `staging_res
 2.43Y verified direct service active status after the manually authorized restart path. Staging localhost route checks show unauthenticated token registration returns `401`, so the service process has loaded the endpoint and it is auth-gated locally. Public live route checks still show unauthenticated token registration returns `404`.
 
 No synthetic-token staging smoke was attempted. Redacted blocker is `staging_token_registration_route_still_missing_after_restart`. Public staging route checks remain `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
+
+## 2.43Z Public Token Route Proxy Smoke
+
+2.43Z verified the route split was caused by public reverse-proxy exposure. Localhost token registration returned unauthenticated `401`, while public token registration returned unauthenticated `404` before the proxy change.
+
+The public reverse proxy already forwarded foreground signaling to the `salemx-call-service` upstream. 2.43Z added the token-registration path to that same upstream, validated nginx syntax, reloaded only nginx, and verified nginx active after reload.
+
+After reload, public route safety passed: `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `401`.
+
+The synthetic-token public staging smoke passed with redacted client proof `pushkit_token_upload_result=http_success` and server proof `pushkit_token_registration_result=registered`. Server diagnostics kept `pushkit_token_store_requested=false`, `pushkit_token_store_result=not_persisted`, `voip_push_send_requested=false`, `apns_provider_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, and `matrix_event_emit_requested=false`.
+
+No real PushKit/APNs token was used, logged, persisted, uploaded, or recorded. No APNs provider request, VoIP push delivery, real PushKit/background callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, or `app.yml` regeneration was introduced.
 
 ## Current State From Tracked Code
 
