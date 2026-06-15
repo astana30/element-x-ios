@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.43W - fail2ban-aware staging deploy smoke reached port 71 but is blocked by SSH authentication; local fake-token app/server registration remains the latest passed token-registration proof.
+After resumed 2.43W - staging SSH auth is recovered and runtime files are copied, but service restart is blocked by restart authorization; local fake-token app/server registration remains the latest passed token-registration proof.
 
 ## Latest App Code Checkpoint
 
@@ -54,7 +54,16 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - The runbook covers safe manual deployment options, pre-deploy checks, post-deploy route checks, synthetic-token smoke proof, forbidden data, rollback, and next prompt constraints.
   - No deploy, restart, live smoke, environment-variable change, or route activation was performed.
   - Live route status remains `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
-- 2.43W fail2ban-aware staging deploy smoke is blocked by SSH auth:
+- Resumed 2.43W fail2ban-aware staging deploy smoke is blocked at service restart:
+  - SSH auth on port `71` is verified with publickey.
+  - The two runtime files for the token endpoint were copied to staging: `app.py` and `pushkit_tokens.py`.
+  - Remote compileall for `salemx_call_service` passed.
+  - Restarting `salemx-call-service` is blocked by service restart authorization.
+  - Redacted blocker: `staging_deploy_blocked_by_restart_auth`.
+  - Direct `salemx-call-service active` status was verified, but it is still the pre-restart process.
+  - No synthetic-token staging smoke was run.
+  - Live route status remains `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
+- Earlier 2.43W fail2ban-aware staging deploy smoke was blocked by SSH auth:
   - The operator manually cleared fail2ban before this attempt.
   - The staging SSH alias still resolves to port `71`.
   - Bounded port `71` connectivity is now open.

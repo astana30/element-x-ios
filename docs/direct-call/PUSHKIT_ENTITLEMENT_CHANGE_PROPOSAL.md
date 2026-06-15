@@ -1,6 +1,6 @@
 # PushKit Entitlement Change Proposal
 
-Status: 2.43W confirms port 71 is reachable after fail2ban unban, but staging deploy is blocked by SSH authentication. No entitlement, `Info.plist`, `app.yml`, APNs registration, real PushKit token upload, durable token persistence, VoIP push delivery, media, or production background behavior is changed by this document.
+Status: resumed 2.43W confirms SSH auth on port 71 works and runtime files are copied, but service restart is blocked by restart authorization. No entitlement, `Info.plist`, `app.yml`, APNs registration, real PushKit token upload, durable token persistence, VoIP push delivery, media, or production background behavior is changed by this document.
 
 ## 1. Current Tracked State
 
@@ -184,6 +184,12 @@ staging_deploy_blocked_by_ssh_timeout
 ```
 
 No deploy, restart, synthetic-token staging smoke, environment-variable change, entitlement change, app signing change, or route activation was performed. Live staging token registration remains `404`; the route is not yet deployed/auth-gated on staging.
+
+Resumed 2.43W after SSH auth recovery copied the two runtime endpoint files to staging and remote compileall passed. Restarting only `salemx-call-service` is blocked by service restart authorization, so the copied code is not active yet. Live staging token registration remains `404`; the route is not yet deployed/auth-gated on staging. Redacted blocker:
+
+```text
+staging_deploy_blocked_by_restart_auth
+```
 
 ## 2.43V Manual Staging Deploy Package
 

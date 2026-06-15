@@ -6,7 +6,7 @@ Repo:
 Branch:
 `salemx-2.43w-fail2ban-aware-staging-token-deploy-smoke`
 
-Next phase: continue from the fail2ban-aware staging deploy attempt. Port 71 is reachable now, but SSH authentication blocks deployment. Fix SSH key authorization or use the approved manual deploy channel, then deploy only the 2.43Q/2.43R token-registration endpoint and run route safety plus synthetic-token staging smoke. Do not upload real app-runtime tokens, send VoIP pushes, or wire background payload callbacks unless the user explicitly authorizes that exact step.
+Next phase: continue from the resumed fail2ban-aware staging deploy attempt. SSH auth on port 71 works and the two endpoint runtime files are copied, but service restart is blocked by restart authorization. Restart only `salemx-call-service` through an approved privileged path, then run route safety and synthetic-token staging smoke. Do not upload real app-runtime tokens, send VoIP pushes, or wire background payload callbacks unless the user explicitly authorizes that exact step.
 
 ## Baseline
 
@@ -104,14 +104,27 @@ No real PushKit token was used. No raw PushKit/APNs token is logged, durably per
 - Live route status remains `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
 - Direct `salemx-call-service active` status is not verified.
 
+Resumed 2.43W after SSH auth recovery:
+
+- SSH publickey auth on port `71` succeeded.
+- Local compileall passed.
+- Local server tests passed: `139 passed`.
+- Runtime files `app.py` and `pushkit_tokens.py` were copied to staging.
+- Remote compileall for `salemx_call_service` passed.
+- Restarting only `salemx-call-service` was blocked by service restart authorization.
+- Redacted blocker: `staging_deploy_blocked_by_restart_auth`.
+- Direct `salemx-call-service active` status was verified, but it is still the pre-restart process.
+- Live route status remains `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
+- Synthetic-token staging smoke was not run.
+
 ## Suggested Next Task
 
 Start one of:
 
-- `2.43X - staging deploy after SSH auth remediation`, if SSH key authorization is fixed and the endpoint is still not deployed.
+- `2.43X - staging restart after privileged service auth remediation`, if privileged restart access is fixed and the copied endpoint files are still present.
 - `2.43X - synthetic-token staging registration smoke after manual deploy`, if an operator has manually deployed the endpoint and unauthenticated token registration now returns `401`.
 
-Goal: use the manual runbook to deploy only the 2.43Q/2.43R call-service token endpoint, then verify route safety and run a synthetic-token staging smoke. If SSH auth is still blocked or the endpoint remains `404`, report only the redacted blocker/status and do not claim staging pass.
+Goal: restart only `salemx-call-service`, then verify route safety and run a synthetic-token staging smoke. If restart authorization is still blocked or the endpoint remains `404`, report only the redacted blocker/status and do not claim staging pass.
 
 The next task must keep separate:
 

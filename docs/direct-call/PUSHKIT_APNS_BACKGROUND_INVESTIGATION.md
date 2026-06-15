@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: 2.43W confirms port 71 is reachable after fail2ban unban, but staging deploy is blocked by SSH authentication while production PushKit/APNs/background behavior remains disabled by default and unwired.
+Status: resumed 2.43W confirms SSH auth on port 71 works and runtime files are copied, but service restart is blocked while production PushKit/APNs/background behavior remains disabled by default and unwired.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -308,6 +308,8 @@ No deploy, restart, synthetic-token staging smoke, server environment change, ro
 2.43W retried staging deploy access after the operator manually cleared fail2ban. Port `71` connectivity is now open, but the controlled SSH probe reached authentication and was rejected before `systemctl`, deployment, or restart could run.
 
 No staging synthetic-token smoke was attempted. Redacted blocker is `staging_deploy_blocked_by_auth`. Live staging route checks remain `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
+
+After SSH auth recovery, resumed 2.43W copied the two runtime endpoint files to staging and remote compileall passed. Restarting only `salemx-call-service` is blocked by service restart authorization, so live staging still serves the pre-restart process. Redacted blocker is `staging_deploy_blocked_by_restart_auth`. Live staging route checks remain `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
 
 ## Current State From Tracked Code
 

@@ -80,6 +80,12 @@ No server deployment, restart, synthetic-token staging smoke, server environment
 
 No real PushKit/APNs token was used, logged, persisted, uploaded, or recorded. No APNs registration, APNs provider request, server VoIP push delivery, real PushKit/background payload callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production background behavior was introduced.
 
+Resumed 2.43W after SSH auth recovery. SSH publickey auth on port `71` succeeded, local compileall passed, and local server tests reported `139 passed`. The two runtime endpoint files were copied to staging, and remote compileall for `salemx_call_service` passed.
+
+Restarting only `salemx-call-service` is blocked by service restart authorization. Direct service status was verified as active, but it is still the pre-restart process. Redacted blocker: `staging_deploy_blocked_by_restart_auth`.
+
+No synthetic-token staging smoke was run because unauthenticated token registration remains `404`. Live route checks remain `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
+
 ### 2.43V — Manual staging deploy package
 
 Prepared a docs-only manual deployment package/runbook for the 2.43Q/2.43R server token-registration endpoint because the normal staging SSH/network path remains blocked on port `71`.
