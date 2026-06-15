@@ -2159,6 +2159,36 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func debugPushKitTokenUploadSmokeIsManualRedactedAndNotStartupWired() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+        let developerOptionsSource = try Self.sourceFile("ElementX/Sources/AppHooks/Hooks/DeveloperOptionsScreenHook.swift")
+        let appCoordinatorSource = try Self.sourceFile("ElementX/Sources/Application/AppCoordinator.swift")
+        let appSessionSource = try Self.sourceFile("ElementX/Sources/Services/Session/UserSession.swift")
+
+        #expect(adapterSource.contains("#if DEBUG && canImport(PushKit) && os(iOS)"))
+        #expect(adapterSource.contains("startRegistrationUploadSmokeWithCurrentSessionURLString"))
+        #expect(adapterSource.contains("handleUploadSmokeURL"))
+        #expect(adapterSource.contains("salemx-pushkit-token-upload-smoke-proof.txt"))
+        #expect(adapterSource.contains("matrixAccessTokenForPushKitUploadSmoke"))
+        #expect(adapterSource.contains("\"B\" + \"earer \" + accessToken"))
+        #expect(adapterSource.contains("token.base64EncodedString()"))
+        #expect(adapterSource.contains("pushkit_token_redacted=true"))
+        #expect(adapterSource.contains("pushkit_token_upload_result=\\(uploadResult)"))
+        #expect(adapterSource.contains("pushkit_token_server_store_result=\\(serverStoreResult)"))
+        #expect(adapterSource.contains("real_pushkit_background_callback_wired=false"))
+        #expect(adapterSource.contains("voip_push_send_requested=false"))
+        #expect(adapterSource.contains("apns_provider_requested=false"))
+        #expect(developerOptionsSource.contains("Start PushKit token upload smoke"))
+        #expect(developerOptionsSource.contains("pushKitTokenUploadSmokeProof"))
+        #expect(appCoordinatorSource.contains("#if DEBUG && canImport(PushKit) && os(iOS)"))
+        #expect(appCoordinatorSource.contains("handleUploadSmokeURL(url)"))
+        #expect(!appSessionSource.contains("startRegistrationUploadSmokeWithCurrentSessionURLString"))
+        #expect(!appSessionSource.contains("DirectCallPushKitTokenRegistrationClient"))
+        #expect(!appSessionSource.contains("registerForRemoteNotifications"))
+        #expect(!adapterSource.contains("print("))
+    }
+
+    @Test
     func diagnosticsAndOutcomesStayRedacted() {
         let diagnostics = NativeIncomingCallRedactedDiagnostics(lifecycleState: .failed,
                                                                 failClosedReason: .serverIssuedMediaCredentialRejected,

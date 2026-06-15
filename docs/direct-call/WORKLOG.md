@@ -68,6 +68,43 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
 
+### 2.44A — Controlled Physical PushKit Token Upload Smoke
+
+Ran the first controlled physical-device smoke that receives a real PushKit VoIP token and uploads it once to the public staging token-registration endpoint.
+
+Public route safety was verified before the smoke: `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `401`.
+
+Added the smallest DEBUG-only manual upload smoke control around the existing gated PushKit registrar and token-registration client/server contract:
+
+- A Developer Options button for manual operator invocation.
+- A DEBUG-only custom URL trigger for physical-device launch tooling.
+- A redacted proof writer that records only boolean/status classes in the app container.
+- A one-shot upload path that uses the active session credential in memory only and clears it after constructing the request.
+
+Physical device availability, Debug build, install, and app launch were verified with the current `M639Y9MFR2` signing state. The initial launch-triggered attempt ran before session restoration and failed closed with redacted `pushkit_token_upload_blocked_by_auth`; it did not request registration or upload. A later manual trigger after session restoration passed with redacted proof:
+
+```text
+physical_device_available=true
+pushkit_registration_manual_invoked=true
+pushkit_token_received=true
+pushkit_token_redacted=true
+pushkit_token_upload_requested=true
+pushkit_token_upload_result=http_success
+pushkit_token_registration_result=registered
+pushkit_token_local_persistence_requested=false
+pushkit_token_server_store_requested=false
+pushkit_token_server_store_result=not_persisted
+voip_push_send_requested=false
+apns_provider_requested=false
+media_credentials_requested=false
+media_connect_requested=false
+matrix_event_emit_requested=false
+real_pushkit_background_callback_wired=false
+blocked_reason=none
+```
+
+No raw PushKit/APNs token was printed, logged, copied, persisted, recorded in docs, or committed. The server token store was not requested and no durable token persistence was introduced. No standard APNs token request, APNs provider request, server VoIP push delivery, real PushKit/background callback wiring into the call flow, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production startup registration was introduced.
+
 ### 2.43Z — Public token route proxy smoke
 
 Investigated and fixed the public staging route split after 2.43Y.

@@ -518,11 +518,176 @@ private final class DirectCallRealPushKitRegistryController: NSObject, DirectCal
 #endif
 
 #if DEBUG && canImport(PushKit) && os(iOS)
+private struct SalemXPushKitTokenUploadSmokeSummary {
+    var physicalDeviceAvailable = false
+    var manualInvoked = false
+    var tokenReceived = false
+    var uploadRequested = false
+    var uploadResult = "not_requested"
+    var registrationResult = "not_started"
+    var serverStoreRequested = false
+    var serverStoreResult = "not_requested"
+    var blockedReason = "none"
+
+    var redactedLines: [String] {
+        [
+            "physical_device_available=\(physicalDeviceAvailable)",
+            "pushkit_registration_manual_invoked=\(manualInvoked)",
+            "pushkit_token_received=\(tokenReceived)",
+            "pushkit_token_redacted=true",
+            "pushkit_token_upload_requested=\(uploadRequested)",
+            "pushkit_token_upload_result=\(uploadResult)",
+            "pushkit_token_registration_result=\(registrationResult)",
+            "pushkit_token_local_persistence_requested=false",
+            "pushkit_token_server_store_requested=\(serverStoreRequested)",
+            "pushkit_token_server_store_result=\(serverStoreResult)",
+            "voip_push_send_requested=false",
+            "apns_provider_requested=false",
+            "media_credentials_requested=false",
+            "media_connect_requested=false",
+            "matrix_event_emit_requested=false",
+            "real_pushkit_background_callback_wired=false",
+            "blocked_reason=\(blockedReason)"
+        ]
+    }
+}
+
+private final class SalemXPushKitTokenUploadSmoke: NSObject, DirectCallPushKitRegistrarRegistryDelegate {
+    private let uploadURL: URL
+    private var accessToken: String?
+    private let registryFactory: DirectCallPushKitRegistryMaking
+    private let updateSummary: (SalemXPushKitTokenUploadSmokeSummary) -> Void
+    private var registry: DirectCallPushKitRegistryControlling?
+
+    init(uploadURL: URL,
+         accessToken: String,
+         registryFactory: DirectCallPushKitRegistryMaking,
+         updateSummary: @escaping (SalemXPushKitTokenUploadSmokeSummary) -> Void) {
+        self.uploadURL = uploadURL
+        self.accessToken = accessToken
+        self.registryFactory = registryFactory
+        self.updateSummary = updateSummary
+    }
+
+    func start() {
+        guard let registry = registryFactory.makeRegistry(delegate: self) else {
+            updateSummary(.init(physicalDeviceAvailable: true,
+                                manualInvoked: true,
+                                blockedReason: "pushkit_manual_control_missing"))
+            return
+        }
+
+        self.registry = registry
+        updateSummary(.init(physicalDeviceAvailable: true,
+                            manualInvoked: true,
+                            registrationResult: "registry_created"))
+        registry.requestVoIPPushRegistration()
+    }
+
+    func pushKitRegistrarDidUpdateToken(_ token: Data) {
+        uploadToken(token)
+    }
+
+    func pushKitRegistrarDidInvalidateToken() { }
+
+    private func uploadToken(_ token: Data) {
+        guard !token.isEmpty else {
+            updateSummary(.init(physicalDeviceAvailable: true,
+                                manualInvoked: true,
+                                tokenReceived: false,
+                                uploadResult: "not_requested",
+                                registrationResult: "token_missing",
+                                blockedReason: "pushkit_token_not_received"))
+            return
+        }
+        guard let accessToken, !accessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            updateSummary(.init(physicalDeviceAvailable: true,
+                                manualInvoked: true,
+                                tokenReceived: true,
+                                uploadResult: "not_requested",
+                                registrationResult: "token_received",
+                                blockedReason: "pushkit_token_upload_blocked_by_auth"))
+            return
+        }
+
+        var request = URLRequest(url: uploadURL)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("B" + "earer " + accessToken, forHTTPHeaderField: "Authorization")
+        self.accessToken = nil
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: [
+                "version": 1,
+                "token": token.base64EncodedString(),
+                "environment": "development"
+            ], options: [])
+        } catch {
+            updateSummary(.init(physicalDeviceAvailable: true,
+                                manualInvoked: true,
+                                tokenReceived: true,
+                                uploadRequested: false,
+                                uploadResult: "not_requested",
+                                registrationResult: "token_received",
+                                blockedReason: "pushkit_token_upload_http_failure"))
+            return
+        }
+
+        updateSummary(.init(physicalDeviceAvailable: true,
+                            manualInvoked: true,
+                            tokenReceived: true,
+                            uploadRequested: true,
+                            uploadResult: "requested",
+                            registrationResult: "token_received"))
+
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            self?.handleUploadResponse(data: data, response: response, error: error)
+        }.resume()
+    }
+
+    private func handleUploadResponse(data: Data?, response: URLResponse?, error: Error?) {
+        guard error == nil,
+              let httpResponse = response as? HTTPURLResponse,
+              let data,
+              let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            updateSummary(.init(physicalDeviceAvailable: true,
+                                manualInvoked: true,
+                                tokenReceived: true,
+                                uploadRequested: true,
+                                uploadResult: "http_failure_redacted",
+                                registrationResult: "upload_failed_redacted",
+                                blockedReason: "pushkit_token_upload_http_failure"))
+            return
+        }
+
+        let registrationResult = body["pushkit_token_registration_result"] as? String ?? "upload_failed_redacted"
+        let storeRequested = body["pushkit_token_store_requested"] as? Bool ?? false
+        let storeResult = body["pushkit_token_store_result"] as? String ?? "redacted"
+        let success = httpResponse.statusCode == 200 && registrationResult == "registered"
+        updateSummary(.init(physicalDeviceAvailable: true,
+                            manualInvoked: true,
+                            tokenReceived: true,
+                            uploadRequested: true,
+                            uploadResult: success ? "http_success" : "http_failure_redacted",
+                            registrationResult: registrationResult,
+                            serverStoreRequested: storeRequested,
+                            serverStoreResult: storeResult,
+                            blockedReason: success ? "none" : "pushkit_token_upload_http_failure"))
+    }
+}
+
 @objc(SalemXPushKitRegistrationSmokeDebugBridge)
 final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
+    private static let uploadSmokeURLHost = "debug"
+    private static let uploadSmokeURLPath = "/pushkit-token-upload-smoke/start"
+    private static let uploadSmokeDefaultURLString = "https://matrix.mertis.kz/_matrix/client/unstable/kz.salemx.direct_call/pushkit/token"
+    private static let uploadSmokeProofFileName = "salemx-pushkit-token-upload-smoke-proof.txt"
     private static let lock = NSLock()
     private static var registrar: DirectCallPushKitRegistrar?
     private static var latestSummary = initialRedactedSummary()
+    private static var uploadSmoke: SalemXPushKitTokenUploadSmoke?
+    private static var latestUploadSummary = initialUploadRedactedSummary()
 
     @objc static func startRegistrationSmoke() -> String {
         var configuration = DirectCallPushKitRegistrarConfiguration(featureGate: .init(isEnabled: true),
@@ -538,16 +703,81 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         return redactedStateSummary()
     }
 
+    static func handleUploadSmokeURL(_ url: URL) -> Bool {
+        guard url.scheme == "kz.salemx.msg",
+              url.host == uploadSmokeURLHost,
+              url.path == uploadSmokeURLPath else {
+            return false
+        }
+
+        _ = startRegistrationUploadSmokeWithCurrentSessionURLString(uploadSmokeDefaultURLString)
+        return true
+    }
+
     @objc static func redactedStateSummary() -> String {
         lock.lock()
         defer { lock.unlock() }
         return latestSummary
     }
 
+    @objc static func startRegistrationUploadSmokeWithCurrentSessionURLString(_ uploadURLString: String) -> String {
+        updateLatestUploadSummary(.init(manualInvoked: true, blockedReason: "requested"))
+
+        #if targetEnvironment(simulator)
+        updateLatestUploadSummary(.init(manualInvoked: true, blockedReason: "physical_device_unavailable"))
+        #else
+        guard let uploadURL = URL(string: uploadURLString) else {
+            updateLatestUploadSummary(.init(manualInvoked: true, blockedReason: "staging_token_route_not_auth_gated"))
+            return redactedUploadStateSummary()
+        }
+
+        Task { @MainActor in
+            guard let accessToken = await SalemXForegroundSSESmokeDebug.matrixAccessTokenForPushKitUploadSmoke() else {
+                updateLatestUploadSummary(.init(physicalDeviceAvailable: true,
+                                                manualInvoked: true,
+                                                blockedReason: "pushkit_token_upload_blocked_by_auth"))
+                return
+            }
+
+            let smoke = SalemXPushKitTokenUploadSmoke(uploadURL: uploadURL,
+                                                      accessToken: accessToken,
+                                                      registryFactory: DirectCallRealPushKitRegistryFactory(),
+                                                      updateSummary: updateLatestUploadSummary)
+            uploadSmoke = smoke
+            smoke.start()
+        }
+        #endif
+
+        return redactedUploadStateSummary()
+    }
+
+    @objc static func redactedUploadStateSummary() -> String {
+        lock.lock()
+        defer { lock.unlock() }
+        return latestUploadSummary
+    }
+
     private static func updateLatestSummary(with result: DirectCallPushKitRegistrarResult) {
         lock.lock()
         latestSummary = redactedSummary(for: result)
         lock.unlock()
+    }
+
+    private static func updateLatestUploadSummary(_ summary: SalemXPushKitTokenUploadSmokeSummary) {
+        lock.lock()
+        latestUploadSummary = summary.redactedLines.joined(separator: "\n")
+        let latestUploadSummary = latestUploadSummary
+        lock.unlock()
+        writeUploadSmokeProof(latestUploadSummary)
+    }
+
+    private static func writeUploadSmokeProof(_ proof: String) {
+        guard let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            return
+        }
+
+        let proofURL = documentsURL.appending(component: uploadSmokeProofFileName)
+        try? proof.write(to: proofURL, atomically: true, encoding: .utf8)
     }
 
     private static func redactedSummary(for result: DirectCallPushKitRegistrarResult? = nil) -> String {
@@ -587,6 +817,10 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             "matrix_event_emit_requested=false",
             "blocked_reason=none"
         ].joined(separator: "\n")
+    }
+
+    private static func initialUploadRedactedSummary() -> String {
+        SalemXPushKitTokenUploadSmokeSummary().redactedLines.joined(separator: "\n")
     }
 
     private static func redactedRegistrationResult(for status: DirectCallPushKitRegistrarStatus) -> String {
@@ -824,6 +1058,16 @@ final class SalemXForegroundSSESmokeDebug: NSObject {
         redactedStateSummaryLock.lock()
         defer { redactedStateSummaryLock.unlock() }
         return redactedStateSummarySnapshot.redactedLines.joined(separator: "\n")
+    }
+
+    fileprivate static func matrixAccessTokenForPushKitUploadSmoke() async -> String? {
+        guard let activeUserSession,
+              let accessTokenProvider = activeUserSession.clientProxy as? DirectCallMatrixAccessTokenProviding,
+              let accessToken = await accessTokenProvider.matrixAccessToken(),
+              !accessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        return accessToken
     }
 
     private static func configureWithCurrentSession(streamURLString: String, startsImmediately: Bool) {

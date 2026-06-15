@@ -32,6 +32,7 @@ struct SalemXDeveloperOptionsScreenHook: DeveloperOptionsScreenHookProtocol {
 
 enum SalemXForegroundSSESmokeControls {
     static let receiverStreamURLString = "https://matrix.mertis.kz/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/stream"
+    static let pushKitTokenUploadURLString = "https://matrix.mertis.kz/_matrix/client/unstable/kz.salemx.direct_call/pushkit/token"
 
     static func startReceiverSSE() {
         SalemXForegroundSSEReceiverSmokeDebugBridge.configureWithCurrentSessionStreamURLString(receiverStreamURLString)
@@ -50,6 +51,7 @@ private struct SalemXForegroundSSESmokeControlsView: View {
     @State private var receiverSummary = SalemXForegroundSSESmokeControls.redactedReceiverStateSummary()
     #if canImport(PushKit)
     @State private var pushKitSummary = SalemXPushKitRegistrationSmokeDebugBridge.redactedStateSummary()
+    @State private var pushKitUploadSummary = SalemXPushKitRegistrationSmokeDebugBridge.redactedUploadStateSummary()
     #endif
 
     var body: some View {
@@ -90,6 +92,20 @@ private struct SalemXForegroundSSESmokeControlsView: View {
                     .font(.system(.caption, design: .monospaced))
                     .textSelection(.enabled)
                     .accessibilityIdentifier("pushKitRegistrationSmokeProof")
+
+                Button("Start PushKit token upload smoke") {
+                    pushKitUploadSummary = SalemXPushKitRegistrationSmokeDebugBridge.startRegistrationUploadSmokeWithCurrentSessionURLString(SalemXForegroundSSESmokeControls.pushKitTokenUploadURLString)
+                    refreshPushKitUploadSummary(after: .seconds(5))
+                }
+
+                Button("Refresh PushKit upload proof") {
+                    refreshPushKitUploadSummary()
+                }
+
+                Text(pushKitUploadSummary)
+                    .font(.system(.caption, design: .monospaced))
+                    .textSelection(.enabled)
+                    .accessibilityIdentifier("pushKitTokenUploadSmokeProof")
             }
             #endif
         }
@@ -111,6 +127,15 @@ private struct SalemXForegroundSSESmokeControlsView: View {
                 try? await Task.sleep(for: delay)
             }
             pushKitSummary = SalemXPushKitRegistrationSmokeDebugBridge.redactedStateSummary()
+        }
+    }
+
+    private func refreshPushKitUploadSummary(after delay: Duration? = nil) {
+        Task { @MainActor in
+            if let delay {
+                try? await Task.sleep(for: delay)
+            }
+            pushKitUploadSummary = SalemXPushKitRegistrationSmokeDebugBridge.redactedUploadStateSummary()
         }
     }
     #endif

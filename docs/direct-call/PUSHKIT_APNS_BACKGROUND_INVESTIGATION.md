@@ -335,6 +335,18 @@ The synthetic-token public staging smoke passed with redacted client proof `push
 
 No real PushKit/APNs token was used, logged, persisted, uploaded, or recorded. No APNs provider request, VoIP push delivery, real PushKit/background callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, or `app.yml` regeneration was introduced.
 
+## 2.44A Controlled Physical PushKit Token Upload Smoke
+
+2.44A performed a controlled physical-device smoke through explicit DEBUG/manual tooling. A real PushKit VoIP token was received and uploaded once to the public staging token-registration endpoint, but the token was never printed, logged, copied into docs, persisted locally, durably stored by the server, recorded, or committed.
+
+The redacted proof reached `physical_device_available=true`, `pushkit_registration_manual_invoked=true`, `pushkit_token_received=true`, `pushkit_token_redacted=true`, `pushkit_token_upload_requested=true`, `pushkit_token_upload_result=http_success`, and `pushkit_token_registration_result=registered`.
+
+The same proof kept `pushkit_token_local_persistence_requested=false`, `pushkit_token_server_store_requested=false`, `pushkit_token_server_store_result=not_persisted`, `voip_push_send_requested=false`, `apns_provider_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, `matrix_event_emit_requested=false`, and `real_pushkit_background_callback_wired=false`.
+
+Public route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `401`.
+
+This does not implement production native direct-call PushKit behavior. Registration remains disabled by default, no standard APNs token is requested, no APNs provider or VoIP push delivery is attempted, no PushKit/background payload callback is wired into the call flow, and no media credentials, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production background behavior is introduced.
+
 ## Current State From Tracked Code
 
 ### Existing PushKit Surface

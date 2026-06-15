@@ -209,7 +209,11 @@ staging_token_registration_route_still_missing_after_restart
 
 Synthetic-token public staging registration passed with redacted `http_success` and `registered` proof. The server did not persist the token, request an APNs provider, send a VoIP push, request media credentials, connect media, or emit Matrix events.
 
-The next required action is public reverse-proxy/path mapping for the token route, followed by route safety and synthetic-token staging smoke.
+2.44A then ran a controlled physical-device PushKit token upload smoke through explicit DEBUG/manual tooling. A real PushKit VoIP token was received and uploaded once to the public staging token-registration endpoint with redacted `http_success` and `registered` proof. The token was never printed, logged, copied into docs, persisted locally, durably stored by the server, recorded, or committed.
+
+2.44A did not change entitlements, `Info.plist`, signing, project files, `app.yml`, provisioning settings, media behavior, Element Call route replacement, or production startup behavior. Real PushKit registration remains disabled by default outside the explicit DEBUG/manual smoke path. No standard APNs token was requested, no APNs provider was requested, no VoIP push delivery was attempted, and no real PushKit/background payload callback was wired into the call flow.
+
+The next required action is token storage/invalidation contract design with synthetic-token and redaction tests first. Do not move directly to VoIP push delivery.
 
 ## 2.43V Manual Staging Deploy Package
 

@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.43Z - public staging token route exposure is fixed and synthetic-token staging registration passed; real PushKit registration remains disabled by default and no real token upload or VoIP push delivery is enabled.
+After 2.44A - controlled physical PushKit token upload smoke passed through an explicit DEBUG/manual path. A real PushKit VoIP token was received and uploaded once to the public staging token-registration endpoint, but it was never printed, logged, persisted, recorded, documented, or committed. Real PushKit registration remains disabled by default, and no server token persistence or VoIP push delivery is enabled.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.44A controlled physical PushKit token upload smoke passed:
+  - Public route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `401`.
+  - Physical iPhone availability, Debug build, install, and launch were verified with the current `M639Y9MFR2` signing state.
+  - PushKit registration and upload were invoked only through explicit DEBUG/manual smoke controls, not app startup or normal runtime.
+  - Redacted proof reached `physical_device_available=true`, `pushkit_registration_manual_invoked=true`, `pushkit_token_received=true`, `pushkit_token_redacted=true`, `pushkit_token_upload_requested=true`, `pushkit_token_upload_result=http_success`, and `pushkit_token_registration_result=registered`.
+  - Redacted proof kept `pushkit_token_local_persistence_requested=false`, `pushkit_token_server_store_requested=false`, `pushkit_token_server_store_result=not_persisted`, `voip_push_send_requested=false`, `apns_provider_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, `matrix_event_emit_requested=false`, and `real_pushkit_background_callback_wired=false`.
+  - No raw PushKit/APNs token was printed, logged, persisted, uploaded to durable storage, recorded in docs, or committed.
+  - No standard APNs token request, APNs provider request, server VoIP push delivery, real PushKit/background callback wiring into call flow, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, or `app.yml` regeneration was introduced.
 - 2.43Z public token route proxy smoke passed:
   - Staging localhost token registration remained unauthenticated `401`.
   - Public staging token registration changed from unauthenticated `404` to `401`.

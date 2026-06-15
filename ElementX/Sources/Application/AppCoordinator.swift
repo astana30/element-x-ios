@@ -249,6 +249,12 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
     }
 
     func handleDeepLink(_ url: URL, isExternalURL: Bool) -> Bool {
+        #if DEBUG && canImport(PushKit) && os(iOS)
+        if SalemXPushKitRegistrationSmokeDebugBridge.handleUploadSmokeURL(url) {
+            return true
+        }
+        #endif
+
         // Parse into an AppRoute to redirect these in a type safe way.
         
         if let route = appRouteURLParser.route(from: url) {

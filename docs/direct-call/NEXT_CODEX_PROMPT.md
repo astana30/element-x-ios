@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.43z-public-token-route-proxy-smoke`
+`salemx-2.44a-controlled-physical-pushkit-token-upload-smoke`
 
-Next phase: continue after public staging token route exposure and synthetic-token registration passed. Do not move to VoIP push delivery yet. The next safe step should define durable token storage/invalidation or run a controlled fake app-to-staging token registration integration without using a real PushKit token.
+Next phase: continue after controlled physical PushKit token upload passed. Do not move to VoIP push delivery yet. The next safe step should define durable token storage/invalidation with fake-token and redaction tests first.
 
 ## Baseline
 
@@ -39,6 +39,7 @@ a12fb1f3206ce2e9cc68205d3995a983643c7503 Validate physical install capability st
 6c2f44b21a9b38a78a7a19f1f918534ae741e44f Add PushKit token registration contract
 5b6312451f9569f536cef05db25038d96926f603 Add server PushKit token registration contract
 42e4e466eccb784b67e002c60dbdb742c8eae745 Validate fake-token PushKit registration smoke
+63abcf838b030a480ef1a3b5c855db41cb2df371 Validate public token route proxy smoke
 ```
 
 ## 2.43S Result
@@ -155,30 +156,41 @@ Resumed 2.43W after SSH auth recovery:
 - Server proof reached `pushkit_token_registration_invoked=true`, `pushkit_token_present=true`, `pushkit_token_store_requested=false`, `pushkit_token_store_result=not_persisted`, `pushkit_token_registration_result=registered`, `voip_push_send_requested=false`, `apns_provider_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, and `matrix_event_emit_requested=false`.
 - No real PushKit/APNs token was used, logged, persisted, uploaded, or recorded.
 
+## 2.44A Result
+
+2.44A ran a controlled physical-device PushKit token upload smoke:
+
+- Public route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `401`.
+- Physical device availability, Debug build, install, and launch were verified with the current `M639Y9MFR2` signing state.
+- PushKit registration and upload were invoked only through explicit DEBUG/manual smoke controls, not app startup or normal runtime.
+- A real PushKit VoIP token was received and uploaded once to the public staging token-registration endpoint.
+- The raw token was never printed, logged, copied into docs, persisted locally, durably stored by the server, recorded, or committed.
+- Redacted proof reached `physical_device_available=true`, `pushkit_registration_manual_invoked=true`, `pushkit_token_received=true`, `pushkit_token_redacted=true`, `pushkit_token_upload_requested=true`, `pushkit_token_upload_result=http_success`, and `pushkit_token_registration_result=registered`.
+- Redacted proof kept `pushkit_token_local_persistence_requested=false`, `pushkit_token_server_store_requested=false`, `pushkit_token_server_store_result=not_persisted`, `voip_push_send_requested=false`, `apns_provider_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, `matrix_event_emit_requested=false`, and `real_pushkit_background_callback_wired=false`.
+- No standard APNs token request, APNs provider request, server VoIP push delivery, real PushKit/background callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production startup registration was introduced.
+
 ## Suggested Next Task
 
-Start one of:
+Start:
 
-- `2.43AA - token registration storage/invalidation design`, if the next phase should define durable storage and deletion without VoIP push delivery.
-- `2.43AA - controlled fake app-to-staging token registration integration`, if the next phase should connect the app client seam to staging with a fake token only.
+- `2.44B - PushKit token storage/invalidation contract`
 
-Goal: build on the now-exposed staging token route without using a real PushKit token and without sending VoIP pushes.
+Goal: define durable server token storage and invalidation semantics with fake-token tests and strict redaction before any VoIP push delivery work.
 
 The next task must keep separate:
 
-- deployment validation
 - server token storage/invalidation contract
 - provider credential readiness
 - later VoIP push delivery smoke
 
-Do not proceed with real token upload, durable token persistence, provider push delivery, or background payload callback wiring unless that authorization is explicit.
+Do not proceed with durable real-token persistence, provider push delivery, or background payload callback wiring unless that authorization is explicit.
 
 Required guardrails:
 
 - Do not wire PushKit registration to app startup by default.
 - Do not request an APNs token unless separately scoped.
 - Do not persist, upload, print, log, document, or commit raw PushKit/APNs tokens.
-- Do not upload a real PushKit token yet unless the task explicitly authorizes it.
+- Do not upload another real PushKit token unless the task explicitly authorizes it.
 - Do not send a server VoIP push yet.
 - Do not use `dev/invite`, `dev/inject-active`, port `8090`, or `SALEMX_FOREGROUND_SIGNALING_DEV_INVITE_ENABLED=1`.
 - Do not request media credentials or connect media.
