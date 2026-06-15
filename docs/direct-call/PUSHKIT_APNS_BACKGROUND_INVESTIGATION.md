@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: 2.43X confirms staging service restart activation is blocked by sudo password policy while production PushKit/APNs/background behavior remains disabled by default and unwired.
+Status: 2.43Y confirms the staging service has the token route active locally, but the public staging token route still returns `404` while production PushKit/APNs/background behavior remains disabled by default and unwired.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -316,6 +316,12 @@ After SSH auth recovery, resumed 2.43W copied the two runtime endpoint files to 
 2.43X attempted to activate the already-copied runtime files by restarting only `salemx-call-service`. Direct service status is `active`, but direct restart is blocked by interactive authentication, and non-interactive sudo restart is blocked because sudo requires a password.
 
 No synthetic-token staging smoke was attempted. Redacted blocker is `staging_restart_blocked_by_sudo_password_required`. Live staging route checks remain `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
+
+## 2.43Y Staging Token Endpoint Post-Restart Smoke
+
+2.43Y verified direct service active status after the manually authorized restart path. Staging localhost route checks show unauthenticated token registration returns `401`, so the service process has loaded the endpoint and it is auth-gated locally. Public live route checks still show unauthenticated token registration returns `404`.
+
+No synthetic-token staging smoke was attempted. Redacted blocker is `staging_token_registration_route_still_missing_after_restart`. Public staging route checks remain `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
 
 ## Current State From Tracked Code
 

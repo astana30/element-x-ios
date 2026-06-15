@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.43X - staging service restart activation remains blocked by sudo password policy; local fake-token app/server registration remains the latest passed token-registration proof.
+After 2.43Y - staging service restart is active and the local token route is auth-gated, but the public staging token route still returns `404`; local fake-token app/server registration remains the latest passed end-to-end token-registration proof.
 
 ## Latest App Code Checkpoint
 
@@ -54,6 +54,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - The runbook covers safe manual deployment options, pre-deploy checks, post-deploy route checks, synthetic-token smoke proof, forbidden data, rollback, and next prompt constraints.
   - No deploy, restart, live smoke, environment-variable change, or route activation was performed.
   - Live route status remains `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
+- 2.43Y staging token endpoint post-restart smoke is blocked at the public route:
+  - Narrow sudo restart/status access for `salemx-call-service` was added manually.
+  - Service active was verified after restart.
+  - Localhost route checks on the staging host show token registration is active and auth-gated with unauthenticated `401`.
+  - Public live route checks still show unauthenticated token registration `404`, so the endpoint is not exposed through the public staging route.
+  - Redacted blocker: `staging_token_registration_route_still_missing_after_restart`.
+  - No synthetic-token staging smoke was run.
+  - Live public route status remains `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
 - 2.43X staging service restart activation smoke is blocked:
   - SSH access on port `71` is still verified.
   - Direct `salemx-call-service active` status is verified before restart.

@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.43x-staging-service-restart-activation-smoke`
+`salemx-2.43y-staging-token-endpoint-post-restart-smoke`
 
-Next phase: continue from the staging service restart activation blocker. SSH auth on port 71 works and the two endpoint runtime files are copied, but service restart is blocked because sudo requires a password. Restart only `salemx-call-service` through an approved privileged path, then run route safety and synthetic-token staging smoke. Do not upload real app-runtime tokens, send VoIP pushes, or wire background payload callbacks unless the user explicitly authorizes that exact step.
+Next phase: continue from the staging token endpoint post-restart blocker. The service has loaded the token endpoint locally and localhost returns unauthenticated `401`, but the public staging token route still returns `404`. Fix the public reverse-proxy/path mapping for the token route, then run route safety and synthetic-token staging smoke. Do not upload real app-runtime tokens, send VoIP pushes, or wire background payload callbacks unless the user explicitly authorizes that exact step.
 
 ## Baseline
 
@@ -129,14 +129,26 @@ Resumed 2.43W after SSH auth recovery:
 - No restart, additional deploy, synthetic-token staging smoke, environment-variable change, or route activation was performed.
 - Live route status remains `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
 
+## 2.43Y Result
+
+2.43Y verified post-restart route state:
+
+- Narrow sudo restart/status access for `salemx-call-service` was added manually before the phase.
+- Direct service active status after restart is verified.
+- Staging localhost token registration returns unauthenticated `401`, so the endpoint is active and auth-gated inside the service process.
+- Public staging token registration still returns unauthenticated `404`.
+- Redacted blocker: `staging_token_registration_route_still_missing_after_restart`.
+- Synthetic-token staging smoke was not run.
+- Public route status remains `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
+
 ## Suggested Next Task
 
 Start one of:
 
-- `2.43Y - staging restart after privileged service auth remediation`, if privileged restart access is fixed and the copied endpoint files are still present.
-- `2.43Y - synthetic-token staging registration smoke after manual deploy`, if an operator has manually restarted/deployed the endpoint and unauthenticated token registration now returns `401`.
+- `2.43Z - public reverse-proxy token route mapping`, if the public token route still returns `404`.
+- `2.43Z - synthetic-token staging registration smoke after public route mapping`, if unauthenticated token registration now returns public `401`.
 
-Goal: restart only `salemx-call-service`, then verify route safety and run a synthetic-token staging smoke. If restart authorization is still blocked or the endpoint remains `404`, report only the redacted blocker/status and do not claim staging pass.
+Goal: expose the already-active service token route through the public staging route, then verify route safety and run a synthetic-token staging smoke. If public token registration remains `404`, report only the redacted blocker/status and do not claim staging pass.
 
 The next task must keep separate:
 

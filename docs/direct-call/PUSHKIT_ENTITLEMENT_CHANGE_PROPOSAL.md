@@ -1,6 +1,6 @@
 # PushKit Entitlement Change Proposal
 
-Status: 2.43X confirms staging service restart activation is blocked by sudo password policy. No entitlement, `Info.plist`, `app.yml`, APNs registration, real PushKit token upload, durable token persistence, VoIP push delivery, media, or production background behavior is changed by this document.
+Status: 2.43Y confirms the staging service has the token route active locally, but the public staging token route still returns `404`. No entitlement, `Info.plist`, `app.yml`, APNs registration, real PushKit token upload, durable token persistence, VoIP push delivery, media, or production background behavior is changed by this document.
 
 ## 1. Current Tracked State
 
@@ -198,6 +198,14 @@ staging_restart_blocked_by_sudo_password_required
 ```
 
 No restart, additional deploy, synthetic-token staging smoke, environment-variable change, entitlement change, app signing change, or route activation was performed. Live staging token registration remains `404`; the route is not yet deployed/auth-gated on staging.
+
+2.43Y verified the manually restored restart/status path. Direct service active status is verified after restart, and the staging localhost token route returns unauthenticated `401`, proving the endpoint is active in the service process. The public staging token route still returns `404`, so synthetic-token staging smoke was not run. Redacted blocker:
+
+```text
+staging_token_registration_route_still_missing_after_restart
+```
+
+The next required action is public reverse-proxy/path mapping for the token route, followed by route safety and synthetic-token staging smoke.
 
 ## 2.43V Manual Staging Deploy Package
 

@@ -68,6 +68,18 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
 
+### 2.43Y — Staging token endpoint post-restart smoke
+
+Verified the manually restored restart/status path for `salemx-call-service`.
+
+Direct service active status after restart was verified. Staging localhost route checks show unauthenticated token registration returns `401`, so the service process has loaded the 2.43Q/2.43R endpoint and it is auth-gated locally.
+
+Public live route checks still show unauthenticated token registration returns `404`. Redacted blocker: `staging_token_registration_route_still_missing_after_restart`.
+
+No synthetic-token staging smoke was run because the public route remains missing. Public route checks remain `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
+
+No real PushKit/APNs token was used, logged, persisted, uploaded, or recorded. No APNs registration, APNs provider request, server VoIP push delivery, real PushKit/background payload callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production background behavior was introduced.
+
 ### 2.43X — Staging service restart activation smoke
 
 Attempted to activate the already-copied 2.43Q/2.43R token endpoint runtime files by restarting only `salemx-call-service`.
