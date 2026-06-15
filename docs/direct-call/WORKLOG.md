@@ -68,6 +68,18 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
 
+### 2.43X — Staging service restart activation smoke
+
+Attempted to activate the already-copied 2.43Q/2.43R token endpoint runtime files by restarting only `salemx-call-service`.
+
+SSH access on port `71` still works. Direct `systemctl is-active salemx-call-service` returned `active`, but direct restart is blocked by interactive authentication and non-interactive sudo restart is blocked because sudo requires a password.
+
+Redacted blocker: `staging_restart_blocked_by_sudo_password_required`.
+
+No restart, additional deploy, synthetic-token staging smoke, server environment change, or route activation was performed. Live route checks remain `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
+
+No real PushKit/APNs token was used, logged, persisted, uploaded, or recorded. No APNs registration, APNs provider request, server VoIP push delivery, real PushKit/background payload callback wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or production background behavior was introduced.
+
 ### 2.43W — Fail2ban-aware staging token deploy smoke
 
 Retried staging deploy after the operator manually cleared fail2ban.

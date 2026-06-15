@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After resumed 2.43W - staging SSH auth is recovered and runtime files are copied, but service restart is blocked by restart authorization; local fake-token app/server registration remains the latest passed token-registration proof.
+After 2.43X - staging service restart activation remains blocked by sudo password policy; local fake-token app/server registration remains the latest passed token-registration proof.
 
 ## Latest App Code Checkpoint
 
@@ -53,6 +53,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - The package lists only the 2.43Q/2.43R call-service endpoint files: runtime `app.py` and `pushkit_tokens.py`, plus `tests/test_service.py` for validation.
   - The runbook covers safe manual deployment options, pre-deploy checks, post-deploy route checks, synthetic-token smoke proof, forbidden data, rollback, and next prompt constraints.
   - No deploy, restart, live smoke, environment-variable change, or route activation was performed.
+  - Live route status remains `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
+- 2.43X staging service restart activation smoke is blocked:
+  - SSH access on port `71` is still verified.
+  - Direct `salemx-call-service active` status is verified before restart.
+  - Restarting only `salemx-call-service` with direct `systemctl` is blocked by interactive authentication.
+  - Restarting with non-interactive `sudo -n systemctl restart salemx-call-service` is blocked because sudo requires a password.
+  - Redacted blocker: `staging_restart_blocked_by_sudo_password_required`.
+  - No restart, synthetic-token staging smoke, environment-variable change, route activation, or additional file deploy was performed.
   - Live route status remains `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
 - Resumed 2.43W fail2ban-aware staging deploy smoke is blocked at service restart:
   - SSH auth on port `71` is verified with publickey.

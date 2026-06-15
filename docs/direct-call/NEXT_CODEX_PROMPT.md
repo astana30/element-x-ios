@@ -4,9 +4,9 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.43w-fail2ban-aware-staging-token-deploy-smoke`
+`salemx-2.43x-staging-service-restart-activation-smoke`
 
-Next phase: continue from the resumed fail2ban-aware staging deploy attempt. SSH auth on port 71 works and the two endpoint runtime files are copied, but service restart is blocked by restart authorization. Restart only `salemx-call-service` through an approved privileged path, then run route safety and synthetic-token staging smoke. Do not upload real app-runtime tokens, send VoIP pushes, or wire background payload callbacks unless the user explicitly authorizes that exact step.
+Next phase: continue from the staging service restart activation blocker. SSH auth on port 71 works and the two endpoint runtime files are copied, but service restart is blocked because sudo requires a password. Restart only `salemx-call-service` through an approved privileged path, then run route safety and synthetic-token staging smoke. Do not upload real app-runtime tokens, send VoIP pushes, or wire background payload callbacks unless the user explicitly authorizes that exact step.
 
 ## Baseline
 
@@ -117,12 +117,24 @@ Resumed 2.43W after SSH auth recovery:
 - Live route status remains `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
 - Synthetic-token staging smoke was not run.
 
+## 2.43X Result
+
+2.43X attempted to activate the copied runtime files:
+
+- SSH access on port `71` still works.
+- Direct `systemctl is-active salemx-call-service` returned `active`.
+- Direct `systemctl restart salemx-call-service` is blocked by interactive authentication.
+- `sudo -n systemctl restart salemx-call-service` is blocked because sudo requires a password.
+- Redacted blocker: `staging_restart_blocked_by_sudo_password_required`.
+- No restart, additional deploy, synthetic-token staging smoke, environment-variable change, or route activation was performed.
+- Live route status remains `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
+
 ## Suggested Next Task
 
 Start one of:
 
-- `2.43X - staging restart after privileged service auth remediation`, if privileged restart access is fixed and the copied endpoint files are still present.
-- `2.43X - synthetic-token staging registration smoke after manual deploy`, if an operator has manually deployed the endpoint and unauthenticated token registration now returns `401`.
+- `2.43Y - staging restart after privileged service auth remediation`, if privileged restart access is fixed and the copied endpoint files are still present.
+- `2.43Y - synthetic-token staging registration smoke after manual deploy`, if an operator has manually restarted/deployed the endpoint and unauthenticated token registration now returns `401`.
 
 Goal: restart only `salemx-call-service`, then verify route safety and run a synthetic-token staging smoke. If restart authorization is still blocked or the endpoint remains `404`, report only the redacted blocker/status and do not claim staging pass.
 

@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: resumed 2.43W confirms SSH auth on port 71 works and runtime files are copied, but service restart is blocked while production PushKit/APNs/background behavior remains disabled by default and unwired.
+Status: 2.43X confirms staging service restart activation is blocked by sudo password policy while production PushKit/APNs/background behavior remains disabled by default and unwired.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -310,6 +310,12 @@ No deploy, restart, synthetic-token staging smoke, server environment change, ro
 No staging synthetic-token smoke was attempted. Redacted blocker is `staging_deploy_blocked_by_auth`. Live staging route checks remain `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
 
 After SSH auth recovery, resumed 2.43W copied the two runtime endpoint files to staging and remote compileall passed. Restarting only `salemx-call-service` is blocked by service restart authorization, so live staging still serves the pre-restart process. Redacted blocker is `staging_deploy_blocked_by_restart_auth`. Live staging route checks remain `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
+
+## 2.43X Staging Service Restart Activation Smoke
+
+2.43X attempted to activate the already-copied runtime files by restarting only `salemx-call-service`. Direct service status is `active`, but direct restart is blocked by interactive authentication, and non-interactive sudo restart is blocked because sudo requires a password.
+
+No synthetic-token staging smoke was attempted. Redacted blocker is `staging_restart_blocked_by_sudo_password_required`. Live staging route checks remain `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated token registration `404`.
 
 ## Current State From Tracked Code
 

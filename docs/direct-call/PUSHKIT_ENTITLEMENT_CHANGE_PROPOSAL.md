@@ -1,6 +1,6 @@
 # PushKit Entitlement Change Proposal
 
-Status: resumed 2.43W confirms SSH auth on port 71 works and runtime files are copied, but service restart is blocked by restart authorization. No entitlement, `Info.plist`, `app.yml`, APNs registration, real PushKit token upload, durable token persistence, VoIP push delivery, media, or production background behavior is changed by this document.
+Status: 2.43X confirms staging service restart activation is blocked by sudo password policy. No entitlement, `Info.plist`, `app.yml`, APNs registration, real PushKit token upload, durable token persistence, VoIP push delivery, media, or production background behavior is changed by this document.
 
 ## 1. Current Tracked State
 
@@ -190,6 +190,14 @@ Resumed 2.43W after SSH auth recovery copied the two runtime endpoint files to s
 ```text
 staging_deploy_blocked_by_restart_auth
 ```
+
+2.43X attempted to activate the copied runtime files. Direct service status is `active`, but direct restart is blocked by interactive authentication and non-interactive sudo restart is blocked because sudo requires a password. Redacted blocker:
+
+```text
+staging_restart_blocked_by_sudo_password_required
+```
+
+No restart, additional deploy, synthetic-token staging smoke, environment-variable change, entitlement change, app signing change, or route activation was performed. Live staging token registration remains `404`; the route is not yet deployed/auth-gated on staging.
 
 ## 2.43V Manual Staging Deploy Package
 
