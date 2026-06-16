@@ -602,3 +602,18 @@ Redacted proof:
 - media credentials, media connection, Matrix events, and real call flow remained false
 
 This proves only that the PushKit callback can request a controlled synthetic CallKit report. It does not wire Matrix event emission, media credentials, media connection, or full direct-call flow.
+
+## 2.45C CallKit answer action proof
+
+The DEBUG-only CallKit answer action proof path was added, but the physical smoke was blocked before a real APNs send.
+
+Redacted result:
+- answer-action proof can record `callkit_answer_action_received=true`, `callkit_answer_action_fulfilled=true`, and `app_activation_observed=true`
+- fresh physical Debug build installed successfully
+- route safety remained green
+- fresh physical PushKit upload smoke returned `pushkit_token_upload_http_failure`
+- APNs dry-run returned HTTP 401
+- real sandbox APNs send was skipped
+- CallKit answer action was not physically observed
+
+No production APNs push was attempted. No repeated push was attempted. No raw token, APNs credential, JWT, authorization header, Matrix access token, raw payload, private log, or secret-bearing URL was recorded. Media, Matrix events, and full direct-call flow remain unwired.

@@ -330,13 +330,14 @@ final class NativeIncomingSyntheticCallKitUIProofHarness {
 #if canImport(CallKit) && os(iOS)
 extension NativeIncomingSyntheticCallKitUIProofHarness {
     static func makePhysicalDeviceProofHarness(handle: String = "synthetic-local-call",
-                                               displayLabel: String = "Native Audio Proof") -> NativeIncomingSyntheticCallKitUIProofHarness {
+                                               displayLabel: String = "Native Audio Proof",
+                                               eventRecorder: NativeIncomingSyntheticCallKitUIProofEventRecording = NativeIncomingSyntheticCallKitUIProofNoopEventRecorder()) -> NativeIncomingSyntheticCallKitUIProofHarness {
         let reporter = NativeIncomingSyntheticCallKitUIProofReporter()
         let adapter = NativeIncomingSyntheticCallKitUIProofAdapter(isEnabled: true,
                                                                    reporter: reporter,
                                                                    actionHandler: NativeIncomingSyntheticCallKitUIProofNoopActionHandler(),
                                                                    diagnosticsRecorder: NativeIncomingSyntheticCallKitUIProofNoopDiagnosticsRecorder(),
-                                                                   eventRecorder: NativeIncomingSyntheticCallKitUIProofNoopEventRecorder())
+                                                                   eventRecorder: eventRecorder)
         return NativeIncomingSyntheticCallKitUIProofHarness(adapter: adapter,
                                                             handle: handle,
                                                             displayLabel: displayLabel)
@@ -405,8 +406,8 @@ final class NativeIncomingSyntheticCallKitUIProofReporter: NSObject, NativeIncom
     func providerDidReset(_ provider: CXProvider) { }
 
     func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
-        delegate?.syntheticCallKitUIReportingDidAnswer(callUUID: action.callUUID)
         action.fulfill()
+        delegate?.syntheticCallKitUIReportingDidAnswer(callUUID: action.callUUID)
     }
 
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
@@ -547,6 +548,9 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var completionCalled = false
     var callKitReportRequested = false
     var callKitReportResult = "not_requested"
+    var callKitAnswerActionReceived = false
+    var callKitAnswerActionFulfilled = false
+    var appActivationObserved = false
     var blockedReason = "voip_push_not_received"
 
     var redactedLines: [String] {
@@ -561,12 +565,26 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "callkit_report_requested=\(callKitReportRequested)",
             "callkit_report_result=\(callKitReportResult)",
             "callkit_report_error_redacted=true",
+            "callkit_answer_action_received=\(callKitAnswerActionReceived)",
+            "callkit_answer_action_fulfilled=\(callKitAnswerActionFulfilled)",
+            "app_activation_observed=\(appActivationObserved)",
             "media_credentials_requested=false",
             "media_connect_requested=false",
             "matrix_event_emit_requested=false",
             "real_call_flow_started=false",
             "blocked_reason=\(blockedReason)"
         ]
+    }
+}
+
+private final class SalemXPushKitCallKitProofEventRecorder: NativeIncomingSyntheticCallKitUIProofEventRecording {
+    func recordSyntheticCallKitUIProofEvent(_ event: NativeIncomingSyntheticCallKitUIProofEvent) {
+        switch event {
+        case .answered:
+            SalemXPushKitRegistrationSmokeDebugBridge.recordCallKitAnswerActionProof()
+        default:
+            break
+        }
     }
 }
 
@@ -748,6 +766,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var latestSummary = initialRedactedSummary()
     private static var uploadSmoke: SalemXPushKitTokenUploadSmoke?
     private static var latestUploadSummary = initialUploadRedactedSummary()
+    private static var latestVoIPPushReceiptSummary = SalemXVoIPPushReceiptProofSummary()
     #if canImport(CallKit) && os(iOS)
     private static var callKitProofHarness: NativeIncomingSyntheticCallKitUIProofHarness?
     #endif
@@ -844,14 +863,28 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         DispatchQueue.main.async {
             var reportedSummary = baseSummary
             reportedSummary.callKitReportResult = reportControlledSandboxVoIPSmokeCallKit()
+            reportedSummary.blockedReason = reportedSummary.callKitReportResult == "reported" ? "callkit_answer_action_not_observed" : "callkit_report_failed_redacted"
             updateLatestVoIPPushReceiptSummary(reportedSummary)
         }
+    }
+
+    static func recordCallKitAnswerActionProof() {
+        lock.lock()
+        var summary = latestVoIPPushReceiptSummary
+        summary.callKitAnswerActionReceived = true
+        summary.callKitAnswerActionFulfilled = true
+        summary.appActivationObserved = true
+        summary.blockedReason = "none"
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
     }
 
     private static func reportControlledSandboxVoIPSmokeCallKit() -> String {
         #if canImport(CallKit) && os(iOS)
         let proofHarness = NativeIncomingSyntheticCallKitUIProofHarness.makePhysicalDeviceProofHarness(handle: "salemx-test-call",
-                                                                                                       displayLabel: "SalemX Test Call")
+                                                                                                       displayLabel: "SalemX Test Call",
+                                                                                                       eventRecorder: SalemXPushKitCallKitProofEventRecorder())
         callKitProofHarness = proofHarness
         switch proofHarness.reportSyntheticIncomingCall() {
         case .reported:
@@ -880,6 +913,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
 
     private static func updateLatestVoIPPushReceiptSummary(_ summary: SalemXVoIPPushReceiptProofSummary) {
         lock.lock()
+        latestVoIPPushReceiptSummary = summary
         let proof = summary.redactedLines.joined(separator: "\n")
         lock.unlock()
         writeUploadSmokeProof(proof)

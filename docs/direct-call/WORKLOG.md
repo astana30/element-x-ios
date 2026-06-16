@@ -2929,3 +2929,24 @@ Redacted result:
 - receipt proof kept `media_credentials_requested=false`, `media_connect_requested=false`, `matrix_event_emit_requested=false`, and `real_call_flow_started=false`
 
 No production APNs push was attempted. No repeated push was attempted. No raw PushKit token, APNs token, `.p8` contents, JWT, authorization header, Matrix access token, raw payload, raw APNs response body, private logs, or secret-bearing URL was recorded. The CallKit proof remains controlled/synthetic and does not start media, emit Matrix events, or start full direct-call flow.
+
+## 2.45C — CallKit answer action proof
+
+Added the minimal DEBUG-only answer-action proof path to the existing controlled CallKit reporter.
+
+Redacted result:
+- `CXAnswerCallAction` is fulfilled promptly before recording proof
+- proof recording can set `callkit_answer_action_received=true`, `callkit_answer_action_fulfilled=true`, and `app_activation_observed=true`
+- targeted DirectCall tests passed with 37 tests
+- SwiftFormat passed on the changed Swift/test files
+- SwiftLint passed on the changed Swift/test files with 0 violations
+- fresh physical Debug build installed successfully
+- public route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, token registration `401`, and APNs send control `401`
+
+Physical close-out blocker:
+- fresh physical PushKit upload smoke returned `pushkit_token_upload_http_failure`
+- APNs dry-run returned HTTP 401 for the provided authenticated control request
+- real sandbox APNs send was skipped because dry-run was not green
+- CallKit answer action was not physically observed in this run
+
+No production APNs push was attempted. No repeated push was attempted. No raw PushKit token, APNs token, APNs key, JWT, authorization header, Matrix access token, raw payload, raw APNs response body, private logs, or secret-bearing URL was recorded. The answer proof remains controlled/synthetic and does not start media, emit Matrix events, or start full direct-call flow.

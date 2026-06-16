@@ -1838,3 +1838,21 @@ Current state:
 - PushKit background callback is not wired into call flow yet
 - CallKit is not wired from PushKit yet
 - media remains untouched
+
+## 2.45C status
+
+CallKit answer action proof is blocked before physical APNs send.
+
+Current safe state:
+- DEBUG-only PushKit/CallKit proof code can record a redacted CallKit answer action when `CXAnswerCallAction` is received
+- targeted DirectCall tests passed
+- fresh physical Debug build installed successfully
+- public route safety remains dev invite 404, unauthenticated foreground invite 401, unauthenticated stream 401, token registration 401, and APNs send control 401
+- no real sandbox APNs push was sent in this run
+- production APNs was not attempted
+- repeated pushes were not attempted
+
+Current blockers:
+- fresh physical PushKit upload smoke returned `pushkit_token_upload_http_failure`
+- authenticated APNs dry-run returned HTTP 401, so the real APNs send was skipped
+- CallKit answer action was not physically observed in this run

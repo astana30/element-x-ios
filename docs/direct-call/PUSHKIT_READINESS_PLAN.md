@@ -657,3 +657,27 @@ Safety:
 - no production APNs push
 - no repeated APNs push
 - no raw token, APNs key, JWT, authorization header, Matrix access token, raw payload, user ID, device ID, room ID, or call handle recorded
+
+## 2.45C readiness update
+
+Ready:
+- DEBUG-only CallKit answer action proof path exists
+- answer action fulfillment can be recorded with redacted fields only
+- targeted DirectCall tests, SwiftFormat, and changed-file SwiftLint passed
+- route safety remains intact
+
+Blocked:
+- fresh physical PushKit upload smoke returned `pushkit_token_upload_http_failure`
+- authenticated APNs dry-run returned HTTP 401
+- real sandbox APNs send was skipped
+- physical CallKit answer action proof was not observed
+
+Still not wired:
+- media credentials/media connection
+- Matrix event emission
+- full direct-call flow
+
+Safety:
+- no production APNs push
+- no repeated APNs push
+- no raw token, APNs key, JWT, authorization header, Matrix access token, raw payload, user ID, device ID, room ID, or call handle recorded
