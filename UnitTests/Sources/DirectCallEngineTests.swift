@@ -1808,7 +1808,8 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(description.contains("pushKitCallbackRuntime: false"))
         #expect(!modelSource.contains("PKPushRegistry"))
         #expect(!modelSource.contains("requestAuthorization"))
-        #expect(!adapterSource.contains("didReceiveIncomingPush"))
+        #expect(adapterSource.contains("didReceiveIncomingPushWith payload"))
+        #expect(adapterSource.contains("callkit_report_requested=false"))
         #expect(!adapterSource.contains("registerForRemoteNotifications"))
         #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !description.contains($0) })
     }
@@ -2063,10 +2064,35 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(registrarSource.contains("\"token_received\""))
         #expect(developerOptionsSource.contains("PushKit registration smoke"))
         #expect(developerOptionsSource.contains("pushKitRegistrationSmokeProof"))
-        #expect(!registrarSource.contains("didReceiveIncomingPush"))
+        #expect(registrarSource.contains("didReceiveIncomingPushWith payload"))
         #expect(!registrarSource.contains("registerForRemoteNotifications"))
         #expect(!appSessionSource.contains("DirectCallPushKitRegistrar"))
         #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !description.contains($0) })
+    }
+
+    @Test
+    func debugVoIPPushReceiptProofIsRedactedAndCallbackOnly() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+        let appSessionSource = try Self.sourceFile("ElementX/Sources/Services/Session/UserSession.swift")
+
+        #expect(adapterSource.contains("didReceiveIncomingPushWith payload"))
+        #expect(adapterSource.contains("guard type == .voIP"))
+        #expect(adapterSource.contains("completion()"))
+        #expect(adapterSource.contains("recordVoIPPushReceipt(payloadDictionary)"))
+        #expect(adapterSource.contains("physical_voip_push_received=\\(physicalVoIPPushReceived)"))
+        #expect(adapterSource.contains("pushkit_callback_invoked=\\(callbackInvoked)"))
+        #expect(adapterSource.contains("pushkit_payload_redacted=true"))
+        #expect(adapterSource.contains("pushkit_payload_kind=\\(payloadKind)"))
+        #expect(adapterSource.contains("sandbox_voip_smoke"))
+        #expect(adapterSource.contains("pushkit_completion_called=\\(completionCalled)"))
+        #expect(adapterSource.contains("callkit_report_requested=false"))
+        #expect(adapterSource.contains("media_credentials_requested=false"))
+        #expect(adapterSource.contains("media_connect_requested=false"))
+        #expect(adapterSource.contains("matrix_event_emit_requested=false"))
+        #expect(adapterSource.contains("real_call_flow_started=false"))
+        #expect(!adapterSource.contains("payload.description"))
+        #expect(!adapterSource.contains("payload.dictionaryPayload.description"))
+        #expect(!appSessionSource.contains("recordVoIPPushReceipt"))
     }
 
     @Test

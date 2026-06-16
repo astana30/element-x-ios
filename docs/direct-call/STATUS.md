@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.44C - the controlled APNs VoIP sandbox send scaffold exists server-side and is deployed to staging, but the live scaffold smoke is blocked before APNs by `persisted_pushkit_token_missing` for the available staging credential. Real PushKit registration remains disabled by default, iOS local token persistence remains disabled, and no APNs provider request or VoIP push delivery is enabled.
+After 2.45A - the controlled APNs VoIP sandbox send path has delivered exactly one sandbox VoIP push to a physical iPhone, and the DEBUG-only PushKit delegate proof confirmed receipt of the redacted `sandbox_voip_smoke` payload. Real PushKit registration remains disabled by default outside manual diagnostics, iOS local token persistence remains disabled, and PushKit receipt is not wired into CallKit, Matrix events, or media.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.45A physical VoIP push receipt proof passed:
+  - A fresh physical Debug build was installed on the connected iPhone.
+  - The manual PushKit upload smoke refreshed the persisted staging token with redacted `http_success`, `registered`, `persisted`, and `redacted_match` proof.
+  - Public route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, unauthenticated token registration `401`, and unauthenticated APNs send control `401`.
+  - APNs dry-run returned HTTP `200` with persisted token lookup `found`, credentials available, sandbox environment, topic resolved, result `dry_run`, and `blocked_reason=none`.
+  - Exactly one real sandbox VoIP push send was attempted and returned `apns_voip_push_send_result=sandbox_success`, `apns_failure_reason=none`, and `blocked_reason=none`.
+  - Physical iPhone proof reached `physical_voip_push_received=true`, `pushkit_callback_invoked=true`, `pushkit_payload_redacted=true`, `pushkit_payload_version=1`, `pushkit_payload_kind=sandbox_voip_smoke`, and `pushkit_completion_called=true`.
+  - Proof kept `callkit_report_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, `matrix_event_emit_requested=false`, and `real_call_flow_started=false`.
+  - No production APNs push, repeated push, CallKit report from PushKit, media behavior, Matrix event emission, Element Call route replacement, entitlement/project/signing/`Info.plist` change, or `app.yml` regeneration was introduced.
 - 2.44C controlled APNs VoIP sandbox send scaffold is implemented and deployed:
   - Added a server-side APNs VoIP sandbox scaffold with an explicit auth-gated control route and redacted diagnostics.
   - APNs send remains disabled by default and production APNs environment is rejected in this scaffold.

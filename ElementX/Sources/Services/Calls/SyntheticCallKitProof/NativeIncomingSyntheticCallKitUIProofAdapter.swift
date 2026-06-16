@@ -500,6 +500,23 @@ private final class DirectCallRealPushKitRegistryController: NSObject, DirectCal
         delegate?.pushKitRegistrarDidUpdateToken(pushCredentials.token)
     }
 
+    func pushRegistry(_ registry: PKPushRegistry,
+                      didReceiveIncomingPushWith payload: PKPushPayload,
+                      for type: PKPushType,
+                      completion: @escaping () -> Void) {
+        guard type == .voIP else {
+            completion()
+            return
+        }
+
+        let payloadDictionary = payload.dictionaryPayload
+        completion()
+
+        #if DEBUG
+        SalemXPushKitRegistrationSmokeDebugBridge.recordVoIPPushReceipt(payloadDictionary)
+        #endif
+    }
+
     func pushRegistry(_ registry: PKPushRegistry, didInvalidatePushTokenFor type: PKPushType) {
         guard type == .voIP else {
             return
@@ -518,6 +535,34 @@ private final class DirectCallRealPushKitRegistryController: NSObject, DirectCal
 #endif
 
 #if DEBUG && canImport(PushKit) && os(iOS)
+private struct SalemXVoIPPushReceiptProofSummary {
+    var physicalVoIPPushReceived = false
+    var callbackInvoked = false
+    var pushType = "none"
+    var payloadVersion = "none"
+    var payloadKind = "none"
+    var completionCalled = false
+    var blockedReason = "voip_push_not_received"
+
+    var redactedLines: [String] {
+        [
+            "physical_voip_push_received=\(physicalVoIPPushReceived)",
+            "pushkit_callback_invoked=\(callbackInvoked)",
+            "pushkit_push_type=\(pushType)",
+            "pushkit_payload_redacted=true",
+            "pushkit_payload_version=\(payloadVersion)",
+            "pushkit_payload_kind=\(payloadKind)",
+            "pushkit_completion_called=\(completionCalled)",
+            "callkit_report_requested=false",
+            "media_credentials_requested=false",
+            "media_connect_requested=false",
+            "matrix_event_emit_requested=false",
+            "real_call_flow_started=false",
+            "blocked_reason=\(blockedReason)"
+        ]
+    }
+}
+
 private struct SalemXPushKitTokenUploadSmokeSummary {
     var physicalDeviceAvailable = false
     var manualInvoked = false
@@ -765,6 +810,21 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         return latestUploadSummary
     }
 
+    static func recordVoIPPushReceipt(_ payload: [AnyHashable: Any]) {
+        let directCallPayload = payload["salemx_direct_call"] as? [String: Any]
+        let version = directCallPayload?["version"] as? Int
+        let kind = directCallPayload?["kind"] as? String
+        let isSandboxSmoke = version == 1 && kind == "sandbox_voip_smoke"
+
+        updateLatestVoIPPushReceiptSummary(.init(physicalVoIPPushReceived: true,
+                                                 callbackInvoked: true,
+                                                 pushType: "voip",
+                                                 payloadVersion: version.map(String.init) ?? "missing",
+                                                 payloadKind: kind ?? "missing",
+                                                 completionCalled: true,
+                                                 blockedReason: isSandboxSmoke ? "none" : "unsupported_redacted_payload"))
+    }
+
     private static func updateLatestSummary(with result: DirectCallPushKitRegistrarResult) {
         lock.lock()
         latestSummary = redactedSummary(for: result)
@@ -777,6 +837,13 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         let latestUploadSummary = latestUploadSummary
         lock.unlock()
         writeUploadSmokeProof(latestUploadSummary)
+    }
+
+    private static func updateLatestVoIPPushReceiptSummary(_ summary: SalemXVoIPPushReceiptProofSummary) {
+        lock.lock()
+        let proof = summary.redactedLines.joined(separator: "\n")
+        lock.unlock()
+        writeUploadSmokeProof(proof)
     }
 
     private static func writeUploadSmokeProof(_ proof: String) {

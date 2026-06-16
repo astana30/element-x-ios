@@ -619,3 +619,22 @@ Still not wired:
 - PushKit background callback into call flow
 - CallKit report from PushKit
 - media credentials/media connection
+
+## 2.45A readiness update
+
+Ready:
+- APNs dry-run is green against the persisted staging PushKit token
+- exactly one controlled sandbox VoIP push send returned sandbox_success
+- physical iPhone PushKit receipt proof is green for the redacted sandbox_voip_smoke payload
+- PushKit completion is called promptly
+
+Still not wired:
+- PushKit receipt into full call flow
+- CallKit report from PushKit
+- media credentials/media connection
+- Matrix event emission from PushKit receipt
+
+Safety:
+- no production APNs push
+- no repeated APNs push
+- no raw token, APNs key, JWT, authorization header, Matrix access token, or raw payload recorded

@@ -576,3 +576,16 @@ Redacted APNs result:
 - blocked_reason=none
 
 This verifies the server-side APNs sandbox provider path. It does not yet prove physical iPhone PushKit background callback receipt.
+
+## 2.45A Physical VoIP push receipt proof
+
+The controlled physical receipt proof passed on a fresh Debug build.
+
+Redacted proof:
+- manual PushKit token upload returned http_success / registered / persisted / redacted_match
+- APNs dry-run returned HTTP 200 with persisted token lookup found, sandbox credentials available, topic resolved, result dry_run, and no blocker
+- exactly one real sandbox VoIP push send returned sandbox_success with no APNs failure reason
+- iPhone proof returned physical_voip_push_received=true, pushkit_callback_invoked=true, pushkit_payload_redacted=true, pushkit_payload_version=1, pushkit_payload_kind=sandbox_voip_smoke, and pushkit_completion_called=true
+- CallKit, media, Matrix events, and real call flow remained false
+
+This proves receipt of the minimal sandbox VoIP push payload only. It does not wire PushKit receipt into CallKit reporting, Matrix event emission, media credentials, media connection, or full call flow.

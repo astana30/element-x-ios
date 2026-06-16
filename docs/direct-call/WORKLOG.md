@@ -2897,3 +2897,19 @@ Redacted result:
 - no production APNs push was attempted
 
 PushKit background callback remains unwired. CallKit remains unwired from PushKit. Media remains untouched. No raw PushKit token, APNs token, .p8 contents, JWT, authorization header, Matrix access token, raw payload, raw APNs response body, private logs, or secret-bearing URL was recorded.
+
+## 2.45A — Physical VoIP push receipt proof
+
+Validated physical iPhone receipt of the controlled sandbox VoIP push.
+
+Redacted result:
+- fresh physical Debug build installed successfully
+- manual PushKit token upload smoke returned http_success / registered / persisted / redacted_match
+- route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, token registration `401`, and APNs send control `401`
+- APNs dry-run returned HTTP 200 and `apns_voip_push_send_result=dry_run`
+- exactly one real sandbox VoIP push send was attempted
+- APNs real send returned `apns_voip_push_send_result=sandbox_success`, `apns_failure_reason=none`, and `blocked_reason=none`
+- physical iPhone proof returned `physical_voip_push_received=true`, `pushkit_callback_invoked=true`, `pushkit_payload_redacted=true`, `pushkit_payload_version=1`, `pushkit_payload_kind=sandbox_voip_smoke`, and `pushkit_completion_called=true`
+- receipt proof kept `callkit_report_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, `matrix_event_emit_requested=false`, and `real_call_flow_started=false`
+
+No production APNs push was attempted. No repeated push was attempted. No raw PushKit token, APNs token, `.p8` contents, JWT, authorization header, Matrix access token, raw payload, raw APNs response body, private logs, or secret-bearing URL was recorded. PushKit receipt remains proof-only and is not wired into CallKit, Matrix events, media, or full call flow.

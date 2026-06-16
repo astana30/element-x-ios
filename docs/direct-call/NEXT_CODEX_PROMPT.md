@@ -4,9 +4,16 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.44c-controlled-apns-voip-sandbox-send-scaffold`
+`salemx-2.45a-physical-voip-push-receipt-proof`
 
-Next phase: continue after the controlled APNs VoIP sandbox send scaffold was added and deployed, but the live scaffold smoke was blocked before APNs by `persisted_pushkit_token_missing` for the available staging credential. Do not move to VoIP push delivery yet. The next safe step should provide a matching authenticated smoke path and server-local sandbox APNs credentials/topic, or design token invalidation/replacement first.
+Next phase: continue after the physical iPhone VoIP push receipt proof passed. Do not wire media or full call flow. The next safe step should be a small, controlled CallKit-from-PushKit proof or planning task that keeps payloads redacted, avoids Matrix events, avoids media credentials, and remains explicitly gated/manual.
+
+Latest redacted result:
+- APNs dry-run returned HTTP 200 and `apns_voip_push_send_result=dry_run`
+- exactly one real sandbox VoIP push send returned `apns_voip_push_send_result=sandbox_success`
+- iPhone proof returned `physical_voip_push_received=true`, `pushkit_callback_invoked=true`, `pushkit_payload_kind=sandbox_voip_smoke`, and `pushkit_completion_called=true`
+- `callkit_report_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, `matrix_event_emit_requested=false`, and `real_call_flow_started=false`
+- no production APNs push and no repeated push were attempted
 
 ## Baseline
 
