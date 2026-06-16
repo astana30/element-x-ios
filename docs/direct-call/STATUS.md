@@ -1790,3 +1790,19 @@ Current safe state:
 Current blocker:
 - direct token-store metadata inspection is blocked by restricted permissions and the current sudo policy
 - matching Matrix access token for APNs control was unavailable locally
+
+## 2.44E2 status
+
+Operator-assisted APNs sandbox send verification is blocked before dry-run.
+
+Current safe state:
+- `salemx-call-service` active was verified
+- public route safety remains dev invite 404, unauthenticated foreground invite 401, unauthenticated stream 401, token registration 401, and APNs send control 401
+- the hidden terminal token prompt was opened
+- APNs dry-run was not run
+- real APNs sandbox send was not attempted
+- production APNs was not attempted
+- repeated pushes were not attempted
+
+Current blocker:
+- matching Matrix access token was not provided to the hidden terminal prompt during this run

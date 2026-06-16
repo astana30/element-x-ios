@@ -2861,3 +2861,17 @@ Redacted result:
 - real APNs sandbox send was not attempted
 
 No production APNs push was attempted. No repeated push was attempted. No raw PushKit token, APNs token, APNs auth key, `.p8` contents, JWT, authorization header, Matrix access token, request payload, user ID, device ID, room ID, call handle, private logs, or secret-bearing URL was recorded.
+
+## 2.44E2 — Operator-assisted APNs sandbox send verification
+
+Attempted operator-assisted APNs sandbox send verification.
+
+Redacted result:
+- `salemx-call-service` active was verified
+- public route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, token registration `401`, and APNs send control `401`
+- the hidden terminal prompt for the matching Matrix access token was opened
+- no Matrix access token was provided during this run
+- APNs dry-run was not run
+- real APNs sandbox send was not attempted
+
+No production APNs push was attempted. No repeated push was attempted. No raw PushKit token, APNs token, APNs auth key, `.p8` contents, JWT, authorization header, Matrix access token, request payload, user ID, device ID, room ID, call handle, private logs, or secret-bearing URL was recorded.

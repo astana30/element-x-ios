@@ -586,3 +586,18 @@ Still safe:
 - PushKit background callback remains unwired
 - CallKit remains unwired from PushKit
 - media credentials and media connection remain untouched
+
+## 2.44E2 readiness update
+
+Still blocked:
+- operator did not provide the matching Matrix access token to the hidden terminal prompt in this run
+- APNs dry-run has not run
+- real APNs sandbox send has not been attempted
+
+Still safe:
+- public route safety remains intact
+- no production APNs push was attempted
+- no repeated push was attempted
+- PushKit background callback remains unwired
+- CallKit remains unwired from PushKit
+- media credentials and media connection remain untouched

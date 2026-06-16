@@ -390,3 +390,33 @@ Hard constraints remain:
 - do not connect media
 - do not touch entitlements/project/signing/Info.plist/app.yml
 - do not stage `docs/direct-call/REPEAT_CALL_FASTPATH_DIAGNOSTICS.md`
+
+# Next prompt — 2.44E3 APNs dry-run with operator token ready
+
+Continue after 2.44E2.
+
+Latest result:
+- `salemx-call-service` active was verified
+- public route safety remained:
+  - `dev/invite=404`
+  - unauthenticated non-dev invite `401`
+  - unauthenticated stream `401`
+  - unauthenticated token registration `401`
+  - unauthenticated APNs send control `401`
+- hidden terminal prompt for the matching Matrix access token was opened
+- no Matrix access token was provided during the run
+- APNs dry-run was not run
+- real APNs sandbox send was not attempted
+
+Next task:
+Retry only when the matching Matrix access token is ready to enter into the hidden terminal prompt. Run APNs dry-run first. If dry-run is green, run exactly one real sandbox VoIP push attempt.
+
+Hard constraints remain:
+- do not print, log, document, or commit raw PushKit/APNs tokens, APNs key material, `.p8` contents, JWTs, authorization headers, access tokens, request payloads, private logs, raw user IDs, raw device IDs, room IDs, call handles, or secret-bearing URLs
+- do not attempt production APNs
+- do not send repeated pushes
+- do not wire PushKit background callback into call flow yet
+- do not wire CallKit from PushKit yet
+- do not connect media
+- do not touch entitlements/project/signing/Info.plist/app.yml
+- do not stage `docs/direct-call/REPEAT_CALL_FASTPATH_DIAGNOSTICS.md`

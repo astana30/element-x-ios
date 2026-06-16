@@ -548,3 +548,13 @@ Verification stopped before APNs dry-run because the required gates were not ava
 - no matching Matrix access token was available locally for the authenticated APNs control route
 
 No APNs dry-run, real sandbox send, production send, repeated send, PushKit background callback wiring, CallKit-from-PushKit wiring, media credential request, or media connection was performed.
+
+## 2.44E2 Operator-assisted APNs sandbox send verification
+
+The operator-assisted verification stopped before APNs dry-run:
+- route safety remained green
+- `salemx-call-service` active was verified
+- the hidden terminal prompt for the matching Matrix access token was opened
+- no token was provided during this run
+
+No APNs dry-run, real sandbox send, production send, repeated send, PushKit background callback wiring, CallKit-from-PushKit wiring, media credential request, or media connection was performed.
