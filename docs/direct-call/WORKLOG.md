@@ -2783,3 +2783,22 @@ Confirmed on a physical iPhone Debug build that the isolated synthetic CallKit p
 - Documented the correct physical Debug local signing override Team ID `M639Y9MFR2`; the old Team ID `83LGSC2QPV` must not be used for current physical Debug builds.
 - Lightly investigated the commit-hook `Package.resolved` warning: the root file exists, no build/test failure is associated with it, and no package resolution files were changed.
 - No PushKit/APNs/background behavior, media credential request, media connection, Matrix event emission, Element Call route replacement, signing/project setting change, production URL, credential value, broad rollout, production/public rollout, or global activation was added.
+
+## 2.44C1 — APNs persisted token lookup preflight
+
+Completed controlled APNs persisted-token lookup recovery.
+
+Redacted result:
+- public APNs sandbox send route is exposed and auth-gated: unauthenticated request returns 401
+- physical PushKit registration smoke was rerun after the APNs scaffold deploy
+- real PushKit token upload returned http_success / registered
+- server-side token persistence returned persisted
+- internal token retrieval returned redacted_match
+- APNs control dry-run returned HTTP 200
+- persisted PushKit token lookup changed from missing to found
+- raw PushKit token remained fully redacted
+- APNs provider was not requested
+- APNs VoIP push send was not attempted
+- current blocker: apns_voip_topic_unresolved / APNs credentials unavailable
+
+No raw PushKit/APNs token, APNs credentials, JWT, authorization header, request payload, user ID, device ID, room ID, call handle, private logs, or secret-bearing URL was recorded.

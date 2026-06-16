@@ -514,3 +514,20 @@ Rollback requirements:
 - Confirm privacy scan shows no raw token, user, device, room, call, request payload, private log, or secret-bearing URL.
 - Confirm no media credential request, media connection, or Matrix event emission occurs from push receipt.
 - Confirm project, signing, entitlement, `Info.plist`, and `app.yml` state matches the approved rollback target.
+
+## 2.44C1 readiness update
+
+Ready:
+- physical PushKit token upload works
+- server-side token persistence works
+- internal redacted token retrieval works
+- public APNs sandbox send control route is auth-gated
+- APNs control can find the persisted PushKit token
+
+Not ready yet:
+- APNs VoIP topic is unresolved
+- APNs credentials are unavailable
+- sandbox VoIP push send has not been attempted
+- PushKit background callback is not wired into call flow
+- CallKit is not wired from PushKit
+- media is not connected

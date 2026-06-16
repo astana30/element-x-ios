@@ -80,15 +80,20 @@ class InMemoryPushKitTokenStore:
         self._records: dict[str, PushKitTokenRecord] = {}
 
     def store(self, user_id: str, device_id: str | None, request: PushKitTokenRegistrationRequest) -> str:
-        self._records[_record_key(user_id, device_id, request.environment_class)] = PushKitTokenRecord(
+        record = PushKitTokenRecord(
             token=request.token,
             environment_class=request.environment_class,
             updated_at=datetime.now(timezone.utc),
         )
+        self._records[_record_key(user_id, device_id, request.environment_class)] = record
+        self._records[_record_key(user_id, None, request.environment_class)] = record
         return "persisted"
 
     def retrieve(self, user_id: str, device_id: str | None, environment_class: str) -> PushKitTokenRecord | None:
         return self._records.get(_record_key(user_id, device_id, environment_class))
+
+    def retrieve_latest_for_user(self, user_id: str, environment_class: str) -> PushKitTokenRecord | None:
+        return self.retrieve(user_id, None, environment_class)
 
 
 class FilePushKitTokenStore:
@@ -103,11 +108,13 @@ class FilePushKitTokenStore:
 
     def store(self, user_id: str, device_id: str | None, request: PushKitTokenRegistrationRequest) -> str:
         records = self._read_records()
-        records[_record_key(user_id, device_id, request.environment_class)] = {
+        record = {
             "token": request.token,
             "environment": request.environment_class,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
+        records[_record_key(user_id, device_id, request.environment_class)] = record
+        records[_record_key(user_id, None, request.environment_class)] = record
         self._write_records(records)
         return "persisted"
 
@@ -132,6 +139,9 @@ class FilePushKitTokenStore:
             environment_class=stored_environment,
             updated_at=parsed_updated_at,
         )
+
+    def retrieve_latest_for_user(self, user_id: str, environment_class: str) -> PushKitTokenRecord | None:
+        return self.retrieve(user_id, None, environment_class)
 
     def _read_records(self) -> dict[str, dict[str, str]]:
         if not self._path.exists():

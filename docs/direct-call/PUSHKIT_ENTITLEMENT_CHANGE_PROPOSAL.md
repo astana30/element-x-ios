@@ -348,3 +348,11 @@ signing/provisioning settings
 ```
 
 Without that explicit authorization, the next task must remain docs/test-only and must not apply project, signing, capability, profile, entitlement, or `Info.plist` changes.
+
+## 2.44C1 note
+
+No entitlement, signing, project, app.yml, or Info.plist changes were made for APNs persisted-token lookup preflight.
+
+The current blocker is server-side APNs configuration:
+- VoIP topic unresolved
+- APNs credentials unavailable

@@ -243,9 +243,8 @@ def create_app(config: ServiceConfig | None = None,
             if not isinstance(payload, dict):
                 raise bad_request(error="Request body must be a JSON object.")
             send_request = APNsVoIPSandboxSendRequest.from_mapping(payload)
-            token_record = token_store.retrieve(
+            token_record = token_store.retrieve_latest_for_user(
                 getattr(authenticated_user, "user" "_id"),
-                getattr(authenticated_user, "device" "_id"),
                 "development",
             )
             diagnostics = voip_send_service.send(send_request, token_record)

@@ -486,3 +486,18 @@ Any production native direct-call VoIP registration proof, APNs provider setup t
 - DEBUG smoke tooling is not production behavior.
 - A future 2.43J may run a controlled local physical PushKit registrar smoke only after explicit approval and entitlement/profile readiness.
 - Physical Debug builds should use `DEVELOPMENT_TEAM=M639Y9MFR2`; the old `83LGSC2QPV` team must not be used.
+
+## 2.44C1 APNs preflight update
+
+The APNs scaffold now successfully locates the persisted PushKit token through the controlled user/environment lookup path. This resolves the earlier Web-session device mismatch where APNs control lookup returned missing because the PushKit token was stored under the physical iPhone device identity.
+
+Redacted outcome:
+- persisted_pushkit_token_lookup_result=found
+- pushkit_token_redacted=true
+- apns_credentials_available=false
+- apns_topic_resolved=false
+- apns_provider_requested=false
+- apns_voip_push_send_requested=false
+- blocked_reason=apns_voip_topic_unresolved
+
+No APNs send was attempted in this step.

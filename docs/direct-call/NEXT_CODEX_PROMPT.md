@@ -266,3 +266,35 @@ Only claim direct `salemx-call-service active` if `systemctl` or an equivalent d
 - Do not stage or commit `docs/direct-call/REPEAT_CALL_FASTPATH_DIAGNOSTICS.md`.
 - Do not log raw tokens, raw identifiers, request payloads, private logs, or secret-bearing URLs.
 - Do not use old Team ID `83LGSC2QPV`; physical Debug work must use `M639Y9MFR2`.
+
+# Next prompt — 2.44D APNs VoIP sandbox credentials/topic setup
+
+Continue after 2.44C1.
+
+Latest result:
+- public APNs sandbox send route is auth-gated
+- physical PushKit token upload was rerun
+- server persistence returned persisted
+- internal retrieval returned redacted_match
+- APNs control dry-run returned HTTP 200
+- persisted PushKit token lookup returned found
+- raw token remained redacted
+- APNs provider was not requested
+- APNs VoIP push send was not attempted
+
+Current blocker:
+- apns_voip_topic_unresolved
+- APNs credentials unavailable
+
+Next task:
+Set up APNs VoIP sandbox credentials and resolve the VoIP topic without committing or logging secrets. Then run exactly one controlled sandbox VoIP push attempt if all preconditions are met.
+
+Hard constraints:
+- do not commit .p8 files, APNs keys, JWTs, auth headers, raw tokens, payloads, user IDs, device IDs, room IDs, call handles, private logs, or secret-bearing URLs
+- do not attempt production APNs
+- do not send repeated pushes
+- do not wire PushKit background callback into call flow yet
+- do not wire CallKit from PushKit yet
+- do not connect media
+- do not touch entitlements/project/signing/Info.plist/app.yml
+- do not stage docs/direct-call/REPEAT_CALL_FASTPATH_DIAGNOSTICS.md

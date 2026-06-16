@@ -1707,3 +1707,24 @@ Goal: decide where foreground session lifecycle owns the disabled-by-default SSE
 - No diagnostic secrets or tokens in production.
 - No unencrypted key material in Matrix events.
 - No raw JSON, `debugInfo`, `originalJSON`, or `originalJson` receive path.
+
+## 2.44C1 status
+
+APNs persisted-token lookup preflight is complete.
+
+Current safe state:
+- PushKit token registration route remains auth-gated
+- APNs sandbox send control route is publicly exposed and auth-gated
+- persisted PushKit token lookup now returns found
+- token remains redacted
+- APNs credentials/topic are not configured yet
+- APNs provider was not requested
+- VoIP push send was not attempted
+- production APNs was not attempted
+- real PushKit/background callback is not wired
+- CallKit report is not wired from PushKit
+- media credentials and media connection remain untouched
+
+Current blocker:
+- apns_voip_topic_unresolved
+- APNs credentials unavailable
