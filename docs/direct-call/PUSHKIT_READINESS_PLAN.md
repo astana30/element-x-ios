@@ -531,3 +531,19 @@ Not ready yet:
 - PushKit background callback is not wired into call flow
 - CallKit is not wired from PushKit
 - media is not connected
+
+## 2.44D readiness update
+
+Ready:
+- server can locate the persisted PushKit token
+- server APNs credentials are configured
+- server resolves the sandbox VoIP topic
+- server builds the sandbox VoIP payload
+- server reaches the APNs provider boundary
+
+Not ready yet:
+- real APNs HTTP/2 provider is not implemented
+- sandbox_success has not been achieved
+- physical iPhone VoIP push receipt has not been proven
+- PushKit background callback remains unwired
+- CallKit remains unwired from PushKit

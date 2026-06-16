@@ -501,3 +501,15 @@ Redacted outcome:
 - blocked_reason=apns_voip_topic_unresolved
 
 No APNs send was attempted in this step.
+
+## 2.44D APNs provider boundary result
+
+The staging APNs control route now reaches the APNs provider boundary with:
+- persisted_pushkit_token_lookup_result=found
+- apns_credentials_available=true
+- apns_topic_resolved=true
+- apns_voip_payload_built=true
+- apns_provider_requested=true
+- apns_voip_push_send_requested=true
+
+The send result was sandbox_failure_redacted because the current APNs provider implementation is still the disabled/redacted scaffold provider. Real APNs HTTP/2 provider implementation remains a follow-up.

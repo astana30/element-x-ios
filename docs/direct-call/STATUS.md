@@ -1728,3 +1728,19 @@ Current safe state:
 Current blocker:
 - apns_voip_topic_unresolved
 - APNs credentials unavailable
+
+## 2.44D status
+
+APNs VoIP sandbox credentials/topic preflight is complete.
+
+Current safe state:
+- persisted PushKit token lookup works
+- APNs credentials are available in staging
+- APNs VoIP topic is resolved
+- APNs payload build path works
+- APNs provider boundary is reached
+- one controlled sandbox send attempt returned sandbox_failure_redacted
+- real APNs HTTP/2 provider implementation remains pending
+- PushKit background callback is not wired
+- CallKit report is not wired from PushKit
+- media credentials and media connection remain untouched

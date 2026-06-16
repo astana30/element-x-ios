@@ -2802,3 +2802,21 @@ Redacted result:
 - current blocker: apns_voip_topic_unresolved / APNs credentials unavailable
 
 No raw PushKit/APNs token, APNs credentials, JWT, authorization header, request payload, user ID, device ID, room ID, call handle, private logs, or secret-bearing URL was recorded.
+
+## 2.44D — APNs VoIP sandbox credentials/topic preflight
+
+Completed controlled APNs VoIP sandbox credential/topic preflight.
+
+Redacted result:
+- persisted PushKit token lookup returned found
+- PushKit token remained redacted
+- APNs credentials were available
+- APNs environment was sandbox
+- APNs topic resolved
+- APNs payload was built
+- APNs provider was requested
+- exactly one controlled sandbox send attempt was made
+- send result was sandbox_failure_redacted
+- current blocker: real APNs HTTP/2 provider is not implemented; the current provider boundary returns sandbox_failure_redacted
+
+No repeated push was attempted. No production APNs push was attempted. No raw PushKit token, APNs token, .p8 contents, JWT, authorization header, request payload, user ID, device ID, room ID, call handle, private logs, or secret-bearing URL was recorded.

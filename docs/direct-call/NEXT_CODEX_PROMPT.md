@@ -298,3 +298,24 @@ Hard constraints:
 - do not connect media
 - do not touch entitlements/project/signing/Info.plist/app.yml
 - do not stage docs/direct-call/REPEAT_CALL_FASTPATH_DIAGNOSTICS.md
+
+# Next prompt — 2.44E real APNs VoIP sandbox HTTP/2 provider
+
+Continue after 2.44D.
+
+Latest result:
+- persisted PushKit token lookup returned found
+- APNs credentials were available
+- APNs sandbox topic was resolved
+- APNs payload was built
+- one controlled sandbox send attempt reached the provider boundary
+- send result was sandbox_failure_redacted
+- no repeated push was attempted
+- no production APNs push was attempted
+- no raw token, APNs key, JWT, authorization header, or payload was recorded
+
+Current blocker:
+- real APNs HTTP/2 provider is not implemented; current provider returns sandbox_failure_redacted
+
+Next task:
+Implement a real, controlled APNs VoIP sandbox HTTP/2 provider with redacted diagnostics only. Do not wire PushKit background callback, CallKit, Matrix events, or media yet.
