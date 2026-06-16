@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.45A - the controlled APNs VoIP sandbox send path has delivered exactly one sandbox VoIP push to a physical iPhone, and the DEBUG-only PushKit delegate proof confirmed receipt of the redacted `sandbox_voip_smoke` payload. Real PushKit registration remains disabled by default outside manual diagnostics, iOS local token persistence remains disabled, and PushKit receipt is not wired into CallKit, Matrix events, or media.
+After 2.45B - the controlled APNs VoIP sandbox send path has delivered exactly one sandbox VoIP push to a physical iPhone, the DEBUG-only PushKit delegate proof confirmed receipt of the redacted `sandbox_voip_smoke` payload, and the callback requested a controlled synthetic CallKit report. Real PushKit registration remains disabled by default outside manual diagnostics, iOS local token persistence remains disabled, and PushKit receipt is not wired into Matrix events, media, or full direct-call flow.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.45B PushKit callback controlled CallKit report proof passed:
+  - A fresh physical Debug build was installed on the connected iPhone.
+  - The manual PushKit upload smoke refreshed the persisted staging token with redacted `http_success`, `registered`, `persisted`, and `redacted_match` proof.
+  - Public route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, unauthenticated token registration `401`, and unauthenticated APNs send control `401`.
+  - APNs dry-run returned HTTP `200` with persisted token lookup `found`, credentials available, sandbox environment, topic resolved, result `dry_run`, and `blocked_reason=none`.
+  - Exactly one real sandbox VoIP push send was attempted and returned `apns_voip_push_send_result=sandbox_success`, `apns_failure_reason=none`, and `blocked_reason=none`.
+  - Physical iPhone proof reached `physical_voip_push_received=true`, `pushkit_callback_invoked=true`, `pushkit_payload_redacted=true`, `pushkit_payload_kind=sandbox_voip_smoke`, `pushkit_completion_called=true`, `callkit_report_requested=true`, and `callkit_report_result=reported`.
+  - Proof kept `media_credentials_requested=false`, `media_connect_requested=false`, `matrix_event_emit_requested=false`, and `real_call_flow_started=false`.
+  - No production APNs push, repeated push, media behavior, Matrix event emission, full direct-call flow, Element Call route replacement, entitlement/project/signing/`Info.plist` change, or `app.yml` regeneration was introduced.
 - 2.45A physical VoIP push receipt proof passed:
   - A fresh physical Debug build was installed on the connected iPhone.
   - The manual PushKit upload smoke refreshed the persisted staging token with redacted `http_success`, `registered`, `persisted`, and `redacted_match` proof.

@@ -589,3 +589,16 @@ Redacted proof:
 - CallKit, media, Matrix events, and real call flow remained false
 
 This proves receipt of the minimal sandbox VoIP push payload only. It does not wire PushKit receipt into CallKit reporting, Matrix event emission, media credentials, media connection, or full call flow.
+
+## 2.45B PushKit callback controlled CallKit report proof
+
+The controlled CallKit report proof passed from the physical PushKit sandbox callback.
+
+Redacted proof:
+- manual PushKit token upload returned http_success / registered / persisted / redacted_match
+- APNs dry-run returned HTTP 200 with persisted token lookup found, sandbox credentials available, topic resolved, result dry_run, and no blocker
+- exactly one real sandbox VoIP push send returned sandbox_success with no APNs failure reason
+- iPhone proof returned pushkit_callback_invoked=true, pushkit_payload_redacted=true, pushkit_payload_kind=sandbox_voip_smoke, pushkit_completion_called=true, callkit_report_requested=true, and callkit_report_result=reported
+- media credentials, media connection, Matrix events, and real call flow remained false
+
+This proves only that the PushKit callback can request a controlled synthetic CallKit report. It does not wire Matrix event emission, media credentials, media connection, or full direct-call flow.

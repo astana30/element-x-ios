@@ -2071,7 +2071,7 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
-    func debugVoIPPushReceiptProofIsRedactedAndCallbackOnly() throws {
+    func debugVoIPPushReceiptProofRequestsControlledCallKitReportOnly() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
         let appSessionSource = try Self.sourceFile("ElementX/Sources/Services/Session/UserSession.swift")
 
@@ -2085,13 +2085,22 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("pushkit_payload_kind=\\(payloadKind)"))
         #expect(adapterSource.contains("sandbox_voip_smoke"))
         #expect(adapterSource.contains("pushkit_completion_called=\\(completionCalled)"))
-        #expect(adapterSource.contains("callkit_report_requested=false"))
+        #expect(adapterSource.contains("callkit_report_requested=\\(callKitReportRequested)"))
+        #expect(adapterSource.contains("callkit_report_result=\\(callKitReportResult)"))
+        #expect(adapterSource.contains("callkit_report_error_redacted=true"))
+        #expect(adapterSource.contains("reportControlledSandboxVoIPSmokeCallKit()"))
+        #expect(adapterSource.contains("NativeIncomingSyntheticCallKitUIProofHarness.makePhysicalDeviceProofHarness"))
+        #expect(adapterSource.contains("displayLabel: \"SalemX Test Call\""))
+        #expect(adapterSource.contains("case .reported:"))
+        #expect(adapterSource.contains("return \"reported\""))
         #expect(adapterSource.contains("media_credentials_requested=false"))
         #expect(adapterSource.contains("media_connect_requested=false"))
         #expect(adapterSource.contains("matrix_event_emit_requested=false"))
         #expect(adapterSource.contains("real_call_flow_started=false"))
         #expect(!adapterSource.contains("payload.description"))
         #expect(!adapterSource.contains("payload.dictionaryPayload.description"))
+        #expect(!adapterSource.contains("room_id"))
+        #expect(!adapterSource.contains("call_handle"))
         #expect(!appSessionSource.contains("recordVoIPPushReceipt"))
     }
 

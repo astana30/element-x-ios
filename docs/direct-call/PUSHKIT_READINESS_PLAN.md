@@ -638,3 +638,22 @@ Safety:
 - no production APNs push
 - no repeated APNs push
 - no raw token, APNs key, JWT, authorization header, Matrix access token, or raw payload recorded
+
+## 2.45B readiness update
+
+Ready:
+- APNs dry-run remains green against the persisted staging PushKit token
+- exactly one controlled sandbox VoIP push send returned sandbox_success
+- physical iPhone PushKit receipt proof is green for the redacted sandbox_voip_smoke payload
+- PushKit completion is called promptly
+- controlled synthetic CallKit report from the PushKit callback returned reported
+
+Still not wired:
+- PushKit receipt into full direct-call flow
+- media credentials/media connection
+- Matrix event emission from PushKit receipt
+
+Safety:
+- no production APNs push
+- no repeated APNs push
+- no raw token, APNs key, JWT, authorization header, Matrix access token, raw payload, user ID, device ID, room ID, or call handle recorded

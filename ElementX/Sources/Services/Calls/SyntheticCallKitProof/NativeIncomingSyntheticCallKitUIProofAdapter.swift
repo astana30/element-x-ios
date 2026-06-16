@@ -329,14 +329,17 @@ final class NativeIncomingSyntheticCallKitUIProofHarness {
 
 #if canImport(CallKit) && os(iOS)
 extension NativeIncomingSyntheticCallKitUIProofHarness {
-    static func makePhysicalDeviceProofHarness() -> NativeIncomingSyntheticCallKitUIProofHarness {
+    static func makePhysicalDeviceProofHarness(handle: String = "synthetic-local-call",
+                                               displayLabel: String = "Native Audio Proof") -> NativeIncomingSyntheticCallKitUIProofHarness {
         let reporter = NativeIncomingSyntheticCallKitUIProofReporter()
         let adapter = NativeIncomingSyntheticCallKitUIProofAdapter(isEnabled: true,
                                                                    reporter: reporter,
                                                                    actionHandler: NativeIncomingSyntheticCallKitUIProofNoopActionHandler(),
                                                                    diagnosticsRecorder: NativeIncomingSyntheticCallKitUIProofNoopDiagnosticsRecorder(),
                                                                    eventRecorder: NativeIncomingSyntheticCallKitUIProofNoopEventRecorder())
-        return NativeIncomingSyntheticCallKitUIProofHarness(adapter: adapter)
+        return NativeIncomingSyntheticCallKitUIProofHarness(adapter: adapter,
+                                                            handle: handle,
+                                                            displayLabel: displayLabel)
     }
 }
 
@@ -542,6 +545,8 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var payloadVersion = "none"
     var payloadKind = "none"
     var completionCalled = false
+    var callKitReportRequested = false
+    var callKitReportResult = "not_requested"
     var blockedReason = "voip_push_not_received"
 
     var redactedLines: [String] {
@@ -553,7 +558,9 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "pushkit_payload_version=\(payloadVersion)",
             "pushkit_payload_kind=\(payloadKind)",
             "pushkit_completion_called=\(completionCalled)",
-            "callkit_report_requested=false",
+            "callkit_report_requested=\(callKitReportRequested)",
+            "callkit_report_result=\(callKitReportResult)",
+            "callkit_report_error_redacted=true",
             "media_credentials_requested=false",
             "media_connect_requested=false",
             "matrix_event_emit_requested=false",
@@ -741,6 +748,9 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var latestSummary = initialRedactedSummary()
     private static var uploadSmoke: SalemXPushKitTokenUploadSmoke?
     private static var latestUploadSummary = initialUploadRedactedSummary()
+    #if canImport(CallKit) && os(iOS)
+    private static var callKitProofHarness: NativeIncomingSyntheticCallKitUIProofHarness?
+    #endif
 
     @objc static func startRegistrationSmoke() -> String {
         var configuration = DirectCallPushKitRegistrarConfiguration(featureGate: .init(isEnabled: true),
@@ -816,13 +826,42 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         let kind = directCallPayload?["kind"] as? String
         let isSandboxSmoke = version == 1 && kind == "sandbox_voip_smoke"
 
-        updateLatestVoIPPushReceiptSummary(.init(physicalVoIPPushReceived: true,
-                                                 callbackInvoked: true,
-                                                 pushType: "voip",
-                                                 payloadVersion: version.map(String.init) ?? "missing",
-                                                 payloadKind: kind ?? "missing",
-                                                 completionCalled: true,
-                                                 blockedReason: isSandboxSmoke ? "none" : "unsupported_redacted_payload"))
+        let baseSummary = SalemXVoIPPushReceiptProofSummary(physicalVoIPPushReceived: true,
+                                                            callbackInvoked: true,
+                                                            pushType: "voip",
+                                                            payloadVersion: version.map(String.init) ?? "missing",
+                                                            payloadKind: kind ?? "missing",
+                                                            completionCalled: true,
+                                                            callKitReportRequested: isSandboxSmoke,
+                                                            callKitReportResult: isSandboxSmoke ? "pending" : "not_requested",
+                                                            blockedReason: isSandboxSmoke ? "none" : "unsupported_redacted_payload")
+        updateLatestVoIPPushReceiptSummary(baseSummary)
+
+        guard isSandboxSmoke else {
+            return
+        }
+
+        DispatchQueue.main.async {
+            var reportedSummary = baseSummary
+            reportedSummary.callKitReportResult = reportControlledSandboxVoIPSmokeCallKit()
+            updateLatestVoIPPushReceiptSummary(reportedSummary)
+        }
+    }
+
+    private static func reportControlledSandboxVoIPSmokeCallKit() -> String {
+        #if canImport(CallKit) && os(iOS)
+        let proofHarness = NativeIncomingSyntheticCallKitUIProofHarness.makePhysicalDeviceProofHarness(handle: "salemx-test-call",
+                                                                                                       displayLabel: "SalemX Test Call")
+        callKitProofHarness = proofHarness
+        switch proofHarness.reportSyntheticIncomingCall() {
+        case .reported:
+            return "reported"
+        default:
+            return "failed_redacted"
+        }
+        #else
+        return "fake_reported"
+        #endif
     }
 
     private static func updateLatestSummary(with result: DirectCallPushKitRegistrarResult) {

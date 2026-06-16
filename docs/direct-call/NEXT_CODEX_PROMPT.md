@@ -4,15 +4,16 @@ Repo:
 `/Users/aibattt/Movies/element-x-ios`
 
 Branch:
-`salemx-2.45a-physical-voip-push-receipt-proof`
+`salemx-2.45b-pushkit-callback-callkit-report-proof`
 
-Next phase: continue after the physical iPhone VoIP push receipt proof passed. Do not wire media or full call flow. The next safe step should be a small, controlled CallKit-from-PushKit proof or planning task that keeps payloads redacted, avoids Matrix events, avoids media credentials, and remains explicitly gated/manual.
+Next phase: continue after the physical iPhone VoIP push receipt proof and controlled CallKit report proof passed. Do not wire media or full call flow. The next safe step should be a small planning or fake-only task for accepting/dismissing the controlled CallKit proof, still avoiding Matrix events and media credentials.
 
 Latest redacted result:
 - APNs dry-run returned HTTP 200 and `apns_voip_push_send_result=dry_run`
 - exactly one real sandbox VoIP push send returned `apns_voip_push_send_result=sandbox_success`
 - iPhone proof returned `physical_voip_push_received=true`, `pushkit_callback_invoked=true`, `pushkit_payload_kind=sandbox_voip_smoke`, and `pushkit_completion_called=true`
-- `callkit_report_requested=false`, `media_credentials_requested=false`, `media_connect_requested=false`, `matrix_event_emit_requested=false`, and `real_call_flow_started=false`
+- controlled CallKit proof returned `callkit_report_requested=true` and `callkit_report_result=reported`
+- `media_credentials_requested=false`, `media_connect_requested=false`, `matrix_event_emit_requested=false`, and `real_call_flow_started=false`
 - no production APNs push and no repeated push were attempted
 
 ## Baseline
