@@ -341,12 +341,21 @@ def create_app(config: ServiceConfig | None = None,
             result = signaling_service.publish_invite(invite_request)
             result_body = result.as_dict()
             result_body.update(_foreground_signaling_invite_diagnostics(invite_request, signaling_service))
+            result_body.update(_background_invite_apns_diagnostics(
+                invite_request=invite_request,
+                token_store=token_store,
+                voip_send_service=voip_send_service,
+                invite_dropped=result.dropped,
+            ))
             LOGGER.info(
-                "foreground signaling invite handled subscriber_available=%s delivered=%s dropped=%s call_kind=%s",
+                "foreground signaling invite handled subscriber_available=%s delivered=%s dropped=%s call_kind=%s "
+                "background_apns_push_requested=%s background_apns_push_result=%s",
                 result.subscriber_available,
                 result.delivered,
                 result.dropped,
                 invite_request.invite.call_kind,
+                result_body["background_apns_push_requested"],
+                result_body["background_apns_push_result"],
             )
             return JSONResponse(status_code=200, content=result_body)
         except CallServiceError as error:
@@ -512,6 +521,65 @@ def _foreground_signaling_invite_diagnostics(
         "active_subscriber_count": signaling_service.diagnostics.subscriber_count,
         "target_subscriber_count": target_subscriber_count,
         "target_active_subscriber_count": target_subscriber_count,
+    }
+
+
+def _background_invite_apns_diagnostics(
+    invite_request: ForegroundCallInviteRequest,
+    token_store: PushKitTokenStoreProtocol,
+    voip_send_service: APNsVoIPSandboxSendService,
+    invite_dropped: bool,
+) -> dict[str, object]:
+    if invite_dropped:
+        return {
+            "real_non_dev_invite_used": True,
+            "dev_invite_used": False,
+            "background_apns_push_requested": False,
+            "background_apns_push_result": "skipped_redacted",
+            "background_apns_failure_reason": "none",
+            "persisted_pushkit_token_lookup_result": "not_requested",
+            "pushkit_token_redacted": True,
+            "media_credentials_requested": False,
+            "media_connect_requested": False,
+            "matrix_event_emit_requested": False,
+            "blocked_reason": "real_invite_payload_mapping_blocked",
+        }
+
+    token_record = token_store.retrieve_latest_for_user(invite_request.recipient, "development")
+    if token_record is None:
+        return {
+            "real_non_dev_invite_used": True,
+            "dev_invite_used": False,
+            "background_apns_push_requested": False,
+            "background_apns_push_result": "skipped_redacted",
+            "background_apns_failure_reason": "none",
+            "persisted_pushkit_token_lookup_result": "missing",
+            "pushkit_token_redacted": True,
+            "media_credentials_requested": False,
+            "media_connect_requested": False,
+            "matrix_event_emit_requested": False,
+            "blocked_reason": "receiver_pushkit_token_missing",
+        }
+
+    diagnostics = voip_send_service.send(
+        APNsVoIPSandboxSendRequest(version=1, dry_run=False),
+        token_record,
+        payload_kind="real_invite_controlled",
+    )
+    return {
+        "real_non_dev_invite_used": True,
+        "dev_invite_used": False,
+        "background_apns_push_requested": diagnostics.apns_voip_push_send_requested,
+        "background_apns_push_result": diagnostics.apns_voip_push_send_result,
+        "background_apns_failure_reason": diagnostics.apns_failure_reason,
+        "persisted_pushkit_token_lookup_result": diagnostics.persisted_pushkit_token_lookup_result,
+        "pushkit_token_redacted": diagnostics.pushkit_token_redacted,
+        "apns_environment": diagnostics.apns_environment,
+        "apns_topic_resolved": diagnostics.apns_topic_resolved,
+        "media_credentials_requested": diagnostics.media_credentials_requested,
+        "media_connect_requested": diagnostics.media_connect_requested,
+        "matrix_event_emit_requested": diagnostics.matrix_event_emit_requested,
+        "blocked_reason": "none" if diagnostics.apns_voip_push_send_result == "sandbox_success" else diagnostics.blocked_reason,
     }
 
 

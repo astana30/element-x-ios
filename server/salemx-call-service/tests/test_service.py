@@ -415,11 +415,88 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["active_subscriber_count"], 1)
         self.assertEqual(body["target_subscriber_count"], 1)
         self.assertEqual(body["target_active_subscriber_count"], 1)
+        self.assertEqual(body["real_non_dev_invite_used"], True)
+        self.assertEqual(body["dev_invite_used"], False)
+        self.assertEqual(body["background_apns_push_requested"], False)
+        self.assertEqual(body["background_apns_push_result"], "skipped_redacted")
+        self.assertEqual(body["persisted_pushkit_token_lookup_result"], "missing")
+        self.assertEqual(body["pushkit_token_redacted"], True)
+        self.assertEqual(body["media_credentials_requested"], False)
+        self.assertEqual(body["media_connect_requested"], False)
+        self.assertEqual(body["matrix_event_emit_requested"], False)
+        self.assertEqual(body["blocked_reason"], "receiver_pushkit_token_missing")
         self.assertEqual(received.call_handle, "opaque-local-safe-handle")
         self.assertEqual(len(self.invite_issuer(app).issued), 0)
         self.assertIn("delivered=True", output)
         self.assertNotIn("auth-a", output)
         self.assertNotIn("auth-b", output)
+        self.assertNotIn("caller", output)
+        self.assertNotIn("callee", output)
+        self.assertNotIn("device-b", output)
+        self.assertNotIn("opaque-local-safe-handle", output)
+
+    async def test_real_invite_route_requests_background_apns_when_recipient_token_exists(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
+        store = InMemoryPushKitTokenStore()
+        token_request = app_module.PushKitTokenRegistrationRequest.from_mapping({
+            "version": 1,
+            "token": "synthetic-" + "recipient-" + "pushkit-token-fixture",
+            "environment": "development",
+        })
+        store.store("callee", "device-b", token_request)
+        provider = FakeAPNsVoIPProvider(result="sandbox_success")
+        send_service = APNsVoIPSandboxSendService(
+            APNsVoIPSandboxConfig(
+                enabled=True,
+                environment="sandbox",
+                team_id="TEAMID",
+                key_id="KEYID",
+                auth_key_path="/redacted/apns-auth-key.p8",
+                topic="kz.salemx.msg.voip",
+            ),
+            provider=provider,
+        )
+        app = app_module.create_app(
+            token_service=self.make_token_service(),
+            foreground_signaling_service=signaling,
+            pushkit_token_store=store,
+            apns_voip_send_service=send_service,
+        )
+
+        with self.assertLogs("salemx_call_service.app", level="INFO") as logs:
+            status, body = await _asgi_post_json(
+                app,
+                app_module.FOREGROUND_SIGNALING_INVITE_PATH,
+                {"authorization": self.authorization("auth-a")},
+                self.targeted_invite_payload(),
+            )
+        output = json.dumps(body, sort_keys=True) + "\n" + "\n".join(logs.output)
+        provider_payload = json.dumps(provider.requests[0].payload, sort_keys=True)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["real_non_dev_invite_used"], True)
+        self.assertEqual(body["dev_invite_used"], False)
+        self.assertEqual(body["background_apns_push_requested"], True)
+        self.assertEqual(body["background_apns_push_result"], "sandbox_success")
+        self.assertEqual(body["background_apns_failure_reason"], "none")
+        self.assertEqual(body["persisted_pushkit_token_lookup_result"], "found")
+        self.assertEqual(body["pushkit_token_redacted"], True)
+        self.assertEqual(body["apns_environment"], "sandbox")
+        self.assertEqual(body["apns_topic_resolved"], True)
+        self.assertEqual(body["media_credentials_requested"], False)
+        self.assertEqual(body["media_connect_requested"], False)
+        self.assertEqual(body["matrix_event_emit_requested"], False)
+        self.assertEqual(body["blocked_reason"], "none")
+        self.assertEqual(len(provider.requests), 1)
+        self.assertEqual(provider.requests[0].environment, "sandbox")
+        self.assertIn("real_invite_controlled", provider_payload)
+        self.assertIn("\"redacted\": true", provider_payload)
+        self.assertNotIn("room_id", provider_payload)
+        self.assertNotIn("call_handle", provider_payload)
+        self.assertNotIn("recipient", provider_payload)
+        self.assertNotIn("synthetic-recipient-pushkit-token-fixture", output)
+        self.assertNotIn("auth-a", output)
         self.assertNotIn("caller", output)
         self.assertNotIn("callee", output)
         self.assertNotIn("device-b", output)

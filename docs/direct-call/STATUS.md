@@ -1901,3 +1901,20 @@ Verified redacted proof:
 - media credentials, media connection, Matrix events, and real call flow remained false
 
 No production APNs push was attempted. No repeated push was attempted. No raw token, APNs key, JWT, authorization header, Matrix access token, raw payload, private log, or secret-bearing URL was recorded.
+
+## 2.46A status
+
+Real non-dev invite background payload mapping reached the controlled PushKit/CallKit proof chain, but stopped before Answer.
+
+Verified redacted proof:
+- Receiver PushKit token upload returned http_success / registered / persisted / redacted_match.
+- The authenticated non-dev invite route was used; `dev/invite` was not used and remains disabled.
+- The invite route requested one background APNs sandbox push and returned `background_apns_push_result=sandbox_success`, `persisted_pushkit_token_lookup_result=found`, and `blocked_reason=none`.
+- iPhone proof returned `physical_voip_push_received=true`, `pushkit_callback_invoked=true`, `pushkit_payload_kind=real_invite_controlled`, `real_invite_payload_mapping_observed=true`, `callkit_report_requested=true`, `callkit_report_result=reported`, and `pushkit_completion_called=true`.
+- `callkit_answer_action_received=false`, so controlled in-app activation/screen proof did not run for the real invite payload.
+- media credentials, media connection, Matrix events, and real call flow remained false.
+
+Current blocker:
+- `blocked_reason=callkit_answer_action_not_observed`
+
+No production APNs push was attempted. No repeated push was attempted. No raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, private log, or secret-bearing URL was recorded.

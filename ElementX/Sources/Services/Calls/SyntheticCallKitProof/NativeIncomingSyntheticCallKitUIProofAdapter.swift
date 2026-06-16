@@ -545,6 +545,7 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var pushType = "none"
     var payloadVersion = "none"
     var payloadKind = "none"
+    var realInvitePayloadMappingObserved = false
     var completionCalled = false
     var callKitReportRequested = false
     var callKitReportResult = "not_requested"
@@ -566,6 +567,7 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "pushkit_payload_redacted=true",
             "pushkit_payload_version=\(payloadVersion)",
             "pushkit_payload_kind=\(payloadKind)",
+            "real_invite_payload_mapping_observed=\(realInvitePayloadMappingObserved)",
             "pushkit_completion_called=\(completionCalled)",
             "callkit_report_requested=\(callKitReportRequested)",
             "callkit_report_result=\(callKitReportResult)",
@@ -858,19 +860,22 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         let version = directCallPayload?["version"] as? Int
         let kind = directCallPayload?["kind"] as? String
         let isSandboxSmoke = version == 1 && kind == "sandbox_voip_smoke"
+        let isRealInviteControlled = version == 1 && kind == "real_invite_controlled"
+        let isControlledPayload = isSandboxSmoke || isRealInviteControlled
 
         let baseSummary = SalemXVoIPPushReceiptProofSummary(physicalVoIPPushReceived: true,
                                                             callbackInvoked: true,
                                                             pushType: "voip",
                                                             payloadVersion: version.map(String.init) ?? "missing",
                                                             payloadKind: kind ?? "missing",
+                                                            realInvitePayloadMappingObserved: isRealInviteControlled,
                                                             completionCalled: false,
-                                                            callKitReportRequested: isSandboxSmoke,
-                                                            callKitReportResult: isSandboxSmoke ? "pending" : "not_requested",
-                                                            blockedReason: isSandboxSmoke ? "none" : "unsupported_redacted_payload")
+                                                            callKitReportRequested: isControlledPayload,
+                                                            callKitReportResult: isControlledPayload ? "pending" : "not_requested",
+                                                            blockedReason: isControlledPayload ? "none" : "unsupported_redacted_payload")
         updateLatestVoIPPushReceiptSummary(baseSummary)
 
-        guard isSandboxSmoke else {
+        guard isControlledPayload else {
             var completedSummary = baseSummary
             completedSummary.completionCalled = true
             updateLatestVoIPPushReceiptSummary(completedSummary)
@@ -891,6 +896,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     static func recordCallKitAnswerActionProof() {
         lock.lock()
         var summary = latestVoIPPushReceiptSummary
+        let screenSource = summary.realInvitePayloadMappingObserved ? "callkit_answer_real_invite_controlled" : "callkit_answer_sandbox_voip_smoke"
         summary.callKitAnswerActionReceived = true
         summary.callKitAnswerActionFulfilled = true
         summary.appActivationObserved = true
@@ -898,7 +904,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         summary.controlledInAppActivationObserved = true
         summary.controlledInAppScreenRequested = true
         summary.controlledInAppScreenPresented = true
-        summary.controlledInAppScreenSource = "callkit_answer_sandbox_voip_smoke"
+        summary.controlledInAppScreenSource = screenSource
         summary.blockedReason = "none"
         lock.unlock()
 

@@ -741,3 +741,25 @@ Safety:
 - no production APNs push
 - no repeated APNs push
 - no raw token, APNs key, JWT, authorization header, Matrix access token, raw payload, user ID, device ID, room ID, or call handle recorded
+
+## 2.46A readiness update
+
+Ready:
+- authenticated non-dev real invite route can request one background sandbox APNs push using the persisted receiver PushKit token
+- iPhone PushKit proof recognizes the redacted `real_invite_controlled` payload mapping
+- controlled CallKit report returns `reported`
+
+Blocked:
+- CallKit Answer action was not observed for the real-invite controlled payload in the single allowed physical push
+- controlled in-app activation/screen proof did not run for this payload
+
+Still not wired:
+- media credentials/media connection
+- Matrix event emission
+- full direct-call flow
+
+Safety:
+- dev invite remains disabled
+- no production APNs push
+- no repeated APNs push
+- no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, or call handle recorded

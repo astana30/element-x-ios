@@ -189,7 +189,10 @@ class APNsVoIPSandboxSendService:
         self._config = config
         self._provider = provider or APNsVoIPHTTP2Provider(config)
 
-    def send(self, request: APNsVoIPSandboxSendRequest, token_record: PushKitTokenRecord | None) -> APNsVoIPSendDiagnostics:
+    def send(self,
+             request: APNsVoIPSandboxSendRequest,
+             token_record: PushKitTokenRecord | None,
+             payload_kind: str = "sandbox_voip_smoke") -> APNsVoIPSendDiagnostics:
         if token_record is None:
             return APNsVoIPSendDiagnostics(
                 persisted_pushkit_token_lookup_result="missing",
@@ -217,7 +220,7 @@ class APNsVoIPSandboxSendService:
                 blocked_reason="apns_voip_topic_unresolved",
             )
 
-        payload = _sandbox_payload()
+        payload = _sandbox_payload(payload_kind)
         if request.dry_run:
             return APNsVoIPSendDiagnostics(
                 persisted_pushkit_token_lookup_result="found",
@@ -270,14 +273,14 @@ class APNsVoIPSandboxSendService:
         )
 
 
-def _sandbox_payload() -> dict[str, object]:
+def _sandbox_payload(kind: str = "sandbox_voip_smoke") -> dict[str, object]:
     return {
         "aps": {
             "content-available": 1,
         },
         "salemx_direct_call": {
             "version": 1,
-            "kind": "sandbox_voip_smoke",
+            "kind": kind,
             "redacted": True,
         },
     }

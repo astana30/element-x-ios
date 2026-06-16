@@ -2997,3 +2997,20 @@ Redacted result:
 - proof kept `media_credentials_requested=false`, `media_connect_requested=false`, `matrix_event_emit_requested=false`, and `real_call_flow_started=false`
 
 No production APNs push was attempted. No repeated push was attempted. No raw PushKit token, APNs token, APNs key, JWT, authorization header, Matrix access token, raw payload, raw APNs response body, private logs, or secret-bearing URL was recorded. The proof remains controlled and does not start media, emit Matrix events, or start full direct-call flow.
+
+## 2.46A — Real invite background payload mapping
+
+Mapped the authenticated non-dev real invite route into the existing background APNs and controlled PushKit/CallKit proof chain.
+
+Redacted result:
+- receiver PushKit token upload returned http_success / registered / persisted / redacted_match
+- staging route safety remained green: dev invite 404, unauthenticated non-dev invite 401, stream 401, token registration 401, and APNs send control 401
+- the real non-dev invite path returned `real_non_dev_invite_used=true`, `dev_invite_used=false`, `background_apns_push_requested=true`, `background_apns_push_result=sandbox_success`, and `persisted_pushkit_token_lookup_result=found`
+- iPhone proof returned `pushkit_payload_kind=real_invite_controlled`, `real_invite_payload_mapping_observed=true`, `callkit_report_requested=true`, `callkit_report_result=reported`, and `pushkit_completion_called=true`
+- Answer action was not observed from the single allowed push, so in-app activation stayed false for this payload
+- proof kept `media_credentials_requested=false`, `media_connect_requested=false`, `matrix_event_emit_requested=false`, and `real_call_flow_started=false`
+
+Current blocker:
+- `callkit_answer_action_not_observed`
+
+No production APNs push was attempted. No repeated push was attempted. No raw PushKit token, APNs token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, private logs, user/device/room/call identifiers, or secret-bearing URL was recorded.

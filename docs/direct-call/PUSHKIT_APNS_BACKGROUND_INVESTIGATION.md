@@ -660,3 +660,20 @@ Redacted proof:
 - media credentials, media connection, Matrix events, and real call flow remained false
 
 No production APNs push was attempted. No repeated push was attempted. No raw token, APNs credential, JWT, authorization header, Matrix access token, raw payload, private log, or secret-bearing URL was recorded.
+
+## 2.46A Real invite background mapping
+
+The authenticated non-dev foreground invite route now maps into the existing APNs sandbox provider with a redacted `real_invite_controlled` payload kind.
+
+Redacted proof:
+- receiver token upload returned http_success / registered / persisted / redacted_match
+- real non-dev invite was used and dev invite was not used
+- background APNs push was requested once and returned sandbox_success
+- iPhone PushKit proof observed `pushkit_payload_kind=real_invite_controlled` and `real_invite_payload_mapping_observed=true`
+- controlled CallKit report returned `reported`
+- Answer action was not observed, leaving controlled in-app activation false for this run
+
+Current blocker:
+- `callkit_answer_action_not_observed`
+
+No production push, repeated push, raw APNs payload, raw invite body, token, JWT, authorization header, Matrix access token, media request, Matrix event, or full call flow was introduced.

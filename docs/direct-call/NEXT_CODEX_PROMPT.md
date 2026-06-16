@@ -8,20 +8,19 @@ Expected intentionally untracked file:
 
 Do not stage or commit that diagnostics file.
 
-## Next task — 2.45E controlled CallKit decline/end action proof
+## Next task — 2.46A1 real invite Answer action observation
 
-Continue after physical 2.45D controlled in-app activation proof passed.
+Continue after 2.46A mapped the authenticated non-dev real invite route into the controlled background APNs / PushKit / CallKit proof chain.
 
 Latest redacted result:
-- physical PushKit token upload returned http_success / registered / persisted / redacted_match
-- APNs dry-run returned HTTP 200 and dry_run with no blocker
-- exactly one real sandbox APNs send returned HTTP 200 and sandbox_success
-- physical iPhone proof returned `physical_voip_push_received=true`, `pushkit_callback_invoked=true`, `pushkit_payload_kind=sandbox_voip_smoke`, `callkit_report_requested=true`, `callkit_report_result=reported`, `pushkit_completion_called=true`, `callkit_answer_action_received=true`, `callkit_answer_action_fulfilled=true`, and `app_activation_observed=true`
-- controlled in-app proof returned `controlled_in_app_activation_requested=true`, `controlled_in_app_activation_observed=true`, `controlled_in_app_screen_requested=true`, `controlled_in_app_screen_presented=true`, and `controlled_in_app_screen_source=callkit_answer_sandbox_voip_smoke`
+- receiver PushKit token upload returned http_success / registered / persisted / redacted_match
+- authenticated non-dev real invite returned `background_apns_push_result=sandbox_success` and `persisted_pushkit_token_lookup_result=found`
+- physical iPhone proof returned `physical_voip_push_received=true`, `pushkit_callback_invoked=true`, `pushkit_payload_kind=real_invite_controlled`, `real_invite_payload_mapping_observed=true`, `callkit_report_requested=true`, `callkit_report_result=reported`, and `pushkit_completion_called=true`
+- `callkit_answer_action_received=false`
 - media credentials, media connection, Matrix events, and real call flow remained false
 
 Next safe step:
-Prove the controlled CallKit decline/end action path from the same PushKit/CallKit proof surface, without media, Matrix events, or full call flow.
+Investigate why the real-invite controlled CallKit report did not produce an observed Answer action, without repeating APNs until the observation path is understood. If the issue is physical observation only and the proof path is still valid, run one controlled retry; otherwise make the smallest targeted fix.
 
 Hard constraints:
 - do not print, log, document, or commit raw PushKit/APNs tokens, APNs key material, JWTs, authorization headers, Matrix access tokens, request payloads, private logs, raw user IDs, raw device IDs, room IDs, call handles, or secret-bearing URLs

@@ -66,12 +66,18 @@ class PushKitTokenStoreProtocol(Protocol):
     def retrieve(self, user_id: str, device_id: str | None, environment_class: str) -> PushKitTokenRecord | None:
         ...
 
+    def retrieve_latest_for_user(self, user_id: str, environment_class: str) -> PushKitTokenRecord | None:
+        ...
+
 
 class DisabledPushKitTokenStore:
     def store(self, user_id: str, device_id: str | None, request: PushKitTokenRegistrationRequest) -> str:
         return "not_persisted"
 
     def retrieve(self, user_id: str, device_id: str | None, environment_class: str) -> PushKitTokenRecord | None:
+        return None
+
+    def retrieve_latest_for_user(self, user_id: str, environment_class: str) -> PushKitTokenRecord | None:
         return None
 
 
