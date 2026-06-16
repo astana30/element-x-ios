@@ -2847,3 +2847,17 @@ Close-out blocker:
 - real APNs sandbox send was not attempted
 
 No repeated push was attempted. No production APNs push was attempted. No raw PushKit token, APNs token, APNs auth key, `.p8` contents, JWT, authorization header, request payload, user ID, device ID, room ID, call handle, private logs, or secret-bearing URL was recorded.
+
+## 2.44E1 — APNs sandbox send verification
+
+Attempted APNs sandbox send verification against the currently deployed provider path.
+
+Redacted result:
+- `salemx-call-service` active was verified
+- public route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, token registration `401`, and APNs send control `401`
+- token-store format inspection remained blocked by the current sudo policy: `direct_store_metadata_check=blocked_by_restricted_permissions`
+- no matching Matrix access token was available in the local environment
+- APNs dry-run was not run
+- real APNs sandbox send was not attempted
+
+No production APNs push was attempted. No repeated push was attempted. No raw PushKit token, APNs token, APNs auth key, `.p8` contents, JWT, authorization header, Matrix access token, request payload, user ID, device ID, room ID, call handle, private logs, or secret-bearing URL was recorded.

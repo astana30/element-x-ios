@@ -1774,3 +1774,19 @@ Still not ready:
 - PushKit background callback remains unwired
 - CallKit report remains unwired from PushKit
 - media credentials and media connection remain untouched
+
+## 2.44E1 status
+
+APNs sandbox send verification is blocked before dry-run.
+
+Current safe state:
+- `salemx-call-service` active was verified
+- public route safety remains dev invite 404, unauthenticated foreground invite 401, unauthenticated stream 401, token registration 401, and APNs send control 401
+- APNs dry-run was not run
+- real APNs sandbox send was not attempted
+- production APNs was not attempted
+- repeated pushes were not attempted
+
+Current blocker:
+- direct token-store metadata inspection is blocked by restricted permissions and the current sudo policy
+- matching Matrix access token for APNs control was unavailable locally

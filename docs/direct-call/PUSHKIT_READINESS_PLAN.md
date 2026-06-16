@@ -570,3 +570,19 @@ Not ready yet:
 - PushKit background callback remains unwired
 - CallKit remains unwired from PushKit
 - media credentials and media connection remain untouched
+
+## 2.44E1 readiness update
+
+Still blocked:
+- redacted token-store format inspection needs an approved non-interactive path
+- APNs control invocation needs a matching Matrix access token for the same staging identity
+- APNs dry-run has not run
+- real APNs sandbox send has not been attempted
+
+Still safe:
+- public route safety remains intact
+- no production APNs push was attempted
+- no repeated push was attempted
+- PushKit background callback remains unwired
+- CallKit remains unwired from PushKit
+- media credentials and media connection remain untouched

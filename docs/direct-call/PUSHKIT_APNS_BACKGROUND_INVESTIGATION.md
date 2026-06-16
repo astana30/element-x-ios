@@ -538,3 +538,13 @@ The APNs dry-run/send close-out is still blocked:
 - real APNs sandbox send was not attempted
 
 No raw PushKit token, APNs token, `.p8` contents, APNs key material, JWT, authorization header, request payload, private log, user ID, device ID, room ID, call handle, or secret-bearing URL was recorded.
+
+## 2.44E1 APNs sandbox send verification
+
+Verification stopped before APNs dry-run because the required gates were not available:
+- route safety remained green
+- `salemx-call-service` active was verified
+- direct token-store format inspection was blocked by restricted permissions/current sudo policy
+- no matching Matrix access token was available locally for the authenticated APNs control route
+
+No APNs dry-run, real sandbox send, production send, repeated send, PushKit background callback wiring, CallKit-from-PushKit wiring, media credential request, or media connection was performed.

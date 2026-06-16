@@ -360,3 +360,33 @@ Hard constraints:
 - do not connect media
 - do not touch entitlements/project/signing/Info.plist/app.yml
 - do not stage `docs/direct-call/REPEAT_CALL_FASTPATH_DIAGNOSTICS.md`
+
+# Next prompt — 2.44E2 APNs dry-run after access/token handoff
+
+Continue after 2.44E1.
+
+Latest result:
+- `salemx-call-service` active was verified
+- public route safety remained:
+  - `dev/invite=404`
+  - unauthenticated non-dev invite `401`
+  - unauthenticated stream `401`
+  - unauthenticated token registration `401`
+  - unauthenticated APNs send control `401`
+- direct token-store format inspection was blocked by restricted permissions/current sudo policy
+- matching Matrix access token for the APNs control route was unavailable locally
+- APNs dry-run was not run
+- real APNs sandbox send was not attempted
+
+Next task:
+Provide a safe non-interactive redacted store-format check and a matching Matrix access token for the same staging identity used by the physical PushKit token upload. Run APNs dry-run first. Run exactly one real sandbox VoIP push only if dry-run is green and token-store format is confirmed safe.
+
+Hard constraints remain:
+- do not print, log, document, or commit raw PushKit/APNs tokens, APNs key material, `.p8` contents, JWTs, authorization headers, access tokens, request payloads, private logs, raw user IDs, raw device IDs, room IDs, call handles, or secret-bearing URLs
+- do not attempt production APNs
+- do not send repeated pushes
+- do not wire PushKit background callback into call flow yet
+- do not wire CallKit from PushKit yet
+- do not connect media
+- do not touch entitlements/project/signing/Info.plist/app.yml
+- do not stage `docs/direct-call/REPEAT_CALL_FASTPATH_DIAGNOSTICS.md`
