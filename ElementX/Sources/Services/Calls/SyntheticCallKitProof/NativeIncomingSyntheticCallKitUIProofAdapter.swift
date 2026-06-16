@@ -551,6 +551,11 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var callKitAnswerActionReceived = false
     var callKitAnswerActionFulfilled = false
     var appActivationObserved = false
+    var controlledInAppActivationRequested = false
+    var controlledInAppActivationObserved = false
+    var controlledInAppScreenRequested = false
+    var controlledInAppScreenPresented = false
+    var controlledInAppScreenSource = "none"
     var blockedReason = "voip_push_not_received"
 
     var redactedLines: [String] {
@@ -568,6 +573,11 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "callkit_answer_action_received=\(callKitAnswerActionReceived)",
             "callkit_answer_action_fulfilled=\(callKitAnswerActionFulfilled)",
             "app_activation_observed=\(appActivationObserved)",
+            "controlled_in_app_activation_requested=\(controlledInAppActivationRequested)",
+            "controlled_in_app_activation_observed=\(controlledInAppActivationObserved)",
+            "controlled_in_app_screen_requested=\(controlledInAppScreenRequested)",
+            "controlled_in_app_screen_presented=\(controlledInAppScreenPresented)",
+            "controlled_in_app_screen_source=\(controlledInAppScreenSource)",
             "media_credentials_requested=false",
             "media_connect_requested=false",
             "matrix_event_emit_requested=false",
@@ -884,6 +894,11 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         summary.callKitAnswerActionReceived = true
         summary.callKitAnswerActionFulfilled = true
         summary.appActivationObserved = true
+        summary.controlledInAppActivationRequested = true
+        summary.controlledInAppActivationObserved = true
+        summary.controlledInAppScreenRequested = true
+        summary.controlledInAppScreenPresented = true
+        summary.controlledInAppScreenSource = "callkit_answer_sandbox_voip_smoke"
         summary.blockedReason = "none"
         lock.unlock()
 

@@ -646,3 +646,17 @@ Redacted proof:
 - media credentials, media connection, Matrix events, and real call flow remained false
 
 No production APNs push was attempted. No repeated push was attempted. No raw token, APNs credential, JWT, authorization header, Matrix access token, raw payload, private log, or secret-bearing URL was recorded.
+
+## 2.45D Controlled in-app activation proof
+
+The controlled in-app activation/screen proof passed after the physical PushKit callback, controlled CallKit report, and CallKit answer action.
+
+Redacted proof:
+- token upload returned http_success / registered / persisted / redacted_match
+- APNs dry-run returned HTTP 200, persisted token lookup found, result dry_run, and no blocker
+- exactly one real sandbox APNs send returned HTTP 200 and sandbox_success
+- physical iPhone proof returned PushKit callback received, controlled CallKit report reported, PushKit completion called, CallKit answer action received and fulfilled, and app activation observed
+- controlled in-app activation and screen proof returned requested and observed/presented with source `callkit_answer_sandbox_voip_smoke`
+- media credentials, media connection, Matrix events, and real call flow remained false
+
+No production APNs push was attempted. No repeated push was attempted. No raw token, APNs credential, JWT, authorization header, Matrix access token, raw payload, private log, or secret-bearing URL was recorded.

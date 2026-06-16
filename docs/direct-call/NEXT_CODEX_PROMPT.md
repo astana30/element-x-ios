@@ -8,15 +8,16 @@ Expected intentionally untracked file:
 
 Do not stage or commit that diagnostics file.
 
-## Next task — 2.45D controlled CallKit decline/end action proof
+## Next task — 2.45E controlled CallKit decline/end action proof
 
-Continue after physical 2.45C verification passed.
+Continue after physical 2.45D controlled in-app activation proof passed.
 
 Latest redacted result:
 - physical PushKit token upload returned http_success / registered / persisted / redacted_match
 - APNs dry-run returned HTTP 200 and dry_run with no blocker
 - exactly one real sandbox APNs send returned HTTP 200 and sandbox_success
 - physical iPhone proof returned `physical_voip_push_received=true`, `pushkit_callback_invoked=true`, `pushkit_payload_kind=sandbox_voip_smoke`, `callkit_report_requested=true`, `callkit_report_result=reported`, `pushkit_completion_called=true`, `callkit_answer_action_received=true`, `callkit_answer_action_fulfilled=true`, and `app_activation_observed=true`
+- controlled in-app proof returned `controlled_in_app_activation_requested=true`, `controlled_in_app_activation_observed=true`, `controlled_in_app_screen_requested=true`, `controlled_in_app_screen_presented=true`, and `controlled_in_app_screen_source=callkit_answer_sandbox_voip_smoke`
 - media credentials, media connection, Matrix events, and real call flow remained false
 
 Next safe step:
