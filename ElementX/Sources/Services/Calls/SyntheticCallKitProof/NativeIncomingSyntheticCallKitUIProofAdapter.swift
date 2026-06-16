@@ -514,10 +514,10 @@ private final class DirectCallRealPushKitRegistryController: NSObject, DirectCal
         }
 
         let payloadDictionary = payload.dictionaryPayload
-        completion()
-
         #if DEBUG
-        SalemXPushKitRegistrationSmokeDebugBridge.recordVoIPPushReceipt(payloadDictionary)
+        SalemXPushKitRegistrationSmokeDebugBridge.recordVoIPPushReceipt(payloadDictionary, completion: completion)
+        #else
+        completion()
         #endif
     }
 
@@ -840,6 +840,10 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     }
 
     static func recordVoIPPushReceipt(_ payload: [AnyHashable: Any]) {
+        recordVoIPPushReceipt(payload) { }
+    }
+
+    static func recordVoIPPushReceipt(_ payload: [AnyHashable: Any], completion: @escaping () -> Void) {
         let directCallPayload = payload["salemx_direct_call"] as? [String: Any]
         let version = directCallPayload?["version"] as? Int
         let kind = directCallPayload?["kind"] as? String
@@ -850,21 +854,27 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                                                             pushType: "voip",
                                                             payloadVersion: version.map(String.init) ?? "missing",
                                                             payloadKind: kind ?? "missing",
-                                                            completionCalled: true,
+                                                            completionCalled: false,
                                                             callKitReportRequested: isSandboxSmoke,
                                                             callKitReportResult: isSandboxSmoke ? "pending" : "not_requested",
                                                             blockedReason: isSandboxSmoke ? "none" : "unsupported_redacted_payload")
         updateLatestVoIPPushReceiptSummary(baseSummary)
 
         guard isSandboxSmoke else {
+            var completedSummary = baseSummary
+            completedSummary.completionCalled = true
+            updateLatestVoIPPushReceiptSummary(completedSummary)
+            completion()
             return
         }
 
         DispatchQueue.main.async {
             var reportedSummary = baseSummary
             reportedSummary.callKitReportResult = reportControlledSandboxVoIPSmokeCallKit()
+            reportedSummary.completionCalled = true
             reportedSummary.blockedReason = reportedSummary.callKitReportResult == "reported" ? "callkit_answer_action_not_observed" : "callkit_report_failed_redacted"
             updateLatestVoIPPushReceiptSummary(reportedSummary)
+            completion()
         }
     }
 

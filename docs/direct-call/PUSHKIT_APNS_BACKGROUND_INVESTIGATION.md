@@ -617,3 +617,19 @@ Redacted result:
 - CallKit answer action was not physically observed
 
 No production APNs push was attempted. No repeated push was attempted. No raw token, APNs credential, JWT, authorization header, Matrix access token, raw payload, private log, or secret-bearing URL was recorded. Media, Matrix events, and full direct-call flow remain unwired.
+
+## 2.45C1 PushKit completion ordering fix
+
+The controlled DEBUG PushKit sandbox proof now records the CallKit report result before recording/calling PushKit completion.
+
+Redacted result:
+- source guard tests cover the completion ordering shape
+- targeted DirectCall tests passed
+- fresh physical Debug build installed successfully
+- route safety remained green
+- physical PushKit upload smoke stopped with `pushkit_token_upload_blocked_by_auth`
+- APNs dry-run was not run
+- real sandbox APNs send was not attempted
+- CallKit answer action was not physically observed
+
+No production APNs push was attempted. No repeated push was attempted. No raw token, APNs credential, JWT, authorization header, Matrix access token, raw payload, private log, or secret-bearing URL was recorded. Media, Matrix events, and full direct-call flow remain unwired.

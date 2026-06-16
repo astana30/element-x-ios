@@ -2950,3 +2950,23 @@ Physical close-out blocker:
 - CallKit answer action was not physically observed in this run
 
 No production APNs push was attempted. No repeated push was attempted. No raw PushKit token, APNs token, APNs key, JWT, authorization header, Matrix access token, raw payload, raw APNs response body, private logs, or secret-bearing URL was recorded. The answer proof remains controlled/synthetic and does not start media, emit Matrix events, or start full direct-call flow.
+
+## 2.45C1 — PushKit completion ordering fix
+
+Fixed the controlled DEBUG PushKit sandbox smoke ordering so the sandbox path records the PushKit receipt, requests the controlled CallKit report, records the final `reported` or `failed_redacted` result, and only then records/calls PushKit completion.
+
+Redacted result:
+- targeted DirectCall tests passed with 37 tests
+- SwiftFormat passed on the changed Swift/test files
+- SwiftLint passed on the changed Swift/test files with 0 violations
+- fresh physical Debug build installed successfully
+- public route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, token registration `401`, and APNs send control `401`
+
+Physical close-out blocker:
+- fresh physical PushKit upload smoke did not reach upload because app auth was unavailable
+- upload proof returned `blocked_reason=pushkit_token_upload_blocked_by_auth`
+- APNs dry-run was not run
+- real sandbox APNs send was not attempted
+- CallKit answer action was not physically observed in this run
+
+No production APNs push was attempted. No repeated push was attempted. No raw PushKit token, APNs token, APNs key, JWT, authorization header, Matrix access token, raw payload, raw APNs response body, private logs, or secret-bearing URL was recorded. The ordering fix remains controlled/synthetic and does not start media, emit Matrix events, or start full direct-call flow.

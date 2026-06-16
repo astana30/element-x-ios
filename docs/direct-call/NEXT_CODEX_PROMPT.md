@@ -8,16 +8,13 @@ Expected intentionally untracked file:
 
 Do not stage or commit that diagnostics file.
 
-## Next task — 2.45C1 CallKit answer action proof retry
+## Next task — 2.45C2 authenticated CallKit answer proof retry
 
-Continue after 2.45C.
+Continue after 2.45C1.
 
 Latest state:
-- DEBUG-only CallKit answer-action proof code exists.
-- `CXAnswerCallAction` is fulfilled promptly and can record:
-  - `callkit_answer_action_received=true`
-  - `callkit_answer_action_fulfilled=true`
-  - `app_activation_observed=true`
+- DEBUG-only PushKit completion ordering fix exists.
+- Controlled sandbox PushKit proof records the CallKit report result before recording/calling PushKit completion.
 - Targeted DirectCall tests passed with 37 tests.
 - SwiftFormat passed.
 - SwiftLint passed on changed files with 0 violations.
@@ -30,15 +27,20 @@ Latest state:
   - unauthenticated APNs send control `401`
 
 Current blocker:
-- physical PushKit upload smoke returned `pushkit_token_upload_http_failure`
-- authenticated APNs dry-run returned HTTP 401
-- real sandbox APNs send was skipped
+- physical PushKit upload smoke returned `pushkit_token_upload_blocked_by_auth`
+- APNs dry-run was not run
+- real sandbox APNs send was not attempted
 - CallKit answer action was not physically observed
 
 Goal:
-Recover the matching authenticated staging session/token path, rerun physical PushKit upload smoke, then run APNs dry-run. If dry-run is green, run exactly one real sandbox VoIP push and tap Accept once in CallKit. Prove:
+Restore/confirm an authenticated app session on the physical iPhone, rerun physical PushKit upload smoke, then run APNs dry-run. If dry-run is green, run exactly one real sandbox VoIP push and tap Accept once in CallKit.
+
+Expected proof:
 
 ```text
+callkit_report_requested=true
+callkit_report_result=reported
+pushkit_completion_called=true
 callkit_answer_action_received=true
 callkit_answer_action_fulfilled=true
 app_activation_observed=true

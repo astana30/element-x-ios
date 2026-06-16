@@ -1856,3 +1856,21 @@ Current blockers:
 - fresh physical PushKit upload smoke returned `pushkit_token_upload_http_failure`
 - authenticated APNs dry-run returned HTTP 401, so the real APNs send was skipped
 - CallKit answer action was not physically observed in this run
+
+## 2.45C1 status
+
+PushKit completion ordering fix is implemented and locally validated.
+
+Current safe state:
+- controlled sandbox PushKit proof now calls PushKit completion after recording the CallKit report result
+- targeted DirectCall tests passed
+- fresh physical Debug build installed successfully
+- public route safety remains dev invite 404, unauthenticated foreground invite 401, unauthenticated stream 401, token registration 401, and APNs send control 401
+- no real sandbox APNs push was sent in this run
+- production APNs was not attempted
+- repeated pushes were not attempted
+
+Current blocker:
+- fresh physical PushKit upload smoke returned `pushkit_token_upload_blocked_by_auth`
+- APNs dry-run was not run
+- CallKit answer action was not physically observed in this run
