@@ -8,19 +8,19 @@ Expected intentionally untracked file:
 
 Do not stage or commit that diagnostics file.
 
-## Next task — 2.46A1 real invite Answer action observation
+## Next task — 2.46A2 physical real-invite Answer retry after auth refresh
 
-Continue after 2.46A mapped the authenticated non-dev real invite route into the controlled background APNs / PushKit / CallKit proof chain.
+Continue after 2.46A1 added controlled synthetic CallKit cleanup after Answer, but physical retry stopped before APNs because the receiver app auth was unavailable.
 
 Latest redacted result:
-- receiver PushKit token upload returned http_success / registered / persisted / redacted_match
-- authenticated non-dev real invite returned `background_apns_push_result=sandbox_success` and `persisted_pushkit_token_lookup_result=found`
-- physical iPhone proof returned `physical_voip_push_received=true`, `pushkit_callback_invoked=true`, `pushkit_payload_kind=real_invite_controlled`, `real_invite_payload_mapping_observed=true`, `callkit_report_requested=true`, `callkit_report_result=reported`, and `pushkit_completion_called=true`
-- `callkit_answer_action_received=false`
-- media credentials, media connection, Matrix events, and real call flow remained false
+- root cause/fix: stale controlled synthetic CallKit calls were not ended/cleared after Answer; 2.46A1 now ends and clears only the DEBUG controlled synthetic call and records redacted cleanup status
+- SwiftFormat, changed-file SwiftLint, and targeted DirectCall tests passed
+- fresh physical Debug build/install passed
+- PushKit upload smoke returned `pushkit_token_upload_blocked_by_auth`
+- real non-dev invite/APNs retry was not run
 
 Next safe step:
-Investigate why the real-invite controlled CallKit report did not produce an observed Answer action, without repeating APNs until the observation path is understood. If the issue is physical observation only and the proof path is still valid, run one controlled retry; otherwise make the smallest targeted fix.
+After refreshing the receiver app auth/session, rerun PushKit upload smoke. Only if it returns http_success / registered / persisted / redacted_match, run exactly one authenticated non-dev real invite/APNs attempt and observe the real-invite-controlled Answer proof.
 
 Hard constraints:
 - do not print, log, document, or commit raw PushKit/APNs tokens, APNs key material, JWTs, authorization headers, Matrix access tokens, request payloads, private logs, raw user IDs, raw device IDs, room IDs, call handles, or secret-bearing URLs

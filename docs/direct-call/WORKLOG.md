@@ -3014,3 +3014,24 @@ Current blocker:
 - `callkit_answer_action_not_observed`
 
 No production APNs push was attempted. No repeated push was attempted. No raw PushKit token, APNs token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, private logs, user/device/room/call identifiers, or secret-bearing URL was recorded.
+
+## 2.46A1 — Real invite CallKit answer observation fix
+
+Added the smallest DEBUG-only cleanup fix for the controlled synthetic CallKit proof path.
+
+Root cause/fix:
+- `real_invite_controlled` already reached the same CallKit report helper as `sandbox_voip_smoke`.
+- The stale-state risk was in the synthetic CallKit proof adapter: after Answer, the controlled call was not ended or cleared.
+- After recording Answer proof, the adapter now ends and clears only the controlled synthetic CallKit call and records `controlled_callkit_cleanup_result=ended`.
+
+Validation:
+- SwiftFormat passed on the changed Swift/test files.
+- changed-file SwiftLint passed with 0 violations.
+- targeted DirectCall tests passed with 37 tests.
+- fresh physical Debug build/install passed.
+
+Physical close-out blocker:
+- PushKit upload smoke stopped with `pushkit_token_upload_blocked_by_auth`
+- real non-dev invite/APNs retry was not run
+
+No production APNs push was attempted. No repeated push was attempted. No raw PushKit token, APNs token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, private logs, user/device/room/call identifiers, or secret-bearing URL was recorded. Media, Matrix events, and full call flow remain unwired.

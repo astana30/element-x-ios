@@ -763,3 +763,25 @@ Safety:
 - no production APNs push
 - no repeated APNs push
 - no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, or call handle recorded
+
+## 2.46A1 readiness update
+
+Ready:
+- controlled synthetic CallKit proof now ends and clears its controlled call after Answer proof
+- cleanup is DEBUG-only and limited to the synthetic proof surface
+- changed-file SwiftFormat, changed-file SwiftLint, targeted DirectCall tests, and physical Debug build/install passed
+
+Blocked:
+- receiver PushKit upload smoke returned `pushkit_token_upload_blocked_by_auth`
+- real non-dev invite/APNs retry was not run
+
+Still not wired:
+- media credentials/media connection
+- Matrix event emission
+- full direct-call flow
+
+Safety:
+- dev invite remains disabled
+- no production APNs push
+- no repeated APNs push
+- no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, or call handle recorded

@@ -166,6 +166,9 @@ final class NativeIncomingSyntheticCallKitUIProofAdapter: NativeIncomingSyntheti
                                          mediaCredentialRequested: false,
                                          mediaConnectAttempted: false))
         _ = record(.answered)
+        reporter.endCall(callUUID: callUUID)
+        clear(callUUID: callUUID)
+        _ = record(.ended)
     }
 
     func syntheticCallKitUIReportingDidEnd(callUUID: UUID) {
@@ -557,6 +560,8 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var controlledInAppScreenRequested = false
     var controlledInAppScreenPresented = false
     var controlledInAppScreenSource = "none"
+    var controlledCallKitCleanupRequested = false
+    var controlledCallKitCleanupResult = "not_requested"
     var blockedReason = "voip_push_not_received"
 
     var redactedLines: [String] {
@@ -580,6 +585,8 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "controlled_in_app_screen_requested=\(controlledInAppScreenRequested)",
             "controlled_in_app_screen_presented=\(controlledInAppScreenPresented)",
             "controlled_in_app_screen_source=\(controlledInAppScreenSource)",
+            "controlled_callkit_cleanup_requested=\(controlledCallKitCleanupRequested)",
+            "controlled_callkit_cleanup_result=\(controlledCallKitCleanupResult)",
             "media_credentials_requested=false",
             "media_connect_requested=false",
             "matrix_event_emit_requested=false",
@@ -594,6 +601,8 @@ private final class SalemXPushKitCallKitProofEventRecorder: NativeIncomingSynthe
         switch event {
         case .answered:
             SalemXPushKitRegistrationSmokeDebugBridge.recordCallKitAnswerActionProof()
+        case .ended:
+            SalemXPushKitRegistrationSmokeDebugBridge.recordControlledCallKitCleanupProof()
         default:
             break
         }
@@ -906,6 +915,16 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         summary.controlledInAppScreenPresented = true
         summary.controlledInAppScreenSource = screenSource
         summary.blockedReason = "none"
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+    }
+
+    static func recordControlledCallKitCleanupProof() {
+        lock.lock()
+        var summary = latestVoIPPushReceiptSummary
+        summary.controlledCallKitCleanupRequested = true
+        summary.controlledCallKitCleanupResult = "ended"
         lock.unlock()
 
         updateLatestVoIPPushReceiptSummary(summary)

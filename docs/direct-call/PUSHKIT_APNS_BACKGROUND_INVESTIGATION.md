@@ -677,3 +677,23 @@ Current blocker:
 - `callkit_answer_action_not_observed`
 
 No production push, repeated push, raw APNs payload, raw invite body, token, JWT, authorization header, Matrix access token, media request, Matrix event, or full call flow was introduced.
+
+## 2.46A1 Real invite Answer observation fix
+
+The real-invite payload path uses the same controlled CallKit report helper as the sandbox smoke path. The likely blocker was stale controlled synthetic CallKit state: answered controlled calls were not ended or cleared after proof.
+
+Fix:
+- after Answer proof is recorded, the DEBUG-only synthetic proof adapter ends and clears only the controlled synthetic CallKit call
+- redacted cleanup fields are written to proof output
+- production call flow, media, Matrix events, and APNs provider code are unchanged
+
+Validation:
+- changed-file SwiftFormat and SwiftLint passed
+- targeted DirectCall tests passed
+- physical Debug build/install passed
+
+Blocked:
+- receiver PushKit upload smoke returned `pushkit_token_upload_blocked_by_auth`
+- no real non-dev invite/APNs retry was attempted in this run
+
+No production push, repeated push, raw APNs payload, raw invite body, token, JWT, authorization header, Matrix access token, media request, Matrix event, or full call flow was introduced.
