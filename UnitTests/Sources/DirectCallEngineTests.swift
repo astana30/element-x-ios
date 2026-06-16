@@ -2171,7 +2171,7 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("salemx-pushkit-token-upload-smoke-proof.txt"))
         #expect(adapterSource.contains("matrixAccessTokenForPushKitUploadSmoke"))
         #expect(adapterSource.contains("\"B\" + \"earer \" + accessToken"))
-        #expect(adapterSource.contains("token.base64EncodedString()"))
+        #expect(adapterSource.contains("token.map { String(format: \"%02x\", $0) }.joined()"))
         #expect(adapterSource.contains("pushkit_token_redacted=true"))
         #expect(adapterSource.contains("pushkit_token_upload_result=\\(uploadResult)"))
         #expect(adapterSource.contains("pushkit_token_server_store_result=\\(serverStoreResult)"))

@@ -1744,3 +1744,33 @@ Current safe state:
 - PushKit background callback is not wired
 - CallKit report is not wired from PushKit
 - media credentials and media connection remain untouched
+
+## 2.44E status
+
+Real APNs VoIP sandbox HTTP/2 provider implementation is complete.
+
+Current safe state:
+- server APNs provider uses HTTP/2 against sandbox APNs
+- APNs provider JWT creation is server-side only
+- APNs key material, JWTs, auth headers, raw tokens, payloads, and response bodies remain unlogged and undocumented
+- APNs send remains explicit and controlled
+- production APNs is not attempted
+- repeated pushes are not attempted
+- physical Debug app upload smoke used lowercase hex token upload
+- physical token upload returned http_success / registered
+- server-side token persistence returned persisted
+- internal token retrieval returned redacted_match
+- route safety remains dev invite 404, unauthenticated foreground invite 401, unauthenticated stream 401, token registration 401, and APNs send control 401
+
+Current blocker:
+- token-store format inspection is blocked by restricted store permissions and non-interactive sudo policy
+- matching Matrix access token for APNs dry-run was unavailable locally
+- APNs dry-run was not run
+- real APNs sandbox send was not attempted
+
+Still not ready:
+- sandbox_success has not been achieved
+- physical iPhone VoIP push receipt has not been proven
+- PushKit background callback remains unwired
+- CallKit report remains unwired from PushKit
+- media credentials and media connection remain untouched

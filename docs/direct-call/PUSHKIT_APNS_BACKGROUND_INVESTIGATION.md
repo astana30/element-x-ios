@@ -513,3 +513,28 @@ The staging APNs control route now reaches the APNs provider boundary with:
 - apns_voip_push_send_requested=true
 
 The send result was sandbox_failure_redacted because the current APNs provider implementation is still the disabled/redacted scaffold provider. Real APNs HTTP/2 provider implementation remains a follow-up.
+
+## 2.44E APNs HTTP/2 provider result
+
+The server now has a controlled APNs VoIP sandbox HTTP/2 provider:
+- sandbox APNs host only
+- HTTP/2 client boundary
+- ES256 provider JWT creation from server-local key material
+- redacted APNs response handling
+- safe APNs failure class reporting only
+
+The provider remains explicit and controlled. It is not wired to normal app startup, PushKit background callbacks, CallKit reporting, Matrix event emission, media credentials, or media connection.
+
+The physical iPhone upload smoke was rerun with a fresh Debug build that uploads the PushKit token as lowercase hex. Redacted proof reached:
+- pushkit_token_upload_result=http_success
+- pushkit_token_registration_result=registered
+- pushkit_token_server_store_result=persisted
+- pushkit_token_retrieval_internal_check=redacted_match
+
+The APNs dry-run/send close-out is still blocked:
+- restricted token-store permissions prevented direct redacted token-format inspection through the current non-interactive SSH policy
+- no matching Matrix access token was available locally for the authenticated APNs dry-run
+- APNs dry-run was not run
+- real APNs sandbox send was not attempted
+
+No raw PushKit token, APNs token, `.p8` contents, APNs key material, JWT, authorization header, request payload, private log, user ID, device ID, room ID, call handle, or secret-bearing URL was recorded.

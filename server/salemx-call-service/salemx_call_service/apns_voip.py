@@ -2,10 +2,20 @@
 
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
+import json
 from os import environ
+from pathlib import Path
+import time
 from typing import Any
 from typing import Protocol
+
+import httpx
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
 
 from .errors import bad_request
 from .pushkit_tokens import PushKitTokenRecord
@@ -23,9 +33,9 @@ APNS_TOPIC_ENV = "SALEMX_APNS_TOPIC"
 class APNsVoIPSandboxConfig:
     enabled: bool
     environment: str
-    team_id_present: bool
-    key_id_present: bool
-    auth_key_path_present: bool
+    team_id: str | None
+    key_id: str | None
+    auth_key_path: str | None
     topic: str | None
 
     @classmethod
@@ -33,15 +43,15 @@ class APNsVoIPSandboxConfig:
         return cls(
             enabled=environ.get(APNS_VOIP_ENABLED_ENV) == "1",
             environment=environ.get(APNS_VOIP_ENVIRONMENT_ENV, "sandbox"),
-            team_id_present=bool(environ.get(APNS_TEAM_ID_ENV)),
-            key_id_present=bool(environ.get(APNS_KEY_ID_ENV)),
-            auth_key_path_present=bool(environ.get(APNS_AUTH_KEY_PATH_ENV)),
+            team_id=environ.get(APNS_TEAM_ID_ENV),
+            key_id=environ.get(APNS_KEY_ID_ENV),
+            auth_key_path=environ.get(APNS_AUTH_KEY_PATH_ENV),
             topic=environ.get(APNS_TOPIC_ENV),
         )
 
     @property
     def credentials_available(self) -> bool:
-        return self.team_id_present and self.key_id_present and self.auth_key_path_present
+        return bool(self.team_id and self.key_id and self.auth_key_path)
 
     @property
     def topic_resolved(self) -> bool:
@@ -74,14 +84,56 @@ class APNsVoIPPushRequest:
     environment: str
 
 
+@dataclass(frozen=True)
+class APNsVoIPPushResult:
+    result: str
+    failure_reason: str = "none"
+
+
 class APNsVoIPProviderProtocol(Protocol):
-    def send_sandbox_push(self, request: APNsVoIPPushRequest) -> str:
+    def send_sandbox_push(self, request: APNsVoIPPushRequest) -> APNsVoIPPushResult:
         ...
 
 
 class DisabledAPNsVoIPProvider:
-    def send_sandbox_push(self, request: APNsVoIPPushRequest) -> str:
-        return "sandbox_failure_redacted"
+    def send_sandbox_push(self, request: APNsVoIPPushRequest) -> APNsVoIPPushResult:
+        return APNsVoIPPushResult(result="sandbox_failure_redacted", failure_reason="provider_disabled")
+
+
+class APNsVoIPHTTP2Provider:
+    def __init__(self,
+                 config: APNsVoIPSandboxConfig,
+                 timeout_seconds: float = 10.0) -> None:
+        self._config = config
+        self._timeout_seconds = timeout_seconds
+
+    def send_sandbox_push(self, request: APNsVoIPPushRequest) -> APNsVoIPPushResult:
+        if self._config.environment != "sandbox":
+            return APNsVoIPPushResult(result="sandbox_failure_redacted", failure_reason="environment_mismatch")
+        if self._config.team_id is None or self._config.key_id is None or self._config.auth_key_path is None:
+            return APNsVoIPPushResult(result="sandbox_failure_redacted", failure_reason="credentials_missing")
+
+        jwt = _apns_provider_jwt(
+            team_id=self._config.team_id,
+            key_id=self._config.key_id,
+            auth_key_path=self._config.auth_key_path,
+        )
+        headers = {
+            "authorization": f"bearer {jwt}",
+            "apns-push-type": "voip",
+            "apns-topic": request.topic,
+            "apns-priority": "10",
+        }
+        url = f"https://api.sandbox.push.apple.com/3/device/{request.token}"
+        try:
+            with httpx.Client(http2=True, timeout=self._timeout_seconds) as client:
+                response = client.post(url, headers=headers, json=request.payload)
+        except httpx.HTTPError:
+            return APNsVoIPPushResult(result="sandbox_failure_redacted", failure_reason="transport_error")
+
+        if 200 <= response.status_code < 300:
+            return APNsVoIPPushResult(result="sandbox_success")
+        return APNsVoIPPushResult(result="sandbox_failure_redacted", failure_reason=_redacted_apns_failure_reason(response))
 
 
 @dataclass(frozen=True)
@@ -97,6 +149,7 @@ class APNsVoIPSendDiagnostics:
     apns_voip_payload_built: bool = False
     apns_voip_push_send_requested: bool = False
     apns_voip_push_send_result: str = "not_run"
+    apns_failure_reason: str = "none"
     apns_response_redacted: bool = True
     voip_push_repeated_send_requested: bool = False
     media_credentials_requested: bool = False
@@ -118,6 +171,7 @@ class APNsVoIPSendDiagnostics:
             "apns_voip_payload_built": self.apns_voip_payload_built,
             "apns_voip_push_send_requested": self.apns_voip_push_send_requested,
             "apns_voip_push_send_result": self.apns_voip_push_send_result,
+            "apns_failure_reason": self.apns_failure_reason,
             "apns_response_redacted": self.apns_response_redacted,
             "voip_push_repeated_send_requested": self.voip_push_repeated_send_requested,
             "media_credentials_requested": self.media_credentials_requested,
@@ -133,7 +187,7 @@ class APNsVoIPSandboxSendService:
                  config: APNsVoIPSandboxConfig,
                  provider: APNsVoIPProviderProtocol | None = None) -> None:
         self._config = config
-        self._provider = provider or DisabledAPNsVoIPProvider()
+        self._provider = provider or APNsVoIPHTTP2Provider(config)
 
     def send(self, request: APNsVoIPSandboxSendRequest, token_record: PushKitTokenRecord | None) -> APNsVoIPSendDiagnostics:
         if token_record is None:
@@ -192,6 +246,7 @@ class APNsVoIPSandboxSendService:
                 apns_topic_resolved=True,
                 apns_voip_payload_built=True,
                 apns_voip_push_send_result="not_run_credentials_missing",
+                apns_failure_reason="credentials_missing",
                 blocked_reason="apns_credentials_unavailable",
             )
 
@@ -209,8 +264,9 @@ class APNsVoIPSandboxSendService:
             apns_topic_resolved=True,
             apns_voip_payload_built=True,
             apns_voip_push_send_requested=True,
-            apns_voip_push_send_result=send_result,
-            blocked_reason="none" if send_result == "sandbox_success" else "apns_sandbox_send_http_failure_redacted",
+            apns_voip_push_send_result=send_result.result,
+            apns_failure_reason=send_result.failure_reason,
+            blocked_reason="none" if send_result.result == "sandbox_success" else "apns_sandbox_send_http_failure_redacted",
         )
 
 
@@ -225,3 +281,44 @@ def _sandbox_payload() -> dict[str, object]:
             "redacted": True,
         },
     }
+
+
+def _apns_provider_jwt(team_id: str, key_id: str, auth_key_path: str) -> str:
+    private_key = load_pem_private_key(Path(auth_key_path).read_bytes(), password=None)
+    if not isinstance(private_key, ec.EllipticCurvePrivateKey):
+        raise ValueError("APNs auth key must be an elliptic curve private key.")
+
+    header = {
+        "alg": "ES256",
+        "kid": key_id,
+    }
+    claims = {
+        "iss": team_id,
+        "iat": int(time.time()),
+    }
+    signing_input = ".".join([
+        _base64_url_json(header),
+        _base64_url_json(claims),
+    ])
+    der_signature = private_key.sign(signing_input.encode("ascii"), ec.ECDSA(hashes.SHA256()))
+    r_value, s_value = decode_dss_signature(der_signature)
+    signature = r_value.to_bytes(32, "big") + s_value.to_bytes(32, "big")
+    return signing_input + "." + _base64_url_bytes(signature)
+
+
+def _redacted_apns_failure_reason(response: httpx.Response) -> str:
+    try:
+        reason = response.json().get("reason")
+    except (json.JSONDecodeError, ValueError, AttributeError):
+        return "http_failure_redacted"
+    if isinstance(reason, str) and reason.isidentifier():
+        return reason
+    return "http_failure_redacted"
+
+
+def _base64_url_json(payload: dict[str, object]) -> str:
+    return _base64_url_bytes(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8"))
+
+
+def _base64_url_bytes(payload: bytes) -> str:
+    return base64.urlsafe_b64encode(payload).rstrip(b"=").decode("ascii")

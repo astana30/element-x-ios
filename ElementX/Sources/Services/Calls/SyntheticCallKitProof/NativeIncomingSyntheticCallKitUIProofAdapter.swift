@@ -624,7 +624,7 @@ private final class SalemXPushKitTokenUploadSmoke: NSObject, DirectCallPushKitRe
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: [
                 "version": 1,
-                "token": token.base64EncodedString(),
+                "token": token.map { String(format: "%02x", $0) }.joined(),
                 "environment": "development"
             ], options: [])
         } catch {

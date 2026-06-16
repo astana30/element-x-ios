@@ -319,3 +319,44 @@ Current blocker:
 
 Next task:
 Implement a real, controlled APNs VoIP sandbox HTTP/2 provider with redacted diagnostics only. Do not wire PushKit background callback, CallKit, Matrix events, or media yet.
+
+# Next prompt — 2.44E1 APNs dry-run and single sandbox send close-out
+
+Continue after 2.44E.
+
+Latest result:
+- real APNs VoIP sandbox HTTP/2 provider is implemented
+- server dependency list includes `httpx[http2]` and `cryptography`
+- local server validation passed with `152 passed`
+- SwiftFormat passed on changed Swift files
+- SwiftLint passed with 0 violations on changed Swift files
+- physical Debug build was installed on the iPhone
+- manual PushKit token upload smoke passed after session warm-up
+- token upload uses lowercase hex encoding
+- server token persistence returned persisted
+- internal token retrieval returned redacted_match
+- public route safety remains:
+  - `dev/invite=404`
+  - unauthenticated non-dev invite `401`
+  - unauthenticated stream `401`
+  - unauthenticated token registration `401`
+  - unauthenticated APNs send control `401`
+
+Current blocker:
+- redacted token-store format inspection is blocked by restricted store permissions and current non-interactive sudo policy
+- matching Matrix access token for the APNs control route was unavailable locally
+- APNs dry-run was not run
+- real APNs sandbox send was not attempted
+
+Next task:
+Recover a safe redacted store-format inspection path and provide a matching Matrix access token for the same staging identity used by the physical token upload. Then run APNs dry-run. If dry-run is green, run exactly one controlled sandbox VoIP push attempt.
+
+Hard constraints:
+- do not print, log, document, or commit raw PushKit/APNs tokens, APNs key material, `.p8` contents, JWTs, authorization headers, access tokens, request payloads, private logs, raw user IDs, raw device IDs, room IDs, call handles, or secret-bearing URLs
+- do not attempt production APNs
+- do not send repeated pushes
+- do not wire PushKit background callback into call flow yet
+- do not wire CallKit from PushKit yet
+- do not connect media
+- do not touch entitlements/project/signing/Info.plist/app.yml
+- do not stage `docs/direct-call/REPEAT_CALL_FASTPATH_DIAGNOSTICS.md`

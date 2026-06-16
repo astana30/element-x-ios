@@ -19,7 +19,7 @@ from salemx_call_service.allocation import (
     RedisAllocationStore,
     SharedAllocationStoreSkeleton,
 )
-from salemx_call_service.apns_voip import APNsVoIPSandboxConfig, APNsVoIPSandboxSendService, APNsVoIPPushRequest
+from salemx_call_service.apns_voip import APNsVoIPSandboxConfig, APNsVoIPSandboxSendService, APNsVoIPPushRequest, APNsVoIPPushResult
 from salemx_call_service.auth import AuthenticatedUser
 from salemx_call_service.config import (
     ALLOCATION_STORE_ENV,
@@ -218,11 +218,11 @@ class FakeRedisRateLimitClient:
 
 
 class FakeAPNsVoIPProvider:
-    def __init__(self, result: str = "sandbox_success") -> None:
-        self.result = result
+    def __init__(self, result: str = "sandbox_success", failure_reason: str = "none") -> None:
+        self.result = APNsVoIPPushResult(result=result, failure_reason=failure_reason)
         self.requests: list[APNsVoIPPushRequest] = []
 
-    def send_sandbox_push(self, request: APNsVoIPPushRequest) -> str:
+    def send_sandbox_push(self, request: APNsVoIPPushRequest) -> APNsVoIPPushResult:
         self.requests.append(request)
         return self.result
 
@@ -1184,9 +1184,9 @@ class APNsVoIPSandboxSendRouteTests(unittest.IsolatedAsyncioTestCase):
         return APNsVoIPSandboxConfig(
             enabled=enabled,
             environment=environment,
-            team_id_present=credentials_available,
-            key_id_present=credentials_available,
-            auth_key_path_present=credentials_available,
+            team_id="TEAMID" if credentials_available else None,
+            key_id="KEYID" if credentials_available else None,
+            auth_key_path="/redacted/apns-auth-key.p8" if credentials_available else None,
             topic=topic,
         )
 
@@ -1280,6 +1280,7 @@ class APNsVoIPSandboxSendRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["apns_voip_payload_built"], True)
         self.assertEqual(body["apns_voip_push_send_requested"], False)
         self.assertEqual(body["apns_voip_push_send_result"], "dry_run")
+        self.assertEqual(body["apns_failure_reason"], "none")
         self.assertEqual(body["voip_push_repeated_send_requested"], False)
         self.assertEqual(body["media_credentials_requested"], False)
         self.assertEqual(body["media_connect_requested"], False)
@@ -1340,6 +1341,7 @@ class APNsVoIPSandboxSendRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["apns_provider_requested"], False)
         self.assertEqual(body["apns_voip_push_send_requested"], False)
         self.assertEqual(body["apns_voip_push_send_result"], "not_run_credentials_missing")
+        self.assertEqual(body["apns_failure_reason"], "credentials_missing")
         self.assertEqual(body["blocked_reason"], "apns_credentials_unavailable")
         self.assertEqual(provider.requests, [])
         self.assertNotIn(self.synthetic_token(), output)
@@ -1416,6 +1418,7 @@ class APNsVoIPSandboxSendRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["apns_voip_payload_built"], True)
         self.assertEqual(body["apns_voip_push_send_requested"], True)
         self.assertEqual(body["apns_voip_push_send_result"], "sandbox_success")
+        self.assertEqual(body["apns_failure_reason"], "none")
         self.assertEqual(body["apns_response_redacted"], True)
         self.assertEqual(body["voip_push_repeated_send_requested"], False)
         self.assertEqual(body["media_credentials_requested"], False)
@@ -1428,6 +1431,33 @@ class APNsVoIPSandboxSendRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(provider.requests[0].environment, "sandbox")
         self.assertNotIn("room_id", json.dumps(provider.requests[0].payload, sort_keys=True))
         self.assertNotIn("call_handle", json.dumps(provider.requests[0].payload, sort_keys=True))
+        self.assertNotIn(self.synthetic_token(), output)
+        self.assertNotIn(self.auth_token(), output)
+        self.assertNotIn(self.auth_user_id(), output)
+        self.assertNotIn(self.auth_device_id(), output)
+
+    async def test_fake_provider_failure_returns_redacted_apns_reason(self) -> None:
+        app_module = _load_app_module()
+        provider = FakeAPNsVoIPProvider(result="sandbox_failure_redacted", failure_reason="BadDeviceToken")
+        app, _ = self.stored_token_app(
+            app_module,
+            config=self.config(enabled=True, credentials_available=True),
+            provider=provider,
+        )
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.APNS_VOIP_SANDBOX_SEND_PATH,
+            {"authorization": self.authorization()},
+            self.send_payload(),
+        )
+        output = json.dumps(body, sort_keys=True)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["apns_voip_push_send_result"], "sandbox_failure_redacted")
+        self.assertEqual(body["apns_failure_reason"], "BadDeviceToken")
+        self.assertEqual(body["blocked_reason"], "apns_sandbox_send_http_failure_redacted")
+        self.assertEqual(len(provider.requests), 1)
         self.assertNotIn(self.synthetic_token(), output)
         self.assertNotIn(self.auth_token(), output)
         self.assertNotIn(self.auth_user_id(), output)

@@ -1,3 +1,5 @@
 fastapi==0.115.12
+cryptography
+httpx[http2]
 redis==5.0.8
 uvicorn[standard]==0.34.2

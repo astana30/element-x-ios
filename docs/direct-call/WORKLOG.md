@@ -2820,3 +2820,30 @@ Redacted result:
 - current blocker: real APNs HTTP/2 provider is not implemented; the current provider boundary returns sandbox_failure_redacted
 
 No repeated push was attempted. No production APNs push was attempted. No raw PushKit token, APNs token, .p8 contents, JWT, authorization header, request payload, user ID, device ID, room ID, call handle, private logs, or secret-bearing URL was recorded.
+
+## 2.44E — Real APNs VoIP sandbox HTTP/2 provider
+
+Implemented the controlled server-side APNs VoIP sandbox HTTP/2 provider.
+
+Redacted result:
+- server now has a real sandbox APNs HTTP/2 provider using `httpx` with HTTP/2
+- server creates ES256 APNs provider JWTs through `cryptography`
+- APNs response bodies remain redacted; only safe status/failure classes are returned
+- server dependency list now includes `httpx[http2]` and `cryptography`
+- local server validation passed with `152 passed`
+- SwiftFormat passed for the changed Swift files
+- SwiftLint passed for the changed Swift files with 0 violations
+- physical Debug build was installed on the connected iPhone
+- manual PushKit token upload smoke passed after the session became available
+- token upload used lowercase hex encoding
+- server-side token persistence returned persisted
+- internal retrieval returned redacted_match
+- public route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, token registration `401`, and APNs send control `401`
+
+Close-out blocker:
+- direct token-store format inspection was blocked by restricted store permissions and the current non-interactive sudo policy
+- a matching Matrix access token for the authenticated APNs dry-run was not available in the local environment
+- APNs dry-run was not run
+- real APNs sandbox send was not attempted
+
+No repeated push was attempted. No production APNs push was attempted. No raw PushKit token, APNs token, APNs auth key, `.p8` contents, JWT, authorization header, request payload, user ID, device ID, room ID, call handle, private logs, or secret-bearing URL was recorded.

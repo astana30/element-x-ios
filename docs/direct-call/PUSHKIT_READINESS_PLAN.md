@@ -547,3 +547,26 @@ Not ready yet:
 - physical iPhone VoIP push receipt has not been proven
 - PushKit background callback remains unwired
 - CallKit remains unwired from PushKit
+
+## 2.44E readiness update
+
+Ready:
+- real controlled APNs VoIP sandbox HTTP/2 provider is implemented
+- sandbox-only environment is enforced
+- APNs provider JWT creation is server-side and redacted
+- APNs response handling returns only safe status/failure classes
+- physical Debug app upload smoke uses lowercase hex token upload
+- real PushKit token upload returned http_success / registered
+- server token persistence returned persisted
+- internal retrieval returned redacted_match
+- public route safety remains intact
+
+Not ready yet:
+- token-store format inspection needs approved redacted server-side access
+- authenticated APNs dry-run needs a matching Matrix access token for the same staging identity
+- real APNs sandbox send was not attempted in 2.44E
+- sandbox_success has not been achieved
+- physical iPhone VoIP push receipt has not been proven
+- PushKit background callback remains unwired
+- CallKit remains unwired from PushKit
+- media credentials and media connection remain untouched

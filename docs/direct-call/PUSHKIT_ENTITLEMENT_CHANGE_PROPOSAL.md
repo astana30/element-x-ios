@@ -356,3 +356,11 @@ No entitlement, signing, project, app.yml, or Info.plist changes were made for A
 The current blocker is server-side APNs configuration:
 - VoIP topic unresolved
 - APNs credentials unavailable
+
+## 2.44E note
+
+No entitlement, signing, project, app.yml, provisioning, or Info.plist changes were made for the real APNs VoIP sandbox HTTP/2 provider work.
+
+2.44E changed only the controlled server APNs provider path and the DEBUG manual token-upload smoke encoding. The physical Debug upload smoke passed with redacted persistence proof, but APNs dry-run/send remains blocked until redacted store-format inspection and a matching authenticated APNs control invocation are available.
+
+No production APNs push, repeated push, PushKit background callback wiring, CallKit-from-PushKit wiring, media credential request, media connection, Matrix event emission, Element Call route replacement, or project/signing behavior was introduced.
