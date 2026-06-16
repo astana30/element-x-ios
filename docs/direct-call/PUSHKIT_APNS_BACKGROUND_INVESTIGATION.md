@@ -558,3 +558,21 @@ The operator-assisted verification stopped before APNs dry-run:
 - no token was provided during this run
 
 No APNs dry-run, real sandbox send, production send, repeated send, PushKit background callback wiring, CallKit-from-PushKit wiring, media credential request, or media connection was performed.
+
+## 2.44E2 APNs sandbox send verification
+
+The operator-assisted APNs sandbox send verification reached sandbox_success.
+
+Redacted APNs result:
+- persisted_pushkit_token_lookup_result=found
+- pushkit_token_redacted=true
+- apns_credentials_available=true
+- apns_environment=sandbox
+- apns_topic_resolved=true
+- apns_provider_requested=true
+- apns_voip_push_send_requested=true
+- apns_voip_push_send_result=sandbox_success
+- apns_failure_reason=none
+- blocked_reason=none
+
+This verifies the server-side APNs sandbox provider path. It does not yet prove physical iPhone PushKit background callback receipt.

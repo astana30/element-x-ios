@@ -420,3 +420,29 @@ Hard constraints remain:
 - do not connect media
 - do not touch entitlements/project/signing/Info.plist/app.yml
 - do not stage `docs/direct-call/REPEAT_CALL_FASTPATH_DIAGNOSTICS.md`
+
+# Next prompt — 2.45A physical VoIP push receipt proof
+
+Continue after 2.44E2.
+
+Latest result:
+- APNs dry-run passed
+- exactly one real sandbox VoIP push send was attempted
+- APNs provider was requested
+- APNs VoIP push send was requested
+- APNs send result was sandbox_success
+- APNs failure reason was none
+- no production push was attempted
+- no repeated push was attempted
+- no raw token/key/JWT/auth header/payload was recorded
+
+Next task:
+Prove the physical iPhone receives the sandbox VoIP push and that PushKit callback is invoked in a controlled/redacted way.
+
+Hard constraints:
+- do not wire full call flow yet
+- do not wire media
+- do not request LiveKit credentials
+- do not emit Matrix events
+- do not expose raw PushKit token/APNs token/JWT/auth headers/payload
+- do not stage REPEAT_CALL_FASTPATH_DIAGNOSTICS.md

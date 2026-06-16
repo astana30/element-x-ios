@@ -2875,3 +2875,25 @@ Redacted result:
 - real APNs sandbox send was not attempted
 
 No production APNs push was attempted. No repeated push was attempted. No raw PushKit token, APNs token, APNs auth key, `.p8` contents, JWT, authorization header, Matrix access token, request payload, user ID, device ID, room ID, call handle, private logs, or secret-bearing URL was recorded.
+
+## 2.44E2 — operator-assisted APNs sandbox send success
+
+Completed operator-assisted APNs sandbox send verification.
+
+Redacted result:
+- APNs dry-run returned HTTP 200
+- persisted PushKit token lookup returned found
+- PushKit token remained redacted
+- APNs credentials were available
+- APNs environment was sandbox
+- APNs topic resolved
+- APNs dry-run returned dry_run with blocked_reason=none
+- exactly one real sandbox VoIP push send was attempted
+- APNs provider was requested
+- APNs VoIP push send was requested
+- APNs send result was sandbox_success
+- APNs failure reason was none
+- no repeated push was attempted
+- no production APNs push was attempted
+
+PushKit background callback remains unwired. CallKit remains unwired from PushKit. Media remains untouched. No raw PushKit token, APNs token, .p8 contents, JWT, authorization header, Matrix access token, raw payload, raw APNs response body, private logs, or secret-bearing URL was recorded.

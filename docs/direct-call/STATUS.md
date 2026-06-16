@@ -1806,3 +1806,17 @@ Current safe state:
 
 Current blocker:
 - matching Matrix access token was not provided to the hidden terminal prompt during this run
+
+## 2.44E2 status
+
+Operator-assisted APNs sandbox send verification passed.
+
+Current state:
+- real APNs VoIP sandbox HTTP/2 provider is operational
+- persisted PushKit token lookup succeeds
+- APNs credentials and sandbox topic are valid
+- one controlled sandbox VoIP push send returned sandbox_success
+- PushKit background receipt/callback proof is next
+- PushKit background callback is not wired into call flow yet
+- CallKit is not wired from PushKit yet
+- media remains untouched

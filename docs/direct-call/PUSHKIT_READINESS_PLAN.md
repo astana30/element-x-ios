@@ -601,3 +601,21 @@ Still safe:
 - PushKit background callback remains unwired
 - CallKit remains unwired from PushKit
 - media credentials and media connection remain untouched
+
+## 2.44E2 readiness update
+
+Ready:
+- real APNs VoIP sandbox HTTP/2 provider
+- persisted PushKit token lookup
+- APNs sandbox credentials/topic
+- controlled sandbox VoIP push send path
+
+Next:
+- prove physical iPhone receives the VoIP push
+- prove PushKit background callback is invoked
+- then plan CallKit reporting from PushKit callback
+
+Still not wired:
+- PushKit background callback into call flow
+- CallKit report from PushKit
+- media credentials/media connection
