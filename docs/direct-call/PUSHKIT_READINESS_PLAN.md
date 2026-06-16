@@ -705,3 +705,21 @@ Safety:
 - no production APNs push
 - no repeated APNs push
 - no raw token, APNs key, JWT, authorization header, Matrix access token, raw payload, user ID, device ID, room ID, or call handle recorded
+
+## 2.45C physical verification readiness update
+
+Ready:
+- authenticated physical PushKit token upload smoke returned http_success / registered / persisted / redacted_match
+- APNs dry-run returned HTTP 200 and dry_run with no blocker
+- exactly one real sandbox APNs send returned sandbox_success
+- physical iPhone proof showed PushKit callback, controlled CallKit report, PushKit completion, CallKit answer action received/fulfilled, and app activation observed
+
+Still not wired:
+- media credentials/media connection
+- Matrix event emission
+- full direct-call flow
+
+Safety:
+- no production APNs push
+- no repeated APNs push
+- no raw token, APNs key, JWT, authorization header, Matrix access token, raw payload, user ID, device ID, room ID, or call handle recorded

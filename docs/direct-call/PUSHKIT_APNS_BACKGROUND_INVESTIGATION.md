@@ -633,3 +633,16 @@ Redacted result:
 - CallKit answer action was not physically observed
 
 No production APNs push was attempted. No repeated push was attempted. No raw token, APNs credential, JWT, authorization header, Matrix access token, raw payload, private log, or secret-bearing URL was recorded. Media, Matrix events, and full direct-call flow remain unwired.
+
+## 2.45C Physical CallKit answer action proof
+
+The physical CallKit answer proof passed after authenticated app session refresh.
+
+Redacted proof:
+- token upload returned http_success / registered / persisted / redacted_match
+- APNs dry-run returned HTTP 200, persisted token lookup found, result dry_run, and no blocker
+- exactly one real sandbox APNs send returned HTTP 200 and sandbox_success
+- physical iPhone proof returned PushKit callback received, controlled CallKit report reported, PushKit completion called, CallKit answer action received and fulfilled, and app activation observed
+- media credentials, media connection, Matrix events, and real call flow remained false
+
+No production APNs push was attempted. No repeated push was attempted. No raw token, APNs credential, JWT, authorization header, Matrix access token, raw payload, private log, or secret-bearing URL was recorded.

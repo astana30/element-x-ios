@@ -1874,3 +1874,16 @@ Current blocker:
 - fresh physical PushKit upload smoke returned `pushkit_token_upload_blocked_by_auth`
 - APNs dry-run was not run
 - CallKit answer action was not physically observed in this run
+
+## 2.45C physical verification status
+
+Physical CallKit answer action proof passed after authenticated app session refresh.
+
+Verified redacted proof:
+- PushKit token upload returned http_success / registered / persisted / redacted_match
+- APNs dry-run returned HTTP 200, persisted token lookup found, result dry_run, and no blocker
+- exactly one real sandbox APNs send returned HTTP 200, sandbox_success, and no APNs failure reason
+- iPhone proof returned `physical_voip_push_received=true`, `pushkit_callback_invoked=true`, `pushkit_payload_kind=sandbox_voip_smoke`, `callkit_report_requested=true`, `callkit_report_result=reported`, `pushkit_completion_called=true`, `callkit_answer_action_received=true`, `callkit_answer_action_fulfilled=true`, and `app_activation_observed=true`
+- media credentials, media connection, Matrix events, and real call flow remained false
+
+No production APNs push was attempted. No repeated push was attempted. No raw token, APNs key, JWT, authorization header, Matrix access token, raw payload, private log, or secret-bearing URL was recorded.
