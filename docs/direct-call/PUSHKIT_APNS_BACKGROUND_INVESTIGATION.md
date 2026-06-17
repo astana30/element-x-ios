@@ -754,7 +754,21 @@ Added proof fields:
 
 The marker can record only safe enum/bucket values for Answer timing (`immediate`, `1-2s`, `>2s`) or End intent. It writes to the dedicated VoIP receipt proof file and does not store screenshots, private logs, raw IDs, payloads, tokens, authorization headers, Matrix access tokens, LiveKit URLs/tokens, or call handles.
 
-No APNs send was run for this code/docs update. No production APNs push, repeated push, real media credentials request, media connection, LiveKit join, Matrix event emission, or full direct-call flow was introduced. The blocker remains `system_or_user_end_before_answer` until a fresh one-shot physical attempt records the operator intent/timing alongside the CallKit first action.
+Physical validation after this diagnostic update reached the same APNs/PushKit/CallKit report path, then narrowed timing further:
+- `callkit_report_result=reported`
+- `callkit_report_completion_observed=true`
+- `callkit_first_action_kind=end`
+- `callkit_first_action_after_report_ms_bucket=500-2000ms`
+- `callkit_ui_surface_observed_by_operator=false`
+- `callkit_operator_intended_action=unknown`
+- `callkit_operator_action_timing_bucket=unknown`
+- `local_end_request_before_answer=false`
+- `provider_invalidate_before_answer=false`
+- `report_call_ended_before_answer=false`
+- `controlled_timeout_before_answer=false`
+- `blocked_reason=system_end_before_answer_window`
+
+No production APNs push, repeated push, real media credentials request, media connection, LiveKit join, Matrix event emission, or full direct-call flow was introduced. Next work should investigate why the controlled incoming CallKit UI does not remain answerable past the 500-2000ms first-action window.
 
 ## 2.46A1 Real invite Answer observation fix
 

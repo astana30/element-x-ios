@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.47A7 diagnostics - the authenticated real non-dev invite/APNs path remains narrowed to a CallKit Answer-vs-End blocker. The last one-shot physical proof reached APNs `sandbox_success`, PushKit callback, `callkit_report_result=reported`, report completion, retained provider/delegate/active UUID, and then `callkit_first_action_kind=end` with `callkit_first_action_after_report_ms_bucket=>2000ms`. Local code did not request End, invalidate the provider, report ended, or hit a controlled timeout before Answer. 2.47A7 adds only redacted operator-intent proof fields and Internal diagnostics controls to mark observed Answer/End intent timing after a physical attempt. Current blocker remains `system_or_user_end_before_answer` until a fresh one-shot proof records whether the operator intended Answer while CallKit delivered End. Real PushKit registration remains disabled by default outside manual diagnostics, iOS local token persistence remains disabled, and the path is not wired into Matrix events, media connection, LiveKit join, or full direct-call flow.
+After 2.47A7 physical validation - the authenticated real non-dev invite/APNs path remains narrowed to a CallKit Answer-vs-End blocker. The latest one-shot physical proof reached APNs `sandbox_success`, PushKit callback, `callkit_report_result=reported`, report completion, retained provider/delegate/active UUID, and then `callkit_first_action_kind=end` with `callkit_first_action_after_report_ms_bucket=500-2000ms`. Operator UI/Answer intent was not marked, and local code did not request End, invalidate the provider, report ended, or hit a controlled timeout before Answer. Current blocker is `system_end_before_answer_window`. Real PushKit registration remains disabled by default outside manual diagnostics, iOS local token persistence remains disabled, and the path is not wired into Matrix events, media connection, LiveKit join, or full direct-call flow.
 
 ## Latest App Code Checkpoint
 
@@ -48,6 +48,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - 2.47A7 CallKit Answer-vs-End interaction validation diagnostics are implemented:
   - The dedicated VoIP receipt proof now includes redacted operator observation fields: `callkit_ui_surface_observed_by_operator`, `callkit_operator_intended_action`, and `callkit_operator_action_timing_bucket`.
   - Internal diagnostics can mark Answer intent timing as `immediate`, `1-2s`, or `>2s`, or mark End intent, without storing screenshots, private logs, raw IDs, payloads, tokens, or URLs.
+  - Physical validation after the diagnostic update reached `callkit_first_action_kind=end` with `callkit_first_action_after_report_ms_bucket=500-2000ms`.
+  - Operator UI/Answer intent remained unmarked: `callkit_ui_surface_observed_by_operator=false`, `callkit_operator_intended_action=unknown`, and `callkit_operator_action_timing_bucket=unknown`.
+  - Local End request, provider invalidation, report-ended, and controlled timeout before Answer remained false; current blocker is `system_end_before_answer_window`.
   - No APNs send, production APNs, repeated push, real media credential request, media connection, LiveKit join, Matrix event emission, full direct-call flow, entitlement/project/signing/`Info.plist` change, or `app.yml` regeneration was introduced by this diagnostic update.
 - 2.47A controlled media credentials boundary is implemented but not physically successful:
   - The dedicated VoIP receipt proof records the planner-only boundary after `foreground_call_state=real_invite_pending_media`.

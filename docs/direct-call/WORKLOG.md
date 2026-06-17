@@ -3161,4 +3161,12 @@ Diagnostic change:
 - Internal diagnostics can mark redacted Answer intent timing as `immediate`, `1-2s`, or `>2s`, or mark End intent
 - the marker writes only safe enum/bucket values to `Documents/salemx-voip-push-receipt-proof.txt`
 
-No APNs push was attempted in this update. No production APNs push was attempted. No repeated push was attempted. No real media credentials request, media connection, LiveKit join, Matrix event emission, or full call flow was introduced. No raw PushKit/APNs token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, LiveKit URL/token, private logs, user/device/room/call identifiers, or secret-bearing URL was recorded.
+Physical validation:
+- one authenticated real non-dev invite/APNs attempt reached APNs/PushKit/CallKit report successfully
+- dedicated VoIP receipt proof returned `callkit_report_result=reported`, `callkit_report_completion_observed=true`, and `callkit_first_action_kind=end`
+- first action timing was `callkit_first_action_after_report_ms_bucket=500-2000ms`
+- operator UI/Answer intent was not marked: `callkit_ui_surface_observed_by_operator=false`, `callkit_operator_intended_action=unknown`, and `callkit_operator_action_timing_bucket=unknown`
+- app-side local End, provider invalidation, report-ended, and controlled timeout before Answer stayed false
+- current blocker: `system_end_before_answer_window`
+
+No production APNs push was attempted. No repeated push was attempted. No real media credentials request, media connection, LiveKit join, Matrix event emission, or full call flow was introduced. No raw PushKit/APNs token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, LiveKit URL/token, private logs, user/device/room/call identifiers, or secret-bearing URL was recorded.
