@@ -764,6 +764,30 @@ Safety:
 - no repeated APNs push
 - no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, or call handle recorded
 
+## 2.46B Readiness Update
+
+Ready:
+- real non-dev invite background APNs reaches `real_invite_controlled` PushKit receipt, controlled CallKit report, Answer action, controlled in-app screen, controlled cleanup, and redacted foreground pending-call state
+- foreground pending-call proof records `foreground_call_state=real_invite_pending_media`
+- foreground state source is `callkit_answer_real_invite_controlled`
+- state payload remains redacted and records only stable redacted correlation presence
+
+Verified:
+- receiver PushKit upload smoke returned http_success / registered / persisted / redacted_match
+- route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, stream `401`, token registration `401`, and APNs send control `401`
+- exactly one authenticated non-dev invite/APNs attempt was run; dev invite was not used
+- iPhone proof returned `foreground_call_state_handoff_requested=true`, `foreground_call_state_handoff_observed=true`, `foreground_call_state_payload_redacted=true`, `foreground_call_state_has_stable_redacted_correlation=true`, and `blocked_reason=none`
+
+Still not wired:
+- media credentials/media connection
+- Matrix event emission
+- full direct-call flow
+
+Safety:
+- no production APNs push
+- no repeated APNs push
+- no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, or call handle recorded
+
 ## 2.46A1 readiness update
 
 Ready:

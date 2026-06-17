@@ -678,6 +678,26 @@ Current blocker:
 
 No production push, repeated push, raw APNs payload, raw invite body, token, JWT, authorization header, Matrix access token, media request, Matrix event, or full call flow was introduced.
 
+## 2.46B Real invite foreground state handoff
+
+The real-invite-controlled physical chain now records a safe foreground pending-call state after CallKit Answer.
+
+Verified:
+- route safety remained green with `dev/invite=404` and unauthenticated public routes returning `401`
+- exactly one authenticated non-dev invite/APNs attempt was run; dev invite was not used
+- dedicated VoIP receipt proof returned `foreground_call_state_handoff_requested=true`, `foreground_call_state_handoff_observed=true`, `foreground_call_state=real_invite_pending_media`, `foreground_call_state_source=callkit_answer_real_invite_controlled`, `foreground_call_state_payload_redacted=true`, and `foreground_call_state_has_stable_redacted_correlation=true`
+- media credentials, media connection, Matrix events, and real call flow remained false
+
+Still not wired:
+- media credentials/media connection
+- Matrix event emission
+- full direct-call flow
+
+Safety:
+- no production APNs push
+- no repeated APNs push
+- no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, or call handle recorded
+
 ## 2.46A1 Real invite Answer observation fix
 
 The real-invite payload path uses the same controlled CallKit report helper as the sandbox smoke path. The likely blocker was stale controlled synthetic CallKit state: answered controlled calls were not ended or cleared after proof.

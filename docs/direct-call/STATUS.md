@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.45B - the controlled APNs VoIP sandbox send path has delivered exactly one sandbox VoIP push to a physical iPhone, the DEBUG-only PushKit delegate proof confirmed receipt of the redacted `sandbox_voip_smoke` payload, and the callback requested a controlled synthetic CallKit report. Real PushKit registration remains disabled by default outside manual diagnostics, iOS local token persistence remains disabled, and PushKit receipt is not wired into Matrix events, media, or full direct-call flow.
+After 2.46B - the authenticated real non-dev invite path has delivered exactly one sandbox APNs background push to a physical iPhone, the DEBUG-only PushKit receipt recognized the redacted `real_invite_controlled` payload, CallKit Answer was observed, the controlled in-app screen was presented, and a redacted foreground pending-call state was recorded as `real_invite_pending_media`. Real PushKit registration remains disabled by default outside manual diagnostics, iOS local token persistence remains disabled, and the path is not wired into Matrix events, media, or full direct-call flow.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,13 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.46B real-invite foreground call-state handoff passed:
+  - A fresh physical Debug build was installed on the connected iPhone.
+  - Public route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, unauthenticated token registration `401`, and unauthenticated APNs send control `401`.
+  - Exactly one authenticated non-dev invite/APNs attempt was run; dev invite was not used.
+  - Dedicated VoIP receipt proof reached `pushkit_payload_kind=real_invite_controlled`, `real_invite_payload_mapping_observed=true`, `callkit_report_result=reported`, `pushkit_completion_called=true`, `callkit_answer_action_received=true`, `callkit_answer_action_fulfilled=true`, `controlled_in_app_screen_presented=true`, `foreground_call_state_handoff_requested=true`, `foreground_call_state_handoff_observed=true`, `foreground_call_state=real_invite_pending_media`, `foreground_call_state_source=callkit_answer_real_invite_controlled`, `foreground_call_state_payload_redacted=true`, `foreground_call_state_has_stable_redacted_correlation=true`, and `blocked_reason=none`.
+  - Proof kept `media_credentials_requested=false`, `media_connect_requested=false`, `matrix_event_emit_requested=false`, and `real_call_flow_started=false`.
+  - No production APNs push, repeated push, media behavior, Matrix event emission, full direct-call flow, Element Call route replacement, entitlement/project/signing/`Info.plist` change, or `app.yml` regeneration was introduced.
 - 2.45B PushKit callback controlled CallKit report proof passed:
   - A fresh physical Debug build was installed on the connected iPhone.
   - The manual PushKit upload smoke refreshed the persisted staging token with redacted `http_success`, `registered`, `persisted`, and `redacted_match` proof.

@@ -8,14 +8,14 @@ Expected intentionally untracked file:
 
 Do not stage or commit that diagnostics file.
 
-## Next task — continue after 2.46A4
+## Next task — continue after 2.46B
 
 Latest completed state:
 - real non-dev invite background APNs path physically reached `real_invite_controlled`
-- PushKit callback proof, controlled CallKit report, PushKit completion, CallKit Answer, controlled in-app screen, and controlled cleanup all passed
+- PushKit callback proof, controlled CallKit report, PushKit completion, CallKit Answer, controlled in-app screen, controlled cleanup, and redacted foreground pending-call state handoff all passed
 - receiver PushKit upload smoke returned http_success / registered / persisted / redacted_match
 - exactly one authenticated non-dev invite/APNs attempt was run; dev invite was not used
-- dedicated VoIP receipt proof returned `callkit_report_result=reported`, `pushkit_completion_called=true`, `callkit_answer_action_received=true`, `callkit_answer_action_fulfilled=true`, `controlled_in_app_screen_presented=true`, `controlled_in_app_screen_source=callkit_answer_real_invite_controlled`, `controlled_callkit_cleanup_result=ended`, and `blocked_reason=none`
+- dedicated VoIP receipt proof returned `callkit_report_result=reported`, `pushkit_completion_called=true`, `callkit_answer_action_received=true`, `callkit_answer_action_fulfilled=true`, `controlled_in_app_screen_presented=true`, `controlled_in_app_screen_source=callkit_answer_real_invite_controlled`, `foreground_call_state_handoff_observed=true`, `foreground_call_state=real_invite_pending_media`, `foreground_call_state_source=callkit_answer_real_invite_controlled`, `foreground_call_state_payload_redacted=true`, `foreground_call_state_has_stable_redacted_correlation=true`, `controlled_callkit_cleanup_result=ended`, and `blocked_reason=none`
 - media credentials, media connection, Matrix events, and full direct-call flow remain unwired
 
 Safety:

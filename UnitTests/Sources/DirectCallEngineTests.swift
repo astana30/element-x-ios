@@ -2171,6 +2171,33 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func realInviteAnswerProofRecordsForegroundPendingCallStateOnly() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+
+        #expect(adapterSource.contains("foreground_call_state_handoff_requested=\\(foregroundCallStateHandoffRequested)"))
+        #expect(adapterSource.contains("foreground_call_state_handoff_observed=\\(foregroundCallStateHandoffObserved)"))
+        #expect(adapterSource.contains("foreground_call_state=\\(foregroundCallState)"))
+        #expect(adapterSource.contains("foreground_call_state_source=\\(foregroundCallStateSource)"))
+        #expect(adapterSource.contains("foreground_call_state_payload_redacted=\\(foregroundCallStatePayloadRedacted)"))
+        #expect(adapterSource.contains("foreground_call_state_has_stable_redacted_correlation=\\(foregroundCallStateHasStableRedactedCorrelation)"))
+        #expect(adapterSource.contains("if summary.realInvitePayloadMappingObserved"))
+        #expect(adapterSource.contains("foregroundCallStateHandoffRequested = true"))
+        #expect(adapterSource.contains("foregroundCallStateHandoffObserved = true"))
+        #expect(adapterSource.contains("foregroundCallState = \"real_invite_pending_media\""))
+        #expect(adapterSource.contains("foregroundCallStateSource = screenSource"))
+        #expect(adapterSource.contains("foregroundCallStatePayloadRedacted = true"))
+        #expect(adapterSource.contains("foregroundCallStateHasStableRedactedCorrelation = true"))
+        #expect(adapterSource.contains("media_credentials_requested=false"))
+        #expect(adapterSource.contains("media_connect_requested=false"))
+        #expect(adapterSource.contains("matrix_event_emit_requested=false"))
+        #expect(adapterSource.contains("real_call_flow_started=false"))
+        #expect(!adapterSource.contains("payload.description"))
+        #expect(!adapterSource.contains("payload.dictionaryPayload.description"))
+        #expect(!adapterSource.contains("room_id"))
+        #expect(!adapterSource.contains("call_handle"))
+    }
+
+    @Test
     func pushKitTokenRegistrationClientValidSyntheticTokenUsesFakeTransportOnly() {
         let transport = DirectCallPushKitTokenRegistrationTransportSpy(result: .success)
         let client = DirectCallPushKitTokenRegistrationClient(transport: transport)

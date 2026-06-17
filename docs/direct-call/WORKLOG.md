@@ -3015,6 +3015,30 @@ Current blocker:
 
 No production APNs push was attempted. No repeated push was attempted. No raw PushKit token, APNs token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, private logs, user/device/room/call identifiers, or secret-bearing URL was recorded.
 
+## 2.46B — Real invite foreground call-state handoff
+
+Added and physically verified the smallest DEBUG-only foreground pending-call state handoff after the real-invite-controlled CallKit Answer path.
+
+Implementation:
+- the dedicated VoIP receipt proof now records a redacted foreground state handoff only after `real_invite_controlled` Answer proof
+- the foreground state is `real_invite_pending_media`
+- the source is `callkit_answer_real_invite_controlled`
+- the proof records only redacted state and stable redacted correlation presence
+
+Validation:
+- changed-file SwiftFormat passed
+- changed-file SwiftLint passed with 0 violations
+- targeted DirectCall tests passed with 37 tests
+- fresh physical Debug build/install passed
+- route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, stream `401`, token registration `401`, and APNs send control `401`
+
+Physical proof:
+- exactly one authenticated non-dev invite/APNs attempt was run; dev invite was not used
+- dedicated VoIP receipt proof returned `pushkit_payload_kind=real_invite_controlled`, `callkit_report_result=reported`, `pushkit_completion_called=true`, `callkit_answer_action_received=true`, `callkit_answer_action_fulfilled=true`, `controlled_in_app_screen_presented=true`, `foreground_call_state_handoff_requested=true`, `foreground_call_state_handoff_observed=true`, `foreground_call_state=real_invite_pending_media`, `foreground_call_state_source=callkit_answer_real_invite_controlled`, `foreground_call_state_payload_redacted=true`, `foreground_call_state_has_stable_redacted_correlation=true`, and `blocked_reason=none`
+- media credentials, media connection, Matrix events, and real call flow remained false
+
+No production APNs push was attempted. No repeated push was attempted. No raw PushKit token, APNs token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, private logs, user/device/room/call identifiers, or secret-bearing URL was recorded.
+
 ## 2.46A1 — Real invite CallKit answer observation fix
 
 Added the smallest DEBUG-only cleanup fix for the controlled synthetic CallKit proof path.

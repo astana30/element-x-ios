@@ -560,6 +560,12 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var controlledInAppScreenRequested = false
     var controlledInAppScreenPresented = false
     var controlledInAppScreenSource = "none"
+    var foregroundCallStateHandoffRequested = false
+    var foregroundCallStateHandoffObserved = false
+    var foregroundCallState = "not_requested"
+    var foregroundCallStateSource = "none"
+    var foregroundCallStatePayloadRedacted = false
+    var foregroundCallStateHasStableRedactedCorrelation = false
     var controlledCallKitCleanupRequested = false
     var controlledCallKitCleanupResult = "not_requested"
     var blockedReason = "voip_push_not_received"
@@ -585,6 +591,12 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "controlled_in_app_screen_requested=\(controlledInAppScreenRequested)",
             "controlled_in_app_screen_presented=\(controlledInAppScreenPresented)",
             "controlled_in_app_screen_source=\(controlledInAppScreenSource)",
+            "foreground_call_state_handoff_requested=\(foregroundCallStateHandoffRequested)",
+            "foreground_call_state_handoff_observed=\(foregroundCallStateHandoffObserved)",
+            "foreground_call_state=\(foregroundCallState)",
+            "foreground_call_state_source=\(foregroundCallStateSource)",
+            "foreground_call_state_payload_redacted=\(foregroundCallStatePayloadRedacted)",
+            "foreground_call_state_has_stable_redacted_correlation=\(foregroundCallStateHasStableRedactedCorrelation)",
             "controlled_callkit_cleanup_requested=\(controlledCallKitCleanupRequested)",
             "controlled_callkit_cleanup_result=\(controlledCallKitCleanupResult)",
             "media_credentials_requested=false",
@@ -952,6 +964,14 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         summary.controlledInAppScreenRequested = true
         summary.controlledInAppScreenPresented = true
         summary.controlledInAppScreenSource = screenSource
+        if summary.realInvitePayloadMappingObserved {
+            summary.foregroundCallStateHandoffRequested = true
+            summary.foregroundCallStateHandoffObserved = true
+            summary.foregroundCallState = "real_invite_pending_media"
+            summary.foregroundCallStateSource = screenSource
+            summary.foregroundCallStatePayloadRedacted = true
+            summary.foregroundCallStateHasStableRedactedCorrelation = true
+        }
         summary.blockedReason = "none"
         lock.unlock()
 
