@@ -3035,3 +3035,25 @@ Physical close-out blocker:
 - real non-dev invite/APNs retry was not run
 
 No production APNs push was attempted. No repeated push was attempted. No raw PushKit token, APNs token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, private logs, user/device/room/call identifiers, or secret-bearing URL was recorded. Media, Matrix events, and full call flow remain unwired.
+
+## 2.46A3 — Real invite CallKit report pending-state fix
+
+Fixed the DEBUG-only real-invite-controlled PushKit receipt path so it cannot stay permanently at `callkit_report_result=pending` with `pushkit_completion_called=false`.
+
+Root cause/fix:
+- the real-invite-controlled receipt had no fallback if the controlled CallKit report completion did not return
+- the receipt path now records a final reported/failed/timeout result and calls PushKit completion exactly once
+- the controlled synthetic CallKit harness is cleared before a new report to avoid stale controlled state
+- the dedicated VoIP receipt proof file remains separate from the PushKit upload proof file
+
+Validation:
+- SwiftFormat passed on the changed Swift/test files
+- changed-file SwiftLint passed with 0 violations
+- targeted DirectCall tests passed with 37 tests
+- fresh physical Debug build/install passed
+
+Physical close-out blocker:
+- fresh physical PushKit upload smoke stopped with `pushkit_token_upload_blocked_by_auth`
+- real non-dev invite/APNs retry was not run
+
+No production APNs push was attempted. No repeated push was attempted. No raw PushKit token, APNs token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, private logs, user/device/room/call identifiers, or secret-bearing URL was recorded. Media, Matrix events, and full call flow remain unwired.

@@ -1941,3 +1941,29 @@ Physical close-out blocker:
 - repeated APNs was not attempted
 
 No media credentials, media connection, Matrix event emission, or full direct-call flow was introduced. No raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, private log, or secret-bearing URL was recorded.
+
+## 2.46A3 status
+
+Real-invite CallKit report pending state now has a minimal DEBUG-only safety fix.
+
+Ready:
+- `real_invite_controlled` now records a final CallKit report result and calls PushKit completion through a one-shot finalizer
+- if the controlled CallKit report callback never returns, the proof records `timeout_redacted`, calls PushKit completion, and sets `blocked_reason=callkit_report_completion_timeout_redacted`
+- the dedicated VoIP receipt proof remains split from the PushKit upload smoke proof
+- SwiftFormat, changed-file SwiftLint, and targeted DirectCall tests passed
+- fresh physical Debug build/install passed
+
+Blocked:
+- receiver PushKit upload smoke returned `pushkit_token_upload_blocked_by_auth`
+- no real non-dev invite/APNs retry was attempted after the fix
+
+Still not wired:
+- media credentials/media connection
+- Matrix event emission
+- full direct-call flow
+
+Safety:
+- dev invite remains disabled
+- no production APNs push
+- no repeated APNs push
+- no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, or call handle recorded

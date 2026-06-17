@@ -697,3 +697,24 @@ Blocked:
 - no real non-dev invite/APNs retry was attempted in this run
 
 No production push, repeated push, raw APNs payload, raw invite body, token, JWT, authorization header, Matrix access token, media request, Matrix event, or full call flow was introduced.
+
+## 2.46A3 Real invite pending-state fix
+
+The latest dedicated VoIP receipt proof showed the real-invite-controlled PushKit callback reached `callkit_report_requested=true` but stayed at `callkit_report_result=pending` and `pushkit_completion_called=false`.
+
+Fix:
+- the controlled receipt path now uses a one-shot finalizer for CallKit report success/failure/timeout
+- PushKit completion is recorded and called after the final report result is recorded
+- timeout fallback is redacted as `callkit_report_completion_timeout_redacted`
+- stale controlled CallKit harness state is cleared before reporting a new controlled call
+
+Validation:
+- changed-file SwiftFormat and SwiftLint passed
+- targeted DirectCall tests passed
+- physical Debug build/install passed
+
+Blocked:
+- receiver PushKit upload smoke returned `pushkit_token_upload_blocked_by_auth`
+- no real non-dev invite/APNs retry was attempted after this fix
+
+No production push, repeated push, raw APNs payload, raw invite body, token, JWT, authorization header, Matrix access token, media request, Matrix event, or full call flow was introduced.

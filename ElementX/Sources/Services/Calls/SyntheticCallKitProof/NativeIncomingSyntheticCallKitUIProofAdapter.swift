@@ -782,6 +782,8 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let uploadSmokeURLPath = "/pushkit-token-upload-smoke/start"
     private static let uploadSmokeDefaultURLString = "https://matrix.mertis.kz/_matrix/client/unstable/kz.salemx.direct_call/pushkit/token"
     private static let uploadSmokeProofFileName = "salemx-pushkit-token-upload-smoke-proof.txt"
+    private static let voIPPushReceiptProofFileName = "salemx-voip-push-receipt-proof.txt"
+    private static let voIPPushReceiptCallKitReportTimeout: TimeInterval = 3
     private static let lock = NSLock()
     private static var registrar: DirectCallPushKitRegistrar?
     private static var latestSummary = initialRedactedSummary()
@@ -892,13 +894,33 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             return
         }
 
-        DispatchQueue.main.async {
-            var reportedSummary = baseSummary
-            reportedSummary.callKitReportResult = reportControlledSandboxVoIPSmokeCallKit()
-            reportedSummary.completionCalled = true
-            reportedSummary.blockedReason = reportedSummary.callKitReportResult == "reported" ? "callkit_answer_action_not_observed" : "callkit_report_failed_redacted"
-            updateLatestVoIPPushReceiptSummary(reportedSummary)
+        let completionLock = NSLock()
+        var didComplete = false
+        let completeOnce: (String, String) -> Void = { reportResult, blockedReason in
+            completionLock.lock()
+            guard !didComplete else {
+                completionLock.unlock()
+                return
+            }
+            didComplete = true
+            completionLock.unlock()
+
+            var completedSummary = baseSummary
+            completedSummary.callKitReportResult = reportResult
+            completedSummary.completionCalled = true
+            completedSummary.blockedReason = blockedReason
+            updateLatestVoIPPushReceiptSummary(completedSummary)
             completion()
+        }
+
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + voIPPushReceiptCallKitReportTimeout) {
+            completeOnce("timeout_redacted", "callkit_report_completion_timeout_redacted")
+        }
+
+        DispatchQueue.main.async {
+            let reportResult = reportControlledSandboxVoIPSmokeCallKit()
+            let blockedReason = reportResult == "reported" || reportResult == "fake_reported" ? "callkit_answer_action_not_observed" : "callkit_report_failed_redacted"
+            completeOnce(reportResult, blockedReason)
         }
     }
 
@@ -932,6 +954,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
 
     private static func reportControlledSandboxVoIPSmokeCallKit() -> String {
         #if canImport(CallKit) && os(iOS)
+        callKitProofHarness = nil
         let proofHarness = NativeIncomingSyntheticCallKitUIProofHarness.makePhysicalDeviceProofHarness(handle: "salemx-test-call",
                                                                                                        displayLabel: "SalemX Test Call",
                                                                                                        eventRecorder: SalemXPushKitCallKitProofEventRecorder())
@@ -966,15 +989,23 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         latestVoIPPushReceiptSummary = summary
         let proof = summary.redactedLines.joined(separator: "\n")
         lock.unlock()
-        writeUploadSmokeProof(proof)
+        writeVoIPPushReceiptProof(proof)
     }
 
     private static func writeUploadSmokeProof(_ proof: String) {
+        writeProof(proof, fileName: uploadSmokeProofFileName)
+    }
+
+    private static func writeVoIPPushReceiptProof(_ proof: String) {
+        writeProof(proof, fileName: voIPPushReceiptProofFileName)
+    }
+
+    private static func writeProof(_ proof: String, fileName: String) {
         guard let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
             return
         }
 
-        let proofURL = documentsURL.appending(component: uploadSmokeProofFileName)
+        let proofURL = documentsURL.appending(component: fileName)
         try? proof.write(to: proofURL, atomically: true, encoding: .utf8)
     }
 

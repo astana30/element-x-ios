@@ -785,3 +785,27 @@ Safety:
 - no production APNs push
 - no repeated APNs push
 - no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, or call handle recorded
+
+## 2.46A3 readiness update
+
+Ready:
+- real-invite-controlled PushKit receipt can no longer remain permanently pending without PushKit completion
+- controlled CallKit report result is finalized as reported, failed_redacted, or timeout_redacted
+- timeout fallback records only redacted blocker state and still calls PushKit completion
+- dedicated VoIP receipt proof remains separate from upload smoke proof
+- changed-file SwiftFormat, changed-file SwiftLint, targeted DirectCall tests, and physical Debug build/install passed
+
+Blocked:
+- receiver PushKit upload smoke returned `pushkit_token_upload_blocked_by_auth`
+- real non-dev invite/APNs retry was not run after the fix
+
+Still not wired:
+- media credentials/media connection
+- Matrix event emission
+- full direct-call flow
+
+Safety:
+- dev invite remains disabled
+- no production APNs push
+- no repeated APNs push
+- no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, or call handle recorded

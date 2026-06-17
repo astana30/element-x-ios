@@ -8,12 +8,14 @@ Expected intentionally untracked file:
 
 Do not stage or commit that diagnostics file.
 
-## Next task — 2.46A2 physical real-invite Answer retry after auth refresh
+## Next task — 2.46A3 physical real-invite Answer retry after auth refresh
 
-Continue after 2.46A1 added controlled synthetic CallKit cleanup after Answer, but physical retry stopped before APNs because the receiver app auth was unavailable.
+Continue after 2.46A3 fixed the real-invite-controlled CallKit report pending state, but physical retry stopped before APNs because the receiver app auth was unavailable.
 
 Latest redacted result:
-- root cause/fix: stale controlled synthetic CallKit calls were not ended/cleared after Answer; 2.46A1 now ends and clears only the DEBUG controlled synthetic call and records redacted cleanup status
+- root cause/fix: the real-invite-controlled receipt could stay at `callkit_report_result=pending` with `pushkit_completion_called=false`; 2.46A3 now finalizes reported/failed/timeout result and calls PushKit completion exactly once
+- timeout fallback is redacted as `callkit_report_completion_timeout_redacted`
+- stale controlled synthetic CallKit harness state is cleared before reporting a new controlled call
 - SwiftFormat, changed-file SwiftLint, and targeted DirectCall tests passed
 - fresh physical Debug build/install passed
 - PushKit upload smoke returned `pushkit_token_upload_blocked_by_auth`
