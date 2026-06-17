@@ -715,6 +715,9 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var callKitProviderDidDeactivateAudioSession = false
     var callKitFirstActionKind = "none"
     var callKitFirstActionAfterReportMsBucket = "not_observed"
+    var callKitUISurfaceObservedByOperator = false
+    var callKitOperatorIntendedAction = "unknown"
+    var callKitOperatorActionTimingBucket = "unknown"
     var callKitUIAnswerOperatorTapObserved = false
     var callKitEndArrivedBeforeOperatorAnswerWindow = false
     var callKitEndActionDelivered = false
@@ -787,6 +790,9 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "callkit_audio_session_did_deactivate=\(callKitProviderDidDeactivateAudioSession)",
             "callkit_first_action_kind=\(callKitFirstActionKind)",
             "callkit_first_action_after_report_ms_bucket=\(callKitFirstActionAfterReportMsBucket)",
+            "callkit_ui_surface_observed_by_operator=\(callKitUISurfaceObservedByOperator)",
+            "callkit_operator_intended_action=\(callKitOperatorIntendedAction)",
+            "callkit_operator_action_timing_bucket=\(callKitOperatorActionTimingBucket)",
             "callkit_ui_answer_operator_tap_observed=\(callKitUIAnswerOperatorTapObserved)",
             "callkit_end_arrived_before_operator_answer_window=\(callKitEndArrivedBeforeOperatorAnswerWindow)",
             "callkit_end_action_delivered=\(callKitEndActionDelivered)",
@@ -1143,6 +1149,49 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         lock.lock()
         defer { lock.unlock() }
         return latestUploadSummary
+    }
+
+    @objc static func recordCallKitOperatorAnswerIntent(_ timingBucket: String) -> String {
+        recordCallKitOperatorInteraction(intendedAction: "answer", timingBucket: timingBucket)
+    }
+
+    @objc static func recordCallKitOperatorEndIntent(_ timingBucket: String) -> String {
+        recordCallKitOperatorInteraction(intendedAction: "end", timingBucket: timingBucket)
+    }
+
+    @objc static func redactedVoIPPushReceiptSummary() -> String {
+        lock.lock()
+        defer { lock.unlock() }
+        return latestVoIPPushReceiptSummary.redactedLines.joined(separator: "\n")
+    }
+
+    private static func recordCallKitOperatorInteraction(intendedAction: String, timingBucket: String) -> String {
+        let safeIntendedAction: String
+        switch intendedAction {
+        case "answer", "end":
+            safeIntendedAction = intendedAction
+        default:
+            safeIntendedAction = "unknown"
+        }
+
+        let safeTimingBucket: String
+        switch timingBucket {
+        case "immediate", "1-2s", ">2s":
+            safeTimingBucket = timingBucket
+        default:
+            safeTimingBucket = "unknown"
+        }
+
+        lock.lock()
+        var summary = latestVoIPPushReceiptSummary
+        summary.callKitUISurfaceObservedByOperator = true
+        summary.callKitOperatorIntendedAction = safeIntendedAction
+        summary.callKitOperatorActionTimingBucket = safeTimingBucket
+        summary.callKitUIAnswerOperatorTapObserved = safeIntendedAction == "answer"
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+        return redactedVoIPPushReceiptSummary()
     }
 
     static func recordVoIPPushReceipt(_ payload: [AnyHashable: Any]) {

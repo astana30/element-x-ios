@@ -743,6 +743,19 @@ Redacted proof:
 
 This proves the blocker is not APNs delivery, PushKit receipt, CallKit report completion, provider/delegate retention, active UUID retention, or local app cleanup before Answer. Next work must distinguish the user/UI/system End-vs-Answer path before any media phase continues.
 
+## 2.47A7 CallKit Answer-vs-End operator-intent diagnostic
+
+The next diagnostic step adds a redacted operator-intent marker to the existing DEBUG-only Internal diagnostics surface.
+
+Added proof fields:
+- `callkit_ui_surface_observed_by_operator`
+- `callkit_operator_intended_action`
+- `callkit_operator_action_timing_bucket`
+
+The marker can record only safe enum/bucket values for Answer timing (`immediate`, `1-2s`, `>2s`) or End intent. It writes to the dedicated VoIP receipt proof file and does not store screenshots, private logs, raw IDs, payloads, tokens, authorization headers, Matrix access tokens, LiveKit URLs/tokens, or call handles.
+
+No APNs send was run for this code/docs update. No production APNs push, repeated push, real media credentials request, media connection, LiveKit join, Matrix event emission, or full direct-call flow was introduced. The blocker remains `system_or_user_end_before_answer` until a fresh one-shot physical attempt records the operator intent/timing alongside the CallKit first action.
+
 ## 2.46A1 Real invite Answer observation fix
 
 The real-invite payload path uses the same controlled CallKit report helper as the sandbox smoke path. The likely blocker was stale controlled synthetic CallKit state: answered controlled calls were not ended or cleared after proof.

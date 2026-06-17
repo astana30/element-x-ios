@@ -52,6 +52,7 @@ private struct SalemXForegroundSSESmokeControlsView: View {
     #if canImport(PushKit)
     @State private var pushKitSummary = SalemXPushKitRegistrationSmokeDebugBridge.redactedStateSummary()
     @State private var pushKitUploadSummary = SalemXPushKitRegistrationSmokeDebugBridge.redactedUploadStateSummary()
+    @State private var voIPReceiptSummary = SalemXPushKitRegistrationSmokeDebugBridge.redactedVoIPPushReceiptSummary()
     #endif
 
     var body: some View {
@@ -106,6 +107,31 @@ private struct SalemXForegroundSSESmokeControlsView: View {
                     .font(.system(.caption, design: .monospaced))
                     .textSelection(.enabled)
                     .accessibilityIdentifier("pushKitTokenUploadSmokeProof")
+
+                Button("Mark CallKit Answer tap immediate") {
+                    voIPReceiptSummary = SalemXPushKitRegistrationSmokeDebugBridge.recordCallKitOperatorAnswerIntent("immediate")
+                }
+
+                Button("Mark CallKit Answer tap 1-2s") {
+                    voIPReceiptSummary = SalemXPushKitRegistrationSmokeDebugBridge.recordCallKitOperatorAnswerIntent("1-2s")
+                }
+
+                Button("Mark CallKit Answer tap >2s") {
+                    voIPReceiptSummary = SalemXPushKitRegistrationSmokeDebugBridge.recordCallKitOperatorAnswerIntent(">2s")
+                }
+
+                Button("Mark CallKit End intent") {
+                    voIPReceiptSummary = SalemXPushKitRegistrationSmokeDebugBridge.recordCallKitOperatorEndIntent("unknown")
+                }
+
+                Button("Refresh VoIP receipt proof") {
+                    refreshVoIPReceiptSummary()
+                }
+
+                Text(voIPReceiptSummary)
+                    .font(.system(.caption, design: .monospaced))
+                    .textSelection(.enabled)
+                    .accessibilityIdentifier("voIPPushReceiptProof")
             }
             #endif
         }
@@ -136,6 +162,15 @@ private struct SalemXForegroundSSESmokeControlsView: View {
                 try? await Task.sleep(for: delay)
             }
             pushKitUploadSummary = SalemXPushKitRegistrationSmokeDebugBridge.redactedUploadStateSummary()
+        }
+    }
+
+    private func refreshVoIPReceiptSummary(after delay: Duration? = nil) {
+        Task { @MainActor in
+            if let delay {
+                try? await Task.sleep(for: delay)
+            }
+            voIPReceiptSummary = SalemXPushKitRegistrationSmokeDebugBridge.redactedVoIPPushReceiptSummary()
         }
     }
     #endif

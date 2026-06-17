@@ -3145,3 +3145,20 @@ Physical proof:
 - media credentials, media connection, Matrix events, and real call flow remained false
 
 No production APNs push was attempted. No repeated push was attempted. No raw PushKit token, APNs token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, private logs, user/device/room/call identifiers, or secret-bearing URL was recorded.
+
+## 2.47A7 — CallKit Answer-vs-End operator-intent diagnostics
+
+Added a minimal DEBUG-only operator-intent marker for the current CallKit End-before-Answer blocker.
+
+Current blocker carried forward:
+- APNs, PushKit receipt, CallKit report completion, provider/delegate retention, and active UUID retention passed in the latest physical proof.
+- The first delivered CallKit action was End, not Answer.
+- Local app End request, provider invalidation, report-ended, and controlled timeout before Answer were all false.
+- `blocked_reason=system_or_user_end_before_answer`
+
+Diagnostic change:
+- dedicated VoIP receipt proof now includes `callkit_ui_surface_observed_by_operator`, `callkit_operator_intended_action`, and `callkit_operator_action_timing_bucket`
+- Internal diagnostics can mark redacted Answer intent timing as `immediate`, `1-2s`, or `>2s`, or mark End intent
+- the marker writes only safe enum/bucket values to `Documents/salemx-voip-push-receipt-proof.txt`
+
+No APNs push was attempted in this update. No production APNs push was attempted. No repeated push was attempted. No real media credentials request, media connection, LiveKit join, Matrix event emission, or full call flow was introduced. No raw PushKit/APNs token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, LiveKit URL/token, private logs, user/device/room/call identifiers, or secret-bearing URL was recorded.
