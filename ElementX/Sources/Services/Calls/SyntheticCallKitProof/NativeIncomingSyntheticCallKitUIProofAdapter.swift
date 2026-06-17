@@ -722,6 +722,13 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var callKitUpdateAudioOnly = false
     var callKitProviderConfigurationAudioOnly = false
     var callKitProviderConfigurationSupportedHandleGeneric = false
+    var localCallKitOnlyUpdateEquivalentToVoIP = false
+    var localCallKitOnlyProviderConfigEquivalentToVoIP = false
+    var voIPCallKitUpdateEquivalentToLocal = false
+    var voIPReportQueueMatchesLocal = false
+    var voIPProviderReuseMatchesLocal = false
+    var voIPOperatorMarkerSetBeforeReport = false
+    var voIPPushKitCompletionDelayedUntilFirstAction = false
     var callKitProviderRetainedForAnswer = false
     var callKitDelegateRetainedForAnswer = false
     var callKitActiveCallUUIDRetained = false
@@ -810,6 +817,13 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "callkit_update_audio_only=\(callKitUpdateAudioOnly)",
             "callkit_provider_configuration_audio_only=\(callKitProviderConfigurationAudioOnly)",
             "callkit_provider_configuration_supported_handle_generic=\(callKitProviderConfigurationSupportedHandleGeneric)",
+            "local_callkit_only_update_equivalent_to_voip=\(localCallKitOnlyUpdateEquivalentToVoIP)",
+            "local_callkit_only_provider_config_equivalent_to_voip=\(localCallKitOnlyProviderConfigEquivalentToVoIP)",
+            "voip_callkit_update_equivalent_to_local=\(voIPCallKitUpdateEquivalentToLocal)",
+            "voip_report_queue_matches_local=\(voIPReportQueueMatchesLocal)",
+            "voip_provider_reuse_matches_local=\(voIPProviderReuseMatchesLocal)",
+            "voip_operator_marker_set_before_report=\(voIPOperatorMarkerSetBeforeReport)",
+            "voip_pushkit_completion_delayed_until_first_action=\(voIPPushKitCompletionDelayedUntilFirstAction)",
             "callkit_provider_retained_for_answer=\(callKitProviderRetainedForAnswer)",
             "callkit_delegate_retained_for_answer=\(callKitDelegateRetainedForAnswer)",
             "callkit_active_call_uuid_retained=\(callKitActiveCallUUIDRetained)",
@@ -892,6 +906,8 @@ private struct SalemXLocalCallKitOnlyProofSummary {
     var callKitUpdateAudioOnly = false
     var callKitProviderConfigurationAudioOnly = false
     var callKitProviderConfigurationSupportedHandleGeneric = false
+    var localCallKitOnlyUpdateEquivalentToVoIP = false
+    var localCallKitOnlyProviderConfigEquivalentToVoIP = false
     var blockedReason = "not_requested"
 
     var redactedLines: [String] {
@@ -909,6 +925,8 @@ private struct SalemXLocalCallKitOnlyProofSummary {
             "callkit_update_audio_only=\(callKitUpdateAudioOnly)",
             "callkit_provider_configuration_audio_only=\(callKitProviderConfigurationAudioOnly)",
             "callkit_provider_configuration_supported_handle_generic=\(callKitProviderConfigurationSupportedHandleGeneric)",
+            "local_callkit_only_update_equivalent_to_voip=\(localCallKitOnlyUpdateEquivalentToVoIP)",
+            "local_callkit_only_provider_config_equivalent_to_voip=\(localCallKitOnlyProviderConfigEquivalentToVoIP)",
             "media_credentials_requested=false",
             "media_connect_requested=false",
             "media_connect_attempted=false",
@@ -1400,6 +1418,8 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         summary.callKitUpdateAudioOnly = true
         summary.callKitProviderConfigurationAudioOnly = true
         summary.callKitProviderConfigurationSupportedHandleGeneric = true
+        summary.localCallKitOnlyUpdateEquivalentToVoIP = true
+        summary.localCallKitOnlyProviderConfigEquivalentToVoIP = true
         updateLatestLocalCallKitOnlySummary(summary)
 
         let proofHarness = NativeIncomingSyntheticCallKitUIProofHarness.makePhysicalDeviceProofHarness(handle: "salemx-local-callkit-only",
@@ -1494,6 +1514,12 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             baseSummary.callKitUpdateAudioOnly = true
             baseSummary.callKitProviderConfigurationAudioOnly = true
             baseSummary.callKitProviderConfigurationSupportedHandleGeneric = true
+            baseSummary.localCallKitOnlyUpdateEquivalentToVoIP = true
+            baseSummary.localCallKitOnlyProviderConfigEquivalentToVoIP = true
+            baseSummary.voIPCallKitUpdateEquivalentToLocal = true
+            baseSummary.voIPReportQueueMatchesLocal = true
+            baseSummary.voIPProviderReuseMatchesLocal = true
+            baseSummary.voIPOperatorMarkerSetBeforeReport = operatorReadyToAnswer
         }
         lock.lock()
         callKitReportCompletionDate = nil
@@ -1580,6 +1606,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         completedSummary.pushKitCompletionAnswerableWindowResult = answerableWindowResult
         completedSummary.pushKitCompletionAnswerableWindowDurationBucket = answerableWindowStartedAt.map { elapsedBucket(from: $0, to: completionCallDate) } ?? "not_requested"
         completedSummary.pushKitCompletionAfterReportMsBucket = reportCompletionDate.map { elapsedBucket(from: $0, to: completionCallDate) } ?? "unknown"
+        completedSummary.voIPPushKitCompletionDelayedUntilFirstAction = answerableWindowRequested && answerableWindowResult == "first_action_observed"
         completedSummary.appStateAtReportCompletion = currentApplicationStateProof()
         if completedSummary.callKitFirstActionKind == "none" {
             completedSummary.callKitEventOrder = reportResult == "timeout_redacted" ? "report_completion_timeout" : "report_completion_only"
