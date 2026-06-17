@@ -1967,3 +1967,26 @@ Safety:
 - no production APNs push
 - no repeated APNs push
 - no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, or call handle recorded
+
+## 2.46A4 status
+
+Real-invite controlled CallKit cleanup ordering is fixed and physically verified.
+
+Root cause/fix:
+- the controlled CallKit end event could be recorded before Answer proof, collapsing a reported real-invite call into cleanup before the user Answer action was observed
+- the DEBUG-only proof recorder now records cleanup only after it has recorded an Answer event for the active controlled CallKit generation
+
+Verified redacted proof:
+- receiver PushKit upload smoke returned http_success / registered / persisted / redacted_match
+- public route safety remained green: dev invite 404, unauthenticated non-dev invite 401, stream 401, token registration 401, and APNs send control 401
+- exactly one authenticated non-dev invite/APNs attempt was run; dev invite was not used
+- dedicated VoIP receipt proof returned `pushkit_payload_kind=real_invite_controlled`, `real_invite_payload_mapping_observed=true`, `callkit_report_requested=true`, `callkit_report_result=reported`, and `pushkit_completion_called=true`
+- CallKit Answer proof returned `callkit_answer_action_received=true` and `callkit_answer_action_fulfilled=true`
+- controlled in-app proof returned `controlled_in_app_screen_presented=true` and `controlled_in_app_screen_source=callkit_answer_real_invite_controlled`
+- controlled cleanup proof returned `controlled_callkit_cleanup_requested=true` and `controlled_callkit_cleanup_result=ended`
+- media credentials, media connection, Matrix events, and real call flow remained false
+
+Safety:
+- no production APNs push
+- no repeated APNs push
+- no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, call handle, private log, or secret-bearing URL recorded

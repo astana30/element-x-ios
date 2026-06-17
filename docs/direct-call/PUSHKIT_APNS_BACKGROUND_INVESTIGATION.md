@@ -718,3 +718,19 @@ Blocked:
 - no real non-dev invite/APNs retry was attempted after this fix
 
 No production push, repeated push, raw APNs payload, raw invite body, token, JWT, authorization header, Matrix access token, media request, Matrix event, or full call flow was introduced.
+
+## 2.46A4 Real invite cleanup-ordering verification
+
+The real-invite-controlled physical proof now reaches the full controlled background chain through Answer.
+
+Root cause/fix:
+- cleanup could be recorded from a controlled CallKit end event before the same active generation recorded Answer
+- the DEBUG-only proof event recorder now ignores cleanup until Answer has been recorded for that generation
+
+Redacted result:
+- receiver PushKit upload smoke returned http_success / registered / persisted / redacted_match
+- exactly one authenticated non-dev invite/APNs attempt was run; `dev/invite` was not used
+- dedicated VoIP receipt proof returned `pushkit_payload_kind=real_invite_controlled`, `real_invite_payload_mapping_observed=true`, `callkit_report_result=reported`, `pushkit_completion_called=true`, `callkit_answer_action_received=true`, `callkit_answer_action_fulfilled=true`, `controlled_in_app_screen_presented=true`, `controlled_in_app_screen_source=callkit_answer_real_invite_controlled`, and `controlled_callkit_cleanup_result=ended`
+- media credentials, media connection, Matrix events, and real call flow remained false
+
+No production push, repeated push, raw APNs payload, raw invite body, token, JWT, authorization header, Matrix access token, media request, Matrix event, or full call flow was introduced.

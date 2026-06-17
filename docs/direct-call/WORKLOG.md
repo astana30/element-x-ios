@@ -3057,3 +3057,27 @@ Physical close-out blocker:
 - real non-dev invite/APNs retry was not run
 
 No production APNs push was attempted. No repeated push was attempted. No raw PushKit token, APNs token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, private logs, user/device/room/call identifiers, or secret-bearing URL was recorded. Media, Matrix events, and full call flow remain unwired.
+
+## 2.46A4 — Real invite CallKit cleanup ordering fix
+
+Fixed and physically verified the remaining real-invite-controlled Answer observation blocker.
+
+Root cause/fix:
+- after the pending-state fix, `reportNewIncomingCall` completed and PushKit completion was called, but a controlled CallKit end event could still record cleanup before Answer proof
+- the DEBUG-only proof recorder now ignores controlled cleanup until the same active generation has recorded Answer
+- cleanup still records after Answer and remains limited to the synthetic controlled CallKit proof surface
+
+Validation:
+- changed-file SwiftFormat passed
+- changed-file SwiftLint passed with 0 violations
+- targeted DirectCall tests passed with 37 tests
+- fresh physical Debug build/install passed
+- receiver PushKit upload smoke returned http_success / registered / persisted / redacted_match
+- route safety remained dev invite 404 and unauthenticated public routes 401
+
+Physical proof:
+- exactly one authenticated non-dev invite/APNs attempt was run; dev invite was not used
+- dedicated VoIP receipt proof returned `pushkit_payload_kind=real_invite_controlled`, `real_invite_payload_mapping_observed=true`, `callkit_report_result=reported`, `pushkit_completion_called=true`, `callkit_answer_action_received=true`, `callkit_answer_action_fulfilled=true`, `controlled_in_app_screen_presented=true`, `controlled_in_app_screen_source=callkit_answer_real_invite_controlled`, and `controlled_callkit_cleanup_result=ended`
+- media credentials, media connection, Matrix events, and real call flow remained false
+
+No production APNs push was attempted. No repeated push was attempted. No raw PushKit token, APNs token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, private logs, user/device/room/call identifiers, or secret-bearing URL was recorded.

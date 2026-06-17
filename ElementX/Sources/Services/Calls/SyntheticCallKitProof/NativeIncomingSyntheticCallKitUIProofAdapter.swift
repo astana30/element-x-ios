@@ -597,11 +597,26 @@ private struct SalemXVoIPPushReceiptProofSummary {
 }
 
 private final class SalemXPushKitCallKitProofEventRecorder: NativeIncomingSyntheticCallKitUIProofEventRecording {
+    private let generation: Int
+    private var didRecordAnswer = false
+
+    init(generation: Int) {
+        self.generation = generation
+    }
+
     func recordSyntheticCallKitUIProofEvent(_ event: NativeIncomingSyntheticCallKitUIProofEvent) {
+        guard SalemXPushKitRegistrationSmokeDebugBridge.isActiveCallKitProofGeneration(generation) else {
+            return
+        }
+
         switch event {
         case .answered:
+            didRecordAnswer = true
             SalemXPushKitRegistrationSmokeDebugBridge.recordCallKitAnswerActionProof()
         case .ended:
+            guard didRecordAnswer else {
+                return
+            }
             SalemXPushKitRegistrationSmokeDebugBridge.recordControlledCallKitCleanupProof()
         default:
             break
@@ -792,6 +807,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var latestVoIPPushReceiptSummary = SalemXVoIPPushReceiptProofSummary()
     #if canImport(CallKit) && os(iOS)
     private static var callKitProofHarness: NativeIncomingSyntheticCallKitUIProofHarness?
+    private static var callKitProofGeneration = 0
     #endif
 
     @objc static func startRegistrationSmoke() -> String {
@@ -952,12 +968,23 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         updateLatestVoIPPushReceiptSummary(summary)
     }
 
+    static func isActiveCallKitProofGeneration(_ generation: Int) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        #if canImport(CallKit) && os(iOS)
+        return callKitProofGeneration == generation
+        #else
+        return false
+        #endif
+    }
+
     private static func reportControlledSandboxVoIPSmokeCallKit() -> String {
         #if canImport(CallKit) && os(iOS)
+        let generation = nextCallKitProofGeneration()
         callKitProofHarness = nil
         let proofHarness = NativeIncomingSyntheticCallKitUIProofHarness.makePhysicalDeviceProofHarness(handle: "salemx-test-call",
                                                                                                        displayLabel: "SalemX Test Call",
-                                                                                                       eventRecorder: SalemXPushKitCallKitProofEventRecorder())
+                                                                                                       eventRecorder: SalemXPushKitCallKitProofEventRecorder(generation: generation))
         callKitProofHarness = proofHarness
         switch proofHarness.reportSyntheticIncomingCall() {
         case .reported:
@@ -967,6 +994,17 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         }
         #else
         return "fake_reported"
+        #endif
+    }
+
+    private static func nextCallKitProofGeneration() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        #if canImport(CallKit) && os(iOS)
+        callKitProofGeneration += 1
+        return callKitProofGeneration
+        #else
+        return 0
         #endif
     }
 

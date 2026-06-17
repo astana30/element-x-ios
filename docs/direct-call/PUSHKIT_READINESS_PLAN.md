@@ -809,3 +809,26 @@ Safety:
 - no production APNs push
 - no repeated APNs push
 - no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, or call handle recorded
+
+## 2.46A4 readiness update
+
+Ready:
+- real non-dev invite background APNs now reaches `real_invite_controlled` PushKit receipt, controlled CallKit report, Answer action, controlled in-app screen, and controlled cleanup
+- cleanup ordering is guarded so pre-Answer end events do not overwrite the waiting-for-Answer proof
+- dedicated VoIP receipt proof remains separate from PushKit upload proof
+
+Verified:
+- receiver PushKit upload smoke returned http_success / registered / persisted / redacted_match
+- exactly one authenticated non-dev invite/APNs attempt was run; dev invite was not used
+- iPhone proof returned `callkit_report_result=reported`, `pushkit_completion_called=true`, `callkit_answer_action_received=true`, `callkit_answer_action_fulfilled=true`, `controlled_in_app_screen_presented=true`, `controlled_in_app_screen_source=callkit_answer_real_invite_controlled`, and `controlled_callkit_cleanup_result=ended`
+
+Still not wired:
+- media credentials/media connection
+- Matrix event emission
+- full direct-call flow
+
+Safety:
+- dev invite remains disabled
+- no production APNs push
+- no repeated APNs push
+- no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, or call handle recorded
