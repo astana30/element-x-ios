@@ -14,6 +14,7 @@ from typing import Any
 from typing import Protocol
 
 from .errors import bad_request
+from .logging_utils import stable_redacted_id
 
 
 def _required_string(payload: dict[str, Any], key: str) -> str:
@@ -188,18 +189,28 @@ class PushKitTokenRegistrationDiagnostics:
     media_connect_requested: bool = False
     matrix_event_emit_requested: bool = False
     blocked_reason: str = "none"
+    pushkit_upload_store_key_redacted: str = "none"
+    pushkit_upload_record_updated_age_bucket: str = "unknown"
+    pushkit_upload_environment: str = "unknown"
+    pushkit_upload_token_is_hex: bool = False
 
     @classmethod
     def accepted(cls,
                  request: PushKitTokenRegistrationRequest,
                  store_result: str = "not_persisted",
-                 retrieval_internal_check: str = "not_requested") -> "PushKitTokenRegistrationDiagnostics":
+                 retrieval_internal_check: str = "not_requested",
+                 store_key_redacted: str = "none",
+                 record_updated_age_bucket: str = "unknown") -> "PushKitTokenRegistrationDiagnostics":
         return cls(
             pushkit_token_present=request.token_present,
             pushkit_token_store_requested=store_result == "persisted",
             pushkit_token_store_result=store_result,
             pushkit_token_registration_result="registered",
             pushkit_token_retrieval_internal_check=retrieval_internal_check,
+            pushkit_upload_store_key_redacted=store_key_redacted,
+            pushkit_upload_record_updated_age_bucket=record_updated_age_bucket,
+            pushkit_upload_environment=request.environment_class,
+            pushkit_upload_token_is_hex=is_hex_pushkit_token(request.token),
         )
 
     def as_dict(self) -> dict[str, Any]:
@@ -218,9 +229,38 @@ class PushKitTokenRegistrationDiagnostics:
             "media_connect_requested": self.media_connect_requested,
             "matrix_event_emit_requested": self.matrix_event_emit_requested,
             "blocked_reason": self.blocked_reason,
+            "pushkit_upload_store_key_redacted": self.pushkit_upload_store_key_redacted,
+            "pushkit_upload_record_updated_age_bucket": self.pushkit_upload_record_updated_age_bucket,
+            "pushkit_upload_environment": self.pushkit_upload_environment,
+            "pushkit_upload_token_is_hex": self.pushkit_upload_token_is_hex,
         }
 
 
 def _record_key(user_id: str, device_id: str | None, environment_class: str) -> str:
     device_component = device_id or "unbound"
     return hashlib.sha256(f"{user_id}\n{device_component}\n{environment_class}".encode("utf-8")).hexdigest()
+
+
+def redacted_latest_user_record_key(user_id: str, environment_class: str) -> str:
+    return stable_redacted_id(_record_key(user_id, None, environment_class))
+
+
+def record_updated_age_bucket(record: PushKitTokenRecord | None, now: datetime | None = None) -> str:
+    if record is None:
+        return "missing"
+
+    reference = now or datetime.now(timezone.utc)
+    updated_at = record.updated_at
+    if updated_at.tzinfo is None:
+        updated_at = updated_at.replace(tzinfo=timezone.utc)
+
+    age_seconds = max(0.0, (reference - updated_at).total_seconds())
+    if age_seconds < 5 * 60:
+        return "<5m"
+    if age_seconds < 30 * 60:
+        return "5-30m"
+    return ">30m"
+
+
+def is_hex_pushkit_token(token: str) -> bool:
+    return bool(token) and len(token) % 2 == 0 and all(character in "0123456789abcdefABCDEF" for character in token)

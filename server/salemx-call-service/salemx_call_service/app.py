@@ -46,8 +46,11 @@ from .logging_utils import configure_logging, stable_redacted_id
 from .pushkit_tokens import (
     DisabledPushKitTokenStore,
     FilePushKitTokenStore,
+    is_hex_pushkit_token,
     PushKitTokenRegistrationDiagnostics,
     PushKitTokenRegistrationRequest,
+    record_updated_age_bucket,
+    redacted_latest_user_record_key,
     PushKitTokenStoreProtocol,
 )
 from .rate_limiting import InMemoryRateLimiter, SharedRateLimiterSkeleton
@@ -215,6 +218,11 @@ def create_app(config: ServiceConfig | None = None,
                 registration_request,
                 store_result=store_result,
                 retrieval_internal_check=retrieval_internal_check,
+                store_key_redacted=redacted_latest_user_record_key(
+                    authenticated_user.user_id,
+                    registration_request.environment_class,
+                ),
+                record_updated_age_bucket=record_updated_age_bucket(stored_record),
             )
             LOGGER.info(
                 "pushkit token registration accepted account_hash=%s device_bound=%s token_present=%s "
@@ -546,6 +554,7 @@ def _background_invite_apns_diagnostics(
         }
 
     token_record = token_store.retrieve_latest_for_user(invite_request.recipient, "development")
+    lookup_store_key_redacted = redacted_latest_user_record_key(invite_request.recipient, "development")
     if token_record is None:
         return {
             "real_non_dev_invite_used": True,
@@ -558,6 +567,15 @@ def _background_invite_apns_diagnostics(
             "media_credentials_requested": False,
             "media_connect_requested": False,
             "matrix_event_emit_requested": False,
+            "pushkit_upload_store_key_redacted": "none",
+            "pushkit_upload_record_updated_age_bucket": "missing",
+            "pushkit_upload_environment": "development",
+            "pushkit_upload_token_is_hex": False,
+            "real_invite_lookup_store_key_redacted": lookup_store_key_redacted,
+            "real_invite_lookup_record_updated_age_bucket": "missing",
+            "real_invite_lookup_environment": "development",
+            "real_invite_lookup_token_is_hex": False,
+            "upload_invite_store_key_match": False,
             "blocked_reason": "receiver_pushkit_token_missing",
         }
 
@@ -579,6 +597,15 @@ def _background_invite_apns_diagnostics(
         "media_credentials_requested": diagnostics.media_credentials_requested,
         "media_connect_requested": diagnostics.media_connect_requested,
         "matrix_event_emit_requested": diagnostics.matrix_event_emit_requested,
+        "pushkit_upload_store_key_redacted": lookup_store_key_redacted,
+        "pushkit_upload_record_updated_age_bucket": record_updated_age_bucket(token_record),
+        "pushkit_upload_environment": token_record.environment_class,
+        "pushkit_upload_token_is_hex": is_hex_pushkit_token(token_record.token),
+        "real_invite_lookup_store_key_redacted": lookup_store_key_redacted,
+        "real_invite_lookup_record_updated_age_bucket": record_updated_age_bucket(token_record),
+        "real_invite_lookup_environment": "development",
+        "real_invite_lookup_token_is_hex": is_hex_pushkit_token(token_record.token),
+        "upload_invite_store_key_match": True,
         "blocked_reason": "none" if diagnostics.apns_voip_push_send_result == "sandbox_success" else diagnostics.blocked_reason,
     }
 
