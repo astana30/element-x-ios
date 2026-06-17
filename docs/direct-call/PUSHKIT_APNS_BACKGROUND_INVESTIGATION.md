@@ -698,6 +698,25 @@ Safety:
 - no repeated APNs push
 - no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, or call handle recorded
 
+## 2.47A Media credentials boundary planner
+
+The real-invite foreground pending state now reaches a controlled planner-only media credentials boundary.
+
+Implemented:
+- `media_credentials_boundary_reached=true`
+- `media_credentials_request_planned=true`
+- `media_credentials_result=planned_redacted`
+- token, URL, and payload are represented only by redaction booleans
+- media connection, LiveKit join, Matrix events, and full call flow remain false
+
+Blocked:
+- physical close-out stopped before APNs because PushKit upload smoke returned `pushkit_token_upload_blocked_by_auth`
+
+Safety:
+- no production APNs push
+- no repeated APNs push
+- no raw LiveKit token, LiveKit URL, token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, or call handle recorded
+
 ## 2.46A1 Real invite Answer observation fix
 
 The real-invite payload path uses the same controlled CallKit report helper as the sandbox smoke path. The likely blocker was stale controlled synthetic CallKit state: answered controlled calls were not ended or cleared after proof.

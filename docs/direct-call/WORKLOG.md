@@ -3015,6 +3015,29 @@ Current blocker:
 
 No production APNs push was attempted. No repeated push was attempted. No raw PushKit token, APNs token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, private logs, user/device/room/call identifiers, or secret-bearing URL was recorded.
 
+## 2.47A — Controlled media credentials boundary
+
+Added the smallest DEBUG-only planner boundary after the real-invite foreground pending state.
+
+Implementation:
+- after `foreground_call_state=real_invite_pending_media`, the dedicated VoIP receipt proof records `media_credentials_boundary_reached=true`
+- this phase plans the credential request only: `media_credentials_request_planned=true` and `media_credentials_result=planned_redacted`
+- token, URL, and payload handling are represented only by redaction booleans
+- media connect, LiveKit join, Matrix events, and full call flow remain false
+
+Validation:
+- changed-file SwiftFormat passed
+- changed-file SwiftLint passed with 0 violations
+- targeted DirectCall tests passed with 37 tests
+- fresh physical Debug build/install passed
+- route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, stream `401`, token registration `401`, and APNs send control `401`
+
+Physical close-out blocker:
+- PushKit upload smoke stopped at `pushkit_token_upload_blocked_by_auth`
+- no real non-dev invite/APNs attempt was run after this change
+
+No production APNs push was attempted. No repeated push was attempted. No raw LiveKit token, LiveKit URL, PushKit token, APNs token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, private logs, user/device/room/call identifiers, or secret-bearing URL was recorded.
+
 ## 2.46B — Real invite foreground call-state handoff
 
 Added and physically verified the smallest DEBUG-only foreground pending-call state handoff after the real-invite-controlled CallKit Answer path.

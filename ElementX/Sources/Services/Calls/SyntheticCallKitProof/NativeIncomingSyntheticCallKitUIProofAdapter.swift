@@ -566,6 +566,12 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var foregroundCallStateSource = "none"
     var foregroundCallStatePayloadRedacted = false
     var foregroundCallStateHasStableRedactedCorrelation = false
+    var mediaCredentialsBoundaryReached = false
+    var mediaCredentialsRequestPlanned = false
+    var mediaCredentialsResult = "not_requested"
+    var mediaCredentialsTokenRedacted = false
+    var mediaCredentialsURLRedacted = false
+    var mediaCredentialsPayloadRedacted = false
     var controlledCallKitCleanupRequested = false
     var controlledCallKitCleanupResult = "not_requested"
     var blockedReason = "voip_push_not_received"
@@ -597,10 +603,18 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "foreground_call_state_source=\(foregroundCallStateSource)",
             "foreground_call_state_payload_redacted=\(foregroundCallStatePayloadRedacted)",
             "foreground_call_state_has_stable_redacted_correlation=\(foregroundCallStateHasStableRedactedCorrelation)",
+            "media_credentials_boundary_reached=\(mediaCredentialsBoundaryReached)",
+            "media_credentials_request_planned=\(mediaCredentialsRequestPlanned)",
+            "media_credentials_result=\(mediaCredentialsResult)",
+            "media_credentials_token_redacted=\(mediaCredentialsTokenRedacted)",
+            "media_credentials_url_redacted=\(mediaCredentialsURLRedacted)",
+            "media_credentials_payload_redacted=\(mediaCredentialsPayloadRedacted)",
             "controlled_callkit_cleanup_requested=\(controlledCallKitCleanupRequested)",
             "controlled_callkit_cleanup_result=\(controlledCallKitCleanupResult)",
             "media_credentials_requested=false",
             "media_connect_requested=false",
+            "media_connect_attempted=false",
+            "livekit_join_requested=false",
             "matrix_event_emit_requested=false",
             "real_call_flow_started=false",
             "blocked_reason=\(blockedReason)"
@@ -971,6 +985,12 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             summary.foregroundCallStateSource = screenSource
             summary.foregroundCallStatePayloadRedacted = true
             summary.foregroundCallStateHasStableRedactedCorrelation = true
+            summary.mediaCredentialsBoundaryReached = true
+            summary.mediaCredentialsRequestPlanned = true
+            summary.mediaCredentialsResult = "planned_redacted"
+            summary.mediaCredentialsTokenRedacted = true
+            summary.mediaCredentialsURLRedacted = true
+            summary.mediaCredentialsPayloadRedacted = true
         }
         summary.blockedReason = "none"
         lock.unlock()

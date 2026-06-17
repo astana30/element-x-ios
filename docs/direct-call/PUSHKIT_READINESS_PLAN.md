@@ -788,6 +788,29 @@ Safety:
 - no repeated APNs push
 - no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, or call handle recorded
 
+## 2.47A Readiness Update
+
+Ready:
+- controlled DEBUG proof reaches a planner-only media credentials boundary after the real-invite foreground pending state
+- proof records `media_credentials_result=planned_redacted`
+- proof records token, URL, and payload redaction booleans without requesting or exposing credentials
+- media connect, LiveKit join, Matrix events, and full direct-call flow remain false
+
+Verified:
+- changed-file SwiftFormat passed
+- changed-file SwiftLint passed with 0 violations
+- targeted DirectCall tests passed with 37 tests
+- physical Debug build/install passed
+- route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, stream `401`, token registration `401`, and APNs send control `401`
+
+Blocked:
+- physical close-out stopped before APNs because PushKit upload smoke returned `pushkit_token_upload_blocked_by_auth`
+
+Safety:
+- no production APNs push
+- no repeated APNs push
+- no raw LiveKit token, LiveKit URL, PushKit token, APNs token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, or call handle recorded
+
 ## 2.46A1 readiness update
 
 Ready:

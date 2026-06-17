@@ -8,15 +8,21 @@ Expected intentionally untracked file:
 
 Do not stage or commit that diagnostics file.
 
-## Next task — continue after 2.46B
+## Next task — continue 2.47A physical close-out
 
 Latest completed state:
-- real non-dev invite background APNs path physically reached `real_invite_controlled`
-- PushKit callback proof, controlled CallKit report, PushKit completion, CallKit Answer, controlled in-app screen, controlled cleanup, and redacted foreground pending-call state handoff all passed
-- receiver PushKit upload smoke returned http_success / registered / persisted / redacted_match
-- exactly one authenticated non-dev invite/APNs attempt was run; dev invite was not used
-- dedicated VoIP receipt proof returned `callkit_report_result=reported`, `pushkit_completion_called=true`, `callkit_answer_action_received=true`, `callkit_answer_action_fulfilled=true`, `controlled_in_app_screen_presented=true`, `controlled_in_app_screen_source=callkit_answer_real_invite_controlled`, `foreground_call_state_handoff_observed=true`, `foreground_call_state=real_invite_pending_media`, `foreground_call_state_source=callkit_answer_real_invite_controlled`, `foreground_call_state_payload_redacted=true`, `foreground_call_state_has_stable_redacted_correlation=true`, `controlled_callkit_cleanup_result=ended`, and `blocked_reason=none`
-- media credentials, media connection, Matrix events, and full direct-call flow remain unwired
+- 2.47A added a DEBUG-only planner media credentials boundary after `foreground_call_state=real_invite_pending_media`
+- planned proof fields are `media_credentials_boundary_reached=true`, `media_credentials_request_planned=true`, `media_credentials_result=planned_redacted`, `media_credentials_token_redacted=true`, `media_credentials_url_redacted=true`, and `media_credentials_payload_redacted=true`
+- media credential request, media connection, LiveKit join, Matrix events, and full direct-call flow remain unwired
+- changed-file SwiftFormat, changed-file SwiftLint, targeted DirectCall tests, and physical Debug build/install passed
+- route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, stream `401`, token registration `401`, and APNs send control `401`
+- physical close-out stopped before APNs because PushKit upload smoke returned `pushkit_token_upload_blocked_by_auth`
+
+Next action:
+- refresh iPhone auth/session
+- rerun PushKit upload smoke until http_success / registered / persisted / redacted_match
+- run exactly one authenticated real non-dev invite/APNs attempt
+- read `Documents/salemx-voip-push-receipt-proof.txt` and confirm the planner media credentials boundary fields
 
 Safety:
 - do not print, log, document, or commit raw PushKit/APNs tokens, APNs key material, JWTs, authorization headers, Matrix access tokens, request payloads, private logs, raw user IDs, raw device IDs, room IDs, call handles, or secret-bearing URLs
