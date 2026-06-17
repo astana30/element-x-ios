@@ -709,13 +709,39 @@ Implemented:
 - token, URL, and payload are represented only by redaction booleans
 - media connection, LiveKit join, Matrix events, and full call flow remain false
 
-Blocked:
-- physical close-out stopped before APNs because PushKit upload smoke returned `pushkit_token_upload_blocked_by_auth`
+Physical status:
+- initial close-out stopped before APNs because PushKit upload smoke returned `pushkit_token_upload_blocked_by_auth`
+- a later one-shot real non-dev invite/APNs attempt reached `background_apns_push_result=sandbox_success`
+- CallKit report completed as `reported`, but the first delivered CallKit action was End, not Answer
 
 Safety:
 - no production APNs push
 - no repeated APNs push
 - no raw LiveKit token, LiveKit URL, token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, or call handle recorded
+
+## 2.47A6 CallKit End-before-Answer diagnostic
+
+The real-invite CallKit blocker is narrowed to the CallKit interaction path after a successful report.
+
+Redacted proof:
+- `callkit_report_result=reported`
+- `callkit_report_completion_observed=true`
+- `callkit_provider_retained_for_answer=true`
+- `callkit_delegate_retained_for_answer=true`
+- `callkit_active_call_uuid_retained=true`
+- `callkit_first_action_kind=end`
+- `callkit_first_action_after_report_ms_bucket=>2000ms`
+- `callkit_end_action_delivered=true`
+- `end_action_uuid_matched=true`
+- `end_action_generation_matched=true`
+- `end_action_source_matched=true`
+- `local_end_request_before_answer=false`
+- `provider_invalidate_before_answer=false`
+- `report_call_ended_before_answer=false`
+- `controlled_timeout_before_answer=false`
+- `blocked_reason=system_or_user_end_before_answer`
+
+This proves the blocker is not APNs delivery, PushKit receipt, CallKit report completion, provider/delegate retention, active UUID retention, or local app cleanup before Answer. Next work must distinguish the user/UI/system End-vs-Answer path before any media phase continues.
 
 ## 2.46A1 Real invite Answer observation fix
 

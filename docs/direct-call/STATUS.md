@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.47A - the authenticated real non-dev invite path remains proven through the redacted `real_invite_pending_media` foreground state, and the DEBUG-only proof now reaches a planner-only media credentials boundary with redacted token/URL/payload status. The physical close-out smoke for 2.47A is blocked until the iPhone session is refreshed because PushKit upload returned `pushkit_token_upload_blocked_by_auth`. Real PushKit registration remains disabled by default outside manual diagnostics, iOS local token persistence remains disabled, and the path is not wired into Matrix events, media connection, LiveKit join, or full direct-call flow.
+After 2.47A6 - the authenticated real non-dev invite/APNs path is narrowed to a CallKit Answer-vs-End blocker. The one-shot physical proof reached APNs `sandbox_success`, PushKit callback, `callkit_report_result=reported`, report completion, retained provider/delegate/active UUID, and then `callkit_first_action_kind=end` with `callkit_first_action_after_report_ms_bucket=>2000ms`. Local code did not request End, invalidate the provider, report ended, or hit a controlled timeout before Answer. Current blocker: `system_or_user_end_before_answer`. Real PushKit registration remains disabled by default outside manual diagnostics, iOS local token persistence remains disabled, and the path is not wired into Matrix events, media connection, LiveKit join, or full direct-call flow.
 
 ## Latest App Code Checkpoint
 
@@ -39,13 +39,19 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
-- 2.47A controlled media credentials boundary is implemented; physical close-out is blocked:
+- 2.47A6 CallKit End-before-Answer diagnostic is implemented and physically narrowed:
+  - Diagnostic proof fields now record redacted CallKit report timing/config, retained provider/delegate/active UUID, first action kind, first action timing bucket, End action matching, local-end/invalidate/report-ended/timeout booleans, and event order.
+  - Exactly one authenticated real non-dev invite/APNs attempt returned `background_apns_push_result=sandbox_success`; dev invite was not used.
+  - Dedicated VoIP receipt proof reached `callkit_report_result=reported`, `callkit_report_completion_observed=true`, `callkit_provider_retained_for_answer=true`, `callkit_delegate_retained_for_answer=true`, `callkit_active_call_uuid_retained=true`, `callkit_first_action_kind=end`, `callkit_first_action_after_report_ms_bucket=>2000ms`, and `blocked_reason=system_or_user_end_before_answer`.
+  - Proof kept `local_end_request_before_answer=false`, `provider_invalidate_before_answer=false`, `report_call_ended_before_answer=false`, `controlled_timeout_before_answer=false`, `media_credentials_requested=false`, `media_connect_requested=false`, `livekit_join_requested=false`, `matrix_event_emit_requested=false`, and `real_call_flow_started=false`.
+  - No production APNs push, repeated push, real media credential request, media connection, LiveKit join, Matrix event emission, full direct-call flow, entitlement/project/signing/`Info.plist` change, or `app.yml` regeneration was introduced.
+- 2.47A controlled media credentials boundary is implemented but not physically successful:
   - The dedicated VoIP receipt proof records the planner-only boundary after `foreground_call_state=real_invite_pending_media`.
   - Planned proof fields include `media_credentials_boundary_reached=true`, `media_credentials_request_planned=true`, `media_credentials_result=planned_redacted`, `media_credentials_token_redacted=true`, `media_credentials_url_redacted=true`, and `media_credentials_payload_redacted=true`.
   - Proof keeps `media_credentials_requested=false`, `media_connect_requested=false`, `media_connect_attempted=false`, `livekit_join_requested=false`, `matrix_event_emit_requested=false`, and `real_call_flow_started=false`.
   - Changed-file SwiftFormat, changed-file SwiftLint, targeted DirectCall tests, and physical Debug build/install passed.
   - Route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, unauthenticated token registration `401`, and unauthenticated APNs send control `401`.
-  - Physical close-out stopped before APNs because PushKit upload smoke returned `pushkit_token_upload_blocked_by_auth`.
+  - Later physical validation reached APNs and CallKit report, but did not reach Answer/foreground state/media planner because CallKit delivered End before Answer.
   - No production APNs push, repeated push, media connection, LiveKit join, Matrix event emission, full direct-call flow, entitlement/project/signing/`Info.plist` change, or `app.yml` regeneration was introduced.
 - 2.46B real-invite foreground call-state handoff passed:
   - A fresh physical Debug build was installed on the connected iPhone.

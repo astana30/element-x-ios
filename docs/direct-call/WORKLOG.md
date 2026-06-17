@@ -3015,6 +3015,22 @@ Current blocker:
 
 No production APNs push was attempted. No repeated push was attempted. No raw PushKit token, APNs token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, private logs, user/device/room/call identifiers, or secret-bearing URL was recorded.
 
+## 2.47A6 — CallKit End-before-Answer diagnostic
+
+Committed the narrowed diagnostic patch for the physical real-invite CallKit blocker.
+
+Diagnostic result:
+- exactly one authenticated real non-dev invite/APNs attempt returned `background_apns_push_result=sandbox_success`; `dev/invite` was not used
+- dedicated VoIP receipt proof reached `callkit_report_result=reported`, `callkit_report_completion_observed=true`, `callkit_provider_retained_for_answer=true`, `callkit_delegate_retained_for_answer=true`, and `callkit_active_call_uuid_retained=true`
+- the first delivered CallKit action was `end`, with `callkit_first_action_after_report_ms_bucket=>2000ms`
+- End matched the active controlled UUID/generation/source and was fulfilled
+- app-side local End, provider invalidation, report-ended, and controlled timeout before Answer all remained false
+
+Current blocker:
+- `system_or_user_end_before_answer`
+
+The media boundary did not run in this physical proof because Answer was not delivered. No production APNs push was attempted. No repeated push was attempted. No real media credentials request, media connection, LiveKit join, Matrix event emission, or full direct-call flow was introduced. No raw PushKit/APNs token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, LiveKit URL/token, private logs, user/device/room/call identifiers, or secret-bearing URL was recorded.
+
 ## 2.47A — Controlled media credentials boundary
 
 Added the smallest DEBUG-only planner boundary after the real-invite foreground pending state.
@@ -3032,9 +3048,10 @@ Validation:
 - fresh physical Debug build/install passed
 - route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, stream `401`, token registration `401`, and APNs send control `401`
 
-Physical close-out blocker:
-- PushKit upload smoke stopped at `pushkit_token_upload_blocked_by_auth`
-- no real non-dev invite/APNs attempt was run after this change
+Physical close-out:
+- the initial close-out stopped at `pushkit_token_upload_blocked_by_auth`
+- a later one-shot physical attempt reached APNs `sandbox_success` and CallKit report `reported`
+- Answer was still not delivered; CallKit delivered End first with `blocked_reason=system_or_user_end_before_answer`
 
 No production APNs push was attempted. No repeated push was attempted. No raw LiveKit token, LiveKit URL, PushKit token, APNs token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, private logs, user/device/room/call identifiers, or secret-bearing URL was recorded.
 

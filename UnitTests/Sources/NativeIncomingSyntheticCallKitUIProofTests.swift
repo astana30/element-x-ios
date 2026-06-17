@@ -69,7 +69,67 @@ struct NativeIncomingSyntheticCallKitUIProofTests {
 
         #expect(actionHandler.answeredIdentities == [identity])
         #expect(actionHandler.endedIdentities.isEmpty)
-        #expect(eventRecorder.events == [.reported, .answered])
+        #expect(eventRecorder.events == [.reported, .answerActionDelivered(uuidMatched: true), .answered, .ended])
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaCredentialRequested == false)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaConnectAttempted == false)
+    }
+
+    @Test
+    func reportRetainsProviderDelegateAndActiveCallUntilAnswer() {
+        let dependencies = makeDependencies()
+        let reporter = NativeIncomingSyntheticCallKitUIReporterSpy()
+        let actionHandler = NativeIncomingSyntheticCallKitActionHandlerSpy()
+        let eventRecorder = NativeIncomingSyntheticCallKitUIProofEventRecorderSpy()
+        let adapter = makeAdapter(reporter: reporter,
+                                  actionHandler: actionHandler,
+                                  diagnosticsRecorder: dependencies.diagnosticsRecorder,
+                                  eventRecorder: eventRecorder)
+        let identity = safeIdentity()
+
+        _ = adapter.reportSyntheticIncomingCall(identity: identity, displayLabel: "Pilot Participant")
+        let retentionProof = adapter.answerRetentionProof(handle: identity.handle.value)
+
+        #expect(retentionProof.providerRetainedForAnswer)
+        #expect(retentionProof.delegateRetainedForAnswer)
+        #expect(retentionProof.activeCallUUIDRetained)
+
+        reporter.simulateAnswer()
+        let postAnswerRetentionProof = adapter.answerRetentionProof(handle: identity.handle.value)
+
+        #expect(postAnswerRetentionProof.providerRetainedForAnswer)
+        #expect(postAnswerRetentionProof.delegateRetainedForAnswer)
+        #expect(!postAnswerRetentionProof.activeCallUUIDRetained)
+        #expect(eventRecorder.events == [.reported, .answerActionDelivered(uuidMatched: true), .answered, .ended])
+    }
+
+    @Test
+    func resetEndAndAudioSessionCallbacksAreRecordedRedacted() {
+        let dependencies = makeDependencies()
+        let reporter = NativeIncomingSyntheticCallKitUIReporterSpy()
+        let actionHandler = NativeIncomingSyntheticCallKitActionHandlerSpy()
+        let eventRecorder = NativeIncomingSyntheticCallKitUIProofEventRecorderSpy()
+        let adapter = makeAdapter(reporter: reporter,
+                                  actionHandler: actionHandler,
+                                  diagnosticsRecorder: dependencies.diagnosticsRecorder,
+                                  eventRecorder: eventRecorder)
+        let identity = safeIdentity()
+
+        _ = adapter.reportSyntheticIncomingCall(identity: identity, displayLabel: "Pilot Participant")
+        reporter.simulateAudioSessionActivated()
+        reporter.simulateEnd()
+        reporter.simulateReset()
+        reporter.simulateAudioSessionDeactivated()
+
+        #expect(actionHandler.endedIdentities == [identity])
+        #expect(eventRecorder.events == [
+            .reported,
+            .audioSessionActivated,
+            .endActionDelivered(uuidMatched: true),
+            .ended,
+            .endActionFulfilled(uuidMatched: true),
+            .providerDidReset,
+            .audioSessionDeactivated
+        ])
         #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaCredentialRequested == false)
         #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaConnectAttempted == false)
     }
@@ -95,7 +155,7 @@ struct NativeIncomingSyntheticCallKitUIProofTests {
         #expect(result == .reported)
         #expect(stateStore.state(for: identity.handle) == .answerRequested)
         #expect(actionRouter.answerRequestCount == 1)
-        #expect(eventRecorder.events == [.reported, .answered])
+        #expect(eventRecorder.events == [.reported, .answerActionDelivered(uuidMatched: true), .answered, .ended])
         #expect(dependencies.diagnosticsRecorder.diagnostics.contains { diagnostics in
             diagnostics.lifecycleState == .answerRequested &&
                 diagnostics.mediaCredentialRequested == false &&
@@ -608,7 +668,7 @@ struct NativeIncomingSyntheticCallKitUIProofTests {
 
         #expect(actionHandler.endedIdentities == [identity])
         #expect(secondEnd == .failed(.unverifiable))
-        #expect(eventRecorder.events == [.reported, .ended, .failed(.unverifiable)])
+        #expect(eventRecorder.events == [.reported, .endActionDelivered(uuidMatched: true), .ended, .endActionFulfilled(uuidMatched: true), .failed(.unverifiable)])
         #expect(dependencies.diagnosticsRecorder.diagnostics.last == .failClosed(.unverifiable))
     }
 
@@ -885,14 +945,19 @@ private final class NativeIncomingSyntheticCallKitActionHandlerSpy: NativeIncomi
 
 private final class NativeIncomingSyntheticCallKitUIReporterSpy: NativeIncomingSyntheticCallKitUIReporting, CustomStringConvertible {
     weak var delegate: NativeIncomingSyntheticCallKitUIReportingDelegate?
+    var providerRetainedForAnswer = true
+    var delegateRetainedForAnswer: Bool {
+        delegate != nil
+    }
 
     private(set) var reportedCalls = [UUID]()
     private(set) var endedCalls = [UUID]()
     private var labels = [UUID: NativeIncomingCallKitDisplayMetadata]()
 
-    func reportIncomingCall(callUUID: UUID, displayMetadata: NativeIncomingCallKitDisplayMetadata) -> Bool {
+    func reportIncomingCall(callUUID: UUID, displayMetadata: NativeIncomingCallKitDisplayMetadata, completion: @escaping (Bool) -> Void) -> Bool {
         reportedCalls.append(callUUID)
         labels[callUUID] = displayMetadata
+        completion(true)
         return true
     }
 
@@ -914,6 +979,19 @@ private final class NativeIncomingSyntheticCallKitUIReporterSpy: NativeIncomingS
         }
 
         delegate?.syntheticCallKitUIReportingDidEnd(callUUID: callUUID)
+        delegate?.syntheticCallKitUIReportingDidFulfillEnd(callUUID: callUUID)
+    }
+
+    func simulateReset() {
+        delegate?.syntheticCallKitUIReportingDidReset()
+    }
+
+    func simulateAudioSessionActivated() {
+        delegate?.syntheticCallKitUIReportingDidActivateAudioSession()
+    }
+
+    func simulateAudioSessionDeactivated() {
+        delegate?.syntheticCallKitUIReportingDidDeactivateAudioSession()
     }
 
     func simulateMute(_ isMuted: Bool) {

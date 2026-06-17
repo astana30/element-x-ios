@@ -3778,7 +3778,7 @@ final class ForegroundNativeIncomingCallE2ECoordinator: CustomStringConvertible,
         case .failed(let reason):
             stateStore.setState(.blocked, for: handle)
             return failClosed(reason, identity: identity, mediaCredentialRequested: false, mediaConnectAttempted: false)
-        case .answered, .ended, .muted:
+        case .providerDidReset, .audioSessionActivated, .audioSessionDeactivated, .answerActionDelivered, .answered, .endActionDelivered, .endActionFulfilled, .localEndRequestedBeforeAnswer, .ended, .muted:
             return failClosed(.unverifiable, identity: identity, mediaCredentialRequested: false, mediaConnectAttempted: false)
         }
     }

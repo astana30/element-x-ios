@@ -8,6 +8,7 @@
 import Foundation
 
 #if canImport(CallKit) && os(iOS)
+import AVFAudio
 import CallKit
 #endif
 
@@ -17,7 +18,14 @@ import PushKit
 
 enum NativeIncomingSyntheticCallKitUIProofEvent: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     case reported
+    case providerDidReset
+    case audioSessionActivated
+    case audioSessionDeactivated
+    case answerActionDelivered(uuidMatched: Bool)
     case answered
+    case endActionDelivered(uuidMatched: Bool)
+    case endActionFulfilled(uuidMatched: Bool)
+    case localEndRequestedBeforeAnswer(uuidMatched: Bool)
     case ended
     case muted(Bool)
     case failed(NativeIncomingCallFailClosedReason)
@@ -26,8 +34,22 @@ enum NativeIncomingSyntheticCallKitUIProofEvent: Equatable, CustomStringConverti
         switch self {
         case .reported:
             "reported"
+        case .providerDidReset:
+            "providerDidReset"
+        case .audioSessionActivated:
+            "audioSessionActivated"
+        case .audioSessionDeactivated:
+            "audioSessionDeactivated"
+        case .answerActionDelivered(let uuidMatched):
+            "answerActionDelivered(uuidMatched: \(uuidMatched))"
         case .answered:
             "answered"
+        case .endActionDelivered(let uuidMatched):
+            "endActionDelivered(uuidMatched: \(uuidMatched))"
+        case .endActionFulfilled(let uuidMatched):
+            "endActionFulfilled(uuidMatched: \(uuidMatched))"
+        case .localEndRequestedBeforeAnswer(let uuidMatched):
+            "localEndRequestedBeforeAnswer(uuidMatched: \(uuidMatched))"
         case .ended:
             "ended"
         case .muted(let isMuted):
@@ -42,21 +64,33 @@ enum NativeIncomingSyntheticCallKitUIProofEvent: Equatable, CustomStringConverti
     }
 }
 
+struct NativeIncomingSyntheticCallKitUIAnswerRetentionProof: Equatable {
+    var providerRetainedForAnswer: Bool
+    var delegateRetainedForAnswer: Bool
+    var activeCallUUIDRetained: Bool
+}
+
 protocol NativeIncomingSyntheticCallKitUIProofEventRecording: AnyObject {
     func recordSyntheticCallKitUIProofEvent(_ event: NativeIncomingSyntheticCallKitUIProofEvent)
 }
 
 protocol NativeIncomingSyntheticCallKitUIReportingDelegate: AnyObject {
+    func syntheticCallKitUIReportingDidReset()
+    func syntheticCallKitUIReportingDidActivateAudioSession()
+    func syntheticCallKitUIReportingDidDeactivateAudioSession()
     func syntheticCallKitUIReportingDidAnswer(callUUID: UUID)
     func syntheticCallKitUIReportingDidEnd(callUUID: UUID)
+    func syntheticCallKitUIReportingDidFulfillEnd(callUUID: UUID)
     func syntheticCallKitUIReportingDidSetMuted(_ isMuted: Bool, callUUID: UUID)
     func syntheticCallKitUIReportingDidFail(callUUID: UUID)
 }
 
 protocol NativeIncomingSyntheticCallKitUIReporting: AnyObject {
     var delegate: NativeIncomingSyntheticCallKitUIReportingDelegate? { get set }
+    var providerRetainedForAnswer: Bool { get }
+    var delegateRetainedForAnswer: Bool { get }
 
-    func reportIncomingCall(callUUID: UUID, displayMetadata: NativeIncomingCallKitDisplayMetadata) -> Bool
+    func reportIncomingCall(callUUID: UUID, displayMetadata: NativeIncomingCallKitDisplayMetadata, completion: @escaping (Bool) -> Void) -> Bool
     func endCall(callUUID: UUID)
 }
 
@@ -68,6 +102,8 @@ final class NativeIncomingSyntheticCallKitUIProofAdapter: NativeIncomingSyntheti
     private let eventRecorder: NativeIncomingSyntheticCallKitUIProofEventRecording
     private var identitiesByUUID = [UUID: NativeIncomingCallIdentity]()
     private var uuidsByHandle = [NativeIncomingCallHandle: UUID]()
+    private var answeredCallUUIDs = Set<UUID>()
+    private var deliveredEndActionUUIDs = Set<UUID>()
 
     init(isEnabled: Bool = false,
          reporter: NativeIncomingSyntheticCallKitUIReporting,
@@ -93,29 +129,59 @@ final class NativeIncomingSyntheticCallKitUIProofAdapter: NativeIncomingSyntheti
 
     func reportSyntheticIncomingCall(identity: NativeIncomingCallIdentity,
                                      displayMetadata: NativeIncomingCallKitDisplayMetadata) -> NativeIncomingSyntheticCallKitUIProofEvent {
+        reportSyntheticIncomingCall(identity: identity, displayMetadata: displayMetadata) { _ in }
+    }
+
+    func reportSyntheticIncomingCall(identity: NativeIncomingCallIdentity,
+                                     displayMetadata: NativeIncomingCallKitDisplayMetadata,
+                                     completion: @escaping (NativeIncomingSyntheticCallKitUIProofEvent) -> Void) -> NativeIncomingSyntheticCallKitUIProofEvent {
         guard isEnabled else {
-            return failClosed(.dependencyUnavailable)
+            let event = failClosed(.dependencyUnavailable)
+            completion(event)
+            return event
         }
         guard uuidsByHandle[identity.handle] == nil else {
-            return failClosed(.duplicate)
+            let event = failClosed(.duplicate)
+            completion(event)
+            return event
         }
 
         let callUUID = UUID()
-        let reportSucceeded = reporter.reportIncomingCall(callUUID: callUUID, displayMetadata: displayMetadata)
-        diagnosticsRecorder.record(.init(lifecycleState: reportSucceeded ? .reported : .blocked,
-                                         failClosedReason: reportSucceeded ? nil : .callReportingUnavailable,
-                                         reportAttempted: true,
-                                         reportSucceeded: reportSucceeded,
-                                         mediaCredentialRequested: false,
-                                         mediaConnectAttempted: false))
-
-        guard reportSucceeded else {
-            return record(.failed(.callReportingUnavailable))
-        }
-
         identitiesByUUID[callUUID] = identity
         uuidsByHandle[identity.handle] = callUUID
-        return record(.reported)
+        let reportSubmitted = reporter.reportIncomingCall(callUUID: callUUID, displayMetadata: displayMetadata) { [weak self] didReport in
+            guard let self else {
+                return
+            }
+
+            self.diagnosticsRecorder.record(.init(lifecycleState: didReport ? .reported : .blocked,
+                                                  failClosedReason: didReport ? nil : .callReportingUnavailable,
+                                                  reportAttempted: true,
+                                                  reportSucceeded: didReport,
+                                                  mediaCredentialRequested: false,
+                                                  mediaConnectAttempted: false))
+            if didReport {
+                completion(self.record(.reported))
+            } else {
+                self.clear(callUUID: callUUID)
+                completion(self.record(.failed(.callReportingUnavailable)))
+            }
+        }
+
+        guard reportSubmitted else {
+            clear(callUUID: callUUID)
+            diagnosticsRecorder.record(.init(lifecycleState: .blocked,
+                                             failClosedReason: .callReportingUnavailable,
+                                             reportAttempted: true,
+                                             reportSucceeded: false,
+                                             mediaCredentialRequested: false,
+                                             mediaConnectAttempted: false))
+            let event = record(.failed(.callReportingUnavailable))
+            completion(event)
+            return event
+        }
+
+        return .reported
     }
 
     func endSyntheticCall(handle rawHandle: String) -> NativeIncomingSyntheticCallKitUIProofEvent {
@@ -124,6 +190,9 @@ final class NativeIncomingSyntheticCallKitUIProofAdapter: NativeIncomingSyntheti
             return failClosed(.unverifiable)
         }
 
+        if !answeredCallUUIDs.contains(callUUID) {
+            _ = record(.localEndRequestedBeforeAnswer(uuidMatched: true))
+        }
         reporter.endCall(callUUID: callUUID)
         actionHandler.endSyntheticCall(identity: identity)
         clear(callUUID: callUUID)
@@ -134,6 +203,13 @@ final class NativeIncomingSyntheticCallKitUIProofAdapter: NativeIncomingSyntheti
                                          mediaCredentialRequested: false,
                                          mediaConnectAttempted: false))
         return record(.ended)
+    }
+
+    func answerRetentionProof(handle rawHandle: String) -> NativeIncomingSyntheticCallKitUIAnswerRetentionProof {
+        let callUUID = callUUID(for: rawHandle)
+        return .init(providerRetainedForAnswer: reporter.providerRetainedForAnswer,
+                     delegateRetainedForAnswer: reporter.delegateRetainedForAnswer,
+                     activeCallUUIDRetained: callUUID.flatMap { identitiesByUUID[$0] } != nil)
     }
 
     func setSyntheticCallMuted(_ isMuted: Bool, handle rawHandle: String) -> NativeIncomingSyntheticCallKitUIProofEvent {
@@ -153,12 +229,15 @@ final class NativeIncomingSyntheticCallKitUIProofAdapter: NativeIncomingSyntheti
     }
 
     func syntheticCallKitUIReportingDidAnswer(callUUID: UUID) {
-        guard let identity = identitiesByUUID[callUUID] else {
+        let identity = identitiesByUUID[callUUID]
+        _ = record(.answerActionDelivered(uuidMatched: identity != nil))
+        guard let identity else {
             _ = failClosed(.unverifiable)
             return
         }
 
         actionHandler.answerSyntheticCall(identity: identity)
+        answeredCallUUIDs.insert(callUUID)
         diagnosticsRecorder.record(.init(lifecycleState: .answered,
                                          failClosedReason: nil,
                                          reportAttempted: false,
@@ -172,11 +251,14 @@ final class NativeIncomingSyntheticCallKitUIProofAdapter: NativeIncomingSyntheti
     }
 
     func syntheticCallKitUIReportingDidEnd(callUUID: UUID) {
-        guard let identity = identitiesByUUID[callUUID] else {
+        let identity = identitiesByUUID[callUUID]
+        _ = record(.endActionDelivered(uuidMatched: identity != nil))
+        guard let identity else {
             _ = failClosed(.unverifiable)
             return
         }
 
+        deliveredEndActionUUIDs.insert(callUUID)
         actionHandler.endSyntheticCall(identity: identity)
         clear(callUUID: callUUID)
         diagnosticsRecorder.record(.init(lifecycleState: .ended,
@@ -186,6 +268,11 @@ final class NativeIncomingSyntheticCallKitUIProofAdapter: NativeIncomingSyntheti
                                          mediaCredentialRequested: false,
                                          mediaConnectAttempted: false))
         _ = record(.ended)
+    }
+
+    func syntheticCallKitUIReportingDidFulfillEnd(callUUID: UUID) {
+        let uuidMatched = deliveredEndActionUUIDs.remove(callUUID) != nil
+        _ = record(.endActionFulfilled(uuidMatched: uuidMatched))
     }
 
     func syntheticCallKitUIReportingDidSetMuted(_ isMuted: Bool, callUUID: UUID) {
@@ -209,6 +296,18 @@ final class NativeIncomingSyntheticCallKitUIProofAdapter: NativeIncomingSyntheti
         _ = failClosed(.callReportingUnavailable)
     }
 
+    func syntheticCallKitUIReportingDidReset() {
+        _ = record(.providerDidReset)
+    }
+
+    func syntheticCallKitUIReportingDidActivateAudioSession() {
+        _ = record(.audioSessionActivated)
+    }
+
+    func syntheticCallKitUIReportingDidDeactivateAudioSession() {
+        _ = record(.audioSessionDeactivated)
+    }
+
     private func callUUID(for rawHandle: String) -> UUID? {
         guard isEnabled,
               let handle = NativeIncomingCallHandle(rawHandle) else {
@@ -219,6 +318,7 @@ final class NativeIncomingSyntheticCallKitUIProofAdapter: NativeIncomingSyntheti
     }
 
     private func clear(callUUID: UUID) {
+        answeredCallUUIDs.remove(callUUID)
         guard let identity = identitiesByUUID[callUUID] else {
             return
         }
@@ -328,6 +428,31 @@ final class NativeIncomingSyntheticCallKitUIProofHarness {
         let identity = NativeIncomingCallIdentity(handle: safeHandle, receivedAt: Date())
         return adapter.reportSyntheticIncomingCall(identity: identity, displayLabel: displayLabel)
     }
+
+    func reportSyntheticIncomingCall(completion: @escaping (NativeIncomingSyntheticCallKitUIProofEvent) -> Void) -> NativeIncomingSyntheticCallKitUIProofEvent {
+        guard let safeHandle = NativeIncomingCallHandle(handle) else {
+            let event = NativeIncomingSyntheticCallKitUIProofEvent.failed(.malformed)
+            completion(event)
+            return event
+        }
+
+        let identity = NativeIncomingCallIdentity(handle: safeHandle, receivedAt: Date())
+        guard let displayMetadata = NativeIncomingCallKitDisplayMetadata(displayLabel) else {
+            let event = NativeIncomingSyntheticCallKitUIProofEvent.failed(.malformed)
+            completion(event)
+            return event
+        }
+
+        return adapter.reportSyntheticIncomingCall(identity: identity, displayMetadata: displayMetadata, completion: completion)
+    }
+
+    func endSyntheticIncomingCall() -> NativeIncomingSyntheticCallKitUIProofEvent {
+        adapter.endSyntheticCall(handle: handle)
+    }
+
+    func answerRetentionProof() -> NativeIncomingSyntheticCallKitUIAnswerRetentionProof {
+        adapter.answerRetentionProof(handle: handle)
+    }
 }
 
 #if canImport(CallKit) && os(iOS)
@@ -371,6 +496,15 @@ final class NativeIncomingSyntheticCallKitUIProofReporter: NSObject, NativeIncom
     weak var delegate: NativeIncomingSyntheticCallKitUIReportingDelegate?
 
     private let provider: CXProvider
+    private let providerDelegateQueue = DispatchQueue(label: "kz.salemx.callkit.proof.delegate")
+
+    var providerRetainedForAnswer: Bool {
+        true
+    }
+
+    var delegateRetainedForAnswer: Bool {
+        delegate != nil
+    }
 
     override init() {
         let configuration = CXProviderConfiguration()
@@ -380,10 +514,10 @@ final class NativeIncomingSyntheticCallKitUIProofReporter: NSObject, NativeIncom
         configuration.supportsVideo = false
         provider = CXProvider(configuration: configuration)
         super.init()
-        provider.setDelegate(self, queue: nil)
+        provider.setDelegate(self, queue: providerDelegateQueue)
     }
 
-    func reportIncomingCall(callUUID: UUID, displayMetadata: NativeIncomingCallKitDisplayMetadata) -> Bool {
+    func reportIncomingCall(callUUID: UUID, displayMetadata: NativeIncomingCallKitDisplayMetadata, completion: @escaping (Bool) -> Void) -> Bool {
         let update = CXCallUpdate()
         update.remoteHandle = CXHandle(type: .generic, value: displayMetadata.label)
         update.localizedCallerName = displayMetadata.label
@@ -394,10 +528,12 @@ final class NativeIncomingSyntheticCallKitUIProofReporter: NSObject, NativeIncom
         update.supportsDTMF = false
         provider.reportNewIncomingCall(with: callUUID, update: update) { [weak self] error in
             guard error != nil else {
+                completion(true)
                 return
             }
 
             self?.delegate?.syntheticCallKitUIReportingDidFail(callUUID: callUUID)
+            completion(false)
         }
         return true
     }
@@ -406,21 +542,32 @@ final class NativeIncomingSyntheticCallKitUIProofReporter: NSObject, NativeIncom
         provider.reportCall(with: callUUID, endedAt: Date(), reason: .remoteEnded)
     }
 
-    func providerDidReset(_ provider: CXProvider) { }
+    func providerDidReset(_ provider: CXProvider) {
+        delegate?.syntheticCallKitUIReportingDidReset()
+    }
 
     func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
-        action.fulfill()
         delegate?.syntheticCallKitUIReportingDidAnswer(callUUID: action.callUUID)
+        action.fulfill()
     }
 
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
         delegate?.syntheticCallKitUIReportingDidEnd(callUUID: action.callUUID)
         action.fulfill()
+        delegate?.syntheticCallKitUIReportingDidFulfillEnd(callUUID: action.callUUID)
     }
 
     func provider(_ provider: CXProvider, perform action: CXSetMutedCallAction) {
         delegate?.syntheticCallKitUIReportingDidSetMuted(action.isMuted, callUUID: action.callUUID)
         action.fulfill()
+    }
+
+    func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
+        delegate?.syntheticCallKitUIReportingDidActivateAudioSession()
+    }
+
+    func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
+        delegate?.syntheticCallKitUIReportingDidDeactivateAudioSession()
     }
 
     override var description: String {
@@ -552,6 +699,38 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var completionCalled = false
     var callKitReportRequested = false
     var callKitReportResult = "not_requested"
+    var callKitReportCompletionObserved = false
+    var callKitReportSubmittedAtMsRedacted = false
+    var callKitReportCompletionAtMsRedacted = false
+    var callKitUpdateHasGenericHandle = false
+    var callKitUpdateHasLocalizedCallerName = false
+    var callKitUpdateAudioOnly = false
+    var callKitProviderConfigurationAudioOnly = false
+    var callKitProviderConfigurationSupportedHandleGeneric = false
+    var callKitProviderRetainedForAnswer = false
+    var callKitDelegateRetainedForAnswer = false
+    var callKitActiveCallUUIDRetained = false
+    var callKitProviderDidResetObserved = false
+    var callKitProviderDidActivateAudioSession = false
+    var callKitProviderDidDeactivateAudioSession = false
+    var callKitFirstActionKind = "none"
+    var callKitFirstActionAfterReportMsBucket = "not_observed"
+    var callKitUIAnswerOperatorTapObserved = false
+    var callKitEndArrivedBeforeOperatorAnswerWindow = false
+    var callKitEndActionDelivered = false
+    var endActionUUIDMatched = false
+    var endActionGenerationMatched = false
+    var endActionSourceMatched = false
+    var endActionFulfilled = false
+    var endActionOrigin = "none"
+    var localEndRequestBeforeAnswer = false
+    var providerInvalidateBeforeAnswer = false
+    var reportCallEndedBeforeAnswer = false
+    var controlledTimeoutBeforeAnswer = false
+    var callKitAnswerActionDelivered = false
+    var answerActionUUIDMatched = false
+    var answerActionGenerationMatched = false
+    var callKitEventOrder = "not_started"
     var callKitAnswerActionReceived = false
     var callKitAnswerActionFulfilled = false
     var appActivationObserved = false
@@ -588,7 +767,42 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "pushkit_completion_called=\(completionCalled)",
             "callkit_report_requested=\(callKitReportRequested)",
             "callkit_report_result=\(callKitReportResult)",
+            "callkit_report_completion_observed=\(callKitReportCompletionObserved)",
+            "callkit_report_submitted_at_ms_redacted=\(callKitReportSubmittedAtMsRedacted)",
+            "callkit_report_completion_at_ms_redacted=\(callKitReportCompletionAtMsRedacted)",
             "callkit_report_error_redacted=true",
+            "callkit_update_has_generic_handle=\(callKitUpdateHasGenericHandle)",
+            "callkit_update_has_localized_caller_name=\(callKitUpdateHasLocalizedCallerName)",
+            "callkit_update_audio_only=\(callKitUpdateAudioOnly)",
+            "callkit_provider_configuration_audio_only=\(callKitProviderConfigurationAudioOnly)",
+            "callkit_provider_configuration_supported_handle_generic=\(callKitProviderConfigurationSupportedHandleGeneric)",
+            "callkit_provider_retained_for_answer=\(callKitProviderRetainedForAnswer)",
+            "callkit_delegate_retained_for_answer=\(callKitDelegateRetainedForAnswer)",
+            "callkit_active_call_uuid_retained=\(callKitActiveCallUUIDRetained)",
+            "callkit_provider_did_reset_observed=\(callKitProviderDidResetObserved)",
+            "callkit_provider_reset_observed=\(callKitProviderDidResetObserved)",
+            "callkit_provider_did_activate_audio_session=\(callKitProviderDidActivateAudioSession)",
+            "callkit_audio_session_did_activate=\(callKitProviderDidActivateAudioSession)",
+            "callkit_provider_did_deactivate_audio_session=\(callKitProviderDidDeactivateAudioSession)",
+            "callkit_audio_session_did_deactivate=\(callKitProviderDidDeactivateAudioSession)",
+            "callkit_first_action_kind=\(callKitFirstActionKind)",
+            "callkit_first_action_after_report_ms_bucket=\(callKitFirstActionAfterReportMsBucket)",
+            "callkit_ui_answer_operator_tap_observed=\(callKitUIAnswerOperatorTapObserved)",
+            "callkit_end_arrived_before_operator_answer_window=\(callKitEndArrivedBeforeOperatorAnswerWindow)",
+            "callkit_end_action_delivered=\(callKitEndActionDelivered)",
+            "end_action_uuid_matched=\(endActionUUIDMatched)",
+            "end_action_generation_matched=\(endActionGenerationMatched)",
+            "end_action_source_matched=\(endActionSourceMatched)",
+            "end_action_fulfilled=\(endActionFulfilled)",
+            "end_action_origin=\(endActionOrigin)",
+            "local_end_request_before_answer=\(localEndRequestBeforeAnswer)",
+            "provider_invalidate_before_answer=\(providerInvalidateBeforeAnswer)",
+            "report_call_ended_before_answer=\(reportCallEndedBeforeAnswer)",
+            "controlled_timeout_before_answer=\(controlledTimeoutBeforeAnswer)",
+            "callkit_answer_action_delivered=\(callKitAnswerActionDelivered)",
+            "answer_action_uuid_matched=\(answerActionUUIDMatched)",
+            "answer_action_generation_matched=\(answerActionGenerationMatched)",
+            "callkit_event_order=\(callKitEventOrder)",
             "callkit_answer_action_received=\(callKitAnswerActionReceived)",
             "callkit_answer_action_fulfilled=\(callKitAnswerActionFulfilled)",
             "app_activation_observed=\(appActivationObserved)",
@@ -632,13 +846,39 @@ private final class SalemXPushKitCallKitProofEventRecorder: NativeIncomingSynthe
 
     func recordSyntheticCallKitUIProofEvent(_ event: NativeIncomingSyntheticCallKitUIProofEvent) {
         guard SalemXPushKitRegistrationSmokeDebugBridge.isActiveCallKitProofGeneration(generation) else {
+            if case .answerActionDelivered = event {
+                SalemXPushKitRegistrationSmokeDebugBridge.recordCallKitAnswerActionDeliveryProof(uuidMatched: false, generationMatched: false)
+            }
+            if case .endActionDelivered = event {
+                SalemXPushKitRegistrationSmokeDebugBridge.recordCallKitEndActionDeliveryProof(uuidMatched: false, generationMatched: false)
+            }
+            if case .endActionFulfilled = event {
+                SalemXPushKitRegistrationSmokeDebugBridge.recordCallKitEndActionFulfillmentProof(uuidMatched: false, generationMatched: false)
+            }
             return
         }
 
         switch event {
+        case .providerDidReset:
+            SalemXPushKitRegistrationSmokeDebugBridge.recordCallKitProviderResetProof()
+        case .audioSessionActivated:
+            SalemXPushKitRegistrationSmokeDebugBridge.recordCallKitAudioSessionProof(activated: true)
+        case .audioSessionDeactivated:
+            SalemXPushKitRegistrationSmokeDebugBridge.recordCallKitAudioSessionProof(activated: false)
+        case .answerActionDelivered(let uuidMatched):
+            SalemXPushKitRegistrationSmokeDebugBridge.recordCallKitAnswerActionDeliveryProof(uuidMatched: uuidMatched, generationMatched: true)
         case .answered:
             didRecordAnswer = true
             SalemXPushKitRegistrationSmokeDebugBridge.recordCallKitAnswerActionProof()
+        case .endActionDelivered(let uuidMatched):
+            SalemXPushKitRegistrationSmokeDebugBridge.recordCallKitEndActionDeliveryProof(uuidMatched: uuidMatched, generationMatched: true)
+        case .endActionFulfilled(let uuidMatched):
+            SalemXPushKitRegistrationSmokeDebugBridge.recordCallKitEndActionFulfillmentProof(uuidMatched: uuidMatched, generationMatched: true)
+        case .localEndRequestedBeforeAnswer(let uuidMatched):
+            guard !didRecordAnswer else {
+                return
+            }
+            SalemXPushKitRegistrationSmokeDebugBridge.recordCallKitLocalEndRequestBeforeAnswerProof(uuidMatched: uuidMatched)
         case .ended:
             guard didRecordAnswer else {
                 return
@@ -831,6 +1071,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var uploadSmoke: SalemXPushKitTokenUploadSmoke?
     private static var latestUploadSummary = initialUploadRedactedSummary()
     private static var latestVoIPPushReceiptSummary = SalemXVoIPPushReceiptProofSummary()
+    private static var callKitReportCompletionDate: Date?
     #if canImport(CallKit) && os(iOS)
     private static var callKitProofHarness: NativeIncomingSyntheticCallKitUIProofHarness?
     private static var callKitProofGeneration = 0
@@ -916,7 +1157,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         let isRealInviteControlled = version == 1 && kind == "real_invite_controlled"
         let isControlledPayload = isSandboxSmoke || isRealInviteControlled
 
-        let baseSummary = SalemXVoIPPushReceiptProofSummary(physicalVoIPPushReceived: true,
+        var baseSummary = SalemXVoIPPushReceiptProofSummary(physicalVoIPPushReceived: true,
                                                             callbackInvoked: true,
                                                             pushType: "voip",
                                                             payloadVersion: version.map(String.init) ?? "missing",
@@ -926,6 +1167,17 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                                                             callKitReportRequested: isControlledPayload,
                                                             callKitReportResult: isControlledPayload ? "pending" : "not_requested",
                                                             blockedReason: isControlledPayload ? "none" : "unsupported_redacted_payload")
+        if isControlledPayload {
+            baseSummary.callKitReportSubmittedAtMsRedacted = true
+            baseSummary.callKitUpdateHasGenericHandle = true
+            baseSummary.callKitUpdateHasLocalizedCallerName = true
+            baseSummary.callKitUpdateAudioOnly = true
+            baseSummary.callKitProviderConfigurationAudioOnly = true
+            baseSummary.callKitProviderConfigurationSupportedHandleGeneric = true
+        }
+        lock.lock()
+        callKitReportCompletionDate = nil
+        lock.unlock()
         updateLatestVoIPPushReceiptSummary(baseSummary)
 
         guard isControlledPayload else {
@@ -938,7 +1190,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
 
         let completionLock = NSLock()
         var didComplete = false
-        let completeOnce: (String, String) -> Void = { reportResult, blockedReason in
+        let completeOnce: (String, String, NativeIncomingSyntheticCallKitUIAnswerRetentionProof?) -> Void = { reportResult, blockedReason, answerRetentionProof in
             completionLock.lock()
             guard !didComplete else {
                 completionLock.unlock()
@@ -947,29 +1199,179 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             didComplete = true
             completionLock.unlock()
 
+            let completionDate = Date()
             var completedSummary = baseSummary
             completedSummary.callKitReportResult = reportResult
+            completedSummary.callKitReportCompletionObserved = reportResult != "timeout_redacted"
+            completedSummary.callKitReportCompletionAtMsRedacted = reportResult != "timeout_redacted"
+            completedSummary.callKitEventOrder = reportResult == "timeout_redacted" ? "report_completion_timeout" : "report_completion_only"
+            completedSummary.controlledTimeoutBeforeAnswer = reportResult == "timeout_redacted"
+            if let answerRetentionProof {
+                completedSummary.callKitProviderRetainedForAnswer = answerRetentionProof.providerRetainedForAnswer
+                completedSummary.callKitDelegateRetainedForAnswer = answerRetentionProof.delegateRetainedForAnswer
+                completedSummary.callKitActiveCallUUIDRetained = answerRetentionProof.activeCallUUIDRetained
+            }
             completedSummary.completionCalled = true
             completedSummary.blockedReason = blockedReason
+            lock.lock()
+            callKitReportCompletionDate = reportResult == "timeout_redacted" ? nil : completionDate
+            lock.unlock()
             updateLatestVoIPPushReceiptSummary(completedSummary)
             completion()
         }
 
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + voIPPushReceiptCallKitReportTimeout) {
-            completeOnce("timeout_redacted", "callkit_report_completion_timeout_redacted")
+            completeOnce("timeout_redacted", "callkit_report_completion_timeout_redacted", nil)
         }
 
         DispatchQueue.main.async {
-            let reportResult = reportControlledSandboxVoIPSmokeCallKit()
-            let blockedReason = reportResult == "reported" || reportResult == "fake_reported" ? "callkit_answer_action_not_observed" : "callkit_report_failed_redacted"
-            completeOnce(reportResult, blockedReason)
+            reportControlledSandboxVoIPSmokeCallKit { reportResult, answerRetentionProof in
+                let blockedReason = reportResult == "reported" || reportResult == "fake_reported" ? "cx_answer_action_callback_not_received" : "callkit_report_failed_redacted"
+                completeOnce(reportResult, blockedReason, answerRetentionProof)
+            }
         }
+    }
+
+    private static func recordFirstCallKitAction(_ kind: String, in summary: inout SalemXVoIPPushReceiptProofSummary) {
+        guard summary.callKitFirstActionKind == "none" else {
+            return
+        }
+
+        let bucket = callKitFirstActionAfterReportBucket()
+        summary.callKitFirstActionKind = kind
+        summary.callKitFirstActionAfterReportMsBucket = bucket
+        if kind == "end",
+           bucket == "<100ms" || bucket == "100-500ms" || bucket == "500-2000ms" {
+            summary.callKitEndArrivedBeforeOperatorAnswerWindow = true
+        }
+    }
+
+    private static func callKitFirstActionAfterReportBucket() -> String {
+        guard let callKitReportCompletionDate else {
+            return "unknown"
+        }
+
+        let elapsedMs = Date().timeIntervalSince(callKitReportCompletionDate) * 1000
+        if elapsedMs < 100 {
+            return "<100ms"
+        } else if elapsedMs < 500 {
+            return "100-500ms"
+        } else if elapsedMs < 2000 {
+            return "500-2000ms"
+        } else {
+            return ">2000ms"
+        }
+    }
+
+    static func recordCallKitAnswerActionDeliveryProof(uuidMatched: Bool, generationMatched: Bool) {
+        lock.lock()
+        var summary = latestVoIPPushReceiptSummary
+        summary.callKitAnswerActionDelivered = true
+        summary.answerActionUUIDMatched = uuidMatched
+        summary.answerActionGenerationMatched = generationMatched
+        recordFirstCallKitAction("answer", in: &summary)
+        summary.callKitEventOrder = "report_completion_then_answer"
+        if !uuidMatched {
+            summary.blockedReason = "answer_action_uuid_mismatch"
+        } else if !generationMatched {
+            summary.blockedReason = "answer_action_generation_mismatch"
+        }
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+    }
+
+    static func recordCallKitEndActionDeliveryProof(uuidMatched: Bool, generationMatched: Bool) {
+        lock.lock()
+        var summary = latestVoIPPushReceiptSummary
+        summary.callKitEndActionDelivered = true
+        summary.endActionUUIDMatched = uuidMatched
+        summary.endActionGenerationMatched = generationMatched
+        summary.endActionSourceMatched = uuidMatched && generationMatched
+        recordFirstCallKitAction("end", in: &summary)
+        summary.callKitEventOrder = "report_completion_then_end"
+        if !summary.callKitAnswerActionReceived {
+            if !uuidMatched {
+                summary.blockedReason = "end_action_uuid_mismatch"
+            } else if !generationMatched {
+                summary.blockedReason = "end_action_generation_mismatch"
+            } else if summary.localEndRequestBeforeAnswer {
+                summary.endActionOrigin = "local_requested"
+                summary.blockedReason = "local_end_requested_before_answer"
+            } else if summary.callKitEndArrivedBeforeOperatorAnswerWindow {
+                summary.endActionOrigin = "system_or_user_unknown"
+                summary.blockedReason = "system_end_before_answer_window"
+            } else {
+                summary.endActionOrigin = "system_or_user_unknown"
+                summary.blockedReason = "system_or_user_end_before_answer"
+            }
+        }
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+    }
+
+    static func recordCallKitEndActionFulfillmentProof(uuidMatched: Bool, generationMatched: Bool) {
+        lock.lock()
+        var summary = latestVoIPPushReceiptSummary
+        summary.endActionFulfilled = true
+        summary.endActionUUIDMatched = uuidMatched
+        summary.endActionGenerationMatched = generationMatched
+        summary.endActionSourceMatched = uuidMatched && generationMatched
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+    }
+
+    static func recordCallKitLocalEndRequestBeforeAnswerProof(uuidMatched: Bool) {
+        lock.lock()
+        var summary = latestVoIPPushReceiptSummary
+        summary.localEndRequestBeforeAnswer = true
+        summary.reportCallEndedBeforeAnswer = true
+        summary.endActionOrigin = "local_requested"
+        if !summary.callKitAnswerActionReceived {
+            summary.blockedReason = uuidMatched ? "local_end_requested_before_answer" : "provider_delegate_instance_mismatch"
+        }
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+    }
+
+    static func recordCallKitProviderResetProof() {
+        lock.lock()
+        var summary = latestVoIPPushReceiptSummary
+        summary.callKitProviderDidResetObserved = true
+        recordFirstCallKitAction("reset", in: &summary)
+        summary.callKitEventOrder = "report_completion_then_reset"
+        if !summary.callKitAnswerActionReceived {
+            summary.blockedReason = "callkit_provider_reset_before_answer"
+        }
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+    }
+
+    static func recordCallKitAudioSessionProof(activated: Bool) {
+        lock.lock()
+        var summary = latestVoIPPushReceiptSummary
+        if activated {
+            summary.callKitProviderDidActivateAudioSession = true
+        } else {
+            summary.callKitProviderDidDeactivateAudioSession = true
+        }
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
     }
 
     static func recordCallKitAnswerActionProof() {
         lock.lock()
         var summary = latestVoIPPushReceiptSummary
         let screenSource = summary.realInvitePayloadMappingObserved ? "callkit_answer_real_invite_controlled" : "callkit_answer_sandbox_voip_smoke"
+        summary.callKitAnswerActionDelivered = true
+        summary.answerActionUUIDMatched = true
+        summary.answerActionGenerationMatched = true
+        summary.callKitEventOrder = "report_completion_then_answer"
         summary.callKitAnswerActionReceived = true
         summary.callKitAnswerActionFulfilled = true
         summary.appActivationObserved = true
@@ -1018,22 +1420,29 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         #endif
     }
 
-    private static func reportControlledSandboxVoIPSmokeCallKit() -> String {
+    private static func reportControlledSandboxVoIPSmokeCallKit(completion: @escaping (String, NativeIncomingSyntheticCallKitUIAnswerRetentionProof?) -> Void) {
         #if canImport(CallKit) && os(iOS)
         let generation = nextCallKitProofGeneration()
+        _ = callKitProofHarness?.endSyntheticIncomingCall()
         callKitProofHarness = nil
         let proofHarness = NativeIncomingSyntheticCallKitUIProofHarness.makePhysicalDeviceProofHarness(handle: "salemx-test-call",
                                                                                                        displayLabel: "SalemX Test Call",
                                                                                                        eventRecorder: SalemXPushKitCallKitProofEventRecorder(generation: generation))
         callKitProofHarness = proofHarness
-        switch proofHarness.reportSyntheticIncomingCall() {
-        case .reported:
-            return "reported"
-        default:
-            return "failed_redacted"
+        let reportSubmission = proofHarness.reportSyntheticIncomingCall { event in
+            switch event {
+            case .reported:
+                completion("reported", proofHarness.answerRetentionProof())
+            default:
+                completion("failed_redacted", nil)
+            }
         }
+        if case .reported = reportSubmission {
+            return
+        }
+        completion("failed_redacted", nil)
         #else
-        return "fake_reported"
+        completion("fake_reported", nil)
         #endif
     }
 
