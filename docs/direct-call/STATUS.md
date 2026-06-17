@@ -1996,6 +1996,27 @@ Safety:
 - no repeated APNs push
 - no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, or call handle recorded
 
+## 2.47A9 status
+
+Local CallKit-only answerability now passes, while the background PushKit real-invite path still delivers End first.
+
+What passed:
+- local DEBUG-only CallKit proof reported successfully and delivered Answer first
+- local proof returned `local_callkit_only_first_action_kind=answer`, `local_callkit_only_answer_action_delivered=true`, and `blocked_reason=none`
+- the same generic audio-only CallKit configuration and delegate path can therefore deliver `CXAnswerCallAction`
+
+Background comparison:
+- one authenticated real non-dev invite/APNs attempt returned sandbox success; `dev/invite` was not used
+- dedicated iPhone receipt proof returned `physical_voip_push_received=true`, `pushkit_payload_kind=real_invite_controlled`, `callkit_report_result=reported`, `callkit_report_completion_observed=true`, and retained provider/delegate/active UUID proof
+- background first action was still `callkit_first_action_kind=end` with `callkit_first_action_after_report_ms_bucket=>2000ms`
+- local End request, provider invalidation, report-ended, and controlled timeout before Answer were all false
+
+Current blocker:
+- `blocked_reason=system_or_user_end_before_answer`
+- this is now a local-vs-background CallKit surface/timing divergence, not a generic CallKit configuration/delegate failure
+
+2.47A media success is still not closed. No production APNs push, repeated push, real media credentials request, media connection, LiveKit join, Matrix event emission, or full call flow was introduced. No raw tokens, JWTs, auth headers, payloads, IDs, call handles, LiveKit URLs/tokens, private logs, or secret-bearing URLs were recorded.
+
 ## 2.46A4 status
 
 Real-invite controlled CallKit cleanup ordering is fixed and physically verified.

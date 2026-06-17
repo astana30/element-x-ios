@@ -124,6 +124,11 @@ private struct SalemXForegroundSSESmokeControlsView: View {
                     voIPReceiptSummary = SalemXPushKitRegistrationSmokeDebugBridge.recordCallKitOperatorEndIntent("unknown")
                 }
 
+                Button("Start local CallKit-only answerability smoke") {
+                    voIPReceiptSummary = SalemXPushKitRegistrationSmokeDebugBridge.startLocalCallKitOnlyAnswerabilitySmoke()
+                    refreshVoIPReceiptSummary(after: .seconds(1))
+                }
+
                 Button("Refresh VoIP receipt proof") {
                     refreshVoIPReceiptSummary()
                 }

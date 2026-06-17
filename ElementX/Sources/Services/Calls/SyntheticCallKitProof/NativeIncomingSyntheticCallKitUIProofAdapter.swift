@@ -754,6 +754,11 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var mediaCredentialsTokenRedacted = false
     var mediaCredentialsURLRedacted = false
     var mediaCredentialsPayloadRedacted = false
+    var localCallKitOnlyReportRequested = false
+    var localCallKitOnlyReportResult = "not_requested"
+    var localCallKitOnlyFirstActionKind = "none"
+    var localCallKitOnlyAnswerActionDelivered = false
+    var localCallKitOnlyEndActionDelivered = false
     var controlledCallKitCleanupRequested = false
     var controlledCallKitCleanupResult = "not_requested"
     var blockedReason = "voip_push_not_received"
@@ -829,6 +834,11 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "media_credentials_token_redacted=\(mediaCredentialsTokenRedacted)",
             "media_credentials_url_redacted=\(mediaCredentialsURLRedacted)",
             "media_credentials_payload_redacted=\(mediaCredentialsPayloadRedacted)",
+            "local_callkit_only_report_requested=\(localCallKitOnlyReportRequested)",
+            "local_callkit_only_report_result=\(localCallKitOnlyReportResult)",
+            "local_callkit_only_first_action_kind=\(localCallKitOnlyFirstActionKind)",
+            "local_callkit_only_answer_action_delivered=\(localCallKitOnlyAnswerActionDelivered)",
+            "local_callkit_only_end_action_delivered=\(localCallKitOnlyEndActionDelivered)",
             "controlled_callkit_cleanup_requested=\(controlledCallKitCleanupRequested)",
             "controlled_callkit_cleanup_result=\(controlledCallKitCleanupResult)",
             "media_credentials_requested=false",
@@ -839,6 +849,28 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "real_call_flow_started=false",
             "blocked_reason=\(blockedReason)"
         ]
+    }
+}
+
+private final class SalemXLocalCallKitOnlyProofEventRecorder: NativeIncomingSyntheticCallKitUIProofEventRecording {
+    private let generation: Int
+
+    init(generation: Int) {
+        self.generation = generation
+    }
+
+    func recordSyntheticCallKitUIProofEvent(_ event: NativeIncomingSyntheticCallKitUIProofEvent) {
+        let generationMatched = SalemXPushKitRegistrationSmokeDebugBridge.isActiveCallKitProofGeneration(generation)
+        switch event {
+        case .providerDidReset:
+            SalemXPushKitRegistrationSmokeDebugBridge.recordLocalCallKitOnlyFirstAction("reset")
+        case .answerActionDelivered:
+            SalemXPushKitRegistrationSmokeDebugBridge.recordLocalCallKitOnlyAnswerActionDeliveryProof(generationMatched: generationMatched)
+        case .endActionDelivered:
+            SalemXPushKitRegistrationSmokeDebugBridge.recordLocalCallKitOnlyEndActionDeliveryProof(generationMatched: generationMatched)
+        default:
+            break
+        }
     }
 }
 
@@ -1165,6 +1197,49 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         return latestVoIPPushReceiptSummary.redactedLines.joined(separator: "\n")
     }
 
+    @objc static func startLocalCallKitOnlyAnswerabilitySmoke() -> String {
+        #if canImport(CallKit) && os(iOS)
+        let generation = nextCallKitProofGeneration()
+        _ = callKitProofHarness?.endSyntheticIncomingCall()
+        callKitProofHarness = nil
+
+        var summary = SalemXVoIPPushReceiptProofSummary(blockedReason: "local_callkit_only_waiting_for_action")
+        summary.localCallKitOnlyReportRequested = true
+        summary.localCallKitOnlyReportResult = "pending"
+        summary.callKitUpdateHasGenericHandle = true
+        summary.callKitUpdateHasLocalizedCallerName = true
+        summary.callKitUpdateAudioOnly = true
+        summary.callKitProviderConfigurationAudioOnly = true
+        summary.callKitProviderConfigurationSupportedHandleGeneric = true
+        updateLatestVoIPPushReceiptSummary(summary)
+
+        let proofHarness = NativeIncomingSyntheticCallKitUIProofHarness.makePhysicalDeviceProofHarness(handle: "salemx-local-callkit-only",
+                                                                                                       displayLabel: "SalemX Test Call",
+                                                                                                       eventRecorder: SalemXLocalCallKitOnlyProofEventRecorder(generation: generation))
+        callKitProofHarness = proofHarness
+        let reportSubmission = proofHarness.reportSyntheticIncomingCall { event in
+            switch event {
+            case .reported:
+                recordLocalCallKitOnlyReportResult("reported")
+            default:
+                recordLocalCallKitOnlyReportResult("failed_redacted")
+            }
+        }
+        if case .reported = reportSubmission {
+            return redactedVoIPPushReceiptSummary()
+        }
+
+        recordLocalCallKitOnlyReportResult("failed_redacted")
+        return redactedVoIPPushReceiptSummary()
+        #else
+        var summary = SalemXVoIPPushReceiptProofSummary(blockedReason: "local_callkit_only_unavailable")
+        summary.localCallKitOnlyReportRequested = true
+        summary.localCallKitOnlyReportResult = "unavailable"
+        updateLatestVoIPPushReceiptSummary(summary)
+        return redactedVoIPPushReceiptSummary()
+        #endif
+    }
+
     private static func recordCallKitOperatorInteraction(intendedAction: String, timingBucket: String) -> String {
         let safeIntendedAction: String
         switch intendedAction {
@@ -1408,6 +1483,67 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         } else {
             summary.callKitProviderDidDeactivateAudioSession = true
         }
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+    }
+
+    static func recordLocalCallKitOnlyReportResult(_ reportResult: String) {
+        let safeReportResult: String
+        switch reportResult {
+        case "reported", "failed_redacted":
+            safeReportResult = reportResult
+        default:
+            safeReportResult = "failed_redacted"
+        }
+
+        lock.lock()
+        var summary = latestVoIPPushReceiptSummary
+        summary.localCallKitOnlyReportRequested = true
+        summary.localCallKitOnlyReportResult = safeReportResult
+        if safeReportResult == "failed_redacted" {
+            summary.blockedReason = "local_callkit_only_report_failed_redacted"
+        }
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+    }
+
+    static func recordLocalCallKitOnlyFirstAction(_ kind: String) {
+        lock.lock()
+        var summary = latestVoIPPushReceiptSummary
+        if summary.localCallKitOnlyFirstActionKind == "none" {
+            summary.localCallKitOnlyFirstActionKind = kind
+        }
+        if kind == "reset" {
+            summary.blockedReason = "local_callkit_only_reset_before_answer"
+        }
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+    }
+
+    static func recordLocalCallKitOnlyAnswerActionDeliveryProof(generationMatched: Bool) {
+        lock.lock()
+        var summary = latestVoIPPushReceiptSummary
+        if summary.localCallKitOnlyFirstActionKind == "none" {
+            summary.localCallKitOnlyFirstActionKind = "answer"
+        }
+        summary.localCallKitOnlyAnswerActionDelivered = generationMatched
+        summary.blockedReason = generationMatched ? "none" : "local_callkit_only_generation_mismatch"
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+    }
+
+    static func recordLocalCallKitOnlyEndActionDeliveryProof(generationMatched: Bool) {
+        lock.lock()
+        var summary = latestVoIPPushReceiptSummary
+        if summary.localCallKitOnlyFirstActionKind == "none" {
+            summary.localCallKitOnlyFirstActionKind = "end"
+        }
+        summary.localCallKitOnlyEndActionDelivered = generationMatched
+        summary.blockedReason = generationMatched ? "local_callkit_only_end_before_answer" : "local_callkit_only_generation_mismatch"
         lock.unlock()
 
         updateLatestVoIPPushReceiptSummary(summary)

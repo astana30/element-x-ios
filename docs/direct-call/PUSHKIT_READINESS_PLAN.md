@@ -766,6 +766,34 @@ Safety:
 - no repeated APNs push
 - no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, or call handle recorded
 
+## 2.47A9 readiness update
+
+Ready:
+- local DEBUG-only CallKit-only proof can report an incoming call and receive Answer first
+- local proof returned `local_callkit_only_report_result=reported`, `local_callkit_only_first_action_kind=answer`, and `local_callkit_only_answer_action_delivered=true`
+- generic CallKit configuration, provider/delegate retention, and action delivery are not the blocker
+
+Blocked:
+- one background real non-dev invite/APNs comparison still delivered `callkit_first_action_kind=end`
+- timing bucket was `>2000ms`
+- app-side local End request, provider invalidation, report-ended, and controlled timeout before Answer were false
+- current blocker remains `system_or_user_end_before_answer`
+
+Do not move to media until the background PushKit/real-invite CallKit surface delivers `callkit_first_action_kind=answer`.
+
+Still not wired:
+- real media credential request
+- media connection
+- LiveKit join
+- Matrix event emission
+- full direct-call flow
+
+Safety:
+- no production APNs push
+- no repeated APNs push
+- no `dev/invite`
+- no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, call handle, LiveKit URL/token, private log, or secret-bearing URL recorded
+
 ## 2.46B Readiness Update
 
 Ready:

@@ -3170,3 +3170,26 @@ Physical validation:
 - current blocker: `system_end_before_answer_window`
 
 No production APNs push was attempted. No repeated push was attempted. No real media credentials request, media connection, LiveKit join, Matrix event emission, or full call flow was introduced. No raw PushKit/APNs token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, LiveKit URL/token, private logs, user/device/room/call identifiers, or secret-bearing URL was recorded.
+
+## 2.47A9 — Local vs background CallKit answerability
+
+Added a DEBUG-only local CallKit-only answerability smoke to isolate CallKit configuration/delegate/action delivery from APNs and PushKit.
+
+Local isolation proof:
+- `local_callkit_only_report_requested=true`
+- `local_callkit_only_report_result=reported`
+- `local_callkit_only_first_action_kind=answer`
+- `local_callkit_only_answer_action_delivered=true`
+- `local_callkit_only_end_action_delivered=false`
+- `blocked_reason=none`
+
+Background comparison:
+- exactly one authenticated real non-dev invite/APNs attempt was run; `dev/invite` was not used
+- dedicated VoIP receipt proof returned `pushkit_payload_kind=real_invite_controlled`, `callkit_report_result=reported`, `callkit_report_completion_observed=true`, provider/delegate/UUID retained, and `callkit_first_action_kind=end`
+- first background action timing was `callkit_first_action_after_report_ms_bucket=>2000ms`
+- local app End request, provider invalidation, report-ended, and controlled timeout before Answer stayed false
+- current narrowed blocker: `system_or_user_end_before_answer`
+
+This narrows the problem to the background PushKit/real-invite CallKit surface or timing, not the generic CallKit provider configuration or delegate action path.
+
+No production APNs push was attempted. No repeated push was attempted. No real media credentials request, media connection, LiveKit join, Matrix event emission, or full call flow was introduced. No raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, private log, user/device/room/call identifiers, LiveKit URL/token, or secret-bearing URL was recorded.

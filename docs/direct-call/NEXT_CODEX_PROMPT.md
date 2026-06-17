@@ -8,36 +8,41 @@ Expected intentionally untracked file:
 
 Do not stage or commit that diagnostics file.
 
-## Next task — 2.47A8 keep CallKit incoming UI answerable past first-action window
+## Next task — 2.47A10 background PushKit CallKit surface timing isolation
 
 Latest completed state:
-- 2.47A6 added redacted CallKit timing/config diagnostics and narrowed the physical blocker
-- 2.47A7 added redacted operator-intent fields and Internal diagnostics controls for Answer-vs-End validation
-- one authenticated real non-dev invite/APNs attempt returned `background_apns_push_result=sandbox_success`; `dev/invite` was not used
-- dedicated VoIP receipt proof reached `callkit_report_result=reported`, `callkit_report_completion_observed=true`, `callkit_provider_retained_for_answer=true`, `callkit_delegate_retained_for_answer=true`, and `callkit_active_call_uuid_retained=true`
-- first delivered CallKit action was `end`, not `answer`
-- latest `callkit_first_action_after_report_ms_bucket=500-2000ms`
-- operator UI/Answer intent was not marked: `callkit_ui_surface_observed_by_operator=false`, `callkit_operator_intended_action=unknown`, and `callkit_operator_action_timing_bucket=unknown`
-- local app End request, provider invalidation, report-ended, and controlled timeout before Answer were all false
-- current blocker: `system_end_before_answer_window`
-- media credential request, media connection, LiveKit join, Matrix events, and full direct-call flow remain unwired
-- new proof fields for the next physical attempt: `callkit_ui_surface_observed_by_operator`, `callkit_operator_intended_action`, and `callkit_operator_action_timing_bucket`
+- 2.47A9 added a DEBUG-only local CallKit-only answerability smoke.
+- Local CallKit-only proof passed without APNs or PushKit:
+  - `local_callkit_only_report_result=reported`
+  - `local_callkit_only_first_action_kind=answer`
+  - `local_callkit_only_answer_action_delivered=true`
+  - `local_callkit_only_end_action_delivered=false`
+  - `blocked_reason=none`
+- One authenticated real non-dev invite/APNs background comparison still delivered End first:
+  - `pushkit_payload_kind=real_invite_controlled`
+  - `callkit_report_result=reported`
+  - `callkit_report_completion_observed=true`
+  - provider/delegate/active UUID retained
+  - `callkit_first_action_kind=end`
+  - `callkit_first_action_after_report_ms_bucket=>2000ms`
+  - local End request, provider invalidation, report-ended, and controlled timeout before Answer were false
+  - `blocked_reason=system_or_user_end_before_answer`
 
 Goal:
-- investigate why CallKit produces `CXEndCallAction` within 500-2000ms before operator intent can be marked
-- keep the CallKit incoming UI answerable long enough to deliver `CXAnswerCallAction`
-- do not move to media until `CXAnswerCallAction` is actually delivered and recorded
+- determine why the same controlled CallKit provider/config/action path is answerable locally but End-first when invoked from the background PushKit real-invite path
+- do not move to media until the background path records `callkit_first_action_kind=answer`
 
-Next investigation:
-- inspect whether the controlled incoming CallKit call is missing configuration required to stay answerable beyond the first-action window
-- inspect app lifecycle/background state around report completion and the 500-2000ms End
-- inspect whether CallKit is expiring the incoming call because no UI/action state is kept active enough
-- do not send another APNs push until a concrete validation plan or minimal fix is ready
+Inspect first:
+- app lifecycle/background state at report completion and first action
+- whether the background path needs an explicit app activation/foreground observation before operator Answer can be tapped
+- whether the incoming UI surface differs between local DEBUG CallKit-only and background PushKit report
+- whether CallKit audio/session activation is absent only on the background path
+- whether operator-intent marker should be set immediately before the background attempt to distinguish UI absence from delayed Answer
 
 Safety:
-- do not print, log, document, or commit raw PushKit/APNs tokens, APNs key material, JWTs, authorization headers, Matrix access tokens, request payloads, private logs, raw user IDs, raw device IDs, room IDs, call handles, or secret-bearing URLs
-- do not attempt production APNs
-- do not send repeated pushes
 - do not use `dev/invite`
+- do not send production APNs
+- do not repeat APNs pushes
 - do not request real media credentials, connect media, join LiveKit, emit Matrix events, or start full direct-call flow
+- do not print, log, document, or commit raw PushKit/APNs tokens, keys, JWTs, authorization headers, Matrix access tokens, APNs payloads, invite bodies, private logs, user IDs, device IDs, room IDs, call handles, LiveKit URLs/tokens, or secret-bearing URLs
 - do not touch project/signing/entitlement/Info.plist/app.yml files

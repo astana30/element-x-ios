@@ -678,6 +678,38 @@ Current blocker:
 
 No production push, repeated push, raw APNs payload, raw invite body, token, JWT, authorization header, Matrix access token, media request, Matrix event, or full call flow was introduced.
 
+## 2.47A9 Local vs background CallKit comparison
+
+The DEBUG-only local CallKit-only isolation proof now succeeds without APNs or PushKit:
+
+```text
+local_callkit_only_report_requested=true
+local_callkit_only_report_result=reported
+local_callkit_only_first_action_kind=answer
+local_callkit_only_answer_action_delivered=true
+local_callkit_only_end_action_delivered=false
+blocked_reason=none
+```
+
+The follow-up background comparison used exactly one authenticated real non-dev invite/APNs attempt. Server APNs returned sandbox success and the dedicated iPhone proof reached PushKit receipt plus CallKit report completion, but CallKit still delivered End first:
+
+```text
+pushkit_payload_kind=real_invite_controlled
+callkit_report_result=reported
+callkit_report_completion_observed=true
+callkit_first_action_kind=end
+callkit_first_action_after_report_ms_bucket=>2000ms
+local_end_request_before_answer=false
+provider_invalidate_before_answer=false
+report_call_ended_before_answer=false
+controlled_timeout_before_answer=false
+blocked_reason=system_or_user_end_before_answer
+```
+
+This narrows the active blocker to the background PushKit/real-invite CallKit surface or timing. Generic CallKit config/delegate/action delivery is proven answerable locally.
+
+No production APNs push, repeated push, dev invite, real media credentials request, media connection, LiveKit join, Matrix event emission, or full direct-call flow was used. No raw token, key, JWT, auth header, payload, user/device/room/call identifier, private log, LiveKit URL/token, or secret-bearing URL was recorded.
+
 ## 2.46B Real invite foreground state handoff
 
 The real-invite-controlled physical chain now records a safe foreground pending-call state after CallKit Answer.
