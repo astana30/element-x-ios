@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Split local CallKit-only and VoIP receipt proof files, then diagnosed the PushKit answerable-window result.
 - Isolated the background PushKit CallKit auto-End blocker after proving local CallKit-only Answer delivery.
 - Hardened foreground native incoming audio lifecycle after the one-device smoke.
 - Added the foreground native incoming call E2E coordinator contract.
@@ -68,6 +69,35 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.47A13 — Split proofs and PushKit answerable-window diagnostic
+
+Split the DEBUG proof storage so local CallKit-only smoke no longer overwrites the real VoIP PushKit receipt proof.
+
+Dedicated local CallKit-only proof:
+
+```text
+proof_source=local_callkit_only
+local_callkit_only_report_result=reported
+local_callkit_only_first_action_kind=answer
+local_callkit_only_answer_action_delivered=true
+local_callkit_only_end_action_delivered=false
+blocked_reason=none
+```
+
+Dedicated VoIP receipt proof:
+
+```text
+proof_source=voip_push_receipt
+pushkit_payload_kind=real_invite_controlled
+pushkit_completion_answerable_window_requested=true
+pushkit_completion_answerable_window_result=first_action_observed
+callkit_first_action_kind=end
+callkit_answer_action_delivered=false
+blocked_reason=background_callkit_end_before_operator_action
+```
+
+The upload smoke proof remains separate at `Documents/salemx-pushkit-token-upload-smoke-proof.txt`. Proof source/generation fields are redacted. No production APNs push, repeated APNs push in this commit step, real media credential request, media connection, LiveKit join, Matrix event emission, full direct-call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 
 ### 2.47A10 — Background PushKit CallKit Auto-End Isolation
 

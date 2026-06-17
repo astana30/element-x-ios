@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.47A10 physical validation - the authenticated real non-dev invite/APNs path is narrowed to a background PushKit/CallKit auto-End surface blocker. Local CallKit-only Answer delivery works, but the latest one-shot background proof reached APNs `sandbox_success`, PushKit callback, `callkit_report_result=reported`, report completion, PushKit completion in `<100ms`, foreground app state at receipt/report/action, valid generic audio-only CallKit config, retained provider/delegate/active UUID, and then `callkit_first_action_kind=end` more than `2000ms` after PushKit completion. The operator did not observe an answerable UI surface. Local code did not request End, invalidate the provider, report ended, or hit a controlled timeout before Answer. Current blocker is `background_callkit_end_before_operator_action`. Real PushKit registration remains disabled by default outside manual diagnostics, iOS local token persistence remains disabled, and the path is not wired into Matrix events, media connection, LiveKit join, or full direct-call flow.
+After 2.47A13 physical validation - proof storage is now split between VoIP receipt, local CallKit-only, and PushKit upload smoke files. Local CallKit-only proof writes `Documents/salemx-local-callkit-only-proof.txt` and remains answerable with `local_callkit_only_first_action_kind=answer`, while real-invite VoIP receipt proof writes `Documents/salemx-voip-push-receipt-proof.txt` and records the background PushKit path independently. The DEBUG answerable-window experiment reached `pushkit_completion_answerable_window_requested=true` and `pushkit_completion_answerable_window_result=first_action_observed`, but the background first action remains `callkit_first_action_kind=end` with `blocked_reason=background_callkit_end_before_operator_action`. Real PushKit registration remains disabled by default outside manual diagnostics, iOS local token persistence remains disabled, and the path is not wired into Matrix events, media connection, LiveKit join, or full direct-call flow.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,13 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.47A13 proof split and answerable-window diagnostic are implemented and physically narrowed:
+  - Local CallKit-only smoke now writes only `Documents/salemx-local-callkit-only-proof.txt` with `proof_source=local_callkit_only`, `local_callkit_only_report_result=reported`, `local_callkit_only_first_action_kind=answer`, `local_callkit_only_answer_action_delivered=true`, `local_callkit_only_end_action_delivered=false`, and `blocked_reason=none`.
+  - Real VoIP PushKit receipt writes only `Documents/salemx-voip-push-receipt-proof.txt` with `proof_source=voip_push_receipt`, `pushkit_payload_kind=real_invite_controlled`, `pushkit_completion_answerable_window_requested=true`, `pushkit_completion_answerable_window_result=first_action_observed`, `callkit_first_action_kind=end`, `callkit_answer_action_delivered=false`, and `blocked_reason=background_callkit_end_before_operator_action`.
+  - The PushKit upload smoke proof remains separate at `Documents/salemx-pushkit-token-upload-smoke-proof.txt`.
+  - Proof source/generation/last-updated fields are redacted and contain no raw tokens, auth headers, payloads, Matrix IDs, device IDs, call handles, private logs, or LiveKit URLs.
+  - Proof kept `media_credentials_requested=false`, `media_connect_requested=false`, `media_connect_attempted=false`, `livekit_join_requested=false`, `matrix_event_emit_requested=false`, and `real_call_flow_started=false`.
+  - No production APNs push, repeated APNs push in this commit step, real media credential request, media connection, LiveKit join, Matrix event emission, full direct-call flow, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 - 2.47A10 background PushKit CallKit auto-End isolation is implemented and physically narrowed:
   - Local CallKit-only proof still works: `local_callkit_only_first_action_kind=answer`, `local_callkit_only_answer_action_delivered=true`, `local_callkit_only_end_action_delivered=false`, and `blocked_reason=none`.
   - Exactly one authenticated real non-dev invite/APNs attempt returned `background_apns_push_result=sandbox_success`; dev invite was not used.

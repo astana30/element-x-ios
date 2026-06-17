@@ -53,6 +53,7 @@ private struct SalemXForegroundSSESmokeControlsView: View {
     @State private var pushKitSummary = SalemXPushKitRegistrationSmokeDebugBridge.redactedStateSummary()
     @State private var pushKitUploadSummary = SalemXPushKitRegistrationSmokeDebugBridge.redactedUploadStateSummary()
     @State private var voIPReceiptSummary = SalemXPushKitRegistrationSmokeDebugBridge.redactedVoIPPushReceiptSummary()
+    @State private var localCallKitOnlySummary = SalemXPushKitRegistrationSmokeDebugBridge.redactedLocalCallKitOnlySummary()
     #endif
 
     var body: some View {
@@ -141,8 +142,12 @@ private struct SalemXForegroundSSESmokeControlsView: View {
                 }
 
                 Button("Start local CallKit-only answerability smoke") {
-                    voIPReceiptSummary = SalemXPushKitRegistrationSmokeDebugBridge.startLocalCallKitOnlyAnswerabilitySmoke()
-                    refreshVoIPReceiptSummary(after: .seconds(1))
+                    localCallKitOnlySummary = SalemXPushKitRegistrationSmokeDebugBridge.startLocalCallKitOnlyAnswerabilitySmoke()
+                    refreshLocalCallKitOnlySummary(after: .seconds(1))
+                }
+
+                Button("Refresh local CallKit-only proof") {
+                    refreshLocalCallKitOnlySummary()
                 }
 
                 Button("Refresh VoIP receipt proof") {
@@ -153,6 +158,11 @@ private struct SalemXForegroundSSESmokeControlsView: View {
                     .font(.system(.caption, design: .monospaced))
                     .textSelection(.enabled)
                     .accessibilityIdentifier("voIPPushReceiptProof")
+
+                Text(localCallKitOnlySummary)
+                    .font(.system(.caption, design: .monospaced))
+                    .textSelection(.enabled)
+                    .accessibilityIdentifier("localCallKitOnlyProof")
             }
             #endif
         }
@@ -192,6 +202,15 @@ private struct SalemXForegroundSSESmokeControlsView: View {
                 try? await Task.sleep(for: delay)
             }
             voIPReceiptSummary = SalemXPushKitRegistrationSmokeDebugBridge.redactedVoIPPushReceiptSummary()
+        }
+    }
+
+    private func refreshLocalCallKitOnlySummary(after delay: Duration? = nil) {
+        Task { @MainActor in
+            if let delay {
+                try? await Task.sleep(for: delay)
+            }
+            localCallKitOnlySummary = SalemXPushKitRegistrationSmokeDebugBridge.redactedLocalCallKitOnlySummary()
         }
     }
     #endif

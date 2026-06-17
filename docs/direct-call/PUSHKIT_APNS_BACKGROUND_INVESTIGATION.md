@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: 2.47A10 narrows the authenticated real-invite background PushKit path to a CallKit auto-End surface blocker. Local CallKit-only Answer delivery works, but the background PushKit path reports successfully, calls PushKit completion in `<100ms`, remains foreground, and then receives `CXEndCallAction` more than `2000ms` later before an operator-observed answerable UI surface. Current blocker: `background_callkit_end_before_operator_action`. Production PushKit/APNs/background behavior remains disabled by default and unwired.
+Status: 2.47A13 splits local CallKit-only proof from real VoIP PushKit receipt proof and keeps the background blocker narrowed to CallKit End as the first action. Local CallKit-only writes `Documents/salemx-local-callkit-only-proof.txt` and still delivers Answer. Real VoIP receipt writes `Documents/salemx-voip-push-receipt-proof.txt`; the answerable-window experiment observed a first action, but that first action was End with `blocked_reason=background_callkit_end_before_operator_action`. Production PushKit/APNs/background behavior remains disabled by default and unwired.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -9,6 +9,41 @@ This document records what is currently present in tracked Element X / SalemX co
 The validated foreground real-invite token-guard baseline was consolidated in 2.42O. The 2.42M physical two-device foreground real-invite smoke passed at `bf9996ae0665ad3953fac3d7a838bfb619349dd1`, and 2.42N guarded the DEBUG smoke tooling release surface at `26e520b6f6ec0220ce118051f5acac36ed40bfba`.
 
 Foreground real invite behavior must remain unchanged while PushKit/APNs/background incoming-call work is scoped separately. The M1-M4 smoke controls and bridges are local DEBUG tooling only and are not production call behavior.
+
+## 2.47A13 Proof split and answerable-window result
+
+The proof files are now unambiguous:
+
+```text
+Documents/salemx-voip-push-receipt-proof.txt
+Documents/salemx-local-callkit-only-proof.txt
+Documents/salemx-pushkit-token-upload-smoke-proof.txt
+```
+
+Local CallKit-only proof:
+
+```text
+proof_source=local_callkit_only
+local_callkit_only_report_result=reported
+local_callkit_only_first_action_kind=answer
+local_callkit_only_answer_action_delivered=true
+local_callkit_only_end_action_delivered=false
+blocked_reason=none
+```
+
+VoIP receipt proof:
+
+```text
+proof_source=voip_push_receipt
+pushkit_payload_kind=real_invite_controlled
+pushkit_completion_answerable_window_requested=true
+pushkit_completion_answerable_window_result=first_action_observed
+callkit_first_action_kind=end
+callkit_answer_action_delivered=false
+blocked_reason=background_callkit_end_before_operator_action
+```
+
+The answerable window now proves the background path observes a first CallKit action before completion is finalized, but that action is still End rather than Answer. No production APNs push, repeated APNs push in this commit step, real media credential request, media connection, LiveKit join, Matrix event emission, full direct-call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, or `app.yml` regeneration was introduced.
 
 ## 2.47A10 Background PushKit Auto-End Timing
 

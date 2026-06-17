@@ -8,41 +8,31 @@ Expected intentionally untracked file:
 
 Do not stage or commit that diagnostics file.
 
-## Next task - 2.47A12 controlled PushKit completion delay / answerable window
+## Next task - 2.47A14 isolate why background PushKit CallKit first action is End
 
 Latest completed state:
-- 2.47A10 narrowed the remaining blocker to the background PushKit/CallKit surface lifecycle.
-- Local CallKit-only proof still passes without APNs or PushKit:
+- 2.47A13 split proof storage so local CallKit-only smoke no longer overwrites real VoIP PushKit receipt proof.
+- Local CallKit-only proof writes `Documents/salemx-local-callkit-only-proof.txt` and passes:
+  - `proof_source=local_callkit_only`
+  - `local_callkit_only_report_result=reported`
   - `local_callkit_only_first_action_kind=answer`
   - `local_callkit_only_answer_action_delivered=true`
   - `local_callkit_only_end_action_delivered=false`
   - `blocked_reason=none`
-- One authenticated real non-dev invite/APNs attempt still auto-ended before an operator-observed answerable UI surface:
-  - `background_apns_push_result=sandbox_success`
+- VoIP receipt proof writes `Documents/salemx-voip-push-receipt-proof.txt` and remains separated from the local proof:
+  - `proof_source=voip_push_receipt`
   - `pushkit_payload_kind=real_invite_controlled`
-  - `callkit_report_result=reported`
-  - `callkit_report_completion_observed=true`
-  - `pushkit_completion_called=true`
-  - `pushkit_completion_after_report_ms_bucket=<100ms`
-  - `callkit_end_after_pushkit_completion_ms_bucket=>2000ms`
-  - `app_state_at_pushkit_receipt=foreground`
-  - `app_state_at_report_completion=foreground`
-  - `app_state_at_first_callkit_action=foreground`
-  - valid generic audio-only CallKit update/config proof
-  - provider/delegate/active UUID retained
-  - provider reset and audio activation/deactivation were not observed before first action
-  - local End request, provider invalidation, report-ended, and controlled timeout before Answer were false
-  - `callkit_ui_surface_observed_by_operator=false`
+  - `pushkit_completion_answerable_window_requested=true`
+  - `pushkit_completion_answerable_window_result=first_action_observed`
   - `callkit_first_action_kind=end`
+  - `callkit_answer_action_delivered=false`
   - `blocked_reason=background_callkit_end_before_operator_action`
-
-Hypothesis:
-- PushKit completion may be called too soon after `reportNewIncomingCall`, causing iOS to end the background CallKit surface before an answerable operator window exists.
+- PushKit upload smoke remains separate at `Documents/salemx-pushkit-token-upload-smoke-proof.txt`.
+- Media credentials, media connect, LiveKit join, Matrix event emission, and full call flow stayed false.
 
 Goal:
-- test a controlled, bounded DEBUG-only PushKit completion delay / answerable-window proof
-- determine whether delaying PushKit completion long enough for an answerable window changes the first action from `end` to `answer`
-- do not move to media until the background path records `callkit_first_action_kind=answer`
+- determine why the background PushKit CallKit surface produces `CXEndCallAction` as the first action even though local CallKit-only Answer works, proof files are separated, the answerable window observes a first action, and local code does not request media, LiveKit, Matrix events, or full call flow.
+- do not move to media until the background path records `callkit_first_action_kind=answer`.
 
 Safety:
 - do not use `dev/invite`
