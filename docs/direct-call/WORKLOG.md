@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Isolated the background PushKit CallKit auto-End blocker after proving local CallKit-only Answer delivery.
 - Hardened foreground native incoming audio lifecycle after the one-device smoke.
 - Added the foreground native incoming call E2E coordinator contract.
 - Recorded supervised narrow non-engineering pilot window 1.
@@ -67,6 +68,48 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.47A10 — Background PushKit CallKit Auto-End Isolation
+
+Narrowed the real-invite background PushKit CallKit blocker without moving to media.
+
+Local CallKit-only proof remains answerable:
+
+```text
+local_callkit_only_first_action_kind=answer
+local_callkit_only_answer_action_delivered=true
+local_callkit_only_end_action_delivered=false
+blocked_reason=none
+```
+
+The latest single authenticated real non-dev invite/APNs attempt returned sandbox success, reached PushKit receipt, reported the CallKit call, and called PushKit completion quickly:
+
+```text
+background_apns_push_result=sandbox_success
+pushkit_payload_kind=real_invite_controlled
+callkit_report_result=reported
+callkit_report_completion_observed=true
+pushkit_completion_called=true
+pushkit_completion_after_report_ms_bucket=<100ms
+callkit_end_after_pushkit_completion_ms_bucket=>2000ms
+app_state_at_pushkit_receipt=foreground
+app_state_at_report_completion=foreground
+app_state_at_first_callkit_action=foreground
+```
+
+CallKit update/config proof was valid generic audio-only. Provider/delegate/active UUID were retained. Provider reset and audio activation/deactivation were not observed before first action. Local End request, provider invalidation, report-ended, and controlled timeout before Answer remained false.
+
+The first delivered CallKit action was End, and the operator did not observe an answerable UI surface:
+
+```text
+callkit_first_action_kind=end
+callkit_first_action_after_report_ms_bucket=>2000ms
+callkit_ui_surface_observed_by_operator=false
+callkit_answer_action_delivered=false
+blocked_reason=background_callkit_end_before_operator_action
+```
+
+No production APNs push, repeated APNs push, real media credential request, media connection, LiveKit join, Matrix event emission, full direct-call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 
 ### 2.44B — Controlled Server-Side PushKit Token Persistence
 

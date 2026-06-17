@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.47A7 physical validation - the authenticated real non-dev invite/APNs path remains narrowed to a CallKit Answer-vs-End blocker. The latest one-shot physical proof reached APNs `sandbox_success`, PushKit callback, `callkit_report_result=reported`, report completion, retained provider/delegate/active UUID, and then `callkit_first_action_kind=end` with `callkit_first_action_after_report_ms_bucket=500-2000ms`. Operator UI/Answer intent was not marked, and local code did not request End, invalidate the provider, report ended, or hit a controlled timeout before Answer. Current blocker is `system_end_before_answer_window`. Real PushKit registration remains disabled by default outside manual diagnostics, iOS local token persistence remains disabled, and the path is not wired into Matrix events, media connection, LiveKit join, or full direct-call flow.
+After 2.47A10 physical validation - the authenticated real non-dev invite/APNs path is narrowed to a background PushKit/CallKit auto-End surface blocker. Local CallKit-only Answer delivery works, but the latest one-shot background proof reached APNs `sandbox_success`, PushKit callback, `callkit_report_result=reported`, report completion, PushKit completion in `<100ms`, foreground app state at receipt/report/action, valid generic audio-only CallKit config, retained provider/delegate/active UUID, and then `callkit_first_action_kind=end` more than `2000ms` after PushKit completion. The operator did not observe an answerable UI surface. Local code did not request End, invalidate the provider, report ended, or hit a controlled timeout before Answer. Current blocker is `background_callkit_end_before_operator_action`. Real PushKit registration remains disabled by default outside manual diagnostics, iOS local token persistence remains disabled, and the path is not wired into Matrix events, media connection, LiveKit join, or full direct-call flow.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.47A10 background PushKit CallKit auto-End isolation is implemented and physically narrowed:
+  - Local CallKit-only proof still works: `local_callkit_only_first_action_kind=answer`, `local_callkit_only_answer_action_delivered=true`, `local_callkit_only_end_action_delivered=false`, and `blocked_reason=none`.
+  - Exactly one authenticated real non-dev invite/APNs attempt returned `background_apns_push_result=sandbox_success`; dev invite was not used.
+  - Dedicated VoIP receipt proof reached `physical_voip_push_received=true`, `pushkit_callback_invoked=true`, `pushkit_payload_kind=real_invite_controlled`, `callkit_report_result=reported`, `callkit_report_completion_observed=true`, `pushkit_completion_called=true`, `pushkit_completion_after_report_ms_bucket=<100ms`, and `callkit_end_after_pushkit_completion_ms_bucket=>2000ms`.
+  - App state was foreground at PushKit receipt, report completion, and first CallKit action. CallKit update/config proof was valid generic audio-only, provider/delegate/active UUID were retained, provider reset and audio activation/deactivation were not observed before first action, and local end/invalidate/report-ended/timeout booleans stayed false.
+  - The first delivered CallKit action was End: `callkit_first_action_kind=end`, `callkit_first_action_after_report_ms_bucket=>2000ms`, `callkit_ui_surface_observed_by_operator=false`, `callkit_answer_action_delivered=false`, and `blocked_reason=background_callkit_end_before_operator_action`.
+  - Proof kept `media_credentials_requested=false`, `media_connect_requested=false`, `media_connect_attempted=false`, `livekit_join_requested=false`, `matrix_event_emit_requested=false`, and `real_call_flow_started=false`.
+  - No production APNs push, repeated APNs push, real media credential request, media connection, LiveKit join, Matrix event emission, full direct-call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 - 2.47A6 CallKit End-before-Answer diagnostic is implemented and physically narrowed:
   - Diagnostic proof fields now record redacted CallKit report timing/config, retained provider/delegate/active UUID, first action kind, first action timing bucket, End action matching, local-end/invalidate/report-ended/timeout booleans, and event order.
   - Exactly one authenticated real non-dev invite/APNs attempt returned `background_apns_push_result=sandbox_success`; dev invite was not used.

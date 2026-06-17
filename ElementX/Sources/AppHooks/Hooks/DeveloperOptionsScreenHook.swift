@@ -108,6 +108,22 @@ private struct SalemXForegroundSSESmokeControlsView: View {
                     .textSelection(.enabled)
                     .accessibilityIdentifier("pushKitTokenUploadSmokeProof")
 
+                Button("Prepare Answer marker: lock screen") {
+                    voIPReceiptSummary = SalemXPushKitRegistrationSmokeDebugBridge.recordCallKitOperatorReadyToAnswer("lockscreen")
+                }
+
+                Button("Prepare Answer marker: full screen") {
+                    voIPReceiptSummary = SalemXPushKitRegistrationSmokeDebugBridge.recordCallKitOperatorReadyToAnswer("fullscreen")
+                }
+
+                Button("Prepare Answer marker: banner") {
+                    voIPReceiptSummary = SalemXPushKitRegistrationSmokeDebugBridge.recordCallKitOperatorReadyToAnswer("banner")
+                }
+
+                Button("Prepare Answer marker: foreground") {
+                    voIPReceiptSummary = SalemXPushKitRegistrationSmokeDebugBridge.recordCallKitOperatorReadyToAnswer("foreground")
+                }
+
                 Button("Mark CallKit Answer tap immediate") {
                     voIPReceiptSummary = SalemXPushKitRegistrationSmokeDebugBridge.recordCallKitOperatorAnswerIntent("immediate")
                 }

@@ -7,6 +7,10 @@
 
 import Foundation
 
+#if os(iOS)
+import UIKit
+#endif
+
 #if canImport(CallKit) && os(iOS)
 import AVFAudio
 import CallKit
@@ -702,6 +706,11 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var callKitReportCompletionObserved = false
     var callKitReportSubmittedAtMsRedacted = false
     var callKitReportCompletionAtMsRedacted = false
+    var pushKitCompletionAfterReportMsBucket = "unknown"
+    var callKitEndAfterPushKitCompletionMsBucket = "unknown"
+    var appStateAtPushKitReceipt = "unknown"
+    var appStateAtReportCompletion = "unknown"
+    var appStateAtFirstCallKitAction = "unknown"
     var callKitUpdateHasGenericHandle = false
     var callKitUpdateHasLocalizedCallerName = false
     var callKitUpdateAudioOnly = false
@@ -713,8 +722,13 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var callKitProviderDidResetObserved = false
     var callKitProviderDidActivateAudioSession = false
     var callKitProviderDidDeactivateAudioSession = false
+    var providerDidResetBeforeFirstAction = false
+    var audioSessionDidActivateBeforeFirstAction = false
+    var audioSessionDidDeactivateBeforeFirstAction = false
     var callKitFirstActionKind = "none"
     var callKitFirstActionAfterReportMsBucket = "not_observed"
+    var operatorReadyToAnswer = false
+    var operatorExpectedSurface = "unknown"
     var callKitUISurfaceObservedByOperator = false
     var callKitOperatorIntendedAction = "unknown"
     var callKitOperatorActionTimingBucket = "unknown"
@@ -779,6 +793,11 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "callkit_report_submitted_at_ms_redacted=\(callKitReportSubmittedAtMsRedacted)",
             "callkit_report_completion_at_ms_redacted=\(callKitReportCompletionAtMsRedacted)",
             "callkit_report_error_redacted=true",
+            "pushkit_completion_after_report_ms_bucket=\(pushKitCompletionAfterReportMsBucket)",
+            "callkit_end_after_pushkit_completion_ms_bucket=\(callKitEndAfterPushKitCompletionMsBucket)",
+            "app_state_at_pushkit_receipt=\(appStateAtPushKitReceipt)",
+            "app_state_at_report_completion=\(appStateAtReportCompletion)",
+            "app_state_at_first_callkit_action=\(appStateAtFirstCallKitAction)",
             "callkit_update_has_generic_handle=\(callKitUpdateHasGenericHandle)",
             "callkit_update_has_localized_caller_name=\(callKitUpdateHasLocalizedCallerName)",
             "callkit_update_audio_only=\(callKitUpdateAudioOnly)",
@@ -793,8 +812,13 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "callkit_audio_session_did_activate=\(callKitProviderDidActivateAudioSession)",
             "callkit_provider_did_deactivate_audio_session=\(callKitProviderDidDeactivateAudioSession)",
             "callkit_audio_session_did_deactivate=\(callKitProviderDidDeactivateAudioSession)",
+            "provider_did_reset_before_first_action=\(providerDidResetBeforeFirstAction)",
+            "audio_session_did_activate_before_first_action=\(audioSessionDidActivateBeforeFirstAction)",
+            "audio_session_did_deactivate_before_first_action=\(audioSessionDidDeactivateBeforeFirstAction)",
             "callkit_first_action_kind=\(callKitFirstActionKind)",
             "callkit_first_action_after_report_ms_bucket=\(callKitFirstActionAfterReportMsBucket)",
+            "operator_ready_to_answer=\(operatorReadyToAnswer)",
+            "operator_expected_surface=\(operatorExpectedSurface)",
             "callkit_ui_surface_observed_by_operator=\(callKitUISurfaceObservedByOperator)",
             "callkit_operator_intended_action=\(callKitOperatorIntendedAction)",
             "callkit_operator_action_timing_bucket=\(callKitOperatorActionTimingBucket)",
@@ -1110,6 +1134,9 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var latestUploadSummary = initialUploadRedactedSummary()
     private static var latestVoIPPushReceiptSummary = SalemXVoIPPushReceiptProofSummary()
     private static var callKitReportCompletionDate: Date?
+    private static var pushKitCompletionDate: Date?
+    private static var pendingOperatorReadyToAnswer = false
+    private static var pendingOperatorExpectedSurface = "unknown"
     #if canImport(CallKit) && os(iOS)
     private static var callKitProofHarness: NativeIncomingSyntheticCallKitUIProofHarness?
     private static var callKitProofGeneration = 0
@@ -1189,6 +1216,27 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
 
     @objc static func recordCallKitOperatorEndIntent(_ timingBucket: String) -> String {
         recordCallKitOperatorInteraction(intendedAction: "end", timingBucket: timingBucket)
+    }
+
+    @objc static func recordCallKitOperatorReadyToAnswer(_ expectedSurface: String) -> String {
+        let safeExpectedSurface: String
+        switch expectedSurface {
+        case "lockscreen", "fullscreen", "banner", "foreground":
+            safeExpectedSurface = expectedSurface
+        default:
+            safeExpectedSurface = "unknown"
+        }
+
+        lock.lock()
+        pendingOperatorReadyToAnswer = true
+        pendingOperatorExpectedSurface = safeExpectedSurface
+        var summary = latestVoIPPushReceiptSummary
+        summary.operatorReadyToAnswer = true
+        summary.operatorExpectedSurface = safeExpectedSurface
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+        return redactedVoIPPushReceiptSummary()
     }
 
     @objc static func redactedVoIPPushReceiptSummary() -> String {
@@ -1291,6 +1339,13 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                                                             callKitReportRequested: isControlledPayload,
                                                             callKitReportResult: isControlledPayload ? "pending" : "not_requested",
                                                             blockedReason: isControlledPayload ? "none" : "unsupported_redacted_payload")
+        baseSummary.appStateAtPushKitReceipt = currentApplicationStateProof()
+        lock.lock()
+        let operatorReadyToAnswer = pendingOperatorReadyToAnswer
+        let operatorExpectedSurface = pendingOperatorExpectedSurface
+        lock.unlock()
+        baseSummary.operatorReadyToAnswer = operatorReadyToAnswer
+        baseSummary.operatorExpectedSurface = operatorExpectedSurface
         if isControlledPayload {
             baseSummary.callKitReportSubmittedAtMsRedacted = true
             baseSummary.callKitUpdateHasGenericHandle = true
@@ -1301,6 +1356,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         }
         lock.lock()
         callKitReportCompletionDate = nil
+        pushKitCompletionDate = nil
         lock.unlock()
         updateLatestVoIPPushReceiptSummary(baseSummary)
 
@@ -1324,10 +1380,13 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             completionLock.unlock()
 
             let completionDate = Date()
+            let completionCallDate = Date()
             var completedSummary = baseSummary
             completedSummary.callKitReportResult = reportResult
             completedSummary.callKitReportCompletionObserved = reportResult != "timeout_redacted"
             completedSummary.callKitReportCompletionAtMsRedacted = reportResult != "timeout_redacted"
+            completedSummary.pushKitCompletionAfterReportMsBucket = reportResult == "timeout_redacted" ? "unknown" : elapsedBucket(from: completionDate, to: completionCallDate)
+            completedSummary.appStateAtReportCompletion = currentApplicationStateProof()
             completedSummary.callKitEventOrder = reportResult == "timeout_redacted" ? "report_completion_timeout" : "report_completion_only"
             completedSummary.controlledTimeoutBeforeAnswer = reportResult == "timeout_redacted"
             if let answerRetentionProof {
@@ -1339,6 +1398,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             completedSummary.blockedReason = blockedReason
             lock.lock()
             callKitReportCompletionDate = reportResult == "timeout_redacted" ? nil : completionDate
+            pushKitCompletionDate = reportResult == "timeout_redacted" ? nil : completionCallDate
             lock.unlock()
             updateLatestVoIPPushReceiptSummary(completedSummary)
             completion()
@@ -1364,6 +1424,10 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         let bucket = callKitFirstActionAfterReportBucket()
         summary.callKitFirstActionKind = kind
         summary.callKitFirstActionAfterReportMsBucket = bucket
+        summary.appStateAtFirstCallKitAction = currentApplicationStateProof()
+        summary.providerDidResetBeforeFirstAction = summary.callKitProviderDidResetObserved
+        summary.audioSessionDidActivateBeforeFirstAction = summary.callKitProviderDidActivateAudioSession
+        summary.audioSessionDidDeactivateBeforeFirstAction = summary.callKitProviderDidDeactivateAudioSession
         if kind == "end",
            bucket == "<100ms" || bucket == "100-500ms" || bucket == "500-2000ms" {
             summary.callKitEndArrivedBeforeOperatorAnswerWindow = true
@@ -1371,11 +1435,15 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     }
 
     private static func callKitFirstActionAfterReportBucket() -> String {
-        guard let callKitReportCompletionDate else {
+        elapsedBucket(from: callKitReportCompletionDate)
+    }
+
+    private static func elapsedBucket(from startDate: Date?, to endDate: Date = Date()) -> String {
+        guard let startDate else {
             return "unknown"
         }
 
-        let elapsedMs = Date().timeIntervalSince(callKitReportCompletionDate) * 1000
+        let elapsedMs = endDate.timeIntervalSince(startDate) * 1000
         if elapsedMs < 100 {
             return "<100ms"
         } else if elapsedMs < 500 {
@@ -1384,6 +1452,19 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             return "500-2000ms"
         } else {
             return ">2000ms"
+        }
+    }
+
+    private static func currentApplicationStateProof() -> String {
+        switch UIApplication.shared.applicationState {
+        case .active:
+            return "foreground"
+        case .background:
+            return "background"
+        case .inactive:
+            return "inactive"
+        @unknown default:
+            return "unknown"
         }
     }
 
@@ -1413,6 +1494,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         summary.endActionGenerationMatched = generationMatched
         summary.endActionSourceMatched = uuidMatched && generationMatched
         recordFirstCallKitAction("end", in: &summary)
+        summary.callKitEndAfterPushKitCompletionMsBucket = elapsedBucket(from: pushKitCompletionDate)
         summary.callKitEventOrder = "report_completion_then_end"
         if !summary.callKitAnswerActionReceived {
             if !uuidMatched {
@@ -1425,6 +1507,15 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             } else if summary.callKitEndArrivedBeforeOperatorAnswerWindow {
                 summary.endActionOrigin = "system_or_user_unknown"
                 summary.blockedReason = "system_end_before_answer_window"
+            } else if summary.operatorReadyToAnswer, !summary.callKitUISurfaceObservedByOperator {
+                summary.endActionOrigin = "system_or_user_unknown"
+                summary.blockedReason = "background_callkit_end_before_operator_action"
+            } else if summary.operatorReadyToAnswer, summary.callKitOperatorIntendedAction == "answer" {
+                summary.endActionOrigin = "system_or_user_unknown"
+                summary.blockedReason = "background_callkit_end_after_operator_answer_intent"
+            } else if !summary.callKitProviderDidActivateAudioSession {
+                summary.endActionOrigin = "system_or_user_unknown"
+                summary.blockedReason = "background_callkit_audio_activation_missing_before_end"
             } else {
                 summary.endActionOrigin = "system_or_user_unknown"
                 summary.blockedReason = "system_or_user_end_before_answer"
