@@ -1521,6 +1521,10 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var pushKitCompletionAnswerableWindowFinish: ((String) -> Void)?
     private static var pendingOperatorReadyToAnswer = false
     private static var pendingOperatorExpectedSurface = "unknown"
+    private static let pendingForegroundCallMetadataMaxAge: TimeInterval = 120
+    private static var pendingForegroundCallMetadataSession: DirectCallSession?
+    private static var pendingForegroundCallMetadataSource = "none"
+    private static var pendingForegroundCallMetadataRecordedAt: Date?
     #if canImport(CallKit) && os(iOS)
     private static var callKitProofHarness: NativeIncomingSyntheticCallKitUIProofHarness?
     private static var callKitProofGeneration = 0
@@ -2313,7 +2317,9 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             summary.foregroundCallStateSource = screenSource
             summary.foregroundCallStatePayloadRedacted = true
             summary.foregroundCallStateHasStableRedactedCorrelation = true
-            summary.recordControlledMediaCredentialsRequestBoundaryNotReady()
+            if !recordForegroundPendingCallMetadataHandoffIfAvailable(&summary) {
+                summary.recordControlledMediaCredentialsRequestBoundaryNotReady()
+            }
         } else {
             summary.blockedReason = "none"
         }
@@ -2609,6 +2615,40 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
 }
 
 extension SalemXPushKitRegistrationSmokeDebugBridge {
+    private static func recordForegroundPendingCallMetadataHandoffIfAvailable(_ summary: inout SalemXVoIPPushReceiptProofSummary) -> Bool {
+        guard let session = pendingForegroundCallMetadataSession,
+              let recordedAt = pendingForegroundCallMetadataRecordedAt,
+              Date().timeIntervalSince(recordedAt) <= pendingForegroundCallMetadataMaxAge else {
+            pendingForegroundCallMetadataSession = nil
+            pendingForegroundCallMetadataSource = "none"
+            pendingForegroundCallMetadataRecordedAt = nil
+            return false
+        }
+
+        summary.recordForegroundPendingCallMetadataHandoff(session: session, source: pendingForegroundCallMetadataSource)
+        return summary.mediaCredentialsRequestMetadataAvailable
+    }
+
+    static func recordForegroundPendingCallMetadataCandidate(_ session: DirectCallSession, source: String) {
+        lock.lock()
+        pendingForegroundCallMetadataSession = session
+        pendingForegroundCallMetadataSource = source
+        pendingForegroundCallMetadataRecordedAt = Date()
+
+        var summaryToWrite: SalemXVoIPPushReceiptProofSummary?
+        if latestVoIPPushReceiptSummary.realInvitePayloadMappingObserved,
+           latestVoIPPushReceiptSummary.foregroundCallState == "real_invite_pending_media" {
+            var summary = latestVoIPPushReceiptSummary
+            summary.recordForegroundPendingCallMetadataHandoff(session: session, source: source)
+            summaryToWrite = summary
+        }
+        lock.unlock()
+
+        if let summaryToWrite {
+            updateLatestVoIPPushReceiptSummary(summaryToWrite)
+        }
+    }
+
     static func recordForegroundPendingCallMetadataHandoff(_ session: DirectCallSession, source: String) {
         lock.lock()
         var summary = latestVoIPPushReceiptSummary

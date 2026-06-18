@@ -1748,6 +1748,11 @@ final class DirectCallEngineSignalBridge {
                     if case .failure(let error) = result {
                         diagnosticState.lastEnvelopeRejectedReason = .init(error)
                         diagnosticState.lastReceiveFailureReason = .init(error, signalType: signalEvent.type)
+                    } else if case .success(let session?) = result,
+                              signalEvent.type == .invite,
+                              session.direction == .incoming {
+                        SalemXPushKitRegistrationSmokeDebugBridge.recordForegroundPendingCallMetadataCandidate(session,
+                                                                                                               source: "real_invite_direct_call_session")
                     }
                     #endif
                 }
