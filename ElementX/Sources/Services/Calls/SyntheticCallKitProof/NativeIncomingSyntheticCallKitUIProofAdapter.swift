@@ -703,6 +703,10 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var payloadVersion = "none"
     var payloadKind = "none"
     var realInvitePayloadMappingObserved = false
+    var elementCallServicePushKitCallbackInvoked = false
+    var elementCallServiceSalemXPayloadObserved = false
+    var elementCallServicePayloadKind = "none"
+    var elementCallServiceCompletedWithoutSalemXCallKitReport = false
     var completionCalled = false
     var callKitReportRequested = false
     var callKitReportResult = "not_requested"
@@ -797,6 +801,10 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "pushkit_payload_version=\(payloadVersion)",
             "pushkit_payload_kind=\(payloadKind)",
             "real_invite_payload_mapping_observed=\(realInvitePayloadMappingObserved)",
+            "element_call_pushkit_callback_invoked=\(elementCallServicePushKitCallbackInvoked)",
+            "element_call_salemx_payload_observed=\(elementCallServiceSalemXPayloadObserved)",
+            "element_call_payload_kind=\(elementCallServicePayloadKind)",
+            "element_call_completed_without_salemx_callkit_report=\(elementCallServiceCompletedWithoutSalemXCallKitReport)",
             "pushkit_completion_called=\(completionCalled)",
             "callkit_report_requested=\(callKitReportRequested)",
             "callkit_report_result=\(callKitReportResult)",
@@ -1571,6 +1579,36 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
 
     static func recordVoIPPushReceipt(_ payload: [AnyHashable: Any]) {
         recordVoIPPushReceipt(payload) { }
+    }
+
+    static func recordElementCallServiceSalemXPushKitReceipt(_ payload: [AnyHashable: Any], completion: @escaping () -> Void) -> Bool {
+        let directCallPayload = payload["salemx_direct_call"] as? [String: Any]
+        let version = directCallPayload?["version"] as? Int
+        let kind = directCallPayload?["kind"] as? String
+        guard let version,
+              let kind,
+              version == 1,
+              kind == "sandbox_voip_smoke" || kind == "real_invite_controlled" else {
+            return false
+        }
+
+        let summary = SalemXVoIPPushReceiptProofSummary(physicalVoIPPushReceived: true,
+                                                        callbackInvoked: true,
+                                                        pushType: "voip",
+                                                        payloadVersion: String(version),
+                                                        payloadKind: kind,
+                                                        realInvitePayloadMappingObserved: kind == "real_invite_controlled",
+                                                        elementCallServicePushKitCallbackInvoked: true,
+                                                        elementCallServiceSalemXPayloadObserved: true,
+                                                        elementCallServicePayloadKind: kind,
+                                                        elementCallServiceCompletedWithoutSalemXCallKitReport: true,
+                                                        completionCalled: true,
+                                                        callKitReportRequested: false,
+                                                        callKitReportResult: "not_requested",
+                                                        blockedReason: "element_call_pushkit_registry_intercepted_salemx_payload")
+        updateLatestVoIPPushReceiptSummary(summary)
+        completion()
+        return true
     }
 
     static func recordVoIPPushReceipt(_ payload: [AnyHashable: Any], completion: @escaping () -> Void) {

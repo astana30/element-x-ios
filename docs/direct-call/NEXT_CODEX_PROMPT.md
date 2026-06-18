@@ -8,7 +8,7 @@ Expected intentionally untracked file:
 
 Do not stage or commit that diagnostics file.
 
-## Next task - 2.47A16 isolate PushKit callback/report lifecycle
+## Next task - 2.47A17 prove PushKit callback owner after APNs accepted
 
 Latest completed state:
 - Proof files are separated:
@@ -25,27 +25,33 @@ Latest completed state:
   - `local_background_answer_action_delivered=true`
   - `local_background_end_action_delivered=false`
   - `blocked_reason=none`
-- Background real-invite PushKit proof still reports End as the first action:
+- The latest server-side real invite/APNs correlation was green:
+  - `real_non_dev_invite_used=true`
+  - `dev_invite_used=false`
+  - `background_apns_push_result=sandbox_success`
+  - upload/invite store key matched
+- The latest iPhone SalemX VoIP receipt proof did not update:
   - `proof_source=voip_push_receipt`
-  - `pushkit_payload_kind=real_invite_controlled`
-  - `pushkit_completion_answerable_window_requested=true`
-  - `pushkit_completion_answerable_window_result=first_action_observed`
-  - `callkit_first_action_kind=end`
-  - `callkit_answer_action_delivered=false`
-  - `blocked_reason=background_callkit_end_before_operator_action`
+  - `physical_voip_push_received=false`
+  - `pushkit_callback_invoked=false`
+  - `pushkit_payload_kind=none`
+  - `blocked_reason=voip_push_not_received`
+- 2.47A17 added a DEBUG-only detector in the startup `ElementCallService` PushKit delegate. If that app-wide registry receives a SalemX payload, the dedicated VoIP proof records:
+  - `element_call_pushkit_callback_invoked=true`
+  - `element_call_salemx_payload_observed=true`
+  - `element_call_payload_kind=real_invite_controlled`
+  - `blocked_reason=element_call_pushkit_registry_intercepted_salemx_payload`
 - Media credentials, media connect, LiveKit join, Matrix event emission, and full call flow stayed false.
 
 Goal:
-- determine why reporting from the PushKit callback produces `CXEndCallAction` first while the same local CallKit path is answerable from both foreground and background app state.
-- do not move to media until the background PushKit path records `callkit_first_action_kind=answer`.
+- run one controlled real non-dev invite/APNs attempt to determine which PushKit owner receives the accepted sandbox push.
+- do not move back to CallKit/media until the physical PushKit callback owner is proven.
 
 Investigate:
-- exact PushKit callback lifecycle around `reportNewIncomingCall` and completion.
-- whether reporting inside the PushKit callback differs from the scheduled local background report.
-- whether deferring report submission out of the PushKit callback, while still safely completing PushKit, changes the first CallKit action.
-- provider/delegate/harness ownership across PushKit callback return.
-- app state, queue, generation, and proof-writer differences between local background and VoIP receipt paths.
-- any system-driven End signal that only appears for reports created inside the PushKit callback.
+- whether the existing startup `ElementCallService` `.voIP` registry receives the SalemX APNs payload.
+- whether the manual SalemX debug PushKit registry receives it instead.
+- whether neither local proof updates despite sandbox_success, which would keep the blocker at APNs accepted but physical callback not observed.
+- keep proof output redacted only.
 
 Safety:
 - do not use `dev/invite`

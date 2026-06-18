@@ -896,6 +896,23 @@ Physical validation after this diagnostic update reached the same APNs/PushKit/C
 
 No production APNs push, repeated push, real media credentials request, media connection, LiveKit join, Matrix event emission, or full direct-call flow was introduced. Next work should investigate why the controlled incoming CallKit UI does not remain answerable past the 500-2000ms first-action window.
 
+## 2.47A17 — APNs accepted but SalemX receipt not updated
+
+Latest server correlation passed: upload and invite lookup used the same fresh development hex PushKit token, and APNs sandbox returned success.
+
+Device/app inspection passed:
+- bundle `kz.salemx.msg`
+- team/application identifier `M639Y9MFR2`
+- `aps-environment=development`
+- `UIBackgroundModes` includes `voip`
+- app process was alive
+
+The dedicated SalemX VoIP receipt proof still showed `physical_voip_push_received=false`, `pushkit_callback_invoked=false`, `pushkit_payload_kind=none`, and `blocked_reason=voip_push_not_received`.
+
+Source inspection narrowed a likely owner mismatch: the existing startup `ElementCallService` owns a real `.voIP` `PKPushRegistry`, while the SalemX native direct-call registry is manual/upload-smoke scoped. A DEBUG-only detector now records if `ElementCallService` receives a SalemX `salemx_direct_call` payload, before the normal Element Call payload parser can reject or log it. The proof is redacted and records only safe booleans/statuses such as `element_call_pushkit_callback_invoked`, `element_call_salemx_payload_observed`, and `element_call_payload_kind`.
+
+No APNs was sent for the diagnostic code change. No production APNs, repeated push, media credentials request, media connection, LiveKit join, Matrix event emission, full call flow, raw tokens/JWTs/auth headers/payloads/IDs/call handles/LiveKit URLs, private logs, or forbidden project/signing file changes were introduced.
+
 ## 2.46A1 Real invite Answer observation fix
 
 The real-invite payload path uses the same controlled CallKit report helper as the sandbox smoke path. The likely blocker was stale controlled synthetic CallKit state: answered controlled calls were not ended or cleared after proof.

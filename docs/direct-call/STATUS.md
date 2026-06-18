@@ -2008,6 +2008,29 @@ Safety:
 - no production APNs, no repeated APNs, no real media credentials request, no media connect, no LiveKit join, no Matrix event emission, and no full direct-call flow
 - no raw tokens, JWTs, authorization headers, APNs payloads, invite bodies, IDs, call handles, LiveKit URLs, private logs, or secret-bearing URLs were recorded
 
+## 2.47A17 status
+
+APNs accepted the real-invite VoIP push but the SalemX debug receipt proof did not update.
+
+Confirmed:
+- PushKit upload smoke was green: upload http_success, registered, persisted, and redacted_match
+- server invite/APNs correlation was green: fresh development hex token, matching upload/invite store key, sandbox_success, and blocked_reason=none
+- installed app inspection showed bundle `kz.salemx.msg`, team `M639Y9MFR2`, `aps-environment=development`, and `voip` background mode
+- app process was alive when inspected
+
+Current blocker:
+- dedicated VoIP receipt proof remained `physical_voip_push_received=false`, `pushkit_callback_invoked=false`, and `blocked_reason=voip_push_not_received`
+- source inspection showed the existing startup `ElementCallService` owns a `.voIP` `PKPushRegistry`, while the SalemX debug registry is created by manual upload smoke
+
+Diagnostic added:
+- DEBUG-only Element Call PushKit detector records redacted SalemX payload interception before the normal Element Call payload parser can reject/log the payload
+- if the startup registry receives the SalemX payload, the proof records `element_call_pushkit_registry_intercepted_salemx_payload` without CallKit, media, LiveKit, Matrix events, or full flow
+
+Safety:
+- no APNs was sent for this diagnostic change
+- no production APNs, repeated APNs, real media credentials request, media connect, LiveKit join, Matrix event emission, or full direct-call flow was introduced
+- no raw tokens, JWTs, authorization headers, APNs payloads, invite bodies, IDs, call handles, LiveKit URLs, private logs, or secret-bearing URLs were recorded
+
 ## 2.46A3 status
 
 Real-invite CallKit report pending state now has a minimal DEBUG-only safety fix.

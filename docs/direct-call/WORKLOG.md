@@ -3205,6 +3205,20 @@ This proves local foreground and local background CallKit-only answerability bot
 
 No APNs was sent for this proof. No production APNs, repeated APNs, real media credentials request, media connect, LiveKit join, Matrix event emission, full call flow, raw secrets, raw payloads, raw IDs, call handles, LiveKit URLs, private logs, or forbidden project/signing file changes were introduced.
 
+## 2026-06-18 — 2.47A17 APNs accepted without SalemX receipt
+
+Investigated the latest real non-dev invite where server-side APNs returned sandbox_success but `Documents/salemx-voip-push-receipt-proof.txt` stayed at `physical_voip_push_received=false`, `pushkit_callback_invoked=false`, and `blocked_reason=voip_push_not_received`.
+
+Findings:
+- PushKit upload smoke and server correlation were green: fresh development hex token, matching upload/invite store key, and sandbox APNs success.
+- Installed app inspection was green: bundle `kz.salemx.msg`, team/application identifier `M639Y9MFR2`, development APNs entitlement, and `voip` background mode.
+- The app process was alive.
+- Source inspection showed two PushKit owners: the existing startup `ElementCallService` `.voIP` registry and the manually-created SalemX debug registry used by upload smoke.
+
+Added a DEBUG-only redacted detector at the top of `ElementCallService.pushRegistry(...didReceiveIncomingPush...)`. If the startup registry receives a SalemX `salemx_direct_call` payload, it writes a safe proof with `element_call_pushkit_callback_invoked=true`, `element_call_salemx_payload_observed=true`, and `blocked_reason=element_call_pushkit_registry_intercepted_salemx_payload`, then completes the callback without reporting CallKit or touching media/Matrix/full flow.
+
+No APNs was sent for this diagnostic change. No production APNs, repeated APNs, real media credentials request, media connect, LiveKit join, Matrix event emission, full call flow, raw tokens, auth headers, JWTs, payloads, IDs, call handles, LiveKit URLs, private logs, or forbidden project/signing file changes were introduced.
+
 ## 2.46A4 — Real invite CallKit cleanup ordering fix
 
 Fixed and physically verified the remaining real-invite-controlled Answer observation blocker.

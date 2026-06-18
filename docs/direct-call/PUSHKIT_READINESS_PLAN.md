@@ -912,3 +912,22 @@ Safety:
 - no production APNs push
 - no repeated APNs push
 - no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, or call handle recorded
+
+## 2.47A17 readiness update
+
+The current blocker is before CallKit/media: APNs sandbox accepted a real-invite VoIP push using the same fresh development token uploaded by the iPhone, but the SalemX VoIP receipt proof did not record a PushKit callback.
+
+Readiness findings:
+- physical app entitlements/profile are consistent with sandbox VoIP delivery: bundle `kz.salemx.msg`, team `M639Y9MFR2`, `aps-environment=development`, and `voip` background mode
+- upload smoke remains the precondition for fresh token storage
+- source inspection shows the app-wide `ElementCallService` owns a startup `.voIP` registry, while the SalemX debug registry is upload-smoke scoped
+
+Next proof:
+- DEBUG-only Element Call detector will prove whether the startup registry receives SalemX `salemx_direct_call` payloads
+- if it does, the dedicated VoIP proof records `element_call_pushkit_registry_intercepted_salemx_payload`
+- if neither proof updates after a single sandbox_success APNs, the blocker remains APNs accepted but physical callback not observed
+
+Safety:
+- no APNs was sent for this diagnostic change
+- no production APNs, repeated APNs, real media credentials request, media connect, LiveKit join, Matrix event emission, or full direct-call flow was introduced
+- no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, call handle, LiveKit URL, or private log recorded

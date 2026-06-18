@@ -2184,6 +2184,26 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func debugElementCallPushKitRegistryRecordsRedactedSalemXPayloadInterception() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+        let elementCallServiceSource = try Self.sourceFile("ElementX/Sources/Services/ElementCall/ElementCallService.swift")
+
+        #expect(elementCallServiceSource.contains("#if DEBUG"))
+        #expect(elementCallServiceSource.contains("recordElementCallServiceSalemXPushKitReceipt(payload.dictionaryPayload, completion: completion)"))
+        #expect(adapterSource.contains("static func recordElementCallServiceSalemXPushKitReceipt(_ payload: [AnyHashable: Any], completion: @escaping () -> Void) -> Bool"))
+        #expect(adapterSource.contains("element_call_pushkit_callback_invoked=\\(elementCallServicePushKitCallbackInvoked)"))
+        #expect(adapterSource.contains("element_call_salemx_payload_observed=\\(elementCallServiceSalemXPayloadObserved)"))
+        #expect(adapterSource.contains("element_call_payload_kind=\\(elementCallServicePayloadKind)"))
+        #expect(adapterSource.contains("element_call_completed_without_salemx_callkit_report=\\(elementCallServiceCompletedWithoutSalemXCallKitReport)"))
+        #expect(adapterSource.contains("element_call_pushkit_registry_intercepted_salemx_payload"))
+        #expect(adapterSource.contains("callKitReportRequested: false"))
+        #expect(adapterSource.contains("callKitReportResult: \"not_requested\""))
+        let interceptionStart = try #require(elementCallServiceSource.range(of: "recordElementCallServiceSalemXPushKitReceipt")?.lowerBound)
+        let roomIDGuard = try #require(elementCallServiceSource.range(of: "guard let roomID")?.lowerBound)
+        #expect(interceptionStart < roomIDGuard)
+    }
+
+    @Test
     func debugLocalCallKitOnlyProofIsSeparatedFromVoIPReceiptProof() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
         let developerOptionsSource = try Self.sourceFile("ElementX/Sources/AppHooks/Hooks/DeveloperOptionsScreenHook.swift")

@@ -545,6 +545,11 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     }
     
     func pushRegistry(_ registry: PKPushRegistry, didReceiveIncomingPushWith payload: PKPushPayload, for type: PKPushType, completion: @escaping () -> Void) {
+        #if DEBUG
+        if SalemXPushKitRegistrationSmokeDebugBridge.recordElementCallServiceSalemXPushKitReceipt(payload.dictionaryPayload, completion: completion) {
+            return
+        }
+        #endif
         guard let roomID = payload.dictionaryPayload[ElementCallServiceNotificationKey.roomID.rawValue] as? String else {
             MXLog.error("Something went wrong, missing room identifier for incoming voip call: \(payload)")
             completion()
