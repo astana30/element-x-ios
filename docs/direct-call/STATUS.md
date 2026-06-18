@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.47B1, the real foreground accept path records a redacted pending-call metadata handoff from the existing `DirectCallSession` before any media credential request. The dedicated VoIP receipt proof can now record `foreground_pending_call_metadata_handoff_observed=true`, `foreground_pending_call_metadata_payload_redacted=true`, redacted presence booleans for call/room/peer metadata, safe direction/intent classes, and `media_credentials_request_metadata_available=true` when the metadata is internally complete. No raw call ID, room ID, peer ID, call handle, token, URL, request body, media connection, LiveKit join, Matrix event emission, or full direct-call flow is wired.
+After 2.47B2, the real foreground accept path can make a DEBUG-only controlled credentials request through the existing LiveKit token boundary using the handed-off `DirectCallSession` metadata, then record only redacted proof fields. The proof can now distinguish `success_redacted` from `blocked_redacted` while keeping token/URL/payload redacted, avoiding local persistence, and keeping media connection, LiveKit join, Matrix event emission, and full direct-call flow disabled. Physical B2 validation is still the next step; no APNs was sent for this code checkpoint.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,13 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.47B2 controlled media credentials request using handed-off metadata is implemented as a DEBUG-only boundary step:
+  - The foreground production accept path now requests credentials through the existing `DirectCallLiveKitTokenProvider` seam after `foreground_call_state=real_invite_pending_media` metadata is available.
+  - The request path uses the active `DirectCallSession` and does not call `connectAudio`, request microphone/camera, join LiveKit, emit Matrix events, or start full call flow.
+  - Dedicated proof records `media_credentials_requested=true`, `media_credentials_request_authorized=true/false`, `media_credentials_result=success_redacted` or `blocked_redacted`, token/URL/payload redaction booleans, `media_credentials_local_persistence_requested=false`, and cleanup status.
+  - LiveKit token request/response descriptions now redact call ID, room ID, peer/user metadata, token, URL, and allocation identifiers.
+  - No APNs was sent for this code checkpoint. Targeted SwiftFormat passed, SwiftLint passed aside from existing file-length warnings, and targeted DirectCall test build reached simulator launch before the known `FBSOpenApplicationServiceErrorDomain / SBMainWorkspace` environment failure.
+  - No production APNs, repeated APNs, media connection, LiveKit join, Matrix event emission, full direct-call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 - 2.47B controlled media credentials request lifecycle is physically validated as a safe blocked boundary:
   - Real non-dev invite/APNs reached SalemX VoIP receipt, CallKit report, Answer, controlled in-app screen, and `foreground_call_state=real_invite_pending_media`.
   - The media boundary now records explicit lifecycle fields: `media_credentials_request_planned=false`, `media_credentials_requested=false`, `media_credentials_request_authorized=false`, `media_credentials_result=blocked_redacted`, `media_credentials_token_received=false`, `media_credentials_token_redacted=true`, `media_credentials_url_received=false`, `media_credentials_url_redacted=true`, `media_credentials_payload_redacted=true`, `media_credentials_local_persistence_requested=false`, `media_credentials_cleanup_requested=false`, and `media_credentials_cleanup_result=not_requested`.

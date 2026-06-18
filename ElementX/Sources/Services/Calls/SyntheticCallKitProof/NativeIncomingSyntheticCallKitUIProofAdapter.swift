@@ -1000,6 +1000,24 @@ private extension SalemXVoIPPushReceiptProofSummary {
         mediaCredentialsCleanupResult = "not_requested"
         blockedReason = mediaCredentialsRequestMetadataAvailable ? "none" : "media_credentials_request_metadata_invalid_redacted"
     }
+
+    mutating func recordControlledMediaCredentialsRequest(succeeded: Bool, session: DirectCallSession, source: String) {
+        recordForegroundPendingCallMetadataHandoff(session: session, source: source)
+        mediaCredentialsBoundaryReached = true
+        mediaCredentialsRequestPlanned = false
+        mediaCredentialsRequested = true
+        mediaCredentialsRequestAuthorized = mediaCredentialsRequestMetadataAvailable
+        mediaCredentialsResult = succeeded && mediaCredentialsRequestMetadataAvailable ? "success_redacted" : "blocked_redacted"
+        mediaCredentialsTokenReceived = succeeded && mediaCredentialsRequestMetadataAvailable
+        mediaCredentialsTokenRedacted = true
+        mediaCredentialsURLReceived = succeeded && mediaCredentialsRequestMetadataAvailable
+        mediaCredentialsURLRedacted = true
+        mediaCredentialsPayloadRedacted = true
+        mediaCredentialsLocalPersistenceRequested = false
+        mediaCredentialsCleanupRequested = succeeded && mediaCredentialsRequestMetadataAvailable
+        mediaCredentialsCleanupResult = mediaCredentialsCleanupRequested ? "cleared" : "not_requested"
+        blockedReason = succeeded && mediaCredentialsRequestMetadataAvailable ? "none" : "media_credentials_request_failed_redacted"
+    }
 }
 
 private struct SalemXLocalCallKitOnlyProofSummary {
@@ -2585,6 +2603,15 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
         lock.lock()
         var summary = latestVoIPPushReceiptSummary
         summary.recordForegroundPendingCallMetadataHandoff(session: session, source: source)
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+    }
+
+    static func recordControlledMediaCredentialsRequest(succeeded: Bool, session: DirectCallSession, source: String) {
+        lock.lock()
+        var summary = latestVoIPPushReceiptSummary
+        summary.recordControlledMediaCredentialsRequest(succeeded: succeeded, session: session, source: source)
         lock.unlock()
 
         updateLatestVoIPPushReceiptSummary(summary)

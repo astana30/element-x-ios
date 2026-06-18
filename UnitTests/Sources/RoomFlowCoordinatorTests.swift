@@ -3732,6 +3732,7 @@ private final class NativeDirectCallRoomFlowOwnerSpy: NativeDirectCallRoomFlowOw
     var startResult: Result<NativeDirectCallComposition, NativeDirectCallRoomFlowOwnerError> = .failure(.disabled)
     var outgoingResult: Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> = .failure(.disabled)
     var acceptResult: Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> = .failure(.disabled)
+    var mediaCredentialsResult: Result<DirectCallMediaConnectionInfo, NativeDirectCallRoomFlowOwnerError> = .failure(.disabled)
     var hangupResult: Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> = .failure(.disabled)
     var cleanupTerminalCallResult: Result<Void, NativeDirectCallRoomFlowOwnerError> = .success(())
     var updatesActiveSessionOnOutgoingSuccess = false
@@ -3765,6 +3766,10 @@ private final class NativeDirectCallRoomFlowOwnerSpy: NativeDirectCallRoomFlowOw
             activeSession = session
         }
         return acceptResult
+    }
+
+    func requestMediaCredentials(callID _: String) async -> Result<DirectCallMediaConnectionInfo, NativeDirectCallRoomFlowOwnerError> {
+        mediaCredentialsResult
     }
 
     func hangup() async -> Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> {
@@ -3871,6 +3876,10 @@ private final class NativeDirectCallRoomControllingSpy: NativeDirectCallRoomCont
     func acceptIncomingCall() async -> Result<DirectCallSession, NativeDirectCallRoomControlError> {
         acceptCount += 1
         return .failure(.noActiveCall)
+    }
+
+    func requestMediaCredentials(callID _: String) async -> Result<DirectCallMediaConnectionInfo, NativeDirectCallRoomControlError> {
+        .failure(.noActiveCall)
     }
 
     func hangup() async -> Result<DirectCallSession, NativeDirectCallRoomControlError> {

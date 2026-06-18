@@ -72,6 +72,10 @@ final class NoOpDirectCallMediaEngine: DirectCallMediaEngineProtocol {
         }
     }
 
+    func requestMediaCredentials(for session: DirectCallSession) async -> Result<DirectCallMediaConnectionInfo, DirectCallMediaError> {
+        await tokenProvider.connectionInfo(for: session)
+    }
+
     func connectAudio(for session: DirectCallSession, keyHandle: DirectCallMediaKeyHandle) async -> Result<DirectCallMediaState, DirectCallMediaError> {
         #if DEBUG
         diagnosticState.mediaConnectAttempted = true
@@ -224,6 +228,8 @@ final class NoOpDirectCallMediaEngine: DirectCallMediaEngineProtocol {
         clearedCallIDs.insert(callID)
     }
 }
+
+extension NoOpDirectCallMediaEngine: DirectCallMediaCredentialsBoundaryRequesting { }
 
 #if DEBUG
 extension NoOpDirectCallMediaEngine: DirectCallMediaDiagnosticSnapshotProviding { }

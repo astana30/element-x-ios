@@ -975,6 +975,19 @@ Callback-owner fields:
 
 No further APNs was sent after the passing proof. No production APNs, repeated APNs, real media credentials request, media connection, LiveKit join, Matrix event emission, full call flow, raw tokens/JWTs/auth headers/payloads/IDs/call handles/LiveKit URLs, private logs, or forbidden project/signing file changes were introduced.
 
+## 2.47B2 — Controlled credentials request code checkpoint
+
+The next media step is implemented without changing APNs behavior. After the real foreground pending-call metadata handoff, the DEBUG proof path now requests credentials through the existing LiveKit token boundary and records only redacted proof.
+
+Safety:
+- no APNs was sent for this code checkpoint
+- no production APNs or repeated APNs was introduced
+- media connect, LiveKit join, Matrix events, and full call flow remain disabled
+- token request/response descriptions redact call ID, room ID, peer/user metadata, token, URL, and allocation identifiers
+- forbidden project/signing/entitlement/`Info.plist`/`app.yml` files were not touched
+
+Next proof should be exactly one physical real non-dev invite/APNs attempt to verify `media_credentials_result=success_redacted` or a redacted blocked reason.
+
 ## 2.46A1 Real invite Answer observation fix
 
 The real-invite payload path uses the same controlled CallKit report helper as the sandbox smoke path. The likely blocker was stale controlled synthetic CallKit state: answered controlled calls were not ended or cleared after proof.

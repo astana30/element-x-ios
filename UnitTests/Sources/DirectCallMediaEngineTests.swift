@@ -1810,10 +1810,12 @@ final class DirectCallMediaProviderSkeletonTests {
 
         #expect(request.intent == .audio)
         #expect(request.direction == .incoming)
+        #expect(String(describing: request).contains(callID) == false)
         #expect(String(describing: request).contains(roomID) == false)
         #expect(String(describing: request).contains(peerUserID) == false)
         #expect(String(describing: request).contains("DEVICEID") == false)
         #expect(String(describing: request).contains("txn-a") == false)
+        #expect(String(reflecting: request).contains(callID) == false)
         #expect(String(reflecting: request).contains(roomID) == false)
         #expect(String(reflecting: request).contains(peerUserID) == false)
     }
@@ -1840,6 +1842,7 @@ final class DirectCallMediaProviderSkeletonTests {
         #expect(payload["direction"] as? String == "incoming")
         #expect(payload["device_id"] as? String == "DEVICEID")
         #expect(payload["client_transaction_id"] as? String == "txn-a")
+        #expect(String(describing: dto).contains(callID) == false)
         #expect(String(describing: dto).contains(roomID) == false)
         #expect(String(describing: dto).contains(peerUserID) == false)
     }
@@ -1873,8 +1876,10 @@ final class DirectCallMediaProviderSkeletonTests {
         #expect(String(describing: dto).contains("wss://livekit.example.com") == false)
         #expect(String(describing: dto).contains("opaque-room") == false)
         #expect(String(describing: dto).contains("participant-credential") == false)
+        #expect(String(describing: dto).contains(dto.allocation.callID) == false)
         #expect(String(reflecting: dto).contains("opaque-room") == false)
         #expect(String(reflecting: dto).contains("participant-credential") == false)
+        #expect(String(reflecting: dto).contains(dto.allocation.callID) == false)
     }
 
     @Test

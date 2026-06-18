@@ -975,3 +975,24 @@ Safety:
 - no APNs was sent after the passing proof
 - no production APNs, repeated APNs, real media credentials request, media connect, LiveKit join, Matrix event emission, or full direct-call flow was introduced
 - no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, call handle, LiveKit URL, or private log recorded
+
+## 2.47B2 readiness update
+
+Ready:
+- foreground pending-call metadata can now be handed to the existing media credentials/token boundary through a DEBUG-only controlled request
+- success proof will record `media_credentials_requested=true`, `media_credentials_request_authorized=true`, `media_credentials_result=success_redacted`, token/URL received booleans, redaction booleans, no local persistence, and cleanup cleared
+- blocked proof remains redacted as `blocked_redacted`
+- token request/response descriptions redact call ID, room ID, peer/user metadata, token, URL, and allocation identifiers
+
+Still not wired:
+- media connection
+- LiveKit join
+- microphone/camera request
+- Matrix event emission
+- full direct-call flow
+
+Safety:
+- no APNs was sent for this code checkpoint
+- no production APNs or repeated APNs was introduced
+- no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, call ID, call handle, LiveKit URL/token, or private log recorded
+- forbidden project/signing/entitlement/`Info.plist`/`app.yml` files remain untouched

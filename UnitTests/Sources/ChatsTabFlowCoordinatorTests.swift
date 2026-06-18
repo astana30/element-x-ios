@@ -423,6 +423,10 @@ private final class ChatsTabNativeDirectCallRoomFlowOwnerSpy: NativeDirectCallRo
         .failure(.disabled)
     }
 
+    func requestMediaCredentials(callID _: String) async -> Result<DirectCallMediaConnectionInfo, NativeDirectCallRoomFlowOwnerError> {
+        .failure(.disabled)
+    }
+
     func hangup() async -> Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError> {
         .failure(.disabled)
     }

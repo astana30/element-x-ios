@@ -122,6 +122,10 @@ final class LiveKitDirectCallMediaEngine: DirectCallMediaEngineProtocol {
         return .success(state)
     }
 
+    func requestMediaCredentials(for session: DirectCallSession) async -> Result<DirectCallMediaConnectionInfo, DirectCallMediaError> {
+        await tokenProvider.connectionInfo(for: session)
+    }
+
     func connectAudio(for session: DirectCallSession, keyHandle: DirectCallMediaKeyHandle) async -> Result<DirectCallMediaState, DirectCallMediaError> {
         #if DEBUG
         diagnosticState.mediaConnectAttempted = true
@@ -327,6 +331,8 @@ final class LiveKitDirectCallMediaEngine: DirectCallMediaEngineProtocol {
         clearedCallIDs.insert(callID)
     }
 }
+
+extension LiveKitDirectCallMediaEngine: DirectCallMediaCredentialsBoundaryRequesting { }
 
 #if DEBUG
 extension LiveKitDirectCallMediaEngine: DirectCallMediaDiagnosticSnapshotProviding { }

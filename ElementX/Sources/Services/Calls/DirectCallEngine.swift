@@ -123,6 +123,29 @@ final class DirectCallEngine: DirectCallEngineProtocol {
         return .success(session)
     }
 
+    func requestMediaCredentials(callID: String) async -> Result<DirectCallMediaConnectionInfo, DirectCallEngineError> {
+        guard !callID.isEmpty else {
+            return .failure(.invalidCallID)
+        }
+
+        guard let session = activeSessionSubject.value,
+              session.callID == callID,
+              !session.state.isTerminal else {
+            return .failure(.invalidTransition)
+        }
+
+        guard let mediaCredentialsRequester = mediaEngine as? DirectCallMediaCredentialsBoundaryRequesting else {
+            return .failure(.mediaConnectionFailed(.tokenUnavailable))
+        }
+
+        switch await mediaCredentialsRequester.requestMediaCredentials(for: session) {
+        case .success(let connectionInfo):
+            return .success(connectionInfo)
+        case .failure(let error):
+            return .failure(.mediaConnectionFailed(error))
+        }
+    }
+
     func rejectCall(callID: String) async -> Result<DirectCallSession, DirectCallEngineError> {
         guard !callID.isEmpty else {
             return .failure(.invalidCallID)

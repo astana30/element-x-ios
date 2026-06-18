@@ -505,6 +505,26 @@ final class DirectCallEngineTests {
     }
 
     @Test
+    func requestMediaCredentialsUsesBoundaryWithoutConnectingMedia() async throws {
+        let mediaEngine = MediaEngineSpy(credentialsResult: .success(.init(serverURL: URL(fileURLWithPath: "/tmp/livekit.example.com"),
+                                                                           roomName: "room-redacted",
+                                                                           token: "token-redacted")))
+        let engine = makeEngine(mediaEngine: mediaEngine)
+
+        let startResult = await engine.startOutgoingAudioCall(peer: peerUserID, roomID: roomID)
+        let session = try #require(startResult.get())
+
+        let credentialsResult = await engine.requestMediaCredentials(callID: session.callID)
+
+        #expect(try #require(credentialsResult.get()).roomName == "room-redacted")
+        #expect(mediaEngine.requestedCredentialSessions.map(\.callID) == [session.callID])
+        #expect(mediaEngine.connectedSessions.isEmpty)
+        #expect(mediaEngine.connectedKeyHandles.isEmpty)
+        #expect(mediaEngine.disconnectCallIDs.isEmpty)
+        #expect(mediaEngine.cleanupCallIDs.isEmpty)
+    }
+
+    @Test
     func acceptAfterValidIncomingInviteConnectsMediaUsingConsumedHandle() async {
         let mediaEngine = MediaEngineSpy()
         let engine = makeEngine(mediaEngine: mediaEngine)
@@ -2500,6 +2520,14 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("mediaCredentialsCleanupRequested = false"))
         #expect(adapterSource.contains("mediaCredentialsCleanupResult = \"not_requested\""))
         #expect(adapterSource.contains("blockedReason = \"media_credentials_request_boundary_not_ready\""))
+        #expect(adapterSource.contains("summary.recordControlledMediaCredentialsRequest(succeeded: succeeded, session: session, source: source)"))
+        #expect(adapterSource.contains("mediaCredentialsRequested = true"))
+        #expect(adapterSource.contains("mediaCredentialsRequestAuthorized = mediaCredentialsRequestMetadataAvailable"))
+        #expect(adapterSource.contains("mediaCredentialsResult = succeeded && mediaCredentialsRequestMetadataAvailable ? \"success_redacted\" : \"blocked_redacted\""))
+        #expect(adapterSource.contains("mediaCredentialsTokenReceived = succeeded && mediaCredentialsRequestMetadataAvailable"))
+        #expect(adapterSource.contains("mediaCredentialsURLReceived = succeeded && mediaCredentialsRequestMetadataAvailable"))
+        #expect(adapterSource.contains("mediaCredentialsCleanupRequested = succeeded && mediaCredentialsRequestMetadataAvailable"))
+        #expect(adapterSource.contains("mediaCredentialsCleanupResult = mediaCredentialsCleanupRequested ? \"cleared\" : \"not_requested\""))
         #expect(adapterSource.contains("media_connect_requested=false"))
         #expect(adapterSource.contains("media_connect_attempted=false"))
         #expect(adapterSource.contains("livekit_join_requested=false"))
@@ -2531,8 +2559,11 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("mediaCredentialsRequestMetadataSource = source"))
         #expect(adapterSource.contains("mediaCredentialsResult = mediaCredentialsRequestMetadataAvailable ? \"metadata_ready_redacted\" : \"metadata_invalid_redacted\""))
         #expect(adapterSource.contains("blockedReason = mediaCredentialsRequestMetadataAvailable ? \"none\" : \"media_credentials_request_metadata_invalid_redacted\""))
+        #expect(adapterSource.contains("static func recordControlledMediaCredentialsRequest(succeeded: Bool, session: DirectCallSession, source: String)"))
         #expect(roomFlowSource.contains("#if DEBUG"))
         #expect(roomFlowSource.contains("SalemXPushKitRegistrationSmokeDebugBridge.recordForegroundPendingCallMetadataHandoff(session, source: \"production_accept_incoming\")"))
+        #expect(roomFlowSource.contains("nativeDirectCallProductionRoomFlowOwner.requestMediaCredentials(callID: session.callID)"))
+        #expect(roomFlowSource.contains("SalemXPushKitRegistrationSmokeDebugBridge.recordControlledMediaCredentialsRequest(succeeded: mediaCredentialsSucceeded"))
         #expect(!adapterSource.contains("room_id"))
         #expect(!adapterSource.contains("call_handle"))
     }
@@ -4441,10 +4472,12 @@ private final class EncryptionServiceSpy: DirectCallEncryptionServiceProtocol {
 }
 
 @MainActor
-private final class MediaEngineSpy: DirectCallMediaEngineProtocol {
+private final class MediaEngineSpy: DirectCallMediaEngineProtocol, DirectCallMediaCredentialsBoundaryRequesting {
     private let mediaStateSubject = CurrentValueSubject<DirectCallMediaState, Never>(.idle)
     private let connectResult: Result<DirectCallMediaState, DirectCallMediaError>
+    private let credentialsResult: Result<DirectCallMediaConnectionInfo, DirectCallMediaError>
 
+    private(set) var requestedCredentialSessions = [DirectCallSession]()
     private(set) var connectedSessions = [DirectCallSession]()
     private(set) var connectedKeyHandles = [DirectCallMediaKeyHandle]()
     private(set) var disconnectCallIDs = [String]()
@@ -4458,8 +4491,10 @@ private final class MediaEngineSpy: DirectCallMediaEngineProtocol {
                                                                                             phase: .activeAudio,
                                                                                             isMicrophoneEnabled: false,
                                                                                             isSpeakerEnabled: false,
-                                                                                            isE2EEReady: true))) {
+                                                                                            isE2EEReady: true)),
+         credentialsResult: Result<DirectCallMediaConnectionInfo, DirectCallMediaError> = .failure(.tokenUnavailable)) {
         self.connectResult = connectResult
+        self.credentialsResult = credentialsResult
     }
 
     func prepareAudioSession(for session: DirectCallSession) async -> Result<DirectCallMediaState, DirectCallMediaError> {
@@ -4474,6 +4509,11 @@ private final class MediaEngineSpy: DirectCallMediaEngineProtocol {
         connectedSessions.append(session)
         connectedKeyHandles.append(keyHandle)
         return connectResult
+    }
+
+    func requestMediaCredentials(for session: DirectCallSession) async -> Result<DirectCallMediaConnectionInfo, DirectCallMediaError> {
+        requestedCredentialSessions.append(session)
+        return credentialsResult
     }
 
     func setMicrophoneEnabled(_ isEnabled: Bool, callID: String) async -> Result<DirectCallMediaState, DirectCallMediaError> {

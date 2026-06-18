@@ -1029,6 +1029,16 @@ final class NativeDirectCallRoomController {
         }
     }
 
+    func requestMediaCredentials(callID: String) async -> Result<DirectCallMediaConnectionInfo, NativeDirectCallRoomControlError> {
+        switch prepare() {
+        case .success(let composition):
+            return await composition.engine.requestMediaCredentials(callID: callID)
+                .mapError { .engine($0) }
+        case .failure(let error):
+            return .failure(error)
+        }
+    }
+
     func hangup() async -> Result<DirectCallSession, NativeDirectCallRoomControlError> {
         switch prepare() {
         case .success(let composition):
@@ -1122,6 +1132,7 @@ protocol NativeDirectCallRoomControlling: AnyObject {
     func start() async -> Result<NativeDirectCallComposition, NativeDirectCallRoomControlError>
     func startOutgoingAudioCall() async -> Result<DirectCallSession, NativeDirectCallRoomControlError>
     func acceptIncomingCall() async -> Result<DirectCallSession, NativeDirectCallRoomControlError>
+    func requestMediaCredentials(callID: String) async -> Result<DirectCallMediaConnectionInfo, NativeDirectCallRoomControlError>
     func hangup() async -> Result<DirectCallSession, NativeDirectCallRoomControlError>
     func cleanupTerminalCall(callID: String) async -> Result<Void, NativeDirectCallRoomControlError>
     func stop()
@@ -1200,6 +1211,15 @@ final class NativeDirectCallDeveloperRoomTrigger {
         }
 
         return await controller.acceptIncomingCall()
+            .mapError { .control($0) }
+    }
+
+    func requestMediaCredentials(callID: String) async -> Result<DirectCallMediaConnectionInfo, NativeDirectCallDeveloperRoomTriggerError> {
+        guard configuration.isEnabled else {
+            return .failure(.disabled)
+        }
+
+        return await controller.requestMediaCredentials(callID: callID)
             .mapError { .control($0) }
     }
 

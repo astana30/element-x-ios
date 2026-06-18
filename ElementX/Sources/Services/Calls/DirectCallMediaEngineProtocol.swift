@@ -33,6 +33,11 @@ protocol DirectCallMediaTokenProviderProtocol {
     func connectionInfo(for session: DirectCallSession) async -> Result<DirectCallMediaConnectionInfo, DirectCallMediaError>
 }
 
+@MainActor
+protocol DirectCallMediaCredentialsBoundaryRequesting {
+    func requestMediaCredentials(for session: DirectCallSession) async -> Result<DirectCallMediaConnectionInfo, DirectCallMediaError>
+}
+
 enum DirectCallLiveKitTokenDirection: String, Codable, Equatable {
     case incoming
     case outgoing
@@ -73,7 +78,7 @@ struct DirectCallLiveKitTokenRequest: Equatable, CustomStringConvertible, Custom
     }
 
     var description: String {
-        "DirectCallLiveKitTokenRequest(callID: \(callID), roomID: <redacted>, peerUserID: <redacted>, intent: \(intent.rawValue), direction: \(direction.rawValue), deviceID: <redacted>, clientTransactionID: <redacted>)"
+        "DirectCallLiveKitTokenRequest(callID: <redacted>, roomID: <redacted>, peerUserID: <redacted>, intent: \(intent.rawValue), direction: \(direction.rawValue), deviceID: <redacted>, clientTransactionID: <redacted>)"
     }
 
     var debugDescription: String {
@@ -122,7 +127,7 @@ struct DirectCallProductionLiveKitTokenRequestDTO: Codable, Equatable, CustomStr
     }
 
     var description: String {
-        "DirectCallProductionLiveKitTokenRequestDTO(version: \(version), callID: \(callID), roomID: <redacted>, peerUserID: <redacted>, intent: \(intent), direction: \(direction.rawValue), deviceID: <redacted>, clientTransactionID: <redacted>)"
+        "DirectCallProductionLiveKitTokenRequestDTO(version: \(version), callID: <redacted>, roomID: <redacted>, peerUserID: <redacted>, intent: \(intent), direction: \(direction.rawValue), deviceID: <redacted>, clientTransactionID: <redacted>)"
     }
 
     var debugDescription: String {
@@ -170,7 +175,7 @@ struct DirectCallProductionLiveKitTokenResponseDTO: Codable, Equatable, CustomSt
         let intent: String
 
         var description: String {
-            "Allocation(id: <redacted>, callID: \(callID), intent: \(intent))"
+            "Allocation(id: <redacted>, callID: <redacted>, intent: \(intent))"
         }
 
         var debugDescription: String {

@@ -17,6 +17,7 @@ protocol DirectCallEngineProtocol {
     func startOutgoingVideoCall(peer: String, roomID: String) async -> Result<DirectCallSession, DirectCallEngineError>
     func receiveIncomingCall(event: DirectCallSignalEvent) async -> Result<DirectCallSession?, DirectCallEngineError>
     func acceptCall(callID: String) async -> Result<DirectCallSession, DirectCallEngineError>
+    func requestMediaCredentials(callID: String) async -> Result<DirectCallMediaConnectionInfo, DirectCallEngineError>
     func rejectCall(callID: String) async -> Result<DirectCallSession, DirectCallEngineError>
     func cancelOutgoingBeforeAnswer(callID: String) async -> Result<DirectCallSession, DirectCallEngineError>
     func hangupActiveCall(callID: String) async -> Result<DirectCallSession, DirectCallEngineError>

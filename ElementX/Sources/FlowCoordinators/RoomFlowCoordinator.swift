@@ -610,6 +610,16 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
         case .success(let session):
             #if DEBUG
             SalemXPushKitRegistrationSmokeDebugBridge.recordForegroundPendingCallMetadataHandoff(session, source: "production_accept_incoming")
+            let mediaCredentialsResult = await nativeDirectCallProductionRoomFlowOwner.requestMediaCredentials(callID: session.callID)
+            let mediaCredentialsSucceeded: Bool
+            if case .success = mediaCredentialsResult {
+                mediaCredentialsSucceeded = true
+            } else {
+                mediaCredentialsSucceeded = false
+            }
+            SalemXPushKitRegistrationSmokeDebugBridge.recordControlledMediaCredentialsRequest(succeeded: mediaCredentialsSucceeded,
+                                                                                              session: session,
+                                                                                              source: "production_accept_incoming")
             #endif
             return .accepted(session,
                              owner: nativeDirectCallProductionRoomFlowOwner,
@@ -3528,6 +3538,7 @@ protocol NativeDirectCallRoomFlowOwning: AnyObject {
     func startListener() async -> Result<NativeDirectCallComposition, NativeDirectCallRoomFlowOwnerError>
     func startOutgoingAudioCall() async -> Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError>
     func acceptIncomingCall() async -> Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError>
+    func requestMediaCredentials(callID: String) async -> Result<DirectCallMediaConnectionInfo, NativeDirectCallRoomFlowOwnerError>
     func hangup() async -> Result<DirectCallSession, NativeDirectCallRoomFlowOwnerError>
     func cleanupTerminalCall(callID: String) async -> Result<Void, NativeDirectCallRoomFlowOwnerError>
     func stop()
@@ -3625,6 +3636,16 @@ final class NativeDirectCallRoomFlowOwner: NativeDirectCallRoomFlowOwning {
         switch makeTrigger() {
         case .success(let trigger):
             return await trigger.acceptIncomingCall()
+                .mapError { .trigger($0) }
+        case .failure(let error):
+            return .failure(error)
+        }
+    }
+
+    func requestMediaCredentials(callID: String) async -> Result<DirectCallMediaConnectionInfo, NativeDirectCallRoomFlowOwnerError> {
+        switch makeTrigger() {
+        case .success(let trigger):
+            return await trigger.requestMediaCredentials(callID: callID)
                 .mapError { .trigger($0) }
         case .failure(let error):
             return .failure(error)

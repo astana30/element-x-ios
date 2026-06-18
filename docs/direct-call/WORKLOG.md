@@ -3342,3 +3342,27 @@ Physical proof:
 - current blocker is `media_credentials_request_boundary_not_ready`
 
 The proof kept `media_connect_requested=false`, `media_connect_attempted=false`, `livekit_join_requested=false`, `matrix_event_emit_requested=false`, and `real_call_flow_started=false`. No APNs was sent after the passing proof. No production APNs, repeated APNs, real media credentials request, media connection, LiveKit join, Matrix event emission, full call flow, raw tokens, auth headers, JWTs, payloads, IDs, call handles, LiveKit URLs, private logs, or forbidden project/signing file changes were introduced.
+
+## 2026-06-18 — 2.47B2 controlled credentials request using handoff metadata
+
+Implemented the smallest DEBUG-only step that uses the existing foreground `DirectCallSession` handoff to request credentials through the existing LiveKit token boundary, without connecting media.
+
+Code path:
+- `DirectCallEngine.requestMediaCredentials(callID:)` validates the active session and calls a new credentials-only media-engine boundary.
+- `LiveKitDirectCallMediaEngine` and `NoOpDirectCallMediaEngine` expose that boundary by calling the existing token provider only.
+- The production accept path records the existing redacted metadata handoff, requests credentials, and writes only redacted success/block proof fields.
+
+Proof shape:
+- success records `media_credentials_requested=true`, `media_credentials_request_authorized=true`, `media_credentials_result=success_redacted`, token/URL received booleans, token/URL/payload redaction booleans, `media_credentials_local_persistence_requested=false`, `media_credentials_cleanup_requested=true`, and `media_credentials_cleanup_result=cleared`
+- failure records `media_credentials_result=blocked_redacted` without token/URL exposure
+- media connect, LiveKit join, Matrix events, and full call flow remain false
+
+Privacy:
+- token request/response descriptions now redact call ID, room ID, peer/user metadata, token, URL, and allocation identifiers
+- no raw token, auth header, JWT, APNs payload, invite body, user/device/room/call identifier, call handle, LiveKit URL/token, private log, or secret-bearing URL is written by the proof
+
+Validation:
+- changed-file SwiftFormat passed
+- changed-file SwiftLint passed with only existing file-length warnings
+- targeted DirectCall test build compiled but simulator launch failed with the known `FBSOpenApplicationServiceErrorDomain / SBMainWorkspace` environment issue
+- no APNs was sent for this code checkpoint; physical B2 validation remains next
