@@ -3366,3 +3366,27 @@ Validation:
 - changed-file SwiftLint passed with only existing file-length warnings
 - targeted DirectCall test build compiled but simulator launch failed with the known `FBSOpenApplicationServiceErrorDomain / SBMainWorkspace` environment issue
 - no APNs was sent for this code checkpoint; physical B2 validation remains next
+
+## 2026-06-18 — 2.47B4 authenticated pending metadata source
+
+Defined the safe metadata source required before a real media-credentials request from the PushKit-controlled Answer path.
+
+Implementation:
+- The real non-dev invite route can accept optional real pending metadata, derive the peer from the authenticated caller, and store the resulting token-request metadata behind an opaque reference.
+- The VoIP APNs payload carries only the opaque `pending_metadata_reference` and a redaction boolean.
+- A new authenticated fetch endpoint returns the stored metadata only to the intended receiver/device and only before expiry.
+- The iOS VoIP receipt proof now records reference/fetch booleans: `pending_metadata_reference_present`, `pending_metadata_reference_redacted`, `pending_metadata_fetch_required`, and `pending_metadata_fetch_requested=false`.
+
+Validation:
+- server compileall passed
+- full call-service tests passed: `154 passed`
+- changed-file SwiftFormat passed
+- changed-file SwiftLint passed with only the existing file-length warning
+- targeted DirectCall tests passed: `38 tests`
+
+Safety:
+- no APNs was sent
+- no production APNs or repeated APNs was introduced
+- no real media credentials request, media connect, LiveKit join, microphone/camera permission request, Matrix event emission, or full call flow was started
+- no raw token, APNs key, JWT, auth header, Matrix access token, APNs payload, invite body, call ID, room ID, user/device ID, call handle, LiveKit URL/token, private log, or secret-bearing URL was written to proof/docs
+- forbidden project/signing/entitlement/`Info.plist`/`app.yml` files were untouched

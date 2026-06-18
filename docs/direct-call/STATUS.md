@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.47B2, the real foreground accept path can make a DEBUG-only controlled credentials request through the existing LiveKit token boundary using the handed-off `DirectCallSession` metadata, then record only redacted proof fields. The proof can now distinguish `success_redacted` from `blocked_redacted` while keeping token/URL/payload redacted, avoiding local persistence, and keeping media connection, LiveKit join, Matrix event emission, and full direct-call flow disabled. Physical B2 validation is still the next step; no APNs was sent for this code checkpoint.
+After 2.47B4, the real invite path has a server-backed authenticated pending metadata source for future media credential requests. The invite can create real call/room/peer metadata server-side, store it behind an opaque reference, and include only that reference in the redacted VoIP APNs payload. The iOS receipt proof records only reference/fetch booleans. No APNs, media credentials request, media connection, LiveKit join, Matrix event emission, or full call flow was run for this code checkpoint.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,13 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.47B4 authenticated pending metadata source is implemented as the next safe bridge toward real credential requests:
+  - The real non-dev invite route now accepts optional `pending_metadata` containing real call metadata, derives receiver-safe metadata from the authenticated caller, and stores it behind an opaque reference.
+  - The APNs VoIP payload carries only `pending_metadata_reference` plus redaction proof; it does not carry raw call ID, room ID, peer/user/device identifiers, call handles, token, URL, auth header, or invite body.
+  - A new authenticated pending-metadata fetch endpoint returns the stored token-request metadata only to the intended receiver/device before expiry.
+  - The iOS VoIP receipt proof records `pending_metadata_reference_present`, `pending_metadata_reference_redacted`, `pending_metadata_fetch_required`, and `pending_metadata_fetch_requested=false`.
+  - Server compileall passed, full call-service pytest passed (`154 passed`), changed-file SwiftFormat passed, changed-file SwiftLint passed with only the existing file-length warning, and targeted DirectCall tests passed (`38 tests`).
+  - No APNs, production APNs, repeated APNs, real media credentials request, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 - 2.47B2 controlled media credentials request using handed-off metadata is implemented as a DEBUG-only boundary step:
   - The foreground production accept path now requests credentials through the existing `DirectCallLiveKitTokenProvider` seam after `foreground_call_state=real_invite_pending_media` metadata is available.
   - The request path uses the active `DirectCallSession` and does not call `connectAudio`, request microphone/camera, join LiveKit, emit Matrix events, or start full call flow.

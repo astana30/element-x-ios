@@ -192,7 +192,8 @@ class APNsVoIPSandboxSendService:
     def send(self,
              request: APNsVoIPSandboxSendRequest,
              token_record: PushKitTokenRecord | None,
-             payload_kind: str = "sandbox_voip_smoke") -> APNsVoIPSendDiagnostics:
+             payload_kind: str = "sandbox_voip_smoke",
+             pending_metadata_reference: str | None = None) -> APNsVoIPSendDiagnostics:
         if token_record is None:
             return APNsVoIPSendDiagnostics(
                 persisted_pushkit_token_lookup_result="missing",
@@ -220,7 +221,7 @@ class APNsVoIPSandboxSendService:
                 blocked_reason="apns_voip_topic_unresolved",
             )
 
-        payload = _sandbox_payload(payload_kind)
+        payload = _sandbox_payload(payload_kind, pending_metadata_reference=pending_metadata_reference)
         if request.dry_run:
             return APNsVoIPSendDiagnostics(
                 persisted_pushkit_token_lookup_result="found",
@@ -273,16 +274,22 @@ class APNsVoIPSandboxSendService:
         )
 
 
-def _sandbox_payload(kind: str = "sandbox_voip_smoke") -> dict[str, object]:
+def _sandbox_payload(kind: str = "sandbox_voip_smoke",
+                     pending_metadata_reference: str | None = None) -> dict[str, object]:
+    salemx_payload: dict[str, object] = {
+        "version": 1,
+        "kind": kind,
+        "redacted": True,
+    }
+    if pending_metadata_reference:
+        salemx_payload["pending_metadata_reference"] = pending_metadata_reference
+        salemx_payload["pending_metadata_reference_redacted"] = True
+
     return {
         "aps": {
             "content-available": 1,
         },
-        "salemx_direct_call": {
-            "version": 1,
-            "kind": kind,
-            "redacted": True,
-        },
+        "salemx_direct_call": salemx_payload,
     }
 
 

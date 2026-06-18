@@ -996,3 +996,23 @@ Safety:
 - no production APNs or repeated APNs was introduced
 - no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, call ID, call handle, LiveKit URL/token, or private log recorded
 - forbidden project/signing/entitlement/`Info.plist`/`app.yml` files remain untouched
+
+## 2.47B4 readiness update
+
+Ready:
+- real non-dev invite can now create an authenticated pending metadata source for the PushKit-controlled Answer path
+- server stores real call/room/peer metadata behind an opaque reference
+- VoIP APNs payload carries only the opaque metadata reference and redaction proof
+- authenticated fetch is receiver/device-bound and expires with the invite
+- iOS receipt proof records pending metadata reference/fetch booleans without raw metadata
+
+Still not wired:
+- iOS does not yet fetch pending metadata after Answer
+- real media credentials request remains blocked until fetched metadata is handed to the existing credentials boundary
+- media connection, LiveKit join, microphone/camera request, Matrix event emission, and full call flow remain disabled
+
+Safety:
+- no APNs was sent for this code checkpoint
+- no production APNs or repeated APNs was introduced
+- no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, call ID, call handle, LiveKit URL/token, or private log recorded
+- forbidden project/signing/entitlement/`Info.plist`/`app.yml` files remain untouched

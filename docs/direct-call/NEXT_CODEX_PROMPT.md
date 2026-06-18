@@ -10,59 +10,57 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-2.47B2 code is implemented as a DEBUG-only controlled media credentials request using the real foreground `DirectCallSession` metadata handoff.
+2.47B4 defines the authenticated pending metadata source needed before requesting real media credentials from the PushKit-controlled Answer path.
 
 Implemented:
-- request credentials through the existing `DirectCallLiveKitTokenProvider` boundary after `foreground_call_state=real_invite_pending_media`
-- record only redacted success/block proof fields
-- redact token request/response descriptions, including call ID, room ID, peer/user metadata, token, URL, and allocation identifiers
-- keep `media_connect_requested=false`, `media_connect_attempted=false`, `livekit_join_requested=false`, `matrix_event_emit_requested=false`, and `real_call_flow_started=false`
+- real non-dev invite can create pending call metadata server-side from authenticated input
+- server stores real call/room/peer metadata behind an opaque reference
+- VoIP APNs payload carries only the opaque metadata reference and redaction proof
+- authenticated pending-metadata fetch returns metadata only to the intended receiver/device before expiry
+- iOS VoIP receipt proof records only metadata-reference/fetch booleans
 
-Validation so far:
+Validation:
+- server compileall passed
+- full call-service tests passed: `154 passed`
 - changed-file SwiftFormat passed
-- changed-file SwiftLint passed with only existing file-length warnings
-- targeted DirectCall test build compiled, then simulator launch failed with the known `FBSOpenApplicationServiceErrorDomain / SBMainWorkspace` environment issue
-- no APNs was sent for the code checkpoint
+- changed-file SwiftLint passed with only the existing file-length warning
+- targeted DirectCall tests passed: `38 tests`
+- no APNs was sent for this code checkpoint
 
 ## Next Task
 
-Run 2.47B2 physical validation.
+Start 2.47B5: wire the iOS PushKit-controlled Answer path to fetch authenticated pending metadata using the APNs opaque reference.
 
 Goal:
-- install a fresh Debug build
-- run PushKit upload smoke
-- run exactly one real non-dev invite/APNs attempt
-- tap Answer if CallKit UI appears
-- read `Documents/salemx-voip-push-receipt-proof.txt`
+- after `callkit_answer_action_received=true`, fetch pending metadata with existing app authentication
+- record only redacted booleans/classes in `Documents/salemx-voip-push-receipt-proof.txt`
+- build/observe the foreground pending metadata handoff from the fetched metadata
+- reach `media_credentials_request_metadata_available=true`
+- do not request real media credentials yet unless explicitly authorized
 
-Expected success proof:
+Expected proof:
 ```text
-media_credentials_boundary_reached=true
-media_credentials_requested=true
-media_credentials_request_authorized=true
-media_credentials_result=success_redacted
-media_credentials_token_received=true
-media_credentials_token_redacted=true
-media_credentials_url_received=true
-media_credentials_url_redacted=true
-media_credentials_payload_redacted=true
-media_credentials_local_persistence_requested=false
-media_credentials_cleanup_requested=true
-media_credentials_cleanup_result=cleared
+pending_metadata_reference_present=true
+pending_metadata_fetch_required=true
+pending_metadata_fetch_requested=true
+pending_metadata_fetch_result=success_redacted
+foreground_pending_call_metadata_handoff_observed=true
+foreground_pending_call_metadata_source=authenticated_pending_metadata
+foreground_pending_call_metadata_has_call_identifier=true
+foreground_pending_call_metadata_has_room_binding=true
+foreground_pending_call_metadata_has_peer=true
+foreground_pending_call_metadata_direction=incoming
+foreground_pending_call_metadata_intent=audio
+media_credentials_request_metadata_available=true
+media_credentials_requested=false
 media_connect_requested=false
 media_connect_attempted=false
 livekit_join_requested=false
+microphone_permission_requested=false
+camera_permission_requested=false
 matrix_event_emit_requested=false
 real_call_flow_started=false
 blocked_reason=none
-```
-
-If blocked:
-```text
-media_credentials_boundary_reached=true
-media_credentials_requested=true
-media_credentials_result=blocked_redacted
-blocked_reason=<redacted_reason>
 ```
 
 Safety:

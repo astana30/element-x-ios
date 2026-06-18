@@ -988,6 +988,22 @@ Safety:
 
 Next proof should be exactly one physical real non-dev invite/APNs attempt to verify `media_credentials_result=success_redacted` or a redacted blocked reason.
 
+## 2.47B4 — Authenticated pending metadata source
+
+The credentials blocker was narrowed to missing real pending metadata in the PushKit-controlled Answer path. This step defines a safe server-backed source without sending APNs or requesting credentials.
+
+Result:
+- real non-dev invite can create pending call metadata server-side and store it behind an opaque reference
+- VoIP APNs payload carries only `pending_metadata_reference` plus redaction proof
+- authenticated metadata fetch is limited to the intended receiver/device before expiry
+- iOS VoIP receipt proof records only pending metadata reference/fetch booleans
+
+Safety:
+- no APNs was sent
+- no production APNs or repeated APNs was introduced
+- no real media credentials request, media connect, LiveKit join, microphone/camera permission request, Matrix event emission, or full call flow was started
+- no raw token, APNs key, JWT, auth header, Matrix access token, APNs payload, invite body, call ID, room ID, user/device ID, call handle, LiveKit URL/token, private log, or secret-bearing URL was recorded
+
 ## 2.46A1 Real invite Answer observation fix
 
 The real-invite payload path uses the same controlled CallKit report helper as the sandbox smoke path. The likely blocker was stale controlled synthetic CallKit state: answered controlled calls were not ended or cleared after proof.

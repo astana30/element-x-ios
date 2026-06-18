@@ -702,6 +702,10 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var pushType = "none"
     var payloadVersion = "none"
     var payloadKind = "none"
+    var pendingMetadataReferencePresent = false
+    var pendingMetadataReferenceRedacted = true
+    var pendingMetadataFetchRequired = false
+    var pendingMetadataFetchRequested = false
     var realInvitePayloadMappingObserved = false
     var elementCallServicePushKitCallbackInvoked = false
     var elementCallServiceSalemXPayloadObserved = false
@@ -821,6 +825,10 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "pushkit_payload_redacted=true",
             "pushkit_payload_version=\(payloadVersion)",
             "pushkit_payload_kind=\(payloadKind)",
+            "pending_metadata_reference_present=\(pendingMetadataReferencePresent)",
+            "pending_metadata_reference_redacted=\(pendingMetadataReferenceRedacted)",
+            "pending_metadata_fetch_required=\(pendingMetadataFetchRequired)",
+            "pending_metadata_fetch_requested=\(pendingMetadataFetchRequested)",
             "real_invite_payload_mapping_observed=\(realInvitePayloadMappingObserved)",
             "element_call_pushkit_callback_invoked=\(elementCallServicePushKitCallbackInvoked)",
             "element_call_salemx_payload_observed=\(elementCallServiceSalemXPayloadObserved)",
@@ -1755,6 +1763,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         let directCallPayload = payload["salemx_direct_call"] as? [String: Any]
         let version = directCallPayload?["version"] as? Int
         let kind = directCallPayload?["kind"] as? String
+        let pendingMetadataReference = directCallPayload?["pending_metadata_reference"] as? String
         let isControlledSalemXPayload = version == 1 && (kind == "sandbox_voip_smoke" || kind == "real_invite_controlled")
         guard isControlledSalemXPayload else {
             updateLatestStartupPushKitRegistrySummary(.init(callbackInvoked: true,
@@ -1764,16 +1773,12 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             return false
         }
 
-        recordVoIPPushReceipt(payload,
-                              completion: completion,
-                              elementCallServiceCallbackInvoked: true)
+        recordVoIPPushReceipt(payload, completion: completion, elementCallServiceCallbackInvoked: true)
         return true
     }
 
     static func recordVoIPPushReceipt(_ payload: [AnyHashable: Any], completion: @escaping () -> Void) {
-        recordVoIPPushReceipt(payload,
-                              completion: completion,
-                              elementCallServiceCallbackInvoked: false)
+        recordVoIPPushReceipt(payload, completion: completion, elementCallServiceCallbackInvoked: false)
     }
 
     private static func recordVoIPPushReceipt(_ payload: [AnyHashable: Any],
@@ -1782,15 +1787,18 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         let directCallPayload = payload["salemx_direct_call"] as? [String: Any]
         let version = directCallPayload?["version"] as? Int
         let kind = directCallPayload?["kind"] as? String
-        let isSandboxSmoke = version == 1 && kind == "sandbox_voip_smoke"
+        let pendingMetadataReferencePresent = (directCallPayload?["pending_metadata_reference"] as? String)?.isEmpty == false
         let isRealInviteControlled = version == 1 && kind == "real_invite_controlled"
-        let isControlledPayload = isSandboxSmoke || isRealInviteControlled
+        let isControlledPayload = version == 1 && (kind == "sandbox_voip_smoke" || kind == "real_invite_controlled")
 
         var baseSummary = SalemXVoIPPushReceiptProofSummary(physicalVoIPPushReceived: true,
                                                             callbackInvoked: true,
                                                             pushType: "voip",
                                                             payloadVersion: version.map(String.init) ?? "missing",
                                                             payloadKind: kind ?? "missing",
+                                                            pendingMetadataReferencePresent: pendingMetadataReferencePresent,
+                                                            pendingMetadataReferenceRedacted: true, pendingMetadataFetchRequired: pendingMetadataReferencePresent,
+                                                            pendingMetadataFetchRequested: false,
                                                             realInvitePayloadMappingObserved: isRealInviteControlled,
                                                             elementCallServicePushKitCallbackInvoked: elementCallServiceCallbackInvoked,
                                                             elementCallServiceSalemXPayloadObserved: elementCallServiceCallbackInvoked,

@@ -505,6 +505,16 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["media_credentials_requested"], False)
         self.assertEqual(body["media_connect_requested"], False)
         self.assertEqual(body["matrix_event_emit_requested"], False)
+        self.assertEqual(body["pending_metadata_source_requested"], False)
+        self.assertEqual(body["pending_metadata_source_created"], False)
+        self.assertEqual(body["pending_metadata_reference_present"], False)
+        self.assertEqual(body["pending_metadata_payload_redacted"], True)
+        self.assertEqual(body["pending_metadata_has_call_identifier"], False)
+        self.assertEqual(body["pending_metadata_has_room_binding"], False)
+        self.assertEqual(body["pending_metadata_has_peer"], False)
+        self.assertEqual(body["pending_metadata_direction"], "none")
+        self.assertEqual(body["pending_metadata_intent"], "none")
+        self.assertEqual(body["pending_metadata_fetch_authenticated_required"], False)
         self.assertEqual(body["blocked_reason"], "none")
         self.assertEqual(len(provider.requests), 1)
         self.assertEqual(provider.requests[0].environment, "sandbox")
@@ -519,6 +529,109 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("callee", output)
         self.assertNotIn("device-b", output)
         self.assertNotIn("opaque-local-safe-handle", output)
+
+    async def test_real_invite_route_creates_authenticated_pending_metadata_source(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
+        store = InMemoryPushKitTokenStore()
+        token_request = app_module.PushKitTokenRegistrationRequest.from_mapping({
+            "version": 1,
+            "token": "synthetic-" + "recipient-" + "pushkit-token-fixture",
+            "environment": "development",
+        })
+        store.store("callee", "device-b", token_request)
+        provider = FakeAPNsVoIPProvider(result="sandbox_success")
+        send_service = APNsVoIPSandboxSendService(
+            APNsVoIPSandboxConfig(
+                enabled=True,
+                environment="sandbox",
+                team_id="TEAMID",
+                key_id="KEYID",
+                auth_key_path="/redacted/apns-auth-key.p8",
+                topic="kz.salemx.msg.voip",
+            ),
+            provider=provider,
+        )
+        app = app_module.create_app(
+            token_service=self.make_token_service(),
+            foreground_signaling_service=signaling,
+            pushkit_token_store=store,
+            apns_voip_send_service=send_service,
+        )
+        payload = self.targeted_invite_payload(
+            expires_at_ms=4102444800000,
+            pending_metadata={
+                "version": 1,
+                "call_id": "call-a",
+                "room_id": "!room:example.test",
+                "intent": "audio",
+            },
+        )
+
+        with self.assertLogs("salemx_call_service.app", level="INFO") as logs:
+            status, body = await _asgi_post_json(
+                app,
+                app_module.FOREGROUND_SIGNALING_INVITE_PATH,
+                {"authorization": self.authorization("auth-a")},
+                payload,
+            )
+        provider_payload = provider.requests[0].payload
+        provider_output = json.dumps(provider_payload, sort_keys=True)
+        output = json.dumps(body, sort_keys=True) + "\n" + provider_output + "\n" + "\n".join(logs.output)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["real_non_dev_invite_used"], True)
+        self.assertEqual(body["dev_invite_used"], False)
+        self.assertEqual(body["background_apns_push_result"], "sandbox_success")
+        self.assertEqual(body["pending_metadata_source_requested"], True)
+        self.assertEqual(body["pending_metadata_source_created"], True)
+        self.assertEqual(body["pending_metadata_reference_present"], True)
+        self.assertEqual(body["pending_metadata_payload_redacted"], True)
+        self.assertEqual(body["pending_metadata_has_call_identifier"], True)
+        self.assertEqual(body["pending_metadata_has_room_binding"], True)
+        self.assertEqual(body["pending_metadata_has_peer"], True)
+        self.assertEqual(body["pending_metadata_direction"], "incoming")
+        self.assertEqual(body["pending_metadata_intent"], "audio")
+        self.assertEqual(body["pending_metadata_fetch_authenticated_required"], True)
+        self.assertEqual(body["media_credentials_requested"], False)
+        self.assertEqual(body["media_connect_requested"], False)
+        self.assertEqual(body["matrix_event_emit_requested"], False)
+        self.assertEqual(body["blocked_reason"], "none")
+
+        salemx_payload = provider_payload["salemx_direct_call"]
+        self.assertIsInstance(salemx_payload, dict)
+        metadata_reference = salemx_payload["pending_metadata_reference"]
+        self.assertIsInstance(metadata_reference, str)
+        self.assertNotEqual(metadata_reference, "")
+        self.assertEqual(salemx_payload["pending_metadata_reference_redacted"], True)
+        self.assertEqual(salemx_payload["redacted"], True)
+
+        metadata_status, metadata_body = await _asgi_get_json(
+            app,
+            f"/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{metadata_reference}",
+            {"authorization": self.authorization("auth-b")},
+        )
+        wrong_user_status, wrong_user_body = await _asgi_get_json(
+            app,
+            f"/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{metadata_reference}",
+            {"authorization": self.authorization("auth-a")},
+        )
+
+        self.assertEqual(metadata_status, 200)
+        self.assertEqual(metadata_body["version"], 1)
+        self.assertEqual(metadata_body["call_id"], "call-a")
+        self.assertEqual(metadata_body["room_id"], "!room:example.test")
+        self.assertEqual(metadata_body["peer_user_id"], "caller")
+        self.assertEqual(metadata_body["direction"], "incoming")
+        self.assertEqual(metadata_body["intent"], "audio")
+        self.assertEqual(wrong_user_status, 403)
+        self.assertEqual(wrong_user_body["errcode"], "M_FORBIDDEN")
+
+        for raw_value in ["call-a", "!room:example.test", "caller", "callee", "device-b", "opaque-local-safe-handle"]:
+            self.assertNotIn(raw_value, output)
+        self.assertNotIn("synthetic-recipient-pushkit-token-fixture", output)
+        self.assertNotIn("auth-a", output)
+        self.assertNotIn("auth-b", output)
 
     async def test_real_invite_route_drops_stale_invite_without_fanout(self) -> None:
         app_module = _load_app_module()
@@ -3517,7 +3630,9 @@ async def _asgi_post_json(
     return int(status), json.loads(response_body.decode("utf-8"))
 
 
-async def _asgi_get_json(app: object, path: str) -> tuple[int, dict[str, object]]:
+async def _asgi_get_json(app: object,
+                         path: str,
+                         headers: dict[str, str] | None = None) -> tuple[int, dict[str, object]]:
     sent_messages: list[dict[str, object]] = []
     received = False
 
@@ -3540,7 +3655,7 @@ async def _asgi_get_json(app: object, path: str) -> tuple[int, dict[str, object]
         "path": path,
         "raw_path": path.encode("ascii"),
         "query_string": b"",
-        "headers": [],
+        "headers": [(key.encode("ascii"), value.encode("utf-8")) for key, value in (headers or {}).items()],
         "client": ("127.0.0.1", 12345),
         "server": ("testserver", 80),
     }

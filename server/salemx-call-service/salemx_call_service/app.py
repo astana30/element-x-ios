@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from dataclasses import replace
 from os import environ
 from typing import Any, Optional
@@ -43,6 +44,12 @@ from .livekit_rooms import DEFAULT_ROOM_DEPARTURE_TIMEOUT_SECONDS, LiveKitRoomSe
 from .livekit_tokens import LiveKitJWTTokenIssuer
 from .local_fake import make_fake_capabilities_payload, make_fake_local_service
 from .logging_utils import configure_logging, stable_redacted_id
+from .pending_call_metadata import (
+    InMemoryPendingCallMetadataStore,
+    no_pending_metadata_diagnostics,
+    pending_metadata_from_invite_payload,
+    PendingCallMetadataStoreProtocol,
+)
 from .pushkit_tokens import (
     DisabledPushKitTokenStore,
     FilePushKitTokenStore,
@@ -63,6 +70,7 @@ ENDPOINT_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/livekit/token"
 ELIGIBILITY_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/eligibility"
 FOREGROUND_SIGNALING_STREAM_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/stream"
 FOREGROUND_SIGNALING_INVITE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/invite"
+FOREGROUND_SIGNALING_PENDING_METADATA_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{metadata_reference}"
 FOREGROUND_SIGNALING_DEV_INVITE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/invite"
 FOREGROUND_SIGNALING_DEV_INJECT_ACTIVE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/inject-active"
 PUSHKIT_TOKEN_REGISTRATION_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/pushkit/token"
@@ -82,6 +90,7 @@ def create_app(config: ServiceConfig | None = None,
                foreground_signaling_service: ForegroundCallSignalingService | None = None,
                pushkit_token_store: PushKitTokenStoreProtocol | None = None,
                apns_voip_send_service: APNsVoIPSandboxSendService | None = None,
+               pending_metadata_store: PendingCallMetadataStoreProtocol | None = None,
                strict_startup: bool = True) -> FastAPI:
     service: DirectCallTokenService | None
     readiness: ServiceReadiness
@@ -156,6 +165,7 @@ def create_app(config: ServiceConfig | None = None,
     signaling_service = foreground_signaling_service or ForegroundCallSignalingService()
     token_store = pushkit_token_store or _pushkit_token_store_for_runtime(runtime_config)
     voip_send_service = apns_voip_send_service or APNsVoIPSandboxSendService(APNsVoIPSandboxConfig.from_env())
+    pending_store = pending_metadata_store or InMemoryPendingCallMetadataStore()
 
     @app.get(HEALTH_PATH)
     async def health() -> JSONResponse:
@@ -341,19 +351,32 @@ def create_app(config: ServiceConfig | None = None,
                                        errcode="M_DIRECT_CALL_SERVICE_UNAVAILABLE",
                                        error="Direct-call service is not ready.")
             bearer_token = bearer_token_from_authorization(authorization)
-            await service.auth_validator.validate_bearer_token(bearer_token)
+            authenticated_user = await service.auth_validator.validate_bearer_token(bearer_token)
             payload: Any = await request.json()
             if not isinstance(payload, dict):
                 raise bad_request(error="Request body must be a JSON object.")
             invite_request = ForegroundCallInviteRequest.from_mapping(payload)
+            pending_metadata = pending_metadata_from_invite_payload(payload, authenticated_user)
+            pending_metadata_reference: str | None = None
+            pending_metadata_diagnostics = no_pending_metadata_diagnostics()
+            if pending_metadata is not None:
+                pending_metadata_reference = pending_store.store(
+                    recipient=invite_request.recipient,
+                    recipient_device=invite_request.recipient_device,
+                    expires_at_ms=invite_request.invite.expires_at_ms,
+                    metadata=pending_metadata,
+                )
+                pending_metadata_diagnostics = pending_metadata.safe_diagnostics()
             result = signaling_service.publish_invite(invite_request)
             result_body = result.as_dict()
             result_body.update(_foreground_signaling_invite_diagnostics(invite_request, signaling_service))
+            result_body.update(pending_metadata_diagnostics)
             result_body.update(_background_invite_apns_diagnostics(
                 invite_request=invite_request,
                 token_store=token_store,
                 voip_send_service=voip_send_service,
                 invite_dropped=result.dropped,
+                pending_metadata_reference=pending_metadata_reference,
             ))
             LOGGER.info(
                 "foreground signaling invite handled subscriber_available=%s delivered=%s dropped=%s call_kind=%s "
@@ -366,6 +389,22 @@ def create_app(config: ServiceConfig | None = None,
                 result_body["background_apns_push_result"],
             )
             return JSONResponse(status_code=200, content=result_body)
+        except CallServiceError as error:
+            status_code, body = error_response(error)
+            return JSONResponse(status_code=status_code, content=body)
+
+    @app.get(FOREGROUND_SIGNALING_PENDING_METADATA_PATH)
+    async def foreground_signaling_pending_metadata(metadata_reference: str,
+                                                    authorization: Optional[str] = Header(default=None)) -> JSONResponse:
+        try:
+            if service is None:
+                raise CallServiceError(status_code=503,
+                                       errcode="M_DIRECT_CALL_SERVICE_UNAVAILABLE",
+                                       error="Direct-call service is not ready.")
+            bearer_token = bearer_token_from_authorization(authorization)
+            authenticated_user = await service.auth_validator.validate_bearer_token(bearer_token)
+            metadata = pending_store.retrieve(metadata_reference, authenticated_user, int(time.time() * 1000))
+            return JSONResponse(status_code=200, content=metadata.token_request_payload())
         except CallServiceError as error:
             status_code, body = error_response(error)
             return JSONResponse(status_code=status_code, content=body)
@@ -537,6 +576,7 @@ def _background_invite_apns_diagnostics(
     token_store: PushKitTokenStoreProtocol,
     voip_send_service: APNsVoIPSandboxSendService,
     invite_dropped: bool,
+    pending_metadata_reference: str | None = None,
 ) -> dict[str, object]:
     if invite_dropped:
         return {
@@ -583,6 +623,7 @@ def _background_invite_apns_diagnostics(
         APNsVoIPSandboxSendRequest(version=1, dry_run=False),
         token_record,
         payload_kind="real_invite_controlled",
+        pending_metadata_reference=pending_metadata_reference,
     )
     return {
         "real_non_dev_invite_used": True,
