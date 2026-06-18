@@ -931,3 +931,22 @@ Safety:
 - no APNs was sent for this diagnostic change
 - no production APNs, repeated APNs, real media credentials request, media connect, LiveKit join, Matrix event emission, or full direct-call flow was introduced
 - no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, call handle, LiveKit URL, or private log recorded
+
+## 2.47A readiness close-out
+
+Ready:
+- real non-dev invite/APNs now reaches SalemX VoIP receipt, CallKit report, Answer action, foreground pending-call handoff, and planner-only media credentials boundary
+- dedicated proof returned `callkit_first_action_kind=answer`, `foreground_call_state=real_invite_pending_media`, `media_credentials_boundary_reached=true`, and `media_credentials_result=planned_redacted`
+- the startup Element Call detector stayed false in the passing path: `element_call_pushkit_callback_invoked=false`
+
+Still not wired:
+- real media credentials request
+- media connection
+- LiveKit join
+- Matrix event emission
+- full direct-call flow
+
+Safety:
+- no further APNs was sent after the passing proof
+- no production APNs, repeated APNs, real media credentials request, media connect, LiveKit join, Matrix event emission, or full direct-call flow was introduced
+- no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, call handle, LiveKit URL, or private log recorded

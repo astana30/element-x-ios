@@ -2031,6 +2031,29 @@ Safety:
 - no production APNs, repeated APNs, real media credentials request, media connect, LiveKit join, Matrix event emission, or full direct-call flow was introduced
 - no raw tokens, JWTs, authorization headers, APNs payloads, invite bodies, IDs, call handles, LiveKit URLs, private logs, or secret-bearing URLs were recorded
 
+## 2.47A physical close-out
+
+The controlled media credentials boundary is physically verified.
+
+Proof:
+- one sandbox real non-dev invite/APNs attempt reached the SalemX VoIP receipt path
+- `physical_voip_push_received=true`, `pushkit_callback_invoked=true`, `pushkit_payload_kind=real_invite_controlled`, and `real_invite_payload_mapping_observed=true`
+- CallKit reported and delivered Answer first: `callkit_report_result=reported`, `callkit_first_action_kind=answer`, `callkit_answer_action_delivered=true`, `answer_action_uuid_matched=true`, and `answer_action_generation_matched=true`
+- controlled in-app foreground handoff passed: `controlled_in_app_screen_presented=true`, `foreground_call_state=real_invite_pending_media`, and redacted stable correlation true
+- controlled media boundary was reached as planner-only: `media_credentials_boundary_reached=true`, `media_credentials_request_planned=true`, `media_credentials_result=planned_redacted`, token/URL/payload redacted true
+- media credentials remained not requested; media connect, LiveKit join, Matrix event emission, and full call flow stayed false
+- `blocked_reason=none`
+
+Additional callback-owner proof:
+- `element_call_pushkit_callback_invoked=false`
+- `element_call_salemx_payload_observed=false`
+- the startup detector did not trigger in the successful path; SalemX PushKit receipt triggered and completed
+
+Safety:
+- no further APNs was sent after the passing proof
+- no production APNs, repeated APNs, real media credentials request, media connect, LiveKit join, Matrix event emission, or full direct-call flow was introduced
+- no raw tokens, JWTs, authorization headers, APNs payloads, invite bodies, IDs, call handles, LiveKit URLs, private logs, or secret-bearing URLs were recorded
+
 ## 2.46A3 status
 
 Real-invite CallKit report pending state now has a minimal DEBUG-only safety fix.

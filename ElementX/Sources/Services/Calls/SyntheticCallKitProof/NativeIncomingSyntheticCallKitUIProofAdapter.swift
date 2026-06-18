@@ -706,6 +706,7 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var elementCallServicePushKitCallbackInvoked = false
     var elementCallServiceSalemXPayloadObserved = false
     var elementCallServicePayloadKind = "none"
+    var elementCallServiceForwardedToSalemXReceiptPipeline = false
     var elementCallServiceCompletedWithoutSalemXCallKitReport = false
     var completionCalled = false
     var callKitReportRequested = false
@@ -804,6 +805,7 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "element_call_pushkit_callback_invoked=\(elementCallServicePushKitCallbackInvoked)",
             "element_call_salemx_payload_observed=\(elementCallServiceSalemXPayloadObserved)",
             "element_call_payload_kind=\(elementCallServicePayloadKind)",
+            "element_call_forwarded_to_salemx_receipt_pipeline=\(elementCallServiceForwardedToSalemXReceiptPipeline)",
             "element_call_completed_without_salemx_callkit_report=\(elementCallServiceCompletedWithoutSalemXCallKitReport)",
             "pushkit_completion_called=\(completionCalled)",
             "callkit_report_requested=\(callKitReportRequested)",
@@ -935,6 +937,40 @@ private struct SalemXLocalCallKitOnlyProofSummary {
             "callkit_provider_configuration_supported_handle_generic=\(callKitProviderConfigurationSupportedHandleGeneric)",
             "local_callkit_only_update_equivalent_to_voip=\(localCallKitOnlyUpdateEquivalentToVoIP)",
             "local_callkit_only_provider_config_equivalent_to_voip=\(localCallKitOnlyProviderConfigEquivalentToVoIP)",
+            "media_credentials_requested=false",
+            "media_connect_requested=false",
+            "media_connect_attempted=false",
+            "livekit_join_requested=false",
+            "matrix_event_emit_requested=false",
+            "real_call_flow_started=false",
+            "blocked_reason=\(blockedReason)"
+        ]
+    }
+}
+
+private struct SalemXStartupPushKitRegistryProofSummary {
+    var proofSource = "startup_pushkit_registry"
+    var proofGeneration = "not_started"
+    var proofLastUpdatedBy = "not_started"
+    var callbackInvoked = false
+    var payloadRedacted = true
+    var salemXPayloadObserved = false
+    var payloadKind = "none"
+    var forwardedToSalemXReceiptPipeline = false
+    var completedBySalemXBridge = false
+    var blockedReason = "not_started"
+
+    var redactedLines: [String] {
+        [
+            "proof_source=\(proofSource)",
+            "proof_generation=\(proofGeneration)",
+            "proof_last_updated_by=\(proofLastUpdatedBy)",
+            "startup_pushkit_callback_invoked=\(callbackInvoked)",
+            "startup_pushkit_payload_redacted=\(payloadRedacted)",
+            "startup_pushkit_salemx_payload_observed=\(salemXPayloadObserved)",
+            "startup_pushkit_payload_kind=\(payloadKind)",
+            "startup_pushkit_forwarded_to_salemx_receipt_pipeline=\(forwardedToSalemXReceiptPipeline)",
+            "startup_pushkit_completed_by_salemx_bridge=\(completedBySalemXBridge)",
             "media_credentials_requested=false",
             "media_connect_requested=false",
             "media_connect_attempted=false",
@@ -1335,6 +1371,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let uploadSmokeDefaultURLString = "https://matrix.mertis.kz/_matrix/client/unstable/kz.salemx.direct_call/pushkit/token"
     private static let uploadSmokeProofFileName = "salemx-pushkit-token-upload-smoke-proof.txt"
     private static let voIPPushReceiptProofFileName = "salemx-voip-push-receipt-proof.txt"
+    private static let startupPushKitRegistryProofFileName = "salemx-startup-pushkit-registry-proof.txt"
     private static let localCallKitOnlyProofFileName = "salemx-local-callkit-only-proof.txt"
     private static let localBackgroundCallKitOnlyProofFileName = "salemx-local-background-callkit-proof.txt"
     private static let voIPPushReceiptCallKitReportTimeout: TimeInterval = 3
@@ -1346,6 +1383,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var uploadSmoke: SalemXPushKitTokenUploadSmoke?
     private static var latestUploadSummary = initialUploadRedactedSummary()
     private static var latestVoIPPushReceiptSummary = SalemXVoIPPushReceiptProofSummary()
+    private static var latestStartupPushKitRegistrySummary = SalemXStartupPushKitRegistryProofSummary()
     private static var latestLocalCallKitOnlySummary = SalemXLocalCallKitOnlyProofSummary()
     private static var latestLocalBackgroundCallKitOnlySummary = SalemXLocalBackgroundCallKitOnlyProofSummary()
     private static var proofGenerationCounter = 0
@@ -1581,37 +1619,34 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         recordVoIPPushReceipt(payload) { }
     }
 
-    static func recordElementCallServiceSalemXPushKitReceipt(_ payload: [AnyHashable: Any], completion: @escaping () -> Void) -> Bool {
+    static func handleElementCallServicePushKitReceipt(_ payload: [AnyHashable: Any], completion: @escaping () -> Void) -> Bool {
         let directCallPayload = payload["salemx_direct_call"] as? [String: Any]
         let version = directCallPayload?["version"] as? Int
         let kind = directCallPayload?["kind"] as? String
-        guard let version,
-              let kind,
-              version == 1,
-              kind == "sandbox_voip_smoke" || kind == "real_invite_controlled" else {
+        let isControlledSalemXPayload = version == 1 && (kind == "sandbox_voip_smoke" || kind == "real_invite_controlled")
+        guard isControlledSalemXPayload else {
+            updateLatestStartupPushKitRegistrySummary(.init(callbackInvoked: true,
+                                                            salemXPayloadObserved: directCallPayload != nil,
+                                                            payloadKind: directCallPayload == nil ? "none" : "unsupported_redacted",
+                                                            blockedReason: directCallPayload == nil ? "salemx_payload_not_detected_in_startup_registry" : "unsupported_salemx_payload_detected_in_startup_registry"))
             return false
         }
 
-        let summary = SalemXVoIPPushReceiptProofSummary(physicalVoIPPushReceived: true,
-                                                        callbackInvoked: true,
-                                                        pushType: "voip",
-                                                        payloadVersion: String(version),
-                                                        payloadKind: kind,
-                                                        realInvitePayloadMappingObserved: kind == "real_invite_controlled",
-                                                        elementCallServicePushKitCallbackInvoked: true,
-                                                        elementCallServiceSalemXPayloadObserved: true,
-                                                        elementCallServicePayloadKind: kind,
-                                                        elementCallServiceCompletedWithoutSalemXCallKitReport: true,
-                                                        completionCalled: true,
-                                                        callKitReportRequested: false,
-                                                        callKitReportResult: "not_requested",
-                                                        blockedReason: "element_call_pushkit_registry_intercepted_salemx_payload")
-        updateLatestVoIPPushReceiptSummary(summary)
-        completion()
+        recordVoIPPushReceipt(payload,
+                              completion: completion,
+                              elementCallServiceCallbackInvoked: true)
         return true
     }
 
     static func recordVoIPPushReceipt(_ payload: [AnyHashable: Any], completion: @escaping () -> Void) {
+        recordVoIPPushReceipt(payload,
+                              completion: completion,
+                              elementCallServiceCallbackInvoked: false)
+    }
+
+    private static func recordVoIPPushReceipt(_ payload: [AnyHashable: Any],
+                                              completion: @escaping () -> Void,
+                                              elementCallServiceCallbackInvoked: Bool) {
         let directCallPayload = payload["salemx_direct_call"] as? [String: Any]
         let version = directCallPayload?["version"] as? Int
         let kind = directCallPayload?["kind"] as? String
@@ -1625,6 +1660,11 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                                                             payloadVersion: version.map(String.init) ?? "missing",
                                                             payloadKind: kind ?? "missing",
                                                             realInvitePayloadMappingObserved: isRealInviteControlled,
+                                                            elementCallServicePushKitCallbackInvoked: elementCallServiceCallbackInvoked,
+                                                            elementCallServiceSalemXPayloadObserved: elementCallServiceCallbackInvoked,
+                                                            elementCallServicePayloadKind: elementCallServiceCallbackInvoked ? kind ?? "missing" : "none",
+                                                            elementCallServiceForwardedToSalemXReceiptPipeline: elementCallServiceCallbackInvoked,
+                                                            elementCallServiceCompletedWithoutSalemXCallKitReport: false,
                                                             completionCalled: false,
                                                             callKitReportRequested: isControlledPayload,
                                                             callKitReportResult: isControlledPayload ? "pending" : "not_requested",
@@ -2311,6 +2351,17 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         writeVoIPPushReceiptProof(proof)
     }
 
+    private static func updateLatestStartupPushKitRegistrySummary(_ summary: SalemXStartupPushKitRegistryProofSummary) {
+        lock.lock()
+        var summary = summary
+        summary.proofGeneration = nextProofGenerationLocked()
+        summary.proofLastUpdatedBy = "element_call_service_pushkit"
+        latestStartupPushKitRegistrySummary = summary
+        let proof = summary.redactedLines.joined(separator: "\n")
+        lock.unlock()
+        writeStartupPushKitRegistryProof(proof)
+    }
+
     private static func updateLatestLocalCallKitOnlySummary(_ summary: SalemXLocalCallKitOnlyProofSummary) {
         lock.lock()
         var summary = summary
@@ -2344,6 +2395,10 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
 
     private static func writeVoIPPushReceiptProof(_ proof: String) {
         writeProof(proof, fileName: voIPPushReceiptProofFileName)
+    }
+
+    private static func writeStartupPushKitRegistryProof(_ proof: String) {
+        writeProof(proof, fileName: startupPushKitRegistryProofFileName)
     }
 
     private static func writeLocalCallKitOnlyProof(_ proof: String) {

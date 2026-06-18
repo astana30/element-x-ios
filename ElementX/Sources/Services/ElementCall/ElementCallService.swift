@@ -546,7 +546,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     
     func pushRegistry(_ registry: PKPushRegistry, didReceiveIncomingPushWith payload: PKPushPayload, for type: PKPushType, completion: @escaping () -> Void) {
         #if DEBUG
-        if SalemXPushKitRegistrationSmokeDebugBridge.recordElementCallServiceSalemXPushKitReceipt(payload.dictionaryPayload, completion: completion) {
+        if SalemXPushKitRegistrationSmokeDebugBridge.handleElementCallServicePushKitReceipt(payload.dictionaryPayload, completion: completion) {
             return
         }
         #endif

@@ -2184,21 +2184,25 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
-    func debugElementCallPushKitRegistryRecordsRedactedSalemXPayloadInterception() throws {
+    func debugElementCallPushKitRegistryForwardsRedactedSalemXPayload() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
         let elementCallServiceSource = try Self.sourceFile("ElementX/Sources/Services/ElementCall/ElementCallService.swift")
 
         #expect(elementCallServiceSource.contains("#if DEBUG"))
-        #expect(elementCallServiceSource.contains("recordElementCallServiceSalemXPushKitReceipt(payload.dictionaryPayload, completion: completion)"))
-        #expect(adapterSource.contains("static func recordElementCallServiceSalemXPushKitReceipt(_ payload: [AnyHashable: Any], completion: @escaping () -> Void) -> Bool"))
+        #expect(elementCallServiceSource.contains("handleElementCallServicePushKitReceipt(payload.dictionaryPayload, completion: completion)"))
+        #expect(adapterSource.contains("static func handleElementCallServicePushKitReceipt(_ payload: [AnyHashable: Any], completion: @escaping () -> Void) -> Bool"))
+        #expect(adapterSource.contains("recordVoIPPushReceipt(payload,"))
+        #expect(adapterSource.contains("elementCallServiceCallbackInvoked: true"))
         #expect(adapterSource.contains("element_call_pushkit_callback_invoked=\\(elementCallServicePushKitCallbackInvoked)"))
         #expect(adapterSource.contains("element_call_salemx_payload_observed=\\(elementCallServiceSalemXPayloadObserved)"))
         #expect(adapterSource.contains("element_call_payload_kind=\\(elementCallServicePayloadKind)"))
+        #expect(adapterSource.contains("element_call_forwarded_to_salemx_receipt_pipeline=\\(elementCallServiceForwardedToSalemXReceiptPipeline)"))
         #expect(adapterSource.contains("element_call_completed_without_salemx_callkit_report=\\(elementCallServiceCompletedWithoutSalemXCallKitReport)"))
-        #expect(adapterSource.contains("element_call_pushkit_registry_intercepted_salemx_payload"))
-        #expect(adapterSource.contains("callKitReportRequested: false"))
-        #expect(adapterSource.contains("callKitReportResult: \"not_requested\""))
-        let interceptionStart = try #require(elementCallServiceSource.range(of: "recordElementCallServiceSalemXPushKitReceipt")?.lowerBound)
+        #expect(adapterSource.contains("salemx-startup-pushkit-registry-proof.txt"))
+        #expect(adapterSource.contains("proofSource = \"startup_pushkit_registry\""))
+        #expect(adapterSource.contains("startup_pushkit_salemx_payload_observed=\\(salemXPayloadObserved)"))
+        #expect(adapterSource.contains("salemx_payload_not_detected_in_startup_registry"))
+        let interceptionStart = try #require(elementCallServiceSource.range(of: "handleElementCallServicePushKitReceipt")?.lowerBound)
         let roomIDGuard = try #require(elementCallServiceSource.range(of: "guard let roomID")?.lowerBound)
         #expect(interceptionStart < roomIDGuard)
     }

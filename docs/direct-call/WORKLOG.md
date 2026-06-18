@@ -3219,6 +3219,28 @@ Added a DEBUG-only redacted detector at the top of `ElementCallService.pushRegis
 
 No APNs was sent for this diagnostic change. No production APNs, repeated APNs, real media credentials request, media connect, LiveKit join, Matrix event emission, full call flow, raw tokens, auth headers, JWTs, payloads, IDs, call handles, LiveKit URLs, private logs, or forbidden project/signing file changes were introduced.
 
+## 2026-06-18 — 2.47A physical close-out
+
+Committed the direct DEBUG bridge experiment after physical validation. The successful proof did not use the startup Element Call detector: `element_call_pushkit_callback_invoked=false` and `element_call_salemx_payload_observed=false`. The SalemX PushKit receipt path itself received the real-invite payload and completed.
+
+Physical proof:
+- `physical_voip_push_received=true`
+- `pushkit_callback_invoked=true`
+- `pushkit_payload_kind=real_invite_controlled`
+- `callkit_report_result=reported`
+- `callkit_first_action_kind=answer`
+- `callkit_answer_action_delivered=true`
+- `callkit_answer_action_received=true`
+- `callkit_answer_action_fulfilled=true`
+- `controlled_in_app_screen_presented=true`
+- `foreground_call_state=real_invite_pending_media`
+- `media_credentials_boundary_reached=true`
+- `media_credentials_request_planned=true`
+- `media_credentials_result=planned_redacted`
+- `blocked_reason=none`
+
+Media remained planner-only: no real media credentials request, media connection, LiveKit join, Matrix event emission, or full call flow. No production APNs or repeated APNs was sent, and no raw tokens, auth headers, JWTs, payloads, IDs, call handles, LiveKit URLs, private logs, or forbidden project/signing file changes were introduced.
+
 ## 2.46A4 — Real invite CallKit cleanup ordering fix
 
 Fixed and physically verified the remaining real-invite-controlled Answer observation blocker.

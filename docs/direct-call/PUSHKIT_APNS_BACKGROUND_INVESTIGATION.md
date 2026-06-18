@@ -913,6 +913,29 @@ Source inspection narrowed a likely owner mismatch: the existing startup `Elemen
 
 No APNs was sent for the diagnostic code change. No production APNs, repeated push, media credentials request, media connection, LiveKit join, Matrix event emission, full call flow, raw tokens/JWTs/auth headers/payloads/IDs/call handles/LiveKit URLs, private logs, or forbidden project/signing file changes were introduced.
 
+## 2.47A close-out — SalemX receipt and planner boundary verified
+
+The follow-up physical proof passed. The real non-dev invite/APNs path reached SalemX's VoIP receipt proof directly; the startup Element Call detector did not trigger.
+
+Verified:
+- `physical_voip_push_received=true`
+- `pushkit_callback_invoked=true`
+- `pushkit_payload_kind=real_invite_controlled`
+- `callkit_report_result=reported`
+- `callkit_first_action_kind=answer`
+- `callkit_answer_action_delivered=true`
+- `foreground_call_state=real_invite_pending_media`
+- `media_credentials_boundary_reached=true`
+- `media_credentials_request_planned=true`
+- `media_credentials_result=planned_redacted`
+- `blocked_reason=none`
+
+Callback-owner fields:
+- `element_call_pushkit_callback_invoked=false`
+- `element_call_salemx_payload_observed=false`
+
+No further APNs was sent after the passing proof. No production APNs, repeated APNs, real media credentials request, media connection, LiveKit join, Matrix event emission, full call flow, raw tokens/JWTs/auth headers/payloads/IDs/call handles/LiveKit URLs, private logs, or forbidden project/signing file changes were introduced.
+
 ## 2.46A1 Real invite Answer observation fix
 
 The real-invite payload path uses the same controlled CallKit report helper as the sandbox smoke path. The likely blocker was stale controlled synthetic CallKit state: answered controlled calls were not ended or cleared after proof.
