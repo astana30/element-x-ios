@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: 2.47B proves the real-invite PushKit path reaches CallKit Answer, foreground pending-call state, and an explicit safe blocked media-credentials request boundary. The current blocker is `media_credentials_request_boundary_not_ready`: the foreground proof path has not yet handed the existing token endpoint the raw request metadata it requires, and no real media credentials request, media connection, LiveKit join, Matrix event emission, or full call flow is wired.
+Status: 2.47B1 adds a redacted foreground pending-call metadata handoff from the existing `DirectCallSession` after foreground accept. The handoff records only metadata presence booleans and safe direction/intent classes, so the existing media credentials boundary can later distinguish `metadata_ready_redacted` from `metadata_invalid_redacted` without exposing raw call IDs, room IDs, peer IDs, call handles, tokens, URLs, payloads, or private logs. No real media credentials request, media connection, LiveKit join, Matrix event emission, or full call flow is wired.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -32,6 +32,22 @@ blocked_reason=media_credentials_request_boundary_not_ready
 ```
 
 This is not a media credentials success. It confirms that the existing boundary is reached without exposing or inventing raw room/call/user/device identifiers. No APNs was sent after this proof, and no production APNs, repeated APNs, real media credentials request, media connection, LiveKit join, Matrix event emission, full call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, or `app.yml` regeneration was introduced.
+
+## 2.47B1 Foreground pending-call metadata handoff
+
+The foreground production accept path now records a safe handoff from the returned `DirectCallSession` into the dedicated VoIP receipt proof. Proof fields are redacted and limited to source, metadata presence booleans, safe direction/intent classes, and media-credentials metadata availability:
+
+```text
+foreground_pending_call_metadata_handoff_observed=true
+foreground_pending_call_metadata_payload_redacted=true
+foreground_pending_call_metadata_has_call_identifier=true
+foreground_pending_call_metadata_has_room_binding=true
+foreground_pending_call_metadata_has_peer=true
+media_credentials_request_metadata_available=true
+media_credentials_request_metadata_redacted=true
+```
+
+The synthetic PushKit proof path still records missing metadata and remains blocked before any credential request. No APNs push, production APNs, repeated push, real media credentials request, media connection, LiveKit join, Matrix event emission, full call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, or `app.yml` regeneration was introduced.
 
 ## 2.47A15 Local Background CallKit Answerability
 

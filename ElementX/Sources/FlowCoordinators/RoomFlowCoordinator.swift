@@ -608,6 +608,9 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
 
         switch await nativeDirectCallProductionRoomFlowOwner.acceptIncomingCall() {
         case .success(let session):
+            #if DEBUG
+            SalemXPushKitRegistrationSmokeDebugBridge.recordForegroundPendingCallMetadataHandoff(session, source: "production_accept_incoming")
+            #endif
             return .accepted(session,
                              owner: nativeDirectCallProductionRoomFlowOwner,
                              triggerDiagnostic: triggerDiagnostic)

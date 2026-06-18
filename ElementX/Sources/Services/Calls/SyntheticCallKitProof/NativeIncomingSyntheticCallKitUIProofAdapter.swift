@@ -780,6 +780,18 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var foregroundCallStateSource = "none"
     var foregroundCallStatePayloadRedacted = false
     var foregroundCallStateHasStableRedactedCorrelation = false
+    var foregroundPendingCallMetadataHandoffRequested = false
+    var foregroundPendingCallMetadataHandoffObserved = false
+    var foregroundPendingCallMetadataSource = "none"
+    var foregroundPendingCallMetadataPayloadRedacted = false
+    var foregroundPendingCallMetadataHasCallIdentifier = false
+    var foregroundPendingCallMetadataHasRoomBinding = false
+    var foregroundPendingCallMetadataHasPeer = false
+    var foregroundPendingCallMetadataDirection = "none"
+    var foregroundPendingCallMetadataIntent = "none"
+    var mediaCredentialsRequestMetadataAvailable = false
+    var mediaCredentialsRequestMetadataRedacted = false
+    var mediaCredentialsRequestMetadataSource = "none"
     var mediaCredentialsBoundaryReached = false
     var mediaCredentialsRequestPlanned = false
     var mediaCredentialsRequested = false
@@ -890,6 +902,18 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "foreground_call_state_source=\(foregroundCallStateSource)",
             "foreground_call_state_payload_redacted=\(foregroundCallStatePayloadRedacted)",
             "foreground_call_state_has_stable_redacted_correlation=\(foregroundCallStateHasStableRedactedCorrelation)",
+            "foreground_pending_call_metadata_handoff_requested=\(foregroundPendingCallMetadataHandoffRequested)",
+            "foreground_pending_call_metadata_handoff_observed=\(foregroundPendingCallMetadataHandoffObserved)",
+            "foreground_pending_call_metadata_source=\(foregroundPendingCallMetadataSource)",
+            "foreground_pending_call_metadata_payload_redacted=\(foregroundPendingCallMetadataPayloadRedacted)",
+            "foreground_pending_call_metadata_has_call_identifier=\(foregroundPendingCallMetadataHasCallIdentifier)",
+            "foreground_pending_call_metadata_has_room_binding=\(foregroundPendingCallMetadataHasRoomBinding)",
+            "foreground_pending_call_metadata_has_peer=\(foregroundPendingCallMetadataHasPeer)",
+            "foreground_pending_call_metadata_direction=\(foregroundPendingCallMetadataDirection)",
+            "foreground_pending_call_metadata_intent=\(foregroundPendingCallMetadataIntent)",
+            "media_credentials_request_metadata_available=\(mediaCredentialsRequestMetadataAvailable)",
+            "media_credentials_request_metadata_redacted=\(mediaCredentialsRequestMetadataRedacted)",
+            "media_credentials_request_metadata_source=\(mediaCredentialsRequestMetadataSource)",
             "media_credentials_boundary_reached=\(mediaCredentialsBoundaryReached)",
             "media_credentials_request_planned=\(mediaCredentialsRequestPlanned)",
             "media_credentials_requested=\(mediaCredentialsRequested)",
@@ -917,6 +941,18 @@ private struct SalemXVoIPPushReceiptProofSummary {
 
 private extension SalemXVoIPPushReceiptProofSummary {
     mutating func recordControlledMediaCredentialsRequestBoundaryNotReady() {
+        foregroundPendingCallMetadataHandoffRequested = true
+        foregroundPendingCallMetadataHandoffObserved = false
+        foregroundPendingCallMetadataSource = "synthetic_voip_receipt"
+        foregroundPendingCallMetadataPayloadRedacted = true
+        foregroundPendingCallMetadataHasCallIdentifier = false
+        foregroundPendingCallMetadataHasRoomBinding = false
+        foregroundPendingCallMetadataHasPeer = false
+        foregroundPendingCallMetadataDirection = "none"
+        foregroundPendingCallMetadataIntent = "none"
+        mediaCredentialsRequestMetadataAvailable = false
+        mediaCredentialsRequestMetadataRedacted = true
+        mediaCredentialsRequestMetadataSource = "none"
         mediaCredentialsBoundaryReached = true
         mediaCredentialsRequestPlanned = false
         mediaCredentialsRequested = false
@@ -931,6 +967,38 @@ private extension SalemXVoIPPushReceiptProofSummary {
         mediaCredentialsCleanupRequested = false
         mediaCredentialsCleanupResult = "not_requested"
         blockedReason = "media_credentials_request_boundary_not_ready"
+    }
+
+    mutating func recordForegroundPendingCallMetadataHandoff(session: DirectCallSession, source: String) {
+        foregroundPendingCallMetadataHandoffRequested = true
+        foregroundPendingCallMetadataHandoffObserved = true
+        foregroundPendingCallMetadataSource = source
+        foregroundPendingCallMetadataPayloadRedacted = true
+        foregroundPendingCallMetadataHasCallIdentifier = !session.callID.isEmpty
+        foregroundPendingCallMetadataHasRoomBinding = !session.roomID.isEmpty
+        foregroundPendingCallMetadataHasPeer = !session.peerUserID.isEmpty
+        foregroundPendingCallMetadataDirection = String(describing: session.direction)
+        foregroundPendingCallMetadataIntent = session.intent.rawValue
+        mediaCredentialsRequestMetadataAvailable = foregroundPendingCallMetadataHasCallIdentifier &&
+            foregroundPendingCallMetadataHasRoomBinding &&
+            foregroundPendingCallMetadataHasPeer &&
+            session.intent == .audio
+        mediaCredentialsRequestMetadataRedacted = true
+        mediaCredentialsRequestMetadataSource = source
+        mediaCredentialsBoundaryReached = true
+        mediaCredentialsRequestPlanned = false
+        mediaCredentialsRequested = false
+        mediaCredentialsRequestAuthorized = false
+        mediaCredentialsResult = mediaCredentialsRequestMetadataAvailable ? "metadata_ready_redacted" : "metadata_invalid_redacted"
+        mediaCredentialsTokenReceived = false
+        mediaCredentialsTokenRedacted = true
+        mediaCredentialsURLReceived = false
+        mediaCredentialsURLRedacted = true
+        mediaCredentialsPayloadRedacted = true
+        mediaCredentialsLocalPersistenceRequested = false
+        mediaCredentialsCleanupRequested = false
+        mediaCredentialsCleanupResult = "not_requested"
+        blockedReason = mediaCredentialsRequestMetadataAvailable ? "none" : "media_credentials_request_metadata_invalid_redacted"
     }
 }
 
@@ -2509,6 +2577,17 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             return "none"
         }
         return result.diagnostics.blockedReason?.description ?? "none"
+    }
+}
+
+extension SalemXPushKitRegistrationSmokeDebugBridge {
+    static func recordForegroundPendingCallMetadataHandoff(_ session: DirectCallSession, source: String) {
+        lock.lock()
+        var summary = latestVoIPPushReceiptSummary
+        summary.recordForegroundPendingCallMetadataHandoff(session: session, source: source)
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
     }
 }
 #endif

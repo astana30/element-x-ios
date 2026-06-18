@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Added the real foreground pending-call metadata handoff proof.
 - Split local CallKit-only and VoIP receipt proof files, then diagnosed the PushKit answerable-window result.
 - Isolated the background PushKit CallKit auto-End blocker after proving local CallKit-only Answer delivery.
 - Hardened foreground native incoming audio lifecycle after the one-device smoke.
@@ -69,6 +70,23 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.47B1 — Foreground Pending-Call Metadata Handoff
+
+Added a DEBUG-only redacted handoff from the existing foreground `DirectCallSession` to the dedicated VoIP receipt proof. The bridge records only source, redacted payload status, metadata presence booleans, safe direction/intent classes, and whether the existing media credentials request metadata is internally available.
+
+The synthetic real-invite PushKit proof path still blocks safely when no real `DirectCallSession` metadata has been handed off:
+
+```text
+foreground_pending_call_metadata_handoff_requested=true
+foreground_pending_call_metadata_handoff_observed=false
+media_credentials_request_metadata_available=false
+media_credentials_request_metadata_redacted=true
+media_credentials_request_metadata_source=none
+blocked_reason=media_credentials_request_boundary_not_ready
+```
+
+No APNs push, production APNs, repeated push, real media credentials request, media connection, LiveKit join, Matrix event emission, full call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 
 ### 2.47A13 — Split proofs and PushKit answerable-window diagnostic
 

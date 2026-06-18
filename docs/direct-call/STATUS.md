@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.47B physical validation, real invite -> APNs -> PushKit -> CallKit Answer -> foreground pending-call state still passes, and the controlled media credentials lifecycle now reaches a safe blocked request boundary. The dedicated VoIP receipt proof records `media_credentials_boundary_reached=true`, `media_credentials_request_planned=false`, `media_credentials_requested=false`, `media_credentials_result=blocked_redacted`, redacted token/URL/payload booleans, and `blocked_reason=media_credentials_request_boundary_not_ready`. No real media credentials request, media connection, LiveKit join, Matrix event emission, or full direct-call flow is wired.
+After 2.47B1, the real foreground accept path records a redacted pending-call metadata handoff from the existing `DirectCallSession` before any media credential request. The dedicated VoIP receipt proof can now record `foreground_pending_call_metadata_handoff_observed=true`, `foreground_pending_call_metadata_payload_redacted=true`, redacted presence booleans for call/room/peer metadata, safe direction/intent classes, and `media_credentials_request_metadata_available=true` when the metadata is internally complete. No raw call ID, room ID, peer ID, call handle, token, URL, request body, media connection, LiveKit join, Matrix event emission, or full direct-call flow is wired.
 
 ## Latest App Code Checkpoint
 
@@ -45,6 +45,11 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Current blocker is `media_credentials_request_boundary_not_ready`, because the foreground pending-call proof path still lacks a safe internal handoff for the raw request metadata required by the existing token endpoint.
   - Proof kept `media_connect_requested=false`, `media_connect_attempted=false`, `livekit_join_requested=false`, `matrix_event_emit_requested=false`, and `real_call_flow_started=false`.
   - No APNs was sent after the passing proof. No production APNs, repeated APNs, real media credentials request, media connection, LiveKit join, Matrix event emission, full call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
+- 2.47B1 real foreground pending-call metadata handoff is implemented as a DEBUG-only redacted bridge from `DirectCallSession`:
+  - The existing production accept path now records a safe metadata handoff after `acceptIncomingCall()` returns a `DirectCallSession`.
+  - The proof records only source, redacted payload status, metadata presence booleans, safe direction/intent values, and metadata availability for the existing credentials boundary.
+  - The synthetic PushKit proof path still records `media_credentials_request_metadata_available=false` and remains blocked before any credential request when no real session metadata is available.
+  - No APNs, production APNs, repeated push, real media credentials request, media connection, LiveKit join, Matrix event emission, full call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 - 2.47A13 proof split and answerable-window diagnostic are implemented and physically narrowed:
   - Local CallKit-only smoke now writes only `Documents/salemx-local-callkit-only-proof.txt` with `proof_source=local_callkit_only`, `local_callkit_only_report_result=reported`, `local_callkit_only_first_action_kind=answer`, `local_callkit_only_answer_action_delivered=true`, `local_callkit_only_end_action_delivered=false`, and `blocked_reason=none`.
   - Real VoIP PushKit receipt writes only `Documents/salemx-voip-push-receipt-proof.txt` with `proof_source=voip_push_receipt`, `pushkit_payload_kind=real_invite_controlled`, `pushkit_completion_answerable_window_requested=true`, `pushkit_completion_answerable_window_result=first_action_observed`, `callkit_first_action_kind=end`, `callkit_answer_action_delivered=false`, and `blocked_reason=background_callkit_end_before_operator_action`.
