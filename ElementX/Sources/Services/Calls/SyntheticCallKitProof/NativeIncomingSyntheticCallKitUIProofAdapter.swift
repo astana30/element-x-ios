@@ -706,6 +706,9 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var pendingMetadataReferenceRedacted = true
     var pendingMetadataFetchRequired = false
     var pendingMetadataFetchRequested = false
+    var pendingMetadataFetchAuthorized = false
+    var pendingMetadataFetchResult = "not_requested"
+    var pendingMetadataPayloadRedacted = true
     var realInvitePayloadMappingObserved = false
     var elementCallServicePushKitCallbackInvoked = false
     var elementCallServiceSalemXPayloadObserved = false
@@ -829,6 +832,9 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "pending_metadata_reference_redacted=\(pendingMetadataReferenceRedacted)",
             "pending_metadata_fetch_required=\(pendingMetadataFetchRequired)",
             "pending_metadata_fetch_requested=\(pendingMetadataFetchRequested)",
+            "pending_metadata_fetch_authorized=\(pendingMetadataFetchAuthorized)",
+            "pending_metadata_fetch_result=\(pendingMetadataFetchResult)",
+            "pending_metadata_payload_redacted=\(pendingMetadataPayloadRedacted)",
             "real_invite_payload_mapping_observed=\(realInvitePayloadMappingObserved)",
             "element_call_pushkit_callback_invoked=\(elementCallServicePushKitCallbackInvoked)",
             "element_call_salemx_payload_observed=\(elementCallServiceSalemXPayloadObserved)",
@@ -1013,6 +1019,53 @@ private extension SalemXVoIPPushReceiptProofSummary {
         mediaCredentialsCleanupRequested = false
         mediaCredentialsCleanupResult = "not_requested"
         blockedReason = mediaCredentialsRequestMetadataAvailable ? "none" : "media_credentials_request_metadata_invalid_redacted"
+    }
+
+    mutating func recordPendingMetadataFetchRequested() {
+        pendingMetadataFetchRequested = true
+        pendingMetadataFetchAuthorized = false
+        pendingMetadataFetchResult = "requested"
+        pendingMetadataPayloadRedacted = true
+        blockedReason = "pending_metadata_fetch_in_progress_redacted"
+    }
+
+    mutating func recordAuthenticatedPendingMetadataFetch(session: DirectCallSession) {
+        pendingMetadataFetchRequested = true
+        pendingMetadataFetchAuthorized = true
+        pendingMetadataFetchResult = "success_redacted"
+        pendingMetadataPayloadRedacted = true
+        recordForegroundPendingCallMetadataHandoff(session: session, source: "authenticated_pending_metadata_fetch")
+        mediaCredentialsResult = "blocked_redacted"
+        mediaCredentialsRequested = false
+        mediaCredentialsRequestAuthorized = false
+        mediaCredentialsTokenReceived = false
+        mediaCredentialsURLReceived = false
+        mediaCredentialsCleanupRequested = false
+        mediaCredentialsCleanupResult = "not_requested"
+        blockedReason = "media_credentials_request_deferred_until_next_phase"
+    }
+
+    mutating func recordAuthenticatedPendingMetadataFetchBlocked(_ reason: String, authorized: Bool) {
+        pendingMetadataFetchRequested = true
+        pendingMetadataFetchAuthorized = authorized
+        pendingMetadataFetchResult = "blocked_redacted"
+        pendingMetadataPayloadRedacted = true
+        foregroundPendingCallMetadataHandoffRequested = true
+        foregroundPendingCallMetadataHandoffObserved = false
+        foregroundPendingCallMetadataSource = "authenticated_pending_metadata_fetch"
+        foregroundPendingCallMetadataPayloadRedacted = true
+        mediaCredentialsRequestMetadataAvailable = false
+        mediaCredentialsRequestMetadataRedacted = true
+        mediaCredentialsRequestMetadataSource = "none"
+        mediaCredentialsBoundaryReached = true
+        mediaCredentialsRequestPlanned = false
+        mediaCredentialsRequested = false
+        mediaCredentialsRequestAuthorized = false
+        mediaCredentialsResult = "blocked_redacted"
+        mediaCredentialsTokenRedacted = true
+        mediaCredentialsURLRedacted = true
+        mediaCredentialsPayloadRedacted = true
+        blockedReason = reason
     }
 
     mutating func recordControlledMediaCredentialsRequest(succeeded: Bool,
@@ -1501,6 +1554,7 @@ private final class SalemXPushKitTokenUploadSmoke: NSObject, DirectCallPushKitRe
 }
 
 @objc(SalemXPushKitRegistrationSmokeDebugBridge)
+// swiftlint:disable:next type_body_length
 final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let uploadSmokeURLHost = "debug"
     private static let uploadSmokeURLPath = "/pushkit-token-upload-smoke/start"
@@ -1510,6 +1564,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let startupPushKitRegistryProofFileName = "salemx-startup-pushkit-registry-proof.txt"
     private static let localCallKitOnlyProofFileName = "salemx-local-callkit-only-proof.txt"
     private static let localBackgroundCallKitOnlyProofFileName = "salemx-local-background-callkit-proof.txt"
+    private static let pendingMetadataEndpointPathPrefix = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata"
     private static let voIPPushReceiptCallKitReportTimeout: TimeInterval = 3
     private static let voIPPushReceiptAnswerableWindowTimeout: TimeInterval = 1.5
     private static let localBackgroundCallKitOnlyReportDelay: TimeInterval = 5
@@ -1533,6 +1588,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var pendingForegroundCallMetadataSession: DirectCallSession?
     private static var pendingForegroundCallMetadataSource = "none"
     private static var pendingForegroundCallMetadataRecordedAt: Date?
+    private static var pendingAuthenticatedMetadataReference: String?
     #if canImport(CallKit) && os(iOS)
     private static var callKitProofHarness: NativeIncomingSyntheticCallKitUIProofHarness?
     private static var callKitProofGeneration = 0
@@ -1833,6 +1889,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         lock.lock()
         callKitReportCompletionDate = nil
         pushKitCompletionDate = nil
+        pendingAuthenticatedMetadataReference = pendingMetadataReferencePresent ? (directCallPayload?["pending_metadata_reference"] as? String) : nil
         pushKitCompletionAnswerableWindowID = nil
         pushKitCompletionAnswerableWindowFinish = nil
         lock.unlock()
@@ -2303,6 +2360,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     }
 
     static func recordCallKitAnswerActionProof() {
+        var pendingMetadataReferenceToFetch: String?
         lock.lock()
         var summary = latestVoIPPushReceiptSummary
         let screenSource = summary.realInvitePayloadMappingObserved ? "callkit_answer_real_invite_controlled" : "callkit_answer_sandbox_voip_smoke"
@@ -2326,7 +2384,13 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             summary.foregroundCallStatePayloadRedacted = true
             summary.foregroundCallStateHasStableRedactedCorrelation = true
             if !recordForegroundPendingCallMetadataHandoffIfAvailable(&summary) {
-                summary.recordControlledMediaCredentialsRequestBoundaryNotReady()
+                if summary.pendingMetadataFetchRequired,
+                   let pendingAuthenticatedMetadataReference {
+                    summary.recordPendingMetadataFetchRequested()
+                    pendingMetadataReferenceToFetch = pendingAuthenticatedMetadataReference
+                } else {
+                    summary.recordControlledMediaCredentialsRequestBoundaryNotReady()
+                }
             }
         } else {
             summary.blockedReason = "none"
@@ -2334,6 +2398,9 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         lock.unlock()
 
         updateLatestVoIPPushReceiptSummary(summary)
+        if let pendingMetadataReferenceToFetch {
+            Task { await fetchAuthenticatedPendingMetadata(reference: pendingMetadataReferenceToFetch) }
+        }
     }
 
     static func recordControlledCallKitCleanupProof() {
@@ -2623,6 +2690,93 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
 }
 
 extension SalemXPushKitRegistrationSmokeDebugBridge {
+    private static func fetchAuthenticatedPendingMetadata(reference: String) async {
+        guard let fetchURL = pendingMetadataFetchURL(reference: reference) else {
+            recordAuthenticatedPendingMetadataFetchBlocked(reason: "pending_metadata_fetch_url_unresolved_redacted", authorized: false)
+            return
+        }
+        guard let accessToken = await SalemXForegroundSSESmokeDebug.matrixAccessTokenForPushKitUploadSmoke() else {
+            recordAuthenticatedPendingMetadataFetchBlocked(reason: "pending_metadata_fetch_blocked_by_auth", authorized: false)
+            return
+        }
+
+        var request = URLRequest(url: fetchURL)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("B" + "earer " + accessToken, forHTTPHeaderField: "Authorization")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200..<300).contains(httpResponse.statusCode) else {
+                recordAuthenticatedPendingMetadataFetchBlocked(reason: "pending_metadata_fetch_http_failure_redacted", authorized: true)
+                return
+            }
+            guard let session = directCallSessionFromPendingMetadata(data: data) else {
+                recordAuthenticatedPendingMetadataFetchBlocked(reason: "pending_metadata_fetch_payload_invalid_redacted", authorized: true)
+                return
+            }
+            recordAuthenticatedPendingMetadataFetchSuccess(session)
+        } catch {
+            recordAuthenticatedPendingMetadataFetchBlocked(reason: "pending_metadata_fetch_network_failure_redacted", authorized: true)
+        }
+    }
+
+    private static func pendingMetadataFetchURL(reference: String) -> URL? {
+        guard !reference.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              var components = URLComponents(string: uploadSmokeDefaultURLString) else {
+            return nil
+        }
+        components.path = pendingMetadataEndpointPathPrefix + "/" + reference
+        components.query = nil
+        return components.url
+    }
+
+    private static func directCallSessionFromPendingMetadata(data: Data) -> DirectCallSession? {
+        guard let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              payload["version"] as? Int == 1,
+              let callID = payload["call_id"] as? String,
+              let roomID = payload["room_id"] as? String,
+              let peerUserID = payload["peer_user_id"] as? String,
+              payload["direction"] as? String == "incoming",
+              DirectCallIntent.parse(payload["intent"] as? String) == .audio,
+              !callID.isEmpty,
+              !roomID.isEmpty,
+              !peerUserID.isEmpty else {
+            return nil
+        }
+
+        return DirectCallSession(callID: callID,
+                                 roomID: roomID,
+                                 peerUserID: peerUserID,
+                                 direction: .incoming,
+                                 intent: .audio,
+                                 encryptionMode: .e2eeRequired,
+                                 startedAt: Date(),
+                                 updatedAt: Date(),
+                                 state: .incomingRinging,
+                                 encryptionState: .ready)
+    }
+
+    private static func recordAuthenticatedPendingMetadataFetchSuccess(_ session: DirectCallSession) {
+        lock.lock()
+        pendingAuthenticatedMetadataReference = nil
+        var summary = latestVoIPPushReceiptSummary
+        summary.recordAuthenticatedPendingMetadataFetch(session: session)
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+    }
+
+    private static func recordAuthenticatedPendingMetadataFetchBlocked(reason: String, authorized: Bool) {
+        lock.lock()
+        var summary = latestVoIPPushReceiptSummary
+        summary.recordAuthenticatedPendingMetadataFetchBlocked(reason, authorized: authorized)
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+    }
+
     private static func recordForegroundPendingCallMetadataHandoffIfAvailable(_ summary: inout SalemXVoIPPushReceiptProofSummary) -> Bool {
         guard let session = pendingForegroundCallMetadataSession,
               let recordedAt = pendingForegroundCallMetadataRecordedAt,

@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Wired the authenticated pending metadata fetch handoff after PushKit-controlled Answer.
 - Added the real foreground pending-call metadata handoff proof.
 - Split local CallKit-only and VoIP receipt proof files, then diagnosed the PushKit answerable-window result.
 - Isolated the background PushKit CallKit auto-End blocker after proving local CallKit-only Answer delivery.
@@ -87,6 +88,33 @@ blocked_reason=media_credentials_request_boundary_not_ready
 ```
 
 No APNs push, production APNs, repeated push, real media credentials request, media connection, LiveKit join, Matrix event emission, full call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
+
+### 2.47B5 — Authenticated Pending Metadata Fetch Handoff
+
+Wired the PushKit-controlled Answer proof to fetch pending metadata through the server-authenticated opaque reference introduced in 2.47B4. The fetch path records only redacted status fields and, on success, builds the foreground pending metadata handoff from the fetched metadata instead of the synthetic VoIP receipt fallback.
+
+Expected success proof shape:
+
+```text
+pending_metadata_reference_present=true
+pending_metadata_fetch_required=true
+pending_metadata_fetch_requested=true
+pending_metadata_fetch_authorized=true
+pending_metadata_fetch_result=success_redacted
+pending_metadata_payload_redacted=true
+foreground_pending_call_metadata_handoff_observed=true
+foreground_pending_call_metadata_source=authenticated_pending_metadata_fetch
+foreground_pending_call_metadata_has_call_identifier=true
+foreground_pending_call_metadata_has_room_binding=true
+foreground_pending_call_metadata_has_peer=true
+foreground_pending_call_metadata_direction=incoming
+foreground_pending_call_metadata_intent=audio
+media_credentials_request_metadata_available=true
+media_credentials_requested=false
+blocked_reason=media_credentials_request_deferred_until_next_phase
+```
+
+This phase still does not request real media credentials, connect media, join LiveKit, request microphone/camera permissions, emit Matrix events, or start full call flow. No APNs was sent for this code checkpoint, and no raw tokens, auth headers, payloads, IDs, call handles, LiveKit URLs/tokens, project/signing files, `Info.plist`, `app.yml`, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` were introduced.
 
 ### 2.47A13 — Split proofs and PushKit answerable-window diagnostic
 

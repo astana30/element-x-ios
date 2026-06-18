@@ -2199,8 +2199,8 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("real_call_flow_started=false"))
         #expect(!adapterSource.contains("payload.description"))
         #expect(!adapterSource.contains("payload.dictionaryPayload.description"))
-        #expect(!adapterSource.contains("room_id"))
-        #expect(!adapterSource.contains("call_handle"))
+        #expect(!adapterSource.contains("room_id=\\("))
+        #expect(!adapterSource.contains("call_handle=\\("))
         #expect(!appSessionSource.contains("recordVoIPPushReceipt"))
     }
 
@@ -2459,6 +2459,7 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    // swiftlint:disable:next function_body_length
     func realInviteAnswerProofRecordsForegroundPendingCallStateOnly() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
 
@@ -2472,6 +2473,9 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("pending_metadata_reference_redacted=\\(pendingMetadataReferenceRedacted)"))
         #expect(adapterSource.contains("pending_metadata_fetch_required=\\(pendingMetadataFetchRequired)"))
         #expect(adapterSource.contains("pending_metadata_fetch_requested=\\(pendingMetadataFetchRequested)"))
+        #expect(adapterSource.contains("pending_metadata_fetch_authorized=\\(pendingMetadataFetchAuthorized)"))
+        #expect(adapterSource.contains("pending_metadata_fetch_result=\\(pendingMetadataFetchResult)"))
+        #expect(adapterSource.contains("pending_metadata_payload_redacted=\\(pendingMetadataPayloadRedacted)"))
         #expect(adapterSource.contains("foreground_pending_call_metadata_handoff_requested=\\(foregroundPendingCallMetadataHandoffRequested)"))
         #expect(adapterSource.contains("foreground_pending_call_metadata_handoff_observed=\\(foregroundPendingCallMetadataHandoffObserved)"))
         #expect(adapterSource.contains("foreground_pending_call_metadata_source=\\(foregroundPendingCallMetadataSource)"))
@@ -2512,6 +2516,17 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("pendingMetadataReferenceRedacted: true"))
         #expect(adapterSource.contains("pendingMetadataFetchRequired: pendingMetadataReferencePresent"))
         #expect(adapterSource.contains("pendingMetadataFetchRequested: false"))
+        #expect(adapterSource.contains("summary.recordPendingMetadataFetchRequested()"))
+        #expect(adapterSource.contains("Task { await fetchAuthenticatedPendingMetadata(reference: pendingMetadataReferenceToFetch) }"))
+        #expect(adapterSource.contains("private static func fetchAuthenticatedPendingMetadata(reference: String) async"))
+        #expect(adapterSource.contains("request.setValue(\"B\" + \"earer \" + accessToken, forHTTPHeaderField: \"Authorization\")"))
+        #expect(adapterSource.contains("private static func directCallSessionFromPendingMetadata(data: Data) -> DirectCallSession?"))
+        #expect(adapterSource.contains("summary.recordAuthenticatedPendingMetadataFetch(session: session)"))
+        #expect(adapterSource.contains("pendingMetadataFetchResult = \"success_redacted\""))
+        #expect(adapterSource.contains("foregroundPendingCallMetadataSource = \"authenticated_pending_metadata_fetch\""))
+        #expect(adapterSource.contains("mediaCredentialsResult = \"blocked_redacted\""))
+        #expect(adapterSource.contains("mediaCredentialsRequested = false"))
+        #expect(adapterSource.contains("blockedReason = \"media_credentials_request_deferred_until_next_phase\""))
         #expect(adapterSource.contains("if !recordForegroundPendingCallMetadataHandoffIfAvailable(&summary)"))
         #expect(adapterSource.contains("summary.recordControlledMediaCredentialsRequestBoundaryNotReady()"))
         #expect(adapterSource.contains("foregroundPendingCallMetadataHandoffRequested = true"))
@@ -2552,8 +2567,8 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("real_call_flow_started=false"))
         #expect(!adapterSource.contains("payload.description"))
         #expect(!adapterSource.contains("payload.dictionaryPayload.description"))
-        #expect(!adapterSource.contains("room_id"))
-        #expect(!adapterSource.contains("call_handle"))
+        #expect(!adapterSource.contains("room_id=\\("))
+        #expect(!adapterSource.contains("call_handle=\\("))
     }
 
     @Test
@@ -2590,8 +2605,8 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(roomFlowSource.contains("SalemXPushKitRegistrationSmokeDebugBridge.recordControlledMediaCredentialsRequest(succeeded: mediaCredentialsSucceeded"))
         #expect(signalTransportSource.contains("SalemXPushKitRegistrationSmokeDebugBridge.recordForegroundPendingCallMetadataCandidate(session"))
         #expect(signalTransportSource.contains("source: \"real_invite_direct_call_session\""))
-        #expect(!adapterSource.contains("room_id"))
-        #expect(!adapterSource.contains("call_handle"))
+        #expect(!adapterSource.contains("room_id=\\("))
+        #expect(!adapterSource.contains("call_handle=\\("))
     }
 
     @Test

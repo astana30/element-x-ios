@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.47B4, the real invite path has a server-backed authenticated pending metadata source for future media credential requests. The invite can create real call/room/peer metadata server-side, store it behind an opaque reference, and include only that reference in the redacted VoIP APNs payload. The iOS receipt proof records only reference/fetch booleans. No APNs, media credentials request, media connection, LiveKit join, Matrix event emission, or full call flow was run for this code checkpoint.
+After 2.47B5, the PushKit-controlled Answer path can use the redacted APNs `pending_metadata_reference` to perform an authenticated pending-metadata fetch and record a real pending-call metadata handoff from the fetched data. The handoff records only booleans/classes and then defers real media credentials to the next phase. No APNs, media credentials request, media connection, LiveKit join, Matrix event emission, or full call flow was run for this code checkpoint.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,13 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.47B5 authenticated pending metadata fetch handoff is implemented as the next DEBUG-only bridge after CallKit Answer:
+  - The VoIP receipt proof now records `pending_metadata_fetch_requested`, `pending_metadata_fetch_authorized`, `pending_metadata_fetch_result`, and `pending_metadata_payload_redacted`.
+  - When the APNs payload includes an opaque `pending_metadata_reference`, the controlled Answer path schedules an authenticated fetch through the existing app auth boundary, parses only the server pending-metadata response, and records `foreground_pending_call_metadata_source=authenticated_pending_metadata_fetch`.
+  - Success proof sets pending metadata presence booleans for call identifier, room binding, peer, incoming direction, and audio intent, and reaches `media_credentials_request_metadata_available=true`.
+  - This phase deliberately keeps `media_credentials_requested=false`, `media_connect_requested=false`, `media_connect_attempted=false`, `livekit_join_requested=false`, `microphone_permission_requested=false`, `camera_permission_requested=false`, `matrix_event_emit_requested=false`, and `real_call_flow_started=false`, with `blocked_reason=media_credentials_request_deferred_until_next_phase`.
+  - Changed-file SwiftFormat passed, changed-file SwiftLint passed with only the existing file-length warning, and targeted DirectCall tests passed (`38 tests`).
+  - No APNs, production APNs, repeated APNs, real media credentials request, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 - 2.47B4 authenticated pending metadata source is implemented as the next safe bridge toward real credential requests:
   - The real non-dev invite route now accepts optional `pending_metadata` containing real call metadata, derives receiver-safe metadata from the authenticated caller, and stores it behind an opaque reference.
   - The APNs VoIP payload carries only `pending_metadata_reference` plus redaction proof; it does not carry raw call ID, room ID, peer/user/device identifiers, call handles, token, URL, auth header, or invite body.

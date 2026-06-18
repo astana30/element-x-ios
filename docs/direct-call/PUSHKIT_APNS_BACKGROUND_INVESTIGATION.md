@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: 2.47B1 adds a redacted foreground pending-call metadata handoff from the existing `DirectCallSession` after foreground accept. The handoff records only metadata presence booleans and safe direction/intent classes, so the existing media credentials boundary can later distinguish `metadata_ready_redacted` from `metadata_invalid_redacted` without exposing raw call IDs, room IDs, peer IDs, call handles, tokens, URLs, payloads, or private logs. No real media credentials request, media connection, LiveKit join, Matrix event emission, or full call flow is wired.
+Status: 2.47B5 wires the PushKit-controlled Answer path to fetch authenticated pending metadata by opaque APNs reference and record a redacted foreground pending-call metadata handoff. Real media credentials remain deferred; no media connection, LiveKit join, Matrix event emission, or full call flow is wired.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -48,6 +48,28 @@ media_credentials_request_metadata_redacted=true
 ```
 
 The synthetic PushKit proof path still records missing metadata and remains blocked before any credential request. No APNs push, production APNs, repeated push, real media credentials request, media connection, LiveKit join, Matrix event emission, full call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, or `app.yml` regeneration was introduced.
+
+## 2.47B5 Authenticated pending metadata fetch handoff
+
+The PushKit-controlled Answer proof now uses the redacted `pending_metadata_reference` from the real-invite VoIP payload to request authenticated pending metadata from the server. The fetched payload is never written raw; proof is reduced to authorization/result classes, redaction booleans, and metadata presence/safe direction/intent classes.
+
+Expected success proof:
+
+```text
+pending_metadata_reference_present=true
+pending_metadata_fetch_required=true
+pending_metadata_fetch_requested=true
+pending_metadata_fetch_authorized=true
+pending_metadata_fetch_result=success_redacted
+pending_metadata_payload_redacted=true
+foreground_pending_call_metadata_handoff_observed=true
+foreground_pending_call_metadata_source=authenticated_pending_metadata_fetch
+media_credentials_request_metadata_available=true
+media_credentials_requested=false
+blocked_reason=media_credentials_request_deferred_until_next_phase
+```
+
+No APNs push was sent for this code checkpoint. No production APNs, repeated push, real media credentials request, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, or `app.yml` regeneration was introduced.
 
 ## 2.47A15 Local Background CallKit Answerability
 
