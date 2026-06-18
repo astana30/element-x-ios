@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: 2.47C adds the DEBUG-only controlled real media credentials request after authenticated pending metadata fetch. The new step records only redacted token/URL/result proof and remains no-connect: no media connection, LiveKit join, microphone/camera permission request, Matrix event emission, or full call flow is wired. Physical 2.47C proof is pending.
+Status: 2.47C adds the DEBUG-only controlled real media credentials request after authenticated pending metadata fetch. Physical proof reached the no-connect credentials boundary and was blocked by `media_credentials_request_failed_redacted`; the current diagnostic patch records redacted token request/status/reason/eligibility/allocation fields for the next one-shot proof. No media connection, LiveKit join, microphone/camera permission request, Matrix event emission, or full call flow is wired.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -90,7 +90,32 @@ matrix_event_emit_requested=false
 real_call_flow_started=false
 ```
 
-No APNs was sent for this code checkpoint. Changed-file SwiftFormat passed, changed-file SwiftLint passed with only the existing file-length warning, and targeted DirectCall tests passed (`38 tests`). No production APNs, repeated APNs, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced. Physical 2.47C proof is pending.
+Physical 2.47C proof reached this boundary and failed redacted:
+
+```text
+media_credentials_requested=true
+media_credentials_request_authorized=true
+media_credentials_result=blocked_redacted
+media_credentials_token_received=false
+media_credentials_url_received=false
+media_credentials_expires_at_present=false
+blocked_reason=media_credentials_request_failed_redacted
+```
+
+The current patch adds only redacted diagnostics to the dedicated proof:
+
+```text
+media_credentials_token_request_seen=...
+media_credentials_token_http_status_bucket=...
+media_credentials_token_reason=...
+media_credentials_eligibility_allowed=...
+media_credentials_rate_limited=...
+media_credentials_allocation_attempted=...
+media_credentials_livekit_room_precreate_attempted=...
+media_credentials_token_issued=...
+```
+
+No APNs was sent for this diagnostic patch. Changed-file SwiftFormat passed, changed-file SwiftLint passed with only the existing file-length warning, and targeted DirectCall tests passed (`38 tests`). No production APNs, repeated APNs, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 
 ## 2.47A15 Local Background CallKit Answerability
 

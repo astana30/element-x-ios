@@ -1018,3 +1018,28 @@ Safety:
 - no production APNs or repeated APNs was introduced
 - no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, call ID, call handle, LiveKit URL/token, or private log recorded
 - forbidden project/signing/entitlement/`Info.plist`/`app.yml` files remain untouched
+
+## 2.47C readiness update
+
+Ready:
+- real invite/APNs/PushKit/CallKit Answer reaches authenticated pending metadata fetch and `media_credentials_request_metadata_available=true`
+- the controlled no-connect credentials request is attempted through the existing token provider boundary
+- proof remains redacted and now includes token request/status/reason/eligibility/allocation booleans/status buckets
+
+Current blocker:
+- physical proof reached `media_credentials_requested=true` and `media_credentials_request_authorized=true`
+- credentials failed redacted with `media_credentials_result=blocked_redacted`, `media_credentials_token_received=false`, `media_credentials_url_received=false`, `media_credentials_expires_at_present=false`, and `blocked_reason=media_credentials_request_failed_redacted`
+- next proof should use the new redacted diagnostics to distinguish auth/status/reason/eligibility/rate-limit/allocation/token issuance without exposing token, URL, request payload, or identifiers
+
+Still not wired:
+- media connection
+- LiveKit join
+- microphone/camera request
+- Matrix event emission
+- full direct-call flow
+
+Safety:
+- no APNs was sent for this diagnostic patch
+- no production APNs or repeated APNs was introduced
+- no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, call ID, call handle, LiveKit URL/token, or private log recorded
+- forbidden project/signing/entitlement/`Info.plist`/`app.yml` files remain untouched

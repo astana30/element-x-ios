@@ -813,6 +813,14 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var mediaCredentialsLocalPersistenceRequested = false
     var mediaCredentialsCleanupRequested = false
     var mediaCredentialsCleanupResult = "not_requested"
+    var mediaCredentialsTokenRequestSeen = false
+    var mediaCredentialsTokenHTTPStatusBucket = "not_requested"
+    var mediaCredentialsTokenReason = "none"
+    var mediaCredentialsEligibilityAllowed = false
+    var mediaCredentialsRateLimited = false
+    var mediaCredentialsAllocationAttempted = false
+    var mediaCredentialsLiveKitRoomPrecreateAttempted = false
+    var mediaCredentialsTokenIssued = false
     var controlledCallKitCleanupRequested = false
     var controlledCallKitCleanupResult = "not_requested"
     var blockedReason = "voip_push_not_received"
@@ -943,6 +951,14 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "media_credentials_local_persistence_requested=\(mediaCredentialsLocalPersistenceRequested)",
             "media_credentials_cleanup_requested=\(mediaCredentialsCleanupRequested)",
             "media_credentials_cleanup_result=\(mediaCredentialsCleanupResult)",
+            "media_credentials_token_request_seen=\(mediaCredentialsTokenRequestSeen)",
+            "media_credentials_token_http_status_bucket=\(mediaCredentialsTokenHTTPStatusBucket)",
+            "media_credentials_token_reason=\(mediaCredentialsTokenReason)",
+            "media_credentials_eligibility_allowed=\(mediaCredentialsEligibilityAllowed)",
+            "media_credentials_rate_limited=\(mediaCredentialsRateLimited)",
+            "media_credentials_allocation_attempted=\(mediaCredentialsAllocationAttempted)",
+            "media_credentials_livekit_room_precreate_attempted=\(mediaCredentialsLiveKitRoomPrecreateAttempted)",
+            "media_credentials_token_issued=\(mediaCredentialsTokenIssued)",
             "controlled_callkit_cleanup_requested=\(controlledCallKitCleanupRequested)",
             "controlled_callkit_cleanup_result=\(controlledCallKitCleanupResult)",
             "media_connect_requested=false",
@@ -1071,7 +1087,8 @@ private extension SalemXVoIPPushReceiptProofSummary {
     mutating func recordControlledMediaCredentialsRequest(succeeded: Bool,
                                                           expiresAtPresent: Bool,
                                                           session: DirectCallSession,
-                                                          source: String) {
+                                                          source: String,
+                                                          diagnostics: DirectCallDiagnosticSnapshot = .empty) {
         recordForegroundPendingCallMetadataHandoff(session: session, source: source)
         mediaCredentialsBoundaryReached = true
         mediaCredentialsRequestPlanned = false
@@ -1087,7 +1104,39 @@ private extension SalemXVoIPPushReceiptProofSummary {
         mediaCredentialsLocalPersistenceRequested = false
         mediaCredentialsCleanupRequested = succeeded && mediaCredentialsRequestMetadataAvailable
         mediaCredentialsCleanupResult = mediaCredentialsCleanupRequested ? "cleared" : "not_requested"
+        mediaCredentialsTokenRequestSeen = diagnostics.tokenRequestSeen
+        mediaCredentialsTokenHTTPStatusBucket = Self.httpStatusBucket(diagnostics.tokenStatus)
+        mediaCredentialsTokenReason = diagnostics.tokenReason.rawValue
+        mediaCredentialsEligibilityAllowed = diagnostics.tokenEligibilityAllowed
+        mediaCredentialsRateLimited = diagnostics.tokenRateLimited
+        mediaCredentialsAllocationAttempted = diagnostics.tokenAllocationAttempted
+        mediaCredentialsLiveKitRoomPrecreateAttempted = diagnostics.tokenLiveKitRoomPrecreateAttempted
+        mediaCredentialsTokenIssued = diagnostics.tokenIssued
         blockedReason = succeeded && mediaCredentialsRequestMetadataAvailable ? "none" : "media_credentials_request_failed_redacted"
+    }
+
+    private static func httpStatusBucket(_ status: Int?) -> String {
+        guard let status else {
+            return "unknown"
+        }
+        switch status {
+        case 200..<300:
+            return "2xx"
+        case 400:
+            return "400"
+        case 401:
+            return "401"
+        case 403:
+            return "403"
+        case 404:
+            return "404"
+        case 429:
+            return "429"
+        case 500..<600:
+            return "5xx"
+        default:
+            return "other_redacted"
+        }
     }
 }
 
@@ -2807,7 +2856,8 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
         recordControlledMediaCredentialsRequest(succeeded: succeeded,
                                                 expiresAtPresent: expiresAtPresent,
                                                 session: session,
-                                                source: source)
+                                                source: source,
+                                                diagnostics: tokenProvider.diagnosticSnapshot)
     }
 
     private static func controlledMediaCredentialsTokenEndpointURL() -> URL? {
@@ -2866,13 +2916,15 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
     static func recordControlledMediaCredentialsRequest(succeeded: Bool,
                                                         expiresAtPresent: Bool,
                                                         session: DirectCallSession,
-                                                        source: String) {
+                                                        source: String,
+                                                        diagnostics: DirectCallDiagnosticSnapshot = .empty) {
         lock.lock()
         var summary = latestVoIPPushReceiptSummary
         summary.recordControlledMediaCredentialsRequest(succeeded: succeeded,
                                                         expiresAtPresent: expiresAtPresent,
                                                         session: session,
-                                                        source: source)
+                                                        source: source,
+                                                        diagnostics: diagnostics)
         lock.unlock()
 
         updateLatestVoIPPushReceiptSummary(summary)

@@ -3444,3 +3444,28 @@ Safety:
 - no real media credentials request, media connect, LiveKit join, microphone/camera permission request, Matrix event emission, or full call flow was started
 - no raw token, APNs key, JWT, auth header, Matrix access token, APNs payload, invite body, call ID, room ID, user/device ID, call handle, LiveKit URL/token, private log, or secret-bearing URL was written to proof/docs
 - forbidden project/signing/entitlement/`Info.plist`/`app.yml` files were untouched
+
+## 2026-06-18 — 2.47C redacted credentials request diagnostics
+
+Physical 2.47C reached the credentials request boundary but did not receive credentials. The successful parts were the real invite/APNs/PushKit path, CallKit Answer, authenticated pending metadata fetch, and `media_credentials_request_metadata_available=true`.
+
+Observed blocker:
+- `media_credentials_requested=true`
+- `media_credentials_request_authorized=true`
+- `media_credentials_result=blocked_redacted`
+- `media_credentials_token_received=false`
+- `media_credentials_url_received=false`
+- `media_credentials_expires_at_present=false`
+- `blocked_reason=media_credentials_request_failed_redacted`
+
+Added redacted proof fields from the existing token provider diagnostics:
+- `media_credentials_token_request_seen`
+- `media_credentials_token_http_status_bucket`
+- `media_credentials_token_reason`
+- `media_credentials_eligibility_allowed`
+- `media_credentials_rate_limited`
+- `media_credentials_allocation_attempted`
+- `media_credentials_livekit_room_precreate_attempted`
+- `media_credentials_token_issued`
+
+This diagnostic does not retry credentials, connect media, join LiveKit, request microphone/camera, emit Matrix events, or start full call flow. No APNs was sent for this patch. No production APNs, repeated APNs, raw token, auth header, JWT, payload, user/device/room/call identifier, call handle, LiveKit URL/token, private log, or forbidden project/signing file change was introduced.

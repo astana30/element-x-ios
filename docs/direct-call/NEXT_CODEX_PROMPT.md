@@ -10,7 +10,7 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-2.47C code is committed as a DEBUG-only no-connect credentials request checkpoint. After authenticated pending metadata fetch succeeds, the PushKit-controlled Answer proof path requests media credentials through the existing `DirectCallLiveKitTokenProvider` boundary and records only redacted token/URL/result proof. Physical 2.47C proof has not run yet.
+2.47C code is committed as a DEBUG-only no-connect credentials request checkpoint. Physical proof reached the credentials request boundary after authenticated pending metadata fetch, but the credential request returned `blocked_redacted` with `blocked_reason=media_credentials_request_failed_redacted`.
 
 Proven:
 - iOS stores the opaque `pending_metadata_reference` from the real-invite VoIP payload
@@ -18,27 +18,28 @@ Proven:
 - fetched metadata is reduced to redacted handoff proof booleans/classes
 - `media_credentials_request_metadata_available=true`
 - code now attempts the controlled media credentials request after metadata success
+- proof now records redacted token diagnostics: request seen, HTTP status bucket, reason, eligibility, rate limit, allocation attempted, LiveKit room precreate attempted, and token issued
 - media connection, LiveKit join, microphone/camera permission request, Matrix event emission, and full call flow remain blocked
 
 Validation:
 - changed-file SwiftFormat passed
 - changed-file SwiftLint passed with only the existing file-length warning
 - targeted DirectCall tests passed: `38 tests`
-- no APNs was sent for this code checkpoint
+- no APNs was sent for the diagnostic proof-field patch
 
 ## Next Task
 
-Start 2.47C physical close-out: controlled real media credentials request, no-connect.
+Start 2.47C1 physical diagnostic close-out: collect redacted media credentials token diagnostics.
 
 Goal:
 - install a fresh Debug build from the current branch
 - run PushKit upload smoke and confirm it is green
 - run exactly one authenticated real non-dev invite/APNs attempt
 - tap Answer once if CallKit UI appears
-- verify the dedicated VoIP receipt proof records redacted credentials success or a redacted blocker
+- verify the dedicated VoIP receipt proof records the redacted token diagnostics below
 - do not connect media, join LiveKit, request microphone/camera, emit Matrix events, or start full call flow
 
-Expected proof:
+Required diagnostic proof fields:
 ```text
 pushkit_payload_kind=real_invite_controlled
 callkit_first_action_kind=answer
@@ -60,16 +61,24 @@ media_credentials_request_metadata_available=true
 media_credentials_boundary_reached=true
 media_credentials_requested=true
 media_credentials_request_authorized=true
-media_credentials_result=success_redacted
-media_credentials_token_received=true
+media_credentials_result=success_redacted OR blocked_redacted
+media_credentials_token_request_seen=true/false
+media_credentials_token_http_status_bucket=2xx/400/401/403/404/429/5xx/other_redacted/unknown
+media_credentials_token_reason=<redacted_reason>
+media_credentials_eligibility_allowed=true/false
+media_credentials_rate_limited=true/false
+media_credentials_allocation_attempted=true/false
+media_credentials_livekit_room_precreate_attempted=true/false
+media_credentials_token_issued=true/false
+media_credentials_token_received=true/false
 media_credentials_token_redacted=true
-media_credentials_url_received=true
+media_credentials_url_received=true/false
 media_credentials_url_redacted=true
-media_credentials_expires_at_present=true
+media_credentials_expires_at_present=true/false
 media_credentials_payload_redacted=true
 media_credentials_local_persistence_requested=false
-media_credentials_cleanup_requested=true
-media_credentials_cleanup_result=cleared
+media_credentials_cleanup_requested=true/false
+media_credentials_cleanup_result=cleared OR not_requested
 media_connect_requested=false
 media_connect_attempted=false
 livekit_join_requested=false
@@ -79,6 +88,8 @@ matrix_event_emit_requested=false
 real_call_flow_started=false
 blocked_reason=none
 ```
+
+If credentials remain blocked, do not repeat APNs. Report the redacted token diagnostics and the blocker.
 
 Safety:
 - do not use `dev/invite`
