@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.47C, the PushKit-controlled Answer path uses the authenticated pending-metadata handoff to request real media credentials through the existing `DirectCallLiveKitTokenProvider` boundary, then records only redacted proof fields. Physical proof reached the credentials request boundary and was blocked by `media_credentials_request_failed_redacted`; this patch adds redacted token diagnostics so the next one-shot proof can distinguish HTTP/status/reason/eligibility/allocation without exposing token, URL, room, call, user, device, auth header, or payload data. This remains no-connect: no media connection, LiveKit join, microphone/camera permission request, Matrix event emission, or full call flow is run.
+After 2.47C, the PushKit-controlled Answer path uses the authenticated pending-metadata handoff to request real media credentials through the existing `DirectCallLiveKitTokenProvider` boundary, then records only redacted proof fields. Physical proof reached the credentials request boundary and failed with `media_credentials_token_http_status_bucket=404`; route probes showed the canonical `/livekit/token` public path returned `404` while existing call-service public routes returned auth-gated `401`. 2.47C2 adds a foreground-signaling token alias and points only the DEBUG controlled proof path at it. This remains no-connect: no media connection, LiveKit join, microphone/camera permission request, Matrix event emission, or full call flow is run.
 
 ## Latest App Code Checkpoint
 
@@ -50,6 +50,12 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - Credentials request proof recorded `media_credentials_requested=true`, `media_credentials_request_authorized=true`, `media_credentials_result=blocked_redacted`, `media_credentials_token_received=false`, `media_credentials_url_received=false`, `media_credentials_expires_at_present=false`, and `blocked_reason=media_credentials_request_failed_redacted`.
   - The proof now records redacted token diagnostics: request seen, HTTP status bucket, token reason, eligibility, rate limit, allocation attempted, LiveKit room precreate attempted, and token issued booleans.
   - No APNs was sent for this diagnostic patch. No production APNs, repeated APNs, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
+- 2.47C2 targets the token 404 only:
+  - Root cause: physical proof returned `media_credentials_token_request_seen=true`, `media_credentials_token_http_status_bucket=404`, and `media_credentials_token_reason=unknown`, while unauthenticated route probes showed the public canonical token route returned `404 M_UNRECOGNIZED` and existing call-service routes returned `401`.
+  - The server keeps the canonical token route and adds an authenticated alias at `/foreground-signaling/livekit/token`, reusing the same token handler.
+  - The DEBUG controlled PushKit proof path now requests credentials through that alias so it can use the already exposed foreground-signaling route family.
+  - Targeted server route tests, server compileall, changed-file SwiftFormat/SwiftLint, and targeted DirectCall tests passed.
+  - No APNs was sent for this fix. No production APNs, repeated APNs, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 - 2.47B5 authenticated pending metadata fetch handoff is physically validated after CallKit Answer:
   - The VoIP receipt proof now records `pending_metadata_fetch_requested`, `pending_metadata_fetch_authorized`, `pending_metadata_fetch_result`, and `pending_metadata_payload_redacted`.
   - When the APNs payload includes an opaque `pending_metadata_reference`, the controlled Answer path schedules an authenticated fetch through the existing app auth boundary, parses only the server pending-metadata response, and records `foreground_pending_call_metadata_source=authenticated_pending_metadata_fetch`.

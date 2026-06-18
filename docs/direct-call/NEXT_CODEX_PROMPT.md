@@ -10,7 +10,7 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-2.47C code is committed as a DEBUG-only no-connect credentials request checkpoint. Physical proof reached the credentials request boundary after authenticated pending metadata fetch, but the credential request returned `blocked_redacted` with `blocked_reason=media_credentials_request_failed_redacted`.
+2.47C2 code is committed as a DEBUG-only no-connect credentials request route fix. Physical 2.47C1 proof reached the credentials request boundary after authenticated pending metadata fetch, but the credential request returned `blocked_redacted` with `media_credentials_token_http_status_bucket=404`.
 
 Proven:
 - iOS stores the opaque `pending_metadata_reference` from the real-invite VoIP payload
@@ -19,24 +19,34 @@ Proven:
 - `media_credentials_request_metadata_available=true`
 - code now attempts the controlled media credentials request after metadata success
 - proof now records redacted token diagnostics: request seen, HTTP status bucket, reason, eligibility, rate limit, allocation attempted, LiveKit room precreate attempted, and token issued
+- route probes narrowed the 404 to public route exposure: the canonical `/livekit/token` public path returned `404`, while existing call-service paths returned auth-gated `401`
+- the server now exposes an authenticated `/foreground-signaling/livekit/token` alias that reuses the same token handler
+- the DEBUG controlled PushKit proof path uses that alias
 - media connection, LiveKit join, microphone/camera permission request, Matrix event emission, and full call flow remain blocked
 
 Validation:
 - changed-file SwiftFormat passed
 - changed-file SwiftLint passed with only the existing file-length warning
+- server compileall passed
+- targeted server token-route tests passed: `4 passed`
 - targeted DirectCall tests passed: `38 tests`
-- no APNs was sent for the diagnostic proof-field patch
+- no APNs was sent for the route fix
 
 ## Next Task
 
-Start 2.47C1 physical diagnostic close-out: collect redacted media credentials token diagnostics.
+Start 2.47C2 physical close-out: deploy/verify the foreground-signaling token alias, then run one controlled no-connect credentials proof only after route safety passes.
 
 Goal:
+- deploy/restart the call-service alias if needed
+- verify unauthenticated public route safety:
+  - `/foreground-signaling/livekit/token` returns `401`, not `404`
+  - `/dev/invite` remains `404`
+  - token upload and real invite routes remain auth-gated
 - install a fresh Debug build from the current branch
 - run PushKit upload smoke and confirm it is green
 - run exactly one authenticated real non-dev invite/APNs attempt
 - tap Answer once if CallKit UI appears
-- verify the dedicated VoIP receipt proof records the redacted token diagnostics below
+- verify the dedicated VoIP receipt proof records credentials success or a redacted non-404 token diagnostic
 - do not connect media, join LiveKit, request microphone/camera, emit Matrix events, or start full call flow
 
 Required diagnostic proof fields:

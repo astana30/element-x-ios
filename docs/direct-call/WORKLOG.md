@@ -3469,3 +3469,37 @@ Added redacted proof fields from the existing token provider diagnostics:
 - `media_credentials_token_issued`
 
 This diagnostic does not retry credentials, connect media, join LiveKit, request microphone/camera, emit Matrix events, or start full call flow. No APNs was sent for this patch. No production APNs, repeated APNs, raw token, auth header, JWT, payload, user/device/room/call identifier, call handle, LiveKit URL/token, private log, or forbidden project/signing file change was introduced.
+
+## 2026-06-18 — 2.47C2 media credentials token 404 fix
+
+Investigated the 2.47C1 physical blocker without sending APNs. The iPhone proof showed the credentials request was authorized and sent, but failed before token issuance:
+
+```text
+media_credentials_token_request_seen=true
+media_credentials_token_http_status_bucket=404
+media_credentials_token_reason=unknown
+media_credentials_eligibility_allowed=false
+media_credentials_allocation_attempted=false
+media_credentials_token_issued=false
+```
+
+Root cause:
+- iOS constructed the canonical token path `/_matrix/client/unstable/kz.salemx.direct_call/livekit/token`.
+- The checked-in server route exists at that path.
+- Public unauthenticated route probes showed the canonical token path returned `404 M_UNRECOGNIZED`, while existing call-service routes such as PushKit token upload and foreground invite returned auth-gated `401`.
+- This narrows the failure to public route exposure/reverse-proxy coverage, not token request schema, metadata lookup, eligibility, allocation, LiveKit precreate, or token signing.
+
+Fix:
+- kept the canonical server token route intact
+- added an authenticated foreground-signaling token alias that reuses the same token handler
+- changed only the DEBUG controlled PushKit credentials proof path to use the alias
+- added source/server tests so the alias remains auth-gated and uses the LiveKit token handler
+
+Validation:
+- server compileall passed
+- targeted server token-route tests passed: `4 passed`
+- changed-file SwiftFormat passed
+- changed-file SwiftLint passed with the existing file-length warning
+- targeted DirectCall tests passed: `38 tests`
+
+No APNs was sent. No production APNs, repeated APNs, media connect, LiveKit join, microphone/camera permission request, Matrix event emission, full call flow, raw token, auth header, JWT, payload, user/device/room/call identifier, call handle, LiveKit URL/token, private log, or forbidden project/signing file change was introduced.

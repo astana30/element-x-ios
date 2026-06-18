@@ -71,6 +71,7 @@ ELIGIBILITY_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/eligibility"
 FOREGROUND_SIGNALING_STREAM_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/stream"
 FOREGROUND_SIGNALING_INVITE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/invite"
 FOREGROUND_SIGNALING_PENDING_METADATA_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{metadata_reference}"
+FOREGROUND_SIGNALING_LIVEKIT_TOKEN_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/livekit/token"
 FOREGROUND_SIGNALING_DEV_INVITE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/invite"
 FOREGROUND_SIGNALING_DEV_INJECT_ACTIVE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/inject-active"
 PUSHKIT_TOKEN_REGISTRATION_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/pushkit/token"
@@ -177,6 +178,7 @@ def create_app(config: ServiceConfig | None = None,
         return JSONResponse(status_code=200 if current_readiness.ready else 503, content=current_readiness.as_dict())
 
     @app.post(ENDPOINT_PATH)
+    @app.post(FOREGROUND_SIGNALING_LIVEKIT_TOKEN_PATH)
     async def livekit_token(request: Request, authorization: Optional[str] = Header(default=None)) -> JSONResponse:
         try:
             if service is None:

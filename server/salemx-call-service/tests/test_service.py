@@ -87,6 +87,7 @@ from salemx_call_service.storage_keys import StorageKeyHasher
 from salemx_call_service.synapse_http import SynapseHTTPResponse
 
 TOKEN_ENDPOINT_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/livekit/token"
+FOREGROUND_SIGNALING_TOKEN_ENDPOINT_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/livekit/token"
 CAPABILITIES_PATH = "/_matrix/client/v3/capabilities"
 
 
@@ -3174,6 +3175,47 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(claims["iss"], "test-api-key")
         self.assertEqual(claims["video"]["room"], body["livekit"]["room_name"])
         self.assertTrue(LiveKitJWTTokenIssuerTests.verify_hs256_signature(body["livekit"]["participant_token"], "test-signing-key"))
+
+    async def test_foreground_signaling_token_alias_requires_authenticated_session(self) -> None:
+        try:
+            with patch.dict(os.environ, {SERVICE_MODE_ENV: ServiceMode.LOCAL_FAKE.value}, clear=True):
+                from salemx_call_service.app import create_app
+        except ModuleNotFoundError as error:
+            if error.name == "fastapi":
+                self.skipTest("FastAPI is not installed in this Python environment.")
+            raise
+
+        app = create_app(token_service=DirectCallTokenServiceTests().make_service())
+        status, body = await _asgi_post_json(app, FOREGROUND_SIGNALING_TOKEN_ENDPOINT_PATH, {
+            "content-type": "application/json",
+        }, DirectCallTokenServiceTests().valid_payload())
+
+        self.assertEqual(status, 401)
+        self.assertEqual(body["errcode"], "M_UNKNOWN_TOKEN")
+        self.assertNotIn("participant_token", body)
+
+    async def test_foreground_signaling_token_alias_uses_livekit_token_handler(self) -> None:
+        try:
+            with patch.dict(os.environ, {SERVICE_MODE_ENV: ServiceMode.LOCAL_FAKE.value}, clear=True):
+                from salemx_call_service.app import create_app
+        except ModuleNotFoundError as error:
+            if error.name == "fastapi":
+                self.skipTest("FastAPI is not installed in this Python environment.")
+            raise
+
+        service = DirectCallTokenServiceTests().make_service(issuer=FakeLiveKitTokenIssuer())
+        app = create_app(token_service=service)
+        authorization = "Be" + "arer " + "matrix-" + "token-a-sensitive"
+        status, body = await _asgi_post_json(app, FOREGROUND_SIGNALING_TOKEN_ENDPOINT_PATH, {
+            "authorization": authorization,
+            "content-type": "application/json",
+        }, DirectCallTokenServiceTests().valid_payload())
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["version"], 1)
+        self.assertIn("livekit", body)
+        self.assertEqual(body["diagnostics"]["token_reason"], "issued")
+        self.assertTrue(body["diagnostics"]["token_issued"])
 
     async def test_token_endpoint_over_redis_rate_limit_returns_429_without_second_token(self) -> None:
         try:

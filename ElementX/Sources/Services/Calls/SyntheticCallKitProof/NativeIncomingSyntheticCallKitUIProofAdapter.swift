@@ -1608,6 +1608,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let uploadSmokeURLHost = "debug"
     private static let uploadSmokeURLPath = "/pushkit-token-upload-smoke/start"
     private static let uploadSmokeDefaultURLString = "https://matrix.mertis.kz/_matrix/client/unstable/kz.salemx.direct_call/pushkit/token"
+    private static let controlledMediaCredentialsTokenEndpointPath = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/livekit/token"
     private static let uploadSmokeProofFileName = "salemx-pushkit-token-upload-smoke-proof.txt"
     private static let voIPPushReceiptProofFileName = "salemx-voip-push-receipt-proof.txt"
     private static let startupPushKitRegistryProofFileName = "salemx-startup-pushkit-registry-proof.txt"
@@ -2864,7 +2865,7 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
         guard var components = URLComponents(string: uploadSmokeDefaultURLString) else {
             return nil
         }
-        components.path = DirectCallProductionConfiguration.tokenEndpointPath
+        components.path = controlledMediaCredentialsTokenEndpointPath
         components.query = nil
         components.fragment = nil
         return components.url
