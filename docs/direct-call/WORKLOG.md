@@ -93,9 +93,15 @@ No APNs push, production APNs, repeated push, real media credentials request, me
 
 Wired the PushKit-controlled Answer proof to fetch pending metadata through the server-authenticated opaque reference introduced in 2.47B4. The fetch path records only redacted status fields and, on success, builds the foreground pending metadata handoff from the fetched metadata instead of the synthetic VoIP receipt fallback.
 
-Expected success proof shape:
+Physical proof passed:
 
 ```text
+physical_voip_push_received=true
+pushkit_callback_invoked=true
+pushkit_payload_kind=real_invite_controlled
+callkit_first_action_kind=answer
+callkit_answer_action_received=true
+callkit_answer_action_fulfilled=true
 pending_metadata_reference_present=true
 pending_metadata_fetch_required=true
 pending_metadata_fetch_requested=true
@@ -110,11 +116,12 @@ foreground_pending_call_metadata_has_peer=true
 foreground_pending_call_metadata_direction=incoming
 foreground_pending_call_metadata_intent=audio
 media_credentials_request_metadata_available=true
+media_credentials_request_metadata_source=authenticated_pending_metadata_fetch
 media_credentials_requested=false
 blocked_reason=media_credentials_request_deferred_until_next_phase
 ```
 
-This phase still does not request real media credentials, connect media, join LiveKit, request microphone/camera permissions, emit Matrix events, or start full call flow. No APNs was sent for this code checkpoint, and no raw tokens, auth headers, payloads, IDs, call handles, LiveKit URLs/tokens, project/signing files, `Info.plist`, `app.yml`, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` were introduced.
+This phase still does not request real media credentials, connect media, join LiveKit, request microphone/camera permissions, emit Matrix events, or start full call flow. No APNs was sent after the passing proof, and no raw tokens, auth headers, payloads, IDs, call handles, LiveKit URLs/tokens, project/signing files, `Info.plist`, `app.yml`, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` were introduced.
 
 ### 2.47A13 — Split proofs and PushKit answerable-window diagnostic
 

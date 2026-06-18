@@ -10,29 +10,31 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-2.47B5 wires the PushKit-controlled Answer path to fetch authenticated pending metadata through the opaque APNs reference, then records a redacted pending-call metadata handoff. Real media credentials are still deferred.
+2.47B5 physically proved the PushKit-controlled Answer path can fetch authenticated pending metadata through the opaque APNs reference, then record a redacted pending-call metadata handoff. Real media credentials are still deferred.
 
-Implemented:
+Proven:
 - iOS stores the opaque `pending_metadata_reference` from the real-invite VoIP payload
 - after CallKit Answer, iOS requests authenticated pending metadata with existing app auth
 - fetched metadata is reduced to redacted handoff proof booleans/classes
+- `media_credentials_request_metadata_available=true`
 - real media credentials stay blocked until the next explicit phase
 
 Validation:
 - changed-file SwiftFormat passed
 - changed-file SwiftLint passed with only the existing file-length warning
 - targeted DirectCall tests passed: `38 tests`
-- no APNs was sent for this code checkpoint
+- one physical real non-dev invite/APNs proof passed
+- no APNs was sent after the passing proof
 
 ## Next Task
 
-Start 2.47B5 physical close-out: prove the authenticated pending metadata fetch handoff with one real non-dev invite/APNs attempt.
+Start 2.47B6: controlled media credentials request using authenticated pending metadata.
 
 Goal:
-- run PushKit upload smoke first and require green redacted proof
-- run exactly one authenticated real non-dev invite/APNs attempt
-- after CallKit Answer, verify authenticated pending metadata fetch success
-- verify real media credentials remain deferred
+- use the proven `authenticated_pending_metadata_fetch` handoff as the metadata source
+- request credentials through the existing `DirectCallLiveKitTokenProvider` boundary
+- record only redacted success/failure fields
+- do not connect media, join LiveKit, request microphone/camera, emit Matrix events, or start full call flow
 
 Expected proof:
 ```text
@@ -54,8 +56,16 @@ foreground_pending_call_metadata_direction=incoming
 foreground_pending_call_metadata_intent=audio
 media_credentials_request_metadata_available=true
 media_credentials_boundary_reached=true
-media_credentials_requested=false
-media_credentials_result=blocked_redacted
+media_credentials_requested=true
+media_credentials_request_authorized=true
+media_credentials_result=success_redacted
+media_credentials_token_received=true
+media_credentials_token_redacted=true
+media_credentials_url_received=true
+media_credentials_url_redacted=true
+media_credentials_payload_redacted=true
+media_credentials_cleanup_requested=true
+media_credentials_cleanup_result=cleared
 media_connect_requested=false
 media_connect_attempted=false
 livekit_join_requested=false
@@ -63,7 +73,7 @@ microphone_permission_requested=false
 camera_permission_requested=false
 matrix_event_emit_requested=false
 real_call_flow_started=false
-blocked_reason=media_credentials_request_deferred_until_next_phase
+blocked_reason=none
 ```
 
 Safety:
