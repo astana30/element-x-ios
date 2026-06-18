@@ -3312,3 +3312,15 @@ Background comparison:
 This narrows the problem to the background PushKit/real-invite CallKit surface or timing, not the generic CallKit provider configuration or delegate action path.
 
 No production APNs push was attempted. No repeated push was attempted. No real media credentials request, media connection, LiveKit join, Matrix event emission, or full call flow was introduced. No raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, private log, user/device/room/call identifiers, LiveKit URL/token, or secret-bearing URL was recorded.
+
+## 2026-06-18 — 2.47B controlled media credentials request lifecycle
+
+Added a DEBUG-only explicit media credentials request boundary after the proven `foreground_call_state=real_invite_pending_media` handoff. The current implementation does not fabricate request identifiers and does not call the token endpoint unless the existing boundary can be authorized with safe internal metadata.
+
+Physical proof:
+- real non-dev invite/APNs reached `physical_voip_push_received=true`, `pushkit_callback_invoked=true`, `pushkit_payload_kind=real_invite_controlled`, CallKit report `reported`, first action `answer`, and fulfilled Answer proof
+- foreground pending-call state remained `foreground_call_state=real_invite_pending_media` with source `callkit_answer_real_invite_controlled` and redacted stable correlation proof
+- media credentials lifecycle recorded `media_credentials_boundary_reached=true`, `media_credentials_request_planned=false`, `media_credentials_requested=false`, `media_credentials_request_authorized=false`, `media_credentials_result=blocked_redacted`, `media_credentials_token_received=false`, `media_credentials_token_redacted=true`, `media_credentials_url_received=false`, `media_credentials_url_redacted=true`, `media_credentials_payload_redacted=true`, `media_credentials_local_persistence_requested=false`, `media_credentials_cleanup_requested=false`, and `media_credentials_cleanup_result=not_requested`
+- current blocker is `media_credentials_request_boundary_not_ready`
+
+The proof kept `media_connect_requested=false`, `media_connect_attempted=false`, `livekit_join_requested=false`, `matrix_event_emit_requested=false`, and `real_call_flow_started=false`. No APNs was sent after the passing proof. No production APNs, repeated APNs, real media credentials request, media connection, LiveKit join, Matrix event emission, full call flow, raw tokens, auth headers, JWTs, payloads, IDs, call handles, LiveKit URLs, private logs, or forbidden project/signing file changes were introduced.

@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: 2.47A15 proves both local foreground CallKit-only and local background scheduled CallKit-only paths deliver Answer, while the real-invite PushKit path still reports End as the first CallKit action. The remaining blocker is now narrowed to the PushKit callback/report lifecycle, not generic CallKit config or app background state. Production PushKit/APNs/background behavior remains disabled by default and unwired.
+Status: 2.47B proves the real-invite PushKit path reaches CallKit Answer, foreground pending-call state, and an explicit safe blocked media-credentials request boundary. The current blocker is `media_credentials_request_boundary_not_ready`: the foreground proof path has not yet handed the existing token endpoint the raw request metadata it requires, and no real media credentials request, media connection, LiveKit join, Matrix event emission, or full call flow is wired.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -9,6 +9,29 @@ This document records what is currently present in tracked Element X / SalemX co
 The validated foreground real-invite token-guard baseline was consolidated in 2.42O. The 2.42M physical two-device foreground real-invite smoke passed at `bf9996ae0665ad3953fac3d7a838bfb619349dd1`, and 2.42N guarded the DEBUG smoke tooling release surface at `26e520b6f6ec0220ce118051f5acac36ed40bfba`.
 
 Foreground real invite behavior must remain unchanged while PushKit/APNs/background incoming-call work is scoped separately. The M1-M4 smoke controls and bridges are local DEBUG tooling only and are not production call behavior.
+
+## 2.47B Safe media credentials request boundary
+
+The latest physical proof reached SalemX VoIP receipt, CallKit report, Answer, controlled in-app screen, and `foreground_call_state=real_invite_pending_media`. The media credentials lifecycle then stopped safely at the request boundary:
+
+```text
+media_credentials_boundary_reached=true
+media_credentials_request_planned=false
+media_credentials_requested=false
+media_credentials_request_authorized=false
+media_credentials_result=blocked_redacted
+media_credentials_token_received=false
+media_credentials_token_redacted=true
+media_credentials_url_received=false
+media_credentials_url_redacted=true
+media_credentials_payload_redacted=true
+media_credentials_local_persistence_requested=false
+media_credentials_cleanup_requested=false
+media_credentials_cleanup_result=not_requested
+blocked_reason=media_credentials_request_boundary_not_ready
+```
+
+This is not a media credentials success. It confirms that the existing boundary is reached without exposing or inventing raw room/call/user/device identifiers. No APNs was sent after this proof, and no production APNs, repeated APNs, real media credentials request, media connection, LiveKit join, Matrix event emission, full call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, or `app.yml` regeneration was introduced.
 
 ## 2.47A15 Local Background CallKit Answerability
 

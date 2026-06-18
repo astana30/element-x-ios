@@ -1,6 +1,6 @@
 # PushKit Readiness Plan
 
-Status: 2.47A15 proves local CallKit-only Answer delivery from both foreground and background app state. Real VoIP PushKit receipt proof remains separated at `Documents/salemx-voip-push-receipt-proof.txt`, and the background real-invite PushKit path still reports End as the first action. The remaining blocker is narrowed to the PushKit callback/report lifecycle, not generic CallKit config or app background state. No standard APNs registration, production APNs, repeated push in this commit step, real media credentials request, media connection, LiveKit join, Matrix event emission, or production background behavior is implemented by this document.
+Status: 2.47B proves real-invite PushKit receipt, CallKit Answer, foreground pending-call state, and an explicit safe blocked media-credentials request boundary. The active blocker is `media_credentials_request_boundary_not_ready`; the next step is a safe internal handoff of the request metadata required by the existing token boundary. No standard APNs registration, production APNs, repeated push in this commit step, real media credentials request, media connection, LiveKit join, Matrix event emission, or production background behavior is implemented by this document.
 
 ## 1. Current Safe Baseline
 
@@ -42,6 +42,7 @@ The 2.43B-I background chain exists only as safe seams:
 - 2.47A10 proves the local CallKit-only path can deliver Answer, while the background PushKit path completes the CallKit report and PushKit completion in `<100ms`, stays foreground, exposes no local End cause, and then receives system/user-unknown End more than `2000ms` later before the operator observes an answerable surface.
 - 2.47A13 splits local CallKit-only proof from VoIP PushKit receipt proof. Local proof now records `proof_source=local_callkit_only` and Answer success in `Documents/salemx-local-callkit-only-proof.txt`; VoIP receipt proof records `proof_source=voip_push_receipt`, answerable-window first-action observation, and the continuing background blocker in `Documents/salemx-voip-push-receipt-proof.txt`.
 - 2.47A15 adds a scheduled local background CallKit-only proof in `Documents/salemx-local-background-callkit-proof.txt`; physical proof reports `app_state_at_report=background`, `local_background_first_action_kind=answer`, and `blocked_reason=none`. This rules out generic CallKit config and background app state as the cause of the PushKit path's first-action End.
+- 2.47B validates the controlled media credentials request lifecycle as a safe blocked boundary: the proof reaches `foreground_call_state=real_invite_pending_media`, records `media_credentials_boundary_reached=true`, `media_credentials_requested=false`, `media_credentials_result=blocked_redacted`, token/URL/payload redaction booleans, and `blocked_reason=media_credentials_request_boundary_not_ready`.
 
 The 2.43I registrar scaffold imports PushKit through an isolated real registry factory, but its feature gate defaults disabled and it is not wired to app startup. 2.43O used a DEBUG-only manual smoke trigger to request local PushKit registration once and receive a redacted `token_received` result. 2.43P adds only an inert token registration contract/client seam with fake transport tests. 2.43Q adds only an auth-gated server endpoint/contract tested with synthetic tokens; it returns redacted status classes and does not durably persist tokens or send VoIP pushes. 2.43R validates a local fake-token app/server smoke against the changed server app only. 2.43S attempted staging deploy validation but was blocked by `staging_deploy_blocked_by_ssh_timeout`, so live staging token registration still requires deployment. 2.43T verified that the local staging SSH alias and identity file exist. 2.43U confirmed the alias resolves to port `71`, the corrected deploy port for this environment, but the port 71 path still timed out before auth/host-key negotiation. 2.43V documents the manual deploy package and runbook for the 2.43Q/2.43R endpoint without deploying it. 2.43W confirms port `71` connectivity, then resumed 2.43W verifies SSH publickey auth, copies the two endpoint runtime files, and remote compileall passes. 2.43X records the restart-auth blocker. 2.43Y verifies the manually restored restart/status path and confirms the token route is active on staging localhost. 2.43Z maps the public token route through the reverse proxy, reloads nginx, and validates public synthetic-token registration with redacted success. 2.44A uses a controlled DEBUG/manual physical smoke to receive a real PushKit token and upload it once to the public staging token-registration endpoint; the proof is fully redacted and the server does not persist the token. 2.44B adds controlled server-side persistence and deploys it to staging. 2.44B1 reruns the physical smoke on a connected iPhone and verifies redacted `persisted` storage plus `pushkit_token_retrieval_internal_check=redacted_match`. 2.44C adds a controlled server-side APNs VoIP sandbox send scaffold, deploys it to staging, and verifies it fails closed before APNs for the available staging credential with `persisted_pushkit_token_missing`; later phases prove the matched real-invite APNs path can send sandbox pushes successfully. 2.47A6 narrows the active blocker to CallKit delivering End before Answer after successful report. 2.47A7 adds redacted operator-intent/timing proof. 2.47A10 narrows further: local CallKit-only Answer works, but background PushKit completes the report, calls PushKit completion in `<100ms`, remains foreground, exposes no local End cause, and then receives End after `>2000ms` before an answerable UI surface is observed. 2.47A13 removes the local-proof/VoIP-receipt storage collision and proves the answerable-window first action is still End. There is still no default-enabled native direct-call PushKit registration, no production APNs send, no repeated push in this commit step, no real media credential request, no media connection, no LiveKit join, no Matrix event emission, and no full direct-call flow. Entitlements, provisioning, project files, signing settings, `Info.plist`, and `app.yml` have not been changed by this work.
 
@@ -948,5 +949,28 @@ Still not wired:
 
 Safety:
 - no further APNs was sent after the passing proof
+- no production APNs, repeated APNs, real media credentials request, media connect, LiveKit join, Matrix event emission, or full direct-call flow was introduced
+- no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, call handle, LiveKit URL, or private log recorded
+
+## 2.47B readiness update
+
+Ready:
+- real non-dev invite/APNs still reaches SalemX VoIP receipt, CallKit report, Answer action, controlled in-app screen, and foreground pending-call handoff
+- the controlled media credentials lifecycle now records a safe blocked request boundary rather than planner-only success
+- proof records `media_credentials_boundary_reached=true`, `media_credentials_request_planned=false`, `media_credentials_requested=false`, `media_credentials_request_authorized=false`, `media_credentials_result=blocked_redacted`, `media_credentials_token_received=false`, `media_credentials_token_redacted=true`, `media_credentials_url_received=false`, `media_credentials_url_redacted=true`, `media_credentials_payload_redacted=true`, `media_credentials_local_persistence_requested=false`, `media_credentials_cleanup_requested=false`, and `media_credentials_cleanup_result=not_requested`
+
+Current blocker:
+- `media_credentials_request_boundary_not_ready`
+- the proof path has not yet handed the existing media token endpoint its required raw request metadata through a safe internal foreground state
+
+Still not wired:
+- real media credentials request
+- media connection
+- LiveKit join
+- Matrix event emission
+- full direct-call flow
+
+Safety:
+- no APNs was sent after the passing proof
 - no production APNs, repeated APNs, real media credentials request, media connect, LiveKit join, Matrix event emission, or full direct-call flow was introduced
 - no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, call handle, LiveKit URL, or private log recorded

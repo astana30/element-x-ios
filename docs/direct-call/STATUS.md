@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.47A13 physical validation - proof storage is now split between VoIP receipt, local CallKit-only, and PushKit upload smoke files. Local CallKit-only proof writes `Documents/salemx-local-callkit-only-proof.txt` and remains answerable with `local_callkit_only_first_action_kind=answer`, while real-invite VoIP receipt proof writes `Documents/salemx-voip-push-receipt-proof.txt` and records the background PushKit path independently. The DEBUG answerable-window experiment reached `pushkit_completion_answerable_window_requested=true` and `pushkit_completion_answerable_window_result=first_action_observed`, but the background first action remains `callkit_first_action_kind=end` with `blocked_reason=background_callkit_end_before_operator_action`. Real PushKit registration remains disabled by default outside manual diagnostics, iOS local token persistence remains disabled, and the path is not wired into Matrix events, media connection, LiveKit join, or full direct-call flow.
+After 2.47B physical validation, real invite -> APNs -> PushKit -> CallKit Answer -> foreground pending-call state still passes, and the controlled media credentials lifecycle now reaches a safe blocked request boundary. The dedicated VoIP receipt proof records `media_credentials_boundary_reached=true`, `media_credentials_request_planned=false`, `media_credentials_requested=false`, `media_credentials_result=blocked_redacted`, redacted token/URL/payload booleans, and `blocked_reason=media_credentials_request_boundary_not_ready`. No real media credentials request, media connection, LiveKit join, Matrix event emission, or full direct-call flow is wired.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,12 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.47B controlled media credentials request lifecycle is physically validated as a safe blocked boundary:
+  - Real non-dev invite/APNs reached SalemX VoIP receipt, CallKit report, Answer, controlled in-app screen, and `foreground_call_state=real_invite_pending_media`.
+  - The media boundary now records explicit lifecycle fields: `media_credentials_request_planned=false`, `media_credentials_requested=false`, `media_credentials_request_authorized=false`, `media_credentials_result=blocked_redacted`, `media_credentials_token_received=false`, `media_credentials_token_redacted=true`, `media_credentials_url_received=false`, `media_credentials_url_redacted=true`, `media_credentials_payload_redacted=true`, `media_credentials_local_persistence_requested=false`, `media_credentials_cleanup_requested=false`, and `media_credentials_cleanup_result=not_requested`.
+  - Current blocker is `media_credentials_request_boundary_not_ready`, because the foreground pending-call proof path still lacks a safe internal handoff for the raw request metadata required by the existing token endpoint.
+  - Proof kept `media_connect_requested=false`, `media_connect_attempted=false`, `livekit_join_requested=false`, `matrix_event_emit_requested=false`, and `real_call_flow_started=false`.
+  - No APNs was sent after the passing proof. No production APNs, repeated APNs, real media credentials request, media connection, LiveKit join, Matrix event emission, full call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 - 2.47A13 proof split and answerable-window diagnostic are implemented and physically narrowed:
   - Local CallKit-only smoke now writes only `Documents/salemx-local-callkit-only-proof.txt` with `proof_source=local_callkit_only`, `local_callkit_only_report_result=reported`, `local_callkit_only_first_action_kind=answer`, `local_callkit_only_answer_action_delivered=true`, `local_callkit_only_end_action_delivered=false`, and `blocked_reason=none`.
   - Real VoIP PushKit receipt writes only `Documents/salemx-voip-push-receipt-proof.txt` with `proof_source=voip_push_receipt`, `pushkit_payload_kind=real_invite_controlled`, `pushkit_completion_answerable_window_requested=true`, `pushkit_completion_answerable_window_result=first_action_observed`, `callkit_first_action_kind=end`, `callkit_answer_action_delivered=false`, and `blocked_reason=background_callkit_end_before_operator_action`.

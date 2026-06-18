@@ -782,10 +782,17 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var foregroundCallStateHasStableRedactedCorrelation = false
     var mediaCredentialsBoundaryReached = false
     var mediaCredentialsRequestPlanned = false
+    var mediaCredentialsRequested = false
+    var mediaCredentialsRequestAuthorized = false
     var mediaCredentialsResult = "not_requested"
+    var mediaCredentialsTokenReceived = false
     var mediaCredentialsTokenRedacted = false
+    var mediaCredentialsURLReceived = false
     var mediaCredentialsURLRedacted = false
     var mediaCredentialsPayloadRedacted = false
+    var mediaCredentialsLocalPersistenceRequested = false
+    var mediaCredentialsCleanupRequested = false
+    var mediaCredentialsCleanupResult = "not_requested"
     var controlledCallKitCleanupRequested = false
     var controlledCallKitCleanupResult = "not_requested"
     var blockedReason = "voip_push_not_received"
@@ -885,13 +892,19 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "foreground_call_state_has_stable_redacted_correlation=\(foregroundCallStateHasStableRedactedCorrelation)",
             "media_credentials_boundary_reached=\(mediaCredentialsBoundaryReached)",
             "media_credentials_request_planned=\(mediaCredentialsRequestPlanned)",
+            "media_credentials_requested=\(mediaCredentialsRequested)",
+            "media_credentials_request_authorized=\(mediaCredentialsRequestAuthorized)",
             "media_credentials_result=\(mediaCredentialsResult)",
+            "media_credentials_token_received=\(mediaCredentialsTokenReceived)",
             "media_credentials_token_redacted=\(mediaCredentialsTokenRedacted)",
+            "media_credentials_url_received=\(mediaCredentialsURLReceived)",
             "media_credentials_url_redacted=\(mediaCredentialsURLRedacted)",
             "media_credentials_payload_redacted=\(mediaCredentialsPayloadRedacted)",
+            "media_credentials_local_persistence_requested=\(mediaCredentialsLocalPersistenceRequested)",
+            "media_credentials_cleanup_requested=\(mediaCredentialsCleanupRequested)",
+            "media_credentials_cleanup_result=\(mediaCredentialsCleanupResult)",
             "controlled_callkit_cleanup_requested=\(controlledCallKitCleanupRequested)",
             "controlled_callkit_cleanup_result=\(controlledCallKitCleanupResult)",
-            "media_credentials_requested=false",
             "media_connect_requested=false",
             "media_connect_attempted=false",
             "livekit_join_requested=false",
@@ -899,6 +912,25 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "real_call_flow_started=false",
             "blocked_reason=\(blockedReason)"
         ]
+    }
+}
+
+private extension SalemXVoIPPushReceiptProofSummary {
+    mutating func recordControlledMediaCredentialsRequestBoundaryNotReady() {
+        mediaCredentialsBoundaryReached = true
+        mediaCredentialsRequestPlanned = false
+        mediaCredentialsRequested = false
+        mediaCredentialsRequestAuthorized = false
+        mediaCredentialsResult = "blocked_redacted"
+        mediaCredentialsTokenReceived = false
+        mediaCredentialsTokenRedacted = true
+        mediaCredentialsURLReceived = false
+        mediaCredentialsURLRedacted = true
+        mediaCredentialsPayloadRedacted = true
+        mediaCredentialsLocalPersistenceRequested = false
+        mediaCredentialsCleanupRequested = false
+        mediaCredentialsCleanupResult = "not_requested"
+        blockedReason = "media_credentials_request_boundary_not_ready"
     }
 }
 
@@ -2185,14 +2217,10 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             summary.foregroundCallStateSource = screenSource
             summary.foregroundCallStatePayloadRedacted = true
             summary.foregroundCallStateHasStableRedactedCorrelation = true
-            summary.mediaCredentialsBoundaryReached = true
-            summary.mediaCredentialsRequestPlanned = true
-            summary.mediaCredentialsResult = "planned_redacted"
-            summary.mediaCredentialsTokenRedacted = true
-            summary.mediaCredentialsURLRedacted = true
-            summary.mediaCredentialsPayloadRedacted = true
+            summary.recordControlledMediaCredentialsRequestBoundaryNotReady()
+        } else {
+            summary.blockedReason = "none"
         }
-        summary.blockedReason = "none"
         lock.unlock()
 
         updateLatestVoIPPushReceiptSummary(summary)
