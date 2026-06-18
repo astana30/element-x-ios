@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: 2.47B5 physically proves the PushKit-controlled Answer path can fetch authenticated pending metadata by opaque APNs reference and record a redacted foreground pending-call metadata handoff. Real media credentials remain deferred; no media connection, LiveKit join, Matrix event emission, or full call flow is wired.
+Status: 2.47C adds the DEBUG-only controlled real media credentials request after authenticated pending metadata fetch. The new step records only redacted token/URL/result proof and remains no-connect: no media connection, LiveKit join, microphone/camera permission request, Matrix event emission, or full call flow is wired. Physical 2.47C proof is pending.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -73,6 +73,24 @@ blocked_reason=media_credentials_request_deferred_until_next_phase
 ```
 
 No APNs push was sent after the passing proof. No production APNs, repeated push, real media credentials request, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, or `app.yml` regeneration was introduced.
+
+## 2.47C Controlled media credentials request, no-connect
+
+The authenticated pending metadata success path now performs the next controlled credentials request through the existing token provider boundary. The proof remains redacted and records only request authorization/result, token and URL receipt booleans, token and URL redaction booleans, expiry presence, payload redaction, no local persistence, and cleanup status.
+
+The no-connect guard remains explicit:
+
+```text
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+No APNs was sent for this code checkpoint. Changed-file SwiftFormat passed, changed-file SwiftLint passed with only the existing file-length warning, and targeted DirectCall tests passed (`38 tests`). No production APNs, repeated APNs, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced. Physical 2.47C proof is pending.
 
 ## 2.47A15 Local Background CallKit Answerability
 

@@ -10,30 +10,32 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-2.47B5 physically proved the PushKit-controlled Answer path can fetch authenticated pending metadata through the opaque APNs reference, then record a redacted pending-call metadata handoff. Real media credentials are still deferred.
+2.47C code is committed as a DEBUG-only no-connect credentials request checkpoint. After authenticated pending metadata fetch succeeds, the PushKit-controlled Answer proof path requests media credentials through the existing `DirectCallLiveKitTokenProvider` boundary and records only redacted token/URL/result proof. Physical 2.47C proof has not run yet.
 
 Proven:
 - iOS stores the opaque `pending_metadata_reference` from the real-invite VoIP payload
 - after CallKit Answer, iOS requests authenticated pending metadata with existing app auth
 - fetched metadata is reduced to redacted handoff proof booleans/classes
 - `media_credentials_request_metadata_available=true`
-- real media credentials stay blocked until the next explicit phase
+- code now attempts the controlled media credentials request after metadata success
+- media connection, LiveKit join, microphone/camera permission request, Matrix event emission, and full call flow remain blocked
 
 Validation:
 - changed-file SwiftFormat passed
 - changed-file SwiftLint passed with only the existing file-length warning
 - targeted DirectCall tests passed: `38 tests`
-- one physical real non-dev invite/APNs proof passed
-- no APNs was sent after the passing proof
+- no APNs was sent for this code checkpoint
 
 ## Next Task
 
-Start 2.47B6: controlled media credentials request using authenticated pending metadata.
+Start 2.47C physical close-out: controlled real media credentials request, no-connect.
 
 Goal:
-- use the proven `authenticated_pending_metadata_fetch` handoff as the metadata source
-- request credentials through the existing `DirectCallLiveKitTokenProvider` boundary
-- record only redacted success/failure fields
+- install a fresh Debug build from the current branch
+- run PushKit upload smoke and confirm it is green
+- run exactly one authenticated real non-dev invite/APNs attempt
+- tap Answer once if CallKit UI appears
+- verify the dedicated VoIP receipt proof records redacted credentials success or a redacted blocker
 - do not connect media, join LiveKit, request microphone/camera, emit Matrix events, or start full call flow
 
 Expected proof:
@@ -63,7 +65,9 @@ media_credentials_token_received=true
 media_credentials_token_redacted=true
 media_credentials_url_received=true
 media_credentials_url_redacted=true
+media_credentials_expires_at_present=true
 media_credentials_payload_redacted=true
+media_credentials_local_persistence_requested=false
 media_credentials_cleanup_requested=true
 media_credentials_cleanup_result=cleared
 media_connect_requested=false

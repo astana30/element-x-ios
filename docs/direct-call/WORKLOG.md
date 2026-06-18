@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Added the controlled real media credentials request no-connect checkpoint.
 - Wired the authenticated pending metadata fetch handoff after PushKit-controlled Answer.
 - Added the real foreground pending-call metadata handoff proof.
 - Split local CallKit-only and VoIP receipt proof files, then diagnosed the PushKit answerable-window result.
@@ -122,6 +123,24 @@ blocked_reason=media_credentials_request_deferred_until_next_phase
 ```
 
 This phase still does not request real media credentials, connect media, join LiveKit, request microphone/camera permissions, emit Matrix events, or start full call flow. No APNs was sent after the passing proof, and no raw tokens, auth headers, payloads, IDs, call handles, LiveKit URLs/tokens, project/signing files, `Info.plist`, `app.yml`, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` were introduced.
+
+### 2.47C — Controlled Real Media Credentials Request, No-Connect
+
+Added the DEBUG-only next step after authenticated pending metadata fetch: the controlled proof path requests media credentials through the existing `DirectCallLiveKitTokenProvider` using the handed-off `DirectCallSession`, then writes only redacted receipt proof. The path records credential request authorization/result, token/URL received booleans, token/URL redaction booleans, expiry presence, payload redaction, no local persistence, and cleanup status.
+
+The checkpoint remains no-connect:
+
+```text
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+No APNs was sent for this code checkpoint. Changed-file SwiftFormat passed, changed-file SwiftLint passed with only the existing file-length warning, and targeted DirectCall tests passed (`38 tests`). No production APNs, repeated APNs, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, project/signing/entitlement/`Info.plist`/`app.yml` change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced. Physical 2.47C proof is pending.
 
 ### 2.47A13 — Split proofs and PushKit answerable-window diagnostic
 

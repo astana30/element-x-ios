@@ -1819,7 +1819,6 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         let directCallPayload = payload["salemx_direct_call"] as? [String: Any]
         let version = directCallPayload?["version"] as? Int
         let kind = directCallPayload?["kind"] as? String
-        let pendingMetadataReference = directCallPayload?["pending_metadata_reference"] as? String
         let isControlledSalemXPayload = version == 1 && (kind == "sandbox_voip_smoke" || kind == "real_invite_controlled")
         guard isControlledSalemXPayload else {
             updateLatestStartupPushKitRegistrySummary(.init(callbackInvoked: true,
@@ -2766,6 +2765,9 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
         lock.unlock()
 
         updateLatestVoIPPushReceiptSummary(summary)
+        Task { @MainActor in
+            await requestControlledMediaCredentialsNoConnect(session: session, source: "authenticated_pending_metadata_fetch")
+        }
     }
 
     private static func recordAuthenticatedPendingMetadataFetchBlocked(reason: String, authorized: Bool) {
@@ -2775,6 +2777,47 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
         lock.unlock()
 
         updateLatestVoIPPushReceiptSummary(summary)
+    }
+
+    @MainActor
+    private static func requestControlledMediaCredentialsNoConnect(session: DirectCallSession, source: String) async {
+        guard let tokenEndpointURL = controlledMediaCredentialsTokenEndpointURL(),
+              let accessTokenProvider = SalemXForegroundSSESmokeDebug.matrixAccessTokenProviderForPushKitUploadSmoke() else {
+            recordControlledMediaCredentialsRequest(succeeded: false,
+                                                    expiresAtPresent: false,
+                                                    session: session,
+                                                    source: source)
+            return
+        }
+
+        let tokenClient = ProductionDirectCallLiveKitTokenClient(configuration: .init(tokenEndpointURL: tokenEndpointURL),
+                                                                 httpTransport: URLSessionDirectCallHTTPTransport(),
+                                                                 accessTokenProvider: accessTokenProvider)
+        let tokenProvider = DirectCallLiveKitTokenProvider(tokenClient: tokenClient)
+        let result = await tokenProvider.connectionInfo(for: session)
+        let succeeded: Bool
+        let expiresAtPresent: Bool
+        if case .success(let connectionInfo) = result {
+            succeeded = true
+            expiresAtPresent = connectionInfo.expiresAtPresent
+        } else {
+            succeeded = false
+            expiresAtPresent = false
+        }
+        recordControlledMediaCredentialsRequest(succeeded: succeeded,
+                                                expiresAtPresent: expiresAtPresent,
+                                                session: session,
+                                                source: source)
+    }
+
+    private static func controlledMediaCredentialsTokenEndpointURL() -> URL? {
+        guard var components = URLComponents(string: uploadSmokeDefaultURLString) else {
+            return nil
+        }
+        components.path = DirectCallProductionConfiguration.tokenEndpointPath
+        components.query = nil
+        components.fragment = nil
+        return components.url
     }
 
     private static func recordForegroundPendingCallMetadataHandoffIfAvailable(_ summary: inout SalemXVoIPPushReceiptProofSummary) -> Bool {
@@ -3058,6 +3101,10 @@ final class SalemXForegroundSSESmokeDebug: NSObject {
             return nil
         }
         return accessToken
+    }
+
+    fileprivate static func matrixAccessTokenProviderForPushKitUploadSmoke() -> DirectCallMatrixAccessTokenProviding? {
+        activeUserSession?.clientProxy as? DirectCallMatrixAccessTokenProviding
     }
 
     private static func configureWithCurrentSession(streamURLString: String, startsImmediately: Bool) {

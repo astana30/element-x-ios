@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.47B5, the PushKit-controlled Answer path physically proves authenticated pending-metadata fetch by redacted APNs `pending_metadata_reference`. The fetched metadata records a real pending-call metadata handoff with only booleans/classes, reaches `media_credentials_request_metadata_available=true`, and still defers real media credentials to the next phase. No media credentials request, media connection, LiveKit join, Matrix event emission, or full call flow was run.
+After 2.47C, the PushKit-controlled Answer path uses the authenticated pending-metadata handoff to request real media credentials through the existing `DirectCallLiveKitTokenProvider` boundary, then records only redacted proof fields. This is still no-connect: no media connection, LiveKit join, microphone/camera permission request, Matrix event emission, or full call flow is run. Physical 2.47C proof is pending.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,12 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.47C controlled real media credentials request, no-connect is implemented as a DEBUG-only code checkpoint:
+  - After authenticated pending metadata fetch succeeds, the controlled proof path requests credentials through the existing `DirectCallLiveKitTokenProvider` and active app auth boundary.
+  - The proof records `media_credentials_requested=true`, `media_credentials_request_authorized=true/false`, `media_credentials_result=success_redacted` or `blocked_redacted`, token/URL receipt booleans, token/URL redaction booleans, expiry presence, payload redaction, no local persistence, and cleanup status.
+  - The path deliberately keeps `media_connect_requested=false`, `media_connect_attempted=false`, `livekit_join_requested=false`, `microphone_permission_requested=false`, `camera_permission_requested=false`, `matrix_event_emit_requested=false`, and `real_call_flow_started=false`.
+  - Changed-file SwiftFormat passed, changed-file SwiftLint passed with only the existing file-length warning, and targeted DirectCall tests passed (`38 tests`).
+  - No APNs was sent for this code checkpoint. No production APNs, repeated APNs, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 - 2.47B5 authenticated pending metadata fetch handoff is physically validated after CallKit Answer:
   - The VoIP receipt proof now records `pending_metadata_fetch_requested`, `pending_metadata_fetch_authorized`, `pending_metadata_fetch_result`, and `pending_metadata_payload_redacted`.
   - When the APNs payload includes an opaque `pending_metadata_reference`, the controlled Answer path schedules an authenticated fetch through the existing app auth boundary, parses only the server pending-metadata response, and records `foreground_pending_call_metadata_source=authenticated_pending_metadata_fetch`.
