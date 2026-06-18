@@ -801,6 +801,7 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var mediaCredentialsTokenRedacted = false
     var mediaCredentialsURLReceived = false
     var mediaCredentialsURLRedacted = false
+    var mediaCredentialsExpiresAtPresent = false
     var mediaCredentialsPayloadRedacted = false
     var mediaCredentialsLocalPersistenceRequested = false
     var mediaCredentialsCleanupRequested = false
@@ -923,6 +924,7 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "media_credentials_token_redacted=\(mediaCredentialsTokenRedacted)",
             "media_credentials_url_received=\(mediaCredentialsURLReceived)",
             "media_credentials_url_redacted=\(mediaCredentialsURLRedacted)",
+            "media_credentials_expires_at_present=\(mediaCredentialsExpiresAtPresent)",
             "media_credentials_payload_redacted=\(mediaCredentialsPayloadRedacted)",
             "media_credentials_local_persistence_requested=\(mediaCredentialsLocalPersistenceRequested)",
             "media_credentials_cleanup_requested=\(mediaCredentialsCleanupRequested)",
@@ -932,6 +934,8 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "media_connect_requested=false",
             "media_connect_attempted=false",
             "livekit_join_requested=false",
+            "microphone_permission_requested=false",
+            "camera_permission_requested=false",
             "matrix_event_emit_requested=false",
             "real_call_flow_started=false",
             "blocked_reason=\(blockedReason)"
@@ -962,6 +966,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         mediaCredentialsTokenRedacted = true
         mediaCredentialsURLReceived = false
         mediaCredentialsURLRedacted = true
+        mediaCredentialsExpiresAtPresent = false
         mediaCredentialsPayloadRedacted = true
         mediaCredentialsLocalPersistenceRequested = false
         mediaCredentialsCleanupRequested = false
@@ -994,6 +999,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         mediaCredentialsTokenRedacted = true
         mediaCredentialsURLReceived = false
         mediaCredentialsURLRedacted = true
+        mediaCredentialsExpiresAtPresent = false
         mediaCredentialsPayloadRedacted = true
         mediaCredentialsLocalPersistenceRequested = false
         mediaCredentialsCleanupRequested = false
@@ -1001,7 +1007,10 @@ private extension SalemXVoIPPushReceiptProofSummary {
         blockedReason = mediaCredentialsRequestMetadataAvailable ? "none" : "media_credentials_request_metadata_invalid_redacted"
     }
 
-    mutating func recordControlledMediaCredentialsRequest(succeeded: Bool, session: DirectCallSession, source: String) {
+    mutating func recordControlledMediaCredentialsRequest(succeeded: Bool,
+                                                          expiresAtPresent: Bool,
+                                                          session: DirectCallSession,
+                                                          source: String) {
         recordForegroundPendingCallMetadataHandoff(session: session, source: source)
         mediaCredentialsBoundaryReached = true
         mediaCredentialsRequestPlanned = false
@@ -1012,6 +1021,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         mediaCredentialsTokenRedacted = true
         mediaCredentialsURLReceived = succeeded && mediaCredentialsRequestMetadataAvailable
         mediaCredentialsURLRedacted = true
+        mediaCredentialsExpiresAtPresent = succeeded && mediaCredentialsRequestMetadataAvailable && expiresAtPresent
         mediaCredentialsPayloadRedacted = true
         mediaCredentialsLocalPersistenceRequested = false
         mediaCredentialsCleanupRequested = succeeded && mediaCredentialsRequestMetadataAvailable
@@ -2608,10 +2618,16 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
         updateLatestVoIPPushReceiptSummary(summary)
     }
 
-    static func recordControlledMediaCredentialsRequest(succeeded: Bool, session: DirectCallSession, source: String) {
+    static func recordControlledMediaCredentialsRequest(succeeded: Bool,
+                                                        expiresAtPresent: Bool,
+                                                        session: DirectCallSession,
+                                                        source: String) {
         lock.lock()
         var summary = latestVoIPPushReceiptSummary
-        summary.recordControlledMediaCredentialsRequest(succeeded: succeeded, session: session, source: source)
+        summary.recordControlledMediaCredentialsRequest(succeeded: succeeded,
+                                                        expiresAtPresent: expiresAtPresent,
+                                                        session: session,
+                                                        source: source)
         lock.unlock()
 
         updateLatestVoIPPushReceiptSummary(summary)

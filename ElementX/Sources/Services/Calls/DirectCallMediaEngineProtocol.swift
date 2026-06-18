@@ -90,6 +90,14 @@ struct DirectCallLiveKitTokenResponse: Equatable, CustomStringConvertible, Custo
     let serverURLString: String
     let roomName: String
     let token: String
+    var expiresAtPresent = false
+
+    init(serverURLString: String, roomName: String, token: String, expiresAtPresent: Bool = false) {
+        self.serverURLString = serverURLString
+        self.roomName = roomName
+        self.token = token
+        self.expiresAtPresent = expiresAtPresent
+    }
 
     var description: String {
         "DirectCallLiveKitTokenResponse(serverURLString: <redacted>, roomName: <redacted>, token: <redacted>)"
@@ -2458,7 +2466,8 @@ final class ProductionDirectCallLiveKitTokenClient: DirectCallLiveKitTokenClient
 
         return .success(.init(serverURLString: dto.liveKit.serverURL,
                               roomName: dto.liveKit.roomName,
-                              token: dto.liveKit.participantToken))
+                              token: dto.liveKit.participantToken,
+                              expiresAtPresent: dto.liveKit.expiresAt?.isEmpty == false))
     }
 
     private func tokenReason(for errcode: String, statusCode: Int) -> DirectCallDiagnosticTokenReason {
@@ -2552,7 +2561,8 @@ final class DirectCallLiveKitTokenProvider: DirectCallMediaTokenProviderProtocol
 
         return .success(.init(serverURL: serverURL,
                               roomName: response.roomName,
-                              token: response.token))
+                              token: response.token,
+                              expiresAtPresent: response.expiresAtPresent))
     }
 }
 

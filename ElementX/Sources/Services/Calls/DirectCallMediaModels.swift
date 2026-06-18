@@ -52,6 +52,14 @@ struct DirectCallMediaConnectionInfo: Equatable, CustomStringConvertible {
     let serverURL: URL
     let roomName: String
     let token: String
+    var expiresAtPresent = false
+
+    init(serverURL: URL, roomName: String, token: String, expiresAtPresent: Bool = false) {
+        self.serverURL = serverURL
+        self.roomName = roomName
+        self.token = token
+        self.expiresAtPresent = expiresAtPresent
+    }
 
     var description: String {
         "DirectCallMediaConnectionInfo(serverURL: <redacted>, roomName: \(roomName), token: <redacted>)"

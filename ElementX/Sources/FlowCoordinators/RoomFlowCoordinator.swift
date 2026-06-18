@@ -612,12 +612,16 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
             SalemXPushKitRegistrationSmokeDebugBridge.recordForegroundPendingCallMetadataHandoff(session, source: "production_accept_incoming")
             let mediaCredentialsResult = await nativeDirectCallProductionRoomFlowOwner.requestMediaCredentials(callID: session.callID)
             let mediaCredentialsSucceeded: Bool
-            if case .success = mediaCredentialsResult {
+            let mediaCredentialsExpiresAtPresent: Bool
+            if case .success(let connectionInfo) = mediaCredentialsResult {
                 mediaCredentialsSucceeded = true
+                mediaCredentialsExpiresAtPresent = connectionInfo.expiresAtPresent
             } else {
                 mediaCredentialsSucceeded = false
+                mediaCredentialsExpiresAtPresent = false
             }
             SalemXPushKitRegistrationSmokeDebugBridge.recordControlledMediaCredentialsRequest(succeeded: mediaCredentialsSucceeded,
+                                                                                              expiresAtPresent: mediaCredentialsExpiresAtPresent,
                                                                                               session: session,
                                                                                               source: "production_accept_incoming")
             #endif
