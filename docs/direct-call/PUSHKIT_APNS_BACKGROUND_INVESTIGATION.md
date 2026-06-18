@@ -1,6 +1,6 @@
 # PushKit/APNs Background Incoming-Call Investigation
 
-Status: 2.47A13 splits local CallKit-only proof from real VoIP PushKit receipt proof and keeps the background blocker narrowed to CallKit End as the first action. Local CallKit-only writes `Documents/salemx-local-callkit-only-proof.txt` and still delivers Answer. Real VoIP receipt writes `Documents/salemx-voip-push-receipt-proof.txt`; the answerable-window experiment observed a first action, but that first action was End with `blocked_reason=background_callkit_end_before_operator_action`. Production PushKit/APNs/background behavior remains disabled by default and unwired.
+Status: 2.47A15 proves both local foreground CallKit-only and local background scheduled CallKit-only paths deliver Answer, while the real-invite PushKit path still reports End as the first CallKit action. The remaining blocker is now narrowed to the PushKit callback/report lifecycle, not generic CallKit config or app background state. Production PushKit/APNs/background behavior remains disabled by default and unwired.
 
 This document records what is currently present in tracked Element X / SalemX code and what would be needed to move from the validated foreground real-invite baseline to background incoming-call support. It does not implement PushKit/APNs production behavior.
 
@@ -9,6 +9,32 @@ This document records what is currently present in tracked Element X / SalemX co
 The validated foreground real-invite token-guard baseline was consolidated in 2.42O. The 2.42M physical two-device foreground real-invite smoke passed at `bf9996ae0665ad3953fac3d7a838bfb619349dd1`, and 2.42N guarded the DEBUG smoke tooling release surface at `26e520b6f6ec0220ce118051f5acac36ed40bfba`.
 
 Foreground real invite behavior must remain unchanged while PushKit/APNs/background incoming-call work is scoped separately. The M1-M4 smoke controls and bridges are local DEBUG tooling only and are not production call behavior.
+
+## 2.47A15 Local Background CallKit Answerability
+
+The local background scheduled CallKit-only isolation proof writes only:
+
+```text
+Documents/salemx-local-background-callkit-proof.txt
+```
+
+Physical proof:
+
+```text
+app_state_at_report=background
+local_background_report_result=reported
+local_background_first_action_kind=answer
+local_background_answer_action_delivered=true
+local_background_end_action_delivered=false
+media_credentials_requested=false
+media_connect_requested=false
+livekit_join_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+blocked_reason=none
+```
+
+This proves local CallKit-only Answer delivery works from both foreground and background app state. The background real-invite PushKit path still produces End first, so the blocker is specific to the PushKit callback/report lifecycle. No APNs push was sent for this proof, and no production APNs, repeated push, real media credential request, media connection, LiveKit join, Matrix event emission, full call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, or `app.yml` regeneration was introduced.
 
 ## 2.47A13 Proof split and answerable-window result
 

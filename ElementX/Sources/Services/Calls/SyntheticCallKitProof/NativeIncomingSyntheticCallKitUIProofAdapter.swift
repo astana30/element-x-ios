@@ -938,6 +938,40 @@ private struct SalemXLocalCallKitOnlyProofSummary {
     }
 }
 
+private struct SalemXLocalBackgroundCallKitOnlyProofSummary {
+    var proofSource = "local_background_callkit_only"
+    var proofGeneration = "not_started"
+    var proofLastUpdatedBy = "not_started"
+    var appStateAtReport = "unknown"
+    var reportRequested = false
+    var reportResult = "not_requested"
+    var firstActionKind = "none"
+    var answerActionDelivered = false
+    var endActionDelivered = false
+    var blockedReason = "not_requested"
+
+    var redactedLines: [String] {
+        [
+            "proof_source=\(proofSource)",
+            "proof_generation=\(proofGeneration)",
+            "proof_last_updated_by=\(proofLastUpdatedBy)",
+            "app_state_at_report=\(appStateAtReport)",
+            "local_background_report_requested=\(reportRequested)",
+            "local_background_report_result=\(reportResult)",
+            "local_background_first_action_kind=\(firstActionKind)",
+            "local_background_answer_action_delivered=\(answerActionDelivered)",
+            "local_background_end_action_delivered=\(endActionDelivered)",
+            "media_credentials_requested=false",
+            "media_connect_requested=false",
+            "media_connect_attempted=false",
+            "livekit_join_requested=false",
+            "matrix_event_emit_requested=false",
+            "real_call_flow_started=false",
+            "blocked_reason=\(blockedReason)"
+        ]
+    }
+}
+
 private final class SalemXPushKitCompletionCoordinator {
     private let lock = NSLock()
     private var didComplete = false
@@ -982,6 +1016,28 @@ private final class SalemXLocalCallKitOnlyProofEventRecorder: NativeIncomingSynt
             SalemXPushKitRegistrationSmokeDebugBridge.recordLocalCallKitOnlyAnswerActionDeliveryProof(generationMatched: generationMatched)
         case .endActionDelivered:
             SalemXPushKitRegistrationSmokeDebugBridge.recordLocalCallKitOnlyEndActionDeliveryProof(generationMatched: generationMatched)
+        default:
+            break
+        }
+    }
+}
+
+private final class SalemXLocalBackgroundCallKitOnlyProofEventRecorder: NativeIncomingSyntheticCallKitUIProofEventRecording {
+    private let generation: Int
+
+    init(generation: Int) {
+        self.generation = generation
+    }
+
+    func recordSyntheticCallKitUIProofEvent(_ event: NativeIncomingSyntheticCallKitUIProofEvent) {
+        let generationMatched = SalemXPushKitRegistrationSmokeDebugBridge.isActiveLocalBackgroundCallKitOnlyProofGeneration(generation)
+        switch event {
+        case .providerDidReset:
+            SalemXPushKitRegistrationSmokeDebugBridge.recordLocalBackgroundCallKitOnlyFirstAction("reset")
+        case .answerActionDelivered:
+            SalemXPushKitRegistrationSmokeDebugBridge.recordLocalBackgroundCallKitOnlyAnswerActionDeliveryProof(generationMatched: generationMatched)
+        case .endActionDelivered:
+            SalemXPushKitRegistrationSmokeDebugBridge.recordLocalBackgroundCallKitOnlyEndActionDeliveryProof(generationMatched: generationMatched)
         default:
             break
         }
@@ -1272,8 +1328,10 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let uploadSmokeProofFileName = "salemx-pushkit-token-upload-smoke-proof.txt"
     private static let voIPPushReceiptProofFileName = "salemx-voip-push-receipt-proof.txt"
     private static let localCallKitOnlyProofFileName = "salemx-local-callkit-only-proof.txt"
+    private static let localBackgroundCallKitOnlyProofFileName = "salemx-local-background-callkit-proof.txt"
     private static let voIPPushReceiptCallKitReportTimeout: TimeInterval = 3
     private static let voIPPushReceiptAnswerableWindowTimeout: TimeInterval = 1.5
+    private static let localBackgroundCallKitOnlyReportDelay: TimeInterval = 5
     private static let lock = NSLock()
     private static var registrar: DirectCallPushKitRegistrar?
     private static var latestSummary = initialRedactedSummary()
@@ -1281,6 +1339,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var latestUploadSummary = initialUploadRedactedSummary()
     private static var latestVoIPPushReceiptSummary = SalemXVoIPPushReceiptProofSummary()
     private static var latestLocalCallKitOnlySummary = SalemXLocalCallKitOnlyProofSummary()
+    private static var latestLocalBackgroundCallKitOnlySummary = SalemXLocalBackgroundCallKitOnlyProofSummary()
     private static var proofGenerationCounter = 0
     private static var callKitReportCompletionDate: Date?
     private static var pushKitCompletionDate: Date?
@@ -1293,6 +1352,8 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var callKitProofGeneration = 0
     private static var localCallKitOnlyProofHarness: NativeIncomingSyntheticCallKitUIProofHarness?
     private static var localCallKitOnlyProofGeneration = 0
+    private static var localBackgroundCallKitOnlyProofHarness: NativeIncomingSyntheticCallKitUIProofHarness?
+    private static var localBackgroundCallKitOnlyProofGeneration = 0
     #endif
 
     @objc static func startRegistrationSmoke() -> String {
@@ -1404,6 +1465,12 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         return latestLocalCallKitOnlySummary.redactedLines.joined(separator: "\n")
     }
 
+    @objc static func redactedLocalBackgroundCallKitOnlySummary() -> String {
+        lock.lock()
+        defer { lock.unlock() }
+        return latestLocalBackgroundCallKitOnlySummary.redactedLines.joined(separator: "\n")
+    }
+
     @objc static func startLocalCallKitOnlyAnswerabilitySmoke() -> String {
         #if canImport(CallKit) && os(iOS)
         let generation = nextLocalCallKitOnlyProofGeneration()
@@ -1446,6 +1513,30 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         summary.reportResult = "unavailable"
         updateLatestLocalCallKitOnlySummary(summary)
         return redactedLocalCallKitOnlySummary()
+        #endif
+    }
+
+    @objc static func scheduleLocalBackgroundCallKitOnlyAnswerabilitySmoke() -> String {
+        #if canImport(CallKit) && os(iOS)
+        let generation = nextLocalBackgroundCallKitOnlyProofGeneration()
+        _ = localBackgroundCallKitOnlyProofHarness?.endSyntheticIncomingCall()
+        localBackgroundCallKitOnlyProofHarness = nil
+
+        var summary = SalemXLocalBackgroundCallKitOnlyProofSummary(blockedReason: "local_background_callkit_only_scheduled")
+        summary.reportRequested = true
+        summary.reportResult = "scheduled"
+        updateLatestLocalBackgroundCallKitOnlySummary(summary)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + localBackgroundCallKitOnlyReportDelay) {
+            reportLocalBackgroundCallKitOnlySmoke(generation: generation)
+        }
+        return redactedLocalBackgroundCallKitOnlySummary()
+        #else
+        var summary = SalemXLocalBackgroundCallKitOnlyProofSummary(blockedReason: "local_background_callkit_only_unavailable")
+        summary.reportRequested = true
+        summary.reportResult = "unavailable"
+        updateLatestLocalBackgroundCallKitOnlySummary(summary)
+        return redactedLocalBackgroundCallKitOnlySummary()
         #endif
     }
 
@@ -1929,6 +2020,70 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         updateLatestLocalCallKitOnlySummary(summary)
     }
 
+    static func recordLocalBackgroundCallKitOnlyReportResult(_ reportResult: String) {
+        let safeReportResult: String
+        switch reportResult {
+        case "reported", "failed_redacted":
+            safeReportResult = reportResult
+        default:
+            safeReportResult = "failed_redacted"
+        }
+
+        lock.lock()
+        var summary = latestLocalBackgroundCallKitOnlySummary
+        summary.reportRequested = true
+        summary.reportResult = safeReportResult
+        summary.appStateAtReport = currentApplicationStateProof()
+        if safeReportResult == "failed_redacted" {
+            summary.blockedReason = "local_background_callkit_only_report_failed_redacted"
+        } else if summary.blockedReason == "local_background_callkit_only_scheduled" {
+            summary.blockedReason = "local_background_callkit_only_waiting_for_action"
+        }
+        lock.unlock()
+
+        updateLatestLocalBackgroundCallKitOnlySummary(summary)
+    }
+
+    static func recordLocalBackgroundCallKitOnlyFirstAction(_ kind: String) {
+        lock.lock()
+        var summary = latestLocalBackgroundCallKitOnlySummary
+        if summary.firstActionKind == "none" {
+            summary.firstActionKind = kind
+        }
+        if kind == "reset" {
+            summary.blockedReason = "local_background_callkit_only_reset_before_answer"
+        }
+        lock.unlock()
+
+        updateLatestLocalBackgroundCallKitOnlySummary(summary)
+    }
+
+    static func recordLocalBackgroundCallKitOnlyAnswerActionDeliveryProof(generationMatched: Bool) {
+        lock.lock()
+        var summary = latestLocalBackgroundCallKitOnlySummary
+        if summary.firstActionKind == "none" {
+            summary.firstActionKind = "answer"
+        }
+        summary.answerActionDelivered = generationMatched
+        summary.blockedReason = generationMatched ? "none" : "local_background_callkit_only_generation_mismatch"
+        lock.unlock()
+
+        updateLatestLocalBackgroundCallKitOnlySummary(summary)
+    }
+
+    static func recordLocalBackgroundCallKitOnlyEndActionDeliveryProof(generationMatched: Bool) {
+        lock.lock()
+        var summary = latestLocalBackgroundCallKitOnlySummary
+        if summary.firstActionKind == "none" {
+            summary.firstActionKind = "end"
+        }
+        summary.endActionDelivered = generationMatched
+        summary.blockedReason = generationMatched ? "local_background_callkit_only_end_before_answer" : "local_background_callkit_only_generation_mismatch"
+        lock.unlock()
+
+        updateLatestLocalBackgroundCallKitOnlySummary(summary)
+    }
+
     static func recordCallKitAnswerActionProof() {
         lock.lock()
         var summary = latestVoIPPushReceiptSummary
@@ -1995,6 +2150,16 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         #endif
     }
 
+    static func isActiveLocalBackgroundCallKitOnlyProofGeneration(_ generation: Int) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        #if canImport(CallKit) && os(iOS)
+        return localBackgroundCallKitOnlyProofGeneration == generation
+        #else
+        return false
+        #endif
+    }
+
     private static func reportControlledSandboxVoIPSmokeCallKit(completion: @escaping (String, NativeIncomingSyntheticCallKitUIAnswerRetentionProof?) -> Void) {
         #if canImport(CallKit) && os(iOS)
         let generation = nextCallKitProofGeneration()
@@ -2021,6 +2186,32 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         #endif
     }
 
+    private static func reportLocalBackgroundCallKitOnlySmoke(generation: Int) {
+        #if canImport(CallKit) && os(iOS)
+        guard isActiveLocalBackgroundCallKitOnlyProofGeneration(generation) else {
+            return
+        }
+
+        let proofHarness = NativeIncomingSyntheticCallKitUIProofHarness.makePhysicalDeviceProofHarness(handle: "salemx-local-background-callkit-only",
+                                                                                                       displayLabel: "SalemX Test Call",
+                                                                                                       eventRecorder: SalemXLocalBackgroundCallKitOnlyProofEventRecorder(generation: generation))
+        localBackgroundCallKitOnlyProofHarness = proofHarness
+        let reportSubmission = proofHarness.reportSyntheticIncomingCall { event in
+            switch event {
+            case .reported:
+                recordLocalBackgroundCallKitOnlyReportResult("reported")
+            default:
+                recordLocalBackgroundCallKitOnlyReportResult("failed_redacted")
+            }
+        }
+        if case .reported = reportSubmission {
+            return
+        }
+
+        recordLocalBackgroundCallKitOnlyReportResult("failed_redacted")
+        #endif
+    }
+
     private static func nextCallKitProofGeneration() -> Int {
         lock.lock()
         defer { lock.unlock() }
@@ -2038,6 +2229,17 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         #if canImport(CallKit) && os(iOS)
         localCallKitOnlyProofGeneration += 1
         return localCallKitOnlyProofGeneration
+        #else
+        return 0
+        #endif
+    }
+
+    private static func nextLocalBackgroundCallKitOnlyProofGeneration() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        #if canImport(CallKit) && os(iOS)
+        localBackgroundCallKitOnlyProofGeneration += 1
+        return localBackgroundCallKitOnlyProofGeneration
         #else
         return 0
         #endif
@@ -2082,6 +2284,17 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         writeLocalCallKitOnlyProof(proof)
     }
 
+    private static func updateLatestLocalBackgroundCallKitOnlySummary(_ summary: SalemXLocalBackgroundCallKitOnlyProofSummary) {
+        lock.lock()
+        var summary = summary
+        summary.proofGeneration = nextProofGenerationLocked()
+        summary.proofLastUpdatedBy = "local_background_callkit_only_smoke"
+        latestLocalBackgroundCallKitOnlySummary = summary
+        let proof = summary.redactedLines.joined(separator: "\n")
+        lock.unlock()
+        writeLocalBackgroundCallKitOnlyProof(proof)
+    }
+
     private static func nextProofGenerationLocked() -> String {
         proofGenerationCounter += 1
         return "generation_\(proofGenerationCounter)"
@@ -2097,6 +2310,10 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
 
     private static func writeLocalCallKitOnlyProof(_ proof: String) {
         writeProof(proof, fileName: localCallKitOnlyProofFileName)
+    }
+
+    private static func writeLocalBackgroundCallKitOnlyProof(_ proof: String) {
+        writeProof(proof, fileName: localBackgroundCallKitOnlyProofFileName)
     }
 
     private static func writeProof(_ proof: String, fileName: String) {

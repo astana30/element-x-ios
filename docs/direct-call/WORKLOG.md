@@ -3195,6 +3195,16 @@ Physical close-out blocker:
 
 No production APNs push was attempted. No repeated push was attempted. No raw PushKit token, APNs token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, private logs, user/device/room/call identifiers, or secret-bearing URL was recorded. Media, Matrix events, and full call flow remain unwired.
 
+## 2026-06-18 — 2.47A15 local background CallKit-only isolation
+
+Added a DEBUG-only `Schedule local background CallKit-only smoke in 5s` Developer Options control. The smoke reuses the controlled physical CallKit proof harness/report path, writes only `Documents/salemx-local-background-callkit-proof.txt`, and does not use PushKit, APNs, server routes, media credentials, LiveKit, Matrix events, or full call flow.
+
+Physical proof returned `app_state_at_report=background`, `local_background_report_result=reported`, `local_background_first_action_kind=answer`, `local_background_answer_action_delivered=true`, `local_background_end_action_delivered=false`, and `blocked_reason=none`.
+
+This proves local foreground and local background CallKit-only answerability both work. The remaining background PushKit real-invite blocker is still first-action End, so the next investigation should focus on the PushKit callback/report lifecycle rather than generic CallKit config/delegate/background state.
+
+No APNs was sent for this proof. No production APNs, repeated APNs, real media credentials request, media connect, LiveKit join, Matrix event emission, full call flow, raw secrets, raw payloads, raw IDs, call handles, LiveKit URLs, private logs, or forbidden project/signing file changes were introduced.
+
 ## 2.46A4 — Real invite CallKit cleanup ordering fix
 
 Fixed and physically verified the remaining real-invite-controlled Answer observation blocker.

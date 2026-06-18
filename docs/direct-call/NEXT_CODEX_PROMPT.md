@@ -8,18 +8,24 @@ Expected intentionally untracked file:
 
 Do not stage or commit that diagnostics file.
 
-## Next task - 2.47A14 isolate why background PushKit CallKit first action is End
+## Next task - 2.47A16 isolate PushKit callback/report lifecycle
 
 Latest completed state:
-- 2.47A13 split proof storage so local CallKit-only smoke no longer overwrites real VoIP PushKit receipt proof.
-- Local CallKit-only proof writes `Documents/salemx-local-callkit-only-proof.txt` and passes:
-  - `proof_source=local_callkit_only`
-  - `local_callkit_only_report_result=reported`
-  - `local_callkit_only_first_action_kind=answer`
-  - `local_callkit_only_answer_action_delivered=true`
-  - `local_callkit_only_end_action_delivered=false`
+- Proof files are separated:
+  - `Documents/salemx-voip-push-receipt-proof.txt`
+  - `Documents/salemx-local-callkit-only-proof.txt`
+  - `Documents/salemx-local-background-callkit-proof.txt`
+  - `Documents/salemx-pushkit-token-upload-smoke-proof.txt`
+- Store-key correlation is green: upload and invite lookup keys match; records are fresh, development, and hex.
+- Local foreground CallKit-only proof delivers Answer.
+- Local background scheduled CallKit-only proof delivers Answer:
+  - `app_state_at_report=background`
+  - `local_background_report_result=reported`
+  - `local_background_first_action_kind=answer`
+  - `local_background_answer_action_delivered=true`
+  - `local_background_end_action_delivered=false`
   - `blocked_reason=none`
-- VoIP receipt proof writes `Documents/salemx-voip-push-receipt-proof.txt` and remains separated from the local proof:
+- Background real-invite PushKit proof still reports End as the first action:
   - `proof_source=voip_push_receipt`
   - `pushkit_payload_kind=real_invite_controlled`
   - `pushkit_completion_answerable_window_requested=true`
@@ -27,12 +33,19 @@ Latest completed state:
   - `callkit_first_action_kind=end`
   - `callkit_answer_action_delivered=false`
   - `blocked_reason=background_callkit_end_before_operator_action`
-- PushKit upload smoke remains separate at `Documents/salemx-pushkit-token-upload-smoke-proof.txt`.
 - Media credentials, media connect, LiveKit join, Matrix event emission, and full call flow stayed false.
 
 Goal:
-- determine why the background PushKit CallKit surface produces `CXEndCallAction` as the first action even though local CallKit-only Answer works, proof files are separated, the answerable window observes a first action, and local code does not request media, LiveKit, Matrix events, or full call flow.
-- do not move to media until the background path records `callkit_first_action_kind=answer`.
+- determine why reporting from the PushKit callback produces `CXEndCallAction` first while the same local CallKit path is answerable from both foreground and background app state.
+- do not move to media until the background PushKit path records `callkit_first_action_kind=answer`.
+
+Investigate:
+- exact PushKit callback lifecycle around `reportNewIncomingCall` and completion.
+- whether reporting inside the PushKit callback differs from the scheduled local background report.
+- whether deferring report submission out of the PushKit callback, while still safely completing PushKit, changes the first CallKit action.
+- provider/delegate/harness ownership across PushKit callback return.
+- app state, queue, generation, and proof-writer differences between local background and VoIP receipt paths.
+- any system-driven End signal that only appears for reports created inside the PushKit callback.
 
 Safety:
 - do not use `dev/invite`
