@@ -362,9 +362,13 @@ def create_app(config: ServiceConfig | None = None,
             pending_metadata_reference: str | None = None
             pending_metadata_diagnostics = no_pending_metadata_diagnostics()
             if pending_metadata is not None:
+                metadata_recipient_device = _pending_metadata_recipient_device(
+                    invite_request=invite_request,
+                    token_store=token_store,
+                )
                 pending_metadata_reference = pending_store.store(
                     recipient=invite_request.recipient,
-                    recipient_device=invite_request.recipient_device,
+                    recipient_device=metadata_recipient_device,
                     expires_at_ms=invite_request.invite.expires_at_ms,
                     metadata=pending_metadata,
                 )
@@ -571,6 +575,20 @@ def _foreground_signaling_invite_diagnostics(
         "target_subscriber_count": target_subscriber_count,
         "target_active_subscriber_count": target_subscriber_count,
     }
+
+
+def _pending_metadata_recipient_device(
+    invite_request: ForegroundCallInviteRequest,
+    token_store: PushKitTokenStoreProtocol,
+) -> str | None:
+    if invite_request.recipient_device is None:
+        return None
+
+    exact_record = token_store.retrieve(invite_request.recipient, invite_request.recipient_device, "development")
+    latest_record = token_store.retrieve_latest_for_user(invite_request.recipient, "development")
+    if exact_record is not None and exact_record == latest_record:
+        return invite_request.recipient_device
+    return None
 
 
 def _background_invite_apns_diagnostics(

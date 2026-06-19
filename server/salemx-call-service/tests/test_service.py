@@ -247,6 +247,7 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
             auth_validator=FakeAuthValidator({
                 "auth-a": AuthenticatedUser("caller", "device-a"),
                 "auth-b": AuthenticatedUser("callee", "device-b"),
+                "auth-c": AuthenticatedUser("callee", "device-c"),
             }),
             room_validator=InMemoryRoomValidator({}),
             allocation_store=InMemoryAllocationStore(allocation_ttl_seconds=300),
@@ -617,6 +618,11 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
             f"/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{metadata_reference}",
             {"authorization": self.authorization("auth-a")},
         )
+        wrong_device_status, wrong_device_body = await _asgi_get_json(
+            app,
+            f"/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{metadata_reference}",
+            {"authorization": self.authorization("auth-c")},
+        )
 
         self.assertEqual(metadata_status, 200)
         self.assertEqual(metadata_body["version"], 1)
@@ -627,12 +633,109 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(metadata_body["intent"], "audio")
         self.assertEqual(wrong_user_status, 403)
         self.assertEqual(wrong_user_body["errcode"], "M_FORBIDDEN")
+        self.assertEqual(wrong_device_status, 403)
+        self.assertEqual(wrong_device_body["errcode"], "M_FORBIDDEN")
 
-        for raw_value in ["call-a", "!room:example.test", "caller", "callee", "device-b", "opaque-local-safe-handle"]:
+        for raw_value in ["call-a", "!room:example.test", "caller", "callee", "device-b", "device-c", "opaque-local-safe-handle"]:
             self.assertNotIn(raw_value, output)
         self.assertNotIn("synthetic-recipient-pushkit-token-fixture", output)
         self.assertNotIn("auth-a", output)
         self.assertNotIn("auth-b", output)
+        self.assertNotIn("auth-c", output)
+
+    async def test_real_invite_pending_metadata_follows_latest_pushkit_token_when_requested_device_is_stale(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
+        store = InMemoryPushKitTokenStore()
+        old_token_request = app_module.PushKitTokenRegistrationRequest.from_mapping({
+            "version": 1,
+            "token": "synthetic-" + "old-recipient-" + "pushkit-token-fixture",
+            "environment": "development",
+        })
+        current_token_request = app_module.PushKitTokenRegistrationRequest.from_mapping({
+            "version": 1,
+            "token": "synthetic-" + "current-recipient-" + "pushkit-token-fixture",
+            "environment": "development",
+        })
+        store.store("callee", "device-b", old_token_request)
+        store.store("callee", "device-c", current_token_request)
+        provider = FakeAPNsVoIPProvider(result="sandbox_success")
+        send_service = APNsVoIPSandboxSendService(
+            APNsVoIPSandboxConfig(
+                enabled=True,
+                environment="sandbox",
+                team_id="TEAMID",
+                key_id="KEYID",
+                auth_key_path="/redacted/apns-auth-key.p8",
+                topic="kz.salemx.msg.voip",
+            ),
+            provider=provider,
+        )
+        app = app_module.create_app(
+            token_service=self.make_token_service(),
+            foreground_signaling_service=signaling,
+            pushkit_token_store=store,
+            apns_voip_send_service=send_service,
+        )
+        payload = self.targeted_invite_payload(
+            expires_at_ms=4102444800000,
+            pending_metadata={
+                "version": 1,
+                "call_id": "call-b",
+                "room_id": "!room-b:example.test",
+                "intent": "audio",
+            },
+        )
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_INVITE_PATH,
+            {"authorization": self.authorization("auth-a")},
+            payload,
+        )
+        provider_payload = provider.requests[0].payload
+        salemx_payload = provider_payload["salemx_direct_call"]
+        metadata_reference = salemx_payload["pending_metadata_reference"]
+        metadata_status, metadata_body = await _asgi_get_json(
+            app,
+            f"/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{metadata_reference}",
+            {"authorization": self.authorization("auth-c")},
+        )
+        wrong_user_status, wrong_user_body = await _asgi_get_json(
+            app,
+            f"/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{metadata_reference}",
+            {"authorization": self.authorization("auth-a")},
+        )
+        output = json.dumps(body, sort_keys=True) + "\n" + json.dumps(provider_payload, sort_keys=True)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["background_apns_push_result"], "sandbox_success")
+        self.assertEqual(body["pending_metadata_source_created"], True)
+        self.assertEqual(body["pending_metadata_reference_present"], True)
+        self.assertEqual(metadata_status, 200)
+        self.assertEqual(metadata_body["version"], 1)
+        self.assertEqual(metadata_body["call_id"], "call-b")
+        self.assertEqual(metadata_body["room_id"], "!room-b:example.test")
+        self.assertEqual(metadata_body["peer_user_id"], "caller")
+        self.assertEqual(metadata_body["direction"], "incoming")
+        self.assertEqual(metadata_body["intent"], "audio")
+        self.assertEqual(wrong_user_status, 403)
+        self.assertEqual(wrong_user_body["errcode"], "M_FORBIDDEN")
+
+        for raw_value in [
+            "call-b",
+            "!room-b:example.test",
+            "caller",
+            "callee",
+            "device-b",
+            "device-c",
+            "opaque-local-safe-handle",
+            "synthetic-old-recipient-pushkit-token-fixture",
+            "synthetic-current-recipient-pushkit-token-fixture",
+        ]:
+            self.assertNotIn(raw_value, output)
+        self.assertNotIn("auth-a", output)
+        self.assertNotIn("auth-c", output)
 
     async def test_real_invite_route_drops_stale_invite_without_fanout(self) -> None:
         app_module = _load_app_module()

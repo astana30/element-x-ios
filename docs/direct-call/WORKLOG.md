@@ -5,6 +5,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 ## Milestones
 
 - Added the controlled real media credentials request no-connect checkpoint.
+- Fixed the pending metadata receiver-device binding that caused physical fetches to return redacted `403 M_FORBIDDEN` after APNs delivered to the latest receiver PushKit token.
 - Added redacted pending metadata fetch HTTP classification after the 2.47C2 token-route fix.
 - Wired the authenticated pending metadata fetch handoff after PushKit-controlled Answer.
 - Added the real foreground pending-call metadata handoff proof.
@@ -142,6 +143,25 @@ real_call_flow_started=false
 ```
 
 No APNs was sent for this code checkpoint. Changed-file SwiftFormat passed, changed-file SwiftLint passed with only the existing file-length warning, and targeted DirectCall tests passed (`38 tests`). No production APNs, repeated APNs, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, project/signing/entitlement/`Info.plist`/`app.yml` change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced. Physical 2.47C proof is pending.
+
+### 2.47C6 — Pending Metadata Receiver Binding
+
+Physical 2.47C5 proof classified the metadata fetch blocker as a redacted forbidden response:
+
+```text
+pending_metadata_fetch_requested=true
+pending_metadata_fetch_authorized=true
+pending_metadata_fetch_result=blocked_redacted
+pending_metadata_fetch_http_status_bucket=403
+pending_metadata_fetch_errcode=M_FORBIDDEN
+pending_metadata_fetch_failure_reason=forbidden
+```
+
+Root cause: the server stored pending metadata against the invite's requested receiver device, while the real invite/APNs path sends to the latest receiver PushKit token for the account. If the requested device is stale, APNs can still reach the physical receiver through the latest token, but the receiver's authenticated metadata fetch is denied.
+
+The server now binds pending metadata to the exact receiver device only when that device token record is the same latest development PushKit token record used for APNs. Otherwise it binds to the receiver account, preserving the receiver-only boundary while allowing the physical device that actually received the PushKit callback to fetch metadata. Targeted tests cover exact-device success, wrong-device denial when the exact token is current, stale requested-device recovery through the latest PushKit token, and wrong-user denial.
+
+No APNs was sent for this fix. No production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, project/signing/entitlement/`Info.plist`/`app.yml` change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 
 ### 2.47A13 — Split proofs and PushKit answerable-window diagnostic
 
