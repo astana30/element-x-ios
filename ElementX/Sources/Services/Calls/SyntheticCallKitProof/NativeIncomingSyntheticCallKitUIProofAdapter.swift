@@ -708,6 +708,9 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var pendingMetadataFetchRequested = false
     var pendingMetadataFetchAuthorized = false
     var pendingMetadataFetchResult = "not_requested"
+    var pendingMetadataFetchHTTPStatusBucket = "not_requested"
+    var pendingMetadataFetchErrcode = "none"
+    var pendingMetadataFetchFailureReason = "none"
     var pendingMetadataPayloadRedacted = true
     var realInvitePayloadMappingObserved = false
     var elementCallServicePushKitCallbackInvoked = false
@@ -842,6 +845,9 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "pending_metadata_fetch_requested=\(pendingMetadataFetchRequested)",
             "pending_metadata_fetch_authorized=\(pendingMetadataFetchAuthorized)",
             "pending_metadata_fetch_result=\(pendingMetadataFetchResult)",
+            "pending_metadata_fetch_http_status_bucket=\(pendingMetadataFetchHTTPStatusBucket)",
+            "pending_metadata_fetch_errcode=\(pendingMetadataFetchErrcode)",
+            "pending_metadata_fetch_failure_reason=\(pendingMetadataFetchFailureReason)",
             "pending_metadata_payload_redacted=\(pendingMetadataPayloadRedacted)",
             "real_invite_payload_mapping_observed=\(realInvitePayloadMappingObserved)",
             "element_call_pushkit_callback_invoked=\(elementCallServicePushKitCallbackInvoked)",
@@ -1041,6 +1047,9 @@ private extension SalemXVoIPPushReceiptProofSummary {
         pendingMetadataFetchRequested = true
         pendingMetadataFetchAuthorized = false
         pendingMetadataFetchResult = "requested"
+        pendingMetadataFetchHTTPStatusBucket = "pending"
+        pendingMetadataFetchErrcode = "none"
+        pendingMetadataFetchFailureReason = "none"
         pendingMetadataPayloadRedacted = true
         blockedReason = "pending_metadata_fetch_in_progress_redacted"
     }
@@ -1049,6 +1058,9 @@ private extension SalemXVoIPPushReceiptProofSummary {
         pendingMetadataFetchRequested = true
         pendingMetadataFetchAuthorized = true
         pendingMetadataFetchResult = "success_redacted"
+        pendingMetadataFetchHTTPStatusBucket = "2xx"
+        pendingMetadataFetchErrcode = "none"
+        pendingMetadataFetchFailureReason = "none"
         pendingMetadataPayloadRedacted = true
         recordForegroundPendingCallMetadataHandoff(session: session, source: "authenticated_pending_metadata_fetch")
         mediaCredentialsResult = "blocked_redacted"
@@ -1061,10 +1073,17 @@ private extension SalemXVoIPPushReceiptProofSummary {
         blockedReason = "media_credentials_request_deferred_until_next_phase"
     }
 
-    mutating func recordAuthenticatedPendingMetadataFetchBlocked(_ reason: String, authorized: Bool) {
+    mutating func recordAuthenticatedPendingMetadataFetchBlocked(_ reason: String,
+                                                                 authorized: Bool,
+                                                                 httpStatusBucket: String = "unknown",
+                                                                 errcode: String = "none",
+                                                                 failureReason: String = "unknown") {
         pendingMetadataFetchRequested = true
         pendingMetadataFetchAuthorized = authorized
         pendingMetadataFetchResult = "blocked_redacted"
+        pendingMetadataFetchHTTPStatusBucket = httpStatusBucket
+        pendingMetadataFetchErrcode = errcode
+        pendingMetadataFetchFailureReason = failureReason
         pendingMetadataPayloadRedacted = true
         foregroundPendingCallMetadataHandoffRequested = true
         foregroundPendingCallMetadataHandoffObserved = false
@@ -2741,11 +2760,17 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
 extension SalemXPushKitRegistrationSmokeDebugBridge {
     private static func fetchAuthenticatedPendingMetadata(reference: String) async {
         guard let fetchURL = pendingMetadataFetchURL(reference: reference) else {
-            recordAuthenticatedPendingMetadataFetchBlocked(reason: "pending_metadata_fetch_url_unresolved_redacted", authorized: false)
+            recordAuthenticatedPendingMetadataFetchBlocked(reason: "pending_metadata_fetch_url_unresolved_redacted",
+                                                           authorized: false,
+                                                           httpStatusBucket: "not_requested",
+                                                           failureReason: "url_unresolved")
             return
         }
         guard let accessToken = await SalemXForegroundSSESmokeDebug.matrixAccessTokenForPushKitUploadSmoke() else {
-            recordAuthenticatedPendingMetadataFetchBlocked(reason: "pending_metadata_fetch_blocked_by_auth", authorized: false)
+            recordAuthenticatedPendingMetadataFetchBlocked(reason: "pending_metadata_fetch_blocked_by_auth",
+                                                           authorized: false,
+                                                           httpStatusBucket: "not_requested",
+                                                           failureReason: "local_auth_unavailable")
             return
         }
 
@@ -2758,16 +2783,27 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse,
                   (200..<300).contains(httpResponse.statusCode) else {
-                recordAuthenticatedPendingMetadataFetchBlocked(reason: "pending_metadata_fetch_http_failure_redacted", authorized: true)
+                let diagnostics = pendingMetadataFetchFailureDiagnostics(response: response, data: data)
+                recordAuthenticatedPendingMetadataFetchBlocked(reason: "pending_metadata_fetch_http_failure_redacted",
+                                                               authorized: true,
+                                                               httpStatusBucket: diagnostics.httpStatusBucket,
+                                                               errcode: diagnostics.errcode,
+                                                               failureReason: diagnostics.failureReason)
                 return
             }
             guard let session = directCallSessionFromPendingMetadata(data: data) else {
-                recordAuthenticatedPendingMetadataFetchBlocked(reason: "pending_metadata_fetch_payload_invalid_redacted", authorized: true)
+                recordAuthenticatedPendingMetadataFetchBlocked(reason: "pending_metadata_fetch_payload_invalid_redacted",
+                                                               authorized: true,
+                                                               httpStatusBucket: "2xx",
+                                                               failureReason: "payload_invalid")
                 return
             }
             recordAuthenticatedPendingMetadataFetchSuccess(session)
         } catch {
-            recordAuthenticatedPendingMetadataFetchBlocked(reason: "pending_metadata_fetch_network_failure_redacted", authorized: true)
+            recordAuthenticatedPendingMetadataFetchBlocked(reason: "pending_metadata_fetch_network_failure_redacted",
+                                                           authorized: true,
+                                                           httpStatusBucket: "network_failure",
+                                                           failureReason: "network_failure")
         }
     }
 
@@ -2779,6 +2815,72 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
         components.path = pendingMetadataEndpointPathPrefix + "/" + reference
         components.query = nil
         return components.url
+    }
+
+    private struct PendingMetadataFetchFailureDiagnostics {
+        let httpStatusBucket: String
+        let errcode: String
+        let failureReason: String
+    }
+
+    private static func pendingMetadataFetchFailureDiagnostics(response: URLResponse?,
+                                                               data: Data) -> PendingMetadataFetchFailureDiagnostics {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            return .init(httpStatusBucket: "unknown",
+                         errcode: "none",
+                         failureReason: "missing_http_response")
+        }
+
+        let errcode = pendingMetadataFetchErrcode(data: data)
+        return .init(httpStatusBucket: pendingMetadataFetchHTTPStatusBucket(httpResponse.statusCode),
+                     errcode: errcode,
+                     failureReason: pendingMetadataFetchFailureReason(statusCode: httpResponse.statusCode, errcode: errcode))
+    }
+
+    private static func pendingMetadataFetchErrcode(data: Data) -> String {
+        guard let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let errcode = payload["errcode"] as? String,
+              errcode.hasPrefix("M_") else {
+            return "none"
+        }
+        return errcode
+    }
+
+    private static func pendingMetadataFetchHTTPStatusBucket(_ statusCode: Int) -> String {
+        switch statusCode {
+        case 200..<300:
+            return "2xx"
+        case 400:
+            return "400"
+        case 401:
+            return "401"
+        case 403:
+            return "403"
+        case 404:
+            return "404"
+        case 429:
+            return "429"
+        case 500..<600:
+            return "5xx"
+        default:
+            return "other_redacted"
+        }
+    }
+
+    private static func pendingMetadataFetchFailureReason(statusCode: Int, errcode: String) -> String {
+        if statusCode == 401 || errcode == "M_UNKNOWN_TOKEN" {
+            return "auth_rejected"
+        }
+        if statusCode == 403 || errcode == "M_FORBIDDEN" {
+            return "forbidden"
+        }
+        if statusCode == 404 || errcode == "M_NOT_FOUND" || errcode == "M_UNRECOGNIZED" {
+            return "not_found"
+        }
+        if (500..<600).contains(statusCode) {
+            return "server_error"
+        }
+        return "http_error_redacted"
     }
 
     private static func directCallSessionFromPendingMetadata(data: Data) -> DirectCallSession? {
@@ -2820,10 +2922,18 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
         }
     }
 
-    private static func recordAuthenticatedPendingMetadataFetchBlocked(reason: String, authorized: Bool) {
+    private static func recordAuthenticatedPendingMetadataFetchBlocked(reason: String,
+                                                                       authorized: Bool,
+                                                                       httpStatusBucket: String = "unknown",
+                                                                       errcode: String = "none",
+                                                                       failureReason: String = "unknown") {
         lock.lock()
         var summary = latestVoIPPushReceiptSummary
-        summary.recordAuthenticatedPendingMetadataFetchBlocked(reason, authorized: authorized)
+        summary.recordAuthenticatedPendingMetadataFetchBlocked(reason,
+                                                               authorized: authorized,
+                                                               httpStatusBucket: httpStatusBucket,
+                                                               errcode: errcode,
+                                                               failureReason: failureReason)
         lock.unlock()
 
         updateLatestVoIPPushReceiptSummary(summary)

@@ -5,6 +5,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 ## Milestones
 
 - Added the controlled real media credentials request no-connect checkpoint.
+- Added redacted pending metadata fetch HTTP classification after the 2.47C2 token-route fix.
 - Wired the authenticated pending metadata fetch handoff after PushKit-controlled Answer.
 - Added the real foreground pending-call metadata handoff proof.
 - Split local CallKit-only and VoIP receipt proof files, then diagnosed the PushKit answerable-window result.
@@ -3503,3 +3504,26 @@ Validation:
 - targeted DirectCall tests passed: `38 tests`
 
 No APNs was sent. No production APNs, repeated APNs, media connect, LiveKit join, microphone/camera permission request, Matrix event emission, full call flow, raw token, auth header, JWT, payload, user/device/room/call identifier, call handle, LiveKit URL/token, private log, or forbidden project/signing file change was introduced.
+
+## 2026-06-19 — 2.47C5 pending metadata fetch HTTP classification
+
+Investigated the post-2.47C2 physical blocker without sending APNs. The latest iPhone proof reached real invite/APNs/PushKit/CallKit Answer and had `pending_metadata_reference_present=true`, but the authenticated pending metadata fetch collapsed to:
+
+```text
+pending_metadata_fetch_requested=true
+pending_metadata_fetch_authorized=true
+pending_metadata_fetch_result=blocked_redacted
+blocked_reason=pending_metadata_fetch_http_failure_redacted
+```
+
+Findings:
+- iOS constructs the pending metadata fetch path as `/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{reference}`.
+- The checked-in server serves the same path and returns stored pending metadata only to the intended receiver/device.
+- Public unauthenticated probes show the deployed pending metadata path returns auth-gated `401 M_UNKNOWN_TOKEN`, so this is not a missing/proxy-uncovered route.
+- The existing server route test proves valid receiver auth can fetch the stored metadata in-process and wrong-user fetch returns `403`.
+
+Fix:
+- added redacted iPhone proof fields for `pending_metadata_fetch_http_status_bucket`, `pending_metadata_fetch_errcode`, and `pending_metadata_fetch_failure_reason`
+- kept raw response bodies, references, auth headers, room/call/peer/user/device identifiers, tokens, URLs, and payloads out of proof/logs/docs
+
+No APNs was sent. No production APNs, repeated APNs, `dev/invite`, media connect, LiveKit join, microphone/camera permission request, Matrix event emission, full call flow, raw token, auth header, JWT, APNs payload, invite body, user/device/room/call identifier, LiveKit URL/token, private log, or forbidden project/signing file change was introduced.
