@@ -104,9 +104,9 @@ class DirectCallTokenService:
             _log_token_diagnostics(diagnostics)
 
             LOGGER.info(
-                "issued direct-call LiveKit token allocation_id=%s call_id=%s room_hash=%s user_hash=%s intent=%s direction=%s",
-                allocation.id,
-                token_request.call_id,
+                "issued direct-call LiveKit token allocation_hash=%s call_hash=%s room_hash=%s user_hash=%s intent=%s direction=%s",
+                stable_redacted_id(allocation.id),
+                stable_redacted_id(token_request.call_id),
                 stable_redacted_id(token_request.room_id),
                 stable_redacted_id(authenticated_user.user_id),
                 token_request.intent,

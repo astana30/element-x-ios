@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-2.47D credentials cleanup / expiry proof is physically closed as a DEBUG-only no-connect proof. The real invite/APNs/PushKit/CallKit Answer path reached authenticated pending metadata fetch and issued redacted media credentials, then proved cleanup cleared token/URL/expiry/payload material, credentials were not reused, and expiry/non-reuse was checked safely. Safety remained intact: no media connection, LiveKit join, microphone/camera permission request, Matrix event emission, or full call flow was run. Next phase is planning-only 2.47E server-side allocation/token expiry verification, not real call flow.
+After 2.47E — server-side allocation/token expiry verification. The 2.47D no-connect credentials cleanup proof remains closed, and 2.47E verifies server-side allocation/token expiry without LiveKit join or media connect.
 
 ## Latest App Code Checkpoint
 
@@ -10,7 +10,7 @@
 
 ## Latest Backend Code Checkpoint
 
-2.39M `d321b8f7b` `Add redacted token failure observability`
+2.47E `Verify server allocation token expiry`
 
 ## Latest Signing Checkpoint
 
@@ -39,6 +39,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.47E server-side media credentials allocation/token expiry is verified without LiveKit join:
+  - Participant token expiry remains bounded by the token issuer TTL.
+  - Allocation expiry remains bounded by the allocation store TTL and is intentionally longer than token expiry.
+  - Repeated credentials requests reuse the active allocation while issuing fresh bounded participant tokens.
+  - Expired allocation state is not returned/reused by the in-memory store; Redis-backed allocation tests already cover expired-key replacement and redacted storage.
+  - The token path performs room pre-create before token issue only; no server test or verification path joins LiveKit.
+  - Successful token issuance logs now use redacted allocation/call hashes, not raw allocation IDs or call IDs.
+  - Safety remains unchanged: no APNs, no media connect, no LiveKit join, no microphone/camera permission request, no Matrix event emit, and no full direct-call flow in this phase.
 - 2.47C controlled real media credentials request, no-connect is implemented as a DEBUG-only code checkpoint:
   - After authenticated pending metadata fetch succeeds, the controlled proof path requests credentials through the existing `DirectCallLiveKitTokenProvider` and active app auth boundary.
   - The proof records `media_credentials_requested=true`, `media_credentials_request_authorized=true/false`, `media_credentials_result=success_redacted` or `blocked_redacted`, token/URL receipt booleans, token/URL redaction booleans, expiry presence, payload redaction, no local persistence, and cleanup status.

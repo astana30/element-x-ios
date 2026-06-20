@@ -1943,6 +1943,42 @@ class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(provisioner.ensured_rooms, [response.livekit.room_name])
         self.assertEqual(issuer.issued[0][2].livekit_room_name, response.livekit.room_name)
 
+    async def test_token_and_allocation_expiry_are_bounded_without_livekit_join(self) -> None:
+        events: list[str] = []
+        issuer = FakeLiveKitTokenIssuer(events=events)
+        provisioner = FakeLiveKitRoomProvisioner(events=events)
+        service = self.make_service(issuer=issuer, provisioner=provisioner)
+
+        before = datetime.now(timezone.utc)
+        response = await service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload())
+        after = datetime.now(timezone.utc)
+        allocation = issuer.issued[0][2]
+
+        self.assertGreater(response.livekit.expires_at, before)
+        self.assertLessEqual(response.livekit.expires_at, after + timedelta(seconds=125))
+        self.assertGreater(allocation.expires_at, before)
+        self.assertLessEqual(allocation.expires_at, after + timedelta(seconds=305))
+        self.assertGreater(allocation.expires_at, response.livekit.expires_at)
+        self.assertEqual(events, ["ensure-room", "issue-token"])
+        self.assertEqual(provisioner.ensured_rooms, [response.livekit.room_name])
+        self.assertEqual(len(issuer.issued), 1)
+
+    async def test_repeated_credentials_request_reuses_allocation_with_new_bounded_token(self) -> None:
+        issuer = FakeLiveKitTokenIssuer()
+        provisioner = FakeLiveKitRoomProvisioner()
+        service = self.make_service(issuer=issuer, provisioner=provisioner)
+
+        first = await service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload(client_transaction_id="txn-1"))
+        second = await service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload(client_transaction_id="txn-2"))
+        after = datetime.now(timezone.utc)
+
+        self.assertEqual(first.allocation.id, second.allocation.id)
+        self.assertEqual(first.livekit.room_name, second.livekit.room_name)
+        self.assertEqual(len(issuer.issued), 2)
+        self.assertEqual(set(provisioner.ensured_rooms), {first.livekit.room_name})
+        self.assertLessEqual(first.livekit.expires_at, after + timedelta(seconds=125))
+        self.assertLessEqual(second.livekit.expires_at, after + timedelta(seconds=125))
+
     async def test_livekit_room_provision_failure_fails_closed_without_token(self) -> None:
         issuer = FakeLiveKitTokenIssuer()
         provisioner = FakeLiveKitRoomProvisioner(fail=True)
@@ -2267,12 +2303,19 @@ class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
         service = self.make_service()
 
         with self.assertLogs("salemx_call_service.service", level="INFO") as logs:
-            await service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload())
+            response = await service.issue_token("Bearer matrix-token-a-sensitive", self.valid_payload())
 
         joined_logs = "\n".join(logs.output)
         self.assertNotIn("matrix-token-a-sensitive", joined_logs)
         self.assertNotIn("participant-token-sensitive", joined_logs)
         self.assertNotIn("!room:example.test", joined_logs)
+        self.assertNotIn("@alice:example.test", joined_logs)
+        self.assertNotIn("@bob:example.test", joined_logs)
+        self.assertNotIn("call-a", joined_logs)
+        self.assertNotIn(response.allocation.id, joined_logs)
+        self.assertNotIn(response.livekit.room_name, joined_logs)
+        self.assertIn("allocation_hash=", joined_logs)
+        self.assertIn("call_hash=", joined_logs)
 
     async def test_default_eligibility_policy_fails_closed_without_token(self) -> None:
         issuer = FakeLiveKitTokenIssuer()
@@ -2444,6 +2487,18 @@ class AllocationStoreTests(unittest.IsolatedAsyncioTestCase):
         second = await store.allocation_for(request)
 
         self.assertNotEqual(first.id, second.id)
+
+    async def test_memory_store_does_not_return_expired_allocation(self) -> None:
+        store = InMemoryAllocationStore(allocation_ttl_seconds=300)
+        request = self.token_request()
+        allocation_key = AllocationKey.from_token_request(request)
+        metadata = AllocationMetadata.from_token_request(request)
+
+        allocation = await store.create_or_reuse(allocation_key, metadata, ttl_seconds=-1)
+
+        self.assertIsNone(await store.get(allocation_key))
+        replacement = await store.create_or_reuse(allocation_key, metadata, ttl_seconds=300)
+        self.assertNotEqual(allocation.id, replacement.id)
 
     async def test_caller_and_callee_share_allocation_key(self) -> None:
         store = InMemoryAllocationStore(allocation_ttl_seconds=300)

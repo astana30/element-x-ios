@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Verified server-side allocation/token expiry without LiveKit join.
 - Added the 2.47D credentials cleanup / expiry proof fields.
 - Physically closed the 2.47D credentials cleanup / expiry no-connect proof.
 - Added the controlled real media credentials request no-connect checkpoint.
@@ -79,6 +80,14 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.47E — Server-Side Allocation/Token Expiry Verification
+
+Added focused server tests for the media credentials allocation/token lifecycle without APNs, media connect, LiveKit join, microphone/camera permission, Matrix events, or full direct-call flow. The tests prove issued participant credentials have bounded expiry, active allocations have bounded TTL, repeated credentials requests reuse only the active allocation while issuing fresh bounded tokens, and expired in-memory allocation state is not returned or reused. Existing Redis allocation tests continue to cover expired-key replacement and redacted stored keys/values.
+
+The server boundary remains no-join: it pre-creates the LiveKit room and issues a scoped participant token only. Successful token issuance logs now use stable redacted allocation/call hashes instead of raw allocation IDs or call IDs. Privacy scan stayed limited to safe field names and synthetic test fixture labels; no raw production secrets, JWTs, auth headers, payloads, LiveKit URLs, room IDs, call IDs, peer/user/device IDs, or tokens were added to docs/logging.
+
+Recommended next phase: `2.47F — controlled media connect preflight, no join`.
 
 ### 2.47B1 — Foreground Pending-Call Metadata Handoff
 
