@@ -10,49 +10,76 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-2.47C8 is committed as a targeted server fix for the persistent direct credentials `eligibilityRejected` blocker after 2.47C7.
+2.47C controlled real media credentials request is physically closed as a no-connect proof.
 
-Root cause:
-- Staging set the legacy switch spelling `SALEMXNATIVE_AUDIO_ELIGIBILITY_ENABLED=1`.
-- The service only read the canonical `SALEMX_NATIVE_AUDIO_ELIGIBILITY_ENABLED`.
-- The allowlist and homeserver values were present, but the service could still construct `DisabledNativeAudioEligibilityPolicy`, producing `eligibilityRejected` before allocation.
-
-Fix:
-- The service now accepts the explicit legacy switch spelling as an alias for the canonical switch.
-- Eligibility still remains fail-closed by default.
-- The switch must be set to `1`, and existing allowlist/homeserver values are still required.
-- Incoming receiver token eligibility from 2.47C7 remains intact.
-
-No APNs was sent for this fix. No production APNs, repeated APNs, `dev/invite`, media connect, LiveKit join, microphone/camera permission request, Matrix event emission, full call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, or forbidden project/signing file change was introduced.
-
-## Next Task
-
-Start 2.47C8 direct credentials close-out after deploying the server fix.
-
-Do not run APNs first. Verify the no-APNs direct credentials path before any physical APNs proof.
-
-Expected direct credentials success:
+Final proof:
 
 ```text
-media_credentials_direct_http_code=200
+pending_metadata_fetch_result=success_redacted
+foreground_pending_call_metadata_handoff_observed=true
+media_credentials_request_metadata_available=true
+media_credentials_boundary_reached=true
+media_credentials_requested=true
+media_credentials_request_authorized=true
+media_credentials_token_request_seen=true
+media_credentials_token_http_status_bucket=2xx
+media_credentials_token_reason=issued
 media_credentials_result=success_redacted
 media_credentials_token_received=true
 media_credentials_url_received=true
 media_credentials_expires_at_present=true
+media_credentials_cleanup_requested=true
+media_credentials_cleanup_result=cleared
 blocked_reason=none
 ```
 
-Only after direct credentials succeeds, run at most one physical APNs proof.
-
-Final physical target:
+Safety remained:
 
 ```text
-media_credentials_token_http_status_bucket=2xx
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+No production APNs, repeated APNs, `dev/invite`, media connect, LiveKit join, microphone/camera permission request, Matrix event emission, full call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, or forbidden project/signing file change was introduced.
+
+## Next Task
+
+Start 2.47D — credentials cleanup / expiry proof.
+
+Goal:
+- Prove issued credentials are not persisted locally beyond the controlled no-connect proof.
+- Prove cleanup clears the in-memory credential material.
+- Prove expiry metadata is present and bounded.
+- Do not connect media.
+- Do not join LiveKit.
+- Do not request microphone/camera permissions.
+- Do not emit Matrix events.
+- Do not start full call flow.
+
+Expected proof direction:
+
+```text
 media_credentials_result=success_redacted
 media_credentials_token_received=true
 media_credentials_url_received=true
 media_credentials_expires_at_present=true
+media_credentials_expiry_bounded=true
+media_credentials_local_persistence_requested=false
+media_credentials_cleanup_requested=true
+media_credentials_cleanup_result=cleared
+media_credentials_post_cleanup_token_available=false
+media_credentials_post_cleanup_url_available=false
 blocked_reason=none
+```
+
+Safety must remain:
+
+```text
 media_connect_requested=false
 media_connect_attempted=false
 livekit_join_requested=false

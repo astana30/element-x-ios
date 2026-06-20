@@ -5,6 +5,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 ## Milestones
 
 - Added the controlled real media credentials request no-connect checkpoint.
+- Physically closed the 2.47C controlled media credentials request no-connect proof after token issuance and cleanup succeeded.
 - Added compatibility for the deployed legacy native-audio eligibility switch spelling so staging builds the intended allowlist policy.
 - Fixed incoming receiver media credential eligibility so room-validated callers are not required to be exact user-allowlisted peers.
 - Fixed the pending metadata receiver-device binding that caused physical fetches to return redacted `403 M_FORBIDDEN` after APNs delivered to the latest receiver PushKit token.
@@ -205,6 +206,43 @@ The direct test proved the authenticated requester was the receiver, direction w
 The server now treats the explicit legacy switch spelling as equivalent to the canonical switch. Eligibility still remains fail-closed by default; the switch must equal `1`, and the existing allowed users/homeserver values are still required. Targeted tests cover readiness and `ServiceConfig.from_env()` with the legacy switch, plus the incoming receiver token route and eligibility cases.
 
 No APNs was sent for this fix. No production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, project/signing/entitlement/`Info.plist`/`app.yml` change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
+
+### 2.47C Close-Out — Controlled Credentials Request, No-Connect
+
+The physical close-out passed after the pending metadata binding, incoming eligibility, and eligibility switch compatibility fixes. Final receipt proof:
+
+```text
+pending_metadata_fetch_result=success_redacted
+foreground_pending_call_metadata_handoff_observed=true
+media_credentials_request_metadata_available=true
+media_credentials_boundary_reached=true
+media_credentials_requested=true
+media_credentials_request_authorized=true
+media_credentials_token_request_seen=true
+media_credentials_token_http_status_bucket=2xx
+media_credentials_token_reason=issued
+media_credentials_result=success_redacted
+media_credentials_token_received=true
+media_credentials_url_received=true
+media_credentials_expires_at_present=true
+media_credentials_cleanup_requested=true
+media_credentials_cleanup_result=cleared
+blocked_reason=none
+```
+
+Safety stayed closed:
+
+```text
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+No APNs was sent after the passing proof. No production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, project/signing/entitlement/`Info.plist`/`app.yml` change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced by the close-out. Next phase is 2.47D credentials cleanup / expiry proof, not real call flow.
 
 ### 2.47A13 — Split proofs and PushKit answerable-window diagnostic
 
