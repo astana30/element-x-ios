@@ -13,7 +13,7 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-2.48C physically proved the DEBUG-only controlled media-connect preflight guard after successful credentials receipt. This is still no-connect only.
+2.48D completed the server/client readiness review before any controlled connect. This remains no-connect only.
 
 Closed prerequisites:
 - 2.47C physical controlled media credentials request succeeded with no media connect.
@@ -22,6 +22,7 @@ Closed prerequisites:
 - 2.48A documented the future media-connect seam.
 - 2.48B implemented the controlled media-connect preflight guard.
 - 2.48C proved the guard physically after real invite/APNs/PushKit/CallKit Answer.
+- 2.48D reviewed the server/client readiness gates and concluded controlled connect is not yet approved.
 
 2.48C proof generation:
 
@@ -71,35 +72,77 @@ matrix_event_emit_requested=false
 real_call_flow_started=false
 ```
 
+2.48D readiness checklist:
+
+```text
+client_preflight_guard_present=true
+client_default_connect_allowed=false
+client_media_engine_invocation_proven_false=true
+client_livekit_connect_audio_invocation_proven_false=true
+client_mic_permission_boundary_identified=true
+client_camera_permission_boundary_identified=true
+client_matrix_event_emit_boundary_identified=true
+server_token_expiry_verified=true
+server_allocation_ttl_verified=true
+server_rate_limit_no_allocation_verified=true
+credentials_redaction_verified=true
+cleanup_non_persistence_verified=true
+rollback_kill_switch_required=true
+controlled_connect_not_yet_approved=true
+```
+
 ## Phase
 
-`2.48D — server/client readiness review before any controlled connect`
+`2.48E — implement disabled controlled-connect switch and proof gates, no LiveKit join`
 
 ## Goal
 
-Review the server and iOS client readiness before allowing any future controlled media-connect attempt.
+Add a disabled-by-default DEBUG-only controlled-connect switch and proof gates for a future connect attempt, while still preventing any media connect or LiveKit join in this phase.
 
-This phase is review/planning only. Do not run APNs, do not connect media, and do not join LiveKit.
+This phase prepares the switch/guard surface only. It must not enable connect execution and must not call `connectAudio` or LiveKit.
 
-## Review Targets
+## Required Behavior
 
-- Confirm the server allocation/token lifecycle is ready for a short controlled connect attempt without changing token scope, token TTL, or allocation expiry.
-- Confirm the iOS `DirectCallMediaConnectionInfo` path is the only credentials consumer before connect.
-- Confirm the connect entrypoint remains gated behind an explicit DEBUG-only operator action and proof guard.
-- Confirm microphone/camera permission prompts remain blocked until a separately approved connect phase.
-- Confirm Matrix event emission and full direct-call flow remain blocked.
-- Define rollback/kill-switch steps before enabling any connect path.
-- Define exact proof fields required for the first controlled connect attempt.
-- Define the minimal tests required before that attempt.
+- Add an explicit DEBUG-only connect switch that defaults to disabled.
+- Add proof fields showing the switch exists and is disabled.
+- Keep `media_connect_execution_allowed=false` unless a later phase explicitly changes it.
+- Keep media engine invocation and LiveKit connect invocation false.
+- Keep microphone/camera permission requests false.
+- Keep Matrix event emission false.
+- Keep full direct-call flow false.
+- Preserve immediate rollback to the current no-connect behavior.
+- Do not change server token scope, token TTL, allocation TTL, or room pre-create behavior.
 
-## Required Output
+Suggested proof fields:
 
-- Readiness findings with code references.
-- A go/no-go checklist for 2.48E or the next explicitly approved controlled connect phase.
-- Required proof fields for any future connect attempt.
-- Required rollback/kill-switch behavior.
-- Required targeted tests.
-- Docs update only unless a concrete readiness bug is found.
+```text
+controlled_connect_switch_present=true
+controlled_connect_switch_enabled=false
+controlled_connect_operator_approval_required=true
+controlled_connect_operator_approval_observed=false
+controlled_connect_one_shot_required=true
+controlled_connect_rollback_available=true
+controlled_connect_video_disabled=true
+controlled_connect_matrix_events_disabled=true
+controlled_connect_audio_permission_deferred=true
+controlled_connect_livekit_join_allowed=false
+media_connect_execution_allowed=false
+media_connect_engine_invoked=false
+livekit_connect_audio_invoked=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+## Required Tests
+
+- Source guard proving the switch is DEBUG-only and defaults disabled.
+- Source guard proving disabled switch keeps `media_connect_execution_allowed=false`.
+- Source guard proving media engine / LiveKit connect invocations remain false.
+- Source guard proving microphone/camera permission fields remain false.
+- Source guard proving Matrix event emission and full flow remain false.
+- Privacy guard proving no raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID is written to proof/docs.
 
 ## Hard Constraints
 
@@ -117,4 +160,4 @@ This phase is review/planning only. Do not run APNs, do not connect media, and d
 
 ## If Blocked
 
-Report the blocker and the smallest next fix. Keep all no-connect safety fields false.
+Report the blocker and the smallest next fix. Keep all no-connect safety fields false. Do not proceed to a real call flow.

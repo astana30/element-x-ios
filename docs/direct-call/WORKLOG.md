@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Completed the server/client readiness review before any controlled media connect.
 - Physically closed the controlled media-connect preflight guard proof without connecting media.
 - Added the controlled media-connect preflight guard without invoking media.
 - Planned the controlled media connect preflight boundary without runtime behavior changes.
@@ -83,6 +84,55 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48D — Server/Client Readiness Review Before Controlled Connect
+
+Reviewed the current server and iOS client seams before any future controlled media-connect attempt. This phase did not run APNs, did not use `dev/invite`, did not connect media, did not join LiveKit, did not request microphone/camera permissions, did not emit Matrix events, and did not start full call flow.
+
+Client readiness:
+
+```text
+client_preflight_guard_present=true
+client_default_connect_allowed=false
+client_media_engine_invocation_proven_false=true
+client_livekit_connect_audio_invocation_proven_false=true
+client_mic_permission_boundary_identified=true
+client_camera_permission_boundary_identified=true
+client_matrix_event_emit_boundary_identified=true
+credentials_redaction_verified=true
+cleanup_non_persistence_verified=true
+rollback_kill_switch_required=true
+controlled_connect_not_yet_approved=true
+```
+
+`DirectCallEngine.requestMediaCredentials` remains a credentials-only boundary. The actual connect path is still isolated behind `DirectCallEngine.connectMediaIfReady`, which requires a connecting session, ready encryption, a valid key handle, and audio intent before it can call `mediaEngine.connectAudio`. `LiveKitDirectCallMediaEngine.connectAudio` is the first path that configures audio routing, builds the E2EE context, obtains connection info, and calls the LiveKit client connect boundary; it starts microphone state disabled and has no camera path.
+
+Server readiness:
+
+```text
+server_token_expiry_verified=true
+server_allocation_ttl_verified=true
+server_rate_limit_no_allocation_verified=true
+```
+
+Existing server tests cover token route behavior, room pre-create before token issue, bounded participant-token expiry, bounded allocation TTL, active allocation reuse with fresh bounded credentials, and rate-limit rejection before allocation/room pre-create. The review did not change token scope, TTLs, allocation expiry, or room pre-create behavior.
+
+Gates before any future controlled connect:
+
+```text
+must require explicit DEBUG-only connect switch
+must require one-shot operator approval
+must keep video disabled
+must keep Matrix event emission disabled
+must request audio permission only in the future connect phase, not in 2.48D
+must stop before LiveKit join unless the next phase explicitly permits it
+must preserve redacted proof only
+must support immediate rollback to no-connect
+```
+
+Conclusion: proceed only to `2.48E — implement disabled controlled-connect switch and proof gates, no LiveKit join`. Do not proceed to real call flow.
+
+No raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID was logged or documented. No project/signing/entitlement/`Info.plist`/`app.yml` file was touched, and `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` remained untracked.
 
 ### 2.48C — Physical Controlled Media-Connect Preflight Proof
 

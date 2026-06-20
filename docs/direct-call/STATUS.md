@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48C — physical proof of the controlled media-connect preflight guard. Real invite/APNs/PushKit/CallKit Answer, pending metadata fetch, and media credentials succeeded, then the DEBUG-only preflight guard blocked before connect.
+After 2.48D — server/client readiness review before any controlled connect. The review confirms the current default remains no-connect and the next phase should only add a disabled DEBUG-only connect switch/proof gates, not perform a LiveKit join.
 
 ## Latest App Code Checkpoint
 
@@ -48,6 +48,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - The media engine was not invoked and LiveKit `connectAudio` was not invoked: `media_connect_engine_invoked=false` and `livekit_connect_audio_invoked=false`.
   - Safety proof remained false for `media_connect_requested`, `media_connect_attempted`, `livekit_join_requested`, `microphone_permission_requested`, `camera_permission_requested`, `matrix_event_emit_requested`, and `real_call_flow_started`.
   - No repeated APNs, production APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, `app.yml` change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced by this close-out.
+- 2.48D server/client readiness review before controlled connect is complete:
+  - `DirectCallEngine.requestMediaCredentials` is a credentials-only boundary; `DirectCallEngine.connectMediaIfReady` is the separate media-connect gate that calls `mediaEngine.connectAudio` only after a connecting session, ready encryption, valid key handle, and audio intent.
+  - `LiveKitDirectCallMediaEngine.connectAudio` is the first path that configures the audio route, obtains credentials again, builds E2EE context, and calls the LiveKit client connect boundary. It initializes microphone state disabled and does not create a camera path.
+  - The 2.48B/2.48C proof adapter already records the no-connect guard fields, including `media_connect_execution_allowed=false`, `media_connect_engine_invoked=false`, and `livekit_connect_audio_invoked=false`.
+  - Server route/tests cover token issuance through the foreground-signaling token alias, room pre-create before token issue, bounded participant-token expiry, bounded allocation TTL, repeated-request allocation reuse with fresh bounded credentials, and rate-limit rejection before allocation/room pre-create.
+  - Readiness checklist: `client_preflight_guard_present=true`, `client_default_connect_allowed=false`, `client_media_engine_invocation_proven_false=true`, `client_livekit_connect_audio_invocation_proven_false=true`, `client_mic_permission_boundary_identified=true`, `client_camera_permission_boundary_identified=true`, `client_matrix_event_emit_boundary_identified=true`, `server_token_expiry_verified=true`, `server_allocation_ttl_verified=true`, `server_rate_limit_no_allocation_verified=true`, `credentials_redaction_verified=true`, `cleanup_non_persistence_verified=true`, `rollback_kill_switch_required=true`, and `controlled_connect_not_yet_approved=true`.
+  - Gates before any future controlled connect: require an explicit DEBUG-only connect switch, one-shot operator approval, video disabled, Matrix event emission disabled, audio permission only in the future connect phase, a stop before LiveKit join unless explicitly permitted, redacted proof only, and immediate rollback to no-connect.
+  - No APNs, production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, `app.yml` change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced by this review.
 - 2.48B controlled media-connect preflight guard is implemented as a DEBUG-only proof step:
   - After controlled media credentials succeed, the proof records preflight metadata/credential availability, token/URL/expiry presence booleans, `media_connect_guard_enabled=true`, and `media_connect_execution_allowed=false`.
   - The preflight result is `blocked_before_connect_redacted` with `media_connect_blocked_reason=controlled_preflight_no_connect`; it does not invoke the media engine or LiveKit connect path.
