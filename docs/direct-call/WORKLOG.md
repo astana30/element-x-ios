@@ -5,6 +5,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 ## Milestones
 
 - Added the controlled real media credentials request no-connect checkpoint.
+- Fixed incoming receiver media credential eligibility so room-validated callers are not required to be exact user-allowlisted peers.
 - Fixed the pending metadata receiver-device binding that caused physical fetches to return redacted `403 M_FORBIDDEN` after APNs delivered to the latest receiver PushKit token.
 - Added redacted pending metadata fetch HTTP classification after the 2.47C2 token-route fix.
 - Wired the authenticated pending metadata fetch handoff after PushKit-controlled Answer.
@@ -160,6 +161,28 @@ pending_metadata_fetch_failure_reason=forbidden
 Root cause: the server stored pending metadata against the invite's requested receiver device, while the real invite/APNs path sends to the latest receiver PushKit token for the account. If the requested device is stale, APNs can still reach the physical receiver through the latest token, but the receiver's authenticated metadata fetch is denied.
 
 The server now binds pending metadata to the exact receiver device only when that device token record is the same latest development PushKit token record used for APNs. Otherwise it binds to the receiver account, preserving the receiver-only boundary while allowing the physical device that actually received the PushKit callback to fetch metadata. Targeted tests cover exact-device success, wrong-device denial when the exact token is current, stale requested-device recovery through the latest PushKit token, and wrong-user denial.
+
+No APNs was sent for this fix. No production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, project/signing/entitlement/`Info.plist`/`app.yml` change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
+
+### 2.47C7 — Incoming Receiver Token Eligibility
+
+Physical proof after deploying 2.47C6 reached authenticated pending metadata fetch success and entered the token boundary, then failed safely:
+
+```text
+pending_metadata_fetch_result=success_redacted
+media_credentials_request_metadata_available=true
+media_credentials_requested=true
+media_credentials_request_authorized=true
+media_credentials_token_request_seen=true
+media_credentials_token_http_status_bucket=403
+media_credentials_token_reason=eligibilityRejected
+media_credentials_eligibility_allowed=false
+blocked_reason=media_credentials_request_failed_redacted
+```
+
+Root cause: incoming receiver token requests authenticate as the receiver, while pending metadata correctly sets `peer_user_id` to the caller. The static allowlist policy still required that caller peer's exact user ID to be allowlisted, so a valid encrypted 1:1 incoming receiver request could fail before allocation.
+
+The policy now keeps the authenticated receiver allowlist gate and the encrypted 1:1 room validation gate. For incoming direction, the peer is accepted through the room validation result, with configured homeserver allowlists still applied to the peer homeserver. Targeted service and foreground-signaling token alias tests cover the valid incoming receiver case, receiver-not-allowlisted failure, and unsupported peer homeserver failure before allocation.
 
 No APNs was sent for this fix. No production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, project/signing/entitlement/`Info.plist`/`app.yml` change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 

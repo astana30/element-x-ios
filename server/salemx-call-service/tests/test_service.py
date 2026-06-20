@@ -2055,6 +2055,96 @@ class DirectCallTokenServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(outgoing.livekit.room_name, incoming.livekit.room_name)
         self.assertEqual(provisioner.ensured_rooms, [outgoing.livekit.room_name, incoming.livekit.room_name])
 
+    async def test_incoming_receiver_allowlisted_with_room_peer_is_eligible(self) -> None:
+        issuer = FakeLiveKitTokenIssuer()
+        provisioner = FakeLiveKitRoomProvisioner()
+        service = self.make_service(
+            issuer=issuer,
+            provisioner=provisioner,
+            eligibility_policy=StaticAllowlistNativeAudioEligibilityPolicy(
+                allowed_user_ids=("@bob:example.test",),
+                allowed_homeservers=("example.test",),
+            ),
+        )
+
+        response = await service.issue_token(
+            "Be" + "arer " + "matrix-" + "token-b-sensitive",
+            self.valid_payload(peer_user_id="@alice:example.test", direction="incoming", device_id="DEVICEB"),
+        )
+        body = response.as_dict()
+        diagnostics_output = json.dumps(body["diagnostics"], sort_keys=True)
+
+        self.assertEqual(body["diagnostics"]["token_status"], 200)
+        self.assertEqual(body["diagnostics"]["token_reason"], "issued")
+        self.assertTrue(body["diagnostics"]["eligibility_allowed"])
+        self.assertTrue(body["diagnostics"]["allocation_attempted"])
+        self.assertTrue(body["diagnostics"]["livekit_room_precreate_attempted"])
+        self.assertTrue(body["diagnostics"]["token_issued"])
+        self.assertEqual(len(issuer.issued), 1)
+        self.assertEqual(len(provisioner.ensured_rooms), 1)
+        self.assertNotIn("matrix-token-b-sensitive", diagnostics_output)
+        self.assertNotIn("participant-token-sensitive", diagnostics_output)
+        self.assertNotIn("!room:example.test", diagnostics_output)
+        self.assertNotIn("@alice:example.test", diagnostics_output)
+        self.assertNotIn("@bob:example.test", diagnostics_output)
+
+    async def test_incoming_receiver_not_allowlisted_still_fails_before_allocation(self) -> None:
+        issuer = FakeLiveKitTokenIssuer()
+        provisioner = FakeLiveKitRoomProvisioner()
+        service = self.make_service(
+            issuer=issuer,
+            provisioner=provisioner,
+            eligibility_policy=StaticAllowlistNativeAudioEligibilityPolicy(
+                allowed_user_ids=("@alice:example.test",),
+                allowed_homeservers=("example.test",),
+            ),
+        )
+
+        with self.assertRaises(CallServiceError) as context:
+            await service.issue_token(
+                "Be" + "arer " + "matrix-" + "token-b-sensitive",
+                self.valid_payload(peer_user_id="@alice:example.test", direction="incoming", device_id="DEVICEB"),
+            )
+
+        diagnostics = context.exception.as_dict()["diagnostics"]
+        self.assertEqual(context.exception.errcode, "M_DIRECT_CALL_NOT_ELIGIBLE")
+        self.assertFalse(diagnostics["eligibility_allowed"])
+        self.assertFalse(diagnostics["allocation_attempted"])
+        self.assertFalse(diagnostics["livekit_room_precreate_attempted"])
+        self.assertFalse(diagnostics["token_issued"])
+        self.assertEqual(len(issuer.issued), 0)
+        self.assertEqual(provisioner.ensured_rooms, [])
+
+    async def test_incoming_peer_homeserver_not_allowlisted_still_fails_before_allocation(self) -> None:
+        issuer = FakeLiveKitTokenIssuer()
+        provisioner = FakeLiveKitRoomProvisioner()
+        service = self.make_service(
+            rooms={
+                "!room:example.test": RoomEligibility(("@alice:other.test", "@bob:example.test"), True),
+            },
+            issuer=issuer,
+            provisioner=provisioner,
+            eligibility_policy=StaticAllowlistNativeAudioEligibilityPolicy(
+                allowed_user_ids=("@bob:example.test",),
+                allowed_homeservers=("example.test",),
+            ),
+        )
+
+        with self.assertRaises(CallServiceError) as context:
+            await service.issue_token(
+                "Be" + "arer " + "matrix-" + "token-b-sensitive",
+                self.valid_payload(peer_user_id="@alice:other.test", direction="incoming", device_id="DEVICEB"),
+            )
+
+        diagnostics = context.exception.as_dict()["diagnostics"]
+        self.assertEqual(context.exception.errcode, "M_DIRECT_CALL_NOT_ELIGIBLE")
+        self.assertFalse(diagnostics["eligibility_allowed"])
+        self.assertFalse(diagnostics["allocation_attempted"])
+        self.assertFalse(diagnostics["livekit_room_precreate_attempted"])
+        self.assertFalse(diagnostics["token_issued"])
+        self.assertEqual(len(issuer.issued), 0)
+        self.assertEqual(provisioner.ensured_rooms, [])
+
     async def test_concurrent_same_call_reuses_allocation(self) -> None:
         provisioner = FakeLiveKitRoomProvisioner()
         service = self.make_service(provisioner=provisioner)
@@ -3319,6 +3409,44 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("livekit", body)
         self.assertEqual(body["diagnostics"]["token_reason"], "issued")
         self.assertTrue(body["diagnostics"]["token_issued"])
+
+    async def test_foreground_signaling_token_alias_allows_incoming_receiver_when_peer_is_room_member(self) -> None:
+        try:
+            with patch.dict(os.environ, {SERVICE_MODE_ENV: ServiceMode.LOCAL_FAKE.value}, clear=True):
+                from salemx_call_service.app import create_app
+        except ModuleNotFoundError as error:
+            if error.name == "fastapi":
+                self.skipTest("FastAPI is not installed in this Python environment.")
+            raise
+
+        service = DirectCallTokenServiceTests().make_service(
+            issuer=FakeLiveKitTokenIssuer(),
+            eligibility_policy=StaticAllowlistNativeAudioEligibilityPolicy(
+                allowed_user_ids=("@bob:example.test",),
+                allowed_homeservers=("example.test",),
+            ),
+        )
+        app = create_app(token_service=service)
+        status, body = await _asgi_post_json(app, FOREGROUND_SIGNALING_TOKEN_ENDPOINT_PATH, {
+            "authorization": "Be" + "arer " + "matrix-" + "token-b-sensitive",
+            "content-type": "application/json",
+        }, DirectCallTokenServiceTests().valid_payload(
+            peer_user_id="@alice:example.test",
+            direction="incoming",
+            device_id="DEVICEB",
+        ))
+        diagnostics_output = json.dumps(body["diagnostics"], sort_keys=True)
+
+        self.assertEqual(status, 200)
+        self.assertIn("livekit", body)
+        self.assertEqual(body["diagnostics"]["token_reason"], "issued")
+        self.assertTrue(body["diagnostics"]["eligibility_allowed"])
+        self.assertTrue(body["diagnostics"]["token_issued"])
+        self.assertNotIn("matrix-token-b-sensitive", diagnostics_output)
+        self.assertNotIn("participant-token-sensitive", diagnostics_output)
+        self.assertNotIn("!room:example.test", diagnostics_output)
+        self.assertNotIn("@alice:example.test", diagnostics_output)
+        self.assertNotIn("@bob:example.test", diagnostics_output)
 
     async def test_token_endpoint_over_redis_rate_limit_returns_429_without_second_token(self) -> None:
         try:

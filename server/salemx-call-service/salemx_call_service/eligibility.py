@@ -135,7 +135,7 @@ class StaticAllowlistNativeAudioEligibilityPolicy:
                        room_eligibility: RoomEligibility) -> NativeAudioEligibilityResult:
         room_eligible = _room_is_eligible(authenticated_user, token_request, room_eligibility)
         account_eligible = self._user_allowed(authenticated_user.user_id)
-        peer_eligible = self._user_allowed(token_request.peer_user_id)
+        peer_eligible = self._peer_allowed(token_request)
 
         if not account_eligible:
             return NativeAudioEligibilityResult.unavailable(
@@ -169,6 +169,13 @@ class StaticAllowlistNativeAudioEligibilityPolicy:
         if not self._allowed_homeservers:
             return True
         return _homeserver_from_user_id(user_id) in self._allowed_homeservers
+
+    def _peer_allowed(self, token_request: TokenRequest) -> bool:
+        if token_request.direction == "incoming":
+            if not self._allowed_homeservers:
+                return True
+            return _homeserver_from_user_id(token_request.peer_user_id) in self._allowed_homeservers
+        return self._user_allowed(token_request.peer_user_id)
 
 
 def eligibility_result_for_room_validation_error() -> NativeAudioEligibilityResult:
