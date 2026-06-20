@@ -10,49 +10,31 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-2.47C7 is committed as a targeted server fix for the media credentials `eligibilityRejected` blocker.
-
-Latest physical proof before the fix:
-- APNs sandbox, PushKit, CallKit report, Answer, foreground pending state, pending metadata fetch, and metadata handoff all passed.
-- The token request reached the server and failed safely with:
-
-```text
-media_credentials_token_http_status_bucket=403
-media_credentials_token_reason=eligibilityRejected
-media_credentials_eligibility_allowed=false
-media_credentials_allocation_attempted=false
-media_credentials_livekit_room_precreate_attempted=false
-media_credentials_token_issued=false
-blocked_reason=media_credentials_request_failed_redacted
-```
+2.47C8 is committed as a targeted server fix for the persistent direct credentials `eligibilityRejected` blocker after 2.47C7.
 
 Root cause:
-- Incoming receiver credentials requests authenticate as the receiver.
-- Pending metadata correctly sets `peer_user_id` to the caller.
-- The static eligibility policy required that caller peer's exact user ID to be allowlisted, even though the encrypted 1:1 room validation already proves the peer relationship.
+- Staging set the legacy switch spelling `SALEMXNATIVE_AUDIO_ELIGIBILITY_ENABLED=1`.
+- The service only read the canonical `SALEMX_NATIVE_AUDIO_ELIGIBILITY_ENABLED`.
+- The allowlist and homeserver values were present, but the service could still construct `DisabledNativeAudioEligibilityPolicy`, producing `eligibilityRejected` before allocation.
 
 Fix:
-- Keep the authenticated receiver account allowlist gate.
-- Keep encrypted 1:1 room validation.
-- For incoming direction, accept the room-validated peer without requiring the peer exact user ID in the static user allowlist.
-- Keep configured homeserver allowlists applied to the incoming peer homeserver.
+- The service now accepts the explicit legacy switch spelling as an alias for the canonical switch.
+- Eligibility still remains fail-closed by default.
+- The switch must be set to `1`, and existing allowlist/homeserver values are still required.
+- Incoming receiver token eligibility from 2.47C7 remains intact.
 
 No APNs was sent for this fix. No production APNs, repeated APNs, `dev/invite`, media connect, LiveKit join, microphone/camera permission request, Matrix event emission, full call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, or forbidden project/signing file change was introduced.
 
 ## Next Task
 
-Start 2.47C7 physical close-out after the server fix is deployed. Run one controlled no-connect proof only.
+Start 2.47C8 direct credentials close-out after deploying the server fix.
 
-Expected success:
+Do not run APNs first. Verify the no-APNs direct credentials path before any physical APNs proof.
+
+Expected direct credentials success:
 
 ```text
-pending_metadata_fetch_result=success_redacted
-foreground_pending_call_metadata_handoff_observed=true
-media_credentials_request_metadata_available=true
-media_credentials_requested=true
-media_credentials_request_authorized=true
-media_credentials_token_request_seen=true
-media_credentials_token_http_status_bucket=2xx
+media_credentials_direct_http_code=200
 media_credentials_result=success_redacted
 media_credentials_token_received=true
 media_credentials_url_received=true
@@ -60,9 +42,17 @@ media_credentials_expires_at_present=true
 blocked_reason=none
 ```
 
-Safety must remain:
+Only after direct credentials succeeds, run at most one physical APNs proof.
+
+Final physical target:
 
 ```text
+media_credentials_token_http_status_bucket=2xx
+media_credentials_result=success_redacted
+media_credentials_token_received=true
+media_credentials_url_received=true
+media_credentials_expires_at_present=true
+blocked_reason=none
 media_connect_requested=false
 media_connect_attempted=false
 livekit_join_requested=false

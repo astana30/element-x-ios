@@ -5,6 +5,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 ## Milestones
 
 - Added the controlled real media credentials request no-connect checkpoint.
+- Added compatibility for the deployed legacy native-audio eligibility switch spelling so staging builds the intended allowlist policy.
 - Fixed incoming receiver media credential eligibility so room-validated callers are not required to be exact user-allowlisted peers.
 - Fixed the pending metadata receiver-device binding that caused physical fetches to return redacted `403 M_FORBIDDEN` after APNs delivered to the latest receiver PushKit token.
 - Added redacted pending metadata fetch HTTP classification after the 2.47C2 token-route fix.
@@ -183,6 +184,25 @@ blocked_reason=media_credentials_request_failed_redacted
 Root cause: incoming receiver token requests authenticate as the receiver, while pending metadata correctly sets `peer_user_id` to the caller. The static allowlist policy still required that caller peer's exact user ID to be allowlisted, so a valid encrypted 1:1 incoming receiver request could fail before allocation.
 
 The policy now keeps the authenticated receiver allowlist gate and the encrypted 1:1 room validation gate. For incoming direction, the peer is accepted through the room validation result, with configured homeserver allowlists still applied to the peer homeserver. Targeted service and foreground-signaling token alias tests cover the valid incoming receiver case, receiver-not-allowlisted failure, and unsupported peer homeserver failure before allocation.
+
+No APNs was sent for this fix. No production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, project/signing/entitlement/`Info.plist`/`app.yml` change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
+
+### 2.47C8 — Eligibility Switch Compatibility
+
+After deploying the incoming receiver eligibility fix, the no-APNs direct credentials test still failed before allocation:
+
+```text
+media_credentials_direct_http_code=403
+diagnostics.token_reason=eligibilityRejected
+diagnostics.eligibility_allowed=false
+diagnostics.allocation_attempted=false
+diagnostics.token_issued=false
+blocked_reason=media_credentials_direct_failed_redacted
+```
+
+The direct test proved the authenticated requester was the receiver, direction was incoming, the peer was the sender, both expected account hashes were present in the allowlist, and the room shape was valid. The remaining mismatch was config: staging had `SALEMXNATIVE_AUDIO_ELIGIBILITY_ENABLED=1`, while the service only read `SALEMX_NATIVE_AUDIO_ELIGIBILITY_ENABLED`.
+
+The server now treats the explicit legacy switch spelling as equivalent to the canonical switch. Eligibility still remains fail-closed by default; the switch must equal `1`, and the existing allowed users/homeserver values are still required. Targeted tests cover readiness and `ServiceConfig.from_env()` with the legacy switch, plus the incoming receiver token route and eligibility cases.
 
 No APNs was sent for this fix. No production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, project/signing/entitlement/`Info.plist`/`app.yml` change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 

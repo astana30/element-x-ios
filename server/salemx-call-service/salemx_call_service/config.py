@@ -21,6 +21,7 @@ LEGACY_RATE_LIMIT_PER_MINUTE_ENV = "RATE_LIMIT_PER_MINUTE"
 ALLOW_MEMORY_RATE_LIMITER_ENV = "SALEMX_CALL_SERVICE_ALLOW_MEMORY_RATE_LIMITER"
 STORAGE_KEY_SECRET_ENV = "SALEMX_CALL_SERVICE_STORAGE_KEY_SECRET"
 NATIVE_AUDIO_ELIGIBILITY_ENABLED_ENV = "SALEMX_NATIVE_AUDIO_ELIGIBILITY_ENABLED"
+LEGACY_NATIVE_AUDIO_ELIGIBILITY_ENABLED_ENV = "SALEMXNATIVE_AUDIO_ELIGIBILITY_ENABLED"
 NATIVE_AUDIO_ELIGIBILITY_ALLOWED_USERS_ENV = "SALEMX_NATIVE_AUDIO_ELIGIBILITY_ALLOWED_USERS"
 NATIVE_AUDIO_ELIGIBILITY_ALLOWED_HOMESERVERS_ENV = "SALEMX_NATIVE_AUDIO_ELIGIBILITY_ALLOWED_HOMESERVERS"
 FOREGROUND_SIGNALING_DEV_INVITE_ENABLED_ENV = "SALEMX_FOREGROUND_SIGNALING_DEV_INVITE_ENABLED"
@@ -163,7 +164,7 @@ class ServiceConfig:
             rate_limit_store=_env_value(environ, RATE_LIMIT_STORE_ENV) or DEFAULT_RATE_LIMIT_STORE,
             rate_limit_store_url=_env_value(environ, RATE_LIMIT_STORE_URL_ENV),
             storage_key_secret=_env_value(environ, STORAGE_KEY_SECRET_ENV),
-            native_audio_eligibility_enabled=_env_value(environ, NATIVE_AUDIO_ELIGIBILITY_ENABLED_ENV) == "1",
+            native_audio_eligibility_enabled=_native_audio_eligibility_enabled(environ),
             native_audio_eligibility_allowed_users=_csv_env(NATIVE_AUDIO_ELIGIBILITY_ALLOWED_USERS_ENV),
             native_audio_eligibility_allowed_homeservers=_csv_env(NATIVE_AUDIO_ELIGIBILITY_ALLOWED_HOMESERVERS_ENV),
         )
@@ -220,7 +221,7 @@ def service_readiness_from_env(env: Mapping[str, str] = environ) -> ServiceReadi
         rate_limit_store_url=_env_value(env, RATE_LIMIT_STORE_URL_ENV),
         rate_limit_per_minute_value=_rate_limit_per_minute_value(env),
         storage_key_secret=_env_value(env, STORAGE_KEY_SECRET_ENV),
-        native_audio_eligibility_enabled=_env_value(env, NATIVE_AUDIO_ELIGIBILITY_ENABLED_ENV) == "1",
+        native_audio_eligibility_enabled=_native_audio_eligibility_enabled(env),
         native_audio_eligibility_allowed_users=_csv_value(_env_value(env, NATIVE_AUDIO_ELIGIBILITY_ALLOWED_USERS_ENV)),
         native_audio_eligibility_allowed_homeservers=_csv_value(_env_value(env, NATIVE_AUDIO_ELIGIBILITY_ALLOWED_HOMESERVERS_ENV)),
         allow_insecure_livekit_url=_env_value(env, ALLOW_INSECURE_LIVEKIT_URL_ENV) == "1",
@@ -406,6 +407,13 @@ def _readiness(mode: str,
 
 def _configured(env: Mapping[str, str], name: str) -> bool:
     return _env_value(env, name) is not None
+
+
+def _native_audio_eligibility_enabled(env: Mapping[str, str]) -> bool:
+    return (
+        _env_value(env, NATIVE_AUDIO_ELIGIBILITY_ENABLED_ENV) == "1"
+        or _env_value(env, LEGACY_NATIVE_AUDIO_ELIGIBILITY_ENABLED_ENV) == "1"
+    )
 
 
 def _env_value(env: Mapping[str, str], name: str) -> str | None:

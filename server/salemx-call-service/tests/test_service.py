@@ -28,6 +28,7 @@ from salemx_call_service.config import (
     ALLOW_MEMORY_RATE_LIMITER_ENV,
     ALLOW_INSECURE_LIVEKIT_URL_ENV,
     FOREGROUND_SIGNALING_DEV_INVITE_ENABLED_ENV,
+    LEGACY_NATIVE_AUDIO_ELIGIBILITY_ENABLED_ENV,
     NATIVE_AUDIO_ELIGIBILITY_ALLOWED_HOMESERVERS_ENV,
     NATIVE_AUDIO_ELIGIBILITY_ALLOWED_USERS_ENV,
     NATIVE_AUDIO_ELIGIBILITY_ENABLED_ENV,
@@ -38,6 +39,7 @@ from salemx_call_service.config import (
     STORAGE_KEY_SECRET_ENV,
     AllocationStoreKind,
     RateLimitStoreKind,
+    ServiceConfig,
     ServiceMode,
     ServicePreflightError,
     service_readiness_from_env,
@@ -2843,6 +2845,37 @@ class ServicePreflightTests(unittest.TestCase):
         self.assertNotIn("@alice:example.test", output)
         self.assertNotIn("@bob:example.test", output)
         self.assertNotIn("example.test", output)
+
+    def test_staging_preflight_accepts_legacy_native_audio_eligibility_switch(self) -> None:
+        env = _staging_env({
+            LEGACY_NATIVE_AUDIO_ELIGIBILITY_ENABLED_ENV: "1",
+            NATIVE_AUDIO_ELIGIBILITY_ALLOWED_USERS_ENV: "@alice:example.test,@bob:example.test",
+            NATIVE_AUDIO_ELIGIBILITY_ALLOWED_HOMESERVERS_ENV: "example.test",
+        })
+
+        readiness = service_readiness_from_env(env)
+        output = json.dumps(readiness.as_dict(), sort_keys=True)
+
+        self.assertTrue(readiness.ready)
+        self.assertTrue(readiness.as_dict()["nativeAudioEligibilityConfigured"])
+        self.assertTrue(readiness.as_dict()["nativeAudioEligibilityAllowlistConfigured"])
+        self.assertNotIn("@alice:example.test", output)
+        self.assertNotIn("@bob:example.test", output)
+        self.assertNotIn("example.test", output)
+
+    def test_service_config_accepts_legacy_native_audio_eligibility_switch(self) -> None:
+        env = _staging_env({
+            LEGACY_NATIVE_AUDIO_ELIGIBILITY_ENABLED_ENV: "1",
+            NATIVE_AUDIO_ELIGIBILITY_ALLOWED_USERS_ENV: "@alice:example.test,@bob:example.test",
+            NATIVE_AUDIO_ELIGIBILITY_ALLOWED_HOMESERVERS_ENV: "example.test",
+        })
+
+        with patch.dict(os.environ, env, clear=True):
+            config = ServiceConfig.from_env()
+
+        self.assertTrue(config.native_audio_eligibility_enabled)
+        self.assertEqual(config.native_audio_eligibility_allowed_users, ("@alice:example.test", "@bob:example.test"))
+        self.assertEqual(config.native_audio_eligibility_allowed_homeservers, ("example.test",))
 
 
 class LocalFakeCapabilityTests(unittest.IsolatedAsyncioTestCase):
