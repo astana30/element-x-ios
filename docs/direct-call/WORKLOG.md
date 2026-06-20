@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Planned the controlled media connect preflight boundary without runtime behavior changes.
 - Verified server-side allocation/token expiry without LiveKit join.
 - Added the 2.47D credentials cleanup / expiry proof fields.
 - Physically closed the 2.47D credentials cleanup / expiry no-connect proof.
@@ -80,6 +81,14 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48A — Controlled Media Connect Planning Only
+
+Documented the first future controlled media-connect boundary without changing runtime behavior. The investigation found that issued credentials are represented as `DirectCallMediaConnectionInfo`, requested through `DirectCallEngine.requestMediaCredentials`, and would only be consumed by the real media path through `DirectCallEngine.connectMediaIfReady` and `LiveKitDirectCallMediaEngine.connectAudio`. The LiveKit/media seams are already isolated behind `DirectCallMediaEngineProtocol`, `DirectCallLiveKitMediaEngineFactory`, `LiveKitDirectCallMediaEngine`, `DirectCallLiveKitClientProtocol`, `DirectCallMediaE2EEContextProviderProtocol`, `DirectCallAudioRouteControllerProtocol`, and `DirectCallLiveKitTokenProvider`.
+
+The proposed 2.48B implementation must add a DEBUG-only preflight boundary after credentials receipt/cleanup proof and before any `connectAudio` call. It may prove configuration, redacted credential presence, E2EE context availability, key-handle availability, and audio-route preflight readiness, but it must not call `liveKitClient.connect`, request microphone/camera permissions, emit Matrix events, or start full direct-call flow. Proof fields, guardrails, tests, and rollback requirements are captured in `NEXT_CODEX_PROMPT.md`.
+
+No APNs, production APNs, `dev/invite`, media connect, LiveKit join, microphone/camera permission request, Matrix event emission, or full direct-call flow was run. No raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID was documented.
 
 ### 2.47E — Server-Side Allocation/Token Expiry Verification
 

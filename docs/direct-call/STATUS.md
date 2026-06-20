@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.47E — server-side allocation/token expiry verification. The 2.47D no-connect credentials cleanup proof remains closed, and 2.47E verifies server-side allocation/token expiry without LiveKit join or media connect.
+After 2.48A — controlled media connect planning only. The future connect boundary is planned, but no media connect, LiveKit join, microphone/camera permission request, Matrix event emission, or full direct-call flow has run.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,12 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48A controlled media connect planning is documented with no runtime behavior change:
+  - Issued media credentials would be consumed through the existing `DirectCallMediaConnectionInfo` path, then ultimately by `DirectCallEngine.connectMediaIfReady` and `LiveKitDirectCallMediaEngine.connectAudio`.
+  - The existing credentials-only boundary is `DirectCallEngine.requestMediaCredentials`, which calls `DirectCallMediaCredentialsBoundaryRequesting.requestMediaCredentials` and deliberately does not call `connectAudio`.
+  - The existing LiveKit/media seams are `DirectCallMediaEngineProtocol`, `DirectCallLiveKitMediaEngineFactory`, `LiveKitDirectCallMediaEngine`, `DirectCallLiveKitClientProtocol`, `DirectCallMediaE2EEContextProviderProtocol`, `DirectCallAudioRouteControllerProtocol`, and `DirectCallLiveKitTokenProvider`.
+  - The proposed 2.48B boundary must be explicit DEBUG-only and stop before `liveKitClient.connect`, microphone/camera permission, or media publication.
+  - Required proof fields and tests are listed in `NEXT_CODEX_PROMPT.md`; all connect/join/mic/camera/Matrix/full-flow fields remain false until a separately approved controlled connect phase.
 - 2.47E server-side media credentials allocation/token expiry is verified without LiveKit join:
   - Participant token expiry remains bounded by the token issuer TTL.
   - Allocation expiry remains bounded by the allocation store TTL and is intentionally longer than token expiry.
