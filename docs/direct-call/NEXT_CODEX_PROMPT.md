@@ -8,11 +8,47 @@ Expected intentionally untracked file:
 
 Do not stage or commit that diagnostics file.
 
-## Latest Completed State
+## Latest Completed Code State
 
-2.47C controlled real media credentials request is physically closed as a no-connect proof.
+2.47D credentials cleanup / expiry proof is implemented as a DEBUG-only no-connect checkpoint.
 
-Final proof:
+The controlled credentials request path still uses the existing authenticated pending metadata handoff and `DirectCallLiveKitTokenProvider`, but now also proves cleanup/non-reuse with redacted fields:
+
+```text
+media_credentials_cleanup_requested=true
+media_credentials_cleanup_result=cleared
+media_credentials_post_cleanup_token_present=false
+media_credentials_post_cleanup_url_present=false
+media_credentials_post_cleanup_expires_at_present=false
+media_credentials_post_cleanup_payload_present=false
+media_credentials_reuse_attempted=false
+media_credentials_reuse_allowed=false
+media_credentials_expiry_reference_present=true
+media_credentials_expiry_check_requested=true
+media_credentials_expiry_check_result=expired_or_not_reusable_redacted
+```
+
+Safety remains no-connect only:
+
+```text
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+No APNs was sent for the 2.47D code checkpoint. No production APNs, repeated APNs, `dev/invite`, media connect, LiveKit join, microphone/camera permission request, Matrix event emission, full call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, or forbidden project/signing file change was introduced.
+
+## Next Task
+
+Run 2.47D physical close-out only.
+
+Use exactly one real non-dev invite/APNs attempt only if direct/no-APNs validation cannot produce the receipt proof. Do not repeat APNs.
+
+Expected success proof:
 
 ```text
 pending_metadata_fetch_result=success_redacted
@@ -30,63 +66,16 @@ media_credentials_url_received=true
 media_credentials_expires_at_present=true
 media_credentials_cleanup_requested=true
 media_credentials_cleanup_result=cleared
+media_credentials_post_cleanup_token_present=false
+media_credentials_post_cleanup_url_present=false
+media_credentials_post_cleanup_expires_at_present=false
+media_credentials_post_cleanup_payload_present=false
+media_credentials_reuse_attempted=false
+media_credentials_reuse_allowed=false
+media_credentials_expiry_reference_present=true
+media_credentials_expiry_check_requested=true
+media_credentials_expiry_check_result=expired_or_not_reusable_redacted
 blocked_reason=none
-```
-
-Safety remained:
-
-```text
-media_connect_requested=false
-media_connect_attempted=false
-livekit_join_requested=false
-microphone_permission_requested=false
-camera_permission_requested=false
-matrix_event_emit_requested=false
-real_call_flow_started=false
-```
-
-No production APNs, repeated APNs, `dev/invite`, media connect, LiveKit join, microphone/camera permission request, Matrix event emission, full call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, or forbidden project/signing file change was introduced.
-
-## Next Task
-
-Start 2.47D — credentials cleanup / expiry proof.
-
-Goal:
-- Prove issued credentials are not persisted locally beyond the controlled no-connect proof.
-- Prove cleanup clears the in-memory credential material.
-- Prove expiry metadata is present and bounded.
-- Do not connect media.
-- Do not join LiveKit.
-- Do not request microphone/camera permissions.
-- Do not emit Matrix events.
-- Do not start full call flow.
-
-Expected proof direction:
-
-```text
-media_credentials_result=success_redacted
-media_credentials_token_received=true
-media_credentials_url_received=true
-media_credentials_expires_at_present=true
-media_credentials_expiry_bounded=true
-media_credentials_local_persistence_requested=false
-media_credentials_cleanup_requested=true
-media_credentials_cleanup_result=cleared
-media_credentials_post_cleanup_token_available=false
-media_credentials_post_cleanup_url_available=false
-blocked_reason=none
-```
-
-Safety must remain:
-
-```text
-media_connect_requested=false
-media_connect_attempted=false
-livekit_join_requested=false
-microphone_permission_requested=false
-camera_permission_requested=false
-matrix_event_emit_requested=false
-real_call_flow_started=false
 ```
 
 Do not:

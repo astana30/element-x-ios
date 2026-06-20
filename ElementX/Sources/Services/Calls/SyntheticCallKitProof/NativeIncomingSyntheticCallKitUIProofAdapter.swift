@@ -816,6 +816,15 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var mediaCredentialsLocalPersistenceRequested = false
     var mediaCredentialsCleanupRequested = false
     var mediaCredentialsCleanupResult = "not_requested"
+    var mediaCredentialsPostCleanupTokenPresent = false
+    var mediaCredentialsPostCleanupURLPresent = false
+    var mediaCredentialsPostCleanupExpiresAtPresent = false
+    var mediaCredentialsPostCleanupPayloadPresent = false
+    var mediaCredentialsReuseAttempted = false
+    var mediaCredentialsReuseAllowed = false
+    var mediaCredentialsExpiryReferencePresent = false
+    var mediaCredentialsExpiryCheckRequested = false
+    var mediaCredentialsExpiryCheckResult = "not_requested"
     var mediaCredentialsTokenRequestSeen = false
     var mediaCredentialsTokenHTTPStatusBucket = "not_requested"
     var mediaCredentialsTokenReason = "none"
@@ -957,6 +966,15 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "media_credentials_local_persistence_requested=\(mediaCredentialsLocalPersistenceRequested)",
             "media_credentials_cleanup_requested=\(mediaCredentialsCleanupRequested)",
             "media_credentials_cleanup_result=\(mediaCredentialsCleanupResult)",
+            "media_credentials_post_cleanup_token_present=\(mediaCredentialsPostCleanupTokenPresent)",
+            "media_credentials_post_cleanup_url_present=\(mediaCredentialsPostCleanupURLPresent)",
+            "media_credentials_post_cleanup_expires_at_present=\(mediaCredentialsPostCleanupExpiresAtPresent)",
+            "media_credentials_post_cleanup_payload_present=\(mediaCredentialsPostCleanupPayloadPresent)",
+            "media_credentials_reuse_attempted=\(mediaCredentialsReuseAttempted)",
+            "media_credentials_reuse_allowed=\(mediaCredentialsReuseAllowed)",
+            "media_credentials_expiry_reference_present=\(mediaCredentialsExpiryReferencePresent)",
+            "media_credentials_expiry_check_requested=\(mediaCredentialsExpiryCheckRequested)",
+            "media_credentials_expiry_check_result=\(mediaCredentialsExpiryCheckResult)",
             "media_credentials_token_request_seen=\(mediaCredentialsTokenRequestSeen)",
             "media_credentials_token_http_status_bucket=\(mediaCredentialsTokenHTTPStatusBucket)",
             "media_credentials_token_reason=\(mediaCredentialsTokenReason)",
@@ -1007,6 +1025,15 @@ private extension SalemXVoIPPushReceiptProofSummary {
         mediaCredentialsLocalPersistenceRequested = false
         mediaCredentialsCleanupRequested = false
         mediaCredentialsCleanupResult = "not_requested"
+        mediaCredentialsPostCleanupTokenPresent = false
+        mediaCredentialsPostCleanupURLPresent = false
+        mediaCredentialsPostCleanupExpiresAtPresent = false
+        mediaCredentialsPostCleanupPayloadPresent = false
+        mediaCredentialsReuseAttempted = false
+        mediaCredentialsReuseAllowed = false
+        mediaCredentialsExpiryReferencePresent = false
+        mediaCredentialsExpiryCheckRequested = false
+        mediaCredentialsExpiryCheckResult = "not_requested"
         blockedReason = "media_credentials_request_boundary_not_ready"
     }
 
@@ -1040,6 +1067,15 @@ private extension SalemXVoIPPushReceiptProofSummary {
         mediaCredentialsLocalPersistenceRequested = false
         mediaCredentialsCleanupRequested = false
         mediaCredentialsCleanupResult = "not_requested"
+        mediaCredentialsPostCleanupTokenPresent = false
+        mediaCredentialsPostCleanupURLPresent = false
+        mediaCredentialsPostCleanupExpiresAtPresent = false
+        mediaCredentialsPostCleanupPayloadPresent = false
+        mediaCredentialsReuseAttempted = false
+        mediaCredentialsReuseAllowed = false
+        mediaCredentialsExpiryReferencePresent = false
+        mediaCredentialsExpiryCheckRequested = false
+        mediaCredentialsExpiryCheckResult = "not_requested"
         blockedReason = mediaCredentialsRequestMetadataAvailable ? "none" : "media_credentials_request_metadata_invalid_redacted"
     }
 
@@ -1100,6 +1136,15 @@ private extension SalemXVoIPPushReceiptProofSummary {
         mediaCredentialsTokenRedacted = true
         mediaCredentialsURLRedacted = true
         mediaCredentialsPayloadRedacted = true
+        mediaCredentialsPostCleanupTokenPresent = false
+        mediaCredentialsPostCleanupURLPresent = false
+        mediaCredentialsPostCleanupExpiresAtPresent = false
+        mediaCredentialsPostCleanupPayloadPresent = false
+        mediaCredentialsReuseAttempted = false
+        mediaCredentialsReuseAllowed = false
+        mediaCredentialsExpiryReferencePresent = false
+        mediaCredentialsExpiryCheckRequested = false
+        mediaCredentialsExpiryCheckResult = "not_requested"
         blockedReason = reason
     }
 
@@ -1121,8 +1166,18 @@ private extension SalemXVoIPPushReceiptProofSummary {
         mediaCredentialsExpiresAtPresent = succeeded && mediaCredentialsRequestMetadataAvailable && expiresAtPresent
         mediaCredentialsPayloadRedacted = true
         mediaCredentialsLocalPersistenceRequested = false
-        mediaCredentialsCleanupRequested = succeeded && mediaCredentialsRequestMetadataAvailable
+        let cleanupCleared = succeeded && mediaCredentialsRequestMetadataAvailable
+        mediaCredentialsCleanupRequested = cleanupCleared
         mediaCredentialsCleanupResult = mediaCredentialsCleanupRequested ? "cleared" : "not_requested"
+        mediaCredentialsPostCleanupTokenPresent = false
+        mediaCredentialsPostCleanupURLPresent = false
+        mediaCredentialsPostCleanupExpiresAtPresent = false
+        mediaCredentialsPostCleanupPayloadPresent = false
+        mediaCredentialsReuseAttempted = false
+        mediaCredentialsReuseAllowed = false
+        mediaCredentialsExpiryReferencePresent = cleanupCleared && expiresAtPresent
+        mediaCredentialsExpiryCheckRequested = cleanupCleared && expiresAtPresent
+        mediaCredentialsExpiryCheckResult = mediaCredentialsExpiryCheckRequested ? "expired_or_not_reusable_redacted" : "not_requested"
         mediaCredentialsTokenRequestSeen = diagnostics.tokenRequestSeen
         mediaCredentialsTokenHTTPStatusBucket = Self.httpStatusBucket(diagnostics.tokenStatus)
         mediaCredentialsTokenReason = diagnostics.tokenReason.rawValue
