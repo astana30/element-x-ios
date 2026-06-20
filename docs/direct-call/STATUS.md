@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48B — controlled media-connect preflight guard. The future connect boundary now records a DEBUG-only blocked-before-connect proof after successful credentials, but still does not connect media, join LiveKit, request microphone/camera permissions, emit Matrix events, or start full direct-call flow.
+After 2.48C — physical proof of the controlled media-connect preflight guard. Real invite/APNs/PushKit/CallKit Answer, pending metadata fetch, and media credentials succeeded, then the DEBUG-only preflight guard blocked before connect.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48C physical controlled media-connect preflight proof succeeded:
+  - Proof generation `generation_8` reached the real invite/APNs/PushKit/CallKit Answer path and kept `dev_invite_used=false`, `background_apns_push_result=sandbox_success`, and `blocked_reason=none`.
+  - Authenticated pending metadata fetch succeeded with `pending_metadata_fetch_result=success_redacted`, `pending_metadata_fetch_http_status_bucket=2xx`, `pending_metadata_fetch_errcode=none`, and `pending_metadata_fetch_failure_reason=none`.
+  - Controlled credentials succeeded with `media_credentials_result=success_redacted`, `media_credentials_token_received=true`, `media_credentials_url_received=true`, `media_credentials_expires_at_present=true`, and `media_credentials_payload_redacted=true`.
+  - Cleanup/expiry proof remained present: `media_credentials_cleanup_result=cleared`, post-cleanup token/URL/expiry/payload booleans false, reuse disallowed, and `media_credentials_expiry_check_result=expired_or_not_reusable_redacted`.
+  - The 2.48C guard recorded credentials present at preflight, `media_connect_guard_enabled=true`, `media_connect_execution_allowed=false`, `media_connect_preflight_result=blocked_before_connect_redacted`, and `media_connect_blocked_reason=controlled_preflight_no_connect`.
+  - The media engine was not invoked and LiveKit `connectAudio` was not invoked: `media_connect_engine_invoked=false` and `livekit_connect_audio_invoked=false`.
+  - Safety proof remained false for `media_connect_requested`, `media_connect_attempted`, `livekit_join_requested`, `microphone_permission_requested`, `camera_permission_requested`, `matrix_event_emit_requested`, and `real_call_flow_started`.
+  - No repeated APNs, production APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, `app.yml` change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced by this close-out.
 - 2.48B controlled media-connect preflight guard is implemented as a DEBUG-only proof step:
   - After controlled media credentials succeed, the proof records preflight metadata/credential availability, token/URL/expiry presence booleans, `media_connect_guard_enabled=true`, and `media_connect_execution_allowed=false`.
   - The preflight result is `blocked_before_connect_redacted` with `media_connect_blocked_reason=controlled_preflight_no_connect`; it does not invoke the media engine or LiveKit connect path.

@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Physically closed the controlled media-connect preflight guard proof without connecting media.
 - Added the controlled media-connect preflight guard without invoking media.
 - Planned the controlled media connect preflight boundary without runtime behavior changes.
 - Verified server-side allocation/token expiry without LiveKit join.
@@ -82,6 +83,20 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48C — Physical Controlled Media-Connect Preflight Proof
+
+Closed the physical proof for the DEBUG-only media-connect preflight guard. Proof generation `generation_8` reached real invite/APNs/PushKit/CallKit Answer, authenticated pending metadata fetch, and controlled credentials success before stopping at the no-connect guard.
+
+The invite/APNs preflight passed with receiver/sender tokens resolved, room validation passing, local schema valid, `invite_http_code=200`, `real_non_dev_invite_used=true`, `dev_invite_used=false`, `background_apns_push_result=sandbox_success`, and `blocked_reason=none`.
+
+The receipt proof kept the prior successful path: `pending_metadata_fetch_result=success_redacted`, `pending_metadata_fetch_http_status_bucket=2xx`, `callkit_first_action_kind=answer`, foreground pending metadata handoff observed, credentials metadata available, credentials requested and authorized, `media_credentials_result=success_redacted`, token/URL received booleans true, expiry present, and payload redacted. Cleanup/expiry proof remained present with credentials cleared, post-cleanup token/URL/expiry/payload booleans false, reuse disallowed, and expiry check `expired_or_not_reusable_redacted`.
+
+The new 2.48C proof reached the guard with credentials present at preflight: `media_connect_preflight_requested=true`, metadata/credentials/token/URL/expiry presence booleans true, `media_connect_guard_enabled=true`, `media_connect_execution_allowed=false`, `media_connect_preflight_result=blocked_before_connect_redacted`, and `media_connect_blocked_reason=controlled_preflight_no_connect`. The media engine and LiveKit `connectAudio` were not invoked.
+
+Safety remained intact: no media connect, LiveKit join, microphone/camera permission request, Matrix event emission, or full direct-call flow. No repeated APNs, production APNs, `dev/invite`, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, project/signing/entitlement/`Info.plist`/`app.yml` change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
+
+Next phase: `2.48D — server/client readiness review before any controlled connect`.
 
 ### 2.48B — Controlled Media-Connect Preflight Guard
 
