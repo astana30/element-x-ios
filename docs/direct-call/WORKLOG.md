@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Added the controlled media-connect preflight guard without invoking media.
 - Planned the controlled media connect preflight boundary without runtime behavior changes.
 - Verified server-side allocation/token expiry without LiveKit join.
 - Added the 2.47D credentials cleanup / expiry proof fields.
@@ -81,6 +82,14 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48B — Controlled Media-Connect Preflight Guard
+
+Added the smallest DEBUG-only preflight proof after controlled media credentials success and before any future media connect. The proof records redacted readiness booleans for metadata, credentials, token, URL, and expiry, then enables the guard and explicitly sets `media_connect_execution_allowed=false`.
+
+Expected successful preflight proof is `media_connect_preflight_requested=true`, `media_connect_preflight_credentials_available=true`, `media_connect_guard_enabled=true`, `media_connect_preflight_result=blocked_before_connect_redacted`, and `media_connect_blocked_reason=controlled_preflight_no_connect`. The path also records `media_connect_engine_invoked=false` and `livekit_connect_audio_invoked=false`.
+
+This checkpoint does not call `connectAudio`, `liveKitClient.connect`, microphone/camera permission requests, Matrix event emission, or full direct-call flow. No APNs, production APNs, `dev/invite`, media connect, LiveKit join, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, or forbidden project/signing file change was introduced.
 
 ### 2.48A — Controlled Media Connect Planning Only
 

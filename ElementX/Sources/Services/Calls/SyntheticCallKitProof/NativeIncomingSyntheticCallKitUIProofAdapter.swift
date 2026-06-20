@@ -833,6 +833,18 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var mediaCredentialsAllocationAttempted = false
     var mediaCredentialsLiveKitRoomPrecreateAttempted = false
     var mediaCredentialsTokenIssued = false
+    var mediaConnectPreflightRequested = false
+    var mediaConnectPreflightMetadataAvailable = false
+    var mediaConnectPreflightCredentialsAvailable = false
+    var mediaConnectPreflightTokenPresent = false
+    var mediaConnectPreflightURLPresent = false
+    var mediaConnectPreflightExpiresAtPresent = false
+    var mediaConnectGuardEnabled = false
+    var mediaConnectExecutionAllowed = false
+    var mediaConnectPreflightResult = "not_requested"
+    var mediaConnectBlockedReason = "not_requested"
+    var mediaConnectEngineInvoked = false
+    var liveKitConnectAudioInvoked = false
     var controlledCallKitCleanupRequested = false
     var controlledCallKitCleanupResult = "not_requested"
     var blockedReason = "voip_push_not_received"
@@ -983,6 +995,18 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "media_credentials_allocation_attempted=\(mediaCredentialsAllocationAttempted)",
             "media_credentials_livekit_room_precreate_attempted=\(mediaCredentialsLiveKitRoomPrecreateAttempted)",
             "media_credentials_token_issued=\(mediaCredentialsTokenIssued)",
+            "media_connect_preflight_requested=\(mediaConnectPreflightRequested)",
+            "media_connect_preflight_metadata_available=\(mediaConnectPreflightMetadataAvailable)",
+            "media_connect_preflight_credentials_available=\(mediaConnectPreflightCredentialsAvailable)",
+            "media_connect_preflight_token_present=\(mediaConnectPreflightTokenPresent)",
+            "media_connect_preflight_url_present=\(mediaConnectPreflightURLPresent)",
+            "media_connect_preflight_expires_at_present=\(mediaConnectPreflightExpiresAtPresent)",
+            "media_connect_guard_enabled=\(mediaConnectGuardEnabled)",
+            "media_connect_execution_allowed=\(mediaConnectExecutionAllowed)",
+            "media_connect_preflight_result=\(mediaConnectPreflightResult)",
+            "media_connect_blocked_reason=\(mediaConnectBlockedReason)",
+            "media_connect_engine_invoked=\(mediaConnectEngineInvoked)",
+            "livekit_connect_audio_invoked=\(liveKitConnectAudioInvoked)",
             "controlled_callkit_cleanup_requested=\(controlledCallKitCleanupRequested)",
             "controlled_callkit_cleanup_result=\(controlledCallKitCleanupResult)",
             "media_connect_requested=false",
@@ -1186,7 +1210,31 @@ private extension SalemXVoIPPushReceiptProofSummary {
         mediaCredentialsAllocationAttempted = diagnostics.tokenAllocationAttempted
         mediaCredentialsLiveKitRoomPrecreateAttempted = diagnostics.tokenLiveKitRoomPrecreateAttempted
         mediaCredentialsTokenIssued = diagnostics.tokenIssued
+        if cleanupCleared {
+            recordControlledMediaConnectPreflight(credentialsAvailable: true,
+                                                  tokenPresent: mediaCredentialsTokenReceived,
+                                                  urlPresent: mediaCredentialsURLReceived,
+                                                  expiresAtPresent: mediaCredentialsExpiresAtPresent)
+        }
         blockedReason = succeeded && mediaCredentialsRequestMetadataAvailable ? "none" : "media_credentials_request_failed_redacted"
+    }
+
+    mutating func recordControlledMediaConnectPreflight(credentialsAvailable: Bool,
+                                                        tokenPresent: Bool,
+                                                        urlPresent: Bool,
+                                                        expiresAtPresent: Bool) {
+        mediaConnectPreflightRequested = true
+        mediaConnectPreflightMetadataAvailable = mediaCredentialsRequestMetadataAvailable
+        mediaConnectPreflightCredentialsAvailable = credentialsAvailable && mediaCredentialsRequestMetadataAvailable
+        mediaConnectPreflightTokenPresent = tokenPresent && mediaCredentialsRequestMetadataAvailable
+        mediaConnectPreflightURLPresent = urlPresent && mediaCredentialsRequestMetadataAvailable
+        mediaConnectPreflightExpiresAtPresent = expiresAtPresent && mediaCredentialsRequestMetadataAvailable
+        mediaConnectGuardEnabled = true
+        mediaConnectExecutionAllowed = false
+        mediaConnectPreflightResult = mediaConnectPreflightCredentialsAvailable ? "blocked_before_connect_redacted" : "blocked_redacted"
+        mediaConnectBlockedReason = mediaConnectPreflightCredentialsAvailable ? "controlled_preflight_no_connect" : "media_connect_preflight_not_ready"
+        mediaConnectEngineInvoked = false
+        liveKitConnectAudioInvoked = false
     }
 
     private static func httpStatusBucket(_ status: Int?) -> String {

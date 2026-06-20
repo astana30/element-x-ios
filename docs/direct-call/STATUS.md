@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48A — controlled media connect planning only. The future connect boundary is planned, but no media connect, LiveKit join, microphone/camera permission request, Matrix event emission, or full direct-call flow has run.
+After 2.48B — controlled media-connect preflight guard. The future connect boundary now records a DEBUG-only blocked-before-connect proof after successful credentials, but still does not connect media, join LiveKit, request microphone/camera permissions, emit Matrix events, or start full direct-call flow.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,11 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48B controlled media-connect preflight guard is implemented as a DEBUG-only proof step:
+  - After controlled media credentials succeed, the proof records preflight metadata/credential availability, token/URL/expiry presence booleans, `media_connect_guard_enabled=true`, and `media_connect_execution_allowed=false`.
+  - The preflight result is `blocked_before_connect_redacted` with `media_connect_blocked_reason=controlled_preflight_no_connect`; it does not invoke the media engine or LiveKit connect path.
+  - Safety fields remain false: `media_connect_requested`, `media_connect_attempted`, `media_connect_engine_invoked`, `livekit_connect_audio_invoked`, `livekit_join_requested`, `microphone_permission_requested`, `camera_permission_requested`, `matrix_event_emit_requested`, and `real_call_flow_started`.
+  - No APNs, production APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, `app.yml` regeneration, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 - 2.48A controlled media connect planning is documented with no runtime behavior change:
   - Issued media credentials would be consumed through the existing `DirectCallMediaConnectionInfo` path, then ultimately by `DirectCallEngine.connectMediaIfReady` and `LiveKitDirectCallMediaEngine.connectAudio`.
   - The existing credentials-only boundary is `DirectCallEngine.requestMediaCredentials`, which calls `DirectCallMediaCredentialsBoundaryRequesting.requestMediaCredentials` and deliberately does not call `connectAudio`.
