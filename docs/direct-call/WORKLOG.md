@@ -5,6 +5,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 ## Milestones
 
 - Added the 2.47D credentials cleanup / expiry proof fields.
+- Physically closed the 2.47D credentials cleanup / expiry no-connect proof.
 - Added the controlled real media credentials request no-connect checkpoint.
 - Physically closed the 2.47C controlled media credentials request no-connect proof after token issuance and cleanup succeeded.
 - Added compatibility for the deployed legacy native-audio eligibility switch spelling so staging builds the intended allowlist policy.
@@ -247,9 +248,33 @@ No APNs was sent after the passing proof. No production APNs, repeated APNs, `de
 
 ### 2.47D — Credentials Cleanup / Expiry Proof
 
-Implemented the DEBUG-only no-connect cleanup/expiry proof for the controlled credentials boundary. After a successful credentials request, the receipt proof now records post-cleanup absence booleans for token, URL, expiry, and payload, records `media_credentials_reuse_attempted=false`, `media_credentials_reuse_allowed=false`, and records a redacted expiry/non-reuse result:
+Implemented and physically closed the DEBUG-only no-connect cleanup/expiry proof for the controlled credentials boundary. The physical proof reached real invite/APNs/PushKit/CallKit Answer, authenticated pending metadata fetch, foreground pending metadata handoff, and controlled credentials issuance:
 
 ```text
+pending_metadata_fetch_result=success_redacted
+pending_metadata_fetch_http_status_bucket=2xx
+callkit_first_action_kind=answer
+foreground_pending_call_metadata_source=authenticated_pending_metadata_fetch
+media_credentials_request_metadata_available=true
+media_credentials_requested=true
+media_credentials_request_authorized=true
+media_credentials_result=success_redacted
+media_credentials_token_received=true
+media_credentials_token_redacted=true
+media_credentials_url_received=true
+media_credentials_url_redacted=true
+media_credentials_expires_at_present=true
+media_credentials_payload_redacted=true
+media_credentials_token_http_status_bucket=2xx
+media_credentials_token_reason=issued
+media_credentials_token_issued=true
+```
+
+The cleanup, non-reuse, and expiry proof passed:
+
+```text
+media_credentials_cleanup_requested=true
+media_credentials_cleanup_result=cleared
 media_credentials_post_cleanup_token_present=false
 media_credentials_post_cleanup_url_present=false
 media_credentials_post_cleanup_expires_at_present=false
@@ -259,9 +284,10 @@ media_credentials_reuse_allowed=false
 media_credentials_expiry_reference_present=true
 media_credentials_expiry_check_requested=true
 media_credentials_expiry_check_result=expired_or_not_reusable_redacted
+blocked_reason=none
 ```
 
-The proof remains no-connect only: media connect, LiveKit join, microphone/camera permission requests, Matrix event emission, and full call flow remain false. No APNs was sent for this code checkpoint, and no raw token, URL, call/room/user/device metadata, auth header, payload, entitlement/project/signing/`Info.plist`/`app.yml` change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced. Physical 2.47D close-out is pending.
+The proof remained no-connect only: `media_connect_requested=false`, `media_connect_attempted=false`, `livekit_join_requested=false`, `microphone_permission_requested=false`, `camera_permission_requested=false`, `matrix_event_emit_requested=false`, and `real_call_flow_started=false`. No APNs was sent after the passing proof. No production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, project/signing/entitlement/`Info.plist`/`app.yml` change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced by the close-out. Next phase is planning-only 2.47E server-side allocation/token expiry verification, not real call flow.
 
 ### 2.47A13 — Split proofs and PushKit answerable-window diagnostic
 
