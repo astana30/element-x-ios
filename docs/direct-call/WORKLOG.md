@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Physically proved the disabled controlled-connect switch blocks before media connect on-device.
 - Added the disabled DEBUG-only controlled-connect switch proof gates without invoking media.
 - Completed the server/client readiness review before any controlled media connect.
 - Physically closed the controlled media-connect preflight guard proof without connecting media.
@@ -85,6 +86,102 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48F — Physical Disabled Controlled-Connect Switch Proof
+
+Closed the physical proof for the disabled DEBUG-only controlled-connect switch without enabling media connect or joining LiveKit.
+
+The one-shot invite/APNs path succeeded with the expected stable identity hashes:
+
+```text
+proof_generation=generation_8
+receiver_user_hash=497015f5745c933a
+sender_user_hash=7d434d7f252427fb
+sender_equals_receiver=false
+room_validation_preflight=pass
+local_schema_valid=true
+invite_http_code=200
+real_non_dev_invite_used=true
+dev_invite_used=false
+background_apns_push_requested=true
+background_apns_push_result=sandbox_success
+blocked_reason=none
+```
+
+The controlled push/CallKit/credentials path remained successful:
+
+```text
+physical_voip_push_received=true
+pushkit_callback_invoked=true
+pushkit_payload_kind=real_invite_controlled
+pending_metadata_fetch_result=success_redacted
+pending_metadata_fetch_http_status_bucket=2xx
+pending_metadata_fetch_errcode=none
+pending_metadata_fetch_failure_reason=none
+callkit_first_action_kind=answer
+callkit_answer_action_received=true
+callkit_answer_action_fulfilled=true
+foreground_call_state=real_invite_pending_media
+foreground_pending_call_metadata_handoff_observed=true
+media_credentials_request_metadata_available=true
+media_credentials_boundary_reached=true
+media_credentials_requested=true
+media_credentials_request_authorized=true
+media_credentials_result=success_redacted
+media_credentials_token_received=true
+media_credentials_url_received=true
+media_credentials_expires_at_present=true
+media_credentials_payload_redacted=true
+```
+
+The disabled switch was present on-device and blocked before every future connect boundary:
+
+```text
+controlled_connect_switch_present=true
+controlled_connect_switch_debug_only=true
+controlled_connect_switch_enabled=false
+controlled_connect_operator_approved=false
+controlled_connect_execution_allowed=false
+controlled_connect_blocked_reason=disabled_switch_no_connect
+controlled_connect_blocked_before_engine=true
+controlled_connect_blocked_before_livekit_join=true
+controlled_connect_blocked_before_permissions=true
+controlled_connect_blocked_before_matrix_events=true
+```
+
+The media-connect preflight still reached the guard and blocked before connect:
+
+```text
+media_connect_preflight_requested=true
+media_connect_preflight_metadata_available=true
+media_connect_preflight_credentials_available=true
+media_connect_preflight_token_present=true
+media_connect_preflight_url_present=true
+media_connect_preflight_expires_at_present=true
+media_connect_guard_enabled=true
+media_connect_execution_allowed=false
+media_connect_preflight_result=blocked_before_connect_redacted
+media_connect_blocked_reason=disabled_switch_no_connect
+media_connect_engine_invoked=false
+livekit_connect_audio_invoked=false
+```
+
+Safety boundary remained false:
+
+```text
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+blocked_reason=none
+```
+
+No repeated APNs, production APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
+
+Next phase: `2.48G — controlled-connect activation plan and rollback design, no physical connect`.
 
 ### 2.48E — Disabled Controlled-Connect Switch And Proof Gates
 

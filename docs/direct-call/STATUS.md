@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48E — disabled controlled-connect switch and proof gates. The default remains no-connect; controlled connect is still not approved and no LiveKit join is enabled.
+After 2.48F — physical proof of the disabled controlled-connect switch. The default remains no-connect; controlled connect is still not approved and no LiveKit join is enabled.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,13 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48F physical disabled controlled-connect switch proof succeeded:
+  - Proof generation `generation_8` reached the one-shot real non-dev invite/APNs/PushKit/CallKit Answer path with receiver hash `497015f5745c933a`, sender hash `7d434d7f252427fb`, `sender_equals_receiver=false`, `room_validation_preflight=pass`, `local_schema_valid=true`, `invite_http_code=200`, `real_non_dev_invite_used=true`, `dev_invite_used=false`, `background_apns_push_requested=true`, `background_apns_push_result=sandbox_success`, and `blocked_reason=none`.
+  - The controlled push/CallKit/credentials path remained successful: `physical_voip_push_received=true`, `pushkit_callback_invoked=true`, `pushkit_payload_kind=real_invite_controlled`, pending metadata fetch `success_redacted` with `2xx`, CallKit first action `answer`, foreground pending metadata handoff observed, and controlled credentials `success_redacted` with token/URL/expiry presence booleans true and payload redacted.
+  - The disabled controlled-connect switch was present on-device and blocked execution: `controlled_connect_switch_present=true`, `controlled_connect_switch_debug_only=true`, `controlled_connect_switch_enabled=false`, `controlled_connect_operator_approved=false`, `controlled_connect_execution_allowed=false`, `controlled_connect_blocked_reason=disabled_switch_no_connect`, and blocked-before-engine/LiveKit-join/permissions/Matrix-events booleans true.
+  - The media-connect preflight still reached the guard and blocked before connect with metadata/credentials/token/URL/expiry present, `media_connect_execution_allowed=false`, `media_connect_preflight_result=blocked_before_connect_redacted`, `media_connect_blocked_reason=disabled_switch_no_connect`, `media_connect_engine_invoked=false`, and `livekit_connect_audio_invoked=false`.
+  - Safety proof remained false for `media_connect_requested`, `media_connect_attempted`, `livekit_join_requested`, `microphone_permission_requested`, `camera_permission_requested`, `matrix_event_emit_requested`, and `real_call_flow_started`.
+  - No repeated APNs, production APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced by this close-out.
 - 2.48E disabled controlled-connect switch/proof gates are implemented:
   - The DEBUG-only proof surface records `controlled_connect_switch_present=true`, `controlled_connect_switch_debug_only=true`, `controlled_connect_switch_enabled=false`, `controlled_connect_operator_approved=false`, `controlled_connect_execution_allowed=false`, and `controlled_connect_blocked_reason=disabled_switch_no_connect`.
   - The guard records `controlled_connect_blocked_before_engine=true`, `controlled_connect_blocked_before_livekit_join=true`, `controlled_connect_blocked_before_permissions=true`, and `controlled_connect_blocked_before_matrix_events=true`.
