@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Wired the controlled-connect activation configuration while keeping the default disabled and no-connect.
 - Documented the controlled-connect activation plan and rollback design without physical connect.
 - Physically proved the disabled controlled-connect switch blocks before media connect on-device.
 - Added the disabled DEBUG-only controlled-connect switch proof gates without invoking media.
@@ -87,6 +88,50 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48H — Controlled-Connect Activation Switch Wiring
+
+Implemented the narrow client-side activation wiring for a future controlled connect without enabling media execution. This phase only changed the DEBUG proof adapter, targeted source-guard tests, and direct-call docs.
+
+The wiring adds `SalemXControlledMediaConnectActivationConfiguration` around the existing disabled switch proof:
+
+```text
+controlled_connect_activation_wiring_present=true
+controlled_connect_activation_debug_only=true
+controlled_connect_activation_default_disabled=true
+controlled_connect_activation_requires_operator_approval=true
+controlled_connect_activation_rollback_available=true
+controlled_connect_activation_scope=planned_audio_only_redacted
+controlled_connect_video_allowed=false
+controlled_connect_matrix_events_allowed=false
+controlled_connect_raw_credentials_logged=false
+```
+
+The default remains no-connect:
+
+```text
+controlled_connect_switch_enabled=false
+controlled_connect_operator_approved=false
+controlled_connect_execution_allowed=false
+controlled_connect_blocked_reason=disabled_switch_no_connect
+media_connect_engine_invoked=false
+livekit_connect_audio_invoked=false
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+Activation still requires both switch enabled and explicit operator approval. Rollback uses the disabled activation configuration and forces media execution, media-engine invocation, and LiveKit connect invocation false.
+
+Targeted tests were added to source-guard the DEBUG-only activation configuration, disabled default, operator approval false default, both-gates-required execution, rollback/no-connect proof, video disabled, Matrix events disabled, raw credential logging disabled, no media-engine invocation, no LiveKit `connectAudio` invocation, no mic/camera permission path, and no full flow.
+
+Next phase: `2.48I — physical proof of activation wiring disabled, no LiveKit join`.
+
+No APNs, production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 
 ### 2.48G — Controlled-Connect Activation Plan And Rollback Design
 

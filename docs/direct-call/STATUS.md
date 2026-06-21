@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48G — controlled-connect activation plan and rollback design. Controlled connect is still not approved, physical connect has not been performed, and the default remains no-connect.
+After 2.48H — controlled-connect activation switch wiring, default disabled. Controlled connect is still not approved, physical connect has not been performed, and the default remains no-connect.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,38 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48H controlled-connect activation switch wiring is implemented with default disabled:
+  - Added a DEBUG-only activation configuration wrapper around the existing controlled-connect switch proof gate. The default configuration uses the disabled switch, `operatorApproved=false`, `planned_audio_only_redacted` scope, video disabled, Matrix events disabled, raw credentials logging disabled, and rollback available.
+  - The future activation gate still requires both switch enabled and explicit operator approval before execution can be allowed. Default execution remains blocked before media engine invocation, LiveKit join, permissions, Matrix events, and full flow.
+  - New default proof fields:
+    ```text
+    controlled_connect_activation_wiring_present=true
+    controlled_connect_activation_debug_only=true
+    controlled_connect_activation_default_disabled=true
+    controlled_connect_activation_requires_operator_approval=true
+    controlled_connect_activation_rollback_available=true
+    controlled_connect_activation_scope=planned_audio_only_redacted
+    controlled_connect_video_allowed=false
+    controlled_connect_matrix_events_allowed=false
+    controlled_connect_raw_credentials_logged=false
+    controlled_connect_switch_enabled=false
+    controlled_connect_operator_approved=false
+    controlled_connect_execution_allowed=false
+    controlled_connect_blocked_reason=disabled_switch_no_connect
+    media_connect_engine_invoked=false
+    livekit_connect_audio_invoked=false
+    media_connect_requested=false
+    media_connect_attempted=false
+    livekit_join_requested=false
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    ```
+  - Rollback proof support restores the disabled activation configuration and keeps media execution, media-engine invocation, and LiveKit connect invocation false.
+  - Source-guard tests now cover activation wiring presence, DEBUG/test-only placement, disabled default, operator approval false default, both-gates-required execution, rollback/no-connect proof, video disabled, Matrix events disabled, raw credential logging disabled, media-engine/LiveKit invocation false, permission paths false, and full flow false.
+  - Next phase: `2.48I — physical proof of activation wiring disabled, no LiveKit join`.
+  - No APNs, production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 - 2.48G controlled-connect activation plan and rollback design is documented without physical connect:
   - This phase reviewed the current activation boundary and made no Swift or server code changes. The credentials-only boundary remains `DirectCallEngine.requestMediaCredentials`; the future media boundary remains `DirectCallEngine.connectMediaIfReady` followed by `LiveKitDirectCallMediaEngine.connectAudio` only after an explicitly approved connecting-session path.
   - Controlled connect is still not approved; physical connect is still not performed; the default remains no-connect.

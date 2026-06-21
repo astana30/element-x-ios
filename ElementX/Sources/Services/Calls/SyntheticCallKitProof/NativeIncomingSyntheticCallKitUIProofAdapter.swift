@@ -709,6 +709,27 @@ private struct SalemXControlledMediaConnectSwitch {
     }
 }
 
+private struct SalemXControlledMediaConnectActivationConfiguration {
+    static let defaultDisabled = SalemXControlledMediaConnectActivationConfiguration(controlledConnectSwitch: .disabled,
+                                                                                     activationScope: "planned_audio_only_redacted",
+                                                                                     videoAllowed: false,
+                                                                                     matrixEventsAllowed: false,
+                                                                                     rawCredentialsLogged: false)
+    static let rollbackDisabled = defaultDisabled
+
+    let controlledConnectSwitch: SalemXControlledMediaConnectSwitch
+    let activationScope: String
+    let videoAllowed: Bool
+    let matrixEventsAllowed: Bool
+    let rawCredentialsLogged: Bool
+
+    let wiringPresent = true
+    let debugOnly = true
+    let isDefaultDisabled = true
+    let requiresOperatorApproval = true
+    let rollbackAvailable = true
+}
+
 private struct SalemXVoIPPushReceiptProofSummary {
     var proofSource = "voip_push_receipt"
     var proofGeneration = "not_started"
@@ -849,6 +870,15 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var mediaCredentialsAllocationAttempted = false
     var mediaCredentialsLiveKitRoomPrecreateAttempted = false
     var mediaCredentialsTokenIssued = false
+    var controlledConnectActivationWiringPresent = SalemXControlledMediaConnectActivationConfiguration.defaultDisabled.wiringPresent
+    var controlledConnectActivationDebugOnly = SalemXControlledMediaConnectActivationConfiguration.defaultDisabled.debugOnly
+    var controlledConnectActivationDefaultDisabled = SalemXControlledMediaConnectActivationConfiguration.defaultDisabled.isDefaultDisabled
+    var controlledConnectActivationRequiresOperatorApproval = SalemXControlledMediaConnectActivationConfiguration.defaultDisabled.requiresOperatorApproval
+    var controlledConnectActivationRollbackAvailable = SalemXControlledMediaConnectActivationConfiguration.defaultDisabled.rollbackAvailable
+    var controlledConnectActivationScope = SalemXControlledMediaConnectActivationConfiguration.defaultDisabled.activationScope
+    var controlledConnectVideoAllowed = SalemXControlledMediaConnectActivationConfiguration.defaultDisabled.videoAllowed
+    var controlledConnectMatrixEventsAllowed = SalemXControlledMediaConnectActivationConfiguration.defaultDisabled.matrixEventsAllowed
+    var controlledConnectRawCredentialsLogged = SalemXControlledMediaConnectActivationConfiguration.defaultDisabled.rawCredentialsLogged
     var controlledConnectSwitchPresent = true
     var controlledConnectSwitchDebugOnly = true
     var controlledConnectSwitchEnabled = SalemXControlledMediaConnectSwitch.disabled.isEnabled
@@ -1021,6 +1051,15 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "media_credentials_allocation_attempted=\(mediaCredentialsAllocationAttempted)",
             "media_credentials_livekit_room_precreate_attempted=\(mediaCredentialsLiveKitRoomPrecreateAttempted)",
             "media_credentials_token_issued=\(mediaCredentialsTokenIssued)",
+            "controlled_connect_activation_wiring_present=\(controlledConnectActivationWiringPresent)",
+            "controlled_connect_activation_debug_only=\(controlledConnectActivationDebugOnly)",
+            "controlled_connect_activation_default_disabled=\(controlledConnectActivationDefaultDisabled)",
+            "controlled_connect_activation_requires_operator_approval=\(controlledConnectActivationRequiresOperatorApproval)",
+            "controlled_connect_activation_rollback_available=\(controlledConnectActivationRollbackAvailable)",
+            "controlled_connect_activation_scope=\(controlledConnectActivationScope)",
+            "controlled_connect_video_allowed=\(controlledConnectVideoAllowed)",
+            "controlled_connect_matrix_events_allowed=\(controlledConnectMatrixEventsAllowed)",
+            "controlled_connect_raw_credentials_logged=\(controlledConnectRawCredentialsLogged)",
             "controlled_connect_switch_present=\(controlledConnectSwitchPresent)",
             "controlled_connect_switch_debug_only=\(controlledConnectSwitchDebugOnly)",
             "controlled_connect_switch_enabled=\(controlledConnectSwitchEnabled)",
@@ -1266,12 +1305,32 @@ private extension SalemXVoIPPushReceiptProofSummary {
         mediaConnectPreflightURLPresent = urlPresent && mediaCredentialsRequestMetadataAvailable
         mediaConnectPreflightExpiresAtPresent = expiresAtPresent && mediaCredentialsRequestMetadataAvailable
         mediaConnectGuardEnabled = true
-        recordControlledConnectSwitchProof(SalemXControlledMediaConnectSwitch.disabled)
+        recordControlledConnectActivationProof(SalemXControlledMediaConnectActivationConfiguration.defaultDisabled)
         mediaConnectExecutionAllowed = controlledConnectExecutionAllowed
         mediaConnectPreflightResult = mediaConnectPreflightCredentialsAvailable ? "blocked_before_connect_redacted" : "blocked_redacted"
         mediaConnectBlockedReason = mediaConnectPreflightCredentialsAvailable ? controlledConnectBlockedReason : "media_connect_preflight_not_ready"
         mediaConnectEngineInvoked = false
         liveKitConnectAudioInvoked = false
+    }
+
+    mutating func rollbackControlledConnectActivationProof() {
+        recordControlledConnectActivationProof(SalemXControlledMediaConnectActivationConfiguration.rollbackDisabled)
+        mediaConnectExecutionAllowed = false
+        mediaConnectEngineInvoked = false
+        liveKitConnectAudioInvoked = false
+    }
+
+    mutating func recordControlledConnectActivationProof(_ activationConfiguration: SalemXControlledMediaConnectActivationConfiguration) {
+        controlledConnectActivationWiringPresent = activationConfiguration.wiringPresent
+        controlledConnectActivationDebugOnly = activationConfiguration.debugOnly
+        controlledConnectActivationDefaultDisabled = activationConfiguration.isDefaultDisabled
+        controlledConnectActivationRequiresOperatorApproval = activationConfiguration.requiresOperatorApproval
+        controlledConnectActivationRollbackAvailable = activationConfiguration.rollbackAvailable
+        controlledConnectActivationScope = activationConfiguration.activationScope
+        controlledConnectVideoAllowed = activationConfiguration.videoAllowed
+        controlledConnectMatrixEventsAllowed = activationConfiguration.matrixEventsAllowed
+        controlledConnectRawCredentialsLogged = activationConfiguration.rawCredentialsLogged
+        recordControlledConnectSwitchProof(activationConfiguration.controlledConnectSwitch)
     }
 
     mutating func recordControlledConnectSwitchProof(_ controlledConnectSwitch: SalemXControlledMediaConnectSwitch) {
