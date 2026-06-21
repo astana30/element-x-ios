@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48F — physical proof of the disabled controlled-connect switch. The default remains no-connect; controlled connect is still not approved and no LiveKit join is enabled.
+After 2.48G — controlled-connect activation plan and rollback design. Controlled connect is still not approved, physical connect has not been performed, and the default remains no-connect.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,54 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48G controlled-connect activation plan and rollback design is documented without physical connect:
+  - This phase reviewed the current activation boundary and made no Swift or server code changes. The credentials-only boundary remains `DirectCallEngine.requestMediaCredentials`; the future media boundary remains `DirectCallEngine.connectMediaIfReady` followed by `LiveKitDirectCallMediaEngine.connectAudio` only after an explicitly approved connecting-session path.
+  - Controlled connect is still not approved; physical connect is still not performed; the default remains no-connect.
+  - Activation checklist:
+    ```text
+    activation_requires_debug_only_switch=true
+    activation_requires_operator_approval=true
+    activation_requires_one_shot_physical_run=true
+    activation_audio_only=true
+    activation_video_disabled=true
+    activation_matrix_events_disabled=true
+    activation_requires_fresh_credentials=true
+    activation_requires_expiry_check=true
+    activation_requires_rollback_plan=true
+    activation_requires_redacted_proof=true
+    activation_requires_no_raw_token_logging=true
+    activation_requires_tests_before_physical=true
+    ```
+  - Rollback plan:
+    ```text
+    rollback_disable_switch=true
+    rollback_operator_approval_false=true
+    rollback_restore_execution_allowed_false=true
+    rollback_keep_media_engine_invoked_false=true
+    rollback_keep_livekit_join_requested_false=true
+    rollback_keep_permissions_unrequested=true
+    rollback_keep_matrix_events_false=true
+    ```
+  - Planned future first controlled-connect proof fields:
+    ```text
+    controlled_connect_switch_enabled=true
+    controlled_connect_operator_approved=true
+    controlled_connect_execution_allowed=true
+    controlled_connect_activation_scope=audio_only_redacted
+    controlled_connect_video_allowed=false
+    controlled_connect_matrix_events_allowed=false
+    controlled_connect_raw_credentials_logged=false
+    controlled_connect_rollback_available=true
+    ```
+  - Hard stop fields remain false unless a future phase explicitly allows them:
+    ```text
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    ```
+  - Required before any physical activation: changed-file/targeted DirectCall tests, proof/source guard tests for the disabled default and operator gate, server token/allocation/pre-create expiry tests, route safety checks, fresh bounded credentials, expiry validation, redacted proof, privacy scan, and immediate rollback availability.
+  - Next phase: `2.48H — implement controlled-connect activation switch wiring, default disabled, no physical connect`.
+  - No APNs, production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 - 2.48F physical disabled controlled-connect switch proof succeeded:
   - Proof generation `generation_8` reached the one-shot real non-dev invite/APNs/PushKit/CallKit Answer path with receiver hash `497015f5745c933a`, sender hash `7d434d7f252427fb`, `sender_equals_receiver=false`, `room_validation_preflight=pass`, `local_schema_valid=true`, `invite_http_code=200`, `real_non_dev_invite_used=true`, `dev_invite_used=false`, `background_apns_push_requested=true`, `background_apns_push_result=sandbox_success`, and `blocked_reason=none`.
   - The controlled push/CallKit/credentials path remained successful: `physical_voip_push_received=true`, `pushkit_callback_invoked=true`, `pushkit_payload_kind=real_invite_controlled`, pending metadata fetch `success_redacted` with `2xx`, CallKit first action `answer`, foreground pending metadata handoff observed, and controlled credentials `success_redacted` with token/URL/expiry presence booleans true and payload redacted.

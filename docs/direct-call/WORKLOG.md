@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Documented the controlled-connect activation plan and rollback design without physical connect.
 - Physically proved the disabled controlled-connect switch blocks before media connect on-device.
 - Added the disabled DEBUG-only controlled-connect switch proof gates without invoking media.
 - Completed the server/client readiness review before any controlled media connect.
@@ -86,6 +87,80 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48G — Controlled-Connect Activation Plan And Rollback Design
+
+Documented the controlled-connect activation plan and rollback strategy without changing Swift or server code, sending APNs, connecting media, joining LiveKit, requesting microphone/camera permission, emitting Matrix events, or starting full call flow.
+
+Reviewed activation readiness:
+
+```text
+client_credentials_boundary=requestMediaCredentials_only
+client_future_connect_boundary=connectMediaIfReady_then_connectAudio
+controlled_connect_not_yet_approved=true
+physical_connect_performed=false
+default_remains_no_connect=true
+```
+
+`DirectCallEngine.requestMediaCredentials` remains credentials-only and does not call the media connect path. The future connection path remains isolated behind `DirectCallEngine.connectMediaIfReady`, which requires an active connecting session, ready encryption, matching key handle, and audio intent before `LiveKitDirectCallMediaEngine.connectAudio` can be reached. The LiveKit client connect boundary is still downstream of that path and remains uninvoked in this phase.
+
+Activation checklist:
+
+```text
+activation_requires_debug_only_switch=true
+activation_requires_operator_approval=true
+activation_requires_one_shot_physical_run=true
+activation_audio_only=true
+activation_video_disabled=true
+activation_matrix_events_disabled=true
+activation_requires_fresh_credentials=true
+activation_requires_expiry_check=true
+activation_requires_rollback_plan=true
+activation_requires_redacted_proof=true
+activation_requires_no_raw_token_logging=true
+activation_requires_tests_before_physical=true
+```
+
+Rollback plan:
+
+```text
+rollback_disable_switch=true
+rollback_operator_approval_false=true
+rollback_restore_execution_allowed_false=true
+rollback_keep_media_engine_invoked_false=true
+rollback_keep_livekit_join_requested_false=true
+rollback_keep_permissions_unrequested=true
+rollback_keep_matrix_events_false=true
+```
+
+Planned future first controlled-connect proof fields:
+
+```text
+controlled_connect_switch_enabled=true
+controlled_connect_operator_approved=true
+controlled_connect_execution_allowed=true
+controlled_connect_activation_scope=audio_only_redacted
+controlled_connect_video_allowed=false
+controlled_connect_matrix_events_allowed=false
+controlled_connect_raw_credentials_logged=false
+controlled_connect_rollback_available=true
+```
+
+Hard stop fields remain false unless a future phase explicitly allows them:
+
+```text
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+Required before any physical activation: changed-file/targeted DirectCall tests, proof/source guard tests for disabled default and operator gate, server token/allocation/pre-create expiry tests, route safety checks, fresh bounded credentials, expiry validation, redacted proof, privacy scan, and immediate rollback availability.
+
+Rollback returns to the 2.48F no-connect state by disabling the switch, clearing operator approval, restoring execution allowed to false, and preserving false proof for media-engine invocation, LiveKit join request, permission request, Matrix event emission, and full flow.
+
+Next phase: `2.48H — implement controlled-connect activation switch wiring, default disabled, no physical connect`.
+
+No APNs, production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 
 ### 2.48F — Physical Disabled Controlled-Connect Switch Proof
 
