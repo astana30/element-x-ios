@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Added the disabled DEBUG-only controlled-connect switch proof gates without invoking media.
 - Completed the server/client readiness review before any controlled media connect.
 - Physically closed the controlled media-connect preflight guard proof without connecting media.
 - Added the controlled media-connect preflight guard without invoking media.
@@ -84,6 +85,33 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48E — Disabled Controlled-Connect Switch And Proof Gates
+
+Implemented the disabled DEBUG-only controlled-connect switch/proof-gates layer in the existing synthetic PushKit receipt proof path. The switch is present only in the DEBUG PushKit proof surface, defaults disabled, and records operator approval as false by default.
+
+The successful preflight proof now records the disabled switch before any media-engine path:
+
+```text
+controlled_connect_switch_present=true
+controlled_connect_switch_debug_only=true
+controlled_connect_switch_enabled=false
+controlled_connect_operator_approved=false
+controlled_connect_execution_allowed=false
+controlled_connect_blocked_reason=disabled_switch_no_connect
+controlled_connect_blocked_before_engine=true
+controlled_connect_blocked_before_livekit_join=true
+controlled_connect_blocked_before_permissions=true
+controlled_connect_blocked_before_matrix_events=true
+media_connect_execution_allowed=false
+media_connect_blocked_reason=disabled_switch_no_connect
+media_connect_engine_invoked=false
+livekit_connect_audio_invoked=false
+```
+
+The default remains no-connect: `media_connect_requested=false`, `media_connect_attempted=false`, `livekit_join_requested=false`, `microphone_permission_requested=false`, `camera_permission_requested=false`, `matrix_event_emit_requested=false`, and `real_call_flow_started=false`.
+
+No APNs, production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, project/signing/entitlement/`Info.plist`/`app.yml` change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 
 ### 2.48D — Server/Client Readiness Review Before Controlled Connect
 

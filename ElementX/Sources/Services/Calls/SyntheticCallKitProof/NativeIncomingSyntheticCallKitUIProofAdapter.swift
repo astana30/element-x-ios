@@ -693,6 +693,22 @@ private final class DirectCallRealPushKitRegistryController: NSObject, DirectCal
 #endif
 
 #if DEBUG && canImport(PushKit) && os(iOS)
+private struct SalemXControlledMediaConnectSwitch {
+    static let disabledSwitchNoConnectReason = "disabled_switch_no_connect"
+    static let disabled = SalemXControlledMediaConnectSwitch(isEnabled: false, operatorApproved: false)
+
+    let isEnabled: Bool
+    let operatorApproved: Bool
+
+    var executionAllowed: Bool {
+        isEnabled && operatorApproved
+    }
+
+    var blockedReason: String {
+        executionAllowed ? "none" : Self.disabledSwitchNoConnectReason
+    }
+}
+
 private struct SalemXVoIPPushReceiptProofSummary {
     var proofSource = "voip_push_receipt"
     var proofGeneration = "not_started"
@@ -833,6 +849,16 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var mediaCredentialsAllocationAttempted = false
     var mediaCredentialsLiveKitRoomPrecreateAttempted = false
     var mediaCredentialsTokenIssued = false
+    var controlledConnectSwitchPresent = true
+    var controlledConnectSwitchDebugOnly = true
+    var controlledConnectSwitchEnabled = SalemXControlledMediaConnectSwitch.disabled.isEnabled
+    var controlledConnectOperatorApproved = SalemXControlledMediaConnectSwitch.disabled.operatorApproved
+    var controlledConnectExecutionAllowed = SalemXControlledMediaConnectSwitch.disabled.executionAllowed
+    var controlledConnectBlockedReason = SalemXControlledMediaConnectSwitch.disabled.blockedReason
+    var controlledConnectBlockedBeforeEngine = true
+    var controlledConnectBlockedBeforeLiveKitJoin = true
+    var controlledConnectBlockedBeforePermissions = true
+    var controlledConnectBlockedBeforeMatrixEvents = true
     var mediaConnectPreflightRequested = false
     var mediaConnectPreflightMetadataAvailable = false
     var mediaConnectPreflightCredentialsAvailable = false
@@ -995,6 +1021,16 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "media_credentials_allocation_attempted=\(mediaCredentialsAllocationAttempted)",
             "media_credentials_livekit_room_precreate_attempted=\(mediaCredentialsLiveKitRoomPrecreateAttempted)",
             "media_credentials_token_issued=\(mediaCredentialsTokenIssued)",
+            "controlled_connect_switch_present=\(controlledConnectSwitchPresent)",
+            "controlled_connect_switch_debug_only=\(controlledConnectSwitchDebugOnly)",
+            "controlled_connect_switch_enabled=\(controlledConnectSwitchEnabled)",
+            "controlled_connect_operator_approved=\(controlledConnectOperatorApproved)",
+            "controlled_connect_execution_allowed=\(controlledConnectExecutionAllowed)",
+            "controlled_connect_blocked_reason=\(controlledConnectBlockedReason)",
+            "controlled_connect_blocked_before_engine=\(controlledConnectBlockedBeforeEngine)",
+            "controlled_connect_blocked_before_livekit_join=\(controlledConnectBlockedBeforeLiveKitJoin)",
+            "controlled_connect_blocked_before_permissions=\(controlledConnectBlockedBeforePermissions)",
+            "controlled_connect_blocked_before_matrix_events=\(controlledConnectBlockedBeforeMatrixEvents)",
             "media_connect_preflight_requested=\(mediaConnectPreflightRequested)",
             "media_connect_preflight_metadata_available=\(mediaConnectPreflightMetadataAvailable)",
             "media_connect_preflight_credentials_available=\(mediaConnectPreflightCredentialsAvailable)",
@@ -1230,11 +1266,25 @@ private extension SalemXVoIPPushReceiptProofSummary {
         mediaConnectPreflightURLPresent = urlPresent && mediaCredentialsRequestMetadataAvailable
         mediaConnectPreflightExpiresAtPresent = expiresAtPresent && mediaCredentialsRequestMetadataAvailable
         mediaConnectGuardEnabled = true
-        mediaConnectExecutionAllowed = false
+        recordControlledConnectSwitchProof(SalemXControlledMediaConnectSwitch.disabled)
+        mediaConnectExecutionAllowed = controlledConnectExecutionAllowed
         mediaConnectPreflightResult = mediaConnectPreflightCredentialsAvailable ? "blocked_before_connect_redacted" : "blocked_redacted"
-        mediaConnectBlockedReason = mediaConnectPreflightCredentialsAvailable ? "controlled_preflight_no_connect" : "media_connect_preflight_not_ready"
+        mediaConnectBlockedReason = mediaConnectPreflightCredentialsAvailable ? controlledConnectBlockedReason : "media_connect_preflight_not_ready"
         mediaConnectEngineInvoked = false
         liveKitConnectAudioInvoked = false
+    }
+
+    mutating func recordControlledConnectSwitchProof(_ controlledConnectSwitch: SalemXControlledMediaConnectSwitch) {
+        controlledConnectSwitchPresent = true
+        controlledConnectSwitchDebugOnly = true
+        controlledConnectSwitchEnabled = controlledConnectSwitch.isEnabled
+        controlledConnectOperatorApproved = controlledConnectSwitch.operatorApproved
+        controlledConnectExecutionAllowed = controlledConnectSwitch.executionAllowed
+        controlledConnectBlockedReason = controlledConnectSwitch.blockedReason
+        controlledConnectBlockedBeforeEngine = !controlledConnectExecutionAllowed
+        controlledConnectBlockedBeforeLiveKitJoin = !controlledConnectExecutionAllowed
+        controlledConnectBlockedBeforePermissions = !controlledConnectExecutionAllowed
+        controlledConnectBlockedBeforeMatrixEvents = !controlledConnectExecutionAllowed
     }
 
     private static func httpStatusBucket(_ status: Int?) -> String {

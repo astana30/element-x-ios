@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48D — server/client readiness review before any controlled connect. The review confirms the current default remains no-connect and the next phase should only add a disabled DEBUG-only connect switch/proof gates, not perform a LiveKit join.
+After 2.48E — disabled controlled-connect switch and proof gates. The default remains no-connect; controlled connect is still not approved and no LiveKit join is enabled.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,12 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48E disabled controlled-connect switch/proof gates are implemented:
+  - The DEBUG-only proof surface records `controlled_connect_switch_present=true`, `controlled_connect_switch_debug_only=true`, `controlled_connect_switch_enabled=false`, `controlled_connect_operator_approved=false`, `controlled_connect_execution_allowed=false`, and `controlled_connect_blocked_reason=disabled_switch_no_connect`.
+  - The guard records `controlled_connect_blocked_before_engine=true`, `controlled_connect_blocked_before_livekit_join=true`, `controlled_connect_blocked_before_permissions=true`, and `controlled_connect_blocked_before_matrix_events=true`.
+  - The media preflight remains blocked with `media_connect_execution_allowed=false`, `media_connect_blocked_reason=disabled_switch_no_connect`, `media_connect_engine_invoked=false`, and `livekit_connect_audio_invoked=false`.
+  - Safety fields remain false for `media_connect_requested`, `media_connect_attempted`, `livekit_join_requested`, `microphone_permission_requested`, `camera_permission_requested`, `matrix_event_emit_requested`, and `real_call_flow_started`.
+  - No APNs, production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, raw token/JWT/auth header/payload/ID/LiveKit URL exposure, entitlement/project/signing/`Info.plist` change, `app.yml` change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 - 2.48C physical controlled media-connect preflight proof succeeded:
   - Proof generation `generation_8` reached the real invite/APNs/PushKit/CallKit Answer path and kept `dev_invite_used=false`, `background_apns_push_result=sandbox_success`, and `blocked_reason=none`.
   - Authenticated pending metadata fetch succeeded with `pending_metadata_fetch_result=success_redacted`, `pending_metadata_fetch_http_status_bucket=2xx`, `pending_metadata_fetch_errcode=none`, and `pending_metadata_fetch_failure_reason=none`.
