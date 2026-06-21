@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Closed the 2.48H-QA broader DirectCall source-guard triage; the selected DirectCall suites pass after narrow test guard fixes.
 - Wired the controlled-connect activation configuration while keeping the default disabled and no-connect.
 - Documented the controlled-connect activation plan and rollback design without physical connect.
 - Physically proved the disabled controlled-connect switch blocks before media connect on-device.
@@ -88,6 +89,50 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48H-QA — DirectCall Source-Guard Drift Triage
+
+Classified and fixed the broader selected DirectCall failures from the 2.48H close-out. This was a test/source-guard checkpoint only; no app runtime path, server path, APNs path, media path, LiveKit path, permission path, Matrix event path, or full call flow was changed.
+
+Result:
+
+```text
+2.48H-QA result = broader DirectCall checks passed after narrow source-guard fix
+```
+
+Initial current-HEAD broader run reproduced three source-guard-only failures and no runtime DirectCall cancellation failure:
+
+```text
+backgroundRealCallKitAdapterKeepsDiagnosticsRedactedAndUnwiredFromPushCallbacks
+debugElementCallPushKitRegistryForwardsRedactedSalemXPayload
+debugLocalCallKitOnlyProofIsSeparatedFromVoIPReceiptProof
+```
+
+Classification:
+
+```text
+source_guard_old_literal_callkit_report_requested=true
+source_guard_element_call_room_guard_range_too_broad=true
+source_guard_local_callkit_only_slice_too_broad=true
+runtime_direct_call_engine_failure_reproduced=false
+touches_2_48h_activation_wiring=false
+```
+
+The narrow fixes updated the tests to assert the current dynamic CallKit report field, scope the Element Call PushKit interception order check to the incoming-push callback body, and slice local CallKit-only proof bodies before the unrelated VoIP operator helper.
+
+Validation:
+
+```text
+swiftformat UnitTests/Sources/DirectCallEngineTests.swift
+swiftlint lint UnitTests/Sources/DirectCallEngineTests.swift
+DIRECT_CALL_ONLY_TESTING='UnitTests/DirectCallEngineTests UnitTests/NativeIncomingCallLifecycleContractTests' Tools/Scripts/verify_direct_call_unit.sh
+```
+
+The broader selected DirectCall command passed after the fix: 131 tests across `DirectCallEngineTests` and `NativeIncomingCallLifecycleContractTests`, including the two 2.48H controlled-connect activation tests and the three previously failing source-guard tests.
+
+Next phase remains: `2.48I — physical proof of activation wiring disabled, no LiveKit join`.
+
+No APNs, production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 
 ### 2.48H — Controlled-Connect Activation Switch Wiring
 

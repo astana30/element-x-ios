@@ -13,7 +13,7 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-2.48H implemented controlled-connect activation switch wiring with the default disabled. Controlled connect is still not approved, physical connect has not been performed, and the default remains no-connect.
+2.48H-QA classified and fixed the broader selected DirectCall source-guard drift after 2.48H. The broader DirectCall checks now pass after narrow test guard fixes. Controlled connect is still not approved, physical connect has not been performed, and the default remains no-connect.
 
 Closed prerequisites:
 - 2.47C physical controlled media credentials request succeeded with no media connect.
@@ -27,6 +27,21 @@ Closed prerequisites:
 - 2.48F physically proved the disabled switch on-device after real non-dev invite/APNs/PushKit/CallKit Answer and controlled credentials success, with no media connect or LiveKit join.
 - 2.48G documented the activation checklist, rollback plan, future first controlled-connect proof fields, and hard-stop fields without physical connect or code changes.
 - 2.48H added the DEBUG-only activation configuration wrapper, default-disabled proof fields, rollback proof support, and targeted source-guard tests without physical connect.
+- 2.48H-QA fixed stale source-guard expectations only and passed the broader selected DirectCall command across `DirectCallEngineTests` and `NativeIncomingCallLifecycleContractTests`.
+
+2.48H-QA conclusion:
+
+```text
+2.48H-QA result = broader DirectCall checks passed after narrow source-guard fix
+```
+
+2.48H-QA fixed source-guard-only drift:
+
+```text
+backgroundRealCallKitAdapterKeepsDiagnosticsRedactedAndUnwiredFromPushCallbacks
+debugElementCallPushKitRegistryForwardsRedactedSalemXPayload
+debugLocalCallKitOnlyProofIsSeparatedFromVoIPReceiptProof
+```
 
 2.48H default proof fields:
 

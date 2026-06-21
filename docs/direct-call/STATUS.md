@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48H — controlled-connect activation switch wiring, default disabled. Controlled connect is still not approved, physical connect has not been performed, and the default remains no-connect.
+After 2.48H-QA — broader DirectCall source-guard triage passed after narrow test guard fixes. Controlled connect is still not approved, physical connect has not been performed, and the default remains no-connect.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,16 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48H-QA broader DirectCall source-guard triage is complete:
+  - `2.48H-QA result = broader DirectCall checks passed after narrow source-guard fix`.
+  - The broader selected DirectCall run reproduced only source-guard drift in three contract tests:
+    - `backgroundRealCallKitAdapterKeepsDiagnosticsRedactedAndUnwiredFromPushCallbacks`
+    - `debugElementCallPushKitRegistryForwardsRedactedSalemXPayload`
+    - `debugLocalCallKitOnlyProofIsSeparatedFromVoIPReceiptProof`
+  - The drift was limited to stale expected source text and range selection: the CallKit report field is now rendered dynamically, the Element Call PushKit interception order assertion needed to be scoped to the incoming-push callback body, and the local CallKit-only proof slices needed to stop before the later VoIP operator helper.
+  - No Swift runtime code changed. The 2.48H activation wiring tests passed, and the broader selected command passed after the narrow test guard fixes with 131 tests across `DirectCallEngineTests` and `NativeIncomingCallLifecycleContractTests`.
+  - Next phase remains: `2.48I — physical proof of activation wiring disabled, no LiveKit join`.
+  - No APNs, production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 - 2.48H controlled-connect activation switch wiring is implemented with default disabled:
   - Added a DEBUG-only activation configuration wrapper around the existing controlled-connect switch proof gate. The default configuration uses the disabled switch, `operatorApproved=false`, `planned_audio_only_redacted` scope, video disabled, Matrix events disabled, raw credentials logging disabled, and rollback available.
   - The future activation gate still requires both switch enabled and explicit operator approval before execution can be allowed. Default execution remains blocked before media engine invocation, LiveKit join, permissions, Matrix events, and full flow.

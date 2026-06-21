@@ -1830,7 +1830,7 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(!modelSource.contains("PKPushRegistry"))
         #expect(!modelSource.contains("requestAuthorization"))
         #expect(adapterSource.contains("didReceiveIncomingPushWith payload"))
-        #expect(adapterSource.contains("callkit_report_requested=false"))
+        #expect(adapterSource.contains("callkit_report_requested=\\(callKitReportRequested)"))
         #expect(!adapterSource.contains("registerForRemoteNotifications"))
         #expect(Self.forbiddenNativeIncomingFragments.allSatisfy { !description.contains($0) })
     }
@@ -2223,8 +2223,12 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("proofSource = \"startup_pushkit_registry\""))
         #expect(adapterSource.contains("startup_pushkit_salemx_payload_observed=\\(salemXPayloadObserved)"))
         #expect(adapterSource.contains("salemx_payload_not_detected_in_startup_registry"))
-        let interceptionStart = try #require(elementCallServiceSource.range(of: "handleElementCallServicePushKitReceipt")?.lowerBound)
-        let roomIDGuard = try #require(elementCallServiceSource.range(of: "guard let roomID")?.lowerBound)
+        let callbackStart = try #require(elementCallServiceSource.range(of: "didReceiveIncomingPushWith payload")?.lowerBound)
+        let interceptionStart = try #require(elementCallServiceSource.range(of: "handleElementCallServicePushKitReceipt",
+                                                                            range: callbackStart..<elementCallServiceSource.endIndex)?.lowerBound)
+        let roomIDGuard = try #require(elementCallServiceSource.range(of: "guard let roomID",
+                                                                      range: callbackStart..<elementCallServiceSource.endIndex)?.lowerBound)
+        #expect(callbackStart < interceptionStart)
         #expect(interceptionStart < roomIDGuard)
     }
 
@@ -2264,13 +2268,14 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("isActiveLocalBackgroundCallKitOnlyProofGeneration(generation)"))
 
         let localStart = try #require(adapterSource.range(of: "startLocalCallKitOnlyAnswerabilitySmoke()")?.lowerBound)
-        let localCallbackStart = try #require(adapterSource.range(of: "static func recordVoIPPushReceipt", range: localStart..<adapterSource.endIndex)?.lowerBound)
-        let localSmokeBody = adapterSource[localStart..<localCallbackStart]
+        let localBackgroundStart = try #require(adapterSource.range(of: "scheduleLocalBackgroundCallKitOnlyAnswerabilitySmoke()",
+                                                                    range: localStart..<adapterSource.endIndex)?.lowerBound)
+        let localSmokeBody = adapterSource[localStart..<localBackgroundStart]
         #expect(localSmokeBody.contains("updateLatestLocalCallKitOnlySummary(summary)"))
         #expect(!localSmokeBody.contains("updateLatestVoIPPushReceiptSummary(summary)"))
 
-        let localBackgroundStart = try #require(adapterSource.range(of: "scheduleLocalBackgroundCallKitOnlyAnswerabilitySmoke()")?.lowerBound)
-        let localBackgroundCallbackStart = try #require(adapterSource.range(of: "static func recordVoIPPushReceipt", range: localBackgroundStart..<adapterSource.endIndex)?.lowerBound)
+        let localBackgroundCallbackStart = try #require(adapterSource.range(of: "private static func recordCallKitOperatorInteraction",
+                                                                            range: localBackgroundStart..<adapterSource.endIndex)?.lowerBound)
         let localBackgroundSmokeBody = adapterSource[localBackgroundStart..<localBackgroundCallbackStart]
         #expect(localBackgroundSmokeBody.contains("updateLatestLocalBackgroundCallKitOnlySummary(summary)"))
         #expect(!localBackgroundSmokeBody.contains("updateLatestVoIPPushReceiptSummary(summary)"))
