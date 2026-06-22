@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48S — the final pre-connect operator gate is documented and ready for one-shot first controlled audio-connect physical attempt. Physical connect was not performed, controlled connect was not enabled, and the default remains no-connect. The next phase is `2.48T — one-shot first controlled audio-connect physical attempt`.
+After 2.48T-Prep — the first controlled audio-connect attempt proof plumbing is implemented behind DEBUG/test-controlled seams. Physical connect was not performed, controlled connect/operator approval/future permission were not enabled by default, and the runtime default remains no-connect. The next phase is `2.48T-Physical — one-shot first controlled audio-connect physical attempt`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,46 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48T-Prep first controlled audio-connect attempt plumbing is implemented:
+  - This is a code/test preparation phase only; it is not a physical APNs, media-connect, LiveKit join, or real-call task.
+  - Default proof fields:
+    ```text
+    controlled_connect_first_attempt_requested=false
+    controlled_connect_first_attempt_allowed=false
+    controlled_connect_first_attempt_started=false
+    controlled_connect_first_attempt_completed=false
+    controlled_connect_first_attempt_repeated=false
+    controlled_connect_first_attempt_result=not_requested
+    controlled_connect_first_attempt_error_bucket=none
+    controlled_connect_first_attempt_audio_only=true
+    controlled_connect_first_attempt_video_allowed=false
+    controlled_connect_first_attempt_matrix_events_allowed=false
+    controlled_connect_first_attempt_raw_credentials_logged=false
+    controlled_connect_first_attempt_blocked_reason=default_disabled_no_connect
+    ```
+  - Runtime default remains no-connect:
+    ```text
+    media_connect_requested=false
+    media_connect_attempted=false
+    livekit_join_requested=false
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    ```
+  - The DEBUG/test-only fake boundary can prove all gates explicitly true without real network/media:
+    ```text
+    controlled_connect_first_attempt_requested=true
+    controlled_connect_first_attempt_allowed=true
+    controlled_connect_first_attempt_started=true
+    controlled_connect_first_attempt_completed=true
+    controlled_connect_first_attempt_repeated=false
+    controlled_connect_first_attempt_result=success_redacted
+    controlled_connect_first_attempt_error_bucket=none
+    ```
+  - The fake boundary records only test-safe media attempt fields, with no real LiveKit network, camera permission, Matrix event emission, or full flow.
+  - Next phase: `2.48T-Physical — one-shot first controlled audio-connect physical attempt`.
+  - No APNs, production APNs, repeated APNs, `dev/invite`, physical media connection, real LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, default controlled-connect enablement, default operator approval, default future physical-connect permission, production-enabled connect behavior, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 - 2.48S final pre-connect operator gate is ready:
   - Conclusion:
     ```text
@@ -2812,9 +2852,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.48T — one-shot first controlled audio-connect physical attempt`
+`2.48T-Physical — one-shot first controlled audio-connect physical attempt`
 
-Goal: perform exactly one operator-approved first controlled audio-connect physical attempt, after receiver app session validation, terminal token validation, room validation, one sandbox APNs, green Answer, fresh credentials, enablement, operator approval, and future phase permission. Stop after the first connect result and preserve the no-camera/no-Matrix-event/no-full-flow boundaries.
+Goal: build and install the current HEAD Debug app, then perform exactly one operator-approved first controlled audio-connect physical attempt after receiver app session validation, terminal token validation, room validation, one sandbox APNs, green Answer, fresh credentials, enablement, operator approval, and future phase permission. Stop after the first connect result and preserve the no-camera/no-Matrix-event/no-full-flow boundaries.
 
 ## Do-Not-Touch Constraints
 

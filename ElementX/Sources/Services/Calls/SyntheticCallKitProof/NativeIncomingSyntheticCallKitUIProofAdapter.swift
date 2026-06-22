@@ -697,6 +697,7 @@ private final class DirectCallRealPushKitRegistryController: NSObject, DirectCal
 private struct SalemXControlledMediaConnectSwitch {
     static let disabledSwitchNoConnectReason = "disabled_switch_no_connect"
     static let disabled = SalemXControlledMediaConnectSwitch(isEnabled: false, operatorApproved: false)
+    static let testOnlyEnabled = SalemXControlledMediaConnectSwitch(isEnabled: true, operatorApproved: true)
 
     let isEnabled: Bool
     let operatorApproved: Bool
@@ -713,6 +714,11 @@ private struct SalemXControlledMediaConnectSwitch {
 private struct SalemXControlledMediaConnectActivationConfiguration {
     static let defaultDisabled = SalemXControlledMediaConnectActivationConfiguration(controlledConnectSwitch: .disabled,
                                                                                      activationScope: "planned_audio_only_redacted",
+                                                                                     videoAllowed: false,
+                                                                                     matrixEventsAllowed: false,
+                                                                                     rawCredentialsLogged: false)
+    static let testOnlyEnabled = SalemXControlledMediaConnectActivationConfiguration(controlledConnectSwitch: .testOnlyEnabled,
+                                                                                     activationScope: "test_audio_only_redacted",
                                                                                      videoAllowed: false,
                                                                                      matrixEventsAllowed: false,
                                                                                      rawCredentialsLogged: false)
@@ -738,6 +744,11 @@ private struct SalemXControlledMediaConnectEnablementConfiguration {
                                                                                      freshCredentialsPresent: false,
                                                                                      audioOnlyScope: true,
                                                                                      futureConnectPhasePermitted: false)
+    static let testOnlyEnabled = SalemXControlledMediaConnectEnablementConfiguration(oneShotEnablementEnabled: true,
+                                                                                     operatorApproved: true,
+                                                                                     freshCredentialsPresent: true,
+                                                                                     audioOnlyScope: true,
+                                                                                     futureConnectPhasePermitted: true)
     static let rollbackDisabled = defaultDisabled
 
     let oneShotEnablementEnabled: Bool
@@ -966,6 +977,102 @@ private struct SalemXControlledAudioConnectActivationPath {
     }
 }
 
+private struct SalemXControlledAudioConnectFakeFirstAttemptMediaEngine {
+    let usesRealLiveKitNetwork = false
+    let mediaConnectRequested = true
+    let mediaConnectAttempted = true
+    let liveKitJoinRequested = true
+    let liveKitConnectAudioInvoked = true
+    let microphonePermissionRequested = false
+    let cameraPermissionRequested = false
+    let matrixEventEmitRequested = false
+    let realCallFlowStarted = false
+    let firstAttemptResult = "success_redacted"
+    let firstAttemptErrorBucket = "none"
+}
+
+private struct SalemXControlledAudioConnectFirstAttempt {
+    static let defaultDisabledNoConnectReason = "default_disabled_no_connect"
+    static let gateBlockedNoConnectReason = "gate_blocked_no_connect"
+    static let defaultDisabled = SalemXControlledAudioConnectFirstAttempt(requested: false,
+                                                                          allowed: false,
+                                                                          started: false,
+                                                                          completed: false,
+                                                                          repeated: false,
+                                                                          result: "not_requested",
+                                                                          errorBucket: "none",
+                                                                          audioOnly: true,
+                                                                          videoAllowed: false,
+                                                                          matrixEventsAllowed: false,
+                                                                          rawCredentialsLogged: false,
+                                                                          blockedReason: defaultDisabledNoConnectReason,
+                                                                          mediaConnectRequested: false,
+                                                                          mediaConnectAttempted: false,
+                                                                          liveKitJoinRequested: false,
+                                                                          liveKitConnectAudioInvoked: false,
+                                                                          microphonePermissionRequested: false,
+                                                                          cameraPermissionRequested: false,
+                                                                          matrixEventEmitRequested: false,
+                                                                          realCallFlowStarted: false)
+
+    static func fakeBoundaryForTests(enablementConfiguration: SalemXControlledMediaConnectEnablementConfiguration,
+                                     executionGate: SalemXControlledAudioConnectExecutionGate,
+                                     activationPath: SalemXControlledAudioConnectActivationPath,
+                                     fakeMediaEngine: SalemXControlledAudioConnectFakeFirstAttemptMediaEngine = .init()) -> SalemXControlledAudioConnectFirstAttempt {
+        let requested = true
+        let allowed = requested &&
+            enablementConfiguration.executionAllowed &&
+            executionGate.executionAllowed &&
+            activationPath.activationAllowed &&
+            !fakeMediaEngine.usesRealLiveKitNetwork &&
+            !fakeMediaEngine.cameraPermissionRequested &&
+            !fakeMediaEngine.matrixEventEmitRequested &&
+            !fakeMediaEngine.realCallFlowStarted
+
+        return SalemXControlledAudioConnectFirstAttempt(requested: requested,
+                                                        allowed: allowed,
+                                                        started: allowed,
+                                                        completed: allowed,
+                                                        repeated: false,
+                                                        result: allowed ? fakeMediaEngine.firstAttemptResult : "blocked_redacted",
+                                                        errorBucket: allowed ? fakeMediaEngine.firstAttemptErrorBucket : Self.gateBlockedNoConnectReason,
+                                                        audioOnly: enablementConfiguration.audioOnlyScope,
+                                                        videoAllowed: executionGate.videoAllowed || activationPath.videoAllowed,
+                                                        matrixEventsAllowed: executionGate.matrixEventsAllowed || activationPath.matrixEventsAllowed,
+                                                        rawCredentialsLogged: executionGate.rawCredentialsLogged || activationPath.rawCredentialsLogged,
+                                                        blockedReason: allowed ? "none" : Self.gateBlockedNoConnectReason,
+                                                        mediaConnectRequested: allowed && fakeMediaEngine.mediaConnectRequested,
+                                                        mediaConnectAttempted: allowed && fakeMediaEngine.mediaConnectAttempted,
+                                                        liveKitJoinRequested: allowed && fakeMediaEngine.liveKitJoinRequested,
+                                                        liveKitConnectAudioInvoked: allowed && fakeMediaEngine.liveKitConnectAudioInvoked,
+                                                        microphonePermissionRequested: allowed && fakeMediaEngine.microphonePermissionRequested,
+                                                        cameraPermissionRequested: false,
+                                                        matrixEventEmitRequested: false,
+                                                        realCallFlowStarted: false)
+    }
+
+    let requested: Bool
+    let allowed: Bool
+    let started: Bool
+    let completed: Bool
+    let repeated: Bool
+    let result: String
+    let errorBucket: String
+    let audioOnly: Bool
+    let videoAllowed: Bool
+    let matrixEventsAllowed: Bool
+    let rawCredentialsLogged: Bool
+    let blockedReason: String
+    let mediaConnectRequested: Bool
+    let mediaConnectAttempted: Bool
+    let liveKitJoinRequested: Bool
+    let liveKitConnectAudioInvoked: Bool
+    let microphonePermissionRequested: Bool
+    let cameraPermissionRequested: Bool
+    let matrixEventEmitRequested: Bool
+    let realCallFlowStarted: Bool
+}
+
 private struct SalemXVoIPPushReceiptProofSummary {
     var proofSource = "voip_push_receipt"
     var proofGeneration = "not_started"
@@ -1189,6 +1296,25 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var mediaConnectBlockedReason = "not_requested"
     var mediaConnectEngineInvoked = false
     var liveKitConnectAudioInvoked = false
+    var controlledConnectFirstAttemptRequested = SalemXControlledAudioConnectFirstAttempt.defaultDisabled.requested
+    var controlledConnectFirstAttemptAllowed = SalemXControlledAudioConnectFirstAttempt.defaultDisabled.allowed
+    var controlledConnectFirstAttemptStarted = SalemXControlledAudioConnectFirstAttempt.defaultDisabled.started
+    var controlledConnectFirstAttemptCompleted = SalemXControlledAudioConnectFirstAttempt.defaultDisabled.completed
+    var controlledConnectFirstAttemptRepeated = SalemXControlledAudioConnectFirstAttempt.defaultDisabled.repeated
+    var controlledConnectFirstAttemptResult = SalemXControlledAudioConnectFirstAttempt.defaultDisabled.result
+    var controlledConnectFirstAttemptErrorBucket = SalemXControlledAudioConnectFirstAttempt.defaultDisabled.errorBucket
+    var controlledConnectFirstAttemptAudioOnly = SalemXControlledAudioConnectFirstAttempt.defaultDisabled.audioOnly
+    var controlledConnectFirstAttemptVideoAllowed = SalemXControlledAudioConnectFirstAttempt.defaultDisabled.videoAllowed
+    var controlledConnectFirstAttemptMatrixEventsAllowed = SalemXControlledAudioConnectFirstAttempt.defaultDisabled.matrixEventsAllowed
+    var controlledConnectFirstAttemptRawCredentialsLogged = SalemXControlledAudioConnectFirstAttempt.defaultDisabled.rawCredentialsLogged
+    var controlledConnectFirstAttemptBlockedReason = SalemXControlledAudioConnectFirstAttempt.defaultDisabled.blockedReason
+    var mediaConnectRequested = SalemXControlledAudioConnectFirstAttempt.defaultDisabled.mediaConnectRequested
+    var mediaConnectAttempted = SalemXControlledAudioConnectFirstAttempt.defaultDisabled.mediaConnectAttempted
+    var liveKitJoinRequested = SalemXControlledAudioConnectFirstAttempt.defaultDisabled.liveKitJoinRequested
+    var microphonePermissionRequested = SalemXControlledAudioConnectFirstAttempt.defaultDisabled.microphonePermissionRequested
+    var cameraPermissionRequested = SalemXControlledAudioConnectFirstAttempt.defaultDisabled.cameraPermissionRequested
+    var matrixEventEmitRequested = SalemXControlledAudioConnectFirstAttempt.defaultDisabled.matrixEventEmitRequested
+    var realCallFlowStarted = SalemXControlledAudioConnectFirstAttempt.defaultDisabled.realCallFlowStarted
     var controlledCallKitCleanupRequested = false
     var controlledCallKitCleanupResult = "not_requested"
     var blockedReason = "voip_push_not_received"
@@ -1422,15 +1548,27 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "media_connect_blocked_reason=\(mediaConnectBlockedReason)",
             "media_connect_engine_invoked=\(mediaConnectEngineInvoked)",
             "livekit_connect_audio_invoked=\(liveKitConnectAudioInvoked)",
+            "controlled_connect_first_attempt_requested=\(controlledConnectFirstAttemptRequested)",
+            "controlled_connect_first_attempt_allowed=\(controlledConnectFirstAttemptAllowed)",
+            "controlled_connect_first_attempt_started=\(controlledConnectFirstAttemptStarted)",
+            "controlled_connect_first_attempt_completed=\(controlledConnectFirstAttemptCompleted)",
+            "controlled_connect_first_attempt_repeated=\(controlledConnectFirstAttemptRepeated)",
+            "controlled_connect_first_attempt_result=\(controlledConnectFirstAttemptResult)",
+            "controlled_connect_first_attempt_error_bucket=\(controlledConnectFirstAttemptErrorBucket)",
+            "controlled_connect_first_attempt_audio_only=\(controlledConnectFirstAttemptAudioOnly)",
+            "controlled_connect_first_attempt_video_allowed=\(controlledConnectFirstAttemptVideoAllowed)",
+            "controlled_connect_first_attempt_matrix_events_allowed=\(controlledConnectFirstAttemptMatrixEventsAllowed)",
+            "controlled_connect_first_attempt_raw_credentials_logged=\(controlledConnectFirstAttemptRawCredentialsLogged)",
+            "controlled_connect_first_attempt_blocked_reason=\(controlledConnectFirstAttemptBlockedReason)",
             "controlled_callkit_cleanup_requested=\(controlledCallKitCleanupRequested)",
             "controlled_callkit_cleanup_result=\(controlledCallKitCleanupResult)",
-            "media_connect_requested=false",
-            "media_connect_attempted=false",
-            "livekit_join_requested=false",
-            "microphone_permission_requested=false",
-            "camera_permission_requested=false",
-            "matrix_event_emit_requested=false",
-            "real_call_flow_started=false",
+            "media_connect_requested=\(mediaConnectRequested)",
+            "media_connect_attempted=\(mediaConnectAttempted)",
+            "livekit_join_requested=\(liveKitJoinRequested)",
+            "microphone_permission_requested=\(microphonePermissionRequested)",
+            "camera_permission_requested=\(cameraPermissionRequested)",
+            "matrix_event_emit_requested=\(matrixEventEmitRequested)",
+            "real_call_flow_started=\(realCallFlowStarted)",
             "blocked_reason=\(blockedReason)"
         ]
     }
@@ -1659,7 +1797,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         mediaConnectPreflightResult = mediaConnectPreflightCredentialsAvailable ? "blocked_before_connect_redacted" : "blocked_redacted"
         mediaConnectBlockedReason = mediaConnectPreflightCredentialsAvailable ? controlledConnectBlockedReasonForPreflight : "media_connect_preflight_not_ready"
         mediaConnectEngineInvoked = false
-        liveKitConnectAudioInvoked = false
+        recordControlledAudioConnectFirstAttemptProof(.defaultDisabled)
     }
 
     mutating func rollbackControlledConnectActivationProof() {
@@ -1669,7 +1807,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         recordControlledAudioConnectActivationPath(SalemXControlledAudioConnectActivationPath.defaultDisabled(receiverAppSessionValidated: false, credentialsPresent: false))
         mediaConnectExecutionAllowed = false
         mediaConnectEngineInvoked = false
-        liveKitConnectAudioInvoked = false
+        recordControlledAudioConnectFirstAttemptProof(.defaultDisabled)
     }
 
     mutating func recordControlledConnectActivationProof(_ activationConfiguration: SalemXControlledMediaConnectActivationConfiguration) {
@@ -1757,6 +1895,63 @@ private extension SalemXVoIPPushReceiptProofSummary {
         controlledAudioConnectActivationBlockedBeforeLiveKitJoin = activationPath.blockedBeforeLiveKitJoin
         controlledAudioConnectActivationBlockedBeforePermissions = activationPath.blockedBeforePermissions
         controlledAudioConnectActivationBlockedBeforeMatrixEvents = activationPath.blockedBeforeMatrixEvents
+    }
+
+    mutating func recordControlledAudioConnectFirstAttemptProof(_ firstAttempt: SalemXControlledAudioConnectFirstAttempt) {
+        controlledConnectFirstAttemptRequested = firstAttempt.requested
+        controlledConnectFirstAttemptAllowed = firstAttempt.allowed
+        controlledConnectFirstAttemptStarted = firstAttempt.started
+        controlledConnectFirstAttemptCompleted = firstAttempt.completed
+        controlledConnectFirstAttemptRepeated = firstAttempt.repeated
+        controlledConnectFirstAttemptResult = firstAttempt.result
+        controlledConnectFirstAttemptErrorBucket = firstAttempt.errorBucket
+        controlledConnectFirstAttemptAudioOnly = firstAttempt.audioOnly
+        controlledConnectFirstAttemptVideoAllowed = firstAttempt.videoAllowed
+        controlledConnectFirstAttemptMatrixEventsAllowed = firstAttempt.matrixEventsAllowed
+        controlledConnectFirstAttemptRawCredentialsLogged = firstAttempt.rawCredentialsLogged
+        controlledConnectFirstAttemptBlockedReason = firstAttempt.blockedReason
+        mediaConnectRequested = firstAttempt.mediaConnectRequested
+        mediaConnectAttempted = firstAttempt.mediaConnectAttempted
+        liveKitJoinRequested = firstAttempt.liveKitJoinRequested
+        liveKitConnectAudioInvoked = firstAttempt.liveKitConnectAudioInvoked
+        microphonePermissionRequested = firstAttempt.microphonePermissionRequested
+        cameraPermissionRequested = firstAttempt.cameraPermissionRequested
+        matrixEventEmitRequested = firstAttempt.matrixEventEmitRequested
+        realCallFlowStarted = firstAttempt.realCallFlowStarted
+        mediaConnectEngineInvoked = firstAttempt.mediaConnectAttempted
+    }
+
+    mutating func recordControlledAudioConnectFirstAttemptBoundaryForTests() {
+        let activationConfiguration = SalemXControlledMediaConnectActivationConfiguration.testOnlyEnabled
+        let enablementConfiguration = SalemXControlledMediaConnectEnablementConfiguration.testOnlyEnabled
+        let executionGate = SalemXControlledAudioConnectExecutionGate(credentialsPresent: true,
+                                                                      activationConfiguration: activationConfiguration,
+                                                                      enablementConfiguration: enablementConfiguration)
+        let activationPath = SalemXControlledAudioConnectActivationPath(receiverAppSessionValidated: true,
+                                                                        credentialsPresent: true,
+                                                                        enablementConfiguration: enablementConfiguration)
+
+        mediaConnectPreflightRequested = true
+        mediaConnectPreflightMetadataAvailable = true
+        mediaConnectPreflightCredentialsAvailable = true
+        mediaConnectPreflightTokenPresent = true
+        mediaConnectPreflightURLPresent = true
+        mediaConnectPreflightExpiresAtPresent = true
+        mediaConnectGuardEnabled = true
+        recordControlledConnectActivationProof(activationConfiguration)
+        recordControlledConnectEnablementProof(enablementConfiguration)
+        recordControlledAudioConnectExecutionGate(executionGate)
+        recordControlledAudioConnectActivationPath(activationPath)
+        mediaConnectExecutionAllowed = controlledConnectExecutionAllowed &&
+            controlledConnectEnablementExecutionAllowed &&
+            controlledAudioConnectExecutionAllowed &&
+            controlledAudioConnectActivationAllowed
+        recordControlledAudioConnectFirstAttemptProof(.fakeBoundaryForTests(enablementConfiguration: enablementConfiguration,
+                                                                            executionGate: executionGate,
+                                                                            activationPath: activationPath))
+        mediaConnectPreflightResult = controlledConnectFirstAttemptAllowed ? "ready_for_first_attempt_redacted" : "blocked_redacted"
+        mediaConnectBlockedReason = controlledConnectFirstAttemptBlockedReason
+        blockedReason = controlledConnectFirstAttemptAllowed ? "none" : controlledConnectFirstAttemptBlockedReason
     }
 
     private var controlledConnectBlockedReasonForPreflight: String {
