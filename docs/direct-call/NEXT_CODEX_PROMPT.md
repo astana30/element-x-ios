@@ -6,9 +6,9 @@ Repo:
 Branch:
 `salemx-2.47a-controlled-media-credentials-boundary`
 
-Latest implementation commit:
-`1cac40bffc472b68f44a284e0383ac35b6265d3e`
-`Add 2.48Q activation path`
+Latest completed physical proof commit before the final gate:
+`98c30289c363c40c85c61c2f916594b3ead336fc`
+`Record 2.48R physical proof`
 
 Expected intentionally untracked file:
 `docs/direct-call/REPEAT_CALL_FASTPATH_DIAGNOSTICS.md`
@@ -17,198 +17,160 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-2.48R physically proved the 2.48Q first-run controlled audio-connect activation path on-device after one corrected flat-schema sandbox APNs, PushKit receipt, CallKit Answer, authenticated pending metadata, media credentials, and media-connect preflight.
+2.48S documented the final pre-connect operator gate. It did not perform physical connect, did not enable controlled connect, and preserved the default no-connect state.
 
-Result:
+Conclusion:
 
 ```text
-2.48R = physical proof succeeded
-proof_file=/tmp/salemx-voip-push-receipt-proof-2.48r-polled.txt
-proof_generation=generation_8
-first-run controlled audio-connect activation path present on-device
-activation path DEBUG-only
-activation one-shot
-activation default disabled
-requires receiver session
-requires fresh credentials
-requires enablement
-requires operator approval
-requires future phase permission
-audio-only=true
-video allowed=false
-Matrix events allowed=false
-raw credentials logged=false
-rollback available
-activation allowed=false
-blocked reason=activation_path_disabled_no_connect
-blocked before engine
-blocked before LiveKit join
-blocked before permissions
-blocked before Matrix events
-no media connect
-no LiveKit join
-no mic/camera permission
-no Matrix events
-no full call flow
+2.48S = final pre-connect operator gate
+physical connect not performed
+controlled connect not enabled
+default remains no-connect
+2.48S result = ready for one-shot first controlled audio-connect physical attempt
 ```
 
-Invite/APNs result:
+Final go/no-go checklist:
 
 ```text
-receiver_token_found=true
-sender_token_found=true
-receiver_user_hash=497015f5745c933a
-sender_user_hash=7d434d7f252427fb
-sender_equals_receiver=false
-room_validation_preflight=pass
-local_schema_valid=true
-invite_send_attempted=true
-invite_http_code=200
-background_apns_push_result=sandbox_success
-blocked_reason=none
+operator_gate_receiver_app_session_validated=true
+operator_gate_terminal_tokens_required=true
+operator_gate_room_validation_required=true
+operator_gate_single_sandbox_apns_only=true
+operator_gate_green_answer_required=true
+operator_gate_audio_only=true
+operator_gate_video_disabled=true
+operator_gate_matrix_events_disabled=true
+operator_gate_raw_credentials_logging_forbidden=true
+operator_gate_rollback_required=true
+operator_gate_one_shot_only=true
+operator_gate_no_repeat_apns=true
+operator_gate_stop_after_first_connect_result=true
 ```
 
-Successful proof fields:
+Allowed future first-connect scope:
 
 ```text
-physical_voip_push_received=true
-pushkit_callback_invoked=true
-pushkit_payload_kind=real_invite_controlled
-callkit_first_action_kind=answer
-callkit_answer_action_delivered=true
-callkit_answer_action_received=true
-callkit_answer_action_fulfilled=true
-pending_metadata_fetch_result=success_redacted
-pending_metadata_fetch_http_status_bucket=2xx
-pending_metadata_fetch_errcode=none
-pending_metadata_fetch_failure_reason=none
-foreground_pending_call_metadata_handoff_observed=true
-media_credentials_request_metadata_available=true
-media_credentials_boundary_reached=true
-media_credentials_requested=true
-media_credentials_request_authorized=true
-media_credentials_result=success_redacted
-media_credentials_token_received=true
-media_credentials_url_received=true
-media_credentials_expires_at_present=true
-media_credentials_payload_redacted=true
-controlled_audio_connect_activation_path_present=true
-controlled_audio_connect_activation_debug_only=true
-controlled_audio_connect_activation_one_shot=true
-controlled_audio_connect_activation_default_disabled=true
-controlled_audio_connect_activation_requires_receiver_session=true
-controlled_audio_connect_activation_requires_fresh_credentials=true
-controlled_audio_connect_activation_requires_enablement=true
-controlled_audio_connect_activation_requires_operator_approval=true
-controlled_audio_connect_activation_requires_future_phase_permission=true
-controlled_audio_connect_activation_audio_only=true
-controlled_audio_connect_activation_video_allowed=false
-controlled_audio_connect_activation_matrix_events_allowed=false
-controlled_audio_connect_activation_raw_credentials_logged=false
-controlled_audio_connect_activation_rollback_available=true
-controlled_audio_connect_activation_allowed=false
-controlled_audio_connect_activation_blocked_reason=activation_path_disabled_no_connect
-controlled_audio_connect_activation_blocked_before_engine=true
-controlled_audio_connect_activation_blocked_before_livekit_join=true
-controlled_audio_connect_activation_blocked_before_permissions=true
-controlled_audio_connect_activation_blocked_before_matrix_events=true
-controlled_audio_connect_execution_gate_present=true
-controlled_audio_connect_execution_debug_only=true
-controlled_audio_connect_execution_audio_only=true
-controlled_audio_connect_execution_video_allowed=false
-controlled_audio_connect_execution_matrix_events_allowed=false
-controlled_audio_connect_execution_raw_credentials_logged=false
-controlled_audio_connect_execution_future_phase_permitted=false
-controlled_audio_connect_execution_allowed=false
-controlled_audio_connect_execution_blocked_reason=future_phase_not_permitted_no_connect
-media_connect_preflight_requested=true
-media_connect_preflight_metadata_available=true
-media_connect_preflight_credentials_available=true
-media_connect_preflight_token_present=true
-media_connect_preflight_url_present=true
-media_connect_preflight_expires_at_present=true
-media_connect_execution_allowed=false
-media_connect_preflight_result=blocked_before_connect_redacted
-media_connect_engine_invoked=false
-livekit_connect_audio_invoked=false
-media_connect_requested=false
-media_connect_attempted=false
-livekit_join_requested=false
-microphone_permission_requested=false
-camera_permission_requested=false
-matrix_event_emit_requested=false
-real_call_flow_started=false
-blocked_reason=none
+allow_one_controlled_audio_connect_attempt=true
+allow_livekit_join_attempt=true
+allow_microphone_permission_request=only_if_required_for_audio_connect
+allow_camera_permission_request=false
+allow_matrix_event_emit=false
+allow_full_call_flow=false
+allow_repeated_apns=false
+```
+
+Final stop conditions:
+
+```text
+stop_if_receiver_app_session_invalid=true
+stop_if_terminal_tokens_invalid=true
+stop_if_room_validation_fails=true
+stop_if_pending_metadata_fetch_fails=true
+stop_if_credentials_fail=true
+stop_if_enablement_not_enabled=true
+stop_if_operator_not_approved=true
+stop_if_future_phase_not_permitted=true
+stop_if_video_enabled=true
+stop_if_camera_permission_requested=true
+stop_if_matrix_event_emit_requested=true
+stop_if_full_call_flow_started=true
+stop_after_first_connect_result=true
 ```
 
 ## Phase
 
-`2.48S — final pre-connect operator gate, no physical connect`
+`2.48T — one-shot first controlled audio-connect physical attempt`
 
 ## Goal
 
-Implement or document the final operator-controlled pre-connect gate needed before any future physical connect attempt. This phase must not perform physical connect, LiveKit join, media connect, permission request, Matrix event emission, or full call flow.
+Run exactly one first controlled audio-connect physical attempt after the final operator gate passes. This phase may attempt one sandbox APNs, one green Answer, one controlled audio connect, and one LiveKit join attempt only within the allowed audio-only scope. Stop after the first connect result.
 
-## Required Behavior
+## Required Preflight
 
-- Preserve the 2.48R proof as the latest physical no-connect proof.
-- Do not send APNs.
-- Do not send production APNs.
-- Do not send repeated APNs.
-- Do not use `dev/invite`.
-- Do not start media connect.
-- Do not join LiveKit.
-- Do not request microphone/camera permissions.
-- Do not emit Matrix events.
-- Do not start full direct-call flow.
-- Do not enable controlled-connect switch by default.
-- Do not enable operator approval by default unless the task explicitly scopes inert gate wiring only.
-- Do not enable future physical-connect permission by default.
-- Do not add production-enabled connect behavior.
-- Do not log or document raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID.
-
-## 2.48S Acceptance Shape
-
-Record a final pre-connect operator gate that is DEBUG/test-scoped, one-shot, default-off, rollback-ready, and explicit about the final future-connect requirements:
+Before any APNs send or connect attempt:
 
 ```text
-final_preconnect_operator_gate_present=true
-final_preconnect_operator_gate_debug_only=true
-final_preconnect_operator_gate_one_shot=true
-final_preconnect_operator_gate_default_off=true
-final_preconnect_operator_gate_requires_receiver_session=true
-final_preconnect_operator_gate_requires_fresh_credentials=true
-final_preconnect_operator_gate_requires_enablement=true
-final_preconnect_operator_gate_requires_operator_approval=true
-final_preconnect_operator_gate_requires_future_phase_permission=true
-final_preconnect_operator_gate_audio_only=true
-final_preconnect_operator_gate_video_allowed=false
-final_preconnect_operator_gate_matrix_events_allowed=false
-final_preconnect_operator_gate_raw_credentials_logged=false
-final_preconnect_operator_gate_rollback_available=true
-final_preconnect_operator_gate_allows_connect=false
-final_preconnect_operator_gate_blocked_reason=operator_gate_disabled_no_connect
-media_connect_requested=false
-media_connect_attempted=false
-livekit_join_requested=false
-microphone_permission_requested=false
+receiver_app_session_validated=true
+terminal_tokens_valid=true
+room_validation_pass=true
+local_schema_valid=true
+controlled_connect_enablement_enabled=true
+controlled_connect_enablement_operator_approved=true
+controlled_connect_enablement_future_phase_permitted=true
+safe_to_send_single_sandbox_apns=true
+explicit_one_shot_confirmation_reached=true
+```
+
+If any preflight field fails or cannot be proved, stop before APNs and classify the blocker.
+
+## Permitted Once
+
+- Send exactly one sandbox APNs after preflight and explicit confirmation.
+- Allow the operator to press green Answer once.
+- Attempt one controlled audio connect after pending metadata, credentials, enablement, operator approval, and future phase permission all pass.
+- Allow one LiveKit join attempt only as part of the controlled audio connect attempt.
+- Request microphone permission only if required for the audio connect attempt.
+- Stop after the first connect result, whether success or blocked.
+
+## Hard Limits
+
+- Do not use `dev/invite`.
+- Do not send production APNs.
+- Do not send repeated APNs.
+- Do not start video.
+- Do not request camera permission.
+- Do not emit Matrix events.
+- Do not start full direct-call flow.
+- Do not continue after the first connect result.
+- Do not log or document raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID.
+- Do not modify `SalemX.xcodeproj/project.pbxproj`, `app.yml`, `.entitlements`, or `Info.plist`.
+
+## Required Proof For Future First Controlled Connect
+
+```text
+controlled_connect_enablement_enabled=true
+controlled_connect_enablement_operator_approved=true
+controlled_connect_enablement_future_phase_permitted=true
+controlled_connect_enablement_execution_allowed=true
+controlled_audio_connect_activation_allowed=true
+controlled_audio_connect_execution_future_phase_permitted=true
+controlled_audio_connect_execution_allowed=true
+media_connect_requested=true
+media_connect_attempted=true
+livekit_join_requested=true
+livekit_connect_audio_invoked=true
+controlled_connect_first_attempt_result=<success_or_blocked_redacted>
+controlled_connect_first_attempt_error_bucket=<none_or_redacted_bucket>
 camera_permission_requested=false
 matrix_event_emit_requested=false
 real_call_flow_started=false
 ```
 
+## Stop Conditions
+
+```text
+stop_if_receiver_app_session_invalid=true
+stop_if_terminal_tokens_invalid=true
+stop_if_room_validation_fails=true
+stop_if_pending_metadata_fetch_fails=true
+stop_if_credentials_fail=true
+stop_if_enablement_not_enabled=true
+stop_if_operator_not_approved=true
+stop_if_future_phase_not_permitted=true
+stop_if_video_enabled=true
+stop_if_camera_permission_requested=true
+stop_if_matrix_event_emit_requested=true
+stop_if_full_call_flow_started=true
+stop_after_first_connect_result=true
+```
+
 ## Required Checks
 
-For docs-only close-out, run:
+Run before committing any close-out docs:
 
 ```bash
 git diff --check
 git diff --cached --check
-```
-
-Run forbidden project/signing scans:
-
-```bash
 git diff --name-only | grep -E 'SalemX.xcodeproj/project.pbxproj|app.yml|\.entitlements|Info.plist' && exit 1 || true
 git diff --cached --name-only | grep -E 'SalemX.xcodeproj/project.pbxproj|app.yml|\.entitlements|Info.plist' && exit 1 || true
 ```

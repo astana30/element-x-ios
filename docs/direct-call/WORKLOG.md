@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Prepared the 2.48S final pre-connect operator gate; ready for one-shot first controlled audio-connect physical attempt, with no physical connect performed.
 - Closed the 2.48R physical proof of the first-run controlled audio-connect activation path default-disabled on-device, with no media connect.
 - Implemented the 2.48Q first controlled audio-connect activation path in the DEBUG proof surface, default-disabled with no physical connect.
 - Prepared the 2.48P first controlled audio-connect activation plan, with no physical connect and default no-connect preserved.
@@ -104,6 +105,98 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48S — Final Pre-Connect Operator Gate
+
+Prepared the final docs-only pre-connect operator gate before the first controlled audio-connect physical attempt. No APNs was sent, no physical connect was performed, controlled connect was not enabled, and the default remains no-connect.
+
+Conclusion:
+
+```text
+2.48S = final pre-connect operator gate
+physical connect not performed
+controlled connect not enabled
+default remains no-connect
+```
+
+Final go/no-go checklist:
+
+```text
+operator_gate_receiver_app_session_validated=true
+operator_gate_terminal_tokens_required=true
+operator_gate_room_validation_required=true
+operator_gate_single_sandbox_apns_only=true
+operator_gate_green_answer_required=true
+operator_gate_audio_only=true
+operator_gate_video_disabled=true
+operator_gate_matrix_events_disabled=true
+operator_gate_raw_credentials_logging_forbidden=true
+operator_gate_rollback_required=true
+operator_gate_one_shot_only=true
+operator_gate_no_repeat_apns=true
+operator_gate_stop_after_first_connect_result=true
+```
+
+Allowed future first-connect scope:
+
+```text
+allow_one_controlled_audio_connect_attempt=true
+allow_livekit_join_attempt=true
+allow_microphone_permission_request=only_if_required_for_audio_connect
+allow_camera_permission_request=false
+allow_matrix_event_emit=false
+allow_full_call_flow=false
+allow_repeated_apns=false
+```
+
+Final stop conditions:
+
+```text
+stop_if_receiver_app_session_invalid=true
+stop_if_terminal_tokens_invalid=true
+stop_if_room_validation_fails=true
+stop_if_pending_metadata_fetch_fails=true
+stop_if_credentials_fail=true
+stop_if_enablement_not_enabled=true
+stop_if_operator_not_approved=true
+stop_if_future_phase_not_permitted=true
+stop_if_video_enabled=true
+stop_if_camera_permission_requested=true
+stop_if_matrix_event_emit_requested=true
+stop_if_full_call_flow_started=true
+stop_after_first_connect_result=true
+```
+
+Required proof fields for the future first controlled connect:
+
+```text
+controlled_connect_enablement_enabled=true
+controlled_connect_enablement_operator_approved=true
+controlled_connect_enablement_future_phase_permitted=true
+controlled_connect_enablement_execution_allowed=true
+controlled_audio_connect_activation_allowed=true
+controlled_audio_connect_execution_future_phase_permitted=true
+controlled_audio_connect_execution_allowed=true
+media_connect_requested=true
+media_connect_attempted=true
+livekit_join_requested=true
+livekit_connect_audio_invoked=true
+controlled_connect_first_attempt_result=<success_or_blocked_redacted>
+controlled_connect_first_attempt_error_bucket=<none_or_redacted_bucket>
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+Readiness conclusion:
+
+```text
+2.48S result = ready for one-shot first controlled audio-connect physical attempt
+```
+
+Next phase: `2.48T — one-shot first controlled audio-connect physical attempt`.
+
+No APNs, production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, controlled-connect switch enablement, operator approval enablement, future physical-connect permission enablement, production-enabled connect behavior, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 
 ### 2.48R — Physical Proof of First-Run Activation Path Default-Disabled
 

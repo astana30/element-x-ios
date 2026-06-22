@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48R — the first controlled audio-connect activation path has been physically proved on-device after one sandbox APNs, PushKit, CallKit Answer, authenticated pending metadata, media credentials, and media-connect preflight. The activation path remained DEBUG-only, one-shot, default-disabled, and blocked before engine, LiveKit join, permissions, and Matrix events. No media connect was performed, controlled connect was not enabled, and the default remains no-connect. The next phase is `2.48S — final pre-connect operator gate, no physical connect`.
+After 2.48S — the final pre-connect operator gate is documented and ready for one-shot first controlled audio-connect physical attempt. Physical connect was not performed, controlled connect was not enabled, and the default remains no-connect. The next phase is `2.48T — one-shot first controlled audio-connect physical attempt`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,78 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48S final pre-connect operator gate is ready:
+  - Conclusion:
+    ```text
+    2.48S = final pre-connect operator gate
+    physical connect not performed
+    controlled connect not enabled
+    default remains no-connect
+    ```
+  - Final go/no-go checklist:
+    ```text
+    operator_gate_receiver_app_session_validated=true
+    operator_gate_terminal_tokens_required=true
+    operator_gate_room_validation_required=true
+    operator_gate_single_sandbox_apns_only=true
+    operator_gate_green_answer_required=true
+    operator_gate_audio_only=true
+    operator_gate_video_disabled=true
+    operator_gate_matrix_events_disabled=true
+    operator_gate_raw_credentials_logging_forbidden=true
+    operator_gate_rollback_required=true
+    operator_gate_one_shot_only=true
+    operator_gate_no_repeat_apns=true
+    operator_gate_stop_after_first_connect_result=true
+    ```
+  - Allowed future first-connect scope:
+    ```text
+    allow_one_controlled_audio_connect_attempt=true
+    allow_livekit_join_attempt=true
+    allow_microphone_permission_request=only_if_required_for_audio_connect
+    allow_camera_permission_request=false
+    allow_matrix_event_emit=false
+    allow_full_call_flow=false
+    allow_repeated_apns=false
+    ```
+  - Final stop conditions:
+    ```text
+    stop_if_receiver_app_session_invalid=true
+    stop_if_terminal_tokens_invalid=true
+    stop_if_room_validation_fails=true
+    stop_if_pending_metadata_fetch_fails=true
+    stop_if_credentials_fail=true
+    stop_if_enablement_not_enabled=true
+    stop_if_operator_not_approved=true
+    stop_if_future_phase_not_permitted=true
+    stop_if_video_enabled=true
+    stop_if_camera_permission_requested=true
+    stop_if_matrix_event_emit_requested=true
+    stop_if_full_call_flow_started=true
+    stop_after_first_connect_result=true
+    ```
+  - Required proof fields for the future first controlled connect:
+    ```text
+    controlled_connect_enablement_enabled=true
+    controlled_connect_enablement_operator_approved=true
+    controlled_connect_enablement_future_phase_permitted=true
+    controlled_connect_enablement_execution_allowed=true
+    controlled_audio_connect_activation_allowed=true
+    controlled_audio_connect_execution_future_phase_permitted=true
+    controlled_audio_connect_execution_allowed=true
+    media_connect_requested=true
+    media_connect_attempted=true
+    livekit_join_requested=true
+    livekit_connect_audio_invoked=true
+    controlled_connect_first_attempt_result=<success_or_blocked_redacted>
+    controlled_connect_first_attempt_error_bucket=<none_or_redacted_bucket>
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    ```
+  - `2.48S result = ready for one-shot first controlled audio-connect physical attempt`.
+  - Next phase: `2.48T — one-shot first controlled audio-connect physical attempt`.
+  - No APNs, production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, controlled-connect switch enablement, operator approval enablement, future physical-connect permission enablement, production-enabled connect behavior, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced during this docs-only gate.
 - 2.48R physical proof of first-run activation path default-disabled succeeded:
   - `2.48R = physical proof succeeded`.
   - Proof file: `/tmp/salemx-voip-push-receipt-proof-2.48r-polled.txt`.
@@ -2740,9 +2812,9 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.48S — final pre-connect operator gate, no physical connect`
+`2.48T — one-shot first controlled audio-connect physical attempt`
 
-Goal: record the final operator-controlled pre-connect gate before any future physical connect attempt while preserving the 2.48R no-connect proof, default-off activation, and all no-media/no-LiveKit/no-permission/no-Matrix-event safety boundaries.
+Goal: perform exactly one operator-approved first controlled audio-connect physical attempt, after receiver app session validation, terminal token validation, room validation, one sandbox APNs, green Answer, fresh credentials, enablement, operator approval, and future phase permission. Stop after the first connect result and preserve the no-camera/no-Matrix-event/no-full-flow boundaries.
 
 ## Do-Not-Touch Constraints
 
