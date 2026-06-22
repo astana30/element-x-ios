@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Completed the 2.48M controlled-connect first-run readiness gate; ready for the first controlled audio-only connect implementation phase with no physical connect performed.
 - Closed the 2.48L-Retry2 physical proof after receiver app session validation with credentials success and no media connect.
 - Prepared the 2.48L-Retry2 one-shot physical retry plan after receiver app session validation; no APNs was sent.
 - Validated the iPhone app Matrix session with a local redacted `/whoami` proof before any 2.48L APNs retry.
@@ -98,6 +99,90 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48M — Controlled-Connect First-Run Readiness Gate
+
+Completed the first-run readiness gate for a future controlled audio-only connect implementation phase. This was a docs-only readiness checkpoint: no physical connect was performed, controlled connect was not enabled, and the default remains no-connect.
+
+Conclusion:
+
+```text
+2.48M = controlled-connect first-run readiness gate
+physical connect not performed
+controlled connect not enabled
+default remains no-connect
+```
+
+Review findings:
+
+- `DirectCallEngine.requestMediaCredentials` remains a credentials-only boundary and does not call media connect.
+- `DirectCallEngine.connectMediaIfReady` remains the private media boundary and requires a connecting session, ready encryption, a valid key handle, and audio intent before it can call the media engine.
+- `LiveKitDirectCallMediaEngine.connectAudio` remains the first real media-connect boundary; it configures audio routing, obtains connection info, builds the E2EE context, and then reaches the LiveKit client connect boundary only when explicitly invoked.
+- The DEBUG controlled-connect switch, activation wiring, and enablement wiring remain default-disabled/default-off, one-shot, rollback-ready, audio-only, video-disabled, Matrix-event-disabled, raw-credential-log-disabled, and blocked before media engine, LiveKit, permissions, Matrix events, or full flow.
+- The latest physical proof remains 2.48L-Retry2: PushKit/APNs, CallKit Answer, app-session validation, pending metadata fetch, media credentials, default-off enablement, and media-connect preflight guard all succeeded while stopping before connect.
+- Prior cleanup/expiry and server allocation/token expiry checkpoints remain the token lifecycle basis for readiness.
+
+Readiness checklist:
+
+```text
+readiness_pushkit_apns_path_proved=true
+readiness_callkit_answer_path_proved=true
+readiness_pending_metadata_fetch_proved=true
+readiness_receiver_app_session_validated=true
+readiness_media_credentials_proved=true
+readiness_credentials_cleanup_proved=true
+readiness_server_token_expiry_proved=true
+readiness_enablement_default_off_proved=true
+readiness_enablement_one_shot_proved=true
+readiness_audio_only_scope_proved=true
+readiness_video_disabled=true
+readiness_matrix_events_disabled=true
+readiness_raw_credentials_not_logged=true
+readiness_rollback_available=true
+readiness_tests_passed=true
+readiness_physical_connect_not_yet_approved=true
+```
+
+Blockers before the first controlled connect:
+
+```text
+block_if_receiver_app_session_invalid=true
+block_if_terminal_tokens_invalid=true
+block_if_room_validation_fails=true
+block_if_credentials_fail=true
+block_if_enablement_not_default_off=true
+block_if_video_enabled=true
+block_if_matrix_events_enabled=true
+block_if_raw_credentials_logged=true
+block_if_rollback_missing=true
+block_if_tests_fail=true
+```
+
+Readiness conclusion:
+
+```text
+2.48M result = ready for first controlled audio-only connect implementation phase, no physical connect performed
+```
+
+Next phase: `2.48N — implement first controlled audio-connect execution path, default disabled, no physical connect`.
+
+The next phase may implement the future execution path only while preserving:
+
+```text
+controlled_connect_enablement_enabled=false
+controlled_connect_enablement_operator_approved=false
+controlled_connect_enablement_future_phase_permitted=false
+controlled_connect_enablement_execution_allowed=false
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+No APNs, production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, controlled-connect switch enablement, controlled-connect operator approval enablement, future physical-connect permission enablement, production-enabled connect behavior, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 
 ### 2.48L-Retry2 — Physical Proof After Session Validation
 

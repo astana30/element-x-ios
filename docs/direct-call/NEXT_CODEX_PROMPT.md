@@ -13,7 +13,7 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-2.48L-Retry2 physically succeeded after receiver app session validation. Pending metadata fetch succeeded, credentials were requested and received, 2.48K enablement wiring was present/default-off on-device, and media-connect preflight reached the guard and blocked before connect. No media connect, LiveKit join, microphone/camera permission, Matrix event emission, or full call flow occurred.
+2.48M completed the controlled-connect first-run readiness gate. The result is ready for the first controlled audio-only connect implementation phase, with no physical connect performed. Controlled connect was not enabled, operator approval was not enabled, future physical-connect permission was not enabled, and the default remains no-connect.
 
 Closed prerequisites:
 - 2.47C physical controlled media credentials request succeeded with no media connect.
@@ -35,92 +35,67 @@ Closed prerequisites:
 - 2.48L-SessionRepair validated the iPhone app Matrix session before any retry; no APNs was sent.
 - 2.48L-Retry2Plan prepared the one-shot retry checklist after receiver app session validation; no APNs was sent.
 - 2.48L-Retry2 physically closed the post-session-repair proof with credentials success and no media connect.
+- 2.48M completed the readiness gate and found no blocker for the next no-physical-connect implementation phase.
 
-2.48L-Retry2 conclusion:
-
-```text
-2.48L-Retry2 = physical proof succeeded
-proof_generation=generation_14
-receiver app session validation held
-pending metadata fetch succeeded
-credentials requested and received
-enablement wiring present on-device
-enablement default off
-execution allowed=false
-blocked reason=enablement_disabled_no_connect
-no media connect
-no LiveKit join
-no mic/camera permission
-no Matrix events
-no full call flow
-```
-
-PushKit and CallKit Answer succeeded:
+2.48M conclusion:
 
 ```text
-physical_voip_push_received=true
-pushkit_callback_invoked=true
-pushkit_payload_kind=real_invite_controlled
-callkit_first_action_kind=answer
-callkit_answer_action_delivered=true
-callkit_answer_action_received=true
-callkit_answer_action_fulfilled=true
+2.48M = controlled-connect first-run readiness gate
+physical connect not performed
+controlled connect not enabled
+default remains no-connect
+2.48M result = ready for first controlled audio-only connect implementation phase, no physical connect performed
 ```
 
-Pending metadata and credentials succeeded:
+Readiness checklist:
+
+```text
+readiness_pushkit_apns_path_proved=true
+readiness_callkit_answer_path_proved=true
+readiness_pending_metadata_fetch_proved=true
+readiness_receiver_app_session_validated=true
+readiness_media_credentials_proved=true
+readiness_credentials_cleanup_proved=true
+readiness_server_token_expiry_proved=true
+readiness_enablement_default_off_proved=true
+readiness_enablement_one_shot_proved=true
+readiness_audio_only_scope_proved=true
+readiness_video_disabled=true
+readiness_matrix_events_disabled=true
+readiness_raw_credentials_not_logged=true
+readiness_rollback_available=true
+readiness_tests_passed=true
+readiness_physical_connect_not_yet_approved=true
+```
+
+Blockers before any first controlled connect:
+
+```text
+block_if_receiver_app_session_invalid=true
+block_if_terminal_tokens_invalid=true
+block_if_room_validation_fails=true
+block_if_credentials_fail=true
+block_if_enablement_not_default_off=true
+block_if_video_enabled=true
+block_if_matrix_events_enabled=true
+block_if_raw_credentials_logged=true
+block_if_rollback_missing=true
+block_if_tests_fail=true
+```
+
+Carry forward the latest physical no-connect proof fields:
 
 ```text
 pending_metadata_fetch_result=success_redacted
-pending_metadata_fetch_http_status_bucket=2xx
-pending_metadata_fetch_errcode=none
-pending_metadata_fetch_failure_reason=none
 foreground_pending_call_metadata_handoff_observed=true
-media_credentials_request_metadata_available=true
-media_credentials_boundary_reached=true
-media_credentials_requested=true
-media_credentials_request_authorized=true
 media_credentials_result=success_redacted
-media_credentials_token_received=true
-media_credentials_url_received=true
-media_credentials_expires_at_present=true
-media_credentials_payload_redacted=true
-```
-
-Enablement remained default-off:
-
-```text
 controlled_connect_enablement_wiring_present=true
-controlled_connect_enablement_debug_only=true
-controlled_connect_enablement_default_off=true
-controlled_connect_enablement_operator_approval_required=true
-controlled_connect_enablement_one_shot=true
-controlled_connect_enablement_fresh_credentials_required=true
-controlled_connect_enablement_audio_only=true
-controlled_connect_enablement_video_allowed=false
-controlled_connect_enablement_matrix_events_allowed=false
-controlled_connect_enablement_raw_credentials_logged=false
-controlled_connect_enablement_rollback_available=true
 controlled_connect_enablement_enabled=false
 controlled_connect_enablement_operator_approved=false
 controlled_connect_enablement_future_phase_permitted=false
 controlled_connect_enablement_execution_allowed=false
 controlled_connect_enablement_blocked_reason=enablement_disabled_no_connect
-```
-
-Media-connect preflight reached the guard and blocked before connect:
-
-```text
 media_connect_preflight_requested=true
-media_connect_preflight_metadata_available=true
-media_connect_preflight_credentials_available=true
-media_connect_preflight_token_present=true
-media_connect_preflight_url_present=true
-media_connect_preflight_expires_at_present=true
-media_connect_execution_allowed=false
-media_connect_preflight_result=blocked_before_connect_redacted
-media_connect_blocked_reason=disabled_switch_no_connect
-media_connect_engine_invoked=false
-livekit_connect_audio_invoked=false
 media_connect_requested=false
 media_connect_attempted=false
 livekit_join_requested=false
@@ -133,17 +108,17 @@ blocked_reason=none
 
 ## Phase
 
-`2.48M — controlled-connect first-run readiness gate, no physical connect`
+`2.48N — implement first controlled audio-connect execution path, default disabled, no physical connect`
 
 ## Goal
 
-Prepare the first controlled-connect readiness gate without performing physical connect. This is not a physical APNs task, not a media-connect task, and not a LiveKit join task.
+Implement the first controlled audio-connect execution path behind the existing DEBUG-only switch/activation/enablement gates while preserving default-disabled behavior. This is a code implementation phase only; it is not a physical APNs task, not a physical media-connect task, not a LiveKit join task, and not a real call task.
 
 ## Required Behavior
 
 - Do not send APNs.
 - Do not run `dev/invite`.
-- Do not start media connect.
+- Do not start physical media connect.
 - Do not join LiveKit.
 - Do not request microphone/camera permissions.
 - Do not emit Matrix events.
@@ -151,20 +126,18 @@ Prepare the first controlled-connect readiness gate without performing physical 
 - Do not enable controlled-connect switch by default.
 - Do not enable operator approval by default.
 - Do not enable future physical-connect permission by default.
-- Preserve the 2.48L-Retry2 success as the latest physical no-connect proof.
-- Build a readiness gate/plan for the future first controlled-connect run that explicitly requires a fresh operator confirmation before any later physical connect.
+- Do not add production-enabled connect behavior.
+- Preserve 2.48L-Retry2 as the latest physical no-connect proof.
+- Preserve 2.48M as the go/no-go readiness gate.
+- Keep the implementation default-disabled unless a later explicit physical phase provides fresh operator confirmation.
 
-Carry forward these 2.48L-Retry2 proof fields:
+The 2.48N implementation must keep these fields false/default-off:
 
 ```text
-pending_metadata_fetch_result=success_redacted
-foreground_pending_call_metadata_handoff_observed=true
-media_credentials_result=success_redacted
-controlled_connect_enablement_wiring_present=true
 controlled_connect_enablement_enabled=false
+controlled_connect_enablement_operator_approved=false
+controlled_connect_enablement_future_phase_permitted=false
 controlled_connect_enablement_execution_allowed=false
-controlled_connect_enablement_blocked_reason=enablement_disabled_no_connect
-media_connect_preflight_requested=true
 media_connect_requested=false
 media_connect_attempted=false
 livekit_join_requested=false
@@ -172,12 +145,19 @@ microphone_permission_requested=false
 camera_permission_requested=false
 matrix_event_emit_requested=false
 real_call_flow_started=false
-blocked_reason=none
 ```
+
+## Implementation Notes
+
+- Keep `DirectCallEngine.requestMediaCredentials` as the credentials-only boundary.
+- Keep `DirectCallEngine.connectMediaIfReady` as the private media boundary that is callable only after an explicitly allowed controlled path exists.
+- Keep `LiveKitDirectCallMediaEngine.connectAudio` as the first real media-connect boundary; do not invoke it physically in 2.48N.
+- Use the existing DEBUG proof adapter fields to prove default-off behavior and no-connect safety.
+- Preserve audio-only scope, video disabled, Matrix events disabled, raw credentials not logged, and rollback available.
 
 ## Required Checks
 
-Run docs/checkpoint checks only unless code changes become necessary:
+Run relevant changed-file/targeted DirectCall checks for any code changes, plus:
 
 ```bash
 git diff --check
@@ -214,7 +194,7 @@ Allowed safe hits are field names, redacted labels, negative statements, and exi
 - Do not send production APNs.
 - Do not send repeated APNs.
 - Do not use `dev/invite`.
-- Do not connect media.
+- Do not connect media physically.
 - Do not join LiveKit.
 - Do not request microphone/camera permissions.
 - Do not emit Matrix events.
@@ -228,4 +208,4 @@ Allowed safe hits are field names, redacted labels, negative statements, and exi
 
 ## If Blocked
 
-Report the blocker and the smallest next fix. Keep all no-connect safety fields false. Do not proceed to actual controlled connect.
+Report the blocker and the smallest next fix. Keep all no-connect safety fields false. Do not proceed to actual physical connect.

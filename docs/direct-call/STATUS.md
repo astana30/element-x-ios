@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48L-Retry2 — the one-shot physical proof retry after receiver app session validation succeeded. Pending metadata fetch succeeded, credentials were requested and received, 2.48K enablement wiring was present/default-off on-device, and media-connect preflight reached the guard and blocked before connect. The next phase is `2.48M — controlled-connect first-run readiness gate, no physical connect`.
+After 2.48M — the controlled-connect first-run readiness gate is complete. The result is ready for the first controlled audio-only connect implementation phase, with no physical connect performed. Controlled connect is not enabled, and the default remains no-connect. The next phase is `2.48N — implement first controlled audio-connect execution path, default disabled, no physical connect`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,65 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48M controlled-connect first-run readiness gate is complete:
+  - `2.48M = controlled-connect first-run readiness gate`.
+  - `physical connect not performed`.
+  - `controlled connect not enabled`.
+  - `default remains no-connect`.
+  - Review conclusion: `DirectCallEngine.requestMediaCredentials` remains the credentials-only boundary; `DirectCallEngine.connectMediaIfReady` remains the private media boundary that requires a connecting session, ready encryption, valid key handle, and audio intent; `LiveKitDirectCallMediaEngine.connectAudio` remains the first real media-connect boundary and stays unreached until an explicitly approved later phase.
+  - The DEBUG proof adapter's controlled-connect switch, activation wiring, and enablement wiring remain default-disabled/default-off, rollback-ready, audio-only, video-disabled, Matrix-event-disabled, raw-credential-log-disabled, and blocked before engine/LiveKit/permissions/events.
+  - Readiness checklist:
+    ```text
+    readiness_pushkit_apns_path_proved=true
+    readiness_callkit_answer_path_proved=true
+    readiness_pending_metadata_fetch_proved=true
+    readiness_receiver_app_session_validated=true
+    readiness_media_credentials_proved=true
+    readiness_credentials_cleanup_proved=true
+    readiness_server_token_expiry_proved=true
+    readiness_enablement_default_off_proved=true
+    readiness_enablement_one_shot_proved=true
+    readiness_audio_only_scope_proved=true
+    readiness_video_disabled=true
+    readiness_matrix_events_disabled=true
+    readiness_raw_credentials_not_logged=true
+    readiness_rollback_available=true
+    readiness_tests_passed=true
+    readiness_physical_connect_not_yet_approved=true
+    ```
+  - First controlled connect blockers:
+    ```text
+    block_if_receiver_app_session_invalid=true
+    block_if_terminal_tokens_invalid=true
+    block_if_room_validation_fails=true
+    block_if_credentials_fail=true
+    block_if_enablement_not_default_off=true
+    block_if_video_enabled=true
+    block_if_matrix_events_enabled=true
+    block_if_raw_credentials_logged=true
+    block_if_rollback_missing=true
+    block_if_tests_fail=true
+    ```
+  - Readiness conclusion:
+    ```text
+    2.48M result = ready for first controlled audio-only connect implementation phase, no physical connect performed
+    ```
+  - Next phase: `2.48N — implement first controlled audio-connect execution path, default disabled, no physical connect`.
+  - Next-phase guardrails:
+    ```text
+    controlled_connect_enablement_enabled=false
+    controlled_connect_enablement_operator_approved=false
+    controlled_connect_enablement_future_phase_permitted=false
+    controlled_connect_enablement_execution_allowed=false
+    media_connect_requested=false
+    media_connect_attempted=false
+    livekit_join_requested=false
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    ```
+  - No APNs, production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, controlled-connect switch enablement, controlled-connect operator approval enablement, future physical-connect permission enablement, production-enabled connect behavior, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 - 2.48L-Retry2 physically closed the post-session-repair proof with no media connect:
   - `2.48L-Retry2 = physical proof succeeded`.
   - Proof path: `/tmp/salemx-voip-push-receipt-proof-2.48l-retry2-polled.txt`.
