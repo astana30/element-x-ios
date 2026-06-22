@@ -13,37 +13,13 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48T-Physical4-MissedSurface — APNs delivered to PushKit, no CallKit answer surface/action, no connect` is complete.
+`2.48T-CallKitSurfaceRepair — fix CallKit report completion/surface before any APNs retry` is complete.
 
-This was a missed/no-answer/no-surface triage, not a first controlled audio-connect proof close.
+This was a code/test repair phase only. It did not send APNs, repeat APNs, run production APNs, use `dev/invite`, retry connect, join LiveKit, request microphone/camera permission, emit Matrix events, or start full call flow.
 
-APNs/send result:
-
-```text
-invite_send_attempted=true
-invite_http_code=200
-real_non_dev_invite_used=True
-dev_invite_used=False
-background_apns_push_requested=True
-background_apns_push_result=sandbox_success
-APNs_sent=true
-blocked_reason=none
-```
-
-Physical proof path:
+The preceding `2.48T-Physical4` physical result remains classified as missed/no-answer/no-surface triage, not as first controlled audio-connect proof close:
 
 ```text
-/tmp/salemx-voip-push-receipt-proof-2.48t-physical4-polled.txt
-```
-
-Physical proof classification:
-
-```text
-proof_generation=generation_3
-proof_last_updated_by=voip_push_callback
-physical_voip_push_received=true
-pushkit_callback_invoked=true
-pushkit_payload_kind=real_invite_controlled
 callkit_report_requested=true
 callkit_report_result=pending
 callkit_report_completion_observed=false
@@ -52,29 +28,49 @@ callkit_first_action_kind=none
 callkit_answer_action_received=false
 ```
 
-Required conclusion:
+The repair adds explicit redacted proof fields:
 
 ```text
-2.48T-Physical4 = APNs sent once and PushKit received, but first controlled audio-connect did not complete.
-Reason: CallKit report remained pending, report completion was not observed, PushKit completion was not called, and no CallKit Answer action was received.
-No pending metadata fetch.
-No media credentials request.
-No media connect.
-No LiveKit join.
-No microphone permission.
-No camera permission.
-No Matrix event emit.
-No full call flow.
-No retry performed.
+callkit_surface_repair_present=true
+callkit_surface_repair_debug_only=true
+callkit_surface_repair_provider_retention_verified=<retention proof>
+callkit_surface_repair_delegate_retention_verified=<retention proof>
+callkit_surface_repair_active_uuid_retention_verified=<retention proof>
+callkit_surface_repair_report_completion_watchdog_present=true
+callkit_surface_repair_report_completion_timeout_classified=<timeout classification>
+callkit_surface_repair_pushkit_completion_safety_present=true
+callkit_surface_repair_pushkit_completion_safety_result=<redacted safety result>
+callkit_surface_repair_background_task_requested=<debug repair state>
+callkit_surface_repair_background_task_ended=<debug repair state>
+callkit_surface_repair_blocks_connect_without_answer=true
+callkit_surface_repair_blocks_metadata_without_answer=true
+callkit_surface_repair_no_direct_answer_bypass=true
+callkit_surface_repair_no_media_connect_on_no_answer=true
 ```
 
-Safety fields:
+Report completion success can now record:
+
+```text
+callkit_report_result=reported
+callkit_report_completion_observed=true
+pushkit_completion_called=true
+```
+
+Missing report completion is classified safely:
+
+```text
+callkit_report_result=timeout_or_pending_redacted
+callkit_report_completion_observed=false
+callkit_surface_repair_report_completion_timeout_classified=true
+callkit_surface_repair_pushkit_completion_safety_result=completed_after_report_timeout
+callkit_first_action_kind=none
+```
+
+Default no-answer behavior remains closed:
 
 ```text
 pending_metadata_fetch_requested=false
-pending_metadata_fetch_result=not_requested
 media_credentials_requested=false
-media_credentials_result=not_requested
 media_connect_requested=false
 media_connect_attempted=false
 livekit_join_requested=false
@@ -83,91 +79,81 @@ microphone_permission_requested=false
 camera_permission_requested=false
 matrix_event_emit_requested=false
 real_call_flow_started=false
-blocked_reason=none
 ```
-
-No repeated APNs, production APNs, `dev/invite`, connect retry, LiveKit join, microphone/camera permission request, Matrix event emission, or full call flow was performed in the close-out.
 
 ## Phase
 
-`2.48T-CallKitSurfaceRepair — fix CallKit report completion/surface before any APNs retry`
+`2.48T-Physical5 — one-shot CallKit surface/answer proof, no repeated connect`
 
-Do not set the next phase to another physical APNs attempt yet.
+This is the next physical proof phase. Do not set the phase to repeated audio-connect. First prove CallKit surface/report completion and one CallKit Answer action after the surface repair.
 
 ## Task
 
-Investigate and repair why the physical proof recorded:
+Prepare and run exactly one controlled Physical5 proof only when fresh local-only inputs and preflight pass.
+
+The proof target is:
 
 ```text
 callkit_report_requested=true
-callkit_report_result=pending
-callkit_report_completion_observed=false
-pushkit_completion_called=false
-callkit_first_action_kind=none
+callkit_report_result=reported
+callkit_report_completion_observed=true
+pushkit_completion_called=true
+callkit_first_action_kind=answer
+callkit_answer_action_received=true
 ```
 
-Target likely area:
-
-```text
-CallKit reportNewIncomingCall completion handling
-provider/delegate retention while device is locked
-PushKit completion timing
-answerable-window handling when app is locked/minimized
-CallKit surface observability
-```
+If the surface still does not appear or no Answer action is received, classify it without retrying APNs or connect.
 
 ## Hard Limits
 
 Do not:
 
-- send APNs
+- send APNs before fresh local preflight and explicit one-shot confirmation
 - run production APNs
 - run repeated APNs
 - run `dev/invite`
 - retry connect
-- join LiveKit
-- request microphone permission
+- join LiveKit unless the future phase explicitly permits and gates it
+- request microphone permission unless the future phase explicitly permits and gates it
 - request camera permission
 - emit Matrix events
 - start full call flow
-- enable uncontrolled connect behavior
+- bypass CallKit Answer
+- mark Answer as received unless CallKit actually delivers the answer action
 - modify `SalemX.xcodeproj/project.pbxproj`
 - modify `app.yml`
 - modify `.entitlements`
 - modify `Info.plist`
 - log or document raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer user ID/user ID/device ID
 
-## Required Work
+## Required Checks Before Any Physical Retry
 
-- Reproduce the diagnosis from source and existing proof only; do not send APNs.
-- Inspect CallKit report completion handling in the controlled PushKit proof path.
-- Inspect provider/delegate/active-call retention while the device is locked/minimized.
-- Inspect PushKit completion timing and any answerable-window timeout path.
-- Add the smallest safe repair and/or diagnostics needed to make report completion/surface observable before any future APNs retry.
-- Keep runtime defaults no-connect.
-- Keep media credentials, media connect, LiveKit join, microphone/camera permission, Matrix events, and full direct-call flow blocked.
-
-## Required Checks
-
-Run focused tests for the touched CallKit/PushKit proof surface, plus:
+Run focused checks for the touched CallKit/PushKit proof surface, plus:
 
 ```bash
+git status --short --branch
 git diff --check
 git diff --cached --check
 git diff --name-only | grep -E 'SalemX.xcodeproj/project.pbxproj|app.yml|\.entitlements|Info.plist' && exit 1 || true
 git diff --cached --name-only | grep -E 'SalemX.xcodeproj/project.pbxproj|app.yml|\.entitlements|Info.plist' && exit 1 || true
 ```
 
-Privacy scan changed docs/diff for raw sensitive values. Allowed hits are field names, redacted labels, negative statements, and stable hashes only.
+Privacy scan changed docs/diff for raw sensitive values. Allowed hits are field names, redacted labels, negative statements, synthetic test values, and stable hashes only.
 
 ## Expected Output
 
 Return:
 
-- repair conclusion
-- commit hash
-- commit message
-- changed files
-- checks run
+- Physical5 classification
+- proof generation
+- whether PushKit was received
+- whether CallKit report completed
+- whether first action was `answer` or `none`
+- whether pending metadata/credentials ran
+- whether media connect was requested
+- whether LiveKit join was requested
+- whether camera permission stayed false
+- whether Matrix event emit stayed false
+- whether full call flow stayed false
 - final `git status --short --branch`
-- explicit statement that no APNs, no production APNs, no repeated APNs, no `dev/invite`, no retry connect, no LiveKit join, no microphone/camera permission, no Matrix event emit, and no full call flow were performed
+- explicit statement that no repeated APNs, no production APNs, no `dev/invite`, no unauthorized retry connect, no unauthorized LiveKit join, no unauthorized microphone/camera permission, no Matrix event emit, and no full call flow were performed

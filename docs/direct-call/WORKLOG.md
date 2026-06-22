@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Completed 2.48T-CallKitSurfaceRepair with explicit CallKit surface repair proof fields, report-completion timeout classification, PushKit completion safety states, provider/delegate/active UUID retention proof, and default no-answer/no-connect behavior preserved.
 - Replaced the 2.48T fake-only boundary with a real controlled audio-connect bridge that remains default-disabled and can reach the real runtime connect-media boundary only when every gate is true.
 - Wired 2.48T-RealRuntime so authenticated pending metadata and media credentials can reach the controlled runtime gate, default disabled and no physical connect.
 - Wired 2.48T-RealPath true one-shot controlled audio path behind DEBUG/test-controlled gates, default disabled and no physical connect.
@@ -109,6 +110,46 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48T-CallKitSurfaceRepair — CallKit Report/Surface Repair
+
+Implemented the repair layer for the 2.48T-Physical4 missed/no-answer/no-surface finding. The VoIP PushKit proof now records explicit CallKit surface repair diagnostics, including provider retention, delegate retention, active UUID retention, report-completion watchdog presence, timeout classification, PushKit completion safety, and no-answer safety gates.
+
+The report-completion timeout path is now classified as:
+
+```text
+callkit_report_result=timeout_or_pending_redacted
+callkit_report_completion_observed=false
+callkit_surface_repair_report_completion_timeout_classified=true
+callkit_surface_repair_pushkit_completion_safety_result=completed_after_report_timeout
+```
+
+When report completion succeeds, the path can record `callkit_report_result=reported`, `callkit_report_completion_observed=true`, and `pushkit_completion_called=true`. The answerable-window path records deterministic safety outcomes for first action, answerable-window timeout, and report-completion-only completion. A DEBUG background task now covers the report/answer-window safety span so the repair proof can distinguish report completion, timeout, and completion safety outcomes while locked/minimized.
+
+Default no-answer behavior remains closed:
+
+```text
+callkit_surface_repair_blocks_connect_without_answer=true
+callkit_surface_repair_blocks_metadata_without_answer=true
+callkit_surface_repair_no_direct_answer_bypass=true
+callkit_surface_repair_no_media_connect_on_no_answer=true
+pending_metadata_fetch_requested=false
+media_credentials_requested=false
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+livekit_connect_audio_invoked=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+Targeted Swift tests/source guards cover pending report retention, report completion success/failure classification, PushKit completion timing safety, no direct answer bypass, no metadata/credentials/connect without CallKit Answer, and the existing successful Answer/controlled bridge path.
+
+Next phase: `2.48T-Physical5 — one-shot CallKit surface/answer proof, no repeated connect`.
+
+No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, real device LiveKit join, microphone/camera permission request on device, Matrix event emission, full direct-call flow, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 
 ### 2.48T-RealBridge — Real Controlled Audio-Connect Bridge
 

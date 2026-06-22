@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48T-Physical4-MissedSurface — a single real non-dev sandbox APNs was sent and reached PushKit, but the first controlled audio-connect physical attempt did not complete because CallKit report completion/surface was not observed and no CallKit Answer action was received. No pending metadata fetch, media credentials request, media connect, LiveKit join, microphone/camera permission, Matrix event emission, full call flow, or retry was performed. The next phase is `2.48T-CallKitSurfaceRepair — fix CallKit report completion/surface before any APNs retry`.
+After 2.48T-CallKitSurfaceRepair — the CallKit report/surface path now records explicit repair proof fields, retains provider/delegate/active UUID proof through the report/answer window, classifies missing report completion as `timeout_or_pending_redacted`, and records deterministic PushKit completion safety without treating no-answer as success. No pending metadata fetch, media credentials request, media connect, LiveKit join, microphone/camera permission, Matrix event emission, full call flow, APNs retry, or `dev/invite` was performed. The next phase is `2.48T-Physical5 — one-shot CallKit surface/answer proof, no repeated connect`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,62 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48T-CallKitSurfaceRepair fixes/classifies the CallKit surface gap before any APNs retry:
+  - This is a code/test repair phase only. It did not send APNs, repeat APNs, run production APNs, use `dev/invite`, retry connect, join LiveKit, request microphone/camera permission, emit Matrix events, or start full call flow.
+  - The physical 2.48T-Physical4 result remains classified as missed/no-answer/no-surface, not as first controlled audio-connect proof close.
+  - The VoIP PushKit proof now includes redacted CallKit surface repair diagnostics:
+    ```text
+    callkit_surface_repair_present=true
+    callkit_surface_repair_debug_only=true
+    callkit_surface_repair_provider_retention_verified=<retention proof>
+    callkit_surface_repair_delegate_retention_verified=<retention proof>
+    callkit_surface_repair_active_uuid_retention_verified=<retention proof>
+    callkit_surface_repair_report_completion_watchdog_present=true
+    callkit_surface_repair_report_completion_timeout_classified=<timeout classification>
+    callkit_surface_repair_pushkit_completion_safety_present=true
+    callkit_surface_repair_pushkit_completion_safety_result=<redacted safety result>
+    callkit_surface_repair_background_task_requested=<debug repair state>
+    callkit_surface_repair_background_task_ended=<debug repair state>
+    callkit_surface_repair_blocks_connect_without_answer=true
+    callkit_surface_repair_blocks_metadata_without_answer=true
+    callkit_surface_repair_no_direct_answer_bypass=true
+    callkit_surface_repair_no_media_connect_on_no_answer=true
+    ```
+  - If CallKit report completion is observed, the proof can record:
+    ```text
+    callkit_report_result=reported
+    callkit_report_completion_observed=true
+    pushkit_completion_called=true
+    ```
+  - If report completion remains missing, the repair watchdog classifies the result instead of leaving the path silently pending:
+    ```text
+    callkit_report_result=timeout_or_pending_redacted
+    callkit_report_completion_observed=false
+    callkit_surface_repair_report_completion_timeout_classified=true
+    callkit_surface_repair_pushkit_completion_safety_result=completed_after_report_timeout
+    callkit_first_action_kind=none
+    ```
+  - The answerable-window safety path records deterministic PushKit completion states:
+    ```text
+    callkit_surface_repair_pushkit_completion_safety_result=completed_after_first_action
+    callkit_surface_repair_pushkit_completion_safety_result=completed_after_answerable_window_timeout
+    callkit_surface_repair_pushkit_completion_safety_result=completed_after_report_completion
+    ```
+  - Default no-answer safety remains closed:
+    ```text
+    pending_metadata_fetch_requested=false
+    media_credentials_requested=false
+    media_connect_requested=false
+    media_connect_attempted=false
+    livekit_join_requested=false
+    livekit_connect_audio_invoked=false
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    ```
+  - Tests/source guards cover pending report retention, report completion success/failure classification, PushKit completion safety, no direct answer bypass, no metadata/credentials/connect without Answer, and the existing controlled bridge path.
+  - Next phase: `2.48T-Physical5 — one-shot CallKit surface/answer proof, no repeated connect`.
 - 2.48T-Physical4-MissedSurface closes the physical attempt as missed/no-answer/no-surface triage:
   - A single sandbox APNs was sent through the real non-dev invite path and was not repeated:
     ```text

@@ -1507,6 +1507,21 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var callKitReportCompletionObserved = false
     var callKitReportSubmittedAtMsRedacted = false
     var callKitReportCompletionAtMsRedacted = false
+    var callKitSurfaceRepairPresent = true
+    var callKitSurfaceRepairDebugOnly = true
+    var callKitSurfaceRepairProviderRetentionVerified = false
+    var callKitSurfaceRepairDelegateRetentionVerified = false
+    var callKitSurfaceRepairActiveUUIDRetentionVerified = false
+    var callKitSurfaceRepairReportCompletionWatchdogPresent = true
+    var callKitSurfaceRepairReportCompletionTimeoutClassified = false
+    var callKitSurfaceRepairPushKitCompletionSafetyPresent = true
+    var callKitSurfaceRepairPushKitCompletionSafetyResult = "not_requested"
+    var callKitSurfaceRepairBackgroundTaskRequested = false
+    var callKitSurfaceRepairBackgroundTaskEnded = false
+    var callKitSurfaceRepairBlocksConnectWithoutAnswer = true
+    var callKitSurfaceRepairBlocksMetadataWithoutAnswer = true
+    var callKitSurfaceRepairNoDirectAnswerBypass = true
+    var callKitSurfaceRepairNoMediaConnectOnNoAnswer = true
     var pushKitCompletionAnswerableWindowRequested = false
     var pushKitCompletionAnswerableWindowResult = "not_requested"
     var pushKitCompletionAnswerableWindowDurationBucket = "not_requested"
@@ -1807,6 +1822,21 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "callkit_report_submitted_at_ms_redacted=\(callKitReportSubmittedAtMsRedacted)",
             "callkit_report_completion_at_ms_redacted=\(callKitReportCompletionAtMsRedacted)",
             "callkit_report_error_redacted=true",
+            "callkit_surface_repair_present=\(callKitSurfaceRepairPresent)",
+            "callkit_surface_repair_debug_only=\(callKitSurfaceRepairDebugOnly)",
+            "callkit_surface_repair_provider_retention_verified=\(callKitSurfaceRepairProviderRetentionVerified)",
+            "callkit_surface_repair_delegate_retention_verified=\(callKitSurfaceRepairDelegateRetentionVerified)",
+            "callkit_surface_repair_active_uuid_retention_verified=\(callKitSurfaceRepairActiveUUIDRetentionVerified)",
+            "callkit_surface_repair_report_completion_watchdog_present=\(callKitSurfaceRepairReportCompletionWatchdogPresent)",
+            "callkit_surface_repair_report_completion_timeout_classified=\(callKitSurfaceRepairReportCompletionTimeoutClassified)",
+            "callkit_surface_repair_pushkit_completion_safety_present=\(callKitSurfaceRepairPushKitCompletionSafetyPresent)",
+            "callkit_surface_repair_pushkit_completion_safety_result=\(callKitSurfaceRepairPushKitCompletionSafetyResult)",
+            "callkit_surface_repair_background_task_requested=\(callKitSurfaceRepairBackgroundTaskRequested)",
+            "callkit_surface_repair_background_task_ended=\(callKitSurfaceRepairBackgroundTaskEnded)",
+            "callkit_surface_repair_blocks_connect_without_answer=\(callKitSurfaceRepairBlocksConnectWithoutAnswer)",
+            "callkit_surface_repair_blocks_metadata_without_answer=\(callKitSurfaceRepairBlocksMetadataWithoutAnswer)",
+            "callkit_surface_repair_no_direct_answer_bypass=\(callKitSurfaceRepairNoDirectAnswerBypass)",
+            "callkit_surface_repair_no_media_connect_on_no_answer=\(callKitSurfaceRepairNoMediaConnectOnNoAnswer)",
             "pushkit_completion_answerable_window_requested=\(pushKitCompletionAnswerableWindowRequested)",
             "pushkit_completion_answerable_window_result=\(pushKitCompletionAnswerableWindowResult)",
             "pushkit_completion_answerable_window_duration_bucket=\(pushKitCompletionAnswerableWindowDurationBucket)",
@@ -3200,6 +3230,9 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var localBackgroundCallKitOnlyProofHarness: NativeIncomingSyntheticCallKitUIProofHarness?
     private static var localBackgroundCallKitOnlyProofGeneration = 0
     #endif
+    #if os(iOS)
+    private static var voIPPushReceiptBackgroundTask: UIBackgroundTaskIdentifier = .invalid
+    #endif
 
     @objc static func startRegistrationSmoke() -> String {
         var configuration = DirectCallPushKitRegistrarConfiguration(featureGate: .init(isEnabled: true),
@@ -3683,21 +3716,8 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         }
 
         let completionCoordinator = SalemXPushKitCompletionCoordinator()
-
-        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + voIPPushReceiptCallKitReportTimeout) {
-            guard completionCoordinator.shouldRunReportTimeout() else {
-                return
-            }
-            completeVoIPPushReceiptOnce(coordinator: completionCoordinator,
-                                        reportResult: "timeout_redacted",
-                                        blockedReason: "callkit_report_completion_timeout_redacted",
-                                        answerRetentionProof: nil,
-                                        reportCompletionDate: nil,
-                                        answerableWindowRequested: false,
-                                        answerableWindowResult: "not_requested",
-                                        answerableWindowStartedAt: nil,
-                                        completion: completion)
-        }
+        startVoIPPushReceiptBackgroundTask()
+        scheduleVoIPPushReceiptReportTimeout(coordinator: completionCoordinator, completion: completion)
 
         DispatchQueue.main.async {
             reportControlledSandboxVoIPSmokeCallKit { reportResult, answerRetentionProof in
@@ -3727,6 +3747,23 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         }
     }
 
+    private static func scheduleVoIPPushReceiptReportTimeout(coordinator: SalemXPushKitCompletionCoordinator, completion: @escaping () -> Void) {
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + voIPPushReceiptCallKitReportTimeout) {
+            guard coordinator.shouldRunReportTimeout() else {
+                return
+            }
+            completeVoIPPushReceiptOnce(coordinator: coordinator,
+                                        reportResult: "timeout_or_pending_redacted",
+                                        blockedReason: "callkit_report_completion_timeout_classified_redacted",
+                                        answerRetentionProof: currentCallKitAnswerRetentionProof(),
+                                        reportCompletionDate: nil,
+                                        answerableWindowRequested: false,
+                                        answerableWindowResult: "not_requested",
+                                        answerableWindowStartedAt: nil,
+                                        completion: completion)
+        }
+    }
+
     private static func completeVoIPPushReceiptOnce(coordinator: SalemXPushKitCompletionCoordinator,
                                                     reportResult: String,
                                                     blockedReason: String,
@@ -3745,8 +3782,9 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         var completedSummary = latestVoIPPushReceiptSummary
         lock.unlock()
         completedSummary.callKitReportResult = reportResult
-        completedSummary.callKitReportCompletionObserved = reportResult != "timeout_redacted"
-        completedSummary.callKitReportCompletionAtMsRedacted = reportResult != "timeout_redacted"
+        completedSummary.callKitReportCompletionObserved = reportResult != "timeout_or_pending_redacted"
+        completedSummary.callKitReportCompletionAtMsRedacted = reportResult != "timeout_or_pending_redacted"
+        completedSummary.callKitSurfaceRepairReportCompletionTimeoutClassified = reportResult == "timeout_or_pending_redacted"
         completedSummary.pushKitCompletionAnswerableWindowRequested = answerableWindowRequested
         completedSummary.pushKitCompletionAnswerableWindowResult = answerableWindowResult
         completedSummary.pushKitCompletionAnswerableWindowDurationBucket = answerableWindowStartedAt.map { elapsedBucket(from: $0, to: completionCallDate) } ?? "not_requested"
@@ -3754,15 +3792,22 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         completedSummary.voIPPushKitCompletionDelayedUntilFirstAction = answerableWindowRequested && answerableWindowResult == "first_action_observed"
         completedSummary.appStateAtReportCompletion = currentApplicationStateProof()
         if completedSummary.callKitFirstActionKind == "none" {
-            completedSummary.callKitEventOrder = reportResult == "timeout_redacted" ? "report_completion_timeout" : "report_completion_only"
+            completedSummary.callKitEventOrder = reportResult == "timeout_or_pending_redacted" ? "report_completion_timeout" : "report_completion_only"
         }
-        completedSummary.controlledTimeoutBeforeAnswer = reportResult == "timeout_redacted"
+        completedSummary.controlledTimeoutBeforeAnswer = reportResult == "timeout_or_pending_redacted"
         if let answerRetentionProof {
             completedSummary.callKitProviderRetainedForAnswer = answerRetentionProof.providerRetainedForAnswer
             completedSummary.callKitDelegateRetainedForAnswer = answerRetentionProof.delegateRetainedForAnswer
             completedSummary.callKitActiveCallUUIDRetained = answerRetentionProof.activeCallUUIDRetained
+            completedSummary.callKitSurfaceRepairProviderRetentionVerified = answerRetentionProof.providerRetainedForAnswer
+            completedSummary.callKitSurfaceRepairDelegateRetentionVerified = answerRetentionProof.delegateRetainedForAnswer
+            completedSummary.callKitSurfaceRepairActiveUUIDRetentionVerified = answerRetentionProof.activeCallUUIDRetained
         }
         completedSummary.completionCalled = true
+        completedSummary.callKitSurfaceRepairPushKitCompletionSafetyResult = pushKitCompletionSafetyResult(reportResult: reportResult,
+                                                                                                           answerableWindowRequested: answerableWindowRequested,
+                                                                                                           answerableWindowResult: answerableWindowResult)
+        completedSummary.callKitSurfaceRepairBackgroundTaskEnded = true
         if answerableWindowRequested, answerableWindowResult == "timeout_elapsed", completedSummary.callKitFirstActionKind == "none" {
             completedSummary.blockedReason = "callkit_first_action_not_observed_before_completion_window"
         } else if !answerableWindowRequested {
@@ -3770,10 +3815,11 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         }
         lock.lock()
         callKitReportCompletionDate = reportCompletionDate
-        pushKitCompletionDate = reportResult == "timeout_redacted" ? nil : completionCallDate
+        pushKitCompletionDate = reportResult == "timeout_or_pending_redacted" ? nil : completionCallDate
         lock.unlock()
         updateLatestVoIPPushReceiptSummary(completedSummary)
         completion()
+        finishVoIPPushReceiptBackgroundTask()
     }
 
     private static func startPushKitCompletionAnswerableWindow(coordinator: SalemXPushKitCompletionCoordinator,
@@ -3798,7 +3844,11 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             summary.callKitProviderRetainedForAnswer = answerRetentionProof.providerRetainedForAnswer
             summary.callKitDelegateRetainedForAnswer = answerRetentionProof.delegateRetainedForAnswer
             summary.callKitActiveCallUUIDRetained = answerRetentionProof.activeCallUUIDRetained
+            summary.callKitSurfaceRepairProviderRetentionVerified = answerRetentionProof.providerRetainedForAnswer
+            summary.callKitSurfaceRepairDelegateRetentionVerified = answerRetentionProof.delegateRetainedForAnswer
+            summary.callKitSurfaceRepairActiveUUIDRetentionVerified = answerRetentionProof.activeCallUUIDRetained
         }
+        summary.callKitSurfaceRepairPushKitCompletionSafetyResult = "waiting_for_answerable_window"
         callKitReportCompletionDate = reportCompletionDate
         pushKitCompletionAnswerableWindowID = windowID
         pushKitCompletionAnswerableWindowFinish = { result in
@@ -3821,6 +3871,66 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + voIPPushReceiptAnswerableWindowTimeout) {
             finish?("timeout_elapsed")
         }
+    }
+
+    private static func pushKitCompletionSafetyResult(reportResult: String, answerableWindowRequested: Bool, answerableWindowResult: String) -> String {
+        if reportResult == "timeout_or_pending_redacted" {
+            return "completed_after_report_timeout"
+        } else if answerableWindowRequested, answerableWindowResult == "first_action_observed" {
+            return "completed_after_first_action"
+        } else if answerableWindowRequested, answerableWindowResult == "timeout_elapsed" {
+            return "completed_after_answerable_window_timeout"
+        } else {
+            return "completed_after_report_completion"
+        }
+    }
+
+    private static func currentCallKitAnswerRetentionProof() -> NativeIncomingSyntheticCallKitUIAnswerRetentionProof? {
+        #if canImport(CallKit) && os(iOS)
+        lock.lock()
+        let proofHarness = callKitProofHarness
+        lock.unlock()
+        return proofHarness?.answerRetentionProof()
+        #else
+        return nil
+        #endif
+    }
+
+    private static func startVoIPPushReceiptBackgroundTask() {
+        #if os(iOS)
+        lock.lock()
+        var summary = latestVoIPPushReceiptSummary
+        summary.callKitSurfaceRepairBackgroundTaskRequested = true
+        latestVoIPPushReceiptSummary = summary
+        let existingTask = voIPPushReceiptBackgroundTask
+        voIPPushReceiptBackgroundTask = .invalid
+        lock.unlock()
+
+        if existingTask != .invalid {
+            UIApplication.shared.endBackgroundTask(existingTask)
+        }
+
+        let task = UIApplication.shared.beginBackgroundTask(withName: "SalemXCallKitSurfaceRepair") {
+            finishVoIPPushReceiptBackgroundTask()
+        }
+        lock.lock()
+        voIPPushReceiptBackgroundTask = task
+        lock.unlock()
+        updateLatestVoIPPushReceiptSummary(summary)
+        #endif
+    }
+
+    private static func finishVoIPPushReceiptBackgroundTask() {
+        #if os(iOS)
+        lock.lock()
+        let task = voIPPushReceiptBackgroundTask
+        voIPPushReceiptBackgroundTask = .invalid
+        lock.unlock()
+
+        if task != .invalid {
+            UIApplication.shared.endBackgroundTask(task)
+        }
+        #endif
     }
 
     private static func clearPushKitCompletionAnswerableWindow(windowID: UUID) {

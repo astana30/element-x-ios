@@ -103,6 +103,73 @@ struct NativeIncomingSyntheticCallKitUIProofTests {
     }
 
     @Test
+    func pendingReportRetainsProviderDelegateAndActiveCallWithoutAnswerBypass() {
+        let dependencies = makeDependencies()
+        let reporter = NativeIncomingSyntheticCallKitUIReporterSpy(autoCompleteReport: false)
+        let actionHandler = NativeIncomingSyntheticCallKitActionHandlerSpy()
+        let eventRecorder = NativeIncomingSyntheticCallKitUIProofEventRecorderSpy()
+        let adapter = makeAdapter(reporter: reporter,
+                                  actionHandler: actionHandler,
+                                  diagnosticsRecorder: dependencies.diagnosticsRecorder,
+                                  eventRecorder: eventRecorder)
+        let identity = safeIdentity()
+
+        let result = adapter.reportSyntheticIncomingCall(identity: identity, displayLabel: "Pilot Participant")
+        let retentionProof = adapter.answerRetentionProof(handle: identity.handle.value)
+
+        #expect(result == .reported)
+        #expect(reporter.pendingReportCompletionCount == 1)
+        #expect(retentionProof.providerRetainedForAnswer)
+        #expect(retentionProof.delegateRetainedForAnswer)
+        #expect(retentionProof.activeCallUUIDRetained)
+        #expect(actionHandler.answeredIdentities.isEmpty)
+        #expect(eventRecorder.events.isEmpty)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.isEmpty)
+    }
+
+    @Test
+    func pendingReportCompletionSuccessRecordsReportedWithoutMediaSideEffects() {
+        let dependencies = makeDependencies()
+        let reporter = NativeIncomingSyntheticCallKitUIReporterSpy(autoCompleteReport: false)
+        let actionHandler = NativeIncomingSyntheticCallKitActionHandlerSpy()
+        let eventRecorder = NativeIncomingSyntheticCallKitUIProofEventRecorderSpy()
+        let adapter = makeAdapter(reporter: reporter,
+                                  actionHandler: actionHandler,
+                                  diagnosticsRecorder: dependencies.diagnosticsRecorder,
+                                  eventRecorder: eventRecorder)
+
+        _ = adapter.reportSyntheticIncomingCall(identity: safeIdentity(), displayLabel: "Pilot Participant")
+        reporter.completePendingReport(succeeded: true)
+
+        #expect(eventRecorder.events == [.reported])
+        #expect(actionHandler.answeredIdentities.isEmpty)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.lifecycleState == .reported)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaCredentialRequested == false)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaConnectAttempted == false)
+    }
+
+    @Test
+    func pendingReportCompletionFailureClassifiesFailureWithoutMediaSideEffects() {
+        let dependencies = makeDependencies()
+        let reporter = NativeIncomingSyntheticCallKitUIReporterSpy(autoCompleteReport: false)
+        let actionHandler = NativeIncomingSyntheticCallKitActionHandlerSpy()
+        let eventRecorder = NativeIncomingSyntheticCallKitUIProofEventRecorderSpy()
+        let adapter = makeAdapter(reporter: reporter,
+                                  actionHandler: actionHandler,
+                                  diagnosticsRecorder: dependencies.diagnosticsRecorder,
+                                  eventRecorder: eventRecorder)
+
+        _ = adapter.reportSyntheticIncomingCall(identity: safeIdentity(), displayLabel: "Pilot Participant")
+        reporter.completePendingReport(succeeded: false)
+
+        #expect(eventRecorder.events == [.failed(.callReportingUnavailable)])
+        #expect(actionHandler.answeredIdentities.isEmpty)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.failClosedReason == .callReportingUnavailable)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaCredentialRequested == false)
+        #expect(dependencies.diagnosticsRecorder.diagnostics.last?.mediaConnectAttempted == false)
+    }
+
+    @Test
     func resetEndAndAudioSessionCallbacksAreRecordedRedacted() {
         let dependencies = makeDependencies()
         let reporter = NativeIncomingSyntheticCallKitUIReporterSpy()
@@ -950,15 +1017,37 @@ private final class NativeIncomingSyntheticCallKitUIReporterSpy: NativeIncomingS
         delegate != nil
     }
 
+    private let autoCompleteReport: Bool
     private(set) var reportedCalls = [UUID]()
     private(set) var endedCalls = [UUID]()
+    private(set) var pendingReportCompletionCount = 0
     private var labels = [UUID: NativeIncomingCallKitDisplayMetadata]()
+    private var pendingReportCompletions = [(Bool) -> Void]()
+
+    init(autoCompleteReport: Bool = true) {
+        self.autoCompleteReport = autoCompleteReport
+    }
 
     func reportIncomingCall(callUUID: UUID, displayMetadata: NativeIncomingCallKitDisplayMetadata, completion: @escaping (Bool) -> Void) -> Bool {
         reportedCalls.append(callUUID)
         labels[callUUID] = displayMetadata
-        completion(true)
+        if autoCompleteReport {
+            completion(true)
+        } else {
+            pendingReportCompletionCount += 1
+            pendingReportCompletions.append(completion)
+        }
         return true
+    }
+
+    func completePendingReport(succeeded: Bool) {
+        guard !pendingReportCompletions.isEmpty else {
+            return
+        }
+
+        let completion = pendingReportCompletions.removeFirst()
+        pendingReportCompletionCount -= 1
+        completion(succeeded)
     }
 
     func endCall(callUUID: UUID) {
