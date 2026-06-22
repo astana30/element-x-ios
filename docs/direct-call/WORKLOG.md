@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Implemented the first controlled audio-connect execution gate, default-disabled and blocked before media execution.
 - Completed the 2.48M controlled-connect first-run readiness gate; ready for the first controlled audio-only connect implementation phase with no physical connect performed.
 - Closed the 2.48L-Retry2 physical proof after receiver app session validation with credentials success and no media connect.
 - Prepared the 2.48L-Retry2 one-shot physical retry plan after receiver app session validation; no APNs was sent.
@@ -99,6 +100,71 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48N — First Controlled Audio-Connect Execution Path
+
+Implemented the narrow first controlled audio-connect execution gate in the existing DEBUG proof surface. This is code/test implementation only: no physical connect was performed, controlled connect was not enabled, operator approval was not enabled, future physical-connect permission remains false by default, and the default remains no-connect.
+
+Conclusion:
+
+```text
+2.48N = first controlled audio-connect execution path, default disabled, no physical connect
+controlled connect not enabled by default
+operator approval not enabled by default
+future physical-connect permission remains false
+execution allowed=false
+default remains no-connect
+```
+
+Implementation:
+
+- Added `SalemXControlledAudioConnectExecutionGate` beside the existing DEBUG-only controlled-connect switch, activation configuration, and enablement configuration.
+- The execution gate takes only credential presence plus the existing activation/enablement configurations. It does not accept raw credential values and only records booleans plus redacted blocked reasons.
+- The gate's execution decision requires credential presence, activation wiring, enablement wiring, one-shot enablement, operator approval, fresh credentials, audio-only scope, video disabled, Matrix events disabled, raw credential logging disabled, and future physical-connect phase permission.
+- The default blocked reason is `future_phase_not_permitted_no_connect`, preserving the 2.48N no-connect default.
+- The existing media-connect preflight records the gate after credentials are present, then keeps media execution false before engine/LiveKit/permissions/events.
+
+Default proof fields:
+
+```text
+controlled_audio_connect_execution_gate_present=true
+controlled_audio_connect_execution_debug_only=true
+controlled_audio_connect_execution_audio_only=true
+controlled_audio_connect_execution_video_allowed=false
+controlled_audio_connect_execution_matrix_events_allowed=false
+controlled_audio_connect_execution_raw_credentials_logged=false
+controlled_audio_connect_execution_requires_enablement=true
+controlled_audio_connect_execution_requires_operator_approval=true
+controlled_audio_connect_execution_requires_future_phase_permission=true
+controlled_audio_connect_execution_future_phase_permitted=false
+controlled_audio_connect_execution_allowed=false
+controlled_audio_connect_execution_blocked_reason=future_phase_not_permitted_no_connect
+controlled_audio_connect_execution_blocked_before_engine=true
+controlled_audio_connect_execution_blocked_before_livekit_join=true
+controlled_audio_connect_execution_blocked_before_permissions=true
+controlled_audio_connect_execution_blocked_before_matrix_events=true
+```
+
+Existing safety fields remain false:
+
+```text
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+Tests:
+
+- Added targeted `DirectCallEngineTests` source guards proving the execution gate exists, is DEBUG/test-only, keeps default future physical-connect permission false, keeps execution false by default, requires every gate before execution, preserves audio-only scope, keeps video/Matrix events/raw credential logging disabled, keeps media engine and LiveKit `connectAudio` uninvoked, keeps mic/camera permission and full-flow paths absent, and restores no-connect on rollback/default state.
+- Existing 2.48K/2.48L proof expectations remain covered by the broader selected DirectCall suites.
+
+Next phase: `2.48O — physical proof of audio-connect execution gate default-blocked, no LiveKit join`.
+
+No APNs, production APNs, repeated APNs, `dev/invite`, physical media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, controlled-connect switch enablement, controlled-connect operator approval enablement, future physical-connect permission enablement, production-enabled connect behavior, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 
 ### 2.48M — Controlled-Connect First-Run Readiness Gate
 

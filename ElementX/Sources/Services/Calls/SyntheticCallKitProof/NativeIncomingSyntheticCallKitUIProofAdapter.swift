@@ -766,6 +766,127 @@ private struct SalemXControlledMediaConnectEnablementConfiguration {
     }
 }
 
+private struct SalemXControlledAudioConnectExecutionGate {
+    static let futurePhaseNotPermittedNoConnectReason = "future_phase_not_permitted_no_connect"
+    static let credentialsMissingNoConnectReason = "credentials_missing_no_connect"
+    static let activationWiringMissingNoConnectReason = "activation_wiring_missing_no_connect"
+    static let enablementWiringMissingNoConnectReason = "enablement_wiring_missing_no_connect"
+    static let enablementDisabledNoConnectReason = "enablement_disabled_no_connect"
+    static let operatorApprovalMissingNoConnectReason = "operator_approval_missing_no_connect"
+    static let freshCredentialsMissingNoConnectReason = "fresh_credentials_missing_no_connect"
+    static let audioOnlyScopeMissingNoConnectReason = "audio_only_scope_missing_no_connect"
+    static let videoEnabledNoConnectReason = "video_enabled_no_connect"
+    static let matrixEventsEnabledNoConnectReason = "matrix_events_enabled_no_connect"
+    static let rawCredentialsLoggedNoConnectReason = "raw_credentials_logged_no_connect"
+
+    static func defaultBlocked(credentialsPresent: Bool) -> SalemXControlledAudioConnectExecutionGate {
+        SalemXControlledAudioConnectExecutionGate(credentialsPresent: credentialsPresent,
+                                                  activationConfiguration: .defaultDisabled,
+                                                  enablementConfiguration: .defaultDisabled)
+    }
+
+    let credentialsPresent: Bool
+    let activationConfiguration: SalemXControlledMediaConnectActivationConfiguration
+    let enablementConfiguration: SalemXControlledMediaConnectEnablementConfiguration
+
+    let gatePresent = true
+    let debugOnly = true
+    let requiresEnablement = true
+    let requiresOperatorApproval = true
+    let requiresFuturePhasePermission = true
+
+    var audioOnly: Bool {
+        enablementConfiguration.audioOnlyScope
+    }
+
+    var videoAllowed: Bool {
+        activationConfiguration.videoAllowed || enablementConfiguration.videoAllowed
+    }
+
+    var matrixEventsAllowed: Bool {
+        activationConfiguration.matrixEventsAllowed || enablementConfiguration.matrixEventsAllowed
+    }
+
+    var rawCredentialsLogged: Bool {
+        activationConfiguration.rawCredentialsLogged || enablementConfiguration.rawCredentialsLogged
+    }
+
+    var futurePhasePermitted: Bool {
+        enablementConfiguration.futureConnectPhasePermitted
+    }
+
+    var executionAllowed: Bool {
+        credentialsPresent
+            && activationConfiguration.wiringPresent
+            && enablementConfiguration.wiringPresent
+            && enablementConfiguration.oneShotEnablementEnabled
+            && activationConfiguration.controlledConnectSwitch.executionAllowed
+            && enablementConfiguration.operatorApproved
+            && enablementConfiguration.freshCredentialsPresent
+            && audioOnly
+            && !videoAllowed
+            && !matrixEventsAllowed
+            && !rawCredentialsLogged
+            && futurePhasePermitted
+    }
+
+    var blockedReason: String {
+        if executionAllowed {
+            return "none"
+        }
+        if !futurePhasePermitted {
+            return Self.futurePhaseNotPermittedNoConnectReason
+        }
+        if !credentialsPresent {
+            return Self.credentialsMissingNoConnectReason
+        }
+        if !activationConfiguration.wiringPresent {
+            return Self.activationWiringMissingNoConnectReason
+        }
+        if !enablementConfiguration.wiringPresent {
+            return Self.enablementWiringMissingNoConnectReason
+        }
+        if !enablementConfiguration.oneShotEnablementEnabled {
+            return Self.enablementDisabledNoConnectReason
+        }
+        if !activationConfiguration.controlledConnectSwitch.executionAllowed || !enablementConfiguration.operatorApproved {
+            return Self.operatorApprovalMissingNoConnectReason
+        }
+        if !enablementConfiguration.freshCredentialsPresent {
+            return Self.freshCredentialsMissingNoConnectReason
+        }
+        if !audioOnly {
+            return Self.audioOnlyScopeMissingNoConnectReason
+        }
+        if videoAllowed {
+            return Self.videoEnabledNoConnectReason
+        }
+        if matrixEventsAllowed {
+            return Self.matrixEventsEnabledNoConnectReason
+        }
+        if rawCredentialsLogged {
+            return Self.rawCredentialsLoggedNoConnectReason
+        }
+        return Self.futurePhaseNotPermittedNoConnectReason
+    }
+
+    var blockedBeforeEngine: Bool {
+        !executionAllowed
+    }
+
+    var blockedBeforeLiveKitJoin: Bool {
+        !executionAllowed
+    }
+
+    var blockedBeforePermissions: Bool {
+        !executionAllowed
+    }
+
+    var blockedBeforeMatrixEvents: Bool {
+        !executionAllowed
+    }
+}
+
 private struct SalemXVoIPPushReceiptProofSummary {
     var proofSource = "voip_push_receipt"
     var proofGeneration = "not_started"
@@ -941,6 +1062,22 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var controlledConnectEnablementFuturePhasePermitted = SalemXControlledMediaConnectEnablementConfiguration.defaultDisabled.futureConnectPhasePermitted
     var controlledConnectEnablementExecutionAllowed = SalemXControlledMediaConnectEnablementConfiguration.defaultDisabled.executionAllowed
     var controlledConnectEnablementBlockedReason = SalemXControlledMediaConnectEnablementConfiguration.defaultDisabled.blockedReason
+    var controlledAudioConnectExecutionGatePresent = SalemXControlledAudioConnectExecutionGate.defaultBlocked(credentialsPresent: false).gatePresent
+    var controlledAudioConnectExecutionDebugOnly = SalemXControlledAudioConnectExecutionGate.defaultBlocked(credentialsPresent: false).debugOnly
+    var controlledAudioConnectExecutionAudioOnly = SalemXControlledAudioConnectExecutionGate.defaultBlocked(credentialsPresent: false).audioOnly
+    var controlledAudioConnectExecutionVideoAllowed = SalemXControlledAudioConnectExecutionGate.defaultBlocked(credentialsPresent: false).videoAllowed
+    var controlledAudioConnectExecutionMatrixEventsAllowed = SalemXControlledAudioConnectExecutionGate.defaultBlocked(credentialsPresent: false).matrixEventsAllowed
+    var controlledAudioConnectExecutionRawCredentialsLogged = SalemXControlledAudioConnectExecutionGate.defaultBlocked(credentialsPresent: false).rawCredentialsLogged
+    var controlledAudioConnectExecutionRequiresEnablement = SalemXControlledAudioConnectExecutionGate.defaultBlocked(credentialsPresent: false).requiresEnablement
+    var controlledAudioConnectExecutionRequiresOperatorApproval = SalemXControlledAudioConnectExecutionGate.defaultBlocked(credentialsPresent: false).requiresOperatorApproval
+    var controlledAudioConnectExecutionRequiresFuturePhasePermission = SalemXControlledAudioConnectExecutionGate.defaultBlocked(credentialsPresent: false).requiresFuturePhasePermission
+    var controlledAudioConnectExecutionFuturePhasePermitted = SalemXControlledAudioConnectExecutionGate.defaultBlocked(credentialsPresent: false).futurePhasePermitted
+    var controlledAudioConnectExecutionAllowed = SalemXControlledAudioConnectExecutionGate.defaultBlocked(credentialsPresent: false).executionAllowed
+    var controlledAudioConnectExecutionBlockedReason = SalemXControlledAudioConnectExecutionGate.defaultBlocked(credentialsPresent: false).blockedReason
+    var controlledAudioConnectExecutionBlockedBeforeEngine = SalemXControlledAudioConnectExecutionGate.defaultBlocked(credentialsPresent: false).blockedBeforeEngine
+    var controlledAudioConnectExecutionBlockedBeforeLiveKitJoin = SalemXControlledAudioConnectExecutionGate.defaultBlocked(credentialsPresent: false).blockedBeforeLiveKitJoin
+    var controlledAudioConnectExecutionBlockedBeforePermissions = SalemXControlledAudioConnectExecutionGate.defaultBlocked(credentialsPresent: false).blockedBeforePermissions
+    var controlledAudioConnectExecutionBlockedBeforeMatrixEvents = SalemXControlledAudioConnectExecutionGate.defaultBlocked(credentialsPresent: false).blockedBeforeMatrixEvents
     var mediaConnectPreflightRequested = false
     var mediaConnectPreflightMetadataAvailable = false
     var mediaConnectPreflightCredentialsAvailable = false
@@ -1138,6 +1275,22 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "controlled_connect_enablement_future_phase_permitted=\(controlledConnectEnablementFuturePhasePermitted)",
             "controlled_connect_enablement_execution_allowed=\(controlledConnectEnablementExecutionAllowed)",
             "controlled_connect_enablement_blocked_reason=\(controlledConnectEnablementBlockedReason)",
+            "controlled_audio_connect_execution_gate_present=\(controlledAudioConnectExecutionGatePresent)",
+            "controlled_audio_connect_execution_debug_only=\(controlledAudioConnectExecutionDebugOnly)",
+            "controlled_audio_connect_execution_audio_only=\(controlledAudioConnectExecutionAudioOnly)",
+            "controlled_audio_connect_execution_video_allowed=\(controlledAudioConnectExecutionVideoAllowed)",
+            "controlled_audio_connect_execution_matrix_events_allowed=\(controlledAudioConnectExecutionMatrixEventsAllowed)",
+            "controlled_audio_connect_execution_raw_credentials_logged=\(controlledAudioConnectExecutionRawCredentialsLogged)",
+            "controlled_audio_connect_execution_requires_enablement=\(controlledAudioConnectExecutionRequiresEnablement)",
+            "controlled_audio_connect_execution_requires_operator_approval=\(controlledAudioConnectExecutionRequiresOperatorApproval)",
+            "controlled_audio_connect_execution_requires_future_phase_permission=\(controlledAudioConnectExecutionRequiresFuturePhasePermission)",
+            "controlled_audio_connect_execution_future_phase_permitted=\(controlledAudioConnectExecutionFuturePhasePermitted)",
+            "controlled_audio_connect_execution_allowed=\(controlledAudioConnectExecutionAllowed)",
+            "controlled_audio_connect_execution_blocked_reason=\(controlledAudioConnectExecutionBlockedReason)",
+            "controlled_audio_connect_execution_blocked_before_engine=\(controlledAudioConnectExecutionBlockedBeforeEngine)",
+            "controlled_audio_connect_execution_blocked_before_livekit_join=\(controlledAudioConnectExecutionBlockedBeforeLiveKitJoin)",
+            "controlled_audio_connect_execution_blocked_before_permissions=\(controlledAudioConnectExecutionBlockedBeforePermissions)",
+            "controlled_audio_connect_execution_blocked_before_matrix_events=\(controlledAudioConnectExecutionBlockedBeforeMatrixEvents)",
             "media_connect_preflight_requested=\(mediaConnectPreflightRequested)",
             "media_connect_preflight_metadata_available=\(mediaConnectPreflightMetadataAvailable)",
             "media_connect_preflight_credentials_available=\(mediaConnectPreflightCredentialsAvailable)",
@@ -1376,6 +1529,10 @@ private extension SalemXVoIPPushReceiptProofSummary {
         recordControlledConnectActivationProof(SalemXControlledMediaConnectActivationConfiguration.defaultDisabled)
         recordControlledConnectEnablementProof(SalemXControlledMediaConnectEnablementConfiguration.defaultDisabled)
         mediaConnectExecutionAllowed = controlledConnectExecutionAllowed && controlledConnectEnablementExecutionAllowed
+        recordControlledAudioConnectExecutionGate(SalemXControlledAudioConnectExecutionGate(credentialsPresent: mediaConnectPreflightCredentialsAvailable,
+                                                                                            activationConfiguration: .defaultDisabled,
+                                                                                            enablementConfiguration: .defaultDisabled))
+        mediaConnectExecutionAllowed = mediaConnectExecutionAllowed && controlledAudioConnectExecutionAllowed
         mediaConnectPreflightResult = mediaConnectPreflightCredentialsAvailable ? "blocked_before_connect_redacted" : "blocked_redacted"
         mediaConnectBlockedReason = mediaConnectPreflightCredentialsAvailable ? controlledConnectBlockedReasonForPreflight : "media_connect_preflight_not_ready"
         mediaConnectEngineInvoked = false
@@ -1385,6 +1542,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
     mutating func rollbackControlledConnectActivationProof() {
         recordControlledConnectActivationProof(SalemXControlledMediaConnectActivationConfiguration.rollbackDisabled)
         recordControlledConnectEnablementProof(SalemXControlledMediaConnectEnablementConfiguration.rollbackDisabled)
+        recordControlledAudioConnectExecutionGate(SalemXControlledAudioConnectExecutionGate.defaultBlocked(credentialsPresent: false))
         mediaConnectExecutionAllowed = false
         mediaConnectEngineInvoked = false
         liveKitConnectAudioInvoked = false
@@ -1433,6 +1591,25 @@ private extension SalemXVoIPPushReceiptProofSummary {
         controlledConnectEnablementFuturePhasePermitted = enablementConfiguration.futureConnectPhasePermitted
         controlledConnectEnablementExecutionAllowed = enablementConfiguration.executionAllowed
         controlledConnectEnablementBlockedReason = enablementConfiguration.blockedReason
+    }
+
+    mutating func recordControlledAudioConnectExecutionGate(_ executionGate: SalemXControlledAudioConnectExecutionGate) {
+        controlledAudioConnectExecutionGatePresent = executionGate.gatePresent
+        controlledAudioConnectExecutionDebugOnly = executionGate.debugOnly
+        controlledAudioConnectExecutionAudioOnly = executionGate.audioOnly
+        controlledAudioConnectExecutionVideoAllowed = executionGate.videoAllowed
+        controlledAudioConnectExecutionMatrixEventsAllowed = executionGate.matrixEventsAllowed
+        controlledAudioConnectExecutionRawCredentialsLogged = executionGate.rawCredentialsLogged
+        controlledAudioConnectExecutionRequiresEnablement = executionGate.requiresEnablement
+        controlledAudioConnectExecutionRequiresOperatorApproval = executionGate.requiresOperatorApproval
+        controlledAudioConnectExecutionRequiresFuturePhasePermission = executionGate.requiresFuturePhasePermission
+        controlledAudioConnectExecutionFuturePhasePermitted = executionGate.futurePhasePermitted
+        controlledAudioConnectExecutionAllowed = executionGate.executionAllowed
+        controlledAudioConnectExecutionBlockedReason = executionGate.blockedReason
+        controlledAudioConnectExecutionBlockedBeforeEngine = executionGate.blockedBeforeEngine
+        controlledAudioConnectExecutionBlockedBeforeLiveKitJoin = executionGate.blockedBeforeLiveKitJoin
+        controlledAudioConnectExecutionBlockedBeforePermissions = executionGate.blockedBeforePermissions
+        controlledAudioConnectExecutionBlockedBeforeMatrixEvents = executionGate.blockedBeforeMatrixEvents
     }
 
     private var controlledConnectBlockedReasonForPreflight: String {
