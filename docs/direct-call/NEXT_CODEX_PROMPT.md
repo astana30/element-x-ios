@@ -13,7 +13,7 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-2.48O physically proved the 2.48N controlled audio-connect execution gate on-device after the real non-dev invite/APNs, PushKit, CallKit Answer, authenticated pending metadata fetch, media credentials, and media-connect preflight path. The gate stayed default-blocked and no media connect was performed.
+2.48P prepared the first controlled audio-connect activation plan after the 2.48O physical no-connect proof. No physical connect was performed, controlled connect was not enabled, and the default remains no-connect.
 
 Closed prerequisites:
 - 2.47C physical controlled media credentials request succeeded with no media connect.
@@ -36,6 +36,7 @@ Closed prerequisites:
 - 2.48M completed the first-run readiness gate and found no blocker for the next no-physical-connect implementation phase.
 - 2.48N implemented the first controlled audio-connect execution gate, default disabled, no physical connect.
 - 2.48O physically proved the controlled audio-connect execution gate appears on-device and remains default-blocked after Answer.
+- 2.48P prepared the first controlled audio-connect activation plan, no physical connect.
 
 2.48O proof summary:
 
@@ -113,13 +114,103 @@ real_call_flow_started=false
 blocked_reason=none
 ```
 
+2.48P activation plan:
+
+```text
+2.48P = first controlled audio-connect activation plan
+physical connect not performed
+controlled connect not enabled
+default remains no-connect
+```
+
+First controlled audio-connect activation requirements:
+
+```text
+first_connect_requires_receiver_app_session_validated=true
+first_connect_requires_terminal_tokens_valid=true
+first_connect_requires_room_validation_pass=true
+first_connect_requires_single_sandbox_apns=true
+first_connect_requires_green_answer=true
+first_connect_requires_fresh_credentials=true
+first_connect_requires_enablement_enabled=true
+first_connect_requires_operator_approved=true
+first_connect_requires_future_phase_permitted=true
+first_connect_audio_only=true
+first_connect_video_allowed=false
+first_connect_matrix_events_allowed=false
+first_connect_raw_credentials_logged=false
+first_connect_rollback_available=true
+first_connect_one_shot_only=true
+```
+
+Allowed future scope:
+
+```text
+allow_audio_connect_attempt=true
+allow_livekit_join_attempt=true
+allow_microphone_permission_request=only_if_required_for_audio_connect
+allow_camera_permission_request=false
+allow_matrix_event_emit=false
+allow_full_call_flow=false
+allow_repeated_apns=false
+```
+
+Stop conditions:
+
+```text
+stop_if_receiver_app_session_invalid=true
+stop_if_pending_metadata_fetch_fails=true
+stop_if_credentials_fail=true
+stop_if_enablement_not_enabled=true
+stop_if_operator_not_approved=true
+stop_if_future_phase_not_permitted=true
+stop_if_video_permission_requested=true
+stop_if_camera_permission_requested=true
+stop_if_matrix_event_emit_requested=true
+stop_if_full_call_flow_started=true
+stop_after_first_connect_result=true
+```
+
+Future first controlled connect proof fields:
+
+```text
+controlled_audio_connect_execution_future_phase_permitted=true
+controlled_audio_connect_execution_allowed=true
+media_connect_requested=true
+media_connect_attempted=true
+livekit_join_requested=true
+livekit_connect_audio_invoked=true
+controlled_connect_first_attempt_result=<success_or_blocked_redacted>
+controlled_connect_first_attempt_error_bucket=<none_or_redacted_bucket>
+microphone_permission_requested=<true_if_required_or_false_if_not_required>
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+Rollback expectations:
+
+```text
+rollback_disable_enablement=true
+rollback_clear_operator_approval=true
+rollback_clear_future_phase_permission=true
+rollback_restore_execution_allowed_false=true
+rollback_restore_no_connect_default=true
+```
+
+Readiness conclusion:
+
+```text
+2.48P result = ready to implement first controlled audio-connect activation path, no physical connect performed
+```
+
 ## Phase
 
-`2.48P — first controlled audio-connect activation plan, no physical connect`
+`2.48Q — implement first controlled audio-connect activation path, default disabled, no physical connect`
 
 ## Goal
 
-Prepare the first controlled audio-connect activation plan without performing physical connect. This is a planning/checklist phase only. Do not set the next phase to actual physical connect yet unless the plan explicitly preserves one-shot approval, default-off safety, and a stop-before-connect proof boundary.
+Implement the first controlled audio-connect activation path while keeping it default-disabled and proof/test gated. This is not a physical connect phase: do not send APNs, do not connect media, do not join LiveKit, and do not request permissions. Do not set the next phase to physical connect yet.
 
 ## Required Behavior
 
@@ -138,35 +229,43 @@ Prepare the first controlled audio-connect activation plan without performing ph
 - Do not add production-enabled connect behavior.
 - Preserve 2.48O as the latest physical no-connect proof.
 
-The 2.48P plan should define:
+The implementation should preserve the 2.48P plan and add only code/test wiring needed for a future explicit one-shot attempt:
 
 ```text
-activation_plan_requires_default_off=true
-activation_plan_requires_operator_approval=true
-activation_plan_requires_future_phase_permission=true
-activation_plan_requires_fresh_credentials=true
-activation_plan_requires_audio_only=true
-activation_plan_forbids_video=true
-activation_plan_forbids_matrix_events=true
-activation_plan_forbids_raw_credentials_logging=true
-activation_plan_forbids_permissions_before_execution=true
-activation_plan_forbids_livekit_join_before_execution=true
-activation_plan_forbids_full_flow=true
-activation_plan_requires_rollback=true
-activation_plan_requires_one_shot_physical_confirmation=true
+first_connect_requires_enablement_enabled=true
+first_connect_requires_operator_approved=true
+first_connect_requires_future_phase_permitted=true
+first_connect_requires_fresh_credentials=true
+first_connect_audio_only=true
+first_connect_video_allowed=false
+first_connect_matrix_events_allowed=false
+first_connect_raw_credentials_logged=false
+first_connect_rollback_available=true
+first_connect_one_shot_only=true
 ```
 
-Stop conditions for any later physical phase:
+Default 2.48Q proof fields should remain blocked:
 
 ```text
-if controlled_audio_connect_execution_gate_present is missing, stop and verify installed commit
-if controlled_audio_connect_execution_allowed=true before explicit approval, stop as safety regression
-if media_connect_requested=true before explicit approval, stop as safety regression
-if livekit_join_requested=true before explicit approval, stop as safety regression
-if microphone_permission_requested=true before explicit approval, stop as safety regression
-if camera_permission_requested=true before explicit approval, stop as safety regression
-if matrix_event_emit_requested=true, stop as safety regression
-if real_call_flow_started=true, stop as safety regression
+controlled_connect_enablement_enabled=false
+controlled_connect_enablement_operator_approved=false
+controlled_connect_enablement_future_phase_permitted=false
+controlled_audio_connect_execution_allowed=false
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+default remains no-connect
+physical connect not performed
+```
+
+If implementation is completed, keep the next handoff as a no-physical-connect follow-up unless the user gives a new explicit physical-proof instruction:
+
+```text
+2.48R — first controlled audio-connect activation implementation review, no physical connect
 ```
 
 ## Required Checks
