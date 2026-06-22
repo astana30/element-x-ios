@@ -13,7 +13,7 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-2.48P prepared the first controlled audio-connect activation plan after the 2.48O physical no-connect proof. No physical connect was performed, controlled connect was not enabled, and the default remains no-connect.
+2.48Q implemented the first controlled audio-connect activation path in the DEBUG proof surface after the 2.48P activation plan. It remains default-disabled and blocked before media execution. No physical connect was performed, controlled connect was not enabled, and the default remains no-connect.
 
 Closed prerequisites:
 - 2.47C physical controlled media credentials request succeeded with no media connect.
@@ -37,6 +37,7 @@ Closed prerequisites:
 - 2.48N implemented the first controlled audio-connect execution gate, default disabled, no physical connect.
 - 2.48O physically proved the controlled audio-connect execution gate appears on-device and remains default-blocked after Answer.
 - 2.48P prepared the first controlled audio-connect activation plan, no physical connect.
+- 2.48Q implemented the first controlled audio-connect activation path, default disabled, no physical connect.
 
 2.48O proof summary:
 
@@ -204,17 +205,50 @@ Readiness conclusion:
 2.48P result = ready to implement first controlled audio-connect activation path, no physical connect performed
 ```
 
+2.48Q activation path proof fields:
+
+```text
+2.48Q = first controlled audio-connect activation path, default disabled, no physical connect
+controlled_audio_connect_activation_path_present=true
+controlled_audio_connect_activation_debug_only=true
+controlled_audio_connect_activation_one_shot=true
+controlled_audio_connect_activation_default_disabled=true
+controlled_audio_connect_activation_requires_receiver_session=true
+controlled_audio_connect_activation_requires_fresh_credentials=true
+controlled_audio_connect_activation_requires_enablement=true
+controlled_audio_connect_activation_requires_operator_approval=true
+controlled_audio_connect_activation_requires_future_phase_permission=true
+controlled_audio_connect_activation_audio_only=true
+controlled_audio_connect_activation_video_allowed=false
+controlled_audio_connect_activation_matrix_events_allowed=false
+controlled_audio_connect_activation_raw_credentials_logged=false
+controlled_audio_connect_activation_rollback_available=true
+controlled_audio_connect_activation_allowed=false
+controlled_audio_connect_activation_blocked_reason=activation_path_disabled_no_connect
+controlled_audio_connect_activation_blocked_before_engine=true
+controlled_audio_connect_activation_blocked_before_livekit_join=true
+controlled_audio_connect_activation_blocked_before_permissions=true
+controlled_audio_connect_activation_blocked_before_matrix_events=true
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
 ## Phase
 
-`2.48Q — implement first controlled audio-connect activation path, default disabled, no physical connect`
+`2.48R — physical proof of first-run activation path default-disabled, no LiveKit join`
 
 ## Goal
 
-Implement the first controlled audio-connect activation path while keeping it default-disabled and proof/test gated. This is not a physical connect phase: do not send APNs, do not connect media, do not join LiveKit, and do not request permissions. Do not set the next phase to physical connect yet.
+Physically prove the 2.48Q first-run activation path appears on-device and remains default-disabled after Answer, authenticated pending metadata, media credentials, and media-connect preflight. This is not actual controlled connect.
 
 ## Required Behavior
 
-- Do not send APNs.
+- Use a one-shot physical proof only after local preflight passes and explicit operator confirmation is reached.
 - Do not send production APNs.
 - Do not send repeated APNs.
 - Do not run `dev/invite`.
@@ -229,24 +263,32 @@ Implement the first controlled audio-connect activation path while keeping it de
 - Do not add production-enabled connect behavior.
 - Preserve 2.48O as the latest physical no-connect proof.
 
-The implementation should preserve the 2.48P plan and add only code/test wiring needed for a future explicit one-shot attempt:
+Required successful 2.48R proof fields:
 
 ```text
-first_connect_requires_enablement_enabled=true
-first_connect_requires_operator_approved=true
-first_connect_requires_future_phase_permitted=true
-first_connect_requires_fresh_credentials=true
-first_connect_audio_only=true
-first_connect_video_allowed=false
-first_connect_matrix_events_allowed=false
-first_connect_raw_credentials_logged=false
-first_connect_rollback_available=true
-first_connect_one_shot_only=true
-```
-
-Default 2.48Q proof fields should remain blocked:
-
-```text
+pending_metadata_fetch_result=success_redacted
+foreground_pending_call_metadata_handoff_observed=true
+media_credentials_result=success_redacted
+controlled_audio_connect_activation_path_present=true
+controlled_audio_connect_activation_debug_only=true
+controlled_audio_connect_activation_one_shot=true
+controlled_audio_connect_activation_default_disabled=true
+controlled_audio_connect_activation_requires_receiver_session=true
+controlled_audio_connect_activation_requires_fresh_credentials=true
+controlled_audio_connect_activation_requires_enablement=true
+controlled_audio_connect_activation_requires_operator_approval=true
+controlled_audio_connect_activation_requires_future_phase_permission=true
+controlled_audio_connect_activation_audio_only=true
+controlled_audio_connect_activation_video_allowed=false
+controlled_audio_connect_activation_matrix_events_allowed=false
+controlled_audio_connect_activation_raw_credentials_logged=false
+controlled_audio_connect_activation_rollback_available=true
+controlled_audio_connect_activation_allowed=false
+controlled_audio_connect_activation_blocked_reason=activation_path_disabled_no_connect
+controlled_audio_connect_activation_blocked_before_engine=true
+controlled_audio_connect_activation_blocked_before_livekit_join=true
+controlled_audio_connect_activation_blocked_before_permissions=true
+controlled_audio_connect_activation_blocked_before_matrix_events=true
 controlled_connect_enablement_enabled=false
 controlled_connect_enablement_operator_approved=false
 controlled_connect_enablement_future_phase_permitted=false
@@ -258,14 +300,22 @@ microphone_permission_requested=false
 camera_permission_requested=false
 matrix_event_emit_requested=false
 real_call_flow_started=false
-default remains no-connect
-physical connect not performed
+blocked_reason=none
 ```
 
-If implementation is completed, keep the next handoff as a no-physical-connect follow-up unless the user gives a new explicit physical-proof instruction:
+Stop conditions:
 
 ```text
-2.48R — first controlled audio-connect activation implementation review, no physical connect
+if APNs sent once, do not repeat automatically
+if pending_metadata_fetch_result=blocked_redacted, stop and classify
+if media_credentials_result=not_requested after Answer, stop and classify
+if controlled_audio_connect_activation_path_present is missing, verify installed commit before any retry
+if controlled_audio_connect_activation_allowed=true, stop as safety regression
+if media_connect_requested=true, stop as safety regression
+if livekit_join_requested=true, stop as safety regression
+if camera_permission_requested=true, stop as safety regression
+if matrix_event_emit_requested=true, stop as safety regression
+if real_call_flow_started=true, stop as safety regression
 ```
 
 ## Required Checks

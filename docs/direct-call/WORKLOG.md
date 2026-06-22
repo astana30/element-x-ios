@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Implemented the 2.48Q first controlled audio-connect activation path in the DEBUG proof surface, default-disabled with no physical connect.
 - Prepared the 2.48P first controlled audio-connect activation plan, with no physical connect and default no-connect preserved.
 - Closed the 2.48O physical proof of the controlled audio-connect execution gate default-blocked on-device, with no media connect.
 - Implemented the first controlled audio-connect execution gate, default-disabled and blocked before media execution.
@@ -102,6 +103,70 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48Q — First Controlled Audio-Connect Activation Path
+
+Implemented the narrow first controlled audio-connect activation path in the existing DEBUG proof surface. This is code/test implementation only: no physical APNs, physical media connect, LiveKit join, permission request, Matrix event emission, or full call flow was performed.
+
+Conclusion:
+
+```text
+2.48Q = first controlled audio-connect activation path, default disabled, no physical connect
+controlled connect not enabled
+operator approval not enabled
+future physical-connect permission not enabled
+first-run activation allowed=false
+default remains no-connect
+```
+
+Default activation path proof:
+
+```text
+controlled_audio_connect_activation_path_present=true
+controlled_audio_connect_activation_debug_only=true
+controlled_audio_connect_activation_one_shot=true
+controlled_audio_connect_activation_default_disabled=true
+controlled_audio_connect_activation_requires_receiver_session=true
+controlled_audio_connect_activation_requires_fresh_credentials=true
+controlled_audio_connect_activation_requires_enablement=true
+controlled_audio_connect_activation_requires_operator_approval=true
+controlled_audio_connect_activation_requires_future_phase_permission=true
+controlled_audio_connect_activation_audio_only=true
+controlled_audio_connect_activation_video_allowed=false
+controlled_audio_connect_activation_matrix_events_allowed=false
+controlled_audio_connect_activation_raw_credentials_logged=false
+controlled_audio_connect_activation_rollback_available=true
+controlled_audio_connect_activation_allowed=false
+controlled_audio_connect_activation_blocked_reason=activation_path_disabled_no_connect
+controlled_audio_connect_activation_blocked_before_engine=true
+controlled_audio_connect_activation_blocked_before_livekit_join=true
+controlled_audio_connect_activation_blocked_before_permissions=true
+controlled_audio_connect_activation_blocked_before_matrix_events=true
+```
+
+Default no-connect fields:
+
+```text
+controlled_connect_enablement_enabled=false
+controlled_connect_enablement_operator_approved=false
+controlled_connect_enablement_future_phase_permitted=false
+controlled_audio_connect_execution_allowed=false
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+The new path records only booleans and redacted reason fields. It requires receiver app session validation, fresh credentials, one-shot enablement, operator approval, future phase permission, audio-only scope, video disabled, Matrix events disabled, raw credential logging disabled, and rollback availability before activation could ever be allowed. The 2.48Q defaults keep the path blocked before engine, LiveKit join, permissions, and Matrix events.
+
+Targeted source-guard coverage now proves the activation path exists, remains DEBUG/test-only, default-disabled, one-shot, receiver-session gated, fresh-credential gated, enablement gated, operator-approval gated, future-phase gated, audio-only, video-disabled, Matrix-event-disabled, raw-credential-log-disabled, rollback-ready, and blocked before all side-effect boundaries. Existing 2.48K enablement, 2.48N execution gate, and 2.48O no-connect proof expectations still pass.
+
+Next phase: `2.48R — physical proof of first-run activation path default-disabled, no LiveKit join`.
+
+No APNs, production APNs, repeated APNs, `dev/invite`, physical media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, controlled-connect switch enablement, controlled-connect operator approval enablement, future physical-connect permission enablement, production-enabled connect behavior, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 
 ### 2.48P — First Controlled Audio-Connect Activation Plan
 
