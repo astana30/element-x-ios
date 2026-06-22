@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Classified the 2.48L physical enablement proof as incomplete on pending metadata `401 M_UNKNOWN_TOKEN`; no repeat APNs was performed.
 - Implemented explicit one-shot controlled-connect enablement with default off and no media execution.
 - Documented the controlled-connect enablement implementation plan for 2.48K while preserving default no-connect.
 - Closed the 2.48I one-shot Answer-path retry as a successful physical no-connect proof.
@@ -94,6 +95,106 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48L-Metadata401 — Pending Metadata Auth Failure Classification
+
+Classified the 2.48L physical enablement default-off proof attempt as incomplete. This was a diagnostic/checkpoint phase only: no APNs retry, no media connect, no LiveKit join, and no app/session repair was performed.
+
+Conclusion:
+
+```text
+2.48L physical attempt = incomplete
+APNs sent once
+PushKit received
+CallKit Answer reached
+2.48K enablement fields present/default-off
+pending metadata fetch failed with 401 M_UNKNOWN_TOKEN
+credentials not requested
+media-connect preflight not requested
+2.48L not closed
+no repeat APNs performed
+```
+
+The one-shot real non-dev invite/APNs had already succeeded:
+
+```text
+invite_http_code=200
+background_apns_push_result=sandbox_success
+APNs_sent=true
+```
+
+The phase-specific proof copy was:
+
+```text
+/tmp/salemx-voip-push-receipt-proof-2.48l-polled.txt
+proof_generation=generation_7
+```
+
+The physical path reached PushKit and CallKit Answer:
+
+```text
+physical_voip_push_received=true
+pushkit_callback_invoked=true
+pushkit_payload_kind=real_invite_controlled
+callkit_first_action_kind=answer
+callkit_answer_action_received=true
+callkit_answer_action_fulfilled=true
+```
+
+2.48K enablement wiring was present on-device and default-off:
+
+```text
+controlled_connect_enablement_wiring_present=true
+controlled_connect_enablement_default_off=true
+controlled_connect_enablement_execution_allowed=false
+controlled_connect_enablement_blocked_reason=enablement_disabled_no_connect
+```
+
+Failure point:
+
+```text
+pending_metadata_fetch_requested=true
+pending_metadata_fetch_authorized=true
+pending_metadata_fetch_result=blocked_redacted
+pending_metadata_fetch_http_status_bucket=401
+pending_metadata_fetch_errcode=M_UNKNOWN_TOKEN
+pending_metadata_fetch_failure_reason=auth_rejected
+blocked_reason=pending_metadata_fetch_http_failure_redacted
+```
+
+Because the authenticated pending metadata fetch failed, the app did not obtain the foreground pending metadata and did not request credentials:
+
+```text
+foreground_pending_call_metadata_handoff_observed=false
+media_credentials_requested=false
+media_connect_preflight_requested=false
+```
+
+Likely cause:
+
+```text
+likely_iPhone_app_matrix_session_invalid_or_stale=true
+terminal_invite_tokens_are_not_sufficient_for_iPhone_pending_metadata_fetch=true
+receiver_app_session_must_be_valid_before_retry=true
+```
+
+The relevant code path confirms the boundary: terminal Token A/B can validate and send the invite, but the iPhone app performs pending metadata fetch through its own stored/authenticated Matrix session. Only a successful pending metadata fetch records foreground handoff and then starts the controlled media credentials no-connect request.
+
+Safety boundary remained intact:
+
+```text
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+Next phase: `2.48L-SessionRepair — refresh/validate iPhone app Matrix session before any APNs retry, no APNs`.
+
+No repeated APNs, production APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, controlled-connect switch enablement, controlled-connect operator approval enablement, future physical-connect permission enablement, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 
 ### 2.48K — Explicit One-Shot Controlled-Connect Enablement
 

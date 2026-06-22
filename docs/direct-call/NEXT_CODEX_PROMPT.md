@@ -13,7 +13,7 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-2.48K implemented explicit one-shot controlled-connect enablement mechanics with the default still off. Physical connect was not performed, controlled connect was not enabled by default, operator approval was not enabled by default, future physical-connect permission remains false, and the default remains no-connect.
+2.48L-Metadata401 classified the physical enablement default-off proof attempt as incomplete. APNs was already sent once and succeeded; PushKit and CallKit Answer reached; 2.48K enablement fields were present/default-off; pending metadata fetch failed with `401 M_UNKNOWN_TOKEN`; credentials and media-connect preflight were not requested. No repeat APNs was performed.
 
 Closed prerequisites:
 - 2.47C physical controlled media credentials request succeeded with no media connect.
@@ -31,42 +31,54 @@ Closed prerequisites:
 - 2.48I-Retry physically closed the disabled activation proof on the one-shot retry with Answer, credentials, preflight guard, and no media connect.
 - 2.48J documented the narrow enablement implementation plan.
 - 2.48K implemented the DEBUG-only one-shot enablement proof mechanics and tests while preserving default no-connect.
+- 2.48L-Metadata401 classified the failed pending metadata auth boundary after the one-shot physical attempt; 2.48L is not closed.
 
-2.48K conclusion:
+2.48L-Metadata401 conclusion:
 
 ```text
-2.48K = explicit one-shot controlled-connect enablement, default off
-physical connect not performed
-controlled connect not enabled by default
-operator approval not enabled by default
-future physical-connect permission remains false
-default remains no-connect
+2.48L physical attempt = incomplete
+APNs sent once
+PushKit received
+CallKit Answer reached
+2.48K enablement fields present/default-off
+pending metadata fetch failed with 401 M_UNKNOWN_TOKEN
+credentials not requested
+media-connect preflight not requested
+2.48L not closed
+no repeat APNs performed
 ```
 
-New default proof fields:
+One-shot invite/APNs result:
 
 ```text
+invite_http_code=200
+background_apns_push_result=sandbox_success
+APNs_sent=true
+```
+
+Physical proof classification:
+
+```text
+proof_generation=generation_7
+physical_voip_push_received=true
+pushkit_callback_invoked=true
+pushkit_payload_kind=real_invite_controlled
+callkit_first_action_kind=answer
+callkit_answer_action_received=true
+callkit_answer_action_fulfilled=true
 controlled_connect_enablement_wiring_present=true
-controlled_connect_enablement_debug_only=true
 controlled_connect_enablement_default_off=true
-controlled_connect_enablement_operator_approval_required=true
-controlled_connect_enablement_one_shot=true
-controlled_connect_enablement_fresh_credentials_required=true
-controlled_connect_enablement_audio_only=true
-controlled_connect_enablement_video_allowed=false
-controlled_connect_enablement_matrix_events_allowed=false
-controlled_connect_enablement_raw_credentials_logged=false
-controlled_connect_enablement_rollback_available=true
-controlled_connect_enablement_enabled=false
-controlled_connect_enablement_operator_approved=false
-controlled_connect_enablement_future_phase_permitted=false
 controlled_connect_enablement_execution_allowed=false
 controlled_connect_enablement_blocked_reason=enablement_disabled_no_connect
-```
-
-Hard safety fields must remain false:
-
-```text
+pending_metadata_fetch_requested=true
+pending_metadata_fetch_authorized=true
+pending_metadata_fetch_result=blocked_redacted
+pending_metadata_fetch_http_status_bucket=401
+pending_metadata_fetch_errcode=M_UNKNOWN_TOKEN
+pending_metadata_fetch_failure_reason=auth_rejected
+foreground_pending_call_metadata_handoff_observed=false
+media_credentials_requested=false
+media_connect_preflight_requested=false
 media_connect_requested=false
 media_connect_attempted=false
 livekit_join_requested=false
@@ -74,66 +86,52 @@ microphone_permission_requested=false
 camera_permission_requested=false
 matrix_event_emit_requested=false
 real_call_flow_started=false
+blocked_reason=pending_metadata_fetch_http_failure_redacted
+```
+
+Likely cause:
+
+```text
+likely_iPhone_app_matrix_session_invalid_or_stale=true
+terminal_invite_tokens_are_not_sufficient_for_iPhone_pending_metadata_fetch=true
+receiver_app_session_must_be_valid_before_retry=true
 ```
 
 ## Phase
 
-`2.48L — physical proof of enablement default-off, no LiveKit join`
+`2.48L-SessionRepair — refresh/validate iPhone app Matrix session before any APNs retry, no APNs`
 
 ## Goal
 
-Plan and run only the next supervised physical proof that the 2.48K enablement wiring is present on-device and still default-off. This is not actual controlled connect. The proof must stop before media engine invocation, LiveKit join, microphone/camera permission, Matrix event emission, and full direct-call flow.
+Refresh or validate the iPhone app's stored/authenticated Matrix session before any future APNs retry. This is a no-APNs diagnostic/session-repair phase only.
 
 ## Required Behavior
 
-- Use the existing one-shot physical proof discipline from the 2.48I-Retry success.
-- Prove the new 2.48K enablement fields are present on-device.
-- Prove enablement remains off by default.
-- Prove operator approval remains false by default.
-- Prove future physical-connect permission remains false.
-- Prove execution remains false and blocked with `enablement_disabled_no_connect`.
-- Prove the existing media-connect preflight still stops before engine invocation.
-- Do not perform actual controlled connect.
-- Do not enable controlled connect by default.
-- Do not enable operator approval by default.
-- Do not add production-enabled connect behavior.
+- Do not send APNs in this phase.
+- Do not run a retry invite.
+- Validate that the freshly installed iPhone app is logged in as the expected receiver account and has a valid authenticated Matrix session before any future physical retry is planned.
+- If local app state is stale, refresh the receiver app session through normal app login/session repair only; do not work around it by using terminal tokens inside the app proof path.
+- Keep the distinction explicit: terminal invite tokens can send the real non-dev invite, but the iPhone app's own stored session performs pending metadata fetch.
+- Do not mark 2.48L closed.
+- Do not set the next phase to a retry until receiver app session validity is proven.
 
-Required success fields:
+Required session-repair conclusion fields:
 
 ```text
-controlled_connect_enablement_wiring_present=true
-controlled_connect_enablement_debug_only=true
-controlled_connect_enablement_default_off=true
-controlled_connect_enablement_operator_approval_required=true
-controlled_connect_enablement_one_shot=true
-controlled_connect_enablement_fresh_credentials_required=true
-controlled_connect_enablement_audio_only=true
-controlled_connect_enablement_video_allowed=false
-controlled_connect_enablement_matrix_events_allowed=false
-controlled_connect_enablement_raw_credentials_logged=false
-controlled_connect_enablement_rollback_available=true
-controlled_connect_enablement_enabled=false
-controlled_connect_enablement_operator_approved=false
-controlled_connect_enablement_future_phase_permitted=false
-controlled_connect_enablement_execution_allowed=false
-controlled_connect_enablement_blocked_reason=enablement_disabled_no_connect
-media_connect_engine_invoked=false
-livekit_connect_audio_invoked=false
-media_connect_requested=false
-media_connect_attempted=false
-livekit_join_requested=false
-microphone_permission_requested=false
-camera_permission_requested=false
-matrix_event_emit_requested=false
-real_call_flow_started=false
+2.48L-SessionRepair = complete
+receiver_app_session_validated=true
+receiver_app_session_matches_expected_hash=true
+pending_metadata_retry_precondition_app_session_valid=true
+APNs_sent=false
+retry_not_performed=true
+next_phase_after_sessionrepair=not_selected_until_explicit_operator_approval
 ```
 
-## Required Tests Before Any Physical Proof
+## Required Checks
 
-Run the targeted DirectCall checks from the latest 2.48K commit before installing/running any app proof:
+Run docs/checkpoint checks only unless code changes become necessary:
 
 ```bash
-DIRECT_CALL_ONLY_TESTING='UnitTests/DirectCallEngineTests UnitTests/NativeIncomingCallLifecycleContractTests' Tools/Scripts/verify_direct_call_unit.sh
 git diff --check
 git diff --cached --check
 ```
@@ -145,7 +143,7 @@ git diff --name-only | grep -E 'SalemX.xcodeproj/project.pbxproj|app.yml|\.entit
 git diff --cached --name-only | grep -E 'SalemX.xcodeproj/project.pbxproj|app.yml|\.entitlements|Info.plist' && exit 1 || true
 ```
 
-Run a privacy scan over changed files/diff for raw:
+Run a privacy scan over changed docs/diff for raw:
 
 ```text
 token
@@ -161,11 +159,11 @@ userID
 deviceID
 ```
 
-Allowed safe hits are field names, redacted labels, negative statements, and synthetic test values only.
+Allowed safe hits are field names, redacted labels, negative statements, and existing stable receiver/sender hashes only.
 
 ## Hard Constraints
 
-- Do not send APNs unless a future 2.48L prompt provides local-only inputs, preflight passes, and an explicit one-shot confirmation is reached.
+- Do not send APNs in 2.48L-SessionRepair.
 - Do not send production APNs.
 - Do not send repeated APNs.
 - Do not use `dev/invite`.

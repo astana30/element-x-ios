@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48K — explicit one-shot controlled-connect enablement is implemented with default off. Physical connect has not been performed, future connect permission remains false, and the default remains no-connect.
+After 2.48L-Metadata401 — the physical enablement proof attempt is classified as incomplete. APNs was sent once and PushKit/CallKit Answer reached, but the iPhone app's authenticated pending metadata fetch returned `401 M_UNKNOWN_TOKEN`, so credentials and media-connect preflight were not requested. The next phase is a no-APNs iPhone app Matrix session repair/validation checkpoint.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,31 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48L-Metadata401 classified the pending metadata auth failure without retrying APNs:
+  - `2.48L physical attempt = incomplete`.
+  - The one-shot real non-dev invite/APNs had already succeeded once with `invite_http_code=200`, `background_apns_push_result=sandbox_success`, and `APNs_sent=true`; no repeat APNs was performed during classification.
+  - The copied proof `/tmp/salemx-voip-push-receipt-proof-2.48l-polled.txt` recorded `proof_generation=generation_7`.
+  - PushKit and CallKit reached the expected controlled path: `physical_voip_push_received=true`, `pushkit_callback_invoked=true`, `pushkit_payload_kind=real_invite_controlled`, `callkit_first_action_kind=answer`, `callkit_answer_action_received=true`, and `callkit_answer_action_fulfilled=true`.
+  - 2.48K enablement fields were present on-device and default-off, including `controlled_connect_enablement_wiring_present=true`, `controlled_connect_enablement_default_off=true`, `controlled_connect_enablement_execution_allowed=false`, and `controlled_connect_enablement_blocked_reason=enablement_disabled_no_connect`.
+  - Failure point:
+    ```text
+    pending_metadata_fetch_result=blocked_redacted
+    pending_metadata_fetch_http_status_bucket=401
+    pending_metadata_fetch_errcode=M_UNKNOWN_TOKEN
+    pending_metadata_fetch_failure_reason=auth_rejected
+    blocked_reason=pending_metadata_fetch_http_failure_redacted
+    ```
+  - Because pending metadata fetch failed, `foreground_pending_call_metadata_handoff_observed=false`, `media_credentials_requested=false`, and `media_connect_preflight_requested=false`; 2.48L is not closed.
+  - Investigation conclusion:
+    ```text
+    likely_iPhone_app_matrix_session_invalid_or_stale=true
+    terminal_invite_tokens_are_not_sufficient_for_iPhone_pending_metadata_fetch=true
+    receiver_app_session_must_be_valid_before_retry=true
+    ```
+  - The distinction is important: terminal Token A/B were valid enough to send the invite, but pending metadata fetch is performed by the iPhone app using its own stored/authenticated Matrix session. A successful pending metadata fetch is the code path that records foreground handoff and then requests controlled media credentials; the `401 M_UNKNOWN_TOKEN` prevented that handoff.
+  - Safety boundary remained intact: `media_connect_requested=false`, `media_connect_attempted=false`, `livekit_join_requested=false`, `microphone_permission_requested=false`, `camera_permission_requested=false`, `matrix_event_emit_requested=false`, and `real_call_flow_started=false`.
+  - Next phase: `2.48L-SessionRepair — refresh/validate iPhone app Matrix session before any APNs retry, no APNs`.
+  - No repeated APNs, production APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, controlled-connect switch enablement, controlled-connect operator approval enablement, future physical-connect permission enablement, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced by this classification checkpoint.
 - 2.48K explicit one-shot controlled-connect enablement is implemented:
   - `2.48K = explicit one-shot controlled-connect enablement, default off`.
   - Added a DEBUG-only enablement configuration/proof layer beside the existing controlled-connect switch and activation proof surface in `NativeIncomingSyntheticCallKitUIProofAdapter.swift`.
