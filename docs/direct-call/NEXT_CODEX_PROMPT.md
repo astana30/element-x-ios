@@ -13,71 +13,68 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48T-RealBridge — real controlled audio-connect bridge, default disabled, no APNs` is complete.
+`2.48T-Physical4-MissedSurface — APNs delivered to PushKit, no CallKit answer surface/action, no connect` is complete.
 
-The app now has a DEBUG/test-controlled real audio-connect bridge from authenticated pending metadata and media credentials into the controlled audio-connect gate. The bridge can reach the fake/test media engine only in unit tests, and the non-test runtime boundary can reach `DirectCallEngine.acceptCall`, `connectMediaIfReady`, `LiveKitDirectCallMediaEngine.connectAudio`, and the LiveKit audio connect boundary only when every gate is explicitly true. Runtime defaults remain no-connect.
+This was a missed/no-answer/no-surface triage, not a first controlled audio-connect proof close.
 
-Default real-bridge proof fields:
+APNs/send result:
 
 ```text
-controlled_connect_real_bridge_present=true
-controlled_connect_real_bridge_debug_only=true
-controlled_connect_real_bridge_default_disabled=true
-controlled_connect_real_bridge_requires_credentials=true
-controlled_connect_real_bridge_requires_enablement=true
-controlled_connect_real_bridge_requires_operator_approval=true
-controlled_connect_real_bridge_requires_future_phase_permission=true
-controlled_connect_real_bridge_audio_only=true
-controlled_connect_real_bridge_video_allowed=false
-controlled_connect_real_bridge_matrix_events_allowed=false
-controlled_connect_real_bridge_raw_credentials_logged=false
-controlled_connect_real_bridge_one_shot=true
-controlled_connect_real_bridge_allowed=false
-controlled_connect_real_bridge_blocked_reason=default_disabled_no_connect
-controlled_connect_real_bridge_blocked_before_connect_media=true
-controlled_connect_real_bridge_can_call_connect_media_when_all_gates_true=true
-controlled_connect_real_bridge_can_call_livekit_audio_when_all_gates_true=true
-controlled_connect_real_bridge_uses_fake_engine_in_tests_only=true
-controlled_connect_real_bridge_uses_real_runtime_boundary_when_not_test=true
-controlled_connect_real_runtime_path_present=true
-controlled_connect_real_runtime_path_debug_only=true
-controlled_connect_real_runtime_path_default_disabled=true
-controlled_connect_real_runtime_path_requires_credentials=true
-controlled_connect_real_runtime_path_requires_enablement=true
-controlled_connect_real_runtime_path_requires_operator_approval=true
-controlled_connect_real_runtime_path_requires_future_phase_permission=true
-controlled_connect_real_runtime_path_audio_only=true
-controlled_connect_real_runtime_path_video_allowed=false
-controlled_connect_real_runtime_path_matrix_events_allowed=false
-controlled_connect_real_runtime_path_raw_credentials_logged=false
-controlled_connect_real_runtime_path_one_shot=true
-controlled_connect_real_runtime_path_allowed=false
-controlled_connect_real_runtime_path_blocked_reason=default_disabled_no_connect
-controlled_connect_real_runtime_path_blocked_before_engine=true
-controlled_connect_real_runtime_path_can_call_connect_media_when_all_gates_true=true
-controlled_connect_real_runtime_path_can_call_livekit_audio_when_all_gates_true=true
+invite_send_attempted=true
+invite_http_code=200
+real_non_dev_invite_used=True
+dev_invite_used=False
+background_apns_push_requested=True
+background_apns_push_result=sandbox_success
+APNs_sent=true
+blocked_reason=none
 ```
 
-Default first-attempt proof fields:
+Physical proof path:
 
 ```text
-controlled_connect_first_attempt_requested=false
-controlled_connect_first_attempt_allowed=false
-controlled_connect_first_attempt_started=false
-controlled_connect_first_attempt_completed=false
-controlled_connect_first_attempt_repeated=false
-controlled_connect_first_attempt_result=not_requested
-controlled_connect_first_attempt_error_bucket=none
-controlled_connect_first_attempt_audio_only=true
-controlled_connect_first_attempt_video_allowed=false
-controlled_connect_first_attempt_matrix_events_allowed=false
-controlled_connect_first_attempt_raw_credentials_logged=false
-controlled_connect_first_attempt_blocked_reason=default_disabled_no_connect
+/tmp/salemx-voip-push-receipt-proof-2.48t-physical4-polled.txt
 ```
 
-Runtime default remains:
+Physical proof classification:
 
 ```text
+proof_generation=generation_3
+proof_last_updated_by=voip_push_callback
+physical_voip_push_received=true
+pushkit_callback_invoked=true
+pushkit_payload_kind=real_invite_controlled
+callkit_report_requested=true
+callkit_report_result=pending
+callkit_report_completion_observed=false
+pushkit_completion_called=false
+callkit_first_action_kind=none
+callkit_answer_action_received=false
+```
+
+Required conclusion:
+
+```text
+2.48T-Physical4 = APNs sent once and PushKit received, but first controlled audio-connect did not complete.
+Reason: CallKit report remained pending, report completion was not observed, PushKit completion was not called, and no CallKit Answer action was received.
+No pending metadata fetch.
+No media credentials request.
+No media connect.
+No LiveKit join.
+No microphone permission.
+No camera permission.
+No Matrix event emit.
+No full call flow.
+No retry performed.
+```
+
+Safety fields:
+
+```text
+pending_metadata_fetch_requested=false
+pending_metadata_fetch_result=not_requested
+media_credentials_requested=false
+media_credentials_result=not_requested
 media_connect_requested=false
 media_connect_attempted=false
 livekit_join_requested=false
@@ -86,253 +83,73 @@ microphone_permission_requested=false
 camera_permission_requested=false
 matrix_event_emit_requested=false
 real_call_flow_started=false
-```
-
-The all-gates-true proof can reach the fake/test media engine only in tests, and the non-test runtime bridge can reach the real connect-media boundary:
-
-```text
-controlled_connect_real_bridge_allowed=true
-controlled_connect_real_bridge_blocked_reason=none
-controlled_connect_real_bridge_blocked_before_connect_media=false
-controlled_connect_first_attempt_requested=true
-controlled_connect_first_attempt_allowed=true
-controlled_connect_first_attempt_started=true
-controlled_connect_first_attempt_completed=true
-controlled_connect_first_attempt_repeated=false
-controlled_connect_first_attempt_result=success_redacted
-controlled_connect_first_attempt_error_bucket=none
-media_connect_requested=true
-media_connect_attempted=true
-livekit_join_requested=true
-livekit_connect_audio_invoked=true
-```
-
-No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, real device LiveKit join, microphone/camera permission request on device, Matrix event emit, or full call flow was performed in 2.48T-RealBridge.
-
-## Phase
-
-`2.48T-Physical4 — one-shot first controlled audio-connect physical attempt`
-
-## Required Setup
-
-Build, install, and launch the current HEAD Debug app on `iPhone PRO` before APNs. Do not use a stale installed app.
-
-Before APNs, validate receiver app session:
-
-```text
-iphone_app_matrix_session_present=true
-iphone_app_matrix_session_whoami_result=success_redacted
-iphone_app_matrix_session_user_hash=497015f5745c933a
-iphone_app_matrix_session_device_present=true
-iphone_app_pending_metadata_auth_ready=true
-APNs_sent=false
 blocked_reason=none
 ```
 
-Use in-memory or local-only token handling. Do not print token values.
+No repeated APNs, production APNs, `dev/invite`, connect retry, LiveKit join, microphone/camera permission request, Matrix event emission, or full call flow was performed in the close-out.
 
-Expected identity hashes:
+## Phase
 
-```text
-receiver/iPhone user hash = 497015f5745c933a
-sender/caller user hash   = 7d434d7f252427fb
-```
+`2.48T-CallKitSurfaceRepair — fix CallKit report completion/surface before any APNs retry`
 
-## Required Preflight Before APNs
+Do not set the next phase to another physical APNs attempt yet.
 
-Validate:
+## Task
 
-```text
-receiver_token_found=true
-sender_token_found=true
-receiver_user_hash=497015f5745c933a
-sender_user_hash=7d434d7f252427fb
-sender_equals_receiver=false
-receiver_device_present=true
-room_validation_preflight=pass
-local_schema_valid=true
-iphone_app_pending_metadata_auth_ready=true
-safe_to_send_apns=true
-APNs_sent=false
-```
-
-Use the corrected flat-schema invite body only.
-
-Send exactly one real non-dev sandbox APNs only after explicit one-shot confirmation. After `background_apns_push_result=sandbox_success`, do not send another APNs.
-
-## Required Physical Proof
-
-Use a phase-specific proof path:
+Investigate and repair why the physical proof recorded:
 
 ```text
-/tmp/salemx-voip-push-receipt-proof-2.48t-physical4-first-connect-polled.txt
+callkit_report_requested=true
+callkit_report_result=pending
+callkit_report_completion_observed=false
+pushkit_completion_called=false
+callkit_first_action_kind=none
 ```
 
-Do not classify from stale generic proof files.
-
-PushKit / CallKit / metadata / credentials must succeed:
+Target likely area:
 
 ```text
-physical_voip_push_received=true
-pushkit_callback_invoked=true
-pushkit_payload_kind=real_invite_controlled
-callkit_first_action_kind=answer
-callkit_answer_action_delivered=true
-callkit_answer_action_received=true
-callkit_answer_action_fulfilled=true
-pending_metadata_fetch_result=success_redacted
-pending_metadata_fetch_http_status_bucket=2xx
-pending_metadata_fetch_errcode=none
-pending_metadata_fetch_failure_reason=none
-foreground_pending_call_metadata_handoff_observed=true
-media_credentials_request_metadata_available=true
-media_credentials_boundary_reached=true
-media_credentials_requested=true
-media_credentials_request_authorized=true
-media_credentials_result=success_redacted
-media_credentials_token_received=true
-media_credentials_url_received=true
-media_credentials_expires_at_present=true
-media_credentials_payload_redacted=true
+CallKit reportNewIncomingCall completion handling
+provider/delegate retention while device is locked
+PushKit completion timing
+answerable-window handling when app is locked/minimized
+CallKit surface observability
 ```
-
-Controlled runtime gates must explicitly open for this one attempt:
-
-```text
-controlled_connect_real_runtime_path_present=true
-controlled_connect_real_runtime_path_debug_only=true
-controlled_connect_real_runtime_path_default_disabled=true
-controlled_connect_real_runtime_path_requires_credentials=true
-controlled_connect_real_runtime_path_requires_enablement=true
-controlled_connect_real_runtime_path_requires_operator_approval=true
-controlled_connect_real_runtime_path_requires_future_phase_permission=true
-controlled_connect_real_runtime_path_audio_only=true
-controlled_connect_real_runtime_path_video_allowed=false
-controlled_connect_real_runtime_path_matrix_events_allowed=false
-controlled_connect_real_runtime_path_raw_credentials_logged=false
-controlled_connect_real_runtime_path_one_shot=true
-controlled_connect_real_runtime_path_can_call_connect_media_when_all_gates_true=true
-controlled_connect_real_runtime_path_can_call_livekit_audio_when_all_gates_true=true
-controlled_connect_enablement_enabled=true
-controlled_connect_enablement_operator_approved=true
-controlled_connect_enablement_future_phase_permitted=true
-controlled_connect_enablement_execution_allowed=true
-controlled_audio_connect_activation_allowed=true
-controlled_audio_connect_execution_future_phase_permitted=true
-controlled_audio_connect_execution_allowed=true
-controlled_connect_real_runtime_path_allowed=true
-controlled_connect_real_runtime_path_blocked_reason=none
-controlled_connect_real_runtime_path_blocked_before_engine=false
-controlled_connect_real_bridge_present=true
-controlled_connect_real_bridge_debug_only=true
-controlled_connect_real_bridge_default_disabled=true
-controlled_connect_real_bridge_requires_credentials=true
-controlled_connect_real_bridge_requires_enablement=true
-controlled_connect_real_bridge_requires_operator_approval=true
-controlled_connect_real_bridge_requires_future_phase_permission=true
-controlled_connect_real_bridge_audio_only=true
-controlled_connect_real_bridge_video_allowed=false
-controlled_connect_real_bridge_matrix_events_allowed=false
-controlled_connect_real_bridge_raw_credentials_logged=false
-controlled_connect_real_bridge_one_shot=true
-controlled_connect_real_bridge_can_call_connect_media_when_all_gates_true=true
-controlled_connect_real_bridge_can_call_livekit_audio_when_all_gates_true=true
-controlled_connect_real_bridge_uses_fake_engine_in_tests_only=true
-controlled_connect_real_bridge_uses_real_runtime_boundary_when_not_test=true
-controlled_connect_real_bridge_allowed=true
-controlled_connect_real_bridge_blocked_reason=none
-controlled_connect_real_bridge_blocked_before_connect_media=false
-```
-
-First attempt proof:
-
-```text
-controlled_connect_first_attempt_requested=true
-controlled_connect_first_attempt_allowed=true
-controlled_connect_first_attempt_started=true
-controlled_connect_first_attempt_completed=true
-controlled_connect_first_attempt_repeated=false
-controlled_connect_first_attempt_result=<success_or_blocked_redacted>
-controlled_connect_first_attempt_error_bucket=<none_or_redacted_bucket>
-media_connect_requested=true
-media_connect_attempted=true
-livekit_join_requested=true
-livekit_connect_audio_invoked=true
-microphone_permission_requested=<true_if_required_or_false_if_not_required>
-camera_permission_requested=false
-matrix_event_emit_requested=false
-real_call_flow_started=false
-```
-
-Video and Matrix-event gates must remain disabled:
-
-```text
-controlled_connect_first_attempt_audio_only=true
-controlled_connect_first_attempt_video_allowed=false
-controlled_connect_first_attempt_matrix_events_allowed=false
-controlled_connect_first_attempt_raw_credentials_logged=false
-controlled_audio_connect_activation_video_allowed=false
-controlled_connect_enablement_video_allowed=false
-controlled_audio_connect_execution_video_allowed=false
-controlled_audio_connect_activation_matrix_events_allowed=false
-controlled_connect_enablement_matrix_events_allowed=false
-controlled_audio_connect_execution_matrix_events_allowed=false
-```
-
-## Stop Conditions
-
-Stop immediately and do not retry if any of these occur:
-
-```text
-APNs was sent once
-media_connect_attempted=true
-livekit_join_requested=true
-controlled_connect_first_attempt_completed=true
-controlled_connect_first_attempt_result is present
-camera_permission_requested=true
-matrix_event_emit_requested=true
-real_call_flow_started=true
-repeated_apns=true
-controlled_connect_first_attempt_repeated=true
-raw credentials logged=true
-```
-
-Do not retry connect, LiveKit join, or APNs inside this task. Record the first result only.
 
 ## Hard Limits
 
-- Do not use `dev/invite`.
-- Do not send production APNs.
-- Do not send repeated APNs.
-- Do not perform more than one controlled media-connect attempt.
-- Do not enable video.
-- Do not request camera permission.
-- Do not emit Matrix events.
-- Do not start full direct-call flow.
-- Do not retry LiveKit join after first result.
-- Do not retry media connect after first result.
-- Do not log or document raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID.
-- Do not modify `SalemX.xcodeproj/project.pbxproj`, `app.yml`, `.entitlements`, or `Info.plist`.
+Do not:
 
-## Docs Close
+- send APNs
+- run production APNs
+- run repeated APNs
+- run `dev/invite`
+- retry connect
+- join LiveKit
+- request microphone permission
+- request camera permission
+- emit Matrix events
+- start full call flow
+- enable uncontrolled connect behavior
+- modify `SalemX.xcodeproj/project.pbxproj`
+- modify `app.yml`
+- modify `.entitlements`
+- modify `Info.plist`
+- log or document raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer user ID/user ID/device ID
 
-If the first attempt includes a result, update only:
+## Required Work
 
-- `docs/direct-call/STATUS.md`
-- `docs/direct-call/WORKLOG.md`
-- `docs/direct-call/NEXT_CODEX_PROMPT.md`
+- Reproduce the diagnosis from source and existing proof only; do not send APNs.
+- Inspect CallKit report completion handling in the controlled PushKit proof path.
+- Inspect provider/delegate/active-call retention while the device is locked/minimized.
+- Inspect PushKit completion timing and any answerable-window timeout path.
+- Add the smallest safe repair and/or diagnostics needed to make report completion/surface observable before any future APNs retry.
+- Keep runtime defaults no-connect.
+- Keep media credentials, media connect, LiveKit join, microphone/camera permission, Matrix events, and full direct-call flow blocked.
 
-If the first attempt succeeds, set next phase to:
+## Required Checks
 
-`2.48U — first-connect result review and cleanup verification, no repeated connect`
-
-If it fails safely, set next phase to:
-
-`2.48T-ResultTriage — classify first controlled audio-connect result, no retry`
-
-Do not set next phase to repeated connect.
-
-## Required Checks Before Commit
+Run focused tests for the touched CallKit/PushKit proof surface, plus:
 
 ```bash
 git diff --check
@@ -341,4 +158,16 @@ git diff --name-only | grep -E 'SalemX.xcodeproj/project.pbxproj|app.yml|\.entit
 git diff --cached --name-only | grep -E 'SalemX.xcodeproj/project.pbxproj|app.yml|\.entitlements|Info.plist' && exit 1 || true
 ```
 
-Run a privacy scan over changed docs/diff for raw sensitive values. Allowed hits are field names, redacted labels, negative statements, and stable hashes only.
+Privacy scan changed docs/diff for raw sensitive values. Allowed hits are field names, redacted labels, negative statements, and stable hashes only.
+
+## Expected Output
+
+Return:
+
+- repair conclusion
+- commit hash
+- commit message
+- changed files
+- checks run
+- final `git status --short --branch`
+- explicit statement that no APNs, no production APNs, no repeated APNs, no `dev/invite`, no retry connect, no LiveKit join, no microphone/camera permission, no Matrix event emit, and no full call flow were performed

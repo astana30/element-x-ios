@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48T-RealBridge — the one-shot controlled real audio-connect bridge is wired behind DEBUG/test-controlled gates and can reach the real `DirectCallEngine.acceptCall` / `connectMediaIfReady` / `LiveKitDirectCallMediaEngine.connectAudio` boundary when all gates are true. Physical connect was not performed, controlled connect/operator approval/future permission were not enabled by default, and the runtime default remains no-connect. The next phase is `2.48T-Physical4 — one-shot first controlled audio-connect physical attempt`.
+After 2.48T-Physical4-MissedSurface — a single real non-dev sandbox APNs was sent and reached PushKit, but the first controlled audio-connect physical attempt did not complete because CallKit report completion/surface was not observed and no CallKit Answer action was received. No pending metadata fetch, media credentials request, media connect, LiveKit join, microphone/camera permission, Matrix event emission, full call flow, or retry was performed. The next phase is `2.48T-CallKitSurfaceRepair — fix CallKit report completion/surface before any APNs retry`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,64 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48T-Physical4-MissedSurface closes the physical attempt as missed/no-answer/no-surface triage:
+  - A single sandbox APNs was sent through the real non-dev invite path and was not repeated:
+    ```text
+    invite_send_attempted=true
+    invite_http_code=200
+    real_non_dev_invite_used=True
+    dev_invite_used=False
+    background_apns_push_requested=True
+    background_apns_push_result=sandbox_success
+    APNs_sent=true
+    blocked_reason=none
+    ```
+  - The phase-specific physical proof at `/tmp/salemx-voip-push-receipt-proof-2.48t-physical4-polled.txt` showed PushKit receipt but no answer surface/action completion:
+    ```text
+    proof_generation=generation_3
+    proof_last_updated_by=voip_push_callback
+    physical_voip_push_received=true
+    pushkit_callback_invoked=true
+    pushkit_payload_kind=real_invite_controlled
+    callkit_report_requested=true
+    callkit_report_result=pending
+    callkit_report_completion_observed=false
+    pushkit_completion_called=false
+    callkit_first_action_kind=none
+    callkit_answer_action_received=false
+    ```
+  - Required conclusion:
+    ```text
+    2.48T-Physical4 = APNs sent once and PushKit received, but first controlled audio-connect did not complete.
+    Reason: CallKit report remained pending, report completion was not observed, PushKit completion was not called, and no CallKit Answer action was received.
+    No pending metadata fetch.
+    No media credentials request.
+    No media connect.
+    No LiveKit join.
+    No microphone permission.
+    No camera permission.
+    No Matrix event emit.
+    No full call flow.
+    No retry performed.
+    ```
+  - Connect and privacy safety remained closed:
+    ```text
+    pending_metadata_fetch_requested=false
+    pending_metadata_fetch_result=not_requested
+    media_credentials_requested=false
+    media_credentials_result=not_requested
+    media_connect_requested=false
+    media_connect_attempted=false
+    livekit_join_requested=false
+    livekit_connect_audio_invoked=false
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    blocked_reason=none
+    ```
+  - This is not a first controlled audio-connect proof close. Next phase: `2.48T-CallKitSurfaceRepair — fix CallKit report completion/surface before any APNs retry`.
+  - No repeated APNs, production APNs, `dev/invite`, connect retry, LiveKit join, microphone/camera permission request, Matrix event emission, full call flow, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 - 2.48T-RealBridge real controlled audio-connect bridge is wired:
   - This is a code/test implementation phase only; it is not a physical APNs, media-connect, LiveKit join, microphone-permission, camera-permission, Matrix-event, or full-call task.
   - The DEBUG/test-controlled bridge replaces the fake-only proof boundary with a narrow runtime boundary that can call `DirectCallEngine.acceptCall`, which reaches `connectMediaIfReady`, `LiveKitDirectCallMediaEngine.connectAudio`, and the LiveKit audio connect boundary only after every gate is true.

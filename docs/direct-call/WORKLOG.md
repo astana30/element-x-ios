@@ -5727,3 +5727,80 @@ Fix:
 - kept raw response bodies, references, auth headers, room/call/peer/user/device identifiers, tokens, URLs, and payloads out of proof/logs/docs
 
 No APNs was sent. No production APNs, repeated APNs, `dev/invite`, media connect, LiveKit join, microphone/camera permission request, Matrix event emission, full call flow, raw token, auth header, JWT, APNs payload, invite body, user/device/room/call identifier, LiveKit URL/token, private log, or forbidden project/signing file change was introduced.
+
+## 2026-06-22 — 2.48T-Physical4-MissedSurface
+
+Closed the one-shot physical attempt as missed/no-answer/no-surface triage, not as first controlled audio-connect proof close.
+
+APNs/send result:
+
+```text
+invite_send_attempted=true
+invite_http_code=200
+real_non_dev_invite_used=True
+dev_invite_used=False
+background_apns_push_requested=True
+background_apns_push_result=sandbox_success
+APNs_sent=true
+blocked_reason=none
+```
+
+Physical proof path:
+
+```text
+/tmp/salemx-voip-push-receipt-proof-2.48t-physical4-polled.txt
+```
+
+Observed proof:
+
+```text
+proof_generation=generation_3
+proof_last_updated_by=voip_push_callback
+physical_voip_push_received=true
+pushkit_callback_invoked=true
+pushkit_payload_kind=real_invite_controlled
+callkit_report_requested=true
+callkit_report_result=pending
+callkit_report_completion_observed=false
+pushkit_completion_called=false
+callkit_first_action_kind=none
+callkit_answer_action_received=false
+```
+
+Conclusion:
+
+```text
+2.48T-Physical4 = APNs sent once and PushKit received, but first controlled audio-connect did not complete.
+Reason: CallKit report remained pending, report completion was not observed, PushKit completion was not called, and no CallKit Answer action was received.
+No pending metadata fetch.
+No media credentials request.
+No media connect.
+No LiveKit join.
+No microphone permission.
+No camera permission.
+No Matrix event emit.
+No full call flow.
+No retry performed.
+```
+
+Safety remained closed:
+
+```text
+pending_metadata_fetch_requested=false
+pending_metadata_fetch_result=not_requested
+media_credentials_requested=false
+media_credentials_result=not_requested
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+livekit_connect_audio_invoked=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+blocked_reason=none
+```
+
+Next phase: `2.48T-CallKitSurfaceRepair — fix CallKit report completion/surface before any APNs retry`.
+
+No repeated APNs, production APNs, `dev/invite`, connect retry, LiveKit join, microphone/camera permission request, Matrix event emission, full call flow, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, or forbidden project/signing file change was introduced.
