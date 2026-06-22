@@ -6,6 +6,10 @@ Repo:
 Branch:
 `salemx-2.47a-controlled-media-credentials-boundary`
 
+Latest implementation commit:
+`1cac40bffc472b68f44a284e0383ac35b6265d3e`
+`Add 2.48Q activation path`
+
 Expected intentionally untracked file:
 `docs/direct-call/REPEAT_CALL_FASTPATH_DIAGNOSTICS.md`
 
@@ -13,47 +17,30 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-2.48Q implemented the first controlled audio-connect activation path in the DEBUG proof surface after the 2.48P activation plan. It remains default-disabled and blocked before media execution. No physical connect was performed, controlled connect was not enabled, and the default remains no-connect.
+2.48R physically proved the 2.48Q first-run controlled audio-connect activation path on-device after one corrected flat-schema sandbox APNs, PushKit receipt, CallKit Answer, authenticated pending metadata, media credentials, and media-connect preflight.
 
-Closed prerequisites:
-- 2.47C physical controlled media credentials request succeeded with no media connect.
-- 2.47D physical credentials cleanup / expiry proof succeeded.
-- 2.47E server-side allocation/token expiry verification succeeded without LiveKit join.
-- 2.48A documented the future media-connect seam.
-- 2.48B implemented the controlled media-connect preflight guard.
-- 2.48C proved the guard physically after real invite/APNs/PushKit/CallKit Answer.
-- 2.48D reviewed the server/client readiness gates and concluded controlled connect was not yet approved.
-- 2.48E added the disabled DEBUG-only switch/proof gates and kept execution blocked.
-- 2.48F physically proved the disabled switch on-device after real non-dev invite/APNs/PushKit/CallKit Answer and controlled credentials success, with no media connect or LiveKit join.
-- 2.48G documented the activation checklist, rollback plan, future first controlled-connect proof fields, and hard-stop fields without physical connect or code changes.
-- 2.48H added the DEBUG-only activation configuration wrapper, default-disabled proof fields, rollback proof support, and targeted source-guard tests without physical connect.
-- 2.48H-QA fixed stale source-guard expectations only and passed the broader selected DirectCall command across `DirectCallEngineTests` and `NativeIncomingCallLifecycleContractTests`.
-- 2.48I-Retry physically closed the disabled activation proof on the one-shot retry with Answer, credentials, preflight guard, and no media connect.
-- 2.48J documented the narrow enablement implementation plan.
-- 2.48K implemented the DEBUG-only one-shot enablement proof mechanics and tests while preserving default no-connect.
-- 2.48L-SessionRepair validated the iPhone app Matrix session before any retry; no APNs was sent.
-- 2.48L-Retry2 physically closed the post-session-repair proof with credentials success and no media connect.
-- 2.48M completed the first-run readiness gate and found no blocker for the next no-physical-connect implementation phase.
-- 2.48N implemented the first controlled audio-connect execution gate, default disabled, no physical connect.
-- 2.48O physically proved the controlled audio-connect execution gate appears on-device and remains default-blocked after Answer.
-- 2.48P prepared the first controlled audio-connect activation plan, no physical connect.
-- 2.48Q implemented the first controlled audio-connect activation path, default disabled, no physical connect.
-
-2.48O proof summary:
+Result:
 
 ```text
-2.48O = physical proof succeeded
-proof_file=/tmp/salemx-voip-push-receipt-proof-2.48o-polled.txt
+2.48R = physical proof succeeded
+proof_file=/tmp/salemx-voip-push-receipt-proof-2.48r-polled.txt
 proof_generation=generation_8
-controlled audio-connect execution gate present on-device
-execution gate DEBUG-only
+first-run controlled audio-connect activation path present on-device
+activation path DEBUG-only
+activation one-shot
+activation default disabled
+requires receiver session
+requires fresh credentials
+requires enablement
+requires operator approval
+requires future phase permission
 audio-only=true
 video allowed=false
 Matrix events allowed=false
 raw credentials logged=false
-future phase permitted=false
-execution allowed=false
-blocked reason=future_phase_not_permitted_no_connect
+rollback available
+activation allowed=false
+blocked reason=activation_path_disabled_no_connect
 blocked before engine
 blocked before LiveKit join
 blocked before permissions
@@ -65,7 +52,23 @@ no Matrix events
 no full call flow
 ```
 
-2.48O successful proof fields:
+Invite/APNs result:
+
+```text
+receiver_token_found=true
+sender_token_found=true
+receiver_user_hash=497015f5745c933a
+sender_user_hash=7d434d7f252427fb
+sender_equals_receiver=false
+room_validation_preflight=pass
+local_schema_valid=true
+invite_send_attempted=true
+invite_http_code=200
+background_apns_push_result=sandbox_success
+blocked_reason=none
+```
+
+Successful proof fields:
 
 ```text
 physical_voip_push_received=true
@@ -80,31 +83,54 @@ pending_metadata_fetch_http_status_bucket=2xx
 pending_metadata_fetch_errcode=none
 pending_metadata_fetch_failure_reason=none
 foreground_pending_call_metadata_handoff_observed=true
+media_credentials_request_metadata_available=true
+media_credentials_boundary_reached=true
+media_credentials_requested=true
+media_credentials_request_authorized=true
 media_credentials_result=success_redacted
-controlled_connect_enablement_wiring_present=true
-controlled_connect_enablement_enabled=false
-controlled_connect_enablement_operator_approved=false
-controlled_connect_enablement_future_phase_permitted=false
-controlled_connect_enablement_execution_allowed=false
-controlled_connect_enablement_blocked_reason=enablement_disabled_no_connect
+media_credentials_token_received=true
+media_credentials_url_received=true
+media_credentials_expires_at_present=true
+media_credentials_payload_redacted=true
+controlled_audio_connect_activation_path_present=true
+controlled_audio_connect_activation_debug_only=true
+controlled_audio_connect_activation_one_shot=true
+controlled_audio_connect_activation_default_disabled=true
+controlled_audio_connect_activation_requires_receiver_session=true
+controlled_audio_connect_activation_requires_fresh_credentials=true
+controlled_audio_connect_activation_requires_enablement=true
+controlled_audio_connect_activation_requires_operator_approval=true
+controlled_audio_connect_activation_requires_future_phase_permission=true
+controlled_audio_connect_activation_audio_only=true
+controlled_audio_connect_activation_video_allowed=false
+controlled_audio_connect_activation_matrix_events_allowed=false
+controlled_audio_connect_activation_raw_credentials_logged=false
+controlled_audio_connect_activation_rollback_available=true
+controlled_audio_connect_activation_allowed=false
+controlled_audio_connect_activation_blocked_reason=activation_path_disabled_no_connect
+controlled_audio_connect_activation_blocked_before_engine=true
+controlled_audio_connect_activation_blocked_before_livekit_join=true
+controlled_audio_connect_activation_blocked_before_permissions=true
+controlled_audio_connect_activation_blocked_before_matrix_events=true
 controlled_audio_connect_execution_gate_present=true
 controlled_audio_connect_execution_debug_only=true
 controlled_audio_connect_execution_audio_only=true
 controlled_audio_connect_execution_video_allowed=false
 controlled_audio_connect_execution_matrix_events_allowed=false
 controlled_audio_connect_execution_raw_credentials_logged=false
-controlled_audio_connect_execution_requires_enablement=true
-controlled_audio_connect_execution_requires_operator_approval=true
-controlled_audio_connect_execution_requires_future_phase_permission=true
 controlled_audio_connect_execution_future_phase_permitted=false
 controlled_audio_connect_execution_allowed=false
 controlled_audio_connect_execution_blocked_reason=future_phase_not_permitted_no_connect
-controlled_audio_connect_execution_blocked_before_engine=true
-controlled_audio_connect_execution_blocked_before_livekit_join=true
-controlled_audio_connect_execution_blocked_before_permissions=true
-controlled_audio_connect_execution_blocked_before_matrix_events=true
 media_connect_preflight_requested=true
+media_connect_preflight_metadata_available=true
+media_connect_preflight_credentials_available=true
+media_connect_preflight_token_present=true
+media_connect_preflight_url_present=true
+media_connect_preflight_expires_at_present=true
+media_connect_execution_allowed=false
 media_connect_preflight_result=blocked_before_connect_redacted
+media_connect_engine_invoked=false
+livekit_connect_audio_invoked=false
 media_connect_requested=false
 media_connect_attempted=false
 livekit_join_requested=false
@@ -115,184 +141,53 @@ real_call_flow_started=false
 blocked_reason=none
 ```
 
-2.48P activation plan:
-
-```text
-2.48P = first controlled audio-connect activation plan
-physical connect not performed
-controlled connect not enabled
-default remains no-connect
-```
-
-First controlled audio-connect activation requirements:
-
-```text
-first_connect_requires_receiver_app_session_validated=true
-first_connect_requires_terminal_tokens_valid=true
-first_connect_requires_room_validation_pass=true
-first_connect_requires_single_sandbox_apns=true
-first_connect_requires_green_answer=true
-first_connect_requires_fresh_credentials=true
-first_connect_requires_enablement_enabled=true
-first_connect_requires_operator_approved=true
-first_connect_requires_future_phase_permitted=true
-first_connect_audio_only=true
-first_connect_video_allowed=false
-first_connect_matrix_events_allowed=false
-first_connect_raw_credentials_logged=false
-first_connect_rollback_available=true
-first_connect_one_shot_only=true
-```
-
-Allowed future scope:
-
-```text
-allow_audio_connect_attempt=true
-allow_livekit_join_attempt=true
-allow_microphone_permission_request=only_if_required_for_audio_connect
-allow_camera_permission_request=false
-allow_matrix_event_emit=false
-allow_full_call_flow=false
-allow_repeated_apns=false
-```
-
-Stop conditions:
-
-```text
-stop_if_receiver_app_session_invalid=true
-stop_if_pending_metadata_fetch_fails=true
-stop_if_credentials_fail=true
-stop_if_enablement_not_enabled=true
-stop_if_operator_not_approved=true
-stop_if_future_phase_not_permitted=true
-stop_if_video_permission_requested=true
-stop_if_camera_permission_requested=true
-stop_if_matrix_event_emit_requested=true
-stop_if_full_call_flow_started=true
-stop_after_first_connect_result=true
-```
-
-Future first controlled connect proof fields:
-
-```text
-controlled_audio_connect_execution_future_phase_permitted=true
-controlled_audio_connect_execution_allowed=true
-media_connect_requested=true
-media_connect_attempted=true
-livekit_join_requested=true
-livekit_connect_audio_invoked=true
-controlled_connect_first_attempt_result=<success_or_blocked_redacted>
-controlled_connect_first_attempt_error_bucket=<none_or_redacted_bucket>
-microphone_permission_requested=<true_if_required_or_false_if_not_required>
-camera_permission_requested=false
-matrix_event_emit_requested=false
-real_call_flow_started=false
-```
-
-Rollback expectations:
-
-```text
-rollback_disable_enablement=true
-rollback_clear_operator_approval=true
-rollback_clear_future_phase_permission=true
-rollback_restore_execution_allowed_false=true
-rollback_restore_no_connect_default=true
-```
-
-Readiness conclusion:
-
-```text
-2.48P result = ready to implement first controlled audio-connect activation path, no physical connect performed
-```
-
-2.48Q activation path proof fields:
-
-```text
-2.48Q = first controlled audio-connect activation path, default disabled, no physical connect
-controlled_audio_connect_activation_path_present=true
-controlled_audio_connect_activation_debug_only=true
-controlled_audio_connect_activation_one_shot=true
-controlled_audio_connect_activation_default_disabled=true
-controlled_audio_connect_activation_requires_receiver_session=true
-controlled_audio_connect_activation_requires_fresh_credentials=true
-controlled_audio_connect_activation_requires_enablement=true
-controlled_audio_connect_activation_requires_operator_approval=true
-controlled_audio_connect_activation_requires_future_phase_permission=true
-controlled_audio_connect_activation_audio_only=true
-controlled_audio_connect_activation_video_allowed=false
-controlled_audio_connect_activation_matrix_events_allowed=false
-controlled_audio_connect_activation_raw_credentials_logged=false
-controlled_audio_connect_activation_rollback_available=true
-controlled_audio_connect_activation_allowed=false
-controlled_audio_connect_activation_blocked_reason=activation_path_disabled_no_connect
-controlled_audio_connect_activation_blocked_before_engine=true
-controlled_audio_connect_activation_blocked_before_livekit_join=true
-controlled_audio_connect_activation_blocked_before_permissions=true
-controlled_audio_connect_activation_blocked_before_matrix_events=true
-media_connect_requested=false
-media_connect_attempted=false
-livekit_join_requested=false
-microphone_permission_requested=false
-camera_permission_requested=false
-matrix_event_emit_requested=false
-real_call_flow_started=false
-```
-
 ## Phase
 
-`2.48R — physical proof of first-run activation path default-disabled, no LiveKit join`
+`2.48S — final pre-connect operator gate, no physical connect`
 
 ## Goal
 
-Physically prove the 2.48Q first-run activation path appears on-device and remains default-disabled after Answer, authenticated pending metadata, media credentials, and media-connect preflight. This is not actual controlled connect.
+Implement or document the final operator-controlled pre-connect gate needed before any future physical connect attempt. This phase must not perform physical connect, LiveKit join, media connect, permission request, Matrix event emission, or full call flow.
 
 ## Required Behavior
 
-- Use a one-shot physical proof only after local preflight passes and explicit operator confirmation is reached.
+- Preserve the 2.48R proof as the latest physical no-connect proof.
+- Do not send APNs.
 - Do not send production APNs.
 - Do not send repeated APNs.
-- Do not run `dev/invite`.
+- Do not use `dev/invite`.
 - Do not start media connect.
 - Do not join LiveKit.
 - Do not request microphone/camera permissions.
 - Do not emit Matrix events.
 - Do not start full direct-call flow.
 - Do not enable controlled-connect switch by default.
-- Do not enable operator approval by default.
+- Do not enable operator approval by default unless the task explicitly scopes inert gate wiring only.
 - Do not enable future physical-connect permission by default.
 - Do not add production-enabled connect behavior.
-- Preserve 2.48O as the latest physical no-connect proof.
+- Do not log or document raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID.
 
-Required successful 2.48R proof fields:
+## 2.48S Acceptance Shape
+
+Record a final pre-connect operator gate that is DEBUG/test-scoped, one-shot, default-off, rollback-ready, and explicit about the final future-connect requirements:
 
 ```text
-pending_metadata_fetch_result=success_redacted
-foreground_pending_call_metadata_handoff_observed=true
-media_credentials_result=success_redacted
-controlled_audio_connect_activation_path_present=true
-controlled_audio_connect_activation_debug_only=true
-controlled_audio_connect_activation_one_shot=true
-controlled_audio_connect_activation_default_disabled=true
-controlled_audio_connect_activation_requires_receiver_session=true
-controlled_audio_connect_activation_requires_fresh_credentials=true
-controlled_audio_connect_activation_requires_enablement=true
-controlled_audio_connect_activation_requires_operator_approval=true
-controlled_audio_connect_activation_requires_future_phase_permission=true
-controlled_audio_connect_activation_audio_only=true
-controlled_audio_connect_activation_video_allowed=false
-controlled_audio_connect_activation_matrix_events_allowed=false
-controlled_audio_connect_activation_raw_credentials_logged=false
-controlled_audio_connect_activation_rollback_available=true
-controlled_audio_connect_activation_allowed=false
-controlled_audio_connect_activation_blocked_reason=activation_path_disabled_no_connect
-controlled_audio_connect_activation_blocked_before_engine=true
-controlled_audio_connect_activation_blocked_before_livekit_join=true
-controlled_audio_connect_activation_blocked_before_permissions=true
-controlled_audio_connect_activation_blocked_before_matrix_events=true
-controlled_connect_enablement_enabled=false
-controlled_connect_enablement_operator_approved=false
-controlled_connect_enablement_future_phase_permitted=false
-controlled_audio_connect_execution_allowed=false
+final_preconnect_operator_gate_present=true
+final_preconnect_operator_gate_debug_only=true
+final_preconnect_operator_gate_one_shot=true
+final_preconnect_operator_gate_default_off=true
+final_preconnect_operator_gate_requires_receiver_session=true
+final_preconnect_operator_gate_requires_fresh_credentials=true
+final_preconnect_operator_gate_requires_enablement=true
+final_preconnect_operator_gate_requires_operator_approval=true
+final_preconnect_operator_gate_requires_future_phase_permission=true
+final_preconnect_operator_gate_audio_only=true
+final_preconnect_operator_gate_video_allowed=false
+final_preconnect_operator_gate_matrix_events_allowed=false
+final_preconnect_operator_gate_raw_credentials_logged=false
+final_preconnect_operator_gate_rollback_available=true
+final_preconnect_operator_gate_allows_connect=false
+final_preconnect_operator_gate_blocked_reason=operator_gate_disabled_no_connect
 media_connect_requested=false
 media_connect_attempted=false
 livekit_join_requested=false
@@ -300,22 +195,6 @@ microphone_permission_requested=false
 camera_permission_requested=false
 matrix_event_emit_requested=false
 real_call_flow_started=false
-blocked_reason=none
-```
-
-Stop conditions:
-
-```text
-if APNs sent once, do not repeat automatically
-if pending_metadata_fetch_result=blocked_redacted, stop and classify
-if media_credentials_result=not_requested after Answer, stop and classify
-if controlled_audio_connect_activation_path_present is missing, verify installed commit before any retry
-if controlled_audio_connect_activation_allowed=true, stop as safety regression
-if media_connect_requested=true, stop as safety regression
-if livekit_join_requested=true, stop as safety regression
-if camera_permission_requested=true, stop as safety regression
-if matrix_event_emit_requested=true, stop as safety regression
-if real_call_flow_started=true, stop as safety regression
 ```
 
 ## Required Checks
@@ -351,26 +230,3 @@ deviceID
 ```
 
 Allowed safe hits are field names, redacted labels, negative statements, and existing stable receiver/sender hashes only.
-
-## Hard Constraints
-
-- Do not send APNs.
-- Do not send production APNs.
-- Do not send repeated APNs.
-- Do not use `dev/invite`.
-- Do not connect media.
-- Do not join LiveKit.
-- Do not request microphone/camera permissions.
-- Do not emit Matrix events.
-- Do not start full call flow.
-- Do not enable controlled connect by default.
-- Do not enable controlled-connect operator approval by default.
-- Do not enable future physical-connect permission by default.
-- Do not add production-enabled connect behavior.
-- Do not expose raw PushKit/APNs tokens, keys, JWTs, authorization headers, Matrix access tokens, APNs payloads, invite bodies, private logs, user IDs, device IDs, room IDs, call IDs, call handles, LiveKit URLs/tokens, room names, key material, or secret-bearing URLs.
-- Do not touch project/signing/entitlement/`Info.plist`/`app.yml` files.
-- Do not stage `docs/direct-call/REPEAT_CALL_FASTPATH_DIAGNOSTICS.md`.
-
-## If Blocked
-
-Report the blocker and the smallest next fix. Keep all no-connect safety fields false. Do not proceed to actual controlled connect.
