@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Prepared the 2.48L-Retry2 one-shot physical retry plan after receiver app session validation; no APNs was sent.
 - Validated the iPhone app Matrix session with a local redacted `/whoami` proof before any 2.48L APNs retry.
 - Classified the 2.48L physical enablement proof as incomplete on pending metadata `401 M_UNKNOWN_TOKEN`; no repeat APNs was performed.
 - Implemented explicit one-shot controlled-connect enablement with default off and no media execution.
@@ -96,6 +97,73 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48L-Retry2Plan — One-Shot Retry Plan After Session Validation
+
+Prepared the next physical retry plan after validating the iPhone app's own Matrix session. This was a docs-only planning checkpoint: no APNs was sent, no retry invite was run, and the default remains no-connect.
+
+Conclusion:
+
+```text
+2.48L-Retry2Plan = ready for one explicit retry only after receiver app session validation
+receiver app Matrix session validated=true
+APNs not sent
+default remains no-connect
+```
+
+Retry2 requirements:
+
+```text
+retry2_requires_receiver_app_session_validated=true
+retry2_requires_fresh_debug_app_running=true
+retry2_requires_terminal_tokens_valid=true
+retry2_requires_room_validation_pass=true
+retry2_requires_single_sandbox_apns=true
+retry2_requires_operator_green_answer_ready=true
+retry2_requires_post_answer_polling=true
+retry2_rejects_stale_proof=true
+retry2_forbids_media_connect=true
+retry2_forbids_livekit_join=true
+retry2_forbids_permissions=true
+retry2_forbids_matrix_events=true
+retry2_forbids_full_flow=true
+```
+
+Required success fields for the future retry:
+
+```text
+pending_metadata_fetch_result=success_redacted
+foreground_pending_call_metadata_handoff_observed=true
+media_credentials_result=success_redacted
+controlled_connect_enablement_wiring_present=true
+controlled_connect_enablement_enabled=false
+controlled_connect_enablement_execution_allowed=false
+controlled_connect_enablement_blocked_reason=enablement_disabled_no_connect
+media_connect_preflight_requested=true
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+blocked_reason=none
+```
+
+Stop conditions:
+
+```text
+if APNs sent once, do not repeat automatically
+if pending_metadata_fetch_result=blocked_redacted, stop and classify
+if media_credentials_result=not_requested after Answer, stop and classify
+if enablement fields missing, verify installed commit before any retry
+if media_connect_requested=true, stop as safety regression
+if livekit_join_requested=true, stop as safety regression
+```
+
+Next phase: `2.48L-Retry2 — one-shot physical proof retry after app session validation, no LiveKit join`.
+
+No APNs, production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, controlled-connect switch enablement, controlled-connect operator approval enablement, future physical-connect permission enablement, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 
 ### 2.48L-SessionRepair — iPhone App Matrix Session Validation
 

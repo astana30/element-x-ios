@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48L-SessionRepair — the iPhone app's own stored Matrix session was validated on-device before any APNs retry. The DEBUG-only local `/whoami` smoke succeeded with redacted/hash-only output for the expected receiver hash, so the pending metadata auth precondition is ready. The next phase is `2.48L-Retry2Plan — one-shot retry after receiver app session validation, no immediate APNs`.
+After 2.48L-Retry2Plan — the next one-shot physical retry is planned and gated by the validated receiver app Matrix session. No APNs was sent during planning, and the default remains no-connect. The next phase is `2.48L-Retry2 — one-shot physical proof retry after app session validation, no LiveKit join`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,57 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48L-Retry2Plan prepared the one-shot retry plan after receiver app session validation:
+  - `2.48L-Retry2Plan = ready for one explicit retry only after receiver app session validation`.
+  - `receiver app Matrix session validated=true`.
+  - `APNs not sent`.
+  - `default remains no-connect`.
+  - Retry2 requirements:
+    ```text
+    retry2_requires_receiver_app_session_validated=true
+    retry2_requires_fresh_debug_app_running=true
+    retry2_requires_terminal_tokens_valid=true
+    retry2_requires_room_validation_pass=true
+    retry2_requires_single_sandbox_apns=true
+    retry2_requires_operator_green_answer_ready=true
+    retry2_requires_post_answer_polling=true
+    retry2_rejects_stale_proof=true
+    retry2_forbids_media_connect=true
+    retry2_forbids_livekit_join=true
+    retry2_forbids_permissions=true
+    retry2_forbids_matrix_events=true
+    retry2_forbids_full_flow=true
+    ```
+  - Required success fields for the future retry:
+    ```text
+    pending_metadata_fetch_result=success_redacted
+    foreground_pending_call_metadata_handoff_observed=true
+    media_credentials_result=success_redacted
+    controlled_connect_enablement_wiring_present=true
+    controlled_connect_enablement_enabled=false
+    controlled_connect_enablement_execution_allowed=false
+    controlled_connect_enablement_blocked_reason=enablement_disabled_no_connect
+    media_connect_preflight_requested=true
+    media_connect_requested=false
+    media_connect_attempted=false
+    livekit_join_requested=false
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    blocked_reason=none
+    ```
+  - Stop conditions:
+    ```text
+    if APNs sent once, do not repeat automatically
+    if pending_metadata_fetch_result=blocked_redacted, stop and classify
+    if media_credentials_result=not_requested after Answer, stop and classify
+    if enablement fields missing, verify installed commit before any retry
+    if media_connect_requested=true, stop as safety regression
+    if livekit_join_requested=true, stop as safety regression
+    ```
+  - Next phase: `2.48L-Retry2 — one-shot physical proof retry after app session validation, no LiveKit join`.
+  - No APNs, production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, controlled-connect switch enablement, controlled-connect operator approval enablement, future physical-connect permission enablement, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 - 2.48L-SessionRepair validated the iPhone app Matrix session without sending APNs:
   - `2.48L-SessionRepair = complete`.
   - Installed and launched the freshly built Debug app on iPhone PRO, then triggered only the local DEBUG session-whoami URL after app session restore completed.
