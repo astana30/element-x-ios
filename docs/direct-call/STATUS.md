@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48I-Triage — one physical disabled-activation proof attempt is classified as incomplete before the Answer pipeline. Controlled connect is still not approved, physical connect has not been performed, and the default remains no-connect.
+After 2.48I-RetryPlan — the one-shot Answer-path retry plan is ready, but no retry has been executed. Controlled connect is still not approved, physical connect has not been performed, and the default remains no-connect.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,58 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48I-RetryPlan prepared the next one-shot Answer-path retry without sending APNs:
+  - `2.48I-RetryPlan = ready for one explicit operator-approved retry only`.
+  - The retry plan reduces the previous avoidable failure causes by requiring a fresh Debug install from current HEAD, an explicit app foreground/background state check before any future send, an operator-ready confirmation for the green Answer tap, post-Answer polling before copying proof, phase-specific proof copying, generation verification, and one future sandbox APNs maximum.
+  - Retry checklist:
+    ```text
+    retry_requires_fresh_debug_install=true
+    retry_requires_current_head_confirmed=true
+    retry_requires_single_sandbox_apns=true
+    retry_requires_operator_answer_ready=true
+    retry_requires_green_answer_tap=true
+    retry_requires_post_answer_polling=true
+    retry_rejects_stale_generation=true
+    retry_requires_activation_fields=true
+    retry_requires_answer_pipeline_fields=true
+    retry_requires_credentials_fields=true
+    retry_requires_preflight_block_fields=true
+    retry_forbids_connect=true
+    retry_forbids_livekit_join=true
+    retry_forbids_permissions=true
+    retry_forbids_matrix_events=true
+    retry_forbids_full_flow=true
+    ```
+  - Required success fields for the retry:
+    ```text
+    callkit_first_action_kind=answer
+    callkit_answer_action_delivered=true
+    callkit_answer_action_received=true
+    callkit_answer_action_fulfilled=true
+    media_credentials_result=success_redacted
+    media_connect_preflight_requested=true
+    controlled_connect_activation_wiring_present=true
+    controlled_connect_execution_allowed=false
+    media_connect_requested=false
+    media_connect_attempted=false
+    livekit_join_requested=false
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    blocked_reason=none
+    ```
+  - Retry stop conditions:
+    ```text
+    if APNs sent once, do not repeat automatically
+    if callkit_first_action_kind=none, stop and classify
+    if activation fields missing, verify installed commit before any retry
+    if credentials not requested after Answer, stop and classify
+    if media_connect_requested=true, stop as safety regression
+    if livekit_join_requested=true, stop as safety regression
+    ```
+  - The next phase is `2.48I-Retry — one-shot physical proof retry, no LiveKit join`, not an actual connect phase.
+  - No APNs, production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, controlled-connect switch enablement, controlled-connect operator approval enablement, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced by this planning checkpoint.
 - 2.48I-Triage classified the physical disabled-activation proof attempt as incomplete:
   - The one-shot real non-dev invite/APNs attempt passed preflight once with receiver hash `497015f5745c933a`, sender hash `7d434d7f252427fb`, `sender_equals_receiver=false`, `room_validation_preflight=pass`, `local_schema_valid=true`, `invite_http_code=200`, `real_non_dev_invite_used=true`, `dev_invite_used=false`, `background_apns_push_requested=true`, `background_apns_push_result=sandbox_success`, and `blocked_reason=none`.
   - Actual 2.48I proof generation `generation_1` recorded `physical_voip_push_received=true`, `pushkit_callback_invoked=true`, `pushkit_payload_kind=real_invite_controlled`, and the 2.48H activation fields on-device: wiring present, DEBUG-only, default disabled, operator approval required, rollback available, and `planned_audio_only_redacted` scope.

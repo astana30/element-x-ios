@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Prepared the 2.48I one-shot Answer-path retry plan; no APNs retry was executed.
 - Classified the 2.48I physical disabled-activation proof attempt as incomplete before the Answer pipeline; no repeat APNs was performed.
 - Closed the 2.48H-QA broader DirectCall source-guard triage; the selected DirectCall suites pass after narrow test guard fixes.
 - Wired the controlled-connect activation configuration while keeping the default disabled and no-connect.
@@ -90,6 +91,94 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48I-RetryPlan — One-Shot Answer-Path Retry Plan
+
+Prepared the next 2.48I physical proof retry as a planning/checklist checkpoint only. No APNs was sent, no retry was executed, and no Swift runtime, server route, project/signing, media, LiveKit, permission, Matrix event, or full-flow behavior changed.
+
+Conclusion:
+
+```text
+2.48I-RetryPlan = ready for one explicit operator-approved retry only
+```
+
+The retry plan is intentionally narrow. It exists to reduce the avoidable causes from the incomplete 2.48I attempt: stale proof acceptance, unknown installed build, unclear pre-send app state, unclear operator timing for the green Answer tap, and proof copying before the Answer-to-credentials-to-preflight pipeline has had time to settle.
+
+Retry checklist:
+
+```text
+retry_requires_fresh_debug_install=true
+retry_requires_current_head_confirmed=true
+retry_requires_single_sandbox_apns=true
+retry_requires_operator_answer_ready=true
+retry_requires_green_answer_tap=true
+retry_requires_post_answer_polling=true
+retry_rejects_stale_generation=true
+retry_requires_activation_fields=true
+retry_requires_answer_pipeline_fields=true
+retry_requires_credentials_fields=true
+retry_requires_preflight_block_fields=true
+retry_forbids_connect=true
+retry_forbids_livekit_join=true
+retry_forbids_permissions=true
+retry_forbids_matrix_events=true
+retry_forbids_full_flow=true
+```
+
+Future retry procedure:
+
+```text
+1. Confirm a fresh Debug app from current HEAD is built, installed, and launched once before the physical attempt.
+2. Confirm the installed commit matches current HEAD before any APNs send.
+3. Confirm the intended app state before APNs; do not send if the foreground/background state is unknown.
+4. Confirm the operator is watching for the system CallKit incoming-call UI and is ready to tap green Answer exactly once.
+5. Allow one future sandbox APNs send only after fresh local inputs, helper preflight, and explicit one-shot confirmation.
+6. After green Answer, wait/poll long enough for Answer, metadata handoff, credentials, and preflight-block fields to update before copying proof.
+7. Copy proof to a phase-specific path and reject `/tmp/salemx-voip-push-receipt-proof-current.txt` as a classification source unless its generation and timestamp are independently verified for the current run.
+8. Reject stale generations; classify only the new retry generation.
+```
+
+Required success fields for the retry:
+
+```text
+callkit_first_action_kind=answer
+callkit_answer_action_delivered=true
+callkit_answer_action_received=true
+callkit_answer_action_fulfilled=true
+media_credentials_result=success_redacted
+media_connect_preflight_requested=true
+controlled_connect_activation_wiring_present=true
+controlled_connect_execution_allowed=false
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+blocked_reason=none
+```
+
+Retry stop conditions:
+
+```text
+if APNs sent once, do not repeat automatically
+if callkit_first_action_kind=none, stop and classify
+if activation fields missing, verify installed commit before any retry
+if credentials not requested after Answer, stop and classify
+if media_connect_requested=true, stop as safety regression
+if livekit_join_requested=true, stop as safety regression
+```
+
+Notes from investigation:
+
+- The 2.48F physical disabled-switch proof remains the success shape: real non-dev invite/APNs/PushKit/CallKit Answer, `media_credentials_result=success_redacted`, `media_connect_preflight_requested=true`, and the disabled guard blocking before connect.
+- The incomplete 2.48I proof proved push receipt and activation wiring but stayed at `callkit_first_action_kind=none`, `media_credentials_result=not_requested`, and `media_connect_preflight_result=not_requested`.
+- `NativeIncomingSyntheticCallKitUIProofAdapter.swift` writes generation, CallKit Answer delivery/receipt/fulfillment, credentials, activation, media preflight, and hard-stop safety fields into the redacted VoIP receipt proof; the retry should classify only those fields from the new phase-specific proof copy.
+
+Next phase: `2.48I-Retry — one-shot physical proof retry, no LiveKit join`.
+
+No APNs, production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, controlled-connect switch enablement, controlled-connect operator approval enablement, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 
 ### 2.48I-Triage — Physical Proof Blocked Before Answer Pipeline
 
