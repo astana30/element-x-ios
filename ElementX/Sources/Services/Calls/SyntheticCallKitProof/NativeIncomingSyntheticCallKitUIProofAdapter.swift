@@ -730,6 +730,41 @@ private struct SalemXControlledMediaConnectActivationConfiguration {
     let rollbackAvailable = true
 }
 
+private struct SalemXControlledMediaConnectEnablementConfiguration {
+    static let enablementDisabledNoConnectReason = "enablement_disabled_no_connect"
+    static let defaultDisabled = SalemXControlledMediaConnectEnablementConfiguration(oneShotEnablementEnabled: false,
+                                                                                     operatorApproved: false,
+                                                                                     freshCredentialsPresent: false,
+                                                                                     audioOnlyScope: true,
+                                                                                     futureConnectPhasePermitted: false)
+    static let rollbackDisabled = defaultDisabled
+
+    let oneShotEnablementEnabled: Bool
+    let operatorApproved: Bool
+    let freshCredentialsPresent: Bool
+    let audioOnlyScope: Bool
+    let futureConnectPhasePermitted: Bool
+
+    let wiringPresent = true
+    let debugOnly = true
+    let isDefaultOff = true
+    let operatorApprovalRequired = true
+    let isOneShot = true
+    let freshCredentialsRequired = true
+    let videoAllowed = false
+    let matrixEventsAllowed = false
+    let rawCredentialsLogged = false
+    let rollbackAvailable = true
+
+    var executionAllowed: Bool {
+        debugOnly && oneShotEnablementEnabled && operatorApproved && freshCredentialsPresent && audioOnlyScope && futureConnectPhasePermitted
+    }
+
+    var blockedReason: String {
+        executionAllowed ? "none" : Self.enablementDisabledNoConnectReason
+    }
+}
+
 private struct SalemXVoIPPushReceiptProofSummary {
     var proofSource = "voip_push_receipt"
     var proofGeneration = "not_started"
@@ -889,6 +924,22 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var controlledConnectBlockedBeforeLiveKitJoin = true
     var controlledConnectBlockedBeforePermissions = true
     var controlledConnectBlockedBeforeMatrixEvents = true
+    var controlledConnectEnablementWiringPresent = SalemXControlledMediaConnectEnablementConfiguration.defaultDisabled.wiringPresent
+    var controlledConnectEnablementDebugOnly = SalemXControlledMediaConnectEnablementConfiguration.defaultDisabled.debugOnly
+    var controlledConnectEnablementDefaultOff = SalemXControlledMediaConnectEnablementConfiguration.defaultDisabled.isDefaultOff
+    var controlledConnectEnablementOperatorApprovalRequired = SalemXControlledMediaConnectEnablementConfiguration.defaultDisabled.operatorApprovalRequired
+    var controlledConnectEnablementOneShot = SalemXControlledMediaConnectEnablementConfiguration.defaultDisabled.isOneShot
+    var controlledConnectEnablementFreshCredentialsRequired = SalemXControlledMediaConnectEnablementConfiguration.defaultDisabled.freshCredentialsRequired
+    var controlledConnectEnablementAudioOnly = SalemXControlledMediaConnectEnablementConfiguration.defaultDisabled.audioOnlyScope
+    var controlledConnectEnablementVideoAllowed = SalemXControlledMediaConnectEnablementConfiguration.defaultDisabled.videoAllowed
+    var controlledConnectEnablementMatrixEventsAllowed = SalemXControlledMediaConnectEnablementConfiguration.defaultDisabled.matrixEventsAllowed
+    var controlledConnectEnablementRawCredentialsLogged = SalemXControlledMediaConnectEnablementConfiguration.defaultDisabled.rawCredentialsLogged
+    var controlledConnectEnablementRollbackAvailable = SalemXControlledMediaConnectEnablementConfiguration.defaultDisabled.rollbackAvailable
+    var controlledConnectEnablementEnabled = SalemXControlledMediaConnectEnablementConfiguration.defaultDisabled.oneShotEnablementEnabled
+    var controlledConnectEnablementOperatorApproved = SalemXControlledMediaConnectEnablementConfiguration.defaultDisabled.operatorApproved
+    var controlledConnectEnablementFuturePhasePermitted = SalemXControlledMediaConnectEnablementConfiguration.defaultDisabled.futureConnectPhasePermitted
+    var controlledConnectEnablementExecutionAllowed = SalemXControlledMediaConnectEnablementConfiguration.defaultDisabled.executionAllowed
+    var controlledConnectEnablementBlockedReason = SalemXControlledMediaConnectEnablementConfiguration.defaultDisabled.blockedReason
     var mediaConnectPreflightRequested = false
     var mediaConnectPreflightMetadataAvailable = false
     var mediaConnectPreflightCredentialsAvailable = false
@@ -1070,6 +1121,22 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "controlled_connect_blocked_before_livekit_join=\(controlledConnectBlockedBeforeLiveKitJoin)",
             "controlled_connect_blocked_before_permissions=\(controlledConnectBlockedBeforePermissions)",
             "controlled_connect_blocked_before_matrix_events=\(controlledConnectBlockedBeforeMatrixEvents)",
+            "controlled_connect_enablement_wiring_present=\(controlledConnectEnablementWiringPresent)",
+            "controlled_connect_enablement_debug_only=\(controlledConnectEnablementDebugOnly)",
+            "controlled_connect_enablement_default_off=\(controlledConnectEnablementDefaultOff)",
+            "controlled_connect_enablement_operator_approval_required=\(controlledConnectEnablementOperatorApprovalRequired)",
+            "controlled_connect_enablement_one_shot=\(controlledConnectEnablementOneShot)",
+            "controlled_connect_enablement_fresh_credentials_required=\(controlledConnectEnablementFreshCredentialsRequired)",
+            "controlled_connect_enablement_audio_only=\(controlledConnectEnablementAudioOnly)",
+            "controlled_connect_enablement_video_allowed=\(controlledConnectEnablementVideoAllowed)",
+            "controlled_connect_enablement_matrix_events_allowed=\(controlledConnectEnablementMatrixEventsAllowed)",
+            "controlled_connect_enablement_raw_credentials_logged=\(controlledConnectEnablementRawCredentialsLogged)",
+            "controlled_connect_enablement_rollback_available=\(controlledConnectEnablementRollbackAvailable)",
+            "controlled_connect_enablement_enabled=\(controlledConnectEnablementEnabled)",
+            "controlled_connect_enablement_operator_approved=\(controlledConnectEnablementOperatorApproved)",
+            "controlled_connect_enablement_future_phase_permitted=\(controlledConnectEnablementFuturePhasePermitted)",
+            "controlled_connect_enablement_execution_allowed=\(controlledConnectEnablementExecutionAllowed)",
+            "controlled_connect_enablement_blocked_reason=\(controlledConnectEnablementBlockedReason)",
             "media_connect_preflight_requested=\(mediaConnectPreflightRequested)",
             "media_connect_preflight_metadata_available=\(mediaConnectPreflightMetadataAvailable)",
             "media_connect_preflight_credentials_available=\(mediaConnectPreflightCredentialsAvailable)",
@@ -1306,15 +1373,17 @@ private extension SalemXVoIPPushReceiptProofSummary {
         mediaConnectPreflightExpiresAtPresent = expiresAtPresent && mediaCredentialsRequestMetadataAvailable
         mediaConnectGuardEnabled = true
         recordControlledConnectActivationProof(SalemXControlledMediaConnectActivationConfiguration.defaultDisabled)
-        mediaConnectExecutionAllowed = controlledConnectExecutionAllowed
+        recordControlledConnectEnablementProof(SalemXControlledMediaConnectEnablementConfiguration.defaultDisabled)
+        mediaConnectExecutionAllowed = controlledConnectExecutionAllowed && controlledConnectEnablementExecutionAllowed
         mediaConnectPreflightResult = mediaConnectPreflightCredentialsAvailable ? "blocked_before_connect_redacted" : "blocked_redacted"
-        mediaConnectBlockedReason = mediaConnectPreflightCredentialsAvailable ? controlledConnectBlockedReason : "media_connect_preflight_not_ready"
+        mediaConnectBlockedReason = mediaConnectPreflightCredentialsAvailable ? controlledConnectBlockedReasonForPreflight : "media_connect_preflight_not_ready"
         mediaConnectEngineInvoked = false
         liveKitConnectAudioInvoked = false
     }
 
     mutating func rollbackControlledConnectActivationProof() {
         recordControlledConnectActivationProof(SalemXControlledMediaConnectActivationConfiguration.rollbackDisabled)
+        recordControlledConnectEnablementProof(SalemXControlledMediaConnectEnablementConfiguration.rollbackDisabled)
         mediaConnectExecutionAllowed = false
         mediaConnectEngineInvoked = false
         liveKitConnectAudioInvoked = false
@@ -1344,6 +1413,35 @@ private extension SalemXVoIPPushReceiptProofSummary {
         controlledConnectBlockedBeforeLiveKitJoin = !controlledConnectExecutionAllowed
         controlledConnectBlockedBeforePermissions = !controlledConnectExecutionAllowed
         controlledConnectBlockedBeforeMatrixEvents = !controlledConnectExecutionAllowed
+    }
+
+    mutating func recordControlledConnectEnablementProof(_ enablementConfiguration: SalemXControlledMediaConnectEnablementConfiguration) {
+        controlledConnectEnablementWiringPresent = enablementConfiguration.wiringPresent
+        controlledConnectEnablementDebugOnly = enablementConfiguration.debugOnly
+        controlledConnectEnablementDefaultOff = enablementConfiguration.isDefaultOff
+        controlledConnectEnablementOperatorApprovalRequired = enablementConfiguration.operatorApprovalRequired
+        controlledConnectEnablementOneShot = enablementConfiguration.isOneShot
+        controlledConnectEnablementFreshCredentialsRequired = enablementConfiguration.freshCredentialsRequired
+        controlledConnectEnablementAudioOnly = enablementConfiguration.audioOnlyScope
+        controlledConnectEnablementVideoAllowed = enablementConfiguration.videoAllowed
+        controlledConnectEnablementMatrixEventsAllowed = enablementConfiguration.matrixEventsAllowed
+        controlledConnectEnablementRawCredentialsLogged = enablementConfiguration.rawCredentialsLogged
+        controlledConnectEnablementRollbackAvailable = enablementConfiguration.rollbackAvailable
+        controlledConnectEnablementEnabled = enablementConfiguration.oneShotEnablementEnabled
+        controlledConnectEnablementOperatorApproved = enablementConfiguration.operatorApproved
+        controlledConnectEnablementFuturePhasePermitted = enablementConfiguration.futureConnectPhasePermitted
+        controlledConnectEnablementExecutionAllowed = enablementConfiguration.executionAllowed
+        controlledConnectEnablementBlockedReason = enablementConfiguration.blockedReason
+    }
+
+    private var controlledConnectBlockedReasonForPreflight: String {
+        if !controlledConnectExecutionAllowed {
+            return controlledConnectBlockedReason
+        }
+        if !controlledConnectEnablementExecutionAllowed {
+            return controlledConnectEnablementBlockedReason
+        }
+        return "none"
     }
 
     private static func httpStatusBucket(_ status: Int?) -> String {

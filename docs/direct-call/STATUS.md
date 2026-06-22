@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48J — controlled-connect enablement implementation plan is complete. Physical connect was not performed, controlled connect is not yet enabled, and the default remains no-connect.
+After 2.48K — explicit one-shot controlled-connect enablement is implemented with default off. Physical connect has not been performed, future connect permission remains false, and the default remains no-connect.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,44 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48K explicit one-shot controlled-connect enablement is implemented:
+  - `2.48K = explicit one-shot controlled-connect enablement, default off`.
+  - Added a DEBUG-only enablement configuration/proof layer beside the existing controlled-connect switch and activation proof surface in `NativeIncomingSyntheticCallKitUIProofAdapter.swift`.
+  - The enablement gate is deliberately conservative: `debugOnly && oneShotEnablementEnabled && operatorApproved && freshCredentialsPresent && audioOnlyScope && futureConnectPhasePermitted`. For 2.48K, default enablement and operator approval are false, and future physical-connect permission is false.
+  - Default proof fields:
+    ```text
+    controlled_connect_enablement_wiring_present=true
+    controlled_connect_enablement_debug_only=true
+    controlled_connect_enablement_default_off=true
+    controlled_connect_enablement_operator_approval_required=true
+    controlled_connect_enablement_one_shot=true
+    controlled_connect_enablement_fresh_credentials_required=true
+    controlled_connect_enablement_audio_only=true
+    controlled_connect_enablement_video_allowed=false
+    controlled_connect_enablement_matrix_events_allowed=false
+    controlled_connect_enablement_raw_credentials_logged=false
+    controlled_connect_enablement_rollback_available=true
+    controlled_connect_enablement_enabled=false
+    controlled_connect_enablement_operator_approved=false
+    controlled_connect_enablement_future_phase_permitted=false
+    controlled_connect_enablement_execution_allowed=false
+    controlled_connect_enablement_blocked_reason=enablement_disabled_no_connect
+    ```
+  - Media preflight now combines the existing switch execution gate with the new enablement execution gate, so default execution remains false before engine invocation. The existing disabled-switch blocked reason remains the first preflight blocker while the new enablement-specific blocked reason is recorded separately.
+  - Rollback proof now restores both the activation configuration and the enablement configuration to the disabled no-connect state.
+  - Targeted source-guard tests were extended to prove DEBUG-only enablement wiring, default-off enablement, operator approval false by default, future phase permission false by default, all-gates-required execution, audio-only scope, video disabled, Matrix events disabled, raw credential logging disabled, rollback restoration, media engine false, LiveKit `connectAudio` false, microphone/camera permission paths absent, Matrix event emission absent, and full-flow false.
+  - Existing hard safety fields remain false:
+    ```text
+    media_connect_requested=false
+    media_connect_attempted=false
+    livekit_join_requested=false
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    ```
+  - Next phase: `2.48L — physical proof of enablement default-off, no LiveKit join`.
+  - No APNs, production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, default controlled-connect enablement, default operator approval enablement, production connect behavior, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 - 2.48J controlled-connect enablement implementation plan is documented:
   - `2.48J = controlled-connect enablement implementation plan`.
   - `physical connect not performed`.

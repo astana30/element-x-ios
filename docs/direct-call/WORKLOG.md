@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Implemented explicit one-shot controlled-connect enablement with default off and no media execution.
 - Documented the controlled-connect enablement implementation plan for 2.48K while preserving default no-connect.
 - Closed the 2.48I one-shot Answer-path retry as a successful physical no-connect proof.
 - Prepared the 2.48I one-shot Answer-path retry plan; no APNs retry was executed.
@@ -93,6 +94,73 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48K — Explicit One-Shot Controlled-Connect Enablement
+
+Implemented the DEBUG-only one-shot controlled-connect enablement proof mechanics while preserving the default no-connect behavior. This phase did not perform a physical connect and did not enable controlled connect or operator approval by default.
+
+Conclusion:
+
+```text
+2.48K = explicit one-shot controlled-connect enablement, default off
+physical connect not performed
+controlled connect not enabled by default
+operator approval not enabled by default
+future physical-connect permission remains false
+default remains no-connect
+```
+
+The enablement configuration lives beside the existing controlled-connect switch and activation proof surface. Its execution gate is intentionally conservative:
+
+```text
+execution_allowed = debug_only
+  AND one_shot_enablement_enabled
+  AND operator_approved
+  AND fresh_credentials_present
+  AND audio_only_scope
+  AND future_connect_phase_permitted
+```
+
+For 2.48K, default enablement is off, operator approval is false, and future physical-connect permission is false, so execution remains blocked before the media engine.
+
+Default proof fields:
+
+```text
+controlled_connect_enablement_wiring_present=true
+controlled_connect_enablement_debug_only=true
+controlled_connect_enablement_default_off=true
+controlled_connect_enablement_operator_approval_required=true
+controlled_connect_enablement_one_shot=true
+controlled_connect_enablement_fresh_credentials_required=true
+controlled_connect_enablement_audio_only=true
+controlled_connect_enablement_video_allowed=false
+controlled_connect_enablement_matrix_events_allowed=false
+controlled_connect_enablement_raw_credentials_logged=false
+controlled_connect_enablement_rollback_available=true
+controlled_connect_enablement_enabled=false
+controlled_connect_enablement_operator_approved=false
+controlled_connect_enablement_future_phase_permitted=false
+controlled_connect_enablement_execution_allowed=false
+controlled_connect_enablement_blocked_reason=enablement_disabled_no_connect
+```
+
+Existing hard safety fields remain false:
+
+```text
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+Rollback now records both the activation configuration and enablement configuration back to their disabled no-connect defaults. The targeted DirectCall source guards cover default-off enablement, operator approval false by default, future phase permission false by default, all-gates-required execution, audio-only scope, video/Matrix/raw-credential disabled behavior, rollback restoration, media engine false, LiveKit `connectAudio` false, microphone/camera permission paths absent, Matrix event emission absent, and full-flow false.
+
+Next phase: `2.48L — physical proof of enablement default-off, no LiveKit join`.
+
+No APNs, production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, default controlled-connect enablement, default operator approval enablement, production connect behavior, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 
 ### 2.48J — Controlled-Connect Enablement Implementation Plan
 
