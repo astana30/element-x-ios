@@ -5,6 +5,7 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
+import CryptoKit
 import Foundation
 
 #if os(iOS)
@@ -1931,14 +1932,79 @@ private final class SalemXPushKitTokenUploadSmoke: NSObject, DirectCallPushKitRe
     }
 }
 
+private struct SalemXMatrixSessionWhoamiProofSummary {
+    var proofGeneration = "none"
+    var proofLastUpdatedBy = "none"
+    var manualInvoked = false
+    var expectedUserHashProvided = false
+    var activeSessionAvailable = false
+    var accessTokenProviderAvailable = false
+    var accessTokenAvailable = false
+    var homeserverURLAvailable = false
+    var whoamiRequested = false
+    var whoamiResult = "not_requested"
+    var whoamiHTTPStatusBucket = "not_requested"
+    var whoamiErrcode = "none"
+    var whoamiFailureReason = "none"
+    var matrixSessionPresent = false
+    var matrixSessionUserHash = "none"
+    var matrixSessionUserHashMatchesExpected = false
+    var matrixSessionDevicePresent = false
+    var pendingMetadataAuthReady = false
+    var blockedReason = "none"
+
+    var redactedLines: [String] {
+        [
+            "proof_generation=\(proofGeneration)",
+            "proof_last_updated_by=\(proofLastUpdatedBy)",
+            "proof_source=matrix_session_whoami_smoke",
+            "manual_invoked=\(manualInvoked)",
+            "expected_user_hash_provided=\(expectedUserHashProvided)",
+            "iphone_app_matrix_session_active_session_available=\(activeSessionAvailable)",
+            "iphone_app_matrix_session_access_token_provider_available=\(accessTokenProviderAvailable)",
+            "iphone_app_matrix_session_access_token_available=\(accessTokenAvailable)",
+            "iphone_app_matrix_session_homeserver_url_available=\(homeserverURLAvailable)",
+            "iphone_app_matrix_session_whoami_requested=\(whoamiRequested)",
+            "iphone_app_matrix_session_whoami_result=\(whoamiResult)",
+            "iphone_app_matrix_session_whoami_http_status_bucket=\(whoamiHTTPStatusBucket)",
+            "iphone_app_matrix_session_whoami_errcode=\(whoamiErrcode)",
+            "iphone_app_matrix_session_whoami_failure_reason=\(whoamiFailureReason)",
+            "iphone_app_matrix_session_present=\(matrixSessionPresent)",
+            "iphone_app_matrix_session_user_hash=\(matrixSessionUserHash)",
+            "iphone_app_matrix_session_user_hash_matches_expected=\(matrixSessionUserHashMatchesExpected)",
+            "iphone_app_matrix_session_device_present=\(matrixSessionDevicePresent)",
+            "iphone_app_pending_metadata_auth_ready=\(pendingMetadataAuthReady)",
+            "APNs_sent=false",
+            "dev_invite_used=false",
+            "media_connect_requested=false",
+            "media_connect_attempted=false",
+            "livekit_join_requested=false",
+            "microphone_permission_requested=false",
+            "camera_permission_requested=false",
+            "matrix_event_emit_requested=false",
+            "real_call_flow_started=false",
+            "blocked_reason=\(blockedReason)"
+        ]
+    }
+}
+
+private struct MatrixSessionWhoamiSmokeAvailability {
+    var activeSessionAvailable: Bool
+    var accessTokenProviderAvailable: Bool
+    var homeserverURLAvailable: Bool
+}
+
 @objc(SalemXPushKitRegistrationSmokeDebugBridge)
 // swiftlint:disable:next type_body_length
 final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let uploadSmokeURLHost = "debug"
     private static let uploadSmokeURLPath = "/pushkit-token-upload-smoke/start"
+    private static let matrixSessionWhoamiSmokeURLPath = "/pushkit-token-upload-smoke/session-whoami"
     private static let uploadSmokeDefaultURLString = "https://matrix.mertis.kz/_matrix/client/unstable/kz.salemx.direct_call/pushkit/token"
+    private static let matrixSessionWhoamiURLString = "https://matrix.mertis.kz/_matrix/client/v3/account/whoami"
     private static let controlledMediaCredentialsTokenEndpointPath = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/livekit/token"
     private static let uploadSmokeProofFileName = "salemx-pushkit-token-upload-smoke-proof.txt"
+    private static let matrixSessionWhoamiProofFileName = "salemx-matrix-session-whoami-proof.txt"
     private static let voIPPushReceiptProofFileName = "salemx-voip-push-receipt-proof.txt"
     private static let startupPushKitRegistryProofFileName = "salemx-startup-pushkit-registry-proof.txt"
     private static let localCallKitOnlyProofFileName = "salemx-local-callkit-only-proof.txt"
@@ -1952,6 +2018,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var latestSummary = initialRedactedSummary()
     private static var uploadSmoke: SalemXPushKitTokenUploadSmoke?
     private static var latestUploadSummary = initialUploadRedactedSummary()
+    private static var latestMatrixSessionWhoamiSummary = SalemXMatrixSessionWhoamiProofSummary()
     private static var latestVoIPPushReceiptSummary = SalemXVoIPPushReceiptProofSummary()
     private static var latestStartupPushKitRegistrySummary = SalemXStartupPushKitRegistryProofSummary()
     private static var latestLocalCallKitOnlySummary = SalemXLocalCallKitOnlyProofSummary()
@@ -1993,13 +2060,23 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
 
     static func handleUploadSmokeURL(_ url: URL) -> Bool {
         guard url.scheme == "kz.salemx.msg",
-              url.host == uploadSmokeURLHost,
-              url.path == uploadSmokeURLPath else {
+              url.host == uploadSmokeURLHost else {
             return false
         }
 
-        _ = startRegistrationUploadSmokeWithCurrentSessionURLString(uploadSmokeDefaultURLString)
-        return true
+        if url.path == uploadSmokeURLPath {
+            _ = startRegistrationUploadSmokeWithCurrentSessionURLString(uploadSmokeDefaultURLString)
+            return true
+        }
+
+        if url.path == matrixSessionWhoamiSmokeURLPath {
+            let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            let expectedUserHash = components?.queryItems?.first { $0.name == "expected_user_hash" }?.value ?? ""
+            _ = startMatrixSessionWhoamiSmokeWithExpectedUserHash(expectedUserHash)
+            return true
+        }
+
+        return false
     }
 
     @objc static func redactedStateSummary() -> String {
@@ -2043,6 +2120,173 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         lock.lock()
         defer { lock.unlock() }
         return latestUploadSummary
+    }
+
+    @objc static func startMatrixSessionWhoamiSmokeWithExpectedUserHash(_ expectedUserHash: String) -> String {
+        let sanitizedExpectedUserHash = sanitizedSessionUserHash(expectedUserHash)
+        updateLatestMatrixSessionWhoamiSummary(.init(manualInvoked: true,
+                                                     expectedUserHashProvided: !sanitizedExpectedUserHash.isEmpty,
+                                                     blockedReason: "requested"))
+
+        Task { @MainActor in
+            await runMatrixSessionWhoamiSmoke(expectedUserHash: sanitizedExpectedUserHash)
+        }
+
+        return redactedMatrixSessionWhoamiSummary()
+    }
+
+    @objc static func redactedMatrixSessionWhoamiSummary() -> String {
+        lock.lock()
+        defer { lock.unlock() }
+        return latestMatrixSessionWhoamiSummary.redactedLines.joined(separator: "\n")
+    }
+
+    private struct MatrixSessionWhoamiContext {
+        let expectedUserHash: String
+        let homeserverURLAvailable: Bool
+        let accessToken: String
+    }
+
+    @MainActor
+    private static func matrixSessionWhoamiContext(expectedUserHash: String) async -> MatrixSessionWhoamiContext? {
+        let availability = SalemXForegroundSSESmokeDebug.matrixSessionWhoamiSmokeAvailability()
+        guard availability.activeSessionAvailable else {
+            updateLatestMatrixSessionWhoamiSummary(.init(manualInvoked: true,
+                                                         expectedUserHashProvided: !expectedUserHash.isEmpty,
+                                                         blockedReason: "missing_active_session"))
+            return nil
+        }
+
+        guard availability.accessTokenProviderAvailable else {
+            updateLatestMatrixSessionWhoamiSummary(.init(manualInvoked: true,
+                                                         expectedUserHashProvided: !expectedUserHash.isEmpty,
+                                                         activeSessionAvailable: true,
+                                                         homeserverURLAvailable: availability.homeserverURLAvailable,
+                                                         blockedReason: "missing_access_token_provider"))
+            return nil
+        }
+
+        guard let accessToken = await SalemXForegroundSSESmokeDebug.matrixAccessTokenForPushKitUploadSmoke(),
+              !accessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            updateLatestMatrixSessionWhoamiSummary(.init(manualInvoked: true,
+                                                         expectedUserHashProvided: !expectedUserHash.isEmpty,
+                                                         activeSessionAvailable: true,
+                                                         accessTokenProviderAvailable: true,
+                                                         homeserverURLAvailable: availability.homeserverURLAvailable,
+                                                         blockedReason: "missing_access_token"))
+            return nil
+        }
+
+        return .init(expectedUserHash: expectedUserHash,
+                     homeserverURLAvailable: availability.homeserverURLAvailable,
+                     accessToken: accessToken)
+    }
+
+    @MainActor
+    private static func runMatrixSessionWhoamiSmoke(expectedUserHash: String) async {
+        guard let context = await matrixSessionWhoamiContext(expectedUserHash: expectedUserHash) else {
+            return
+        }
+
+        guard let whoamiURL = URL(string: matrixSessionWhoamiURLString) else {
+            updateLatestMatrixSessionWhoamiSummary(.init(manualInvoked: true,
+                                                         expectedUserHashProvided: !context.expectedUserHash.isEmpty,
+                                                         activeSessionAvailable: true,
+                                                         accessTokenProviderAvailable: true,
+                                                         accessTokenAvailable: true,
+                                                         homeserverURLAvailable: context.homeserverURLAvailable,
+                                                         blockedReason: "whoami_url_unresolved"))
+            return
+        }
+
+        var request = URLRequest(url: whoamiURL)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("B" + "earer " + context.accessToken, forHTTPHeaderField: "Authorization")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                updateLatestMatrixSessionWhoamiSummary(.init(manualInvoked: true,
+                                                             expectedUserHashProvided: !context.expectedUserHash.isEmpty,
+                                                             activeSessionAvailable: true,
+                                                             accessTokenProviderAvailable: true,
+                                                             accessTokenAvailable: true,
+                                                             homeserverURLAvailable: context.homeserverURLAvailable,
+                                                             whoamiRequested: true,
+                                                             whoamiResult: "blocked_redacted",
+                                                             whoamiHTTPStatusBucket: "unknown",
+                                                             whoamiFailureReason: "missing_http_response",
+                                                             blockedReason: "whoami_missing_http_response"))
+                return
+            }
+
+            guard (200..<300).contains(httpResponse.statusCode) else {
+                let diagnostics = pendingMetadataFetchFailureDiagnostics(response: response, data: data)
+                updateLatestMatrixSessionWhoamiSummary(.init(manualInvoked: true,
+                                                             expectedUserHashProvided: !context.expectedUserHash.isEmpty,
+                                                             activeSessionAvailable: true,
+                                                             accessTokenProviderAvailable: true,
+                                                             accessTokenAvailable: true,
+                                                             homeserverURLAvailable: context.homeserverURLAvailable,
+                                                             whoamiRequested: true,
+                                                             whoamiResult: "blocked_redacted",
+                                                             whoamiHTTPStatusBucket: diagnostics.httpStatusBucket,
+                                                             whoamiErrcode: diagnostics.errcode,
+                                                             whoamiFailureReason: diagnostics.failureReason,
+                                                             blockedReason: "whoami_http_failure_redacted"))
+                return
+            }
+
+            guard let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let userID = payload["user_id"] as? String,
+                  !userID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                updateLatestMatrixSessionWhoamiSummary(.init(manualInvoked: true,
+                                                             expectedUserHashProvided: !context.expectedUserHash.isEmpty,
+                                                             activeSessionAvailable: true,
+                                                             accessTokenProviderAvailable: true,
+                                                             accessTokenAvailable: true,
+                                                             homeserverURLAvailable: context.homeserverURLAvailable,
+                                                             whoamiRequested: true,
+                                                             whoamiResult: "blocked_redacted",
+                                                             whoamiHTTPStatusBucket: "2xx",
+                                                             whoamiFailureReason: "payload_invalid",
+                                                             blockedReason: "whoami_payload_invalid_redacted"))
+                return
+            }
+
+            let deviceID = payload["device_id"] as? String
+            let userHash = sha256Prefix16(userID)
+            let expectedHashMatched = !context.expectedUserHash.isEmpty && userHash == context.expectedUserHash
+            let devicePresent = deviceID?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            updateLatestMatrixSessionWhoamiSummary(.init(manualInvoked: true,
+                                                         expectedUserHashProvided: !context.expectedUserHash.isEmpty,
+                                                         activeSessionAvailable: true,
+                                                         accessTokenProviderAvailable: true,
+                                                         accessTokenAvailable: true,
+                                                         homeserverURLAvailable: context.homeserverURLAvailable,
+                                                         whoamiRequested: true,
+                                                         whoamiResult: "success_redacted",
+                                                         whoamiHTTPStatusBucket: "2xx",
+                                                         matrixSessionPresent: true,
+                                                         matrixSessionUserHash: userHash,
+                                                         matrixSessionUserHashMatchesExpected: expectedHashMatched,
+                                                         matrixSessionDevicePresent: devicePresent,
+                                                         pendingMetadataAuthReady: expectedHashMatched && devicePresent,
+                                                         blockedReason: expectedHashMatched && devicePresent ? "none" : "whoami_unexpected_session_redacted"))
+        } catch {
+            updateLatestMatrixSessionWhoamiSummary(.init(manualInvoked: true,
+                                                         expectedUserHashProvided: !context.expectedUserHash.isEmpty,
+                                                         activeSessionAvailable: true,
+                                                         accessTokenProviderAvailable: true,
+                                                         accessTokenAvailable: true,
+                                                         homeserverURLAvailable: context.homeserverURLAvailable,
+                                                         whoamiRequested: true,
+                                                         whoamiResult: "blocked_redacted",
+                                                         whoamiHTTPStatusBucket: "network_failure",
+                                                         whoamiFailureReason: "network_failure",
+                                                         blockedReason: "whoami_network_failure_redacted"))
+        }
     }
 
     @objc static func recordCallKitOperatorAnswerIntent(_ timingBucket: String) -> String {
@@ -2923,6 +3167,17 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         writeUploadSmokeProof(latestUploadSummary)
     }
 
+    private static func updateLatestMatrixSessionWhoamiSummary(_ summary: SalemXMatrixSessionWhoamiProofSummary) {
+        lock.lock()
+        var summary = summary
+        summary.proofGeneration = nextProofGenerationLocked()
+        summary.proofLastUpdatedBy = "matrix_session_whoami_smoke"
+        latestMatrixSessionWhoamiSummary = summary
+        let proof = summary.redactedLines.joined(separator: "\n")
+        lock.unlock()
+        writeMatrixSessionWhoamiProof(proof)
+    }
+
     private static func updateLatestVoIPPushReceiptSummary(_ summary: SalemXVoIPPushReceiptProofSummary) {
         lock.lock()
         var summary = summary
@@ -2974,6 +3229,10 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
 
     private static func writeUploadSmokeProof(_ proof: String) {
         writeProof(proof, fileName: uploadSmokeProofFileName)
+    }
+
+    private static func writeMatrixSessionWhoamiProof(_ proof: String) {
+        writeProof(proof, fileName: matrixSessionWhoamiProofFileName)
     }
 
     private static func writeVoIPPushReceiptProof(_ proof: String) {
@@ -3042,6 +3301,20 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
 
     private static func initialUploadRedactedSummary() -> String {
         SalemXPushKitTokenUploadSmokeSummary().redactedLines.joined(separator: "\n")
+    }
+
+    private static func sanitizedSessionUserHash(_ userHash: String) -> String {
+        let trimmed = userHash.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard trimmed.count == 16,
+              trimmed.allSatisfy(\.isHexDigit) else {
+            return ""
+        }
+        return trimmed
+    }
+
+    private static func sha256Prefix16(_ value: String) -> String {
+        let digest = SHA256.hash(data: Data(value.utf8))
+        return digest.prefix(8).map { String(format: "%02x", $0) }.joined()
     }
 
     private static func redactedRegistrationResult(for status: DirectCallPushKitRegistrarStatus) -> String {
@@ -3578,6 +3851,13 @@ final class SalemXForegroundSSESmokeDebug: NSObject {
 
     fileprivate static func matrixAccessTokenProviderForPushKitUploadSmoke() -> DirectCallMatrixAccessTokenProviding? {
         activeUserSession?.clientProxy as? DirectCallMatrixAccessTokenProviding
+    }
+
+    fileprivate static func matrixSessionWhoamiSmokeAvailability() -> MatrixSessionWhoamiSmokeAvailability {
+        let clientProxy = activeUserSession?.clientProxy
+        return .init(activeSessionAvailable: activeUserSession != nil,
+                     accessTokenProviderAvailable: clientProxy is DirectCallMatrixAccessTokenProviding,
+                     homeserverURLAvailable: clientProxy?.homeserver.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
     }
 
     private static func configureWithCurrentSession(streamURLString: String, startsImmediately: Bool) {

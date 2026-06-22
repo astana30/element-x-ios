@@ -33,6 +33,7 @@ struct SalemXDeveloperOptionsScreenHook: DeveloperOptionsScreenHookProtocol {
 enum SalemXForegroundSSESmokeControls {
     static let receiverStreamURLString = "https://matrix.mertis.kz/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/stream"
     static let pushKitTokenUploadURLString = "https://matrix.mertis.kz/_matrix/client/unstable/kz.salemx.direct_call/pushkit/token"
+    static let expectedReceiverUserHash = "497015f5745c933a"
 
     static func startReceiverSSE() {
         SalemXForegroundSSEReceiverSmokeDebugBridge.configureWithCurrentSessionStreamURLString(receiverStreamURLString)
@@ -52,6 +53,7 @@ private struct SalemXForegroundSSESmokeControlsView: View {
     #if canImport(PushKit)
     @State private var pushKitSummary = SalemXPushKitRegistrationSmokeDebugBridge.redactedStateSummary()
     @State private var pushKitUploadSummary = SalemXPushKitRegistrationSmokeDebugBridge.redactedUploadStateSummary()
+    @State private var matrixSessionWhoamiSummary = SalemXPushKitRegistrationSmokeDebugBridge.redactedMatrixSessionWhoamiSummary()
     @State private var voIPReceiptSummary = SalemXPushKitRegistrationSmokeDebugBridge.redactedVoIPPushReceiptSummary()
     @State private var localCallKitOnlySummary = SalemXPushKitRegistrationSmokeDebugBridge.redactedLocalCallKitOnlySummary()
     @State private var localBackgroundCallKitOnlySummary = SalemXPushKitRegistrationSmokeDebugBridge.redactedLocalBackgroundCallKitOnlySummary()
@@ -109,6 +111,20 @@ private struct SalemXForegroundSSESmokeControlsView: View {
                     .font(.system(.caption, design: .monospaced))
                     .textSelection(.enabled)
                     .accessibilityIdentifier("pushKitTokenUploadSmokeProof")
+
+                Button("Start Matrix session whoami smoke") {
+                    matrixSessionWhoamiSummary = SalemXPushKitRegistrationSmokeDebugBridge.startMatrixSessionWhoamiSmokeWithExpectedUserHash(SalemXForegroundSSESmokeControls.expectedReceiverUserHash)
+                    refreshMatrixSessionWhoamiSummary(after: .seconds(3))
+                }
+
+                Button("Refresh Matrix session whoami proof") {
+                    refreshMatrixSessionWhoamiSummary()
+                }
+
+                Text(matrixSessionWhoamiSummary)
+                    .font(.system(.caption, design: .monospaced))
+                    .textSelection(.enabled)
+                    .accessibilityIdentifier("matrixSessionWhoamiSmokeProof")
 
                 Button("Prepare Answer marker: lock screen") {
                     voIPReceiptSummary = SalemXPushKitRegistrationSmokeDebugBridge.recordCallKitOperatorReadyToAnswer("lockscreen")
@@ -208,6 +224,15 @@ private struct SalemXForegroundSSESmokeControlsView: View {
                 try? await Task.sleep(for: delay)
             }
             pushKitUploadSummary = SalemXPushKitRegistrationSmokeDebugBridge.redactedUploadStateSummary()
+        }
+    }
+
+    private func refreshMatrixSessionWhoamiSummary(after delay: Duration? = nil) {
+        Task { @MainActor in
+            if let delay {
+                try? await Task.sleep(for: delay)
+            }
+            matrixSessionWhoamiSummary = SalemXPushKitRegistrationSmokeDebugBridge.redactedMatrixSessionWhoamiSummary()
         }
     }
 

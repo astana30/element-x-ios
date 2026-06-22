@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48L-Metadata401 — the physical enablement proof attempt is classified as incomplete. APNs was sent once and PushKit/CallKit Answer reached, but the iPhone app's authenticated pending metadata fetch returned `401 M_UNKNOWN_TOKEN`, so credentials and media-connect preflight were not requested. The next phase is a no-APNs iPhone app Matrix session repair/validation checkpoint.
+After 2.48L-SessionRepair — the iPhone app's own stored Matrix session was validated on-device before any APNs retry. The DEBUG-only local `/whoami` smoke succeeded with redacted/hash-only output for the expected receiver hash, so the pending metadata auth precondition is ready. The next phase is `2.48L-Retry2Plan — one-shot retry after receiver app session validation, no immediate APNs`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,42 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48L-SessionRepair validated the iPhone app Matrix session without sending APNs:
+  - `2.48L-SessionRepair = complete`.
+  - Installed and launched the freshly built Debug app on iPhone PRO, then triggered only the local DEBUG session-whoami URL after app session restore completed.
+  - First immediate local trigger proved the timing boundary and stopped before `/whoami` with `blocked_reason=missing_active_session`; no APNs or retry path was used.
+  - Delayed local trigger copied `/tmp/salemx-matrix-session-whoami-proof-2.48l-sessionrepair-retry.txt` and proved:
+    ```text
+    iphone_app_matrix_session_present=true
+    iphone_app_matrix_session_whoami_result=success_redacted
+    iphone_app_matrix_session_user_hash=497015f5745c933a
+    iphone_app_matrix_session_user_hash_matches_expected=true
+    iphone_app_matrix_session_device_present=true
+    iphone_app_pending_metadata_auth_ready=true
+    blocked_reason=none
+    ```
+  - The proof remained local/redacted and preserved the safety boundary:
+    ```text
+    APNs_sent=false
+    dev_invite_used=false
+    media_connect_requested=false
+    media_connect_attempted=false
+    livekit_join_requested=false
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    ```
+  - Session-repair conclusion:
+    ```text
+    receiver_app_session_validated=true
+    receiver_app_session_matches_expected_hash=true
+    pending_metadata_retry_precondition_app_session_valid=true
+    retry_not_performed=true
+    ```
+  - Terminal invite tokens remain insufficient proof for app pending metadata auth; the iPhone app session itself is now validated.
+  - Next phase: `2.48L-Retry2Plan — one-shot retry after receiver app session validation, no immediate APNs`.
+  - No APNs, production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, controlled-connect switch enablement, controlled-connect operator approval enablement, future physical-connect permission enablement, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 - 2.48L-Metadata401 classified the pending metadata auth failure without retrying APNs:
   - `2.48L physical attempt = incomplete`.
   - The one-shot real non-dev invite/APNs had already succeeded once with `invite_http_code=200`, `background_apns_push_result=sandbox_success`, and `APNs_sent=true`; no repeat APNs was performed during classification.

@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Validated the iPhone app Matrix session with a local redacted `/whoami` proof before any 2.48L APNs retry.
 - Classified the 2.48L physical enablement proof as incomplete on pending metadata `401 M_UNKNOWN_TOKEN`; no repeat APNs was performed.
 - Implemented explicit one-shot controlled-connect enablement with default off and no media execution.
 - Documented the controlled-connect enablement implementation plan for 2.48K while preserving default no-connect.
@@ -95,6 +96,69 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48L-SessionRepair — iPhone App Matrix Session Validation
+
+Completed the no-APNs session validation checkpoint before any 2.48L retry. A minimal DEBUG-only proof surface was added because the existing PushKit upload smoke proved only app-side access-token presence and did not validate authenticated `/whoami` or the expected receiver hash.
+
+Conclusion:
+
+```text
+2.48L-SessionRepair = complete
+receiver_app_session_validated=true
+receiver_app_session_matches_expected_hash=true
+pending_metadata_retry_precondition_app_session_valid=true
+APNs_sent=false
+retry_not_performed=true
+```
+
+Physical/on-device validation:
+
+```text
+installed_debug_app=true
+launched_debug_app=true
+local_session_whoami_url_triggered=true
+APNs_sent=false
+```
+
+The first immediate trigger proved a restore-timing boundary and did not request `/whoami`:
+
+```text
+iphone_app_matrix_session_present=false
+iphone_app_pending_metadata_auth_ready=false
+blocked_reason=missing_active_session
+```
+
+After the app restored its session, the delayed local trigger succeeded:
+
+```text
+proof_file=/tmp/salemx-matrix-session-whoami-proof-2.48l-sessionrepair-retry.txt
+iphone_app_matrix_session_present=true
+iphone_app_matrix_session_whoami_result=success_redacted
+iphone_app_matrix_session_user_hash=497015f5745c933a
+iphone_app_matrix_session_user_hash_matches_expected=true
+iphone_app_matrix_session_device_present=true
+iphone_app_pending_metadata_auth_ready=true
+blocked_reason=none
+```
+
+Safety boundary remained intact:
+
+```text
+APNs_sent=false
+dev_invite_used=false
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+Terminal invite tokens remain insufficient proof of app pending metadata auth; the iPhone app's own stored session must be valid, and this checkpoint proved it with redacted/hash-only output. The next phase is `2.48L-Retry2Plan — one-shot retry after receiver app session validation, no immediate APNs`.
+
+No APNs, production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, controlled-connect switch enablement, controlled-connect operator approval enablement, future physical-connect permission enablement, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 
 ### 2.48L-Metadata401 — Pending Metadata Auth Failure Classification
 
