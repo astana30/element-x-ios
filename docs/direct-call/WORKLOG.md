@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Documented the controlled-connect enablement implementation plan for 2.48K while preserving default no-connect.
 - Closed the 2.48I one-shot Answer-path retry as a successful physical no-connect proof.
 - Prepared the 2.48I one-shot Answer-path retry plan; no APNs retry was executed.
 - Classified the 2.48I physical disabled-activation proof attempt as incomplete before the Answer pipeline; no repeat APNs was performed.
@@ -92,6 +93,87 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48J — Controlled-Connect Enablement Implementation Plan
+
+Prepared the 2.48K implementation plan as a docs-only checkpoint. No physical connect was performed, controlled connect was not enabled, and the default remains no-connect.
+
+Conclusion:
+
+```text
+2.48J = controlled-connect enablement implementation plan
+physical connect not performed
+controlled connect not yet enabled
+default remains no-connect
+```
+
+Investigation summary:
+
+- `DirectCallEngine.requestMediaCredentials` remains the credentials-only boundary and does not connect media.
+- `DirectCallEngine.connectMediaIfReady` remains the private media boundary reached only from accepted/answered connecting sessions with ready encryption and a valid key handle.
+- `LiveKitDirectCallMediaEngine.connectAudio` remains the first real media-connect boundary and must stay uninvoked in 2.48K.
+- The existing 2.48H/2.48I proof surface already has the DEBUG-only controlled switch, default-disabled activation configuration, preflight guard, and rollback proof support needed for a narrow enablement layer.
+
+The next code phase is:
+
+```text
+2.48K — implement explicit one-shot controlled-connect enablement, default off, no physical connect
+```
+
+2.48K must implement explicit enablement mechanics without turning them on by default:
+
+```text
+enablement_debug_only=true
+enablement_default_enabled=false
+enablement_operator_approval_default=false
+enablement_requires_fresh_credentials=true
+enablement_requires_audio_only_scope=true
+enablement_video_disabled=true
+enablement_matrix_events_disabled=true
+enablement_raw_credentials_logged=false
+enablement_rollback_available=true
+enablement_tests_required_before_physical=true
+```
+
+Future 2.48K proof fields:
+
+```text
+controlled_connect_enablement_wiring_present=true
+controlled_connect_enablement_debug_only=true
+controlled_connect_enablement_default_off=true
+controlled_connect_enablement_operator_approval_required=true
+controlled_connect_enablement_audio_only=true
+controlled_connect_enablement_video_allowed=false
+controlled_connect_enablement_matrix_events_allowed=false
+controlled_connect_enablement_raw_credentials_logged=false
+controlled_connect_enablement_rollback_available=true
+controlled_connect_enablement_execution_allowed=false
+```
+
+Future stop/safety fields that must remain false in 2.48K:
+
+```text
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+Rollback expectations:
+
+```text
+rollback_disables_enablement=true
+rollback_clears_operator_approval=true
+rollback_restores_execution_allowed_false=true
+rollback_preserves_no_connect=true
+```
+
+2.48K should add the smallest code surface needed: a DEBUG-only one-shot enablement configuration/proof wrapper near the existing controlled-connect switch and activation configuration, a default-off path that records execution as not allowed, rollback proof fields that restore the default no-connect state, and source-guard tests that prove no media, LiveKit, permission, Matrix event, or full-flow path is wired.
+
+No APNs, production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, controlled-connect switch enablement, controlled-connect operator approval enablement, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 
 ### 2.48I-Retry — Physical Disabled-Activation Proof Retry
 

@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48I-Retry — physical disabled-activation proof succeeded on the one-shot retry. Controlled connect is still not approved, physical connect has not been performed, and the default remains no-connect.
+After 2.48J — controlled-connect enablement implementation plan is complete. Physical connect was not performed, controlled connect is not yet enabled, and the default remains no-connect.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,59 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48J controlled-connect enablement implementation plan is documented:
+  - `2.48J = controlled-connect enablement implementation plan`.
+  - `physical connect not performed`.
+  - `controlled connect not yet enabled`.
+  - `default remains no-connect`.
+  - Investigation conclusion: keep `DirectCallEngine.requestMediaCredentials` as the credentials-only boundary; keep `DirectCallEngine.connectMediaIfReady` as the private media boundary that must stay unreached in 2.48K; treat `LiveKitDirectCallMediaEngine.connectAudio` as the first real media-connect boundary and keep it uninvoked until a later physical-connect phase explicitly permits it.
+  - Narrow 2.48K implementation path: add explicit DEBUG-only one-shot enablement configuration/proof mechanics around the existing `SalemXControlledMediaConnectSwitch` and `SalemXControlledMediaConnectActivationConfiguration` proof surface, default the enablement off, keep operator approval false by default, require fresh credentials and audio-only scope before execution can ever be considered, and preserve video/Matrix/raw-credential hard stops.
+  - 2.48K required enablement defaults:
+    ```text
+    enablement_debug_only=true
+    enablement_default_enabled=false
+    enablement_operator_approval_default=false
+    enablement_requires_fresh_credentials=true
+    enablement_requires_audio_only_scope=true
+    enablement_video_disabled=true
+    enablement_matrix_events_disabled=true
+    enablement_raw_credentials_logged=false
+    enablement_rollback_available=true
+    enablement_tests_required_before_physical=true
+    ```
+  - Future 2.48K proof fields:
+    ```text
+    controlled_connect_enablement_wiring_present=true
+    controlled_connect_enablement_debug_only=true
+    controlled_connect_enablement_default_off=true
+    controlled_connect_enablement_operator_approval_required=true
+    controlled_connect_enablement_audio_only=true
+    controlled_connect_enablement_video_allowed=false
+    controlled_connect_enablement_matrix_events_allowed=false
+    controlled_connect_enablement_raw_credentials_logged=false
+    controlled_connect_enablement_rollback_available=true
+    controlled_connect_enablement_execution_allowed=false
+    ```
+  - 2.48K stop/safety fields must remain false:
+    ```text
+    media_connect_requested=false
+    media_connect_attempted=false
+    livekit_join_requested=false
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    ```
+  - Rollback expectations:
+    ```text
+    rollback_disables_enablement=true
+    rollback_clears_operator_approval=true
+    rollback_restores_execution_allowed_false=true
+    rollback_preserves_no_connect=true
+    ```
+  - 2.48K tests must be completed before any future physical proof: source guards for DEBUG-only placement, default-off enablement, operator-approval default false, fresh-credentials requirement, audio-only scope, video/Matrix/raw-credential disabled behavior, rollback proof fields, false stop/safety fields, and absence of `connectMediaIfReady`, `.connectAudio`, microphone/camera permission, and Matrix event-emission paths from the enablement proof surface.
+  - Next phase: `2.48K — implement explicit one-shot controlled-connect enablement, default off, no physical connect`.
+  - No APNs, production APNs, repeated APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, controlled-connect switch enablement, controlled-connect operator approval enablement, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced by this planning checkpoint.
 - 2.48I-Retry physical disabled-activation proof succeeded:
   - `2.48I-Retry = physical proof succeeded`.
   - The phase-specific proof file `/tmp/salemx-voip-push-receipt-proof-2.48i-retry-polled.txt` recorded `proof_generation=generation_8`; stale `/tmp/salemx-voip-push-receipt-proof-current.txt` was not used for classification.
