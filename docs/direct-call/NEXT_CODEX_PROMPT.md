@@ -13,7 +13,7 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-2.48L-Retry2Plan prepared the next one-shot physical retry after receiver app session validation. This was docs-only: no APNs was sent, no retry invite was run, and the default remains no-connect.
+2.48L-Retry2 physically succeeded after receiver app session validation. Pending metadata fetch succeeded, credentials were requested and received, 2.48K enablement wiring was present/default-off on-device, and media-connect preflight reached the guard and blocked before connect. No media connect, LiveKit join, microphone/camera permission, Matrix event emission, or full call flow occurred.
 
 Closed prerequisites:
 - 2.47C physical controlled media credentials request succeeded with no media connect.
@@ -34,45 +34,93 @@ Closed prerequisites:
 - 2.48L-Metadata401 classified the failed pending metadata auth boundary after the one-shot physical attempt; 2.48L is not closed.
 - 2.48L-SessionRepair validated the iPhone app Matrix session before any retry; no APNs was sent.
 - 2.48L-Retry2Plan prepared the one-shot retry checklist after receiver app session validation; no APNs was sent.
+- 2.48L-Retry2 physically closed the post-session-repair proof with credentials success and no media connect.
 
-2.48L-Retry2Plan conclusion:
-
-```text
-2.48L-Retry2Plan = ready for one explicit retry only after receiver app session validation
-receiver app Matrix session validated=true
-APNs not sent
-default remains no-connect
-```
-
-Retry2 requirements:
+2.48L-Retry2 conclusion:
 
 ```text
-retry2_requires_receiver_app_session_validated=true
-retry2_requires_fresh_debug_app_running=true
-retry2_requires_terminal_tokens_valid=true
-retry2_requires_room_validation_pass=true
-retry2_requires_single_sandbox_apns=true
-retry2_requires_operator_green_answer_ready=true
-retry2_requires_post_answer_polling=true
-retry2_rejects_stale_proof=true
-retry2_forbids_media_connect=true
-retry2_forbids_livekit_join=true
-retry2_forbids_permissions=true
-retry2_forbids_matrix_events=true
-retry2_forbids_full_flow=true
+2.48L-Retry2 = physical proof succeeded
+proof_generation=generation_14
+receiver app session validation held
+pending metadata fetch succeeded
+credentials requested and received
+enablement wiring present on-device
+enablement default off
+execution allowed=false
+blocked reason=enablement_disabled_no_connect
+no media connect
+no LiveKit join
+no mic/camera permission
+no Matrix events
+no full call flow
 ```
 
-Required success fields for the future retry:
+PushKit and CallKit Answer succeeded:
+
+```text
+physical_voip_push_received=true
+pushkit_callback_invoked=true
+pushkit_payload_kind=real_invite_controlled
+callkit_first_action_kind=answer
+callkit_answer_action_delivered=true
+callkit_answer_action_received=true
+callkit_answer_action_fulfilled=true
+```
+
+Pending metadata and credentials succeeded:
 
 ```text
 pending_metadata_fetch_result=success_redacted
+pending_metadata_fetch_http_status_bucket=2xx
+pending_metadata_fetch_errcode=none
+pending_metadata_fetch_failure_reason=none
 foreground_pending_call_metadata_handoff_observed=true
+media_credentials_request_metadata_available=true
+media_credentials_boundary_reached=true
+media_credentials_requested=true
+media_credentials_request_authorized=true
 media_credentials_result=success_redacted
+media_credentials_token_received=true
+media_credentials_url_received=true
+media_credentials_expires_at_present=true
+media_credentials_payload_redacted=true
+```
+
+Enablement remained default-off:
+
+```text
 controlled_connect_enablement_wiring_present=true
+controlled_connect_enablement_debug_only=true
+controlled_connect_enablement_default_off=true
+controlled_connect_enablement_operator_approval_required=true
+controlled_connect_enablement_one_shot=true
+controlled_connect_enablement_fresh_credentials_required=true
+controlled_connect_enablement_audio_only=true
+controlled_connect_enablement_video_allowed=false
+controlled_connect_enablement_matrix_events_allowed=false
+controlled_connect_enablement_raw_credentials_logged=false
+controlled_connect_enablement_rollback_available=true
 controlled_connect_enablement_enabled=false
+controlled_connect_enablement_operator_approved=false
+controlled_connect_enablement_future_phase_permitted=false
 controlled_connect_enablement_execution_allowed=false
 controlled_connect_enablement_blocked_reason=enablement_disabled_no_connect
+```
+
+Media-connect preflight reached the guard and blocked before connect:
+
+```text
 media_connect_preflight_requested=true
+media_connect_preflight_metadata_available=true
+media_connect_preflight_credentials_available=true
+media_connect_preflight_token_present=true
+media_connect_preflight_url_present=true
+media_connect_preflight_expires_at_present=true
+media_connect_execution_allowed=false
+media_connect_preflight_result=blocked_before_connect_redacted
+media_connect_blocked_reason=disabled_switch_no_connect
+media_connect_engine_invoked=false
+livekit_connect_audio_invoked=false
 media_connect_requested=false
 media_connect_attempted=false
 livekit_join_requested=false
@@ -83,48 +131,30 @@ real_call_flow_started=false
 blocked_reason=none
 ```
 
-Stop conditions:
-
-```text
-if APNs sent once, do not repeat automatically
-if pending_metadata_fetch_result=blocked_redacted, stop and classify
-if media_credentials_result=not_requested after Answer, stop and classify
-if enablement fields missing, verify installed commit before any retry
-if media_connect_requested=true, stop as safety regression
-if livekit_join_requested=true, stop as safety regression
-```
-
-Receiver app session precondition carried forward:
-
-```text
-iphone_app_matrix_session_present=true
-iphone_app_matrix_session_whoami_result=success_redacted
-iphone_app_matrix_session_user_hash=497015f5745c933a
-iphone_app_matrix_session_device_present=true
-iphone_app_pending_metadata_auth_ready=true
-```
-
 ## Phase
 
-`2.48L-Retry2 — one-shot physical proof retry after app session validation, no LiveKit join`
+`2.48M — controlled-connect first-run readiness gate, no physical connect`
 
 ## Goal
 
-Execute exactly one explicit operator-approved physical retry after re-confirming the receiver app session, terminal tokens, room validation, and local schema. The retry must prove pending metadata fetch, foreground handoff, credentials, and default-off enablement guard without media connect or LiveKit join.
+Prepare the first controlled-connect readiness gate without performing physical connect. This is not a physical APNs task, not a media-connect task, and not a LiveKit join task.
 
 ## Required Behavior
 
-- Send at most one sandbox APNs only after preflight passes and explicit one-shot confirmation is reached.
-- After `background_apns_push_result=sandbox_success`, do not send another APNs.
-- Require the fresh Debug app to be running.
-- Require terminal tokens to validate and room validation to pass.
-- Require operator green Answer readiness and post-Answer polling before copying proof.
-- Reject stale proof generations.
-- Keep the distinction explicit: terminal invite tokens can send the real non-dev invite, but the iPhone app's own stored session performs pending metadata fetch.
-- Do not mark 2.48L closed.
-- Stop and classify on any blocked pending metadata fetch, missing credentials request after Answer, missing enablement fields, media-connect request, or LiveKit join request.
+- Do not send APNs.
+- Do not run `dev/invite`.
+- Do not start media connect.
+- Do not join LiveKit.
+- Do not request microphone/camera permissions.
+- Do not emit Matrix events.
+- Do not start full direct-call flow.
+- Do not enable controlled-connect switch by default.
+- Do not enable operator approval by default.
+- Do not enable future physical-connect permission by default.
+- Preserve the 2.48L-Retry2 success as the latest physical no-connect proof.
+- Build a readiness gate/plan for the future first controlled-connect run that explicitly requires a fresh operator confirmation before any later physical connect.
 
-Required success fields:
+Carry forward these 2.48L-Retry2 proof fields:
 
 ```text
 pending_metadata_fetch_result=success_redacted

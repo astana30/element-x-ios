@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48L-Retry2Plan — the next one-shot physical retry is planned and gated by the validated receiver app Matrix session. No APNs was sent during planning, and the default remains no-connect. The next phase is `2.48L-Retry2 — one-shot physical proof retry after app session validation, no LiveKit join`.
+After 2.48L-Retry2 — the one-shot physical proof retry after receiver app session validation succeeded. Pending metadata fetch succeeded, credentials were requested and received, 2.48K enablement wiring was present/default-off on-device, and media-connect preflight reached the guard and blocked before connect. The next phase is `2.48M — controlled-connect first-run readiness gate, no physical connect`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,102 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48L-Retry2 physically closed the post-session-repair proof with no media connect:
+  - `2.48L-Retry2 = physical proof succeeded`.
+  - Proof path: `/tmp/salemx-voip-push-receipt-proof-2.48l-retry2-polled.txt`.
+  - Proof generation: `generation_14`.
+  - Receiver app session validation held.
+  - Exactly one sandbox APNs was sent and returned `background_apns_push_result=sandbox_success`; no repeat APNs was sent.
+  - PushKit and CallKit Answer succeeded:
+    ```text
+    physical_voip_push_received=true
+    pushkit_callback_invoked=true
+    pushkit_payload_kind=real_invite_controlled
+    callkit_first_action_kind=answer
+    callkit_answer_action_delivered=true
+    callkit_answer_action_received=true
+    callkit_answer_action_fulfilled=true
+    ```
+  - Pending metadata fetch succeeded after receiver app session validation:
+    ```text
+    pending_metadata_fetch_result=success_redacted
+    pending_metadata_fetch_http_status_bucket=2xx
+    pending_metadata_fetch_errcode=none
+    pending_metadata_fetch_failure_reason=none
+    foreground_pending_call_metadata_handoff_observed=true
+    ```
+  - Credentials were requested and received:
+    ```text
+    media_credentials_request_metadata_available=true
+    media_credentials_boundary_reached=true
+    media_credentials_requested=true
+    media_credentials_request_authorized=true
+    media_credentials_result=success_redacted
+    media_credentials_token_received=true
+    media_credentials_url_received=true
+    media_credentials_expires_at_present=true
+    media_credentials_payload_redacted=true
+    ```
+  - 2.48K enablement wiring was present on-device and default-off:
+    ```text
+    controlled_connect_enablement_wiring_present=true
+    controlled_connect_enablement_debug_only=true
+    controlled_connect_enablement_default_off=true
+    controlled_connect_enablement_operator_approval_required=true
+    controlled_connect_enablement_one_shot=true
+    controlled_connect_enablement_fresh_credentials_required=true
+    controlled_connect_enablement_audio_only=true
+    controlled_connect_enablement_video_allowed=false
+    controlled_connect_enablement_matrix_events_allowed=false
+    controlled_connect_enablement_raw_credentials_logged=false
+    controlled_connect_enablement_rollback_available=true
+    controlled_connect_enablement_enabled=false
+    controlled_connect_enablement_operator_approved=false
+    controlled_connect_enablement_future_phase_permitted=false
+    controlled_connect_enablement_execution_allowed=false
+    controlled_connect_enablement_blocked_reason=enablement_disabled_no_connect
+    ```
+  - Media-connect preflight reached the guard and blocked before connect:
+    ```text
+    media_connect_preflight_requested=true
+    media_connect_preflight_metadata_available=true
+    media_connect_preflight_credentials_available=true
+    media_connect_preflight_token_present=true
+    media_connect_preflight_url_present=true
+    media_connect_preflight_expires_at_present=true
+    media_connect_execution_allowed=false
+    media_connect_preflight_result=blocked_before_connect_redacted
+    media_connect_blocked_reason=disabled_switch_no_connect
+    media_connect_engine_invoked=false
+    livekit_connect_audio_invoked=false
+    ```
+  - Safety boundary remained intact:
+    ```text
+    media_connect_requested=false
+    media_connect_attempted=false
+    livekit_join_requested=false
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    blocked_reason=none
+    ```
+  - Close-out summary:
+    ```text
+    pending metadata fetch succeeded
+    credentials requested and received
+    enablement wiring present on-device
+    enablement default off
+    execution allowed=false
+    blocked reason=enablement_disabled_no_connect
+    no media connect
+    no LiveKit join
+    no mic/camera permission
+    no Matrix events
+    no full call flow
+    ```
+  - Next phase: `2.48M — controlled-connect first-run readiness gate, no physical connect`.
+  - No repeated APNs, production APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, controlled-connect switch enablement, controlled-connect operator approval enablement, future physical-connect permission enablement, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 - 2.48L-Retry2Plan prepared the one-shot retry plan after receiver app session validation:
   - `2.48L-Retry2Plan = ready for one explicit retry only after receiver app session validation`.
   - `receiver app Matrix session validated=true`.
