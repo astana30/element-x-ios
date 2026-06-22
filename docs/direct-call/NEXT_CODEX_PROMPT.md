@@ -13,13 +13,32 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48T-RealRuntime — real controlled audio-connect runtime path, default disabled, no APNs` is complete.
+`2.48T-RealBridge — real controlled audio-connect bridge, default disabled, no APNs` is complete.
 
-The app now has a DEBUG/test-controlled runtime path from authenticated pending metadata and media credentials into the controlled audio-connect gate. The path can reach the fake/test media engine seam only when every gate is explicitly true. Runtime defaults remain no-connect.
+The app now has a DEBUG/test-controlled real audio-connect bridge from authenticated pending metadata and media credentials into the controlled audio-connect gate. The bridge can reach the fake/test media engine only in unit tests, and the non-test runtime boundary can reach `DirectCallEngine.acceptCall`, `connectMediaIfReady`, `LiveKitDirectCallMediaEngine.connectAudio`, and the LiveKit audio connect boundary only when every gate is explicitly true. Runtime defaults remain no-connect.
 
-Default real-runtime proof fields:
+Default real-bridge proof fields:
 
 ```text
+controlled_connect_real_bridge_present=true
+controlled_connect_real_bridge_debug_only=true
+controlled_connect_real_bridge_default_disabled=true
+controlled_connect_real_bridge_requires_credentials=true
+controlled_connect_real_bridge_requires_enablement=true
+controlled_connect_real_bridge_requires_operator_approval=true
+controlled_connect_real_bridge_requires_future_phase_permission=true
+controlled_connect_real_bridge_audio_only=true
+controlled_connect_real_bridge_video_allowed=false
+controlled_connect_real_bridge_matrix_events_allowed=false
+controlled_connect_real_bridge_raw_credentials_logged=false
+controlled_connect_real_bridge_one_shot=true
+controlled_connect_real_bridge_allowed=false
+controlled_connect_real_bridge_blocked_reason=default_disabled_no_connect
+controlled_connect_real_bridge_blocked_before_connect_media=true
+controlled_connect_real_bridge_can_call_connect_media_when_all_gates_true=true
+controlled_connect_real_bridge_can_call_livekit_audio_when_all_gates_true=true
+controlled_connect_real_bridge_uses_fake_engine_in_tests_only=true
+controlled_connect_real_bridge_uses_real_runtime_boundary_when_not_test=true
 controlled_connect_real_runtime_path_present=true
 controlled_connect_real_runtime_path_debug_only=true
 controlled_connect_real_runtime_path_default_disabled=true
@@ -69,9 +88,12 @@ matrix_event_emit_requested=false
 real_call_flow_started=false
 ```
 
-The fake/test seam can reach the first-attempt boundary only when receiver session validation, fresh credentials, enablement, operator approval, future phase permission, activation, execution, audio-only safety, and one-shot gates are all true:
+The all-gates-true proof can reach the fake/test media engine only in tests, and the non-test runtime bridge can reach the real connect-media boundary:
 
 ```text
+controlled_connect_real_bridge_allowed=true
+controlled_connect_real_bridge_blocked_reason=none
+controlled_connect_real_bridge_blocked_before_connect_media=false
 controlled_connect_first_attempt_requested=true
 controlled_connect_first_attempt_allowed=true
 controlled_connect_first_attempt_started=true
@@ -85,11 +107,11 @@ livekit_join_requested=true
 livekit_connect_audio_invoked=true
 ```
 
-No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, real LiveKit join, microphone/camera permission request on device, Matrix event emit, or full call flow was performed in 2.48T-RealRuntime.
+No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, real device LiveKit join, microphone/camera permission request on device, Matrix event emit, or full call flow was performed in 2.48T-RealBridge.
 
 ## Phase
 
-`2.48T-Physical3 — one-shot first controlled audio-connect physical attempt`
+`2.48T-Physical4 — one-shot first controlled audio-connect physical attempt`
 
 ## Required Setup
 
@@ -143,7 +165,7 @@ Send exactly one real non-dev sandbox APNs only after explicit one-shot confirma
 Use a phase-specific proof path:
 
 ```text
-/tmp/salemx-voip-push-receipt-proof-2.48t-physical3-first-connect-polled.txt
+/tmp/salemx-voip-push-receipt-proof-2.48t-physical4-first-connect-polled.txt
 ```
 
 Do not classify from stale generic proof files.
@@ -201,6 +223,25 @@ controlled_audio_connect_execution_allowed=true
 controlled_connect_real_runtime_path_allowed=true
 controlled_connect_real_runtime_path_blocked_reason=none
 controlled_connect_real_runtime_path_blocked_before_engine=false
+controlled_connect_real_bridge_present=true
+controlled_connect_real_bridge_debug_only=true
+controlled_connect_real_bridge_default_disabled=true
+controlled_connect_real_bridge_requires_credentials=true
+controlled_connect_real_bridge_requires_enablement=true
+controlled_connect_real_bridge_requires_operator_approval=true
+controlled_connect_real_bridge_requires_future_phase_permission=true
+controlled_connect_real_bridge_audio_only=true
+controlled_connect_real_bridge_video_allowed=false
+controlled_connect_real_bridge_matrix_events_allowed=false
+controlled_connect_real_bridge_raw_credentials_logged=false
+controlled_connect_real_bridge_one_shot=true
+controlled_connect_real_bridge_can_call_connect_media_when_all_gates_true=true
+controlled_connect_real_bridge_can_call_livekit_audio_when_all_gates_true=true
+controlled_connect_real_bridge_uses_fake_engine_in_tests_only=true
+controlled_connect_real_bridge_uses_real_runtime_boundary_when_not_test=true
+controlled_connect_real_bridge_allowed=true
+controlled_connect_real_bridge_blocked_reason=none
+controlled_connect_real_bridge_blocked_before_connect_media=false
 ```
 
 First attempt proof:

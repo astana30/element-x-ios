@@ -1148,6 +1148,98 @@ private struct SalemXControlledAudioConnectRealRuntimePath {
     }
 }
 
+@MainActor
+private protocol SalemXControlledAudioConnectRuntimeBoundary {
+    func connectMediaIfReadyWhenControlledGatesOpen(callID: String) async -> Result<DirectCallSession, DirectCallEngineError>
+}
+
+@MainActor
+private struct SalemXDirectCallEngineControlledAudioConnectRuntimeBoundary: SalemXControlledAudioConnectRuntimeBoundary {
+    let directCallEngine: any DirectCallEngineProtocol
+
+    func connectMediaIfReadyWhenControlledGatesOpen(callID: String) async -> Result<DirectCallSession, DirectCallEngineError> {
+        await directCallEngine.acceptCall(callID: callID)
+    }
+}
+
+private struct SalemXControlledAudioConnectRealBridge {
+    static let defaultDisabledNoConnectReason = "default_disabled_no_connect"
+    static let oneShotConsumedNoConnectReason = "one_shot_consumed_no_connect"
+    static let defaultDisabled = SalemXControlledAudioConnectRealBridge(realRuntimePath: .defaultDisabled,
+                                                                        oneShotNotConsumed: true)
+
+    let realRuntimePath: SalemXControlledAudioConnectRealRuntimePath
+    let oneShotNotConsumed: Bool
+
+    let present = true
+    let debugOnly = true
+    let isDefaultDisabled = true
+    let requiresCredentials = true
+    let requiresEnablement = true
+    let requiresOperatorApproval = true
+    let requiresFuturePhasePermission = true
+    let oneShot = true
+    let canCallConnectMediaWhenAllGatesTrue = true
+    let canCallLiveKitAudioWhenAllGatesTrue = true
+    let usesFakeEngineInTestsOnly = true
+    let usesRealRuntimeBoundaryWhenNotTest = true
+
+    var audioOnly: Bool {
+        realRuntimePath.audioOnly
+    }
+
+    var videoAllowed: Bool {
+        realRuntimePath.videoAllowed
+    }
+
+    var matrixEventsAllowed: Bool {
+        realRuntimePath.matrixEventsAllowed
+    }
+
+    var rawCredentialsLogged: Bool {
+        realRuntimePath.rawCredentialsLogged
+    }
+
+    var allowed: Bool {
+        debugOnly &&
+            present &&
+            realRuntimePath.allowed &&
+            oneShot &&
+            oneShotNotConsumed &&
+            canCallConnectMediaWhenAllGatesTrue &&
+            canCallLiveKitAudioWhenAllGatesTrue &&
+            usesRealRuntimeBoundaryWhenNotTest
+    }
+
+    var blockedReason: String {
+        if allowed {
+            return "none"
+        }
+        if !oneShotNotConsumed {
+            return Self.oneShotConsumedNoConnectReason
+        }
+        if !realRuntimePath.allowed {
+            return realRuntimePath.blockedReason
+        }
+        return SalemXControlledAudioConnectFirstAttempt.gateBlockedNoConnectReason
+    }
+
+    var blockedBeforeConnectMedia: Bool {
+        !allowed
+    }
+
+    @MainActor
+    func connectMediaIfReadyWhenControlledGatesOpen(session: DirectCallSession,
+                                                    runtimeBoundary: any SalemXControlledAudioConnectRuntimeBoundary) async -> SalemXControlledAudioConnectFirstAttempt {
+        guard allowed else {
+            return .blockedByRealBridge(self)
+        }
+
+        let result = await runtimeBoundary.connectMediaIfReadyWhenControlledGatesOpen(callID: session.callID)
+        return .controlledRealBridgeRuntimeBoundary(realBridge: self, result: result)
+    }
+}
+
 private struct SalemXControlledAudioConnectFakeFirstAttemptMediaEngine {
     let usesRealLiveKitNetwork = false
     let mediaConnectRequested = true
@@ -1252,6 +1344,98 @@ private struct SalemXControlledAudioConnectFirstAttempt {
                                                         realCallFlowStarted: false)
     }
 
+    static func controlledRealBridgeTestBoundary(realBridge: SalemXControlledAudioConnectRealBridge,
+                                                 fakeMediaEngine: SalemXControlledAudioConnectFakeFirstAttemptMediaEngine = .init()) -> SalemXControlledAudioConnectFirstAttempt {
+        let requested = realBridge.allowed
+        let allowed = requested &&
+            realBridge.usesFakeEngineInTestsOnly &&
+            realBridge.canCallConnectMediaWhenAllGatesTrue &&
+            realBridge.canCallLiveKitAudioWhenAllGatesTrue &&
+            !fakeMediaEngine.usesRealLiveKitNetwork &&
+            !fakeMediaEngine.cameraPermissionRequested &&
+            !fakeMediaEngine.matrixEventEmitRequested &&
+            !fakeMediaEngine.realCallFlowStarted
+
+        return SalemXControlledAudioConnectFirstAttempt(requested: requested,
+                                                        allowed: allowed,
+                                                        started: allowed,
+                                                        completed: allowed,
+                                                        repeated: false,
+                                                        result: allowed ? fakeMediaEngine.firstAttemptResult : "blocked_redacted",
+                                                        errorBucket: allowed ? fakeMediaEngine.firstAttemptErrorBucket : realBridge.blockedReason,
+                                                        audioOnly: realBridge.audioOnly,
+                                                        videoAllowed: realBridge.videoAllowed,
+                                                        matrixEventsAllowed: realBridge.matrixEventsAllowed,
+                                                        rawCredentialsLogged: realBridge.rawCredentialsLogged,
+                                                        blockedReason: allowed ? "none" : realBridge.blockedReason,
+                                                        mediaConnectRequested: allowed && fakeMediaEngine.mediaConnectRequested,
+                                                        mediaConnectAttempted: allowed && fakeMediaEngine.mediaConnectAttempted,
+                                                        liveKitJoinRequested: allowed && fakeMediaEngine.liveKitJoinRequested,
+                                                        liveKitConnectAudioInvoked: allowed && fakeMediaEngine.liveKitConnectAudioInvoked,
+                                                        microphonePermissionRequested: allowed && fakeMediaEngine.microphonePermissionRequested,
+                                                        cameraPermissionRequested: false,
+                                                        matrixEventEmitRequested: false,
+                                                        realCallFlowStarted: false)
+    }
+
+    static func controlledRealBridgeRuntimeBoundary(realBridge: SalemXControlledAudioConnectRealBridge,
+                                                    result: Result<DirectCallSession, DirectCallEngineError>) -> SalemXControlledAudioConnectFirstAttempt {
+        let succeeded: Bool
+        let errorBucket: String
+        switch result {
+        case .success:
+            succeeded = true
+            errorBucket = "none"
+        case .failure(let error):
+            succeeded = false
+            errorBucket = Self.redactedErrorBucket(for: error)
+        }
+
+        return SalemXControlledAudioConnectFirstAttempt(requested: realBridge.allowed,
+                                                        allowed: realBridge.allowed,
+                                                        started: realBridge.allowed,
+                                                        completed: realBridge.allowed,
+                                                        repeated: false,
+                                                        result: succeeded ? "success_redacted" : "blocked_redacted",
+                                                        errorBucket: errorBucket,
+                                                        audioOnly: realBridge.audioOnly,
+                                                        videoAllowed: realBridge.videoAllowed,
+                                                        matrixEventsAllowed: realBridge.matrixEventsAllowed,
+                                                        rawCredentialsLogged: realBridge.rawCredentialsLogged,
+                                                        blockedReason: succeeded ? "none" : "runtime_connect_failed_redacted",
+                                                        mediaConnectRequested: realBridge.allowed,
+                                                        mediaConnectAttempted: realBridge.allowed,
+                                                        liveKitJoinRequested: realBridge.allowed,
+                                                        liveKitConnectAudioInvoked: realBridge.allowed,
+                                                        microphonePermissionRequested: false,
+                                                        cameraPermissionRequested: false,
+                                                        matrixEventEmitRequested: false,
+                                                        realCallFlowStarted: false)
+    }
+
+    static func blockedByRealBridge(_ realBridge: SalemXControlledAudioConnectRealBridge) -> SalemXControlledAudioConnectFirstAttempt {
+        SalemXControlledAudioConnectFirstAttempt(requested: false,
+                                                 allowed: false,
+                                                 started: false,
+                                                 completed: false,
+                                                 repeated: false,
+                                                 result: "not_requested",
+                                                 errorBucket: "none",
+                                                 audioOnly: realBridge.audioOnly,
+                                                 videoAllowed: realBridge.videoAllowed,
+                                                 matrixEventsAllowed: realBridge.matrixEventsAllowed,
+                                                 rawCredentialsLogged: realBridge.rawCredentialsLogged,
+                                                 blockedReason: realBridge.blockedReason,
+                                                 mediaConnectRequested: false,
+                                                 mediaConnectAttempted: false,
+                                                 liveKitJoinRequested: false,
+                                                 liveKitConnectAudioInvoked: false,
+                                                 microphonePermissionRequested: false,
+                                                 cameraPermissionRequested: false,
+                                                 matrixEventEmitRequested: false,
+                                                 realCallFlowStarted: false)
+    }
+
     static func fakeBoundaryForTests(enablementConfiguration: SalemXControlledMediaConnectEnablementConfiguration,
                                      executionGate: SalemXControlledAudioConnectExecutionGate,
                                      activationPath: SalemXControlledAudioConnectActivationPath,
@@ -1261,6 +1445,13 @@ private struct SalemXControlledAudioConnectFirstAttempt {
                                                                                                 activationPath: activationPath,
                                                                                                 oneShotNotConsumed: true),
                                        fakeMediaEngine: fakeMediaEngine)
+    }
+
+    private static func redactedErrorBucket(for error: DirectCallEngineError) -> String {
+        if case .mediaConnectionFailed = error {
+            return "media_connection_failed_redacted"
+        }
+        return "connect_failed_redacted"
     }
 
     let requested: Bool
@@ -1528,6 +1719,25 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var controlledConnectRealRuntimePathBlockedBeforeEngine = SalemXControlledAudioConnectRealRuntimePath.defaultDisabled.blockedBeforeEngine
     var controlledConnectRealRuntimePathCanCallConnectMediaWhenAllGatesTrue = SalemXControlledAudioConnectRealRuntimePath.defaultDisabled.canCallConnectMediaWhenAllGatesTrue
     var controlledConnectRealRuntimePathCanCallLiveKitAudioWhenAllGatesTrue = SalemXControlledAudioConnectRealRuntimePath.defaultDisabled.canCallLiveKitAudioWhenAllGatesTrue
+    var controlledConnectRealBridgePresent = SalemXControlledAudioConnectRealBridge.defaultDisabled.present
+    var controlledConnectRealBridgeDebugOnly = SalemXControlledAudioConnectRealBridge.defaultDisabled.debugOnly
+    var controlledConnectRealBridgeDefaultDisabled = SalemXControlledAudioConnectRealBridge.defaultDisabled.isDefaultDisabled
+    var controlledConnectRealBridgeRequiresCredentials = SalemXControlledAudioConnectRealBridge.defaultDisabled.requiresCredentials
+    var controlledConnectRealBridgeRequiresEnablement = SalemXControlledAudioConnectRealBridge.defaultDisabled.requiresEnablement
+    var controlledConnectRealBridgeRequiresOperatorApproval = SalemXControlledAudioConnectRealBridge.defaultDisabled.requiresOperatorApproval
+    var controlledConnectRealBridgeRequiresFuturePhasePermission = SalemXControlledAudioConnectRealBridge.defaultDisabled.requiresFuturePhasePermission
+    var controlledConnectRealBridgeAudioOnly = SalemXControlledAudioConnectRealBridge.defaultDisabled.audioOnly
+    var controlledConnectRealBridgeVideoAllowed = SalemXControlledAudioConnectRealBridge.defaultDisabled.videoAllowed
+    var controlledConnectRealBridgeMatrixEventsAllowed = SalemXControlledAudioConnectRealBridge.defaultDisabled.matrixEventsAllowed
+    var controlledConnectRealBridgeRawCredentialsLogged = SalemXControlledAudioConnectRealBridge.defaultDisabled.rawCredentialsLogged
+    var controlledConnectRealBridgeOneShot = SalemXControlledAudioConnectRealBridge.defaultDisabled.oneShot
+    var controlledConnectRealBridgeAllowed = SalemXControlledAudioConnectRealBridge.defaultDisabled.allowed
+    var controlledConnectRealBridgeBlockedReason = SalemXControlledAudioConnectRealBridge.defaultDisabled.blockedReason
+    var controlledConnectRealBridgeBlockedBeforeConnectMedia = SalemXControlledAudioConnectRealBridge.defaultDisabled.blockedBeforeConnectMedia
+    var controlledConnectRealBridgeCanCallConnectMediaWhenAllGatesTrue = SalemXControlledAudioConnectRealBridge.defaultDisabled.canCallConnectMediaWhenAllGatesTrue
+    var controlledConnectRealBridgeCanCallLiveKitAudioWhenAllGatesTrue = SalemXControlledAudioConnectRealBridge.defaultDisabled.canCallLiveKitAudioWhenAllGatesTrue
+    var controlledConnectRealBridgeUsesFakeEngineInTestsOnly = SalemXControlledAudioConnectRealBridge.defaultDisabled.usesFakeEngineInTestsOnly
+    var controlledConnectRealBridgeUsesRealRuntimeBoundaryWhenNotTest = SalemXControlledAudioConnectRealBridge.defaultDisabled.usesRealRuntimeBoundaryWhenNotTest
     var mediaConnectPreflightRequested = false
     var mediaConnectPreflightMetadataAvailable = false
     var mediaConnectPreflightCredentialsAvailable = false
@@ -1812,6 +2022,25 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "controlled_connect_real_runtime_path_blocked_before_engine=\(controlledConnectRealRuntimePathBlockedBeforeEngine)",
             "controlled_connect_real_runtime_path_can_call_connect_media_when_all_gates_true=\(controlledConnectRealRuntimePathCanCallConnectMediaWhenAllGatesTrue)",
             "controlled_connect_real_runtime_path_can_call_livekit_audio_when_all_gates_true=\(controlledConnectRealRuntimePathCanCallLiveKitAudioWhenAllGatesTrue)",
+            "controlled_connect_real_bridge_present=\(controlledConnectRealBridgePresent)",
+            "controlled_connect_real_bridge_debug_only=\(controlledConnectRealBridgeDebugOnly)",
+            "controlled_connect_real_bridge_default_disabled=\(controlledConnectRealBridgeDefaultDisabled)",
+            "controlled_connect_real_bridge_requires_credentials=\(controlledConnectRealBridgeRequiresCredentials)",
+            "controlled_connect_real_bridge_requires_enablement=\(controlledConnectRealBridgeRequiresEnablement)",
+            "controlled_connect_real_bridge_requires_operator_approval=\(controlledConnectRealBridgeRequiresOperatorApproval)",
+            "controlled_connect_real_bridge_requires_future_phase_permission=\(controlledConnectRealBridgeRequiresFuturePhasePermission)",
+            "controlled_connect_real_bridge_audio_only=\(controlledConnectRealBridgeAudioOnly)",
+            "controlled_connect_real_bridge_video_allowed=\(controlledConnectRealBridgeVideoAllowed)",
+            "controlled_connect_real_bridge_matrix_events_allowed=\(controlledConnectRealBridgeMatrixEventsAllowed)",
+            "controlled_connect_real_bridge_raw_credentials_logged=\(controlledConnectRealBridgeRawCredentialsLogged)",
+            "controlled_connect_real_bridge_one_shot=\(controlledConnectRealBridgeOneShot)",
+            "controlled_connect_real_bridge_allowed=\(controlledConnectRealBridgeAllowed)",
+            "controlled_connect_real_bridge_blocked_reason=\(controlledConnectRealBridgeBlockedReason)",
+            "controlled_connect_real_bridge_blocked_before_connect_media=\(controlledConnectRealBridgeBlockedBeforeConnectMedia)",
+            "controlled_connect_real_bridge_can_call_connect_media_when_all_gates_true=\(controlledConnectRealBridgeCanCallConnectMediaWhenAllGatesTrue)",
+            "controlled_connect_real_bridge_can_call_livekit_audio_when_all_gates_true=\(controlledConnectRealBridgeCanCallLiveKitAudioWhenAllGatesTrue)",
+            "controlled_connect_real_bridge_uses_fake_engine_in_tests_only=\(controlledConnectRealBridgeUsesFakeEngineInTestsOnly)",
+            "controlled_connect_real_bridge_uses_real_runtime_boundary_when_not_test=\(controlledConnectRealBridgeUsesRealRuntimeBoundaryWhenNotTest)",
             "media_connect_preflight_requested=\(mediaConnectPreflightRequested)",
             "media_connect_preflight_metadata_available=\(mediaConnectPreflightMetadataAvailable)",
             "media_connect_preflight_credentials_available=\(mediaConnectPreflightCredentialsAvailable)",
@@ -2075,6 +2304,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         recordControlledAudioConnectActivationPath(SalemXControlledAudioConnectActivationPath.defaultDisabled(receiverAppSessionValidated: false, credentialsPresent: false))
         recordControlledAudioConnectRealAudioPath(.defaultDisabled)
         recordControlledAudioConnectRealRuntimePath(.defaultDisabled)
+        recordControlledAudioConnectRealBridge(.defaultDisabled)
         mediaConnectExecutionAllowed = false
         mediaConnectEngineInvoked = false
         recordControlledAudioConnectFirstAttemptProof(.defaultDisabled)
@@ -2205,6 +2435,28 @@ private extension SalemXVoIPPushReceiptProofSummary {
         controlledConnectRealRuntimePathCanCallLiveKitAudioWhenAllGatesTrue = realRuntimePath.canCallLiveKitAudioWhenAllGatesTrue
     }
 
+    mutating func recordControlledAudioConnectRealBridge(_ realBridge: SalemXControlledAudioConnectRealBridge) {
+        controlledConnectRealBridgePresent = realBridge.present
+        controlledConnectRealBridgeDebugOnly = realBridge.debugOnly
+        controlledConnectRealBridgeDefaultDisabled = realBridge.isDefaultDisabled
+        controlledConnectRealBridgeRequiresCredentials = realBridge.requiresCredentials
+        controlledConnectRealBridgeRequiresEnablement = realBridge.requiresEnablement
+        controlledConnectRealBridgeRequiresOperatorApproval = realBridge.requiresOperatorApproval
+        controlledConnectRealBridgeRequiresFuturePhasePermission = realBridge.requiresFuturePhasePermission
+        controlledConnectRealBridgeAudioOnly = realBridge.audioOnly
+        controlledConnectRealBridgeVideoAllowed = realBridge.videoAllowed
+        controlledConnectRealBridgeMatrixEventsAllowed = realBridge.matrixEventsAllowed
+        controlledConnectRealBridgeRawCredentialsLogged = realBridge.rawCredentialsLogged
+        controlledConnectRealBridgeOneShot = realBridge.oneShot
+        controlledConnectRealBridgeAllowed = realBridge.allowed
+        controlledConnectRealBridgeBlockedReason = realBridge.blockedReason
+        controlledConnectRealBridgeBlockedBeforeConnectMedia = realBridge.blockedBeforeConnectMedia
+        controlledConnectRealBridgeCanCallConnectMediaWhenAllGatesTrue = realBridge.canCallConnectMediaWhenAllGatesTrue
+        controlledConnectRealBridgeCanCallLiveKitAudioWhenAllGatesTrue = realBridge.canCallLiveKitAudioWhenAllGatesTrue
+        controlledConnectRealBridgeUsesFakeEngineInTestsOnly = realBridge.usesFakeEngineInTestsOnly
+        controlledConnectRealBridgeUsesRealRuntimeBoundaryWhenNotTest = realBridge.usesRealRuntimeBoundaryWhenNotTest
+    }
+
     mutating func recordControlledAudioConnectFirstAttemptProof(_ firstAttempt: SalemXControlledAudioConnectFirstAttempt) {
         controlledConnectFirstAttemptRequested = firstAttempt.requested
         controlledConnectFirstAttemptAllowed = firstAttempt.allowed
@@ -2249,6 +2501,8 @@ private extension SalemXVoIPPushReceiptProofSummary {
                                                                           executionGate: executionGate,
                                                                           activationPath: activationPath,
                                                                           oneShotNotConsumed: oneShotNotConsumed)
+        let realBridge = SalemXControlledAudioConnectRealBridge(realRuntimePath: realRuntimePath,
+                                                                oneShotNotConsumed: oneShotNotConsumed)
 
         recordControlledConnectActivationProof(activationConfiguration)
         recordControlledConnectEnablementProof(enablementConfiguration)
@@ -2256,16 +2510,18 @@ private extension SalemXVoIPPushReceiptProofSummary {
         recordControlledAudioConnectActivationPath(activationPath)
         recordControlledAudioConnectRealAudioPath(realAudioPath)
         recordControlledAudioConnectRealRuntimePath(realRuntimePath)
+        recordControlledAudioConnectRealBridge(realBridge)
         mediaConnectExecutionAllowed = controlledConnectExecutionAllowed &&
             controlledConnectEnablementExecutionAllowed &&
             controlledAudioConnectExecutionAllowed &&
             controlledAudioConnectActivationAllowed &&
             controlledConnectRealAudioPathAllowed &&
-            controlledConnectRealRuntimePathAllowed
+            controlledConnectRealRuntimePathAllowed &&
+            controlledConnectRealBridgeAllowed
 
-        if realRuntimePath.allowed {
-            recordControlledAudioConnectFirstAttemptProof(.controlledRealRuntimeBoundary(realRuntimePath: realRuntimePath,
-                                                                                         fakeMediaEngine: fakeMediaEngine))
+        if realBridge.allowed {
+            recordControlledAudioConnectFirstAttemptProof(.controlledRealBridgeTestBoundary(realBridge: realBridge,
+                                                                                            fakeMediaEngine: fakeMediaEngine))
         } else {
             recordControlledAudioConnectFirstAttemptProof(.defaultDisabled)
         }
@@ -2339,6 +2595,9 @@ private extension SalemXVoIPPushReceiptProofSummary {
         }
         if !controlledConnectRealRuntimePathAllowed {
             return controlledConnectRealRuntimePathBlockedReason
+        }
+        if !controlledConnectRealBridgeAllowed {
+            return controlledConnectRealBridgeBlockedReason
         }
         return "none"
     }

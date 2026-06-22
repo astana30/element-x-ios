@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48T-RealRuntime — the one-shot controlled real audio-connect runtime path is wired behind DEBUG/test-controlled gates and can reach the fake/test media engine seam when all gates are true. Physical connect was not performed, controlled connect/operator approval/future permission were not enabled by default, and the runtime default remains no-connect. The next phase is `2.48T-Physical3 — one-shot first controlled audio-connect physical attempt`.
+After 2.48T-RealBridge — the one-shot controlled real audio-connect bridge is wired behind DEBUG/test-controlled gates and can reach the real `DirectCallEngine.acceptCall` / `connectMediaIfReady` / `LiveKitDirectCallMediaEngine.connectAudio` boundary when all gates are true. Physical connect was not performed, controlled connect/operator approval/future permission were not enabled by default, and the runtime default remains no-connect. The next phase is `2.48T-Physical4 — one-shot first controlled audio-connect physical attempt`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,47 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48T-RealBridge real controlled audio-connect bridge is wired:
+  - This is a code/test implementation phase only; it is not a physical APNs, media-connect, LiveKit join, microphone-permission, camera-permission, Matrix-event, or full-call task.
+  - The DEBUG/test-controlled bridge replaces the fake-only proof boundary with a narrow runtime boundary that can call `DirectCallEngine.acceptCall`, which reaches `connectMediaIfReady`, `LiveKitDirectCallMediaEngine.connectAudio`, and the LiveKit audio connect boundary only after every gate is true.
+  - The bridge proof fields are present and default disabled:
+    ```text
+    controlled_connect_real_bridge_present=true
+    controlled_connect_real_bridge_debug_only=true
+    controlled_connect_real_bridge_default_disabled=true
+    controlled_connect_real_bridge_requires_credentials=true
+    controlled_connect_real_bridge_requires_enablement=true
+    controlled_connect_real_bridge_requires_operator_approval=true
+    controlled_connect_real_bridge_requires_future_phase_permission=true
+    controlled_connect_real_bridge_audio_only=true
+    controlled_connect_real_bridge_video_allowed=false
+    controlled_connect_real_bridge_matrix_events_allowed=false
+    controlled_connect_real_bridge_raw_credentials_logged=false
+    controlled_connect_real_bridge_one_shot=true
+    controlled_connect_real_bridge_allowed=false
+    controlled_connect_real_bridge_blocked_reason=default_disabled_no_connect
+    controlled_connect_real_bridge_blocked_before_connect_media=true
+    controlled_connect_real_bridge_can_call_connect_media_when_all_gates_true=true
+    controlled_connect_real_bridge_can_call_livekit_audio_when_all_gates_true=true
+    controlled_connect_real_bridge_uses_fake_engine_in_tests_only=true
+    controlled_connect_real_bridge_uses_real_runtime_boundary_when_not_test=true
+    ```
+  - Default runtime remains no-connect:
+    ```text
+    controlled_connect_first_attempt_requested=false
+    controlled_connect_first_attempt_allowed=false
+    media_connect_requested=false
+    media_connect_attempted=false
+    livekit_join_requested=false
+    livekit_connect_audio_invoked=false
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    ```
+  - When receiver session validation, fresh credentials, enablement, operator approval, future phase permission, activation, execution, audio-only safety, and one-shot gates are all true, unit/source-guard proof shows the test seam can reach a fake media engine only in tests, while the non-test runtime boundary can reach the real connect-media boundary.
+  - Next phase: `2.48T-Physical4 — one-shot first controlled audio-connect physical attempt`.
+  - No APNs, production APNs, repeated APNs, `dev/invite`, physical media connection, real device LiveKit join, microphone/camera permission request on device, Matrix event emission, full direct-call flow, default controlled-connect enablement, default operator approval, default future physical-connect permission, production-enabled connect behavior, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 - 2.48T-RealRuntime real controlled audio-connect runtime path is wired:
   - This is a code/test preparation phase only; it is not a physical APNs, media-connect, LiveKit join, microphone-permission, camera-permission, Matrix-event, or full-call task.
   - `requestControlledMediaCredentialsForControlledRuntime` now feeds the controlled runtime preflight after authenticated pending metadata and media credentials; default runtime remains blocked.
