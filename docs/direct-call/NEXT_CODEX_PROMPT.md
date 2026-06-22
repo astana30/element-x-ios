@@ -13,7 +13,7 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-2.48N implemented the first controlled audio-connect execution gate in the existing DEBUG proof surface. It is default-disabled and blocked before media execution. No physical connect was performed. Controlled connect, operator approval, and future physical-connect permission remain disabled by default, and the default remains no-connect.
+2.48O physically proved the 2.48N controlled audio-connect execution gate on-device after the real non-dev invite/APNs, PushKit, CallKit Answer, authenticated pending metadata fetch, media credentials, and media-connect preflight path. The gate stayed default-blocked and no media connect was performed.
 
 Closed prerequisites:
 - 2.47C physical controlled media credentials request succeeded with no media connect.
@@ -35,21 +35,56 @@ Closed prerequisites:
 - 2.48L-Retry2 physically closed the post-session-repair proof with credentials success and no media connect.
 - 2.48M completed the first-run readiness gate and found no blocker for the next no-physical-connect implementation phase.
 - 2.48N implemented the first controlled audio-connect execution gate, default disabled, no physical connect.
+- 2.48O physically proved the controlled audio-connect execution gate appears on-device and remains default-blocked after Answer.
 
-2.48N conclusion:
+2.48O proof summary:
 
 ```text
-2.48N = first controlled audio-connect execution path, default disabled, no physical connect
-controlled connect not enabled by default
-operator approval not enabled by default
-future physical-connect permission remains false
+2.48O = physical proof succeeded
+proof_file=/tmp/salemx-voip-push-receipt-proof-2.48o-polled.txt
+proof_generation=generation_8
+controlled audio-connect execution gate present on-device
+execution gate DEBUG-only
+audio-only=true
+video allowed=false
+Matrix events allowed=false
+raw credentials logged=false
+future phase permitted=false
 execution allowed=false
-default remains no-connect
+blocked reason=future_phase_not_permitted_no_connect
+blocked before engine
+blocked before LiveKit join
+blocked before permissions
+blocked before Matrix events
+no media connect
+no LiveKit join
+no mic/camera permission
+no Matrix events
+no full call flow
 ```
 
-2.48N default execution gate fields:
+2.48O successful proof fields:
 
 ```text
+physical_voip_push_received=true
+pushkit_callback_invoked=true
+pushkit_payload_kind=real_invite_controlled
+callkit_first_action_kind=answer
+callkit_answer_action_delivered=true
+callkit_answer_action_received=true
+callkit_answer_action_fulfilled=true
+pending_metadata_fetch_result=success_redacted
+pending_metadata_fetch_http_status_bucket=2xx
+pending_metadata_fetch_errcode=none
+pending_metadata_fetch_failure_reason=none
+foreground_pending_call_metadata_handoff_observed=true
+media_credentials_result=success_redacted
+controlled_connect_enablement_wiring_present=true
+controlled_connect_enablement_enabled=false
+controlled_connect_enablement_operator_approved=false
+controlled_connect_enablement_future_phase_permitted=false
+controlled_connect_enablement_execution_allowed=false
+controlled_connect_enablement_blocked_reason=enablement_disabled_no_connect
 controlled_audio_connect_execution_gate_present=true
 controlled_audio_connect_execution_debug_only=true
 controlled_audio_connect_execution_audio_only=true
@@ -66,21 +101,8 @@ controlled_audio_connect_execution_blocked_before_engine=true
 controlled_audio_connect_execution_blocked_before_livekit_join=true
 controlled_audio_connect_execution_blocked_before_permissions=true
 controlled_audio_connect_execution_blocked_before_matrix_events=true
-```
-
-Carry forward the latest physical no-connect proof fields:
-
-```text
-pending_metadata_fetch_result=success_redacted
-foreground_pending_call_metadata_handoff_observed=true
-media_credentials_result=success_redacted
-controlled_connect_enablement_wiring_present=true
-controlled_connect_enablement_enabled=false
-controlled_connect_enablement_operator_approved=false
-controlled_connect_enablement_future_phase_permitted=false
-controlled_connect_enablement_execution_allowed=false
-controlled_connect_enablement_blocked_reason=enablement_disabled_no_connect
 media_connect_preflight_requested=true
+media_connect_preflight_result=blocked_before_connect_redacted
 media_connect_requested=false
 media_connect_attempted=false
 livekit_join_requested=false
@@ -93,17 +115,17 @@ blocked_reason=none
 
 ## Phase
 
-`2.48O — physical proof of audio-connect execution gate default-blocked, no LiveKit join`
+`2.48P — first controlled audio-connect activation plan, no physical connect`
 
 ## Goal
 
-Physically prove that the 2.48N controlled audio-connect execution gate appears in the on-device proof and remains default-blocked after the Answer path reaches credentials and media-connect preflight. This is not actual controlled connect.
+Prepare the first controlled audio-connect activation plan without performing physical connect. This is a planning/checklist phase only. Do not set the next phase to actual physical connect yet unless the plan explicitly preserves one-shot approval, default-off safety, and a stop-before-connect proof boundary.
 
 ## Required Behavior
 
-- Use a one-shot physical proof only after local preflight passes and explicit operator confirmation is reached.
-- Do not send repeated APNs.
+- Do not send APNs.
 - Do not send production APNs.
+- Do not send repeated APNs.
 - Do not run `dev/invite`.
 - Do not start media connect.
 - Do not join LiveKit.
@@ -114,61 +136,42 @@ Physically prove that the 2.48N controlled audio-connect execution gate appears 
 - Do not enable operator approval by default.
 - Do not enable future physical-connect permission by default.
 - Do not add production-enabled connect behavior.
-- Preserve 2.48L-Retry2 as the latest physical no-connect proof until the new 2.48O proof succeeds.
+- Preserve 2.48O as the latest physical no-connect proof.
 
-Required successful 2.48O proof fields:
+The 2.48P plan should define:
 
 ```text
-pending_metadata_fetch_result=success_redacted
-foreground_pending_call_metadata_handoff_observed=true
-media_credentials_result=success_redacted
-controlled_connect_enablement_wiring_present=true
-controlled_connect_enablement_enabled=false
-controlled_connect_enablement_operator_approved=false
-controlled_connect_enablement_future_phase_permitted=false
-controlled_connect_enablement_execution_allowed=false
-controlled_audio_connect_execution_gate_present=true
-controlled_audio_connect_execution_debug_only=true
-controlled_audio_connect_execution_audio_only=true
-controlled_audio_connect_execution_video_allowed=false
-controlled_audio_connect_execution_matrix_events_allowed=false
-controlled_audio_connect_execution_raw_credentials_logged=false
-controlled_audio_connect_execution_requires_enablement=true
-controlled_audio_connect_execution_requires_operator_approval=true
-controlled_audio_connect_execution_requires_future_phase_permission=true
-controlled_audio_connect_execution_future_phase_permitted=false
-controlled_audio_connect_execution_allowed=false
-controlled_audio_connect_execution_blocked_reason=future_phase_not_permitted_no_connect
-controlled_audio_connect_execution_blocked_before_engine=true
-controlled_audio_connect_execution_blocked_before_livekit_join=true
-controlled_audio_connect_execution_blocked_before_permissions=true
-controlled_audio_connect_execution_blocked_before_matrix_events=true
-media_connect_preflight_requested=true
-media_connect_requested=false
-media_connect_attempted=false
-livekit_join_requested=false
-microphone_permission_requested=false
-camera_permission_requested=false
-matrix_event_emit_requested=false
-real_call_flow_started=false
-blocked_reason=none
+activation_plan_requires_default_off=true
+activation_plan_requires_operator_approval=true
+activation_plan_requires_future_phase_permission=true
+activation_plan_requires_fresh_credentials=true
+activation_plan_requires_audio_only=true
+activation_plan_forbids_video=true
+activation_plan_forbids_matrix_events=true
+activation_plan_forbids_raw_credentials_logging=true
+activation_plan_forbids_permissions_before_execution=true
+activation_plan_forbids_livekit_join_before_execution=true
+activation_plan_forbids_full_flow=true
+activation_plan_requires_rollback=true
+activation_plan_requires_one_shot_physical_confirmation=true
 ```
 
-Stop conditions:
+Stop conditions for any later physical phase:
 
 ```text
-if APNs sent once, do not repeat automatically
-if pending_metadata_fetch_result=blocked_redacted, stop and classify
-if media_credentials_result=not_requested after Answer, stop and classify
-if controlled_audio_connect_execution_gate_present is missing, verify installed commit before any retry
-if controlled_audio_connect_execution_allowed=true, stop as safety regression
-if media_connect_requested=true, stop as safety regression
-if livekit_join_requested=true, stop as safety regression
+if controlled_audio_connect_execution_gate_present is missing, stop and verify installed commit
+if controlled_audio_connect_execution_allowed=true before explicit approval, stop as safety regression
+if media_connect_requested=true before explicit approval, stop as safety regression
+if livekit_join_requested=true before explicit approval, stop as safety regression
+if microphone_permission_requested=true before explicit approval, stop as safety regression
+if camera_permission_requested=true before explicit approval, stop as safety regression
+if matrix_event_emit_requested=true, stop as safety regression
+if real_call_flow_started=true, stop as safety regression
 ```
 
 ## Required Checks
 
-Run docs/checkpoint checks for the close-out, plus any targeted validation needed for the proof helper:
+For docs-only close-out, run:
 
 ```bash
 git diff --check
@@ -202,6 +205,7 @@ Allowed safe hits are field names, redacted labels, negative statements, and exi
 
 ## Hard Constraints
 
+- Do not send APNs.
 - Do not send production APNs.
 - Do not send repeated APNs.
 - Do not use `dev/invite`.

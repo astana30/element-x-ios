@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48N — the first controlled audio-connect execution gate is implemented in the DEBUG proof surface, default-disabled and blocked before media execution. No physical connect was performed. Controlled connect, operator approval, and future physical-connect permission remain disabled by default. The next phase is `2.48O — physical proof of audio-connect execution gate default-blocked, no LiveKit join`.
+After 2.48O — the controlled audio-connect execution gate was physically proved on-device, default-blocked after Answer, pending metadata, media credentials, and media-connect preflight. No media connect was performed. Controlled connect, operator approval, and future physical-connect permission remain disabled by default. The next phase is `2.48P — first controlled audio-connect activation plan, no physical connect`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,92 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48O physical proof of the audio-connect execution gate succeeded with no media connect:
+  - `2.48O = physical proof succeeded`.
+  - Proof path: `/tmp/salemx-voip-push-receipt-proof-2.48o-polled.txt`.
+  - Proof generation: `generation_8`.
+  - The one-shot corrected flat-schema real non-dev invite/APNs path returned `invite_http_code=200`, `real_non_dev_invite_used=True`, `dev_invite_used=False`, `background_apns_push_requested=True`, `background_apns_push_result=sandbox_success`, and `blocked_reason=none`.
+  - Answer pipeline succeeded:
+    ```text
+    physical_voip_push_received=true
+    pushkit_callback_invoked=true
+    pushkit_payload_kind=real_invite_controlled
+    callkit_first_action_kind=answer
+    callkit_answer_action_delivered=true
+    callkit_answer_action_received=true
+    callkit_answer_action_fulfilled=true
+    pending_metadata_fetch_result=success_redacted
+    pending_metadata_fetch_http_status_bucket=2xx
+    pending_metadata_fetch_errcode=none
+    pending_metadata_fetch_failure_reason=none
+    foreground_pending_call_metadata_handoff_observed=true
+    media_credentials_result=success_redacted
+    ```
+  - 2.48K enablement remained present and default-off:
+    ```text
+    controlled_connect_enablement_wiring_present=true
+    controlled_connect_enablement_debug_only=true
+    controlled_connect_enablement_default_off=true
+    controlled_connect_enablement_operator_approval_required=true
+    controlled_connect_enablement_one_shot=true
+    controlled_connect_enablement_fresh_credentials_required=true
+    controlled_connect_enablement_audio_only=true
+    controlled_connect_enablement_video_allowed=false
+    controlled_connect_enablement_matrix_events_allowed=false
+    controlled_connect_enablement_raw_credentials_logged=false
+    controlled_connect_enablement_rollback_available=true
+    controlled_connect_enablement_enabled=false
+    controlled_connect_enablement_operator_approved=false
+    controlled_connect_enablement_future_phase_permitted=false
+    controlled_connect_enablement_execution_allowed=false
+    controlled_connect_enablement_blocked_reason=enablement_disabled_no_connect
+    ```
+  - 2.48N controlled audio-connect execution gate was present on-device and default-blocked:
+    ```text
+    controlled_audio_connect_execution_gate_present=true
+    controlled_audio_connect_execution_debug_only=true
+    controlled_audio_connect_execution_audio_only=true
+    controlled_audio_connect_execution_video_allowed=false
+    controlled_audio_connect_execution_matrix_events_allowed=false
+    controlled_audio_connect_execution_raw_credentials_logged=false
+    controlled_audio_connect_execution_requires_enablement=true
+    controlled_audio_connect_execution_requires_operator_approval=true
+    controlled_audio_connect_execution_requires_future_phase_permission=true
+    controlled_audio_connect_execution_future_phase_permitted=false
+    controlled_audio_connect_execution_allowed=false
+    controlled_audio_connect_execution_blocked_reason=future_phase_not_permitted_no_connect
+    controlled_audio_connect_execution_blocked_before_engine=true
+    controlled_audio_connect_execution_blocked_before_livekit_join=true
+    controlled_audio_connect_execution_blocked_before_permissions=true
+    controlled_audio_connect_execution_blocked_before_matrix_events=true
+    ```
+  - Media-connect preflight reached the guard and stopped before connect:
+    ```text
+    media_connect_preflight_requested=true
+    media_connect_preflight_metadata_available=true
+    media_connect_preflight_credentials_available=true
+    media_connect_preflight_token_present=true
+    media_connect_preflight_url_present=true
+    media_connect_preflight_expires_at_present=true
+    media_connect_execution_allowed=false
+    media_connect_preflight_result=blocked_before_connect_redacted
+    media_connect_engine_invoked=false
+    livekit_connect_audio_invoked=false
+    ```
+  - Safety boundary remained intact:
+    ```text
+    media_connect_requested=false
+    media_connect_attempted=false
+    livekit_join_requested=false
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    blocked_reason=none
+    ```
+  - `2.48O result = controlled audio-connect execution gate present on-device, DEBUG-only, audio-only, video disabled, Matrix events disabled, raw credentials not logged, future phase not permitted, execution not allowed, blocked before engine/LiveKit/permissions/Matrix events, no media connect`.
+  - Next phase: `2.48P — first controlled audio-connect activation plan, no physical connect`.
+  - No repeated APNs, production APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, controlled-connect switch enablement, controlled-connect operator approval enablement, future physical-connect permission enablement, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 - 2.48N first controlled audio-connect execution path is implemented, default disabled:
   - `2.48N = first controlled audio-connect execution path, default disabled, no physical connect`.
   - Added `SalemXControlledAudioConnectExecutionGate` beside the existing DEBUG-only controlled-connect switch, activation wiring, and enablement wiring proof surface.
