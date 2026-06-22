@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48T-Prep — the first controlled audio-connect attempt proof plumbing is implemented behind DEBUG/test-controlled seams. Physical connect was not performed, controlled connect/operator approval/future permission were not enabled by default, and the runtime default remains no-connect. The next phase is `2.48T-Physical — one-shot first controlled audio-connect physical attempt`.
+After 2.48T-RealPath — the one-shot controlled real audio path is wired behind DEBUG/test-controlled gates and can reach the existing media engine boundary through fake/test proof when all gates are true. Physical connect was not performed, controlled connect/operator approval/future permission were not enabled by default, and the runtime default remains no-connect. The next phase is `2.48T-Physical2 — one-shot first controlled audio-connect physical attempt`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,42 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48T-RealPath true one-shot audio-connect runtime path is prepared:
+  - This is a code/test preparation phase only; it is not a physical APNs, media-connect, LiveKit join, microphone-permission, camera-permission, Matrix-event, or full-call task.
+  - The real runtime path proof fields are present and default disabled:
+    ```text
+    controlled_connect_real_audio_path_present=true
+    controlled_connect_real_audio_path_debug_only=true
+    controlled_connect_real_audio_path_default_disabled=true
+    controlled_connect_real_audio_path_requires_enablement=true
+    controlled_connect_real_audio_path_requires_operator_approval=true
+    controlled_connect_real_audio_path_requires_future_phase_permission=true
+    controlled_connect_real_audio_path_audio_only=true
+    controlled_connect_real_audio_path_video_allowed=false
+    controlled_connect_real_audio_path_matrix_events_allowed=false
+    controlled_connect_real_audio_path_raw_credentials_logged=false
+    controlled_connect_real_audio_path_one_shot=true
+    controlled_connect_real_audio_path_allowed=false
+    controlled_connect_real_audio_path_blocked_reason=default_disabled_no_connect
+    controlled_connect_real_audio_path_blocked_before_engine=true
+    controlled_connect_real_audio_path_can_reach_engine_when_all_gates_true=true
+    ```
+  - Default runtime remains no-connect:
+    ```text
+    controlled_connect_first_attempt_requested=false
+    controlled_connect_first_attempt_allowed=false
+    media_connect_requested=false
+    media_connect_attempted=false
+    livekit_join_requested=false
+    livekit_connect_audio_invoked=false
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    ```
+  - When all gates are explicitly true in the fake/test seam, the real path can reach the existing `DirectCallEngine.connectMediaIfReady` / `LiveKitDirectCallMediaEngine.connectAudio` boundary without performing physical media.
+  - Next phase: `2.48T-Physical2 — one-shot first controlled audio-connect physical attempt`.
+  - No APNs, production APNs, repeated APNs, `dev/invite`, physical media connection, real LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, default controlled-connect enablement, default operator approval, default future physical-connect permission, production-enabled connect behavior, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 - 2.48T-Prep first controlled audio-connect attempt plumbing is implemented:
   - This is a code/test preparation phase only; it is not a physical APNs, media-connect, LiveKit join, or real-call task.
   - Default proof fields:
@@ -77,7 +113,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
     controlled_connect_first_attempt_error_bucket=none
     ```
   - The fake boundary records only test-safe media attempt fields, with no real LiveKit network, camera permission, Matrix event emission, or full flow.
-  - Next phase: `2.48T-Physical — one-shot first controlled audio-connect physical attempt`.
+  - Next phase: `2.48T-Physical2 — one-shot first controlled audio-connect physical attempt`.
   - No APNs, production APNs, repeated APNs, `dev/invite`, physical media connection, real LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, default controlled-connect enablement, default operator approval, default future physical-connect permission, production-enabled connect behavior, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 - 2.48S final pre-connect operator gate is ready:
   - Conclusion:
@@ -2852,7 +2888,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Next Recommended Phase
 
-`2.48T-Physical — one-shot first controlled audio-connect physical attempt`
+`2.48T-Physical2 — one-shot first controlled audio-connect physical attempt`
 
 Goal: build and install the current HEAD Debug app, then perform exactly one operator-approved first controlled audio-connect physical attempt after receiver app session validation, terminal token validation, room validation, one sandbox APNs, green Answer, fresh credentials, enablement, operator approval, and future phase permission. Stop after the first connect result and preserve the no-camera/no-Matrix-event/no-full-flow boundaries.
 

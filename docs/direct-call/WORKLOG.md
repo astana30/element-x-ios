@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Wired 2.48T-RealPath true one-shot controlled audio path behind DEBUG/test-controlled gates, default disabled and no physical connect.
 - Implemented 2.48T-Prep first controlled audio-connect attempt plumbing with DEBUG/test-only fake boundary proof and default no-connect preserved.
 - Prepared the 2.48S final pre-connect operator gate; ready for one-shot first controlled audio-connect physical attempt, with no physical connect performed.
 - Closed the 2.48R physical proof of the first-run controlled audio-connect activation path default-disabled on-device, with no media connect.
@@ -107,6 +108,51 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
 
+### 2.48T-RealPath — True One-Shot Audio-Connect Runtime Path
+
+Wired the real-path proof layer so the future first controlled audio-only connect can reach the existing `DirectCallEngine.connectMediaIfReady` / `LiveKitDirectCallMediaEngine.connectAudio` boundary only after every required gate is true. This phase used only unit/source-guard proof and the fake/test media seam. No APNs was sent, no physical media connect was performed, no real LiveKit join was attempted, no microphone/camera permission was requested, no Matrix event was emitted, and no full call flow was started.
+
+Default real-path proof fields:
+
+```text
+controlled_connect_real_audio_path_present=true
+controlled_connect_real_audio_path_debug_only=true
+controlled_connect_real_audio_path_default_disabled=true
+controlled_connect_real_audio_path_requires_enablement=true
+controlled_connect_real_audio_path_requires_operator_approval=true
+controlled_connect_real_audio_path_requires_future_phase_permission=true
+controlled_connect_real_audio_path_audio_only=true
+controlled_connect_real_audio_path_video_allowed=false
+controlled_connect_real_audio_path_matrix_events_allowed=false
+controlled_connect_real_audio_path_raw_credentials_logged=false
+controlled_connect_real_audio_path_one_shot=true
+controlled_connect_real_audio_path_allowed=false
+controlled_connect_real_audio_path_blocked_reason=default_disabled_no_connect
+controlled_connect_real_audio_path_blocked_before_engine=true
+controlled_connect_real_audio_path_can_reach_engine_when_all_gates_true=true
+```
+
+Default runtime remains:
+
+```text
+controlled_connect_first_attempt_requested=false
+controlled_connect_first_attempt_allowed=false
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+livekit_connect_audio_invoked=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+The fake/test seam proves the all-gates-true path can record `controlled_connect_first_attempt_requested=true`, `controlled_connect_first_attempt_allowed=true`, `media_connect_requested=true`, `media_connect_attempted=true`, `livekit_join_requested=true`, and `livekit_connect_audio_invoked=true` without using real LiveKit network, camera permission, Matrix events, or full flow.
+
+Next phase: `2.48T-Physical2 — one-shot first controlled audio-connect physical attempt`.
+
+No APNs, production APNs, repeated APNs, `dev/invite`, physical media connection, real LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, default controlled-connect enablement, default operator approval, default future physical-connect permission, production-enabled connect behavior, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
+
 ### 2.48T-Prep — First Controlled Audio-Connect Attempt Plumbing
 
 Implemented the missing first-attempt proof plumbing and a DEBUG/test-only fake media boundary for the future one-shot controlled audio-connect physical attempt. No APNs was sent, no physical media connect was performed, no real LiveKit join was attempted, and the runtime default remains no-connect.
@@ -154,7 +200,7 @@ controlled_connect_first_attempt_error_bucket=none
 
 The fake/test seam may record test-only `media_connect_requested=true`, `media_connect_attempted=true`, `livekit_join_requested=true`, and `livekit_connect_audio_invoked=true`, but it does not use real LiveKit network, camera permission, Matrix events, or full call flow.
 
-Next phase: `2.48T-Physical — one-shot first controlled audio-connect physical attempt`.
+Next phase: `2.48T-Physical2 — one-shot first controlled audio-connect physical attempt`.
 
 No APNs, production APNs, repeated APNs, `dev/invite`, physical media connection, real LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, default controlled-connect enablement, default operator approval, default future physical-connect permission, production-enabled connect behavior, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 

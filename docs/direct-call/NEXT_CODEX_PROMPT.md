@@ -13,9 +13,29 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48T-Prep — first controlled audio-connect attempt plumbing, no APNs` is complete.
+`2.48T-RealPath — true one-shot audio-connect runtime path, default disabled, no APNs` is complete.
 
-The app now has DEBUG/test-controlled first-attempt proof plumbing and a fake media boundary that can prove the future one-shot first controlled audio-connect attempt without real network/media. Runtime defaults remain no-connect.
+The app now has a DEBUG/test-controlled real-path gate that can reach the existing `DirectCallEngine.connectMediaIfReady` / `LiveKitDirectCallMediaEngine.connectAudio` boundary through the fake/test media seam when every gate is explicitly true. Runtime defaults remain no-connect.
+
+Default real-path proof fields:
+
+```text
+controlled_connect_real_audio_path_present=true
+controlled_connect_real_audio_path_debug_only=true
+controlled_connect_real_audio_path_default_disabled=true
+controlled_connect_real_audio_path_requires_enablement=true
+controlled_connect_real_audio_path_requires_operator_approval=true
+controlled_connect_real_audio_path_requires_future_phase_permission=true
+controlled_connect_real_audio_path_audio_only=true
+controlled_connect_real_audio_path_video_allowed=false
+controlled_connect_real_audio_path_matrix_events_allowed=false
+controlled_connect_real_audio_path_raw_credentials_logged=false
+controlled_connect_real_audio_path_one_shot=true
+controlled_connect_real_audio_path_allowed=false
+controlled_connect_real_audio_path_blocked_reason=default_disabled_no_connect
+controlled_connect_real_audio_path_blocked_before_engine=true
+controlled_connect_real_audio_path_can_reach_engine_when_all_gates_true=true
+```
 
 Default proof fields:
 
@@ -56,13 +76,17 @@ controlled_connect_first_attempt_completed=true
 controlled_connect_first_attempt_repeated=false
 controlled_connect_first_attempt_result=success_redacted
 controlled_connect_first_attempt_error_bucket=none
+media_connect_requested=true
+media_connect_attempted=true
+livekit_join_requested=true
+livekit_connect_audio_invoked=true
 ```
 
-No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, real LiveKit join, microphone/camera permission request, Matrix event emit, or full call flow was performed in 2.48T-Prep.
+No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, real LiveKit join, microphone/camera permission request, Matrix event emit, or full call flow was performed in 2.48T-RealPath.
 
 ## Phase
 
-`2.48T-Physical — one-shot first controlled audio-connect physical attempt`
+`2.48T-Physical2 — one-shot first controlled audio-connect physical attempt`
 
 ## Required Setup
 
@@ -149,6 +173,18 @@ media_credentials_payload_redacted=true
 Controlled gates must explicitly open for this one attempt:
 
 ```text
+controlled_connect_real_audio_path_present=true
+controlled_connect_real_audio_path_debug_only=true
+controlled_connect_real_audio_path_default_disabled=true
+controlled_connect_real_audio_path_requires_enablement=true
+controlled_connect_real_audio_path_requires_operator_approval=true
+controlled_connect_real_audio_path_requires_future_phase_permission=true
+controlled_connect_real_audio_path_audio_only=true
+controlled_connect_real_audio_path_video_allowed=false
+controlled_connect_real_audio_path_matrix_events_allowed=false
+controlled_connect_real_audio_path_raw_credentials_logged=false
+controlled_connect_real_audio_path_one_shot=true
+controlled_connect_real_audio_path_can_reach_engine_when_all_gates_true=true
 controlled_connect_enablement_enabled=true
 controlled_connect_enablement_operator_approved=true
 controlled_connect_enablement_future_phase_permitted=true
@@ -156,6 +192,9 @@ controlled_connect_enablement_execution_allowed=true
 controlled_audio_connect_activation_allowed=true
 controlled_audio_connect_execution_future_phase_permitted=true
 controlled_audio_connect_execution_allowed=true
+controlled_connect_real_audio_path_allowed=true
+controlled_connect_real_audio_path_blocked_reason=none
+controlled_connect_real_audio_path_blocked_before_engine=false
 ```
 
 First attempt proof:
