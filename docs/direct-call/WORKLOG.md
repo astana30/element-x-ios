@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Wired 2.48T-RealRuntime so authenticated pending metadata and media credentials can reach the controlled runtime gate, default disabled and no physical connect.
 - Wired 2.48T-RealPath true one-shot controlled audio path behind DEBUG/test-controlled gates, default disabled and no physical connect.
 - Implemented 2.48T-Prep first controlled audio-connect attempt plumbing with DEBUG/test-only fake boundary proof and default no-connect preserved.
 - Prepared the 2.48S final pre-connect operator gate; ready for one-shot first controlled audio-connect physical attempt, with no physical connect performed.
@@ -107,6 +108,53 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48T-RealRuntime — Real Controlled Audio-Connect Runtime Path
+
+Wired the first real controlled audio-connect runtime path behind DEBUG/test-controlled gates. The Answer/pending-metadata/media-credentials proof path now feeds `requestControlledMediaCredentialsForControlledRuntime`, records the real runtime preflight, and only records a first controlled audio attempt when receiver session validation, fresh credentials, enablement, operator approval, future phase permission, activation, execution, audio-only safety, and one-shot gates are all true. This phase used only unit/source-guard proof and the fake/test media seam; no physical APNs or media execution was performed.
+
+Default real-runtime proof fields:
+
+```text
+controlled_connect_real_runtime_path_present=true
+controlled_connect_real_runtime_path_debug_only=true
+controlled_connect_real_runtime_path_default_disabled=true
+controlled_connect_real_runtime_path_requires_credentials=true
+controlled_connect_real_runtime_path_requires_enablement=true
+controlled_connect_real_runtime_path_requires_operator_approval=true
+controlled_connect_real_runtime_path_requires_future_phase_permission=true
+controlled_connect_real_runtime_path_audio_only=true
+controlled_connect_real_runtime_path_video_allowed=false
+controlled_connect_real_runtime_path_matrix_events_allowed=false
+controlled_connect_real_runtime_path_raw_credentials_logged=false
+controlled_connect_real_runtime_path_one_shot=true
+controlled_connect_real_runtime_path_allowed=false
+controlled_connect_real_runtime_path_blocked_reason=default_disabled_no_connect
+controlled_connect_real_runtime_path_blocked_before_engine=true
+controlled_connect_real_runtime_path_can_call_connect_media_when_all_gates_true=true
+controlled_connect_real_runtime_path_can_call_livekit_audio_when_all_gates_true=true
+```
+
+Default runtime remains:
+
+```text
+controlled_connect_first_attempt_requested=false
+controlled_connect_first_attempt_allowed=false
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+livekit_connect_audio_invoked=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+The fake/test seam proves the all-gates-true runtime path can record `media_connect_requested=true`, `media_connect_attempted=true`, `livekit_join_requested=true`, `livekit_connect_audio_invoked=true`, `controlled_connect_first_attempt_started=true`, `controlled_connect_first_attempt_completed=true`, and `controlled_connect_first_attempt_repeated=false` without using real LiveKit network, microphone/camera permission on device, Matrix events, or full flow.
+
+Next phase: `2.48T-Physical3 — one-shot first controlled audio-connect physical attempt`.
+
+No APNs, production APNs, repeated APNs, `dev/invite`, physical media connection, real LiveKit join, microphone/camera permission request on device, Matrix event emission, full direct-call flow, default controlled-connect enablement, default operator approval, default future physical-connect permission, production-enabled connect behavior, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 
 ### 2.48T-RealPath — True One-Shot Audio-Connect Runtime Path
 

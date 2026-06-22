@@ -13,31 +13,33 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48T-RealPath — true one-shot audio-connect runtime path, default disabled, no APNs` is complete.
+`2.48T-RealRuntime — real controlled audio-connect runtime path, default disabled, no APNs` is complete.
 
-The app now has a DEBUG/test-controlled real-path gate that can reach the existing `DirectCallEngine.connectMediaIfReady` / `LiveKitDirectCallMediaEngine.connectAudio` boundary through the fake/test media seam when every gate is explicitly true. Runtime defaults remain no-connect.
+The app now has a DEBUG/test-controlled runtime path from authenticated pending metadata and media credentials into the controlled audio-connect gate. The path can reach the fake/test media engine seam only when every gate is explicitly true. Runtime defaults remain no-connect.
 
-Default real-path proof fields:
+Default real-runtime proof fields:
 
 ```text
-controlled_connect_real_audio_path_present=true
-controlled_connect_real_audio_path_debug_only=true
-controlled_connect_real_audio_path_default_disabled=true
-controlled_connect_real_audio_path_requires_enablement=true
-controlled_connect_real_audio_path_requires_operator_approval=true
-controlled_connect_real_audio_path_requires_future_phase_permission=true
-controlled_connect_real_audio_path_audio_only=true
-controlled_connect_real_audio_path_video_allowed=false
-controlled_connect_real_audio_path_matrix_events_allowed=false
-controlled_connect_real_audio_path_raw_credentials_logged=false
-controlled_connect_real_audio_path_one_shot=true
-controlled_connect_real_audio_path_allowed=false
-controlled_connect_real_audio_path_blocked_reason=default_disabled_no_connect
-controlled_connect_real_audio_path_blocked_before_engine=true
-controlled_connect_real_audio_path_can_reach_engine_when_all_gates_true=true
+controlled_connect_real_runtime_path_present=true
+controlled_connect_real_runtime_path_debug_only=true
+controlled_connect_real_runtime_path_default_disabled=true
+controlled_connect_real_runtime_path_requires_credentials=true
+controlled_connect_real_runtime_path_requires_enablement=true
+controlled_connect_real_runtime_path_requires_operator_approval=true
+controlled_connect_real_runtime_path_requires_future_phase_permission=true
+controlled_connect_real_runtime_path_audio_only=true
+controlled_connect_real_runtime_path_video_allowed=false
+controlled_connect_real_runtime_path_matrix_events_allowed=false
+controlled_connect_real_runtime_path_raw_credentials_logged=false
+controlled_connect_real_runtime_path_one_shot=true
+controlled_connect_real_runtime_path_allowed=false
+controlled_connect_real_runtime_path_blocked_reason=default_disabled_no_connect
+controlled_connect_real_runtime_path_blocked_before_engine=true
+controlled_connect_real_runtime_path_can_call_connect_media_when_all_gates_true=true
+controlled_connect_real_runtime_path_can_call_livekit_audio_when_all_gates_true=true
 ```
 
-Default proof fields:
+Default first-attempt proof fields:
 
 ```text
 controlled_connect_first_attempt_requested=false
@@ -60,13 +62,14 @@ Runtime default remains:
 media_connect_requested=false
 media_connect_attempted=false
 livekit_join_requested=false
+livekit_connect_audio_invoked=false
 microphone_permission_requested=false
 camera_permission_requested=false
 matrix_event_emit_requested=false
 real_call_flow_started=false
 ```
 
-The fake/test path can reach the first-attempt boundary only when all gates are explicitly true in tests:
+The fake/test seam can reach the first-attempt boundary only when receiver session validation, fresh credentials, enablement, operator approval, future phase permission, activation, execution, audio-only safety, and one-shot gates are all true:
 
 ```text
 controlled_connect_first_attempt_requested=true
@@ -82,11 +85,11 @@ livekit_join_requested=true
 livekit_connect_audio_invoked=true
 ```
 
-No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, real LiveKit join, microphone/camera permission request, Matrix event emit, or full call flow was performed in 2.48T-RealPath.
+No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, real LiveKit join, microphone/camera permission request on device, Matrix event emit, or full call flow was performed in 2.48T-RealRuntime.
 
 ## Phase
 
-`2.48T-Physical2 — one-shot first controlled audio-connect physical attempt`
+`2.48T-Physical3 — one-shot first controlled audio-connect physical attempt`
 
 ## Required Setup
 
@@ -128,6 +131,7 @@ room_validation_preflight=pass
 local_schema_valid=true
 iphone_app_pending_metadata_auth_ready=true
 safe_to_send_apns=true
+APNs_sent=false
 ```
 
 Use the corrected flat-schema invite body only.
@@ -139,7 +143,7 @@ Send exactly one real non-dev sandbox APNs only after explicit one-shot confirma
 Use a phase-specific proof path:
 
 ```text
-/tmp/salemx-voip-push-receipt-proof-2.48t-first-connect-polled.txt
+/tmp/salemx-voip-push-receipt-proof-2.48t-physical3-first-connect-polled.txt
 ```
 
 Do not classify from stale generic proof files.
@@ -170,21 +174,23 @@ media_credentials_expires_at_present=true
 media_credentials_payload_redacted=true
 ```
 
-Controlled gates must explicitly open for this one attempt:
+Controlled runtime gates must explicitly open for this one attempt:
 
 ```text
-controlled_connect_real_audio_path_present=true
-controlled_connect_real_audio_path_debug_only=true
-controlled_connect_real_audio_path_default_disabled=true
-controlled_connect_real_audio_path_requires_enablement=true
-controlled_connect_real_audio_path_requires_operator_approval=true
-controlled_connect_real_audio_path_requires_future_phase_permission=true
-controlled_connect_real_audio_path_audio_only=true
-controlled_connect_real_audio_path_video_allowed=false
-controlled_connect_real_audio_path_matrix_events_allowed=false
-controlled_connect_real_audio_path_raw_credentials_logged=false
-controlled_connect_real_audio_path_one_shot=true
-controlled_connect_real_audio_path_can_reach_engine_when_all_gates_true=true
+controlled_connect_real_runtime_path_present=true
+controlled_connect_real_runtime_path_debug_only=true
+controlled_connect_real_runtime_path_default_disabled=true
+controlled_connect_real_runtime_path_requires_credentials=true
+controlled_connect_real_runtime_path_requires_enablement=true
+controlled_connect_real_runtime_path_requires_operator_approval=true
+controlled_connect_real_runtime_path_requires_future_phase_permission=true
+controlled_connect_real_runtime_path_audio_only=true
+controlled_connect_real_runtime_path_video_allowed=false
+controlled_connect_real_runtime_path_matrix_events_allowed=false
+controlled_connect_real_runtime_path_raw_credentials_logged=false
+controlled_connect_real_runtime_path_one_shot=true
+controlled_connect_real_runtime_path_can_call_connect_media_when_all_gates_true=true
+controlled_connect_real_runtime_path_can_call_livekit_audio_when_all_gates_true=true
 controlled_connect_enablement_enabled=true
 controlled_connect_enablement_operator_approved=true
 controlled_connect_enablement_future_phase_permitted=true
@@ -192,9 +198,9 @@ controlled_connect_enablement_execution_allowed=true
 controlled_audio_connect_activation_allowed=true
 controlled_audio_connect_execution_future_phase_permitted=true
 controlled_audio_connect_execution_allowed=true
-controlled_connect_real_audio_path_allowed=true
-controlled_connect_real_audio_path_blocked_reason=none
-controlled_connect_real_audio_path_blocked_before_engine=false
+controlled_connect_real_runtime_path_allowed=true
+controlled_connect_real_runtime_path_blocked_reason=none
+controlled_connect_real_runtime_path_blocked_before_engine=false
 ```
 
 First attempt proof:
