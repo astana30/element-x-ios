@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Classified the 2.48I physical disabled-activation proof attempt as incomplete before the Answer pipeline; no repeat APNs was performed.
 - Closed the 2.48H-QA broader DirectCall source-guard triage; the selected DirectCall suites pass after narrow test guard fixes.
 - Wired the controlled-connect activation configuration while keeping the default disabled and no-connect.
 - Documented the controlled-connect activation plan and rollback design without physical connect.
@@ -89,6 +90,81 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48I-Triage — Physical Proof Blocked Before Answer Pipeline
+
+Classified the one-shot 2.48I physical disabled-activation proof attempt without retrying APNs. This was a docs-only triage checkpoint; no Swift runtime, server route, project/signing, media, LiveKit, permission, Matrix event, or full-flow behavior changed.
+
+The one-shot real non-dev invite/APNs path passed preflight and sent exactly once:
+
+```text
+receiver_token_found=true
+sender_token_found=true
+receiver_user_hash=497015f5745c933a
+sender_user_hash=7d434d7f252427fb
+sender_equals_receiver=false
+room_validation_preflight=pass
+local_schema_valid=true
+safe_to_send_apns=true
+invite_http_code=200
+real_non_dev_invite_used=true
+dev_invite_used=false
+background_apns_push_requested=true
+background_apns_push_result=sandbox_success
+blocked_reason=none
+```
+
+The actual 2.48I proof was `generation_1` from `/tmp/salemx-voip-push-receipt-proof-2.48i-polled.txt`. It proved push receipt and the new activation wiring fields on-device:
+
+```text
+physical_voip_push_received=true
+pushkit_callback_invoked=true
+pushkit_payload_kind=real_invite_controlled
+controlled_connect_activation_wiring_present=true
+controlled_connect_activation_debug_only=true
+controlled_connect_activation_default_disabled=true
+controlled_connect_activation_requires_operator_approval=true
+controlled_connect_activation_rollback_available=true
+controlled_connect_activation_scope=planned_audio_only_redacted
+controlled_connect_video_allowed=false
+controlled_connect_matrix_events_allowed=false
+controlled_connect_raw_credentials_logged=false
+```
+
+The attempt did not close because the Answer pipeline was not reached:
+
+```text
+callkit_report_requested=true
+callkit_report_result=pending
+callkit_report_completion_observed=false
+pushkit_completion_called=false
+pushkit_completion_answerable_window_requested=false
+pushkit_completion_answerable_window_result=not_requested
+callkit_first_action_kind=none
+callkit_answer_action_delivered=false
+callkit_answer_action_received=false
+callkit_answer_action_fulfilled=false
+media_credentials_result=not_requested
+media_connect_preflight_result=not_requested
+```
+
+Safety remained intact:
+
+```text
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+Classification: this is not closed 2.48I. The most likely cause is CallKit UI did not surface or the operator could not tap Answer because CallKit report completion never arrived; the proof does not show an Answer action delivery failure after a surfaced UI. The stale local `/tmp/salemx-voip-push-receipt-proof-current.txt` file was `generation_8` from an earlier successful run, so future proof copies must write a phase-specific file and verify generation before classification. No evidence points to a 2.48H activation wiring media/connect regression: activation fields were present and connect/LiveKit/permission/Matrix/full-flow fields stayed false.
+
+Next phase: `2.48I-RetryPlan — one-shot Answer-path retry plan with explicit operator approval, no immediate APNs`.
+
+No repeated APNs, production APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 
 ### 2.48H-QA — DirectCall Source-Guard Drift Triage
 

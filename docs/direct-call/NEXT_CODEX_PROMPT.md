@@ -13,7 +13,7 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-2.48H-QA classified and fixed the broader selected DirectCall source-guard drift after 2.48H. The broader DirectCall checks now pass after narrow test guard fixes. Controlled connect is still not approved, physical connect has not been performed, and the default remains no-connect.
+2.48I-Triage classified the one-shot 2.48I physical disabled-activation proof as incomplete before the Answer pipeline. APNs was sent once and the physical proof recorded push receipt plus activation wiring fields on-device, but CallKit report remained pending, no Answer action reached the pipeline, media credentials were not requested, and media-connect preflight was not requested. 2.48I is not closed. Controlled connect is still not approved, physical connect has not been performed, and the default remains no-connect.
 
 Closed prerequisites:
 - 2.47C physical controlled media credentials request succeeded with no media connect.
@@ -28,22 +28,35 @@ Closed prerequisites:
 - 2.48G documented the activation checklist, rollback plan, future first controlled-connect proof fields, and hard-stop fields without physical connect or code changes.
 - 2.48H added the DEBUG-only activation configuration wrapper, default-disabled proof fields, rollback proof support, and targeted source-guard tests without physical connect.
 - 2.48H-QA fixed stale source-guard expectations only and passed the broader selected DirectCall command across `DirectCallEngineTests` and `NativeIncomingCallLifecycleContractTests`.
+- 2.48I-Triage classified the first physical disabled-activation proof attempt as incomplete before the Answer pipeline, with APNs sent once, push received, activation wiring fields present, credentials/preflight not requested, and no repeat APNs.
 
-2.48H-QA conclusion:
-
-```text
-2.48H-QA result = broader DirectCall checks passed after narrow source-guard fix
-```
-
-2.48H-QA fixed source-guard-only drift:
+2.48I-Triage conclusion:
 
 ```text
-backgroundRealCallKitAdapterKeepsDiagnosticsRedactedAndUnwiredFromPushCallbacks
-debugElementCallPushKitRegistryForwardsRedactedSalemXPayload
-debugLocalCallKitOnlyProofIsSeparatedFromVoIPReceiptProof
+2.48I physical attempt = incomplete
+APNs sent once
+push received
+activation wiring fields present
+CallKit Answer did not reach pipeline
+media credentials not requested
+media-connect preflight not requested
+2.48I not closed
+no repeat APNs performed
 ```
 
-2.48H default proof fields:
+2.48I-Triage safety boundary:
+
+```text
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+2.48I-Triage on-device activation fields present:
 
 ```text
 controlled_connect_activation_wiring_present=true
@@ -55,34 +68,26 @@ controlled_connect_activation_scope=planned_audio_only_redacted
 controlled_connect_video_allowed=false
 controlled_connect_matrix_events_allowed=false
 controlled_connect_raw_credentials_logged=false
-controlled_connect_switch_enabled=false
-controlled_connect_operator_approved=false
-controlled_connect_execution_allowed=false
-controlled_connect_blocked_reason=disabled_switch_no_connect
-media_connect_engine_invoked=false
-livekit_connect_audio_invoked=false
-media_connect_requested=false
-media_connect_attempted=false
-livekit_join_requested=false
-microphone_permission_requested=false
-camera_permission_requested=false
-matrix_event_emit_requested=false
-real_call_flow_started=false
 ```
 
 ## Phase
 
-`2.48I — physical proof of activation wiring disabled, no LiveKit join`
+`2.48I-RetryPlan — one-shot Answer-path retry plan with explicit operator approval, no immediate APNs`
 
 ## Goal
 
-Physically prove the 2.48H activation wiring is present on-device while still disabled. This phase may exercise only the existing disabled proof path; it must not enable controlled connect, connect media, join LiveKit, request microphone/camera permission, emit Matrix events, or start full call flow.
+Prepare the next one-shot Answer-path retry plan after the incomplete 2.48I physical attempt. This planning phase must not send APNs. It should define the smallest safe retry steps that ensure the operator is ready, the proof copy is phase-specific, the proof generation is verified, and any later APNs send still requires fresh explicit inputs, helper preflight, and one-shot confirmation.
 
 ## Required Behavior
 
-- Keep the DEBUG-only activation switch disabled.
-- Keep operator approval false.
-- Prove the 2.48H activation wiring fields are present in physical redacted proof.
+- Do not send APNs in this retry-planning phase.
+- Record that the prior 2.48I attempt sent APNs once, received the push, proved activation fields, and stopped before Answer.
+- Require a phase-specific future proof copy path, not `/tmp/salemx-voip-push-receipt-proof-current.txt`.
+- Require future proof generation verification before classification.
+- Require an explicit operator-ready step before any later send.
+- Require future helper preflight and one-shot confirmation before any later sandbox APNs send.
+- Keep the DEBUG-only activation switch disabled unless a later phase explicitly approves otherwise.
+- Keep operator approval false unless a later phase explicitly approves otherwise.
 - Keep `controlled_connect_execution_allowed=false`.
 - Keep `media_connect_execution_allowed=false`.
 - Keep media engine invocation and LiveKit connect invocation false.
@@ -96,19 +101,22 @@ Physically prove the 2.48H activation wiring is present on-device while still di
 
 ## Required Tests
 
-- Run the 2.48H targeted DirectCall source/proof guard tests before any physical proof.
-- Physical proof must include the 2.48H activation wiring fields with default disabled values.
-- Physical proof must keep media engine invocation and LiveKit connect invocation false.
-- Physical proof must keep microphone/camera permission fields false.
-- Physical proof must keep Matrix event emission and full flow false.
+- Docs/checkpoint-only changes should run `git diff --check`, forbidden project/signing scans, and a privacy scan over changed docs/diff.
+- If Swift/test files change, run SwiftFormat/SwiftLint on the touched scope and the targeted DirectCall tests.
+- Any future physical retry must first rerun the targeted DirectCall source/proof guard tests.
+- Any future physical retry proof must include the activation wiring fields with default disabled values.
+- Any future physical retry proof must keep media engine invocation and LiveKit connect invocation false.
+- Any future physical retry proof must keep microphone/camera permission fields false.
+- Any future physical retry proof must keep Matrix event emission and full flow false.
 - Privacy guard proving no raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID is written to proof/docs.
 
 ## Hard Constraints
 
+- Do not send APNs in the 2.48I-RetryPlan phase.
 - Do not use `dev/invite`.
 - Do not send production APNs.
 - Do not send repeated APNs.
-- Send at most one sandbox APNs attempt only if the explicit 2.48I disabled-wiring physical proof inputs and operator approval are present.
+- Send at most one future sandbox APNs attempt only in a later explicitly approved physical retry phase, with fresh inputs, passing preflight, and one-shot confirmation.
 - Do not connect media.
 - Do not join LiveKit.
 - Do not request microphone/camera permissions.

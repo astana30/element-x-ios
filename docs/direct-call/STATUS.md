@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48H-QA — broader DirectCall source-guard triage passed after narrow test guard fixes. Controlled connect is still not approved, physical connect has not been performed, and the default remains no-connect.
+After 2.48I-Triage — one physical disabled-activation proof attempt is classified as incomplete before the Answer pipeline. Controlled connect is still not approved, physical connect has not been performed, and the default remains no-connect.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,16 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48I-Triage classified the physical disabled-activation proof attempt as incomplete:
+  - The one-shot real non-dev invite/APNs attempt passed preflight once with receiver hash `497015f5745c933a`, sender hash `7d434d7f252427fb`, `sender_equals_receiver=false`, `room_validation_preflight=pass`, `local_schema_valid=true`, `invite_http_code=200`, `real_non_dev_invite_used=true`, `dev_invite_used=false`, `background_apns_push_requested=true`, `background_apns_push_result=sandbox_success`, and `blocked_reason=none`.
+  - Actual 2.48I proof generation `generation_1` recorded `physical_voip_push_received=true`, `pushkit_callback_invoked=true`, `pushkit_payload_kind=real_invite_controlled`, and the 2.48H activation fields on-device: wiring present, DEBUG-only, default disabled, operator approval required, rollback available, and `planned_audio_only_redacted` scope.
+  - The attempt did not close because it stopped before the Answer pipeline: `callkit_report_requested=true`, `callkit_report_result=pending`, `callkit_report_completion_observed=false`, `pushkit_completion_called=false`, `callkit_first_action_kind=none`, `callkit_answer_action_delivered=false`, `callkit_answer_action_received=false`, and `callkit_answer_action_fulfilled=false`.
+  - As a result, `media_credentials_result=not_requested` and `media_connect_preflight_result=not_requested`; 2.48I is not closed.
+  - Safety boundary remained intact: `media_connect_requested=false`, `media_connect_attempted=false`, `livekit_join_requested=false`, `microphone_permission_requested=false`, `camera_permission_requested=false`, `matrix_event_emit_requested=false`, and `real_call_flow_started=false`.
+  - Local artifact note: `/tmp/salemx-voip-push-receipt-proof-current.txt` was stale `generation_8` from an earlier successful run; the 2.48I classification uses `/tmp/salemx-voip-push-receipt-proof-2.48i-polled.txt`.
+  - Most likely classification: CallKit UI did not surface or the operator could not tap Answer because the CallKit report completion never arrived. There is no evidence that 2.48H activation wiring caused a media/connect regression; the activation fields were present and all connect/LiveKit/permission/Matrix/full-flow fields remained false.
+  - Next phase: `2.48I-RetryPlan — one-shot Answer-path retry plan with explicit operator approval, no immediate APNs`.
+  - No repeated APNs, production APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced by this triage.
 - 2.48H-QA broader DirectCall source-guard triage is complete:
   - `2.48H-QA result = broader DirectCall checks passed after narrow source-guard fix`.
   - The broader selected DirectCall run reproduced only source-guard drift in three contract tests:
