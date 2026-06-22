@@ -13,7 +13,7 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-2.48I-RetryPlan prepared the next one-shot Answer-path retry plan. No APNs was sent in the planning checkpoint. The prior 2.48I physical attempt remains incomplete: APNs was sent once, push was received, activation wiring fields were present, CallKit Answer did not reach the pipeline, media credentials were not requested, media-connect preflight was not requested, 2.48I was not closed, and no repeat APNs was performed. Controlled connect is still not approved, physical connect has not been performed, and the default remains no-connect.
+2.48I-Retry physically proved the disabled activation wiring on-device after the one-shot Answer-path retry. The retry reached PushKit, CallKit Answer, authenticated pending metadata handoff, controlled credentials success, and the media-connect preflight guard while still blocking before connect. Controlled connect is still not approved, physical connect has not been performed, and the default remains no-connect.
 
 Closed prerequisites:
 - 2.47C physical controlled media credentials request succeeded with no media connect.
@@ -30,45 +30,49 @@ Closed prerequisites:
 - 2.48H-QA fixed stale source-guard expectations only and passed the broader selected DirectCall command across `DirectCallEngineTests` and `NativeIncomingCallLifecycleContractTests`.
 - 2.48I-Triage classified the first physical disabled-activation proof attempt as incomplete before the Answer pipeline, with APNs sent once, push received, activation wiring fields present, credentials/preflight not requested, and no repeat APNs.
 - 2.48I-RetryPlan defined the safest one-shot retry requirements and moved the next phase to one explicit operator-approved retry only.
+- 2.48I-Retry physically closed the disabled activation proof on the one-shot retry with Answer, credentials, preflight guard, and no media connect.
 
-2.48I-RetryPlan conclusion:
+2.48I-Retry conclusion:
 
 ```text
-2.48I-RetryPlan = ready for one explicit operator-approved retry only
+2.48I-Retry = physical proof succeeded
+activation wiring present on-device
+Answer pipeline reached
+credentials requested and received
+media-connect preflight reached guard
+execution_allowed=false
+blocked reason=disabled_switch_no_connect
+no media connect
+no LiveKit join
+no mic/camera permission
+no Matrix events
+no full call flow
 ```
 
-Retry checklist:
+Key proof fields:
 
 ```text
-retry_requires_fresh_debug_install=true
-retry_requires_current_head_confirmed=true
-retry_requires_single_sandbox_apns=true
-retry_requires_operator_answer_ready=true
-retry_requires_green_answer_tap=true
-retry_requires_post_answer_polling=true
-retry_rejects_stale_generation=true
-retry_requires_activation_fields=true
-retry_requires_answer_pipeline_fields=true
-retry_requires_credentials_fields=true
-retry_requires_preflight_block_fields=true
-retry_forbids_connect=true
-retry_forbids_livekit_join=true
-retry_forbids_permissions=true
-retry_forbids_matrix_events=true
-retry_forbids_full_flow=true
-```
-
-Required success fields for the retry:
-
-```text
+proof_generation=generation_8
+physical_voip_push_received=true
+pushkit_callback_invoked=true
+pushkit_payload_kind=real_invite_controlled
+pending_metadata_fetch_result=success_redacted
+pending_metadata_fetch_http_status_bucket=2xx
 callkit_first_action_kind=answer
 callkit_answer_action_delivered=true
 callkit_answer_action_received=true
 callkit_answer_action_fulfilled=true
+foreground_pending_call_metadata_handoff_observed=true
+foreground_pending_call_metadata_source=authenticated_pending_metadata_fetch
 media_credentials_result=success_redacted
 media_connect_preflight_requested=true
 controlled_connect_activation_wiring_present=true
 controlled_connect_execution_allowed=false
+controlled_connect_blocked_reason=disabled_switch_no_connect
+media_connect_preflight_result=blocked_before_connect_redacted
+media_connect_blocked_reason=disabled_switch_no_connect
+media_connect_engine_invoked=false
+livekit_connect_audio_invoked=false
 media_connect_requested=false
 media_connect_attempted=false
 livekit_join_requested=false
@@ -79,66 +83,40 @@ real_call_flow_started=false
 blocked_reason=none
 ```
 
-Retry stop conditions:
-
-```text
-if APNs sent once, do not repeat automatically
-if callkit_first_action_kind=none, stop and classify
-if activation fields missing, verify installed commit before any retry
-if credentials not requested after Answer, stop and classify
-if media_connect_requested=true, stop as safety regression
-if livekit_join_requested=true, stop as safety regression
-```
-
 ## Phase
 
-`2.48I-Retry — one-shot physical proof retry, no LiveKit join`
+`2.48J — controlled-connect enablement implementation plan, no physical connect`
 
 ## Goal
 
-Execute exactly one future physical proof retry only when fresh local inputs are present, helper preflight passes, and explicit one-shot confirmation is reached. The retry should prove the disabled activation wiring can reach CallKit Answer, controlled credentials, and the media-connect preflight guard while still blocking before any connect, LiveKit join, microphone/camera permission, Matrix event emission, or full call flow.
+Prepare the implementation plan for controlled-connect enablement after the successful disabled proof. This phase is planning only: no physical connect, no APNs, no media engine invocation, no LiveKit join, no microphone/camera permission request, no Matrix event emission, and no full direct-call flow.
 
 ## Required Behavior
 
-- Before any APNs send, confirm a fresh Debug app from current HEAD is installed and the installed commit matches current HEAD.
-- Before any APNs send, confirm the intended app foreground/background state and do not send if that state is unknown.
-- Before any APNs send, confirm the operator is ready to watch for the system CallKit UI and tap the green Answer button once.
-- Use the local env file only if the next prompt supplies one; do not print token values.
-- Send at most one sandbox APNs only after helper preflight passes and explicit one-shot confirmation is reached.
-- After the sandbox APNs result, do not send another APNs.
-- After green Answer, poll long enough for Answer, metadata handoff, credentials, and media-connect preflight-block fields to update before copying proof.
-- Copy proof to a phase-specific path and verify the new proof generation before classification.
-- Reject stale proof generations, including stale `/tmp/salemx-voip-push-receipt-proof-current.txt` content unless independently verified for the current run.
-- Keep the DEBUG-only activation switch disabled.
-- Keep controlled-connect operator approval false. The retry's operator approval is procedural approval for the one-shot physical proof, not approval to connect media.
-- Keep `controlled_connect_execution_allowed=false`.
-- Keep `media_connect_execution_allowed=false`.
-- Keep media engine invocation and LiveKit connect invocation false.
-- Keep microphone/camera permission requests false.
-- Keep Matrix event emission false.
-- Keep full direct-call flow false.
-- Preserve redacted proof only.
-- Do not change server token scope, token TTL, allocation TTL, or room pre-create behavior.
-- Preserve rollback to the 2.48F no-connect state: disabled switch, operator approval false, execution allowed false, media engine not invoked, LiveKit join not requested, permissions unrequested, Matrix events false.
-- Do not enable the controlled-connect switch or controlled-connect operator approval.
+- Produce a narrow enablement implementation plan, not an execution.
+- Keep the current runtime default disabled and no-connect.
+- Identify the exact code/config seams that would need to change in a later implementation phase.
+- Preserve the two-key activation model: DEBUG-only controlled switch plus explicit operator approval.
+- Preserve rollback to the 2.48F/2.48I no-connect state.
+- Define proof fields required for any future first controlled-connect implementation and physical proof.
+- Define hard stops for video, Matrix event emission, raw credentials logging, production APNs, repeated APNs, and unsupervised rollout.
+- Do not enable controlled connect in this phase.
+- Do not request or use microphone/camera permissions in this phase.
+- Do not change server token scope, token TTL, allocation TTL, or room pre-create behavior unless the plan explicitly documents a later reviewed phase.
 
 ## Required Tests
 
+- Docs-only planning should run `git diff --check`, forbidden project/signing scans, and a privacy scan over changed docs/diff.
 - If Swift/test files change, run SwiftFormat/SwiftLint on the touched scope and the targeted DirectCall tests.
-- Before physical retry, rerun the targeted DirectCall source/proof guard tests.
-- Physical retry proof must include the activation wiring fields with default disabled values.
-- Physical retry proof must include the Answer pipeline fields, credentials success fields, and preflight-block fields listed above.
-- Physical retry proof must keep media engine invocation and LiveKit connect invocation false.
-- Physical retry proof must keep microphone/camera permission fields false.
-- Physical retry proof must keep Matrix event emission and full flow false.
+- If enablement code is planned but not implemented, list the tests required for the later implementation phase instead of running a physical proof.
 - Privacy guard proving no raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID is written to proof/docs.
 
 ## Hard Constraints
 
+- Do not send APNs.
 - Do not use `dev/invite`.
 - Do not send production APNs.
 - Do not send repeated APNs.
-- Send at most one sandbox APNs attempt, only with fresh inputs, passing preflight, and one-shot confirmation.
 - Do not connect media.
 - Do not join LiveKit.
 - Do not request microphone/camera permissions.
@@ -152,4 +130,4 @@ Execute exactly one future physical proof retry only when fresh local inputs are
 
 ## If Blocked
 
-Report the blocker and the smallest next fix. If APNs was already sent once for the retry, do not repeat automatically. Keep all no-connect safety fields false. Do not proceed to a real call flow.
+Report the blocker and the smallest next fix. Keep all no-connect safety fields false. Do not proceed to a real call flow.

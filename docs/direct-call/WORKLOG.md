@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Closed the 2.48I one-shot Answer-path retry as a successful physical no-connect proof.
 - Prepared the 2.48I one-shot Answer-path retry plan; no APNs retry was executed.
 - Classified the 2.48I physical disabled-activation proof attempt as incomplete before the Answer pipeline; no repeat APNs was performed.
 - Closed the 2.48H-QA broader DirectCall source-guard triage; the selected DirectCall suites pass after narrow test guard fixes.
@@ -91,6 +92,148 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48I-Retry — Physical Disabled-Activation Proof Retry
+
+Closed the one-shot 2.48I physical retry as a successful no-connect proof. The retry used the phase-specific proof copy `/tmp/salemx-voip-push-receipt-proof-2.48i-retry-polled.txt`; classification used `proof_generation=generation_8` from that file, not stale `/tmp/salemx-voip-push-receipt-proof-current.txt`.
+
+Close-out result:
+
+```text
+2.48I-Retry = physical proof succeeded
+activation wiring present on-device
+Answer pipeline reached
+credentials requested and received
+media-connect preflight reached guard
+execution_allowed=false
+blocked reason=disabled_switch_no_connect
+no media connect
+no LiveKit join
+no mic/camera permission
+no Matrix events
+no full call flow
+```
+
+The one-shot real non-dev invite/APNs retry had already sent exactly once and succeeded:
+
+```text
+background_apns_push_result=sandbox_success
+blocked_reason=none
+```
+
+The controlled PushKit / CallKit path succeeded:
+
+```text
+physical_voip_push_received=true
+pushkit_callback_invoked=true
+pushkit_payload_kind=real_invite_controlled
+pending_metadata_fetch_result=success_redacted
+pending_metadata_fetch_http_status_bucket=2xx
+pending_metadata_fetch_errcode=none
+pending_metadata_fetch_failure_reason=none
+callkit_first_action_kind=answer
+callkit_answer_action_delivered=true
+callkit_answer_action_received=true
+callkit_answer_action_fulfilled=true
+```
+
+Foreground handoff and credentials succeeded:
+
+```text
+foreground_call_state=real_invite_pending_media
+foreground_pending_call_metadata_handoff_observed=true
+foreground_pending_call_metadata_source=authenticated_pending_metadata_fetch
+foreground_pending_call_metadata_has_call_identifier=true
+foreground_pending_call_metadata_has_room_binding=true
+foreground_pending_call_metadata_has_peer=true
+foreground_pending_call_metadata_direction=incoming
+foreground_pending_call_metadata_intent=audio
+media_credentials_request_metadata_available=true
+media_credentials_boundary_reached=true
+media_credentials_requested=true
+media_credentials_request_authorized=true
+media_credentials_result=success_redacted
+media_credentials_token_received=true
+media_credentials_url_received=true
+media_credentials_expires_at_present=true
+media_credentials_payload_redacted=true
+```
+
+Cleanup/expiry remained safe:
+
+```text
+media_credentials_cleanup_requested=true
+media_credentials_cleanup_result=cleared
+media_credentials_post_cleanup_token_present=false
+media_credentials_post_cleanup_url_present=false
+media_credentials_post_cleanup_expires_at_present=false
+media_credentials_post_cleanup_payload_present=false
+media_credentials_reuse_attempted=false
+media_credentials_reuse_allowed=false
+media_credentials_expiry_reference_present=true
+media_credentials_expiry_check_requested=true
+media_credentials_expiry_check_result=expired_or_not_reusable_redacted
+```
+
+The 2.48H activation wiring was present on-device and the controlled-connect switch remained disabled:
+
+```text
+controlled_connect_activation_wiring_present=true
+controlled_connect_activation_debug_only=true
+controlled_connect_activation_default_disabled=true
+controlled_connect_activation_requires_operator_approval=true
+controlled_connect_activation_rollback_available=true
+controlled_connect_activation_scope=planned_audio_only_redacted
+controlled_connect_video_allowed=false
+controlled_connect_matrix_events_allowed=false
+controlled_connect_raw_credentials_logged=false
+controlled_connect_switch_present=true
+controlled_connect_switch_debug_only=true
+controlled_connect_switch_enabled=false
+controlled_connect_operator_approved=false
+controlled_connect_execution_allowed=false
+controlled_connect_blocked_reason=disabled_switch_no_connect
+controlled_connect_blocked_before_engine=true
+controlled_connect_blocked_before_livekit_join=true
+controlled_connect_blocked_before_permissions=true
+controlled_connect_blocked_before_matrix_events=true
+```
+
+Media-connect preflight reached the disabled guard and blocked before connect:
+
+```text
+media_connect_preflight_requested=true
+media_connect_preflight_metadata_available=true
+media_connect_preflight_credentials_available=true
+media_connect_preflight_token_present=true
+media_connect_preflight_url_present=true
+media_connect_preflight_expires_at_present=true
+media_connect_guard_enabled=true
+media_connect_execution_allowed=false
+media_connect_preflight_result=blocked_before_connect_redacted
+media_connect_blocked_reason=disabled_switch_no_connect
+media_connect_engine_invoked=false
+livekit_connect_audio_invoked=false
+```
+
+Safety boundary was preserved:
+
+```text
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+blocked_reason=none
+```
+
+`pushkit_completion_answerable_window_result=timeout_elapsed`, `operator_ready_to_answer=false`, and `voip_operator_marker_set_before_report=false` were not blockers for this proof because the actual CallKit Answer path completed.
+
+Next phase: `2.48J — controlled-connect enablement implementation plan, no physical connect`.
+
+No repeated APNs, production APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, controlled-connect switch enablement, controlled-connect operator approval enablement, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 
 ### 2.48I-RetryPlan — One-Shot Answer-Path Retry Plan
 

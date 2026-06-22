@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48I-RetryPlan — the one-shot Answer-path retry plan is ready, but no retry has been executed. Controlled connect is still not approved, physical connect has not been performed, and the default remains no-connect.
+After 2.48I-Retry — physical disabled-activation proof succeeded on the one-shot retry. Controlled connect is still not approved, physical connect has not been performed, and the default remains no-connect.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,20 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48I-Retry physical disabled-activation proof succeeded:
+  - `2.48I-Retry = physical proof succeeded`.
+  - The phase-specific proof file `/tmp/salemx-voip-push-receipt-proof-2.48i-retry-polled.txt` recorded `proof_generation=generation_8`; stale `/tmp/salemx-voip-push-receipt-proof-current.txt` was not used for classification.
+  - The one-shot real non-dev invite/APNs retry had already sent exactly once and returned `background_apns_push_result=sandbox_success` with `blocked_reason=none`. No repeat APNs was sent during close-out.
+  - Activation wiring was present on-device: DEBUG-only, default disabled, requires operator approval, rollback available, `planned_audio_only_redacted` scope, video disabled, Matrix events disabled, and raw credentials logging disabled.
+  - Answer pipeline reached successfully: `physical_voip_push_received=true`, `pushkit_callback_invoked=true`, `pushkit_payload_kind=real_invite_controlled`, `pending_metadata_fetch_result=success_redacted`, `pending_metadata_fetch_http_status_bucket=2xx`, `pending_metadata_fetch_errcode=none`, `pending_metadata_fetch_failure_reason=none`, `callkit_first_action_kind=answer`, `callkit_answer_action_delivered=true`, `callkit_answer_action_received=true`, and `callkit_answer_action_fulfilled=true`.
+  - Foreground handoff succeeded with `foreground_call_state=real_invite_pending_media`, authenticated pending metadata source, call/room/peer bindings present, `foreground_pending_call_metadata_direction=incoming`, and `foreground_pending_call_metadata_intent=audio`.
+  - Credentials were requested and received: `media_credentials_request_metadata_available=true`, `media_credentials_boundary_reached=true`, `media_credentials_requested=true`, `media_credentials_request_authorized=true`, `media_credentials_result=success_redacted`, token/URL receipt booleans true, expiry present, and payload redacted. Cleanup/expiry stayed safe with cleanup cleared, post-cleanup token/URL/expiry/payload booleans false, reuse disallowed, and `media_credentials_expiry_check_result=expired_or_not_reusable_redacted`.
+  - Media-connect preflight reached the disabled guard and stopped before connect: `controlled_connect_switch_enabled=false`, `controlled_connect_operator_approved=false`, `controlled_connect_execution_allowed=false`, `controlled_connect_blocked_reason=disabled_switch_no_connect`, `media_connect_preflight_requested=true`, `media_connect_execution_allowed=false`, `media_connect_preflight_result=blocked_before_connect_redacted`, `media_connect_blocked_reason=disabled_switch_no_connect`, `media_connect_engine_invoked=false`, and `livekit_connect_audio_invoked=false`.
+  - Safety boundary stayed intact: `media_connect_requested=false`, `media_connect_attempted=false`, `livekit_join_requested=false`, `microphone_permission_requested=false`, `camera_permission_requested=false`, `matrix_event_emit_requested=false`, `real_call_flow_started=false`, and `blocked_reason=none`.
+  - `pushkit_completion_answerable_window_result=timeout_elapsed`, `operator_ready_to_answer=false`, and `voip_operator_marker_set_before_report=false` were not blockers because the actual CallKit Answer path completed.
+  - Close-out record: activation wiring present on-device, Answer pipeline reached, credentials requested and received, media-connect preflight reached guard, `execution_allowed=false`, blocked reason `disabled_switch_no_connect`, no media connect, no LiveKit join, no mic/camera permission, no Matrix events, and no full call flow.
+  - Next phase: `2.48J — controlled-connect enablement implementation plan, no physical connect`.
+  - No repeated APNs, production APNs, `dev/invite`, media connection, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, controlled-connect switch enablement, controlled-connect operator approval enablement, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced by this close-out.
 - 2.48I-RetryPlan prepared the next one-shot Answer-path retry without sending APNs:
   - `2.48I-RetryPlan = ready for one explicit operator-approved retry only`.
   - The retry plan reduces the previous avoidable failure causes by requiring a fresh Debug install from current HEAD, an explicit app foreground/background state check before any future send, an operator-ready confirmation for the green Answer tap, post-Answer polling before copying proof, phase-specific proof copying, generation verification, and one future sandbox APNs maximum.
