@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48X — second-device remote audio/liveness readiness review is complete. The existing Physical8 proof (`generation_14`) proves the first controlled audio-only connect completed once and stayed safe, but it does not contain explicit remote-audio/liveness evidence for LiveKit join result, room connected/disconnected state, local audio publish, remote participant/audio track subscription, remote audio level/liveness, microphone permission result, or audio route availability. No APNs/connect/runtime action was performed. The next phase is `2.48X-RemoteAudioLivenessDiagnostics — add redacted remote audio/liveness proof fields, no APNs/connect`.
+After 2.48X-RemoteAudioLivenessDiagnostics — redacted remote audio/liveness proof fields were added without APNs/connect. The DEBUG proof can now classify LiveKit join result, local audio publish, microphone requested/not-required state, audio route availability, remote participant/audio track/liveness observation, and LiveKit/audio cleanup without logging raw identifiers. Default runtime remains no-connect. The next phase is `2.48Y — one-shot second-device remote audio/liveness physical proof`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,47 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48X-RemoteAudioLivenessDiagnostics adds targeted redacted remote audio/liveness diagnostics without APNs/connect:
+  - This was a code/test diagnostics phase only. It did not send APNs, run production APNs, repeat APNs, use `dev/invite`, start another media connect, join LiveKit on device, request microphone/camera permission on device, emit Matrix events, enable video, or start full call flow.
+  - The proof now emits DEBUG-only redacted diagnostics fields:
+    ```text
+    remote_audio_liveness_diagnostics_present=true
+    remote_audio_liveness_diagnostics_debug_only=true
+    remote_audio_liveness_diagnostics_audio_only=true
+    remote_audio_liveness_diagnostics_video_allowed=false
+    remote_audio_liveness_diagnostics_matrix_events_allowed=false
+    remote_audio_liveness_diagnostics_raw_identifiers_logged=false
+    ```
+  - LiveKit join is explicitly classified:
+    ```text
+    livekit_join_result=<success_redacted_or_failed_redacted_or_not_requested>
+    livekit_join_error_bucket=<none_or_redacted_bucket>
+    livekit_room_connected=<redacted_bool>
+    livekit_room_disconnected=<redacted_bool>
+    livekit_local_participant_present=<redacted_bool>
+    ```
+  - Local publish, microphone, audio route, remote participant/audio, liveness, and cleanup are now classified without raw IDs:
+    ```text
+    local_audio_publish_requested=<redacted_bool>
+    local_audio_publish_started=<redacted_bool>
+    local_audio_publish_result=<success_redacted_or_failed_redacted_or_not_requested>
+    microphone_permission_result=<requested_redacted_or_not_requested_or_not_required_redacted>
+    microphone_permission_not_required_reason=<redacted_reason>
+    audio_route_result=<available_redacted_or_not_observed_redacted>
+    livekit_remote_participant_seen=<redacted_bool>
+    livekit_remote_audio_track_subscribed=<redacted_bool>
+    livekit_audio_liveness_result=<success_redacted_or_not_observed_redacted>
+    livekit_cleanup_result=<completed_redacted_or_not_completed_redacted_or_not_requested>
+    ```
+  - Safety defaults remain preserved:
+    ```text
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    controlled_connect_first_attempt_repeated=false
+    media_credentials_reuse_allowed=false
+    ```
+  - Next phase: `2.48Y — one-shot second-device remote audio/liveness physical proof`.
 - 2.48X remote audio/liveness readiness review is complete:
   - This was a docs-only review of the existing Physical8 proof at `/tmp/salemx-voip-push-receipt-proof-2.48t-physical8-first-audio-connect-polled.txt`.
   - Classification: `2.48X result = remote audio/liveness proof incomplete; targeted diagnostics needed`.

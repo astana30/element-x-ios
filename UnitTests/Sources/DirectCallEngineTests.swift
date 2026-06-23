@@ -2553,6 +2553,113 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func remoteAudioLivenessDiagnosticsFieldsAndDefaultsAreRedacted() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+
+        #expect(adapterSource.contains("remote_audio_liveness_diagnostics_present=\\(remoteAudioLivenessDiagnosticsPresent)"))
+        #expect(adapterSource.contains("remote_audio_liveness_diagnostics_debug_only=\\(remoteAudioLivenessDiagnosticsDebugOnly)"))
+        #expect(adapterSource.contains("remote_audio_liveness_diagnostics_audio_only=\\(remoteAudioLivenessDiagnosticsAudioOnly)"))
+        #expect(adapterSource.contains("remote_audio_liveness_diagnostics_video_allowed=\\(remoteAudioLivenessDiagnosticsVideoAllowed)"))
+        #expect(adapterSource.contains("remote_audio_liveness_diagnostics_matrix_events_allowed=\\(remoteAudioLivenessDiagnosticsMatrixEventsAllowed)"))
+        #expect(adapterSource.contains("remote_audio_liveness_diagnostics_raw_identifiers_logged=\\(remoteAudioLivenessDiagnosticsRawIdentifiersLogged)"))
+        #expect(adapterSource.contains("livekit_join_result=\\(liveKitJoinResult)"))
+        #expect(adapterSource.contains("livekit_join_error_bucket=\\(liveKitJoinErrorBucket)"))
+        #expect(adapterSource.contains("livekit_room_connected=\\(liveKitRoomConnected)"))
+        #expect(adapterSource.contains("livekit_room_disconnected=\\(liveKitRoomDisconnected)"))
+        #expect(adapterSource.contains("livekit_local_participant_present=\\(liveKitLocalParticipantPresent)"))
+        #expect(adapterSource.contains("local_audio_publish_requested=\\(localAudioPublishRequested)"))
+        #expect(adapterSource.contains("local_audio_publish_started=\\(localAudioPublishStarted)"))
+        #expect(adapterSource.contains("local_audio_publish_result=\\(localAudioPublishResult)"))
+        #expect(adapterSource.contains("local_audio_publish_error_bucket=\\(localAudioPublishErrorBucket)"))
+        #expect(adapterSource.contains("microphone_permission_result=\\(microphonePermissionResult)"))
+        #expect(adapterSource.contains("microphone_permission_not_required_reason=\\(microphonePermissionNotRequiredReason)"))
+        #expect(adapterSource.contains("audio_route_available=\\(audioRouteAvailable)"))
+        #expect(adapterSource.contains("audio_route_result=\\(audioRouteResult)"))
+        #expect(adapterSource.contains("livekit_remote_participant_seen=\\(liveKitRemoteParticipantSeen)"))
+        #expect(adapterSource.contains("livekit_remote_participant_count_bucket=\\(liveKitRemoteParticipantCountBucket)"))
+        #expect(adapterSource.contains("livekit_remote_audio_track_subscribed=\\(liveKitRemoteAudioTrackSubscribed)"))
+        #expect(adapterSource.contains("livekit_remote_audio_track_unmuted=\\(liveKitRemoteAudioTrackUnmuted)"))
+        #expect(adapterSource.contains("livekit_remote_audio_level_observed=\\(liveKitRemoteAudioLevelObserved)"))
+        #expect(adapterSource.contains("livekit_audio_liveness_observed=\\(liveKitAudioLivenessObserved)"))
+        #expect(adapterSource.contains("livekit_audio_liveness_result=\\(liveKitAudioLivenessResult)"))
+        #expect(adapterSource.contains("livekit_audio_liveness_error_bucket=\\(liveKitAudioLivenessErrorBucket)"))
+        #expect(adapterSource.contains("livekit_cleanup_requested=\\(liveKitCleanupRequested)"))
+        #expect(adapterSource.contains("livekit_cleanup_completed=\\(liveKitCleanupCompleted)"))
+        #expect(adapterSource.contains("livekit_cleanup_result=\\(liveKitCleanupResult)"))
+
+        #expect(adapterSource.contains("var remoteAudioLivenessDiagnosticsPresent = true"))
+        #expect(adapterSource.contains("var remoteAudioLivenessDiagnosticsDebugOnly = true"))
+        #expect(adapterSource.contains("var remoteAudioLivenessDiagnosticsAudioOnly = true"))
+        #expect(adapterSource.contains("var remoteAudioLivenessDiagnosticsVideoAllowed = false"))
+        #expect(adapterSource.contains("var remoteAudioLivenessDiagnosticsMatrixEventsAllowed = false"))
+        #expect(adapterSource.contains("var remoteAudioLivenessDiagnosticsRawIdentifiersLogged = false"))
+        #expect(adapterSource.contains("var liveKitJoinResult = \"not_requested\""))
+        #expect(adapterSource.contains("var localAudioPublishResult = \"not_requested\""))
+        #expect(adapterSource.contains("var microphonePermissionResult = \"not_requested_or_not_required_redacted\""))
+        #expect(adapterSource.contains("var liveKitAudioLivenessResult = \"not_observed_redacted\""))
+        #expect(adapterSource.contains("var liveKitCleanupResult = \"not_requested\""))
+
+        #expect(adapterSource.contains("camera_permission_requested=\\(cameraPermissionRequested)"))
+        #expect(adapterSource.contains("matrix_event_emit_requested=\\(matrixEventEmitRequested)"))
+        #expect(adapterSource.contains("real_call_flow_started=\\(realCallFlowStarted)"))
+        #expect(adapterSource.contains("controlled_connect_first_attempt_repeated=\\(controlledConnectFirstAttemptRepeated)"))
+        #expect(!adapterSource.contains("remoteAudioLivenessDiagnosticsRawIdentifiersLogged = true"))
+    }
+
+    @Test
+    func remoteAudioLivenessDiagnosticsClassifyJoinPublishMicLivenessAndCleanup() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+
+        #expect(adapterSource.contains("mutating func refreshRemoteAudioLivenessDiagnostics()"))
+        #expect(adapterSource.contains("remoteAudioLivenessDiagnosticsDebugOnly = true"))
+        #expect(adapterSource.contains("remoteAudioLivenessDiagnosticsAudioOnly = true"))
+        #expect(adapterSource.contains("remoteAudioLivenessDiagnosticsVideoAllowed = controlledConnectFirstAttemptVideoAllowed"))
+        #expect(adapterSource.contains("remoteAudioLivenessDiagnosticsMatrixEventsAllowed = controlledConnectFirstAttemptMatrixEventsAllowed"))
+        #expect(adapterSource.contains("remoteAudioLivenessDiagnosticsRawIdentifiersLogged = false"))
+        #expect(adapterSource.contains("liveKitJoinResult = controlledConnectFirstAttemptResult == \"success_redacted\" ? \"success_redacted\" : \"failed_redacted\""))
+        #expect(adapterSource.contains("liveKitJoinErrorBucket = controlledConnectFirstAttemptResult == \"success_redacted\" ? \"none\" : controlledConnectFirstAttemptErrorBucket"))
+        #expect(adapterSource.contains("liveKitJoinResult = \"not_requested\""))
+        #expect(adapterSource.contains("liveKitRoomConnected = controlledConnectFirstAttemptResult == \"success_redacted\""))
+        #expect(adapterSource.contains("liveKitLocalParticipantPresent = liveKitRoomConnected"))
+        #expect(adapterSource.contains("microphonePermissionResult = microphonePermissionRequested ? \"requested_redacted\" : \"not_requested_or_not_required_redacted\""))
+        #expect(adapterSource.contains("microphonePermissionNotRequiredReason = microphonePermissionRequested ? \"requested_redacted\" : \"receive_only_audio_session_redacted\""))
+        #expect(adapterSource.contains("audioRouteAvailable = callKitProviderDidActivateAudioSession"))
+        #expect(adapterSource.contains("audioRouteResult = audioRouteAvailable ? \"available_redacted\" : \"not_observed_redacted\""))
+        #expect(adapterSource.contains("liveKitCleanupRequested = disconnectCleanupDiagnosticsLiveKitCleanupRequested"))
+        #expect(adapterSource.contains("liveKitCleanupCompleted = disconnectCleanupDiagnosticsLiveKitCleanupCompleted"))
+        #expect(adapterSource.contains("liveKitCleanupResult = liveKitCleanupCompleted ? \"completed_redacted\" : (liveKitCleanupRequested ? \"not_completed_redacted\" : \"not_requested\")"))
+
+        #expect(adapterSource.contains("mutating func recordRemoteAudioLivenessJoinResult(succeeded: Bool, errorBucket: String = \"none\")"))
+        #expect(adapterSource.contains("liveKitJoinResult = succeeded ? \"success_redacted\" : \"failed_redacted\""))
+        #expect(adapterSource.contains("liveKitJoinErrorBucket = succeeded ? \"none\" : errorBucket"))
+        #expect(adapterSource.contains("liveKitRoomConnected = succeeded"))
+        #expect(adapterSource.contains("liveKitLocalParticipantPresent = succeeded"))
+
+        #expect(adapterSource.contains("mutating func recordLocalAudioPublishResult(requested: Bool, started: Bool, succeeded: Bool, errorBucket: String = \"none\")"))
+        #expect(adapterSource.contains("localAudioPublishRequested = requested"))
+        #expect(adapterSource.contains("localAudioPublishStarted = requested && started"))
+        #expect(adapterSource.contains("localAudioPublishResult = requested ? (succeeded ? \"success_redacted\" : \"failed_redacted\") : \"not_requested\""))
+        #expect(adapterSource.contains("localAudioPublishErrorBucket = requested && !succeeded ? errorBucket : \"none\""))
+
+        #expect(adapterSource.contains("mutating func recordMicrophonePermissionResult(requested: Bool, notRequiredReason: String)"))
+        #expect(adapterSource.contains("microphonePermissionResult = requested ? \"requested_redacted\" : \"not_requested_or_not_required_redacted\""))
+        #expect(adapterSource.contains("microphonePermissionNotRequiredReason = requested ? \"requested_redacted\" : notRequiredReason"))
+
+        #expect(adapterSource.contains("mutating func recordRemoteAudioLivenessObservation(participantSeen: Bool"))
+        #expect(adapterSource.contains("liveKitRemoteParticipantSeen = participantSeen"))
+        #expect(adapterSource.contains("liveKitRemoteParticipantCountBucket = participantCountBucket"))
+        #expect(adapterSource.contains("liveKitRemoteAudioTrackSubscribed = audioTrackSubscribed"))
+        #expect(adapterSource.contains("liveKitRemoteAudioTrackUnmuted = audioTrackUnmuted"))
+        #expect(adapterSource.contains("liveKitRemoteAudioLevelObserved = audioLevelObserved"))
+        #expect(adapterSource.contains("liveKitAudioLivenessObserved = livenessObserved"))
+        #expect(adapterSource.contains("liveKitAudioLivenessResult = livenessObserved ? \"success_redacted\" : \"not_observed_redacted\""))
+        #expect(adapterSource.contains("liveKitAudioLivenessErrorBucket = errorBucket"))
+
+        #expect(adapterSource.contains("refreshRemoteAudioLivenessDiagnostics()"))
+        #expect(adapterSource.contains("summary.refreshRemoteAudioLivenessDiagnostics()"))
+    }
+
+    @Test
     func controlledCallKitReportClearsStaleSyntheticCallBeforeNewReport() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
 

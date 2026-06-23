@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Added 2.48X-RemoteAudioLivenessDiagnostics: the DEBUG proof now emits redacted fields for LiveKit join result, local audio publish, microphone requested/not-required classification, audio route availability, remote participant/audio track/liveness observation, and LiveKit/audio cleanup while preserving default no-connect, one-shot, no-video, no-camera, no-Matrix, no-full-flow safety.
 - Closed 2.48X as a docs-only second-device remote audio/liveness readiness review: Physical8 generation 14 proves one successful controlled audio-only connect and preserved one-shot/no-repeat/no-video/no-Matrix/full-flow safety, but explicit LiveKit join result, room state, local publish, remote participant/audio track, audio liveness, microphone-result, audio-route, and Physical8 disconnect-cleanup diagnostics are missing; next is targeted no-APNs/no-connect diagnostics.
 - Added 2.48W-DisconnectCleanupDiagnostics: redacted DEBUG proof fields now classify provider/local cleanup without expected CallKit End action, require delivery/fulfillment/matching/timing when an End action is expected, preserve audio-session deactivation and non-reusable credentials, and keep default runtime no-connect.
 - Classified 2.48W as controlled disconnect/end-call cleanup proof incomplete: Physical8 showed cleanup requested/result ended and valid audio-session deactivation, but CallKit End action delivery/matching/fulfillment was not observed; next is targeted no-APNs/no-connect diagnostics.
@@ -122,6 +123,62 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48X-RemoteAudioLivenessDiagnostics — Remote Audio/Liveness Diagnostics
+
+Implemented targeted remote audio/liveness diagnostics without APNs, physical connect, LiveKit retry, microphone/camera permission on device, Matrix event emission, video, or full call flow.
+
+The VoIP proof now includes DEBUG-only redacted diagnostics fields:
+
+```text
+remote_audio_liveness_diagnostics_present=true
+remote_audio_liveness_diagnostics_debug_only=true
+remote_audio_liveness_diagnostics_audio_only=true
+remote_audio_liveness_diagnostics_video_allowed=false
+remote_audio_liveness_diagnostics_matrix_events_allowed=false
+remote_audio_liveness_diagnostics_raw_identifiers_logged=false
+livekit_join_result=<success_redacted_or_failed_redacted_or_not_requested>
+livekit_join_error_bucket=<none_or_redacted_bucket>
+livekit_room_connected=<redacted_bool>
+livekit_room_disconnected=<redacted_bool>
+livekit_local_participant_present=<redacted_bool>
+local_audio_publish_requested=<redacted_bool>
+local_audio_publish_started=<redacted_bool>
+local_audio_publish_result=<success_redacted_or_failed_redacted_or_not_requested>
+local_audio_publish_error_bucket=<none_or_redacted_bucket>
+microphone_permission_result=<requested_redacted_or_not_requested_or_not_required_redacted>
+microphone_permission_not_required_reason=<redacted_reason>
+audio_route_available=<redacted_bool>
+audio_route_result=<available_redacted_or_not_observed_redacted>
+livekit_remote_participant_seen=<redacted_bool>
+livekit_remote_participant_count_bucket=<redacted_bucket>
+livekit_remote_audio_track_subscribed=<redacted_bool>
+livekit_remote_audio_track_unmuted=<redacted_bool>
+livekit_remote_audio_level_observed=<redacted_bool>
+livekit_audio_liveness_observed=<redacted_bool>
+livekit_audio_liveness_result=<success_redacted_or_not_observed_redacted>
+livekit_audio_liveness_error_bucket=<none_or_redacted_bucket>
+livekit_cleanup_requested=<redacted_bool>
+livekit_cleanup_completed=<redacted_bool>
+livekit_cleanup_result=<completed_redacted_or_not_completed_redacted_or_not_requested>
+```
+
+Join success/failure, local audio publish success/failure, microphone requested/not-required, remote participant/audio/liveness observed or not observed, and LiveKit/audio cleanup requested/completed are all explicitly classified without raw identifiers. Missing remote audio is classified as `not_observed_redacted`, not success.
+
+The diagnostics refresh from existing first-attempt, audio-session, and cleanup state. Future proof hooks can record more specific redacted liveness observations without changing the default runtime:
+
+```text
+remote_audio_liveness_raw_identifiers_logged=false
+controlled_connect_first_attempt_repeated=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+media_credentials_reuse_allowed=false
+```
+
+Targeted tests cover field presence, DEBUG/test-controlled redaction, default no-connect, video/camera/Matrix/full-flow safety, raw identifier blocking, LiveKit join success/failure, local audio publish success/failure, microphone requested/not-required classification, remote participant/audio track/liveness observed and not observed, LiveKit/audio cleanup classification, one-shot consumption, first-attempt non-repeat, credential non-reuse, no repeated media connect, and preservation of existing Physical8/2.48U/2.48V/2.48W expectations.
+
+Next phase: `2.48Y — one-shot second-device remote audio/liveness physical proof`.
 
 ### 2.48X — Second-Device Remote Audio/Liveness Readiness Review
 
