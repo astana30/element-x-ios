@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Closed 2.48Z-Physical1 as safely classified: one sandbox APNs, PushKit, CallKit Answer, pending metadata, media credentials, one controlled audio-only connect, and LiveKit join succeeded on the two-physical-device path, but remote participant/audio/liveness was not observed; no retry was performed.
 - Added 2.48X-RemoteAudioLivenessDiagnostics: the DEBUG proof now emits redacted fields for LiveKit join result, local audio publish, microphone requested/not-required classification, audio route availability, remote participant/audio track/liveness observation, and LiveKit/audio cleanup while preserving default no-connect, one-shot, no-video, no-camera, no-Matrix, no-full-flow safety.
 - Closed 2.48X as a docs-only second-device remote audio/liveness readiness review: Physical8 generation 14 proves one successful controlled audio-only connect and preserved one-shot/no-repeat/no-video/no-Matrix/full-flow safety, but explicit LiveKit join result, room state, local publish, remote participant/audio track, audio liveness, microphone-result, audio-route, and Physical8 disconnect-cleanup diagnostics are missing; next is targeted no-APNs/no-connect diagnostics.
 - Added 2.48W-DisconnectCleanupDiagnostics: redacted DEBUG proof fields now classify provider/local cleanup without expected CallKit End action, require delivery/fulfillment/matching/timing when an End action is expected, preserve audio-session deactivation and non-reusable credentials, and keep default runtime no-connect.
@@ -7464,3 +7465,133 @@ same_encrypted_room_validated=true
 No APNs, no production APNs, no repeated APNs, no `dev/invite`, no connect, no LiveKit join, no video, no microphone/camera permission, no Matrix event emit, no full call flow, no one-shot hook reset/re-arm, and no physical call attempt were performed.
 
 Next phase: `2.48Z-Physical1 — one-shot two-physical-device remote audio/liveness proof`.
+
+## 2026-06-23 — 2.48Z-Physical1
+
+Ran the first one-shot two-physical-device remote audio/liveness proof and safely classified the result.
+
+Preflight and send:
+
+```text
+receiver_token_found=true
+sender_token_found=true
+receiver_user_hash=497015f5745c933a
+sender_user_hash=7d434d7f252427fb
+sender_equals_receiver=false
+room_validation_preflight=pass
+receiver_iphone_pending_metadata_auth_ready=true
+second_physical_device_pending_metadata_auth_ready=true
+remote_peer_kind=physical_ios_redacted
+remote_peer_physical_device=true
+simulator_assisted_remote_audio_proof=false
+production_like_two_physical_device_proof=true
+safe_to_send_apns=true
+```
+
+Exactly one sandbox APNs was sent after explicit confirmation:
+
+```text
+confirmation_reached=true
+invite_send_attempted=true
+invite_http_code=200
+real_non_dev_invite_used=true
+dev_invite_used=false
+background_apns_push_requested=true
+background_apns_push_result=sandbox_success
+APNs_sent=true
+```
+
+Physical proof:
+
+```text
+proof_generation=generation_13
+physical_voip_push_received=true
+pushkit_callback_invoked=true
+pushkit_payload_kind=real_invite_controlled
+callkit_report_result=reported
+callkit_report_completion_observed=true
+pushkit_completion_called=true
+callkit_first_action_kind=answer
+callkit_answer_action_delivered=true
+callkit_answer_action_received=true
+callkit_answer_action_fulfilled=true
+pending_metadata_fetch_result=success_redacted
+pending_metadata_fetch_http_status_bucket=2xx
+media_credentials_requested=true
+media_credentials_request_authorized=true
+media_credentials_result=success_redacted
+controlled_connect_first_attempt_requested=true
+controlled_connect_first_attempt_allowed=true
+controlled_connect_first_attempt_started=true
+controlled_connect_first_attempt_completed=true
+controlled_connect_first_attempt_repeated=false
+controlled_connect_first_attempt_result=success_redacted
+livekit_join_requested=true
+livekit_join_result=success_redacted
+```
+
+The physical remote peer context survived PushKit and Answer:
+
+```text
+remote_peer_context_handoff_present=true
+remote_peer_context_handoff_debug_only=true
+remote_peer_context_handoff_armed_before_apns=true
+remote_peer_context_handoff_received_by_runtime=true
+remote_peer_context_handoff_survived_pushkit=true
+remote_peer_context_handoff_survived_answer=true
+remote_peer_context_handoff_raw_identifiers_logged=false
+remote_peer_kind=physical_ios_redacted
+remote_peer_physical_device=true
+simulator_assisted_remote_audio_proof=false
+production_like_two_physical_device_proof=true
+second_device_remote_audio_readiness=ready_redacted
+```
+
+Remote audio/liveness did not complete because the remote participant was not observed:
+
+```text
+livekit_room_connected=true
+livekit_room_disconnected=true
+livekit_local_participant_present=true
+local_audio_publish_requested=false
+local_audio_publish_result=not_required_redacted
+microphone_permission_requested=false
+microphone_permission_result=not_requested_or_not_required_redacted
+livekit_remote_participant_seen=false
+livekit_remote_participant_count_bucket=0
+livekit_remote_audio_track_subscribed=false
+livekit_remote_audio_track_unmuted=false
+livekit_remote_audio_level_observed=false
+livekit_audio_liveness_observed=false
+livekit_audio_liveness_result=not_observed_redacted
+livekit_audio_liveness_error_bucket=remote_participant_missing_redacted
+remote_audio_liveness_result=not_observed_redacted
+remote_audio_liveness_error_bucket=remote_participant_missing_redacted
+livekit_cleanup_requested=true
+livekit_cleanup_completed=true
+livekit_cleanup_result=completed_redacted
+```
+
+Safety stayed closed:
+
+```text
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+blocked_reason=none
+```
+
+Conclusion:
+
+```text
+2.48Z-Physical1 = two-physical-device remote audio/liveness proof safely classified
+first controlled audio connect attempted
+LiveKit join result=success_redacted
+remote audio/liveness result=not_observed_redacted
+remote liveness blocker=remote_participant_missing_redacted
+no retry performed
+```
+
+No repeated APNs, no production APNs, no `dev/invite`, no repeated connect, no repeated LiveKit join, no video, no camera permission, no Matrix event emit, no full call flow, and no project/signing changes were performed.
+
+Next phase: `2.48Z-RemoteParticipantDiagnostics — diagnose missing physical remote participant, no APNs/connect retry`.

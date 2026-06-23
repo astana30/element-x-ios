@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-SecondPhysicalDeviceSetup — the second physical iPhone is ready as the future remote peer. Both physical app sessions validated with redacted `/whoami` proofs, the expected sender and receiver stable hashes are distinct, and the same encrypted room preflight passed using in-memory tokens. No APNs/connect/LiveKit was run. The next phase is `2.48Z-Physical1 — one-shot two-physical-device remote audio/liveness proof`.
+After 2.48Z-Physical1 — the first two-physical-device remote audio/liveness proof is safely classified. One sandbox APNs was sent after explicit confirmation, PushKit and CallKit Answer succeeded, pending metadata and media credentials succeeded, and one controlled audio-only media connect/LiveKit join completed. Remote audio/liveness was not observed because no remote participant was seen. No retry was performed. The next phase is `2.48Z-RemoteParticipantDiagnostics — diagnose missing physical remote participant, no APNs/connect retry`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,107 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48Z-Physical1 safely classifies the first two-physical-device remote audio/liveness proof:
+  - This was a one-shot two-physical-device proof with iPhone PRO as the receiver and the second physical iPhone as the remote peer context. Exactly one sandbox APNs was sent after explicit `SEND_2_48Z_PHYSICAL1` confirmation; no APNs retry, connect retry, or LiveKit retry was performed.
+  - APNs and PushKit/CallKit path:
+    ```text
+    proof_generation=generation_13
+    physical_voip_push_received=true
+    pushkit_callback_invoked=true
+    pushkit_payload_kind=real_invite_controlled
+    callkit_report_result=reported
+    callkit_report_completion_observed=true
+    pushkit_completion_called=true
+    callkit_first_action_kind=answer
+    callkit_answer_action_delivered=true
+    callkit_answer_action_received=true
+    callkit_answer_action_fulfilled=true
+    ```
+  - Metadata, credentials, and one controlled connect attempt:
+    ```text
+    pending_metadata_reference_present=true
+    pending_metadata_fetch_requested=true
+    pending_metadata_fetch_result=success_redacted
+    pending_metadata_fetch_http_status_bucket=2xx
+    media_credentials_requested=true
+    media_credentials_request_authorized=true
+    media_credentials_result=success_redacted
+    media_credentials_token_received=true
+    media_credentials_url_received=true
+    media_credentials_payload_redacted=true
+    physical6_runtime_enablement_url_hook_consumed=true
+    controlled_connect_first_attempt_requested=true
+    controlled_connect_first_attempt_allowed=true
+    controlled_connect_first_attempt_started=true
+    controlled_connect_first_attempt_completed=true
+    controlled_connect_first_attempt_repeated=false
+    controlled_connect_first_attempt_result=success_redacted
+    controlled_connect_first_attempt_error_bucket=none
+    media_connect_requested=true
+    media_connect_attempted=true
+    livekit_join_requested=true
+    livekit_connect_audio_invoked=true
+    livekit_join_result=success_redacted
+    ```
+  - Physical remote peer context was preserved into runtime:
+    ```text
+    remote_peer_context_handoff_present=true
+    remote_peer_context_handoff_debug_only=true
+    remote_peer_context_handoff_armed_before_apns=true
+    remote_peer_context_handoff_received_by_runtime=true
+    remote_peer_context_handoff_survived_pushkit=true
+    remote_peer_context_handoff_survived_answer=true
+    remote_peer_context_handoff_raw_identifiers_logged=false
+    remote_peer_kind=physical_ios_redacted
+    remote_peer_physical_device=true
+    simulator_assisted_remote_audio_proof=false
+    production_like_two_physical_device_proof=true
+    second_device_remote_audio_readiness=ready_redacted
+    ```
+  - Remote audio/liveness classification:
+    ```text
+    livekit_room_connected=true
+    livekit_room_disconnected=true
+    livekit_local_participant_present=true
+    local_audio_publish_requested=false
+    local_audio_publish_started=false
+    local_audio_publish_result=not_required_redacted
+    local_audio_publish_not_required_reason=receive_only_audio_connect_redacted
+    microphone_permission_requested=false
+    microphone_permission_result=not_requested_or_not_required_redacted
+    livekit_remote_participant_seen=false
+    livekit_remote_participant_count_bucket=0
+    livekit_remote_audio_track_subscribed=false
+    livekit_remote_audio_track_unmuted=false
+    livekit_remote_audio_level_observed=false
+    livekit_audio_liveness_observed=false
+    livekit_audio_liveness_result=not_observed_redacted
+    livekit_audio_liveness_error_bucket=remote_participant_missing_redacted
+    remote_audio_liveness_result=not_observed_redacted
+    remote_audio_liveness_error_bucket=remote_participant_missing_redacted
+    livekit_cleanup_requested=true
+    livekit_cleanup_completed=true
+    livekit_cleanup_result=completed_redacted
+    ```
+  - Safety stayed closed:
+    ```text
+    remote_audio_liveness_diagnostics_video_allowed=false
+    remote_audio_liveness_diagnostics_matrix_events_allowed=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    blocked_reason=none
+    ```
+  - Conclusion:
+    ```text
+    2.48Z-Physical1 = two-physical-device remote audio/liveness proof safely classified
+    first controlled audio connect attempted
+    LiveKit join result=success_redacted
+    remote audio/liveness result=not_observed_redacted
+    remote liveness blocker=remote_participant_missing_redacted
+    no retry performed
+    ```
+  - Next phase: `2.48Z-RemoteParticipantDiagnostics — diagnose missing physical remote participant, no APNs/connect retry`.
 - 2.48Z-SecondPhysicalDeviceSetup prepares the second physical iPhone remote peer:
   - This was a setup/readiness phase only. It did not send APNs, run production APNs, repeat APNs, use `dev/invite`, start media connect, join LiveKit, request microphone/camera permission, enable video, emit Matrix events, start full call flow, reset/re-arm the one-shot hook, or perform another physical call attempt.
   - Physical device setup:
