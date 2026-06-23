@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48T-Physical8 — the one-shot physical proof reached PushKit, CallKit Answer, pending metadata reference handoff/fetch, media credentials, and the first controlled audio-only connect attempt. The attempt completed with `controlled_connect_first_attempt_result=success_redacted`, `controlled_connect_first_attempt_repeated=false`, camera/video/Matrix/full-flow stayed closed, and the DEBUG one-shot hook was consumed. One sandbox APNs was sent; no production APNs, repeated APNs, `dev/invite`, repeated connect, video, camera permission, Matrix event emission, or full call flow was performed. The next phase is `2.48U — first-connect result review and cleanup verification, no repeated connect`.
+After 2.48U — the Physical8 proof review and cleanup verification is complete. Physical8 proved the first controlled audio-connect attempt completed successfully once, the DEBUG one-shot hook was consumed, credentials were cleared and not reusable, and no repeated APNs/connect, video, camera permission, Matrix event emission, or full call flow occurred. This phase used only the existing Physical8 proof and performed no runtime/APNs/connect action. The next phase is `2.48V — controlled audio session lifecycle review, no repeated connect`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,51 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48U first-connect result review and cleanup verification is complete:
+  - This was a docs-only review of the existing Physical8 proof at `/tmp/salemx-voip-push-receipt-proof-2.48t-physical8-first-audio-connect-polled.txt`.
+  - No APNs, production APNs, repeated APNs, `dev/invite`, repeated connect, new LiveKit join, video, camera permission, Matrix event emission, or full call flow was performed.
+  - The reviewed proof generation was `generation_14`.
+  - The first controlled audio-connect attempt completed and was not repeated:
+    ```text
+    controlled_connect_first_attempt_completed=true
+    controlled_connect_first_attempt_result=success_redacted
+    controlled_connect_first_attempt_error_bucket=none
+    controlled_connect_first_attempt_repeated=false
+    physical6_runtime_enablement_url_hook_consumed=true
+    ```
+  - Credentials cleanup and non-reuse were verified:
+    ```text
+    media_credentials_cleanup_requested=true
+    media_credentials_cleanup_result=cleared
+    media_credentials_post_cleanup_token_present=false
+    media_credentials_post_cleanup_url_present=false
+    media_credentials_post_cleanup_expires_at_present=false
+    media_credentials_post_cleanup_payload_present=false
+    media_credentials_reuse_attempted=false
+    media_credentials_reuse_allowed=false
+    media_credentials_expiry_check_requested=true
+    media_credentials_expiry_check_result=expired_or_not_reusable_redacted
+    ```
+  - The only media/LiveKit activity remained the single Physical8 audio-only attempt:
+    ```text
+    media_connect_requested=true
+    media_connect_attempted=true
+    livekit_join_requested=true
+    livekit_connect_audio_invoked=true
+    controlled_connect_first_attempt_audio_only=true
+    controlled_connect_first_attempt_video_allowed=false
+    ```
+  - Safety fields remained closed:
+    ```text
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    controlled_connect_first_attempt_matrix_events_allowed=false
+    controlled_connect_first_attempt_raw_credentials_logged=false
+    blocked_reason=none
+    ```
+  - Conclusion: `2.48U = first-connect result review and cleanup verification completed`; Physical8 first controlled audio-connect succeeded, the one-shot hook was consumed, credentials are not reusable, and the next phase is `2.48V — controlled audio session lifecycle review, no repeated connect`.
 - 2.48T-Physical8 physically proves the one-shot Answer -> metadata reference -> credentials -> first controlled audio-connect path:
   - Initial helper preflight correctly stopped before APNs when staging still served stale foreground-signaling diagnostics. The staging call-service was updated with only the repaired `app.py`, remote compileall passed, `salemx-call-service` restarted successfully, route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated foreground LiveKit token `401`, then app session and hook proofs were refreshed before retrying the helper.
   - The phase-specific proof path is `/tmp/salemx-voip-push-receipt-proof-2.48t-physical8-first-audio-connect-polled.txt`.

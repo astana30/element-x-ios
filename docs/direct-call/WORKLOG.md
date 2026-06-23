@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Closed 2.48U as a docs-only first-connect result review and cleanup verification: Physical8's first controlled audio-only connect succeeded once, the one-shot hook was consumed, credentials were cleared and not reusable, and no repeated APNs/connect, video, camera permission, Matrix event emission, or full call flow occurred.
 - Closed 2.48T-Physical8 as a successful one-shot physical first controlled audio-connect proof: PushKit received, CallKit report completed, Answer received/fulfilled, pending metadata reference observed/handed off, metadata fetch succeeded, credentials succeeded, the first controlled audio-only connect/LiveKit attempt completed once, and no video/camera/Matrix/full-flow path opened.
 - Repaired the 2.48T-Physical7 pending metadata reference boundary so real non-dev invite/APNs preflight blocks when no reference exists, valid server-created references stay opaque/redacted, PushKit/Answer proof records reference observation and handoff, and credentials/connect remain blocked without metadata success.
 - Closed 2.48T-Physical7 as answered / missing pending metadata / no-connect triage: PushKit received, CallKit report completed, Answer delivered/received/fulfilled, pending metadata requested but blocked on missing reference, credentials/connect/LiveKit stayed closed, and no retry was performed.
@@ -117,6 +118,69 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48U — First-Connect Result Review and Cleanup Verification
+
+Closed the review phase as docs-only, using only the existing Physical8 proof:
+
+```text
+/tmp/salemx-voip-push-receipt-proof-2.48t-physical8-first-audio-connect-polled.txt
+```
+
+No APNs, production APNs, repeated APNs, `dev/invite`, repeated connect, new LiveKit join, video, camera permission, Matrix event emission, or full call flow was performed.
+
+Reviewed proof:
+
+```text
+proof_generation=generation_14
+controlled_connect_first_attempt_completed=true
+controlled_connect_first_attempt_result=success_redacted
+controlled_connect_first_attempt_error_bucket=none
+controlled_connect_first_attempt_repeated=false
+physical6_runtime_enablement_url_hook_consumed=true
+```
+
+Credentials cleanup and non-reuse were present and sufficient:
+
+```text
+media_credentials_cleanup_requested=true
+media_credentials_cleanup_result=cleared
+media_credentials_post_cleanup_token_present=false
+media_credentials_post_cleanup_url_present=false
+media_credentials_post_cleanup_expires_at_present=false
+media_credentials_post_cleanup_payload_present=false
+media_credentials_reuse_attempted=false
+media_credentials_reuse_allowed=false
+media_credentials_expiry_check_requested=true
+media_credentials_expiry_check_result=expired_or_not_reusable_redacted
+```
+
+The only media and LiveKit activity remained the already-closed Physical8 single controlled audio attempt:
+
+```text
+media_connect_requested=true
+media_connect_attempted=true
+livekit_join_requested=true
+livekit_connect_audio_invoked=true
+controlled_connect_first_attempt_audio_only=true
+controlled_connect_first_attempt_video_allowed=false
+```
+
+Safety fields remained closed:
+
+```text
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+controlled_connect_first_attempt_matrix_events_allowed=false
+controlled_connect_first_attempt_raw_credentials_logged=false
+blocked_reason=none
+```
+
+Conclusion: `2.48U = first-connect result review and cleanup verification completed`. Physical8 first controlled audio-connect succeeded, the one-shot hook was consumed, the first attempt was not repeated, credentials are not reusable, and no repeated APNs/connect, video, camera permission, Matrix event emission, or full call flow occurred.
+
+Next phase: `2.48V — controlled audio session lifecycle review, no repeated connect`.
 
 ### 2.48T-Physical8 — One-Shot First Controlled Audio Connect Proof
 

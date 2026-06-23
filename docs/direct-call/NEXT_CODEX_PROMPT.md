@@ -13,80 +13,59 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48T-Physical8 — one-shot Answer -> metadata reference -> credentials -> first controlled audio-connect physical attempt` is complete.
+`2.48U — first-connect result review and cleanup verification, no repeated connect` is complete.
 
-This was a one-shot physical proof. Exactly one sandbox APNs was sent after explicit confirmation; do not repeat it. No production APNs, repeated APNs, `dev/invite`, repeated connect, repeated LiveKit join, video, camera permission, Matrix event emit, or full call flow was performed.
+This was a docs-only review of the existing Physical8 proof. No APNs, production APNs, repeated APNs, `dev/invite`, repeated connect, new LiveKit join, video, camera permission, Matrix event emission, or full call flow was performed.
 
-Before the successful send, the first helper run blocked safely before APNs because staging still served stale foreground-signaling diagnostics. Only the repaired call-service runtime `app.py` was deployed to staging. Remote compileall passed, `salemx-call-service` restarted successfully, direct service status returned active, and public route safety remained:
+Latest Physical8 close commit before 2.48U:
 
 ```text
-dev/invite=404
-unauthenticated_non_dev_invite=401
-unauthenticated_stream=401
-unauthenticated_foreground_livekit_token=401
+ac1b94e91 Close Physical8 first audio connect proof
 ```
 
-The app session proof and DEBUG-only one-shot hook proof were refreshed after the server repair and before the successful one-shot helper run.
+## Physical8 Proof Reviewed
 
-## Physical8 Proof Result
-
-Phase-specific proof path:
+Proof path:
 
 ```text
 /tmp/salemx-voip-push-receipt-proof-2.48t-physical8-first-audio-connect-polled.txt
 ```
 
-Proof summary:
+First controlled audio-connect result:
 
 ```text
 proof_generation=generation_14
-physical_voip_push_received=true
-pushkit_callback_invoked=true
-pushkit_payload_kind=real_invite_controlled
-callkit_report_requested=true
-callkit_report_result=reported
-callkit_report_completion_observed=true
-pushkit_completion_called=true
-callkit_first_action_kind=answer
-callkit_answer_action_delivered=true
-callkit_answer_action_received=true
-callkit_answer_action_fulfilled=true
-```
-
-Pending metadata and credentials:
-
-```text
-pending_metadata_reference_present=true
-pending_metadata_reference_repair_reference_observed_by_pushkit=true
-pending_metadata_reference_repair_reference_handed_to_answer_pipeline=true
-pending_metadata_fetch_requested=true
-pending_metadata_fetch_result=success_redacted
-pending_metadata_fetch_http_status_bucket=2xx
-pending_metadata_fetch_errcode=none
-foreground_pending_call_metadata_handoff_observed=true
-media_credentials_requested=true
-media_credentials_request_authorized=true
-media_credentials_result=success_redacted
-media_credentials_token_received=true
-media_credentials_url_received=true
-```
-
-First controlled audio-connect attempt:
-
-```text
-physical6_runtime_enablement_url_hook_consumed=true
-controlled_connect_real_bridge_allowed=true
-controlled_connect_first_attempt_requested=true
-controlled_connect_first_attempt_allowed=true
-controlled_connect_first_attempt_started=true
 controlled_connect_first_attempt_completed=true
-controlled_connect_first_attempt_repeated=false
 controlled_connect_first_attempt_result=success_redacted
 controlled_connect_first_attempt_error_bucket=none
+controlled_connect_first_attempt_repeated=false
+physical6_runtime_enablement_url_hook_consumed=true
+```
+
+Credentials cleanup and non-reuse:
+
+```text
+media_credentials_cleanup_requested=true
+media_credentials_cleanup_result=cleared
+media_credentials_post_cleanup_token_present=false
+media_credentials_post_cleanup_url_present=false
+media_credentials_post_cleanup_expires_at_present=false
+media_credentials_post_cleanup_payload_present=false
+media_credentials_reuse_attempted=false
+media_credentials_reuse_allowed=false
+media_credentials_expiry_check_requested=true
+media_credentials_expiry_check_result=expired_or_not_reusable_redacted
+```
+
+The already-closed Physical8 media/LiveKit activity stayed limited to one audio-only attempt:
+
+```text
 media_connect_requested=true
 media_connect_attempted=true
 livekit_join_requested=true
 livekit_connect_audio_invoked=true
+controlled_connect_first_attempt_audio_only=true
+controlled_connect_first_attempt_video_allowed=false
 ```
 
 Safety fields stayed closed:
@@ -96,38 +75,44 @@ microphone_permission_requested=false
 camera_permission_requested=false
 matrix_event_emit_requested=false
 real_call_flow_started=false
-controlled_connect_first_attempt_audio_only=true
-controlled_connect_first_attempt_video_allowed=false
 controlled_connect_first_attempt_matrix_events_allowed=false
 controlled_connect_first_attempt_raw_credentials_logged=false
 blocked_reason=none
 ```
 
-## Phase
-
-`2.48U — first-connect result review and cleanup verification, no repeated connect`
-
-This is a review/cleanup phase only. Do not send APNs, do not retry media connect, and do not start another LiveKit join.
-
-## Suggested 2.48U Scope
-
-Review the Physical8 result and verify cleanup/follow-up safety:
+## 2.48U Conclusion
 
 ```text
-physical8_result_classification=success_first_controlled_audio_connect_redacted
-single_apns_send_preserved=true
-single_connect_attempt_preserved=true
-single_livekit_join_attempt_preserved=true
-hook_consumed_after_metadata_and_credentials=true
-no_repeated_connect_after_success=true
-video_remained_disabled=true
-camera_permission_remained_false=true
-matrix_event_emit_remained_false=true
-full_call_flow_remained_false=true
-raw_credentials_logged=false
+2.48U = first-connect result review and cleanup verification completed
+Physical8 first controlled audio-connect succeeded
+one-shot hook consumed
+first attempt repeated=false
+credentials not reusable
+no repeated APNs
+no repeated connect
+no video
+no camera permission
+no Matrix event emit
+no full call flow
 ```
 
-If code changes are needed, keep them narrow and default-off. Do not use the physical helper again unless a later prompt explicitly authorizes a new one-shot phase.
+Cleanup / one-shot verification is sufficient. Do not run another APNs helper or another connect attempt for this result.
+
+## Next Phase
+
+`2.48V — controlled audio session lifecycle review, no repeated connect`
+
+This is a review/planning phase only unless a later prompt explicitly authorizes narrow code changes. Do not set up another physical APNs/connect attempt yet.
+
+Suggested scope:
+
+```text
+review_audio_session_lifecycle_after_first_connect=true
+review_connect_success_teardown_observability=true
+review_one_shot_hook_consumption_persistence=true
+review_credentials_cleanup_lifecycle=true
+review_no_video_camera_matrix_full_flow_regression=true
+```
 
 ## Hard Limits
 
@@ -140,9 +125,11 @@ Do not:
 - retry media connect
 - retry LiveKit join
 - enable video
+- request microphone permission
 - request camera permission
 - emit Matrix events
 - start full call flow
+- reset the one-shot hook to perform another connect
 - bypass CallKit Answer
 - request credentials before metadata fetch success
 - consume the DEBUG hook before metadata plus credentials eligibility
@@ -164,22 +151,20 @@ git diff --name-only | grep -E 'SalemX.xcodeproj/project.pbxproj|app.yml|\.entit
 git diff --cached --name-only | grep -E 'SalemX.xcodeproj/project.pbxproj|app.yml|\.entitlements|Info.plist' && exit 1 || true
 ```
 
-If code changes are made, also run the focused DirectCall subset:
-
-```bash
-DIRECT_CALL_ONLY_TESTING='UnitTests/DirectCallEngineTests UnitTests/NativeIncomingCallLifecycleContractTests' Tools/Scripts/verify_direct_call_unit.sh
-```
-
 Privacy scan changed docs/diff for raw sensitive values. Allowed hits are field names, redacted labels, negative statements, synthetic test values, and stable hashes only.
 
 ## Expected Output
 
 Return:
 
-- Physical8 close status
+- Physical8 result review
+- cleanup / one-shot verification status
+- whether the hook was consumed
+- whether first attempt repeated=false
+- whether credentials are non-reusable
 - next phase
 - commit hash if docs or code were updated
 - changed files
 - checks run
 - final `git status --short --branch`
-- explicit statement that no repeated APNs, no production APNs, no `dev/invite`, no repeated connect, no video, no camera permission, no Matrix event emit, and no full call flow were performed
+- explicit statement that no APNs, production APNs, repeated APNs, `dev/invite`, repeated connect, video, camera permission, Matrix event emit, or full call flow was performed
