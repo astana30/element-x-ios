@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Added the 2.48T-Physical6 DEBUG-only one-shot physical connect enablement URL hook, default-disabled and audio-only, with no APNs or physical media connect performed.
 - Closed 2.48T-Physical5 as a successful physical CallKit surface/Answer proof: one sandbox APNs, PushKit received, CallKit report completed, PushKit completion called, Answer action delivered/received/fulfilled, and no media connect.
 - Completed 2.48T-CallKitSurfaceRepair with explicit CallKit surface repair proof fields, report-completion timeout classification, PushKit completion safety states, provider/delegate/active UUID retention proof, and default no-answer/no-connect behavior preserved.
 - Replaced the 2.48T fake-only boundary with a real controlled audio-connect bridge that remains default-disabled and can reach the real runtime connect-media boundary only when every gate is true.
@@ -111,6 +112,61 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48T-Physical6EnablementHook — DEBUG One-Shot Physical Connect Enablement Hook
+
+Implemented the DEBUG-only URL hook that arms exactly one future Physical6 controlled audio-connect attempt after the eligible incoming CallKit Answer pipeline reaches pending metadata and media credentials. The hook is local-only, default-disabled, audio-only, and records redacted proof fields; opening the URL does not send APNs, start media connect, join LiveKit, request microphone/camera permission, emit Matrix events, or start the full direct-call flow.
+
+Hook activation URL:
+
+```text
+kz.salemx.msg://debug/direct-call/physical6-enable-controlled-audio-connect
+```
+
+Default proof fields:
+
+```text
+physical6_runtime_enablement_url_hook_present=true
+physical6_runtime_enablement_url_hook_debug_only=true
+physical6_runtime_enablement_url_hook_default_disabled=true
+physical6_runtime_enablement_url_hook_armed=false
+physical6_runtime_enablement_url_hook_one_shot=true
+physical6_runtime_enablement_url_hook_audio_only=true
+physical6_runtime_enablement_url_hook_video_allowed=false
+physical6_runtime_enablement_url_hook_matrix_events_allowed=false
+physical6_runtime_enablement_url_hook_raw_credentials_logged=false
+physical6_runtime_enablement_url_hook_consumed=false
+physical6_runtime_enablement_url_hook_blocked_reason=default_disabled_no_connect
+```
+
+After local URL activation, the hook records that it is armed and waiting for one incoming Answer pipeline while side effects remain closed:
+
+```text
+physical6_runtime_enablement_url_hook_armed=true
+physical6_runtime_enablement_url_hook_consumed=false
+physical6_runtime_enablement_url_hook_blocked_reason=armed_waiting_for_one_incoming_answer
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+livekit_connect_audio_invoked=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+The credentials/connect preflight now consumes the armed hook state instead of hard-coding the connect gate to default-disabled:
+
+```text
+physical6_runtime_enablement_url_hook_present=true
+credentials_connect_preflight_uses_default_disabled=false
+```
+
+The default runtime path still blocks with no connect unless the hook is armed and the future physical attempt reaches CallKit Answer, pending metadata success, and credentials success. A future first attempt must record `physical6_runtime_enablement_url_hook_consumed=true` and `controlled_connect_first_attempt_repeated=false`.
+
+Next phase: `2.48T-Physical6 — one-shot first controlled audio-connect physical attempt`.
+
+No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, real LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 
 ### 2.48T-Physical5 — CallKit Surface/Answer Physical Proof
 

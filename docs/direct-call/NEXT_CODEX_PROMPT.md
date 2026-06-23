@@ -13,76 +13,40 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48T-Physical5 — one-shot CallKit surface/answer proof, no repeated connect` is complete.
+`2.48T-Physical6EnablementHook — add DEBUG-only one-shot physical connect enablement hook, no APNs` is complete.
 
-One sandbox APNs was sent after fresh in-memory token/room preflight, corrected flat schema validation, and explicit one-shot confirmation. No repeated APNs, production APNs, or `dev/invite` was used.
+This was code/test prep only. No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, real LiveKit join, microphone/camera permission, Matrix event emission, or full direct-call flow was performed.
 
-Redacted preflight/send proof:
+The DEBUG local URL hook is present and default-disabled:
 
 ```text
-receiver_token_found=true
-sender_token_found=true
-receiver_user_hash=497015f5745c933a
-sender_user_hash=7d434d7f252427fb
-sender_equals_receiver=false
-room_validation_preflight=pass
-local_schema_valid=true
-corrected_flat_schema_used=true
-nested_invite_body_used=false
-safe_to_send_apns=true
-invite_send_attempted=true
-invite_http_code=200
-real_non_dev_invite_used=true
-dev_invite_used=false
-background_apns_push_requested=true
-background_apns_push_result=sandbox_success
-APNs_sent=true
+kz.salemx.msg://debug/direct-call/physical6-enable-controlled-audio-connect
+physical6_runtime_enablement_url_hook_present=true
+physical6_runtime_enablement_url_hook_debug_only=true
+physical6_runtime_enablement_url_hook_default_disabled=true
+physical6_runtime_enablement_url_hook_armed=false
+physical6_runtime_enablement_url_hook_one_shot=true
+physical6_runtime_enablement_url_hook_audio_only=true
+physical6_runtime_enablement_url_hook_video_allowed=false
+physical6_runtime_enablement_url_hook_matrix_events_allowed=false
+physical6_runtime_enablement_url_hook_raw_credentials_logged=false
+physical6_runtime_enablement_url_hook_consumed=false
+physical6_runtime_enablement_url_hook_blocked_reason=default_disabled_no_connect
 ```
 
-The phase-specific proof generation was `generation_7`. The repaired CallKit report/surface/Answer path succeeded:
+The credentials/connect preflight now uses the armed one-shot hook state instead of hard-coding default-disabled:
 
 ```text
-physical_voip_push_received=true
-pushkit_callback_invoked=true
-pushkit_payload_kind=real_invite_controlled
-callkit_report_requested=true
-callkit_report_result=reported
-callkit_report_completion_observed=true
-pushkit_completion_called=true
-callkit_surface_repair_provider_retention_verified=true
-callkit_surface_repair_delegate_retention_verified=true
-callkit_surface_repair_active_uuid_retention_verified=true
-callkit_first_action_kind=answer
-callkit_answer_action_delivered=true
-callkit_answer_action_received=true
-callkit_answer_action_fulfilled=true
-callkit_event_order=report_completion_then_answer
-app_activation_observed=true
-controlled_in_app_activation_observed=true
+physical6_runtime_enablement_url_hook_present=true
+credentials_connect_preflight_uses_default_disabled=false
 ```
 
-This closes CallKit surface/Answer only. It is not a first controlled audio-connect proof. The answer-window safety completed after timeout before the late Answer action was observed:
+After the local URL hook is opened, the expected pre-APNs proof should show the hook armed and no side effects:
 
 ```text
-pushkit_completion_answerable_window_result=timeout_elapsed
-callkit_surface_repair_pushkit_completion_safety_result=completed_after_answerable_window_timeout
-```
-
-Pending metadata, credentials, connect, LiveKit, permissions, Matrix events, and full flow stayed closed:
-
-```text
-pending_metadata_reference_present=false
-pending_metadata_fetch_requested=false
-pending_metadata_fetch_result=not_requested
-media_credentials_requested=false
-media_credentials_result=blocked_redacted
-controlled_connect_enablement_enabled=false
-controlled_connect_enablement_execution_allowed=false
-controlled_connect_enablement_blocked_reason=enablement_disabled_no_connect
-controlled_connect_first_attempt_requested=false
-controlled_connect_first_attempt_allowed=false
-controlled_connect_first_attempt_started=false
-controlled_connect_first_attempt_completed=false
+physical6_runtime_enablement_url_hook_armed=true
+physical6_runtime_enablement_url_hook_consumed=false
+physical6_runtime_enablement_url_hook_blocked_reason=armed_waiting_for_one_incoming_answer
 media_connect_requested=false
 media_connect_attempted=false
 livekit_join_requested=false
@@ -91,7 +55,13 @@ microphone_permission_requested=false
 camera_permission_requested=false
 matrix_event_emit_requested=false
 real_call_flow_started=false
-blocked_reason=media_credentials_request_boundary_not_ready
+```
+
+The default runtime still blocks with no connect until the hook is armed and the future incoming Answer pipeline reaches pending metadata and media credentials. A future first attempt must consume the hook once:
+
+```text
+physical6_runtime_enablement_url_hook_consumed=true
+controlled_connect_first_attempt_repeated=false
 ```
 
 ## Phase
@@ -102,7 +72,39 @@ This is the next physical proof phase. Do not run repeated APNs or repeated conn
 
 ## Task
 
-Prepare the first controlled audio-connect physical attempt with fresh in-memory/local-only inputs. Send APNs only after preflight passes and explicit one-shot confirmation is reached. After sandbox APNs success, do not send another APNs.
+Prepare the first controlled audio-connect physical attempt with fresh in-memory/local-only inputs.
+
+Before any APNs attempt, activate the DEBUG one-shot hook locally:
+
+```bash
+open 'kz.salemx.msg://debug/direct-call/physical6-enable-controlled-audio-connect'
+```
+
+Then verify the hook is armed and side effects are still closed:
+
+```text
+physical6_runtime_enablement_url_hook_present=true
+physical6_runtime_enablement_url_hook_debug_only=true
+physical6_runtime_enablement_url_hook_default_disabled=true
+physical6_runtime_enablement_url_hook_armed=true
+physical6_runtime_enablement_url_hook_one_shot=true
+physical6_runtime_enablement_url_hook_audio_only=true
+physical6_runtime_enablement_url_hook_video_allowed=false
+physical6_runtime_enablement_url_hook_matrix_events_allowed=false
+physical6_runtime_enablement_url_hook_raw_credentials_logged=false
+physical6_runtime_enablement_url_hook_consumed=false
+physical6_runtime_enablement_url_hook_blocked_reason=armed_waiting_for_one_incoming_answer
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+livekit_connect_audio_invoked=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+Send APNs only after fresh preflight passes, the hook is armed, local schema validation passes, explicit one-shot confirmation is reached, and the operator is ready to answer. After sandbox APNs success, do not send another APNs.
 
 The future proof target should show the CallKit Answer path plus exactly one controlled first connect attempt, while still preserving audio-only and no Matrix-event/full-flow boundaries:
 

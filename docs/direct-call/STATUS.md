@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48T-Physical5 — one sandbox APNs was sent through the corrected flat non-dev invite path, PushKit was received, CallKit report completed, PushKit completion was called, and the CallKit Answer action was delivered and fulfilled. This closes the CallKit surface/Answer proof only; it does not complete first controlled audio-connect proof. No repeated APNs, production APNs, `dev/invite`, media connect, LiveKit join, microphone/camera permission, Matrix event emission, or full call flow was performed. The next phase is `2.48T-Physical6 — one-shot first controlled audio-connect physical attempt`.
+After 2.48T-Physical6EnablementHook — the DEBUG-only one-shot physical connect enablement URL hook is present, default-disabled, audio-only, and wired into the post-Answer credentials/connect preflight without sending APNs or starting media. No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, real LiveKit join, microphone/camera permission, Matrix event emission, or full call flow was performed. The next phase is `2.48T-Physical6 — one-shot first controlled audio-connect physical attempt`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,51 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48T-Physical6EnablementHook adds the DEBUG-only one-shot physical connect enablement hook for the future Physical6 attempt:
+  - This is code/test prep only. It did not send APNs, run production APNs, repeat APNs, use `dev/invite`, start physical media connect, join real LiveKit, request microphone/camera permission, emit Matrix events, or start full call flow.
+  - The local URL hook is DEBUG-only and does not start connect by itself:
+    ```text
+    kz.salemx.msg://debug/direct-call/physical6-enable-controlled-audio-connect
+    physical6_runtime_enablement_url_hook_present=true
+    physical6_runtime_enablement_url_hook_debug_only=true
+    physical6_runtime_enablement_url_hook_default_disabled=true
+    physical6_runtime_enablement_url_hook_one_shot=true
+    physical6_runtime_enablement_url_hook_audio_only=true
+    physical6_runtime_enablement_url_hook_video_allowed=false
+    physical6_runtime_enablement_url_hook_matrix_events_allowed=false
+    physical6_runtime_enablement_url_hook_raw_credentials_logged=false
+    ```
+  - Default proof remains no-connect until the hook is activated:
+    ```text
+    physical6_runtime_enablement_url_hook_armed=false
+    physical6_runtime_enablement_url_hook_consumed=false
+    physical6_runtime_enablement_url_hook_blocked_reason=default_disabled_no_connect
+    ```
+  - After local hook activation, the next eligible incoming CallKit Answer pipeline can evaluate the one-shot controlled audio gate only after PushKit, Answer, pending metadata, and media credentials succeed:
+    ```text
+    physical6_runtime_enablement_url_hook_armed=true
+    physical6_runtime_enablement_url_hook_consumed=false
+    physical6_runtime_enablement_url_hook_blocked_reason=armed_waiting_for_one_incoming_answer
+    media_connect_requested=false
+    media_connect_attempted=false
+    livekit_join_requested=false
+    livekit_connect_audio_invoked=false
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    ```
+  - The source guard blocker is removed while the default-disabled path remains available:
+    ```text
+    physical6_runtime_enablement_url_hook_present=true
+    credentials_connect_preflight_uses_default_disabled=false
+    ```
+  - A future first controlled attempt must consume the one-shot hook and must not repeat:
+    ```text
+    physical6_runtime_enablement_url_hook_consumed=true
+    controlled_connect_first_attempt_repeated=false
+    ```
+  - Next phase: `2.48T-Physical6 — one-shot first controlled audio-connect physical attempt`.
 - 2.48T-Physical5 proves the repaired CallKit surface/Answer path on device:
   - One sandbox APNs was sent after fresh in-memory token/room preflight, corrected flat local schema validation, and explicit `SEND_2_48T_PHYSICAL5` confirmation. No repeated APNs, production APNs, or `dev/invite` was used.
   - The redacted preflight/send result was:

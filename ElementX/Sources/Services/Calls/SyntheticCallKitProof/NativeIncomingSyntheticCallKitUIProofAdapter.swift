@@ -777,6 +777,52 @@ private struct SalemXControlledMediaConnectEnablementConfiguration {
     }
 }
 
+private struct SalemXPhysical6RuntimeEnablementURLHook {
+    static let defaultDisabledNoConnectReason = "default_disabled_no_connect"
+    static let armedWaitingForOneIncomingAnswerReason = "armed_waiting_for_one_incoming_answer"
+    static let oneShotConsumedNoConnectReason = "one_shot_consumed_no_connect"
+    static let defaultDisabled = SalemXPhysical6RuntimeEnablementURLHook(armed: false, consumed: false)
+    static let armed = SalemXPhysical6RuntimeEnablementURLHook(armed: true, consumed: false)
+
+    let armed: Bool
+    let consumed: Bool
+
+    let present = true
+    let debugOnly = true
+    let isDefaultDisabled = true
+    let oneShot = true
+    let audioOnly = true
+    let videoAllowed = false
+    let matrixEventsAllowed = false
+    let rawCredentialsLogged = false
+
+    var oneShotNotConsumed: Bool {
+        armed && !consumed
+    }
+
+    var activationConfiguration: SalemXControlledMediaConnectActivationConfiguration {
+        oneShotNotConsumed ? .testOnlyEnabled : .defaultDisabled
+    }
+
+    var enablementConfiguration: SalemXControlledMediaConnectEnablementConfiguration {
+        oneShotNotConsumed ? .testOnlyEnabled : .defaultDisabled
+    }
+
+    var blockedReason: String {
+        if consumed {
+            return Self.oneShotConsumedNoConnectReason
+        }
+        if armed {
+            return Self.armedWaitingForOneIncomingAnswerReason
+        }
+        return Self.defaultDisabledNoConnectReason
+    }
+
+    func consumedCopy() -> SalemXPhysical6RuntimeEnablementURLHook {
+        .init(armed: false, consumed: true)
+    }
+}
+
 private struct SalemXControlledAudioConnectExecutionGate {
     static let futurePhaseNotPermittedNoConnectReason = "future_phase_not_permitted_no_connect"
     static let credentialsMissingNoConnectReason = "credentials_missing_no_connect"
@@ -1631,6 +1677,17 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var mediaCredentialsAllocationAttempted = false
     var mediaCredentialsLiveKitRoomPrecreateAttempted = false
     var mediaCredentialsTokenIssued = false
+    var physical6RuntimeEnablementURLHookPresent = SalemXPhysical6RuntimeEnablementURLHook.defaultDisabled.present
+    var physical6RuntimeEnablementURLHookDebugOnly = SalemXPhysical6RuntimeEnablementURLHook.defaultDisabled.debugOnly
+    var physical6RuntimeEnablementURLHookDefaultDisabled = SalemXPhysical6RuntimeEnablementURLHook.defaultDisabled.isDefaultDisabled
+    var physical6RuntimeEnablementURLHookArmed = SalemXPhysical6RuntimeEnablementURLHook.defaultDisabled.armed
+    var physical6RuntimeEnablementURLHookOneShot = SalemXPhysical6RuntimeEnablementURLHook.defaultDisabled.oneShot
+    var physical6RuntimeEnablementURLHookAudioOnly = SalemXPhysical6RuntimeEnablementURLHook.defaultDisabled.audioOnly
+    var physical6RuntimeEnablementURLHookVideoAllowed = SalemXPhysical6RuntimeEnablementURLHook.defaultDisabled.videoAllowed
+    var physical6RuntimeEnablementURLHookMatrixEventsAllowed = SalemXPhysical6RuntimeEnablementURLHook.defaultDisabled.matrixEventsAllowed
+    var physical6RuntimeEnablementURLHookRawCredentialsLogged = SalemXPhysical6RuntimeEnablementURLHook.defaultDisabled.rawCredentialsLogged
+    var physical6RuntimeEnablementURLHookConsumed = SalemXPhysical6RuntimeEnablementURLHook.defaultDisabled.consumed
+    var physical6RuntimeEnablementURLHookBlockedReason = SalemXPhysical6RuntimeEnablementURLHook.defaultDisabled.blockedReason
     var controlledConnectActivationWiringPresent = SalemXControlledMediaConnectActivationConfiguration.defaultDisabled.wiringPresent
     var controlledConnectActivationDebugOnly = SalemXControlledMediaConnectActivationConfiguration.defaultDisabled.debugOnly
     var controlledConnectActivationDefaultDisabled = SalemXControlledMediaConnectActivationConfiguration.defaultDisabled.isDefaultDisabled
@@ -1949,6 +2006,17 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "media_credentials_allocation_attempted=\(mediaCredentialsAllocationAttempted)",
             "media_credentials_livekit_room_precreate_attempted=\(mediaCredentialsLiveKitRoomPrecreateAttempted)",
             "media_credentials_token_issued=\(mediaCredentialsTokenIssued)",
+            "physical6_runtime_enablement_url_hook_present=\(physical6RuntimeEnablementURLHookPresent)",
+            "physical6_runtime_enablement_url_hook_debug_only=\(physical6RuntimeEnablementURLHookDebugOnly)",
+            "physical6_runtime_enablement_url_hook_default_disabled=\(physical6RuntimeEnablementURLHookDefaultDisabled)",
+            "physical6_runtime_enablement_url_hook_armed=\(physical6RuntimeEnablementURLHookArmed)",
+            "physical6_runtime_enablement_url_hook_one_shot=\(physical6RuntimeEnablementURLHookOneShot)",
+            "physical6_runtime_enablement_url_hook_audio_only=\(physical6RuntimeEnablementURLHookAudioOnly)",
+            "physical6_runtime_enablement_url_hook_video_allowed=\(physical6RuntimeEnablementURLHookVideoAllowed)",
+            "physical6_runtime_enablement_url_hook_matrix_events_allowed=\(physical6RuntimeEnablementURLHookMatrixEventsAllowed)",
+            "physical6_runtime_enablement_url_hook_raw_credentials_logged=\(physical6RuntimeEnablementURLHookRawCredentialsLogged)",
+            "physical6_runtime_enablement_url_hook_consumed=\(physical6RuntimeEnablementURLHookConsumed)",
+            "physical6_runtime_enablement_url_hook_blocked_reason=\(physical6RuntimeEnablementURLHookBlockedReason)",
             "controlled_connect_activation_wiring_present=\(controlledConnectActivationWiringPresent)",
             "controlled_connect_activation_debug_only=\(controlledConnectActivationDebugOnly)",
             "controlled_connect_activation_default_disabled=\(controlledConnectActivationDefaultDisabled)",
@@ -2260,11 +2328,26 @@ private extension SalemXVoIPPushReceiptProofSummary {
         blockedReason = reason
     }
 
+    mutating func recordPhysical6RuntimeEnablementURLHook(_ hook: SalemXPhysical6RuntimeEnablementURLHook) {
+        physical6RuntimeEnablementURLHookPresent = hook.present
+        physical6RuntimeEnablementURLHookDebugOnly = hook.debugOnly
+        physical6RuntimeEnablementURLHookDefaultDisabled = hook.isDefaultDisabled
+        physical6RuntimeEnablementURLHookArmed = hook.armed
+        physical6RuntimeEnablementURLHookOneShot = hook.oneShot
+        physical6RuntimeEnablementURLHookAudioOnly = hook.audioOnly
+        physical6RuntimeEnablementURLHookVideoAllowed = hook.videoAllowed
+        physical6RuntimeEnablementURLHookMatrixEventsAllowed = hook.matrixEventsAllowed
+        physical6RuntimeEnablementURLHookRawCredentialsLogged = hook.rawCredentialsLogged
+        physical6RuntimeEnablementURLHookConsumed = hook.consumed
+        physical6RuntimeEnablementURLHookBlockedReason = hook.blockedReason
+    }
+
     mutating func recordControlledMediaCredentialsRequest(succeeded: Bool,
                                                           expiresAtPresent: Bool,
                                                           session: DirectCallSession,
                                                           source: String,
-                                                          diagnostics: DirectCallDiagnosticSnapshot = .empty) {
+                                                          diagnostics: DirectCallDiagnosticSnapshot = .empty,
+                                                          physical6RuntimeEnablementHook: SalemXPhysical6RuntimeEnablementURLHook = .defaultDisabled) {
         recordForegroundPendingCallMetadataHandoff(session: session, source: source)
         mediaCredentialsBoundaryReached = true
         mediaCredentialsRequestPlanned = false
@@ -2298,11 +2381,13 @@ private extension SalemXVoIPPushReceiptProofSummary {
         mediaCredentialsAllocationAttempted = diagnostics.tokenAllocationAttempted
         mediaCredentialsLiveKitRoomPrecreateAttempted = diagnostics.tokenLiveKitRoomPrecreateAttempted
         mediaCredentialsTokenIssued = diagnostics.tokenIssued
+        recordPhysical6RuntimeEnablementURLHook(physical6RuntimeEnablementHook)
         if cleanupCleared {
             recordControlledMediaConnectPreflight(credentialsAvailable: true,
                                                   tokenPresent: mediaCredentialsTokenReceived,
                                                   urlPresent: mediaCredentialsURLReceived,
-                                                  expiresAtPresent: mediaCredentialsExpiresAtPresent)
+                                                  expiresAtPresent: mediaCredentialsExpiresAtPresent,
+                                                  physical6RuntimeEnablementHook: physical6RuntimeEnablementHook)
         }
         blockedReason = succeeded && mediaCredentialsRequestMetadataAvailable ? "none" : "media_credentials_request_failed_redacted"
     }
@@ -2310,7 +2395,8 @@ private extension SalemXVoIPPushReceiptProofSummary {
     mutating func recordControlledMediaConnectPreflight(credentialsAvailable: Bool,
                                                         tokenPresent: Bool,
                                                         urlPresent: Bool,
-                                                        expiresAtPresent: Bool) {
+                                                        expiresAtPresent: Bool,
+                                                        physical6RuntimeEnablementHook: SalemXPhysical6RuntimeEnablementURLHook = .defaultDisabled) {
         mediaConnectPreflightRequested = true
         mediaConnectPreflightMetadataAvailable = mediaCredentialsRequestMetadataAvailable
         mediaConnectPreflightCredentialsAvailable = credentialsAvailable && mediaCredentialsRequestMetadataAvailable
@@ -2318,11 +2404,21 @@ private extension SalemXVoIPPushReceiptProofSummary {
         mediaConnectPreflightURLPresent = urlPresent && mediaCredentialsRequestMetadataAvailable
         mediaConnectPreflightExpiresAtPresent = expiresAtPresent && mediaCredentialsRequestMetadataAvailable
         mediaConnectGuardEnabled = true
-        attemptControlledAudioConnectRuntimeIfAllowed(activationConfiguration: .defaultDisabled,
-                                                      enablementConfiguration: .defaultDisabled,
+        recordPhysical6RuntimeEnablementURLHook(physical6RuntimeEnablementHook)
+        attemptControlledAudioConnectRuntimeIfAllowed(activationConfiguration: physical6RuntimeEnablementHook.activationConfiguration,
+                                                      enablementConfiguration: physical6RuntimeEnablementHook.enablementConfiguration,
                                                       receiverAppSessionValidated: pendingMetadataFetchAuthorized && pendingMetadataFetchResult == "success_redacted",
-                                                      oneShotNotConsumed: true)
-        mediaConnectPreflightResult = mediaConnectPreflightCredentialsAvailable ? "blocked_before_connect_redacted" : "blocked_redacted"
+                                                      oneShotNotConsumed: physical6RuntimeEnablementHook.oneShotNotConsumed)
+        if controlledConnectFirstAttemptRequested {
+            recordPhysical6RuntimeEnablementURLHook(physical6RuntimeEnablementHook.consumedCopy())
+        }
+        if controlledConnectFirstAttemptAllowed {
+            mediaConnectPreflightResult = "ready_for_first_attempt_redacted"
+        } else if mediaConnectPreflightCredentialsAvailable {
+            mediaConnectPreflightResult = "blocked_before_connect_redacted"
+        } else {
+            mediaConnectPreflightResult = "blocked_redacted"
+        }
         mediaConnectBlockedReason = mediaConnectPreflightCredentialsAvailable ? controlledConnectBlockedReasonForPreflight : "media_connect_preflight_not_ready"
         mediaConnectEngineInvoked = false
     }
@@ -3187,6 +3283,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let uploadSmokeURLHost = "debug"
     private static let uploadSmokeURLPath = "/pushkit-token-upload-smoke/start"
     private static let matrixSessionWhoamiSmokeURLPath = "/pushkit-token-upload-smoke/session-whoami"
+    private static let physical6RuntimeEnablementURLHookPath = "/direct-call/physical6-enable-controlled-audio-connect"
     private static let uploadSmokeDefaultURLString = "https://matrix.mertis.kz/_matrix/client/unstable/kz.salemx.direct_call/pushkit/token"
     private static let matrixSessionWhoamiURLString = "https://matrix.mertis.kz/_matrix/client/v3/account/whoami"
     private static let controlledMediaCredentialsTokenEndpointPath = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/livekit/token"
@@ -3222,6 +3319,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var pendingForegroundCallMetadataSource = "none"
     private static var pendingForegroundCallMetadataRecordedAt: Date?
     private static var pendingAuthenticatedMetadataReference: String?
+    private static var physical6RuntimeEnablementURLHook = SalemXPhysical6RuntimeEnablementURLHook.defaultDisabled
     #if canImport(CallKit) && os(iOS)
     private static var callKitProofHarness: NativeIncomingSyntheticCallKitUIProofHarness?
     private static var callKitProofGeneration = 0
@@ -3266,7 +3364,33 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             return true
         }
 
+        if url.path == physical6RuntimeEnablementURLHookPath {
+            armPhysical6RuntimeEnablementURLHook()
+            return true
+        }
+
         return false
+    }
+
+    private static func armPhysical6RuntimeEnablementURLHook() {
+        lock.lock()
+        physical6RuntimeEnablementURLHook = .armed
+        var summary = latestVoIPPushReceiptSummary
+        summary.recordPhysical6RuntimeEnablementURLHook(physical6RuntimeEnablementURLHook)
+        summary.mediaConnectRequested = false
+        summary.mediaConnectAttempted = false
+        summary.liveKitJoinRequested = false
+        summary.liveKitConnectAudioInvoked = false
+        summary.microphonePermissionRequested = false
+        summary.cameraPermissionRequested = false
+        summary.matrixEventEmitRequested = false
+        summary.realCallFlowStarted = false
+        summary.mediaConnectExecutionAllowed = false
+        summary.mediaConnectEngineInvoked = false
+        summary.recordControlledAudioConnectFirstAttemptProof(.defaultDisabled)
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
     }
 
     @objc static func redactedStateSummary() -> String {
@@ -3681,9 +3805,11 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         lock.lock()
         let operatorReadyToAnswer = pendingOperatorReadyToAnswer
         let operatorExpectedSurface = pendingOperatorExpectedSurface
+        let physical6RuntimeEnablementURLHookSnapshot = physical6RuntimeEnablementURLHook
         lock.unlock()
         baseSummary.operatorReadyToAnswer = operatorReadyToAnswer
         baseSummary.operatorExpectedSurface = operatorExpectedSurface
+        baseSummary.recordPhysical6RuntimeEnablementURLHook(physical6RuntimeEnablementURLHookSnapshot)
         if isControlledPayload {
             baseSummary.callKitReportSubmittedAtMsRedacted = true
             baseSummary.callKitUpdateHasGenericHandle = true
@@ -4880,12 +5006,17 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
                                                         source: String,
                                                         diagnostics: DirectCallDiagnosticSnapshot = .empty) {
         lock.lock()
+        let physical6RuntimeEnablementURLHookSnapshot = physical6RuntimeEnablementURLHook
         var summary = latestVoIPPushReceiptSummary
         summary.recordControlledMediaCredentialsRequest(succeeded: succeeded,
                                                         expiresAtPresent: expiresAtPresent,
                                                         session: session,
                                                         source: source,
-                                                        diagnostics: diagnostics)
+                                                        diagnostics: diagnostics,
+                                                        physical6RuntimeEnablementHook: physical6RuntimeEnablementURLHookSnapshot)
+        if summary.physical6RuntimeEnablementURLHookConsumed {
+            physical6RuntimeEnablementURLHook = physical6RuntimeEnablementURLHookSnapshot.consumedCopy()
+        }
         lock.unlock()
 
         updateLatestVoIPPushReceiptSummary(summary)
