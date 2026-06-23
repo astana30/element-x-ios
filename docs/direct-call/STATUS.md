@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48U — the Physical8 proof review and cleanup verification is complete. Physical8 proved the first controlled audio-connect attempt completed successfully once, the DEBUG one-shot hook was consumed, credentials were cleared and not reusable, and no repeated APNs/connect, video, camera permission, Matrix event emission, or full call flow occurred. This phase used only the existing Physical8 proof and performed no runtime/APNs/connect action. The next phase is `2.48V — controlled audio session lifecycle review, no repeated connect`.
+After 2.48V — the controlled audio session lifecycle review is complete. Physical8's existing proof shows the first controlled audio-connect succeeded once, the one-shot hook was consumed, credentials were non-reusable, CallKit/audio-session activation and deactivation were observed in the expected post-Answer lifecycle, and no repeated APNs/connect, video, microphone/camera permission, Matrix event emission, or full call flow occurred. This phase used only the existing Physical8 proof and performed no runtime/APNs/connect action. The next phase is `2.48W — controlled disconnect/end-call cleanup review, no repeated connect`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,51 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48V controlled audio session lifecycle review is complete:
+  - This was a docs-only review of the existing Physical8 proof at `/tmp/salemx-voip-push-receipt-proof-2.48t-physical8-first-audio-connect-polled.txt`.
+  - Classification: `2.48V result = audio session lifecycle sufficient for next cleanup/lifecycle phase`.
+  - No APNs, production APNs, repeated APNs, `dev/invite`, repeated connect, new LiveKit join, video, microphone/camera permission, Matrix event emission, or full call flow was performed.
+  - The reviewed proof generation was `generation_14`.
+  - The first controlled audio-connect attempt completed and was not repeated:
+    ```text
+    controlled_connect_first_attempt_result=success_redacted
+    controlled_connect_first_attempt_error_bucket=none
+    controlled_connect_first_attempt_repeated=false
+    physical6_runtime_enablement_url_hook_consumed=true
+    ```
+  - Media/LiveKit activity remained the single Physical8 audio-only attempt:
+    ```text
+    media_connect_requested=true
+    media_connect_attempted=true
+    livekit_join_requested=true
+    livekit_connect_audio_invoked=true
+    ```
+  - CallKit/provider audio-session lifecycle proof was sufficient:
+    ```text
+    callkit_provider_did_activate_audio_session=true
+    callkit_audio_session_did_activate=true
+    callkit_provider_did_deactivate_audio_session=true
+    callkit_audio_session_did_deactivate=true
+    audio_session_did_activate_before_first_action=false
+    audio_session_did_deactivate_before_first_action=false
+    ```
+  - Cleanup and non-reuse remained verified:
+    ```text
+    controlled_callkit_cleanup_requested=true
+    controlled_callkit_cleanup_result=ended
+    media_credentials_cleanup_requested=true
+    media_credentials_cleanup_result=cleared
+    media_credentials_reuse_allowed=false
+    ```
+  - Safety fields remained closed:
+    ```text
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    ```
+  - Conclusion: first controlled audio-connect already succeeded, no repeated APNs/connect occurred, the one-shot hook stayed consumed, credentials stayed non-reusable, video remained disabled, microphone/camera permission stayed false, Matrix event emission stayed false, and full call flow stayed false.
+  - Next phase: `2.48W — controlled disconnect/end-call cleanup review, no repeated connect`.
 - 2.48U first-connect result review and cleanup verification is complete:
   - This was a docs-only review of the existing Physical8 proof at `/tmp/salemx-voip-push-receipt-proof-2.48t-physical8-first-audio-connect-polled.txt`.
   - No APNs, production APNs, repeated APNs, `dev/invite`, repeated connect, new LiveKit join, video, camera permission, Matrix event emission, or full call flow was performed.
