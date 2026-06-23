@@ -13,100 +13,162 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48W-DisconnectCleanupDiagnostics — add/verify controlled disconnect cleanup proof, no APNs/connect` is complete.
+`2.48X — second-device remote audio/liveness readiness review, no repeated connect` is complete.
 
-This was a code/test diagnostics phase. No APNs, production APNs, repeated APNs, `dev/invite`, repeated connect, new LiveKit join, video, microphone/camera permission on device, Matrix event emission, or full call flow was performed.
-
-Latest 2.48W close-out commit before this phase:
+Classification:
 
 ```text
-646c8ad1ab1d6e4e7aee84007f4112ea5aaf6c1d Classify disconnect cleanup proof gap
+2.48X result = remote audio/liveness proof incomplete; targeted diagnostics needed
 ```
 
-## Diagnostics Implemented
-
-The VoIP proof now emits DEBUG-only redacted disconnect cleanup diagnostics:
+This was a docs-only review of the existing Physical8 proof:
 
 ```text
-disconnect_cleanup_diagnostics_present=true
-disconnect_cleanup_diagnostics_debug_only=true
-disconnect_cleanup_diagnostics_callkit_cleanup_requested=<redacted_bool>
-disconnect_cleanup_diagnostics_callkit_cleanup_result=<redacted_result>
-disconnect_cleanup_diagnostics_end_action_expected=<redacted_bool>
-disconnect_cleanup_diagnostics_end_action_delivered=<redacted_bool>
-disconnect_cleanup_diagnostics_end_action_fulfilled=<redacted_bool>
-disconnect_cleanup_diagnostics_end_action_origin=<redacted_origin>
-disconnect_cleanup_diagnostics_end_action_uuid_matched=<redacted_bool>
-disconnect_cleanup_diagnostics_end_action_generation_matched=<redacted_bool>
-disconnect_cleanup_diagnostics_end_action_source_matched=<redacted_bool>
-disconnect_cleanup_diagnostics_provider_end_reported=<redacted_bool>
-disconnect_cleanup_diagnostics_local_cleanup_completed=<redacted_bool>
-disconnect_cleanup_diagnostics_audio_session_deactivated=<redacted_bool>
-disconnect_cleanup_diagnostics_livekit_cleanup_requested=<redacted_bool>
-disconnect_cleanup_diagnostics_livekit_cleanup_completed=<redacted_bool>
-disconnect_cleanup_diagnostics_one_shot_consumed=<redacted_bool>
-disconnect_cleanup_diagnostics_no_repeated_connect=true
-disconnect_cleanup_diagnostics_no_matrix_events=true
-disconnect_cleanup_diagnostics_no_video=true
-disconnect_cleanup_diagnostics_raw_identifiers_logged=false
-disconnect_cleanup_diagnostics_end_timing_classification=<redacted_bucket>
-disconnect_cleanup_diagnostics_result=<redacted_result>
+/tmp/salemx-voip-push-receipt-proof-2.48t-physical8-first-audio-connect-polled.txt
 ```
 
-Provider/local cleanup without an expected CallKit End action is now classified explicitly:
+No APNs, production APNs, repeated APNs, `dev/invite`, repeated connect, new LiveKit join, video, microphone/camera permission on device, Matrix event emission, or full call flow was performed.
+
+## What Physical8 Already Proves
+
+Reviewed proof generation:
 
 ```text
-disconnect_cleanup_diagnostics_end_action_expected=false
-disconnect_cleanup_diagnostics_end_action_delivered=false
-disconnect_cleanup_diagnostics_local_cleanup_completed=true
-disconnect_cleanup_diagnostics_provider_end_reported=true
-disconnect_cleanup_diagnostics_result=local_or_provider_cleanup_sufficient_redacted
+proof_generation=generation_14
 ```
 
-If a CallKit End action is expected, success requires delivery, fulfillment, UUID/generation/source matching, and non-unknown timing:
+The first controlled audio-only connect completed once:
 
 ```text
-disconnect_cleanup_diagnostics_end_action_expected=true
-disconnect_cleanup_diagnostics_end_action_delivered=true
-disconnect_cleanup_diagnostics_end_action_fulfilled=true
-disconnect_cleanup_diagnostics_end_action_uuid_matched=true
-disconnect_cleanup_diagnostics_end_action_generation_matched=true
-disconnect_cleanup_diagnostics_end_action_source_matched=true
+controlled_connect_first_attempt_result=success_redacted
+controlled_connect_first_attempt_error_bucket=none
+controlled_connect_first_attempt_repeated=false
+media_connect_requested=true
+media_connect_attempted=true
+livekit_join_requested=true
+livekit_connect_audio_invoked=true
 ```
 
-Unknown End action timing is classified as `end_action_timing_unknown_redacted`, not success.
-
-## Preserved Safety
+The one-shot and safety boundaries remained closed:
 
 ```text
-default_runtime_no_connect=true
-one_shot_hook_consumed=true
-first_attempt_repeated=false
-credentials_non_reusable=true
-no_repeated_media_connect=true
-no_livekit_rejoin=true
-video_disabled=true
-camera_permission_false=true
-matrix_event_emit_false=true
-full_call_flow_false=true
-raw_identifiers_logged=false
+physical6_runtime_enablement_url_hook_consumed=true
+media_credentials_reuse_allowed=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+controlled_connect_first_attempt_video_allowed=false
+controlled_connect_first_attempt_matrix_events_allowed=false
+```
+
+Audio-session activation/deactivation is present through existing CallKit proof fields:
+
+```text
+callkit_audio_session_did_activate=true
+callkit_audio_session_did_deactivate=true
+```
+
+## Proof Gaps
+
+The existing Physical8 proof and current proof surface do not explicitly prove second-device remote audio/liveness. Missing or insufficient fields include:
+
+```text
+livekit_join_result
+livekit_join_error_bucket
+livekit_room_connected
+livekit_room_disconnected
+livekit_local_participant_present
+livekit_remote_participant_seen
+livekit_remote_participant_count_bucket
+livekit_remote_audio_track_subscribed
+livekit_remote_audio_track_unmuted
+livekit_remote_audio_level_observed
+livekit_audio_liveness_observed
+livekit_audio_liveness_result
+livekit_audio_liveness_error_bucket
+local_audio_publish_requested
+local_audio_publish_started
+local_audio_publish_result
+microphone_permission_result
+audio_route_available
+```
+
+The current code can emit disconnect cleanup diagnostics for future captures, but the Physical8 proof predates those fields:
+
+```text
+disconnect_cleanup_diagnostics_present=<missing in Physical8 proof>
+disconnect_cleanup_diagnostics_livekit_cleanup_requested=<missing in Physical8 proof>
+disconnect_cleanup_diagnostics_livekit_cleanup_completed=<missing in Physical8 proof>
 ```
 
 ## Next Phase
 
-`2.48X — second-device remote audio/liveness readiness review, no repeated connect`
+`2.48X-RemoteAudioLivenessDiagnostics — add redacted remote audio/liveness proof fields, no APNs/connect`
 
-This is a readiness/review phase only unless a later prompt explicitly authorizes narrow code changes. Do not set up another physical APNs/connect attempt yet.
+This is a code/test diagnostics phase only. Do not perform another physical APNs/connect attempt.
 
-Suggested scope:
+## Goal
+
+Add redacted proof fields and tests so a future one-shot second-device proof can safely answer:
 
 ```text
-review_second_device_remote_audio_liveness_readiness=true
-review_first_connect_success_constraints=true
-review_disconnect_cleanup_diagnostics_before_remote_liveness=true
-review_no_repeated_connect_regression=true
-review_no_video_camera_matrix_full_flow_regression=true
+did LiveKit join actually succeed
+did local audio publish start
+did remote participant become visible
+did remote audio track subscribe
+did remote audio become audible / liveness observed
+did microphone permission become required or remain unnecessary
+did audio route stay valid
+did disconnect cleanup clean LiveKit/audio state
 ```
+
+## Required Fields
+
+Add or verify DEBUG-only redacted proof fields covering:
+
+```text
+remote_audio_liveness_diagnostics_present
+remote_audio_liveness_diagnostics_debug_only
+livekit_join_result
+livekit_join_error_bucket
+livekit_room_connected
+livekit_room_disconnected
+livekit_local_participant_present
+livekit_remote_participant_seen
+livekit_remote_participant_count_bucket
+livekit_remote_audio_track_subscribed
+livekit_remote_audio_track_unmuted
+livekit_remote_audio_level_observed
+livekit_audio_liveness_observed
+livekit_audio_liveness_result
+livekit_audio_liveness_error_bucket
+local_audio_publish_requested
+local_audio_publish_started
+local_audio_publish_result
+microphone_permission_requested
+microphone_permission_result
+audio_session_did_activate
+audio_session_did_deactivate
+audio_route_available
+disconnect_cleanup_diagnostics_livekit_cleanup_requested
+disconnect_cleanup_diagnostics_livekit_cleanup_completed
+remote_audio_liveness_raw_identifiers_logged
+```
+
+Default safe expectations:
+
+```text
+remote_audio_liveness_diagnostics_present=true
+remote_audio_liveness_diagnostics_debug_only=true
+remote_audio_liveness_raw_identifiers_logged=false
+controlled_connect_first_attempt_repeated=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+Do not fake remote audio/liveness success. If the runtime cannot observe a value, classify it explicitly as missing/not_observed/not_requested.
 
 ## Hard Limits
 
@@ -119,7 +181,7 @@ Do not:
 - retry media connect
 - retry LiveKit join
 - enable video
-- request microphone permission
+- request microphone permission on device
 - request camera permission
 - emit Matrix events
 - start full call flow
@@ -140,32 +202,34 @@ Run:
 
 ```bash
 git status --short --branch
+swiftformat <changed Swift files>
+swiftlint lint <changed Swift files>
+DIRECT_CALL_ONLY_TESTING='UnitTests/DirectCallEngineTests UnitTests/NativeIncomingCallLifecycleContractTests' Tools/Scripts/verify_direct_call_unit.sh
 git diff --check
 git diff --cached --check
 git diff --name-only | grep -E 'SalemX.xcodeproj/project.pbxproj|app.yml|\.entitlements|Info.plist' && exit 1 || true
 git diff --cached --name-only | grep -E 'SalemX.xcodeproj/project.pbxproj|app.yml|\.entitlements|Info.plist' && exit 1 || true
 ```
 
-If code changes are made, also run the focused DirectCall subset:
-
-```bash
-DIRECT_CALL_ONLY_TESTING='UnitTests/DirectCallEngineTests UnitTests/NativeIncomingCallLifecycleContractTests' Tools/Scripts/verify_direct_call_unit.sh
-```
-
-Privacy scan changed docs/diff for raw sensitive values. Allowed hits are field names, redacted labels, negative statements, synthetic test values, and stable hashes only.
+Privacy scan changed files/diff for raw sensitive values. Allowed hits are field names, redacted labels, negative statements, synthetic test values, and stable hashes only.
 
 ## Expected Output
 
 Return:
 
-- 2.48X readiness review result
-- whether disconnect cleanup diagnostics remain sufficient
+- implementation summary
+- whether LiveKit join result is now explicit
+- whether local audio publish result is now explicit
+- whether remote participant/audio track/liveness result is now explicit
+- whether microphone permission state is explicit
+- whether audio route availability is explicit
+- whether disconnect cleanup covers LiveKit/audio cleanup
 - whether one-shot hook stayed consumed
 - whether first attempt repeated=false
 - whether credentials stayed non-reusable
-- whether media connect was not repeated
-- commit hash if docs or code were updated
+- commit hash
+- commit message
 - changed files
 - checks run
 - final `git status --short --branch`
-- explicit statement that no APNs, production APNs, repeated APNs, `dev/invite`, repeated connect, video, microphone/camera permission, Matrix event emit, or full call flow was performed
+- explicit statement that no APNs, production APNs, repeated APNs, `dev/invite`, repeated connect, video, microphone/camera permission on device, Matrix event emit, or full call flow was performed

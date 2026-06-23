@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48W-DisconnectCleanupDiagnostics — controlled disconnect/end-call cleanup can be classified safely without another physical attempt. The DEBUG proof now emits redacted disconnect cleanup diagnostics that distinguish provider/local cleanup without expected CallKit End action from End-action-required cleanup, require delivery/fulfillment/matching/timing when an End action is expected, preserve audio-session deactivation checks, keep credentials non-reusable, and keep the default runtime no-connect. No APNs/connect/runtime action was performed. The next phase is `2.48X — second-device remote audio/liveness readiness review, no repeated connect`.
+After 2.48X — second-device remote audio/liveness readiness review is complete. The existing Physical8 proof (`generation_14`) proves the first controlled audio-only connect completed once and stayed safe, but it does not contain explicit remote-audio/liveness evidence for LiveKit join result, room connected/disconnected state, local audio publish, remote participant/audio track subscription, remote audio level/liveness, microphone permission result, or audio route availability. No APNs/connect/runtime action was performed. The next phase is `2.48X-RemoteAudioLivenessDiagnostics — add redacted remote audio/liveness proof fields, no APNs/connect`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,63 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48X remote audio/liveness readiness review is complete:
+  - This was a docs-only review of the existing Physical8 proof at `/tmp/salemx-voip-push-receipt-proof-2.48t-physical8-first-audio-connect-polled.txt`.
+  - Classification: `2.48X result = remote audio/liveness proof incomplete; targeted diagnostics needed`.
+  - Reviewed proof generation: `generation_14`.
+  - No APNs, production APNs, repeated APNs, `dev/invite`, repeated connect, new LiveKit join, video, microphone/camera permission on device, Matrix event emission, or full call flow was performed.
+  - The existing proof confirms the first controlled audio-only connect completed once:
+    ```text
+    controlled_connect_first_attempt_result=success_redacted
+    controlled_connect_first_attempt_error_bucket=none
+    controlled_connect_first_attempt_repeated=false
+    media_connect_requested=true
+    media_connect_attempted=true
+    livekit_join_requested=true
+    livekit_connect_audio_invoked=true
+    ```
+  - The one-shot and safety boundaries remained closed after Physical8:
+    ```text
+    physical6_runtime_enablement_url_hook_consumed=true
+    media_credentials_reuse_allowed=false
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    controlled_connect_first_attempt_video_allowed=false
+    controlled_connect_first_attempt_matrix_events_allowed=false
+    ```
+  - Explicit remote-audio/liveness proof fields are missing from the existing Physical8 proof and current proof surface:
+    ```text
+    livekit_join_result=<missing>
+    livekit_room_connected=<missing>
+    livekit_room_disconnected=<missing>
+    livekit_local_participant_present=<missing>
+    livekit_remote_participant_seen=<missing>
+    livekit_remote_participant_count_bucket=<missing>
+    livekit_remote_audio_track_subscribed=<missing>
+    livekit_remote_audio_track_unmuted=<missing>
+    livekit_remote_audio_level_observed=<missing>
+    livekit_audio_liveness_observed=<missing>
+    livekit_audio_liveness_result=<missing>
+    local_audio_publish_requested=<missing>
+    local_audio_publish_started=<missing>
+    local_audio_publish_result=<missing>
+    microphone_permission_result=<missing>
+    audio_route_available=<missing>
+    ```
+  - Audio-session activation/deactivation is present via the existing CallKit proof fields, but not enough to prove remote audio/liveness:
+    ```text
+    callkit_audio_session_did_activate=true
+    callkit_audio_session_did_deactivate=true
+    ```
+  - Current code can emit disconnect cleanup diagnostics for future proof captures, including LiveKit/audio cleanup classification, but the Physical8 proof predates those fields:
+    ```text
+    disconnect_cleanup_diagnostics_present=<missing in Physical8 proof>
+    disconnect_cleanup_diagnostics_livekit_cleanup_requested=<missing in Physical8 proof>
+    disconnect_cleanup_diagnostics_livekit_cleanup_completed=<missing in Physical8 proof>
+    ```
+  - Next phase: `2.48X-RemoteAudioLivenessDiagnostics — add redacted remote audio/liveness proof fields, no APNs/connect`.
 - 2.48W-DisconnectCleanupDiagnostics adds targeted redacted cleanup diagnostics without APNs/connect:
   - This was a code/test diagnostics phase only. It did not send APNs, run production APNs, repeat APNs, use `dev/invite`, start another media connect, join LiveKit again, request microphone/camera permission on device, emit Matrix events, enable video, or start full call flow.
   - The proof now emits DEBUG-only redacted diagnostics fields:
