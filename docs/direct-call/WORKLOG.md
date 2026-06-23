@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Classified 2.48W as controlled disconnect/end-call cleanup proof incomplete: Physical8 showed cleanup requested/result ended and valid audio-session deactivation, but CallKit End action delivery/matching/fulfillment was not observed; next is targeted no-APNs/no-connect diagnostics.
 - Closed 2.48V as a docs-only controlled audio session lifecycle review: Physical8's proof showed CallKit/provider audio activation and deactivation, no pre-Answer audio-session activation/deactivation, one-shot hook consumption, non-reusable credentials, and no repeated APNs/connect, video, microphone/camera permission, Matrix event emission, or full call flow.
 - Closed 2.48U as a docs-only first-connect result review and cleanup verification: Physical8's first controlled audio-only connect succeeded once, the one-shot hook was consumed, credentials were cleared and not reusable, and no repeated APNs/connect, video, camera permission, Matrix event emission, or full call flow occurred.
 - Closed 2.48T-Physical8 as a successful one-shot physical first controlled audio-connect proof: PushKit received, CallKit report completed, Answer received/fulfilled, pending metadata reference observed/handed off, metadata fetch succeeded, credentials succeeded, the first controlled audio-only connect/LiveKit attempt completed once, and no video/camera/Matrix/full-flow path opened.
@@ -119,6 +120,93 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48W — Controlled Disconnect/End-Call Cleanup Review
+
+Closed the review phase as docs-only, using only the existing Physical8 proof:
+
+```text
+/tmp/salemx-voip-push-receipt-proof-2.48t-physical8-first-audio-connect-polled.txt
+```
+
+No APNs, production APNs, repeated APNs, `dev/invite`, repeated connect, new LiveKit join, video, microphone/camera permission, Matrix event emission, or full call flow was performed.
+
+Classification:
+
+```text
+2.48W result = controlled disconnect/end-call cleanup proof incomplete; targeted diagnostics needed
+```
+
+Reviewed proof:
+
+```text
+proof_generation=generation_14
+controlled_connect_first_attempt_completed=true
+controlled_connect_first_attempt_result=success_redacted
+controlled_connect_first_attempt_error_bucket=none
+controlled_connect_first_attempt_repeated=false
+physical6_runtime_enablement_url_hook_consumed=true
+```
+
+The already-closed Physical8 media and LiveKit activity stayed limited to one audio-only attempt:
+
+```text
+media_connect_requested=true
+media_connect_attempted=true
+livekit_join_requested=true
+livekit_connect_audio_invoked=true
+```
+
+Controlled CallKit cleanup was requested and marked ended, but CallKit End action observability was incomplete:
+
+```text
+controlled_callkit_cleanup_requested=true
+controlled_callkit_cleanup_result=ended
+callkit_end_after_pushkit_completion_ms_bucket=unknown
+callkit_end_action_delivered=false
+end_action_uuid_matched=false
+end_action_generation_matched=false
+end_action_source_matched=false
+end_action_fulfilled=false
+end_action_origin=none
+```
+
+Audio-session deactivation remained valid:
+
+```text
+callkit_provider_did_deactivate_audio_session=true
+callkit_audio_session_did_deactivate=true
+audio_session_did_deactivate_before_first_action=false
+```
+
+Credentials stayed non-reusable:
+
+```text
+media_credentials_cleanup_requested=true
+media_credentials_cleanup_result=cleared
+media_credentials_post_cleanup_token_present=false
+media_credentials_post_cleanup_url_present=false
+media_credentials_post_cleanup_expires_at_present=false
+media_credentials_post_cleanup_payload_present=false
+media_credentials_reuse_attempted=false
+media_credentials_reuse_allowed=false
+media_credentials_expiry_check_requested=true
+media_credentials_expiry_check_result=expired_or_not_reusable_redacted
+```
+
+Safety fields remained closed:
+
+```text
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+controlled_connect_first_attempt_video_allowed=false
+```
+
+Conclusion: first controlled audio-connect already succeeded, no repeated APNs/connect occurred, the one-shot hook stayed consumed, the first attempt was not repeated, credentials stayed non-reusable, video remained disabled, microphone/camera permission stayed false, Matrix event emission stayed false, and full call flow stayed false. The disconnect/end-call cleanup proof needs targeted diagnostics because the proof did not observe CallKit End action delivery/matching/fulfillment.
+
+Next phase: `2.48W-DisconnectCleanupDiagnostics — add/verify controlled disconnect cleanup proof, no APNs/connect`.
 
 ### 2.48V — Controlled Audio Session Lifecycle Review
 
