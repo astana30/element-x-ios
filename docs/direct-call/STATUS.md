@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-SenderLiveKitReadinessHookRepair — the DEBUG/test-controlled sender LiveKit readiness hook can now be armed from redacted Matrix-session, expected-user, and same-room readiness booleans, and the existing second physical sender readiness fields map from that hook instead of stale receiver runtime state. The hook remains default-disabled, audio-only, no-raw-identifiers, no-connect, and no-join by itself. The next phase is `2.48Z-Physical2-Retry1 — one-shot two-physical-device sender-join/remote-participant proof`.
+After 2.48Z-Physical2-Retry1-RemoteMissingTriage — the one-shot two-physical-device proof delivered one sandbox APNs, received PushKit/CallKit Answer, fetched pending metadata, received media credentials, and completed one receiver controlled audio-only LiveKit join. The receiver remote participant observer safely classified the remote participant/audio/liveness as not observed, and the final VoIP proof showed the sender readiness hook had fallen back to default-disabled after PushKit/Answer despite being true before APNs. No retry was performed. The next phase is `2.48Z-SenderReadinessPersistenceRepair — preserve sender readiness and add sender join result proof before any APNs retry`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,115 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48Z-Physical2-Retry1-RemoteMissingTriage safely classified the one-shot two-physical-device sender/remote-participant proof:
+  - Proof path:
+    ```text
+    /tmp/salemx-voip-push-receipt-proof-2.48z-physical2-retry1-sender-join-remote-participant-polled.txt
+    ```
+  - Exactly one sandbox APNs was sent after explicit confirmation. No repeated APNs, production APNs, `dev/invite`, repeated connect, repeated LiveKit join, video, camera permission, Matrix event emission, or full call flow was performed.
+  - Pre-APNs gates passed with both physical app sessions ready, distinct Matrix accounts, same encrypted room validation, receiver enablement hook armed, physical remote-peer handoff armed, and sender readiness hook armed:
+    ```text
+    receiver_user_hash=497015f5745c933a
+    sender_user_hash=7d434d7f252427fb
+    sender_equals_receiver=false
+    room_validation_preflight=pass
+    corrected_flat_schema_used=true
+    nested_invite_body_used=false
+    physical6_runtime_enablement_url_hook_armed=true
+    remote_peer_context_handoff_armed_before_apns=true
+    sender_livekit_readiness_hook_armed=true
+    sender_livekit_readiness_hook_matrix_session_ready=true
+    sender_livekit_readiness_hook_same_room_ready=true
+    safe_to_send_apns=true
+    ```
+  - APNs/send result:
+    ```text
+    invite_send_attempted=true
+    invite_http_code=200
+    real_non_dev_invite_used=true
+    dev_invite_used=false
+    background_apns_push_result=sandbox_success
+    APNs_sent=true
+    ```
+  - Receiver PushKit, CallKit, metadata, credentials, and one controlled receiver connect succeeded:
+    ```text
+    proof_generation=generation_16
+    physical_voip_push_received=true
+    pushkit_callback_invoked=true
+    pushkit_payload_kind=real_invite_controlled
+    callkit_report_result=reported
+    callkit_first_action_kind=answer
+    callkit_answer_action_delivered=true
+    callkit_answer_action_received=true
+    callkit_answer_action_fulfilled=true
+    pending_metadata_reference_present=true
+    pending_metadata_fetch_requested=true
+    pending_metadata_fetch_result=success_redacted
+    pending_metadata_fetch_http_status_bucket=2xx
+    foreground_pending_call_metadata_handoff_observed=true
+    media_credentials_requested=true
+    media_credentials_result=success_redacted
+    physical6_runtime_enablement_url_hook_consumed=true
+    controlled_connect_first_attempt_requested=true
+    controlled_connect_first_attempt_allowed=true
+    controlled_connect_first_attempt_started=true
+    controlled_connect_first_attempt_completed=true
+    controlled_connect_first_attempt_repeated=false
+    controlled_connect_first_attempt_result=success_redacted
+    media_connect_requested=true
+    media_connect_attempted=true
+    livekit_join_requested=true
+    livekit_connect_audio_invoked=true
+    livekit_join_result=success_redacted
+    ```
+  - Physical remote context survived to runtime, but the final sender readiness hook did not:
+    ```text
+    remote_peer_context_handoff_present=true
+    remote_peer_context_handoff_armed_before_apns=true
+    remote_peer_context_handoff_received_by_runtime=true
+    remote_peer_context_handoff_survived_pushkit=true
+    remote_peer_context_handoff_survived_answer=true
+    remote_peer_kind=physical_ios_redacted
+    remote_peer_physical_device=true
+    production_like_two_physical_device_proof=true
+
+    sender_livekit_readiness_hook_armed=false
+    sender_livekit_readiness_hook_matrix_session_ready=false
+    sender_livekit_readiness_hook_expected_user_matched=false
+    sender_livekit_readiness_hook_same_room_ready=false
+    sender_livekit_readiness_hook_blocked_reason=default_disabled_no_connect
+    second_physical_sender_livekit_readiness_matrix_session_ready=false
+    second_physical_sender_livekit_readiness_same_room_ready=false
+    ```
+  - Receiver observer and remote audio/liveness were safely not observed, not faked:
+    ```text
+    receiver_remote_participant_observer_present=true
+    receiver_remote_participant_observer_result=not_observed_redacted
+    receiver_remote_participant_observer_error_bucket=sender_not_joined_or_remote_missing_redacted
+    receiver_remote_participant_observer_remote_seen=false
+    receiver_remote_participant_observer_audio_track_seen=false
+    receiver_remote_participant_observer_liveness_seen=false
+    livekit_remote_participant_seen=false
+    livekit_remote_audio_track_subscribed=false
+    livekit_audio_liveness_result=not_observed_redacted
+    livekit_audio_liveness_error_bucket=remote_participant_missing_redacted
+    ```
+  - Safety stayed closed:
+    ```text
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    blocked_reason=none
+    ```
+  - Classification:
+    ```text
+    2.48Z-Physical2-Retry1 = receiver controlled audio join succeeded once, but sender readiness/join was not preserved into final proof and remote participant/audio/liveness was not observed.
+    No retry performed.
+    No repeated APNs.
+    No repeated connect.
+    ```
+  - Next phase: `2.48Z-SenderReadinessPersistenceRepair — preserve sender readiness and add sender join result proof before any APNs retry`.
 - 2.48Z-SenderLiveKitReadinessHookRepair makes second physical sender readiness activatable before any APNs retry:
   - This was a code/test diagnostics repair only. It did not send APNs, run production APNs, repeat APNs, use `dev/invite`, start physical media connect, join LiveKit on a real device, request microphone/camera permission, enable video, emit Matrix events, start full call flow, reset physical call hooks for an actual run, or perform a physical call attempt.
   - Added a DEBUG/test-controlled sender readiness hook with redacted inputs only:

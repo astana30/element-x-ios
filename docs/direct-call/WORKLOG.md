@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Closed 2.48Z-Physical2-Retry1 as safe remote-missing triage: one sandbox APNs, PushKit/CallKit Answer, pending metadata, media credentials, one receiver controlled audio-only connect, and receiver LiveKit join succeeded, but the final proof reset sender readiness to default-disabled and remote participant/audio/liveness was not observed; no retry was performed.
 - Added 2.48Z-SenderLiveKitReadinessHookRepair: the DEBUG/test-controlled sender LiveKit readiness hook can now classify redacted sender Matrix-session readiness and same-room readiness as true before a future APNs retry while the sender join path remains default-disabled/no-connect/no-join.
 - Closed 2.48Z-Physical2-PreAPNsSenderReadinessBlocked before APNs: both physical app sessions validated and receiver hooks armed, but the repaired sender LiveKit readiness diagnostics still classified matrix-session/same-room readiness as false before APNs, so no invite/APNs/connect/LiveKit attempt was performed.
 - Added 2.48Z-RemoteParticipantPresenceRepair: the DEBUG proof now exposes default-disabled sender-side LiveKit readiness/join-path fields and receiver remote participant observer classifications for sender-not-joined, remote-missing, remote-seen, audio-track-missing, and liveness-not-observed without device APNs/connect/LiveKit.
@@ -127,6 +128,74 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48Z-Physical2-Retry1 — Remote Participant Missing Triage
+
+Closed the one-shot two-physical-device sender/remote-participant proof as safely classified, not remote-audio success.
+
+Exactly one sandbox APNs was sent after explicit confirmation. No repeated APNs, production APNs, `dev/invite`, repeated connect, repeated LiveKit join, video, camera permission, Matrix event emission, or full call flow was performed.
+
+The receiver path succeeded through Answer, metadata, credentials, one controlled connect, and receiver LiveKit join:
+
+```text
+proof_generation=generation_16
+physical_voip_push_received=true
+pushkit_callback_invoked=true
+callkit_report_result=reported
+callkit_first_action_kind=answer
+callkit_answer_action_received=true
+pending_metadata_fetch_result=success_redacted
+pending_metadata_fetch_http_status_bucket=2xx
+media_credentials_result=success_redacted
+physical6_runtime_enablement_url_hook_consumed=true
+controlled_connect_first_attempt_completed=true
+controlled_connect_first_attempt_repeated=false
+controlled_connect_first_attempt_result=success_redacted
+media_connect_requested=true
+media_connect_attempted=true
+livekit_join_requested=true
+livekit_connect_audio_invoked=true
+livekit_join_result=success_redacted
+```
+
+The physical remote peer context survived PushKit and Answer:
+
+```text
+remote_peer_context_handoff_armed_before_apns=true
+remote_peer_context_handoff_received_by_runtime=true
+remote_peer_context_handoff_survived_pushkit=true
+remote_peer_context_handoff_survived_answer=true
+remote_peer_kind=physical_ios_redacted
+remote_peer_physical_device=true
+production_like_two_physical_device_proof=true
+```
+
+However, the sender readiness hook that was true before APNs was default-disabled in the final VoIP proof, and the remote participant/audio/liveness observer did not see the sender:
+
+```text
+sender_livekit_readiness_hook_armed=false
+sender_livekit_readiness_hook_matrix_session_ready=false
+sender_livekit_readiness_hook_same_room_ready=false
+second_physical_sender_livekit_readiness_matrix_session_ready=false
+second_physical_sender_livekit_readiness_same_room_ready=false
+receiver_remote_participant_observer_result=not_observed_redacted
+receiver_remote_participant_observer_error_bucket=sender_not_joined_or_remote_missing_redacted
+livekit_remote_participant_seen=false
+livekit_remote_audio_track_subscribed=false
+livekit_audio_liveness_result=not_observed_redacted
+```
+
+Safety remained closed:
+
+```text
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+blocked_reason=none
+```
+
+Next phase: `2.48Z-SenderReadinessPersistenceRepair — preserve sender readiness and add sender join result proof before any APNs retry`.
 
 ### 2.48Z-SenderLiveKitReadinessHookRepair — Sender LiveKit Readiness Hook
 
