@@ -1895,6 +1895,19 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var remoteAudioLivenessDiagnosticsVideoAllowed = false
     var remoteAudioLivenessDiagnosticsMatrixEventsAllowed = false
     var remoteAudioLivenessDiagnosticsRawIdentifiersLogged = false
+    var remoteAudioPublishLivenessRepairPresent = true
+    var remoteAudioPublishLivenessRepairDebugOnly = true
+    var remoteAudioPublishLivenessRepairRequiresLiveKitJoinSuccess = true
+    var remoteAudioPublishLivenessRepairClassifiesPublishNotRequested = true
+    var remoteAudioPublishLivenessRepairClassifiesPublishSuccess = true
+    var remoteAudioPublishLivenessRepairClassifiesPublishFailure = true
+    var remoteAudioPublishLivenessRepairClassifiesSimulatorPeer = true
+    var remoteAudioPublishLivenessRepairClassifiesRemoteMissing = true
+    var remoteAudioPublishLivenessRepairClassifiesRemoteTrackMissing = true
+    var remoteAudioPublishLivenessRepairClassifiesLivenessObserved = true
+    var remoteAudioPublishLivenessRepairNoVideo = true
+    var remoteAudioPublishLivenessRepairNoMatrixEvents = true
+    var remoteAudioPublishLivenessRepairRawIdentifiersLogged = false
     var liveKitJoinResult = "not_requested"
     var liveKitJoinErrorBucket = "none"
     var liveKitRoomConnected = false
@@ -1904,10 +1917,16 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var localAudioPublishStarted = false
     var localAudioPublishResult = "not_requested"
     var localAudioPublishErrorBucket = "none"
+    var localAudioPublishNotRequiredReason = "none"
     var microphonePermissionResult = "not_requested_or_not_required_redacted"
     var microphonePermissionNotRequiredReason = "no_connect_default_disabled"
     var audioRouteAvailable = false
     var audioRouteResult = "not_observed_redacted"
+    var remotePeerKind = "unknown_redacted"
+    var remotePeerPhysicalDevice = "unknown"
+    var simulatorAssistedRemoteAudioProof = false
+    var productionLikeTwoPhysicalDeviceProof = false
+    var remoteAudioLivenessLimitation = "unknown_redacted"
     var liveKitRemoteParticipantSeen = false
     var liveKitRemoteParticipantCountBucket = "0"
     var liveKitRemoteAudioTrackSubscribed = false
@@ -2293,6 +2312,19 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "remote_audio_liveness_diagnostics_video_allowed=\(remoteAudioLivenessDiagnosticsVideoAllowed)",
             "remote_audio_liveness_diagnostics_matrix_events_allowed=\(remoteAudioLivenessDiagnosticsMatrixEventsAllowed)",
             "remote_audio_liveness_diagnostics_raw_identifiers_logged=\(remoteAudioLivenessDiagnosticsRawIdentifiersLogged)",
+            "remote_audio_publish_liveness_repair_present=\(remoteAudioPublishLivenessRepairPresent)",
+            "remote_audio_publish_liveness_repair_debug_only=\(remoteAudioPublishLivenessRepairDebugOnly)",
+            "remote_audio_publish_liveness_repair_requires_livekit_join_success=\(remoteAudioPublishLivenessRepairRequiresLiveKitJoinSuccess)",
+            "remote_audio_publish_liveness_repair_classifies_publish_not_requested=\(remoteAudioPublishLivenessRepairClassifiesPublishNotRequested)",
+            "remote_audio_publish_liveness_repair_classifies_publish_success=\(remoteAudioPublishLivenessRepairClassifiesPublishSuccess)",
+            "remote_audio_publish_liveness_repair_classifies_publish_failure=\(remoteAudioPublishLivenessRepairClassifiesPublishFailure)",
+            "remote_audio_publish_liveness_repair_classifies_simulator_peer=\(remoteAudioPublishLivenessRepairClassifiesSimulatorPeer)",
+            "remote_audio_publish_liveness_repair_classifies_remote_missing=\(remoteAudioPublishLivenessRepairClassifiesRemoteMissing)",
+            "remote_audio_publish_liveness_repair_classifies_remote_track_missing=\(remoteAudioPublishLivenessRepairClassifiesRemoteTrackMissing)",
+            "remote_audio_publish_liveness_repair_classifies_liveness_observed=\(remoteAudioPublishLivenessRepairClassifiesLivenessObserved)",
+            "remote_audio_publish_liveness_repair_no_video=\(remoteAudioPublishLivenessRepairNoVideo)",
+            "remote_audio_publish_liveness_repair_no_matrix_events=\(remoteAudioPublishLivenessRepairNoMatrixEvents)",
+            "remote_audio_publish_liveness_repair_raw_identifiers_logged=\(remoteAudioPublishLivenessRepairRawIdentifiersLogged)",
             "livekit_join_result=\(liveKitJoinResult)",
             "livekit_join_error_bucket=\(liveKitJoinErrorBucket)",
             "livekit_room_connected=\(liveKitRoomConnected)",
@@ -2302,10 +2334,16 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "local_audio_publish_started=\(localAudioPublishStarted)",
             "local_audio_publish_result=\(localAudioPublishResult)",
             "local_audio_publish_error_bucket=\(localAudioPublishErrorBucket)",
+            "local_audio_publish_not_required_reason=\(localAudioPublishNotRequiredReason)",
             "microphone_permission_result=\(microphonePermissionResult)",
             "microphone_permission_not_required_reason=\(microphonePermissionNotRequiredReason)",
             "audio_route_available=\(audioRouteAvailable)",
             "audio_route_result=\(audioRouteResult)",
+            "remote_peer_kind=\(remotePeerKind)",
+            "remote_peer_physical_device=\(remotePeerPhysicalDevice)",
+            "simulator_assisted_remote_audio_proof=\(simulatorAssistedRemoteAudioProof)",
+            "production_like_two_physical_device_proof=\(productionLikeTwoPhysicalDeviceProof)",
+            "remote_audio_liveness_limitation=\(remoteAudioLivenessLimitation)",
             "livekit_remote_participant_seen=\(liveKitRemoteParticipantSeen)",
             "livekit_remote_participant_count_bucket=\(liveKitRemoteParticipantCountBucket)",
             "livekit_remote_audio_track_subscribed=\(liveKitRemoteAudioTrackSubscribed)",
@@ -2396,17 +2434,46 @@ private extension SalemXVoIPPushReceiptProofSummary {
         remoteAudioLivenessDiagnosticsVideoAllowed = controlledConnectFirstAttemptVideoAllowed
         remoteAudioLivenessDiagnosticsMatrixEventsAllowed = controlledConnectFirstAttemptMatrixEventsAllowed
         remoteAudioLivenessDiagnosticsRawIdentifiersLogged = false
+        remoteAudioPublishLivenessRepairPresent = true
+        remoteAudioPublishLivenessRepairDebugOnly = true
+        remoteAudioPublishLivenessRepairRequiresLiveKitJoinSuccess = true
+        remoteAudioPublishLivenessRepairClassifiesPublishNotRequested = true
+        remoteAudioPublishLivenessRepairClassifiesPublishSuccess = true
+        remoteAudioPublishLivenessRepairClassifiesPublishFailure = true
+        remoteAudioPublishLivenessRepairClassifiesSimulatorPeer = true
+        remoteAudioPublishLivenessRepairClassifiesRemoteMissing = true
+        remoteAudioPublishLivenessRepairClassifiesRemoteTrackMissing = true
+        remoteAudioPublishLivenessRepairClassifiesLivenessObserved = true
+        remoteAudioPublishLivenessRepairNoVideo = !controlledConnectFirstAttemptVideoAllowed && !cameraPermissionRequested
+        remoteAudioPublishLivenessRepairNoMatrixEvents = !controlledConnectFirstAttemptMatrixEventsAllowed && !matrixEventEmitRequested
+        remoteAudioPublishLivenessRepairRawIdentifiersLogged = false
 
         if liveKitJoinRequested {
             liveKitJoinResult = controlledConnectFirstAttemptResult == "success_redacted" ? "success_redacted" : "failed_redacted"
             liveKitJoinErrorBucket = controlledConnectFirstAttemptResult == "success_redacted" ? "none" : controlledConnectFirstAttemptErrorBucket
             liveKitRoomConnected = controlledConnectFirstAttemptResult == "success_redacted"
             liveKitLocalParticipantPresent = liveKitRoomConnected
+            if liveKitJoinResult == "success_redacted",
+               !localAudioPublishRequested,
+               localAudioPublishResult == "not_requested" {
+                localAudioPublishResult = "not_required_redacted"
+                localAudioPublishErrorBucket = "none"
+                localAudioPublishNotRequiredReason = "receive_only_audio_connect_redacted"
+            } else if liveKitJoinResult != "success_redacted",
+                      !localAudioPublishRequested,
+                      localAudioPublishResult == "not_requested" {
+                localAudioPublishResult = "blocked_redacted"
+                localAudioPublishErrorBucket = "livekit_join_not_success_redacted"
+                localAudioPublishNotRequiredReason = "none"
+                liveKitAudioLivenessResult = "not_observed_redacted"
+                liveKitAudioLivenessErrorBucket = "livekit_join_not_success_redacted"
+            }
         } else {
             liveKitJoinResult = "not_requested"
             liveKitJoinErrorBucket = "none"
             liveKitRoomConnected = false
             liveKitLocalParticipantPresent = false
+            localAudioPublishNotRequiredReason = localAudioPublishResult == "not_requested" ? "none" : localAudioPublishNotRequiredReason
         }
 
         liveKitRoomDisconnected = controlledCallKitCleanupResult == "ended"
@@ -2427,17 +2494,33 @@ private extension SalemXVoIPPushReceiptProofSummary {
         liveKitLocalParticipantPresent = succeeded
     }
 
-    mutating func recordLocalAudioPublishResult(requested: Bool, started: Bool, succeeded: Bool, errorBucket: String = "none") {
+    mutating func recordLocalAudioPublishResult(requested: Bool,
+                                                started: Bool,
+                                                succeeded: Bool,
+                                                errorBucket: String = "none",
+                                                notRequiredReason: String = "receive_only_audio_connect_redacted") {
         localAudioPublishRequested = requested
         localAudioPublishStarted = requested && started
-        localAudioPublishResult = requested ? (succeeded ? "success_redacted" : "failed_redacted") : "not_requested"
+        localAudioPublishResult = requested ? (succeeded ? "success_redacted" : "failed_redacted") : "not_required_redacted"
         localAudioPublishErrorBucket = requested && !succeeded ? errorBucket : "none"
+        localAudioPublishNotRequiredReason = requested ? "none" : notRequiredReason
     }
 
     mutating func recordMicrophonePermissionResult(requested: Bool, notRequiredReason: String) {
         microphonePermissionRequested = requested
         microphonePermissionResult = requested ? "requested_redacted" : "not_requested_or_not_required_redacted"
         microphonePermissionNotRequiredReason = requested ? "requested_redacted" : notRequiredReason
+    }
+
+    mutating func recordRemoteAudioPeerClassification(peerKind: String,
+                                                      physicalDevice: String,
+                                                      simulatorAssisted: Bool,
+                                                      limitation: String = "none") {
+        remotePeerKind = peerKind
+        remotePeerPhysicalDevice = physicalDevice
+        simulatorAssistedRemoteAudioProof = simulatorAssisted
+        productionLikeTwoPhysicalDeviceProof = physicalDevice == "true" && !simulatorAssisted
+        remoteAudioLivenessLimitation = simulatorAssisted ? "simulator_assisted_redacted" : limitation
     }
 
     mutating func recordRemoteAudioLivenessObservation(participantSeen: Bool,
@@ -2454,7 +2537,15 @@ private extension SalemXVoIPPushReceiptProofSummary {
         liveKitRemoteAudioLevelObserved = audioLevelObserved
         liveKitAudioLivenessObserved = livenessObserved
         liveKitAudioLivenessResult = livenessObserved ? "success_redacted" : "not_observed_redacted"
-        liveKitAudioLivenessErrorBucket = errorBucket
+        if livenessObserved {
+            liveKitAudioLivenessErrorBucket = "none"
+        } else if !participantSeen {
+            liveKitAudioLivenessErrorBucket = "remote_participant_missing_redacted"
+        } else if !audioTrackSubscribed {
+            liveKitAudioLivenessErrorBucket = "remote_audio_track_missing_redacted"
+        } else {
+            liveKitAudioLivenessErrorBucket = errorBucket
+        }
     }
 
     mutating func recordMetadataCredentialsBoundaryRepairProof(allowsHookConsumptionAfterCredentials: Bool = false) {

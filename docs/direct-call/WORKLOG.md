@@ -6935,3 +6935,82 @@ No retry performed.
 No repeated APNs, production APNs, `dev/invite`, repeated connect, repeated LiveKit join, video, camera permission request, Matrix event emission, full call flow, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, or forbidden project/signing file change was introduced.
 
 Next phase: `2.48Y-RemoteAudioPublishLivenessRepair — fix local publish and simulator remote liveness observability before any APNs retry`.
+
+## 2026-06-23 — 2.48Y-RemoteAudioPublishLivenessRepair
+
+Repaired the redacted proof classification for the post-join local publish and remote liveness gap without sending APNs or performing another device connect.
+
+Context from the 2.48Y proof:
+
+```text
+livekit_join_result=success_redacted
+local_audio_publish_result=not_requested
+livekit_audio_liveness_result=not_observed_redacted
+```
+
+The current controlled bridge joins LiveKit audio with microphone publish disabled for the receive-only path. The proof now classifies that explicitly after join success:
+
+```text
+local_audio_publish_requested=false
+local_audio_publish_started=false
+local_audio_publish_result=not_required_redacted
+local_audio_publish_not_required_reason=receive_only_audio_connect_redacted
+```
+
+If LiveKit join is not successful, local publish and liveness now fail closed with redacted blockers:
+
+```text
+local_audio_publish_result=blocked_redacted
+local_audio_publish_error_bucket=livekit_join_not_success_redacted
+livekit_audio_liveness_result=not_observed_redacted
+livekit_audio_liveness_error_bucket=livekit_join_not_success_redacted
+```
+
+Added repair guard fields:
+
+```text
+remote_audio_publish_liveness_repair_present=true
+remote_audio_publish_liveness_repair_debug_only=true
+remote_audio_publish_liveness_repair_requires_livekit_join_success=true
+remote_audio_publish_liveness_repair_classifies_publish_not_requested=true
+remote_audio_publish_liveness_repair_classifies_publish_success=true
+remote_audio_publish_liveness_repair_classifies_publish_failure=true
+remote_audio_publish_liveness_repair_classifies_simulator_peer=true
+remote_audio_publish_liveness_repair_classifies_remote_missing=true
+remote_audio_publish_liveness_repair_classifies_remote_track_missing=true
+remote_audio_publish_liveness_repair_classifies_liveness_observed=true
+remote_audio_publish_liveness_repair_no_video=true
+remote_audio_publish_liveness_repair_no_matrix_events=true
+remote_audio_publish_liveness_repair_raw_identifiers_logged=false
+```
+
+Remote peer and simulator limitation are now explicit:
+
+```text
+remote_peer_kind=<ios_simulator_redacted_or_physical_ios_redacted_or_unknown_redacted>
+remote_peer_physical_device=<true_or_false_or_unknown>
+simulator_assisted_remote_audio_proof=<true_or_false>
+production_like_two_physical_device_proof=<true_or_false>
+remote_audio_liveness_limitation=<simulator_assisted_redacted_or_redacted_bucket>
+```
+
+Remote liveness not-observed classification now distinguishes:
+
+```text
+livekit_audio_liveness_error_bucket=remote_participant_missing_redacted
+livekit_audio_liveness_error_bucket=remote_audio_track_missing_redacted
+```
+
+Safety remains closed:
+
+```text
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+controlled_connect_first_attempt_repeated=false
+media_credentials_reuse_allowed=false
+```
+
+No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, microphone/camera permission request on device, Matrix event emission, full call flow, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, or forbidden project/signing file change was introduced.
+
+Next phase: `2.48Y-Physical2 — one-shot simulator-assisted remote audio/liveness proof`.

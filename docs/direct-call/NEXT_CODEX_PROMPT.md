@@ -13,217 +13,236 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48Y — one-shot second-device remote audio/liveness physical proof` is complete and safely classified.
+`2.48Y-RemoteAudioPublishLivenessRepair — repair/classify local audio publish and remote liveness path, no APNs/connect` is complete.
 
-This was a physical one-shot proof. One sandbox APNs reached PushKit, one green Answer was received, pending metadata succeeded, media credentials succeeded, and exactly one controlled audio-only media connect / LiveKit join attempt completed. The second-device side used the simulator, and remote participant/audio/liveness was not observed. Do not treat this as remote-audio success.
+This was a code/test repair phase only. No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, microphone/camera permission on device, Matrix event emission, full call flow, or hook reset/re-arm was performed.
 
-Phase-specific proof path:
-
-```text
-/tmp/salemx-voip-push-receipt-proof-2.48y-remote-audio-liveness-polled.txt
-```
-
-Reviewed proof generation:
+The previous physical proof remains:
 
 ```text
+2.48Y result = safely classified, not remote-audio success
 proof_generation=generation_12
-```
-
-## 2.48Y Classification
-
-PushKit and CallKit Answer succeeded:
-
-```text
-physical_voip_push_received=true
-pushkit_callback_invoked=true
-pushkit_payload_kind=real_invite_controlled
-callkit_report_result=reported
-callkit_report_completion_observed=true
-pushkit_completion_called=true
-callkit_first_action_kind=answer
-callkit_answer_action_received=true
-callkit_answer_action_fulfilled=true
-```
-
-Metadata and credentials succeeded:
-
-```text
-pending_metadata_reference_present=true
-pending_metadata_reference_redacted=true
-pending_metadata_fetch_requested=true
-pending_metadata_fetch_result=success_redacted
-pending_metadata_fetch_http_status_bucket=2xx
-pending_metadata_fetch_errcode=none
-media_credentials_requested=true
-media_credentials_request_authorized=true
-media_credentials_result=success_redacted
-media_credentials_token_received=true
-media_credentials_url_received=true
-media_credentials_expires_at_present=true
-media_credentials_payload_redacted=true
-```
-
-One controlled audio-only connect attempt completed:
-
-```text
-physical6_runtime_enablement_url_hook_consumed=true
-controlled_connect_first_attempt_requested=true
-controlled_connect_first_attempt_allowed=true
-controlled_connect_first_attempt_started=true
-controlled_connect_first_attempt_completed=true
-controlled_connect_first_attempt_repeated=false
-controlled_connect_first_attempt_result=success_redacted
-controlled_connect_first_attempt_error_bucket=none
-media_connect_requested=true
-media_connect_attempted=true
-livekit_join_requested=true
-livekit_connect_audio_invoked=true
 livekit_join_result=success_redacted
-livekit_join_error_bucket=none
-livekit_room_connected=true
-livekit_local_participant_present=true
+local_audio_publish_result=not_requested
+livekit_audio_liveness_result=not_observed_redacted
 ```
 
-Remote audio/liveness did not succeed and was classified safely:
+## Repair Added
+
+The proof now emits repair guard fields:
 
 ```text
-remote_audio_liveness_diagnostics_present=true
-remote_audio_liveness_diagnostics_debug_only=true
-remote_audio_liveness_diagnostics_audio_only=true
-remote_audio_liveness_diagnostics_video_allowed=false
-remote_audio_liveness_diagnostics_matrix_events_allowed=false
-remote_audio_liveness_diagnostics_raw_identifiers_logged=false
+remote_audio_publish_liveness_repair_present=true
+remote_audio_publish_liveness_repair_debug_only=true
+remote_audio_publish_liveness_repair_requires_livekit_join_success=true
+remote_audio_publish_liveness_repair_classifies_publish_not_requested=true
+remote_audio_publish_liveness_repair_classifies_publish_success=true
+remote_audio_publish_liveness_repair_classifies_publish_failure=true
+remote_audio_publish_liveness_repair_classifies_simulator_peer=true
+remote_audio_publish_liveness_repair_classifies_remote_missing=true
+remote_audio_publish_liveness_repair_classifies_remote_track_missing=true
+remote_audio_publish_liveness_repair_classifies_liveness_observed=true
+remote_audio_publish_liveness_repair_no_video=true
+remote_audio_publish_liveness_repair_no_matrix_events=true
+remote_audio_publish_liveness_repair_raw_identifiers_logged=false
+```
+
+After successful LiveKit audio join, the current receive-only bridge now classifies local publish explicitly:
+
+```text
 local_audio_publish_requested=false
 local_audio_publish_started=false
-local_audio_publish_result=not_requested
-microphone_permission_requested=false
-microphone_permission_result=not_requested_or_not_required_redacted
-microphone_permission_not_required_reason=receive_only_audio_session_redacted
-audio_route_available=false
-audio_route_result=not_observed_redacted
-livekit_remote_participant_seen=false
-livekit_remote_participant_count_bucket=0
-livekit_remote_audio_track_subscribed=false
-livekit_remote_audio_track_unmuted=false
-livekit_remote_audio_level_observed=false
-livekit_audio_liveness_observed=false
-livekit_audio_liveness_result=not_observed_redacted
-livekit_audio_liveness_error_bucket=none
-livekit_cleanup_requested=true
-livekit_cleanup_completed=true
-livekit_cleanup_result=completed_redacted
+local_audio_publish_result=not_required_redacted
+local_audio_publish_not_required_reason=receive_only_audio_connect_redacted
 ```
 
-Safety stayed closed:
+If LiveKit join is not successful, publish/liveness now fail closed:
+
+```text
+local_audio_publish_result=blocked_redacted
+local_audio_publish_error_bucket=livekit_join_not_success_redacted
+livekit_audio_liveness_result=not_observed_redacted
+livekit_audio_liveness_error_bucket=livekit_join_not_success_redacted
+```
+
+Remote peer and limitation fields are available:
+
+```text
+remote_peer_kind=<ios_simulator_redacted_or_physical_ios_redacted_or_unknown_redacted>
+remote_peer_physical_device=<true_or_false_or_unknown>
+simulator_assisted_remote_audio_proof=<true_or_false>
+production_like_two_physical_device_proof=<true_or_false>
+remote_audio_liveness_limitation=<simulator_assisted_redacted_or_redacted_bucket>
+```
+
+Remote liveness not-observed buckets now distinguish:
+
+```text
+livekit_audio_liveness_error_bucket=remote_participant_missing_redacted
+livekit_audio_liveness_error_bucket=remote_audio_track_missing_redacted
+```
+
+Safety remains:
 
 ```text
 camera_permission_requested=false
 matrix_event_emit_requested=false
 real_call_flow_started=false
-blocked_reason=none
+controlled_connect_first_attempt_repeated=false
+media_credentials_reuse_allowed=false
 ```
 
 ## Next Phase
 
-`2.48Y-RemoteAudioPublishLivenessRepair — fix local publish and simulator remote liveness observability before any APNs retry`
+`2.48Y-Physical2 — one-shot simulator-assisted remote audio/liveness proof`
 
-This is a code/test diagnostics and repair phase only.
+This is a single physical proof attempt only after fresh preflight and explicit confirmation. It is not a repeated-connect phase and it is not a production-like two-physical-device proof.
 
-Do not send APNs in this phase.
-Do not perform another physical connect in this phase.
-Do not re-arm the one-shot hook in this phase.
-
-## Goal
-
-Investigate and fix why the one-shot proof reached LiveKit join success but still recorded:
+If a true second physical iOS device becomes available instead, classify:
 
 ```text
-local_audio_publish_requested=false
-audio_route_available=false
-livekit_remote_participant_seen=false
-livekit_remote_audio_track_subscribed=false
-livekit_audio_liveness_result=not_observed_redacted
+remote_peer_kind=physical_ios_redacted
+remote_peer_physical_device=true
+simulator_assisted_remote_audio_proof=false
+production_like_two_physical_device_proof=true
 ```
 
-The repair should make a future simulator-backed or true-second-device proof able to distinguish:
+If the simulator is used, classify:
 
 ```text
-local publish not wired
-local publish intentionally receive-only
-simulator peer not actually joined
-remote participant missing
-remote audio track missing
-remote audio muted
-remote level/liveness not observed
-cleanup completed
+remote_peer_kind=ios_simulator_redacted
+remote_peer_physical_device=false
+simulator_assisted_remote_audio_proof=true
+production_like_two_physical_device_proof=false
+remote_audio_liveness_limitation=simulator_assisted_redacted
 ```
 
-Do not fake remote liveness success.
+Do not fake remote audio/liveness success.
 
 ## Hard Limits
 
 Do not:
 
-- send APNs
-- run production APNs
-- send repeated APNs
 - run `dev/invite`
-- perform physical media connect
-- perform physical LiveKit join
-- retry connect
-- retry LiveKit join
+- run production APNs
+- send repeated APNs after one successful sandbox APNs send
+- perform more than one media-connect attempt
+- perform more than one LiveKit join attempt per controlled path
 - enable video
 - request camera permission
 - emit Matrix events
 - start full direct-call flow
-- reset or re-arm the consumed one-shot hook
-- bypass CallKit Answer
-- log or document raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer user ID/user ID/device ID
+- retry media connect after the first result
+- retry LiveKit join after the first result
+- log/document raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer user ID/user ID/device ID
 - modify `SalemX.xcodeproj/project.pbxproj`
 - modify `app.yml`
 - modify `.entitlements`
 - modify `Info.plist`
 
-Allowed:
+Allowed in this phase only:
 
-- Minimal Swift diagnostics/repair code.
-- Minimal simulator/test-controlled liveness seams.
-- Targeted DirectCall tests.
-- Docs updates:
-  - `docs/direct-call/STATUS.md`
-  - `docs/direct-call/WORKLOG.md`
-  - `docs/direct-call/NEXT_CODEX_PROMPT.md`
+```text
+one DEBUG-only enablement hook activation
+one sandbox APNs send
+one green Answer
+one pending metadata fetch
+one media credentials request
+one controlled audio-only media connect attempt
+one LiveKit audio connect/join attempt
+remote audio/liveness observation
+microphone permission request only if required for audio
+```
+
+Forbidden even in this phase:
+
+```text
+camera_permission_requested=true
+matrix_event_emit_requested=true
+real_call_flow_started=true
+controlled_connect_first_attempt_repeated=true
+repeated_apns=true
+repeated_connect_attempt=true
+video_enabled=true
+```
+
+## Required Proof Fields
+
+Use phase-specific proof path:
+
+```text
+/tmp/salemx-voip-push-receipt-proof-2.48y-physical2-remote-audio-liveness-polled.txt
+```
+
+Require:
+
+```text
+proof_generation
+physical_voip_push_received=true
+pushkit_callback_invoked=true
+callkit_report_result=reported
+callkit_answer_action_received=true
+pending_metadata_fetch_result=success_redacted
+media_credentials_result=success_redacted
+controlled_connect_first_attempt_result=<success_or_blocked_redacted>
+controlled_connect_first_attempt_repeated=false
+physical6_runtime_enablement_url_hook_consumed=true
+remote_audio_publish_liveness_repair_present=true
+livekit_join_result=<success_redacted_or_failed_redacted_or_not_requested>
+local_audio_publish_result=<success_redacted_or_failed_redacted_or_not_required_redacted_or_blocked_redacted>
+local_audio_publish_not_required_reason=<redacted_bucket_or_none>
+remote_peer_kind=<ios_simulator_redacted_or_physical_ios_redacted_or_unknown_redacted>
+remote_peer_physical_device=<true_or_false_or_unknown>
+simulator_assisted_remote_audio_proof=<true_or_false>
+production_like_two_physical_device_proof=<true_or_false>
+remote_audio_liveness_limitation=<redacted_bucket_or_none>
+livekit_remote_participant_seen=<true_or_false>
+livekit_remote_audio_track_subscribed=<true_or_false>
+livekit_remote_audio_track_unmuted=<true_or_false>
+livekit_audio_liveness_result=<success_redacted_or_not_observed_redacted>
+livekit_audio_liveness_error_bucket=<none_or_redacted_bucket>
+livekit_cleanup_result=<completed_redacted_or_not_completed_redacted_or_not_requested>
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
 
 ## Required Checks Before Commit
 
 Run:
 
 ```bash
-swiftformat <changed Swift files>
-swiftlint lint <changed Swift files>
-DIRECT_CALL_ONLY_TESTING='UnitTests/DirectCallEngineTests UnitTests/NativeIncomingCallLifecycleContractTests' Tools/Scripts/verify_direct_call_unit.sh
 git diff --check
 git diff --cached --check
 git diff --name-only | grep -E 'SalemX.xcodeproj/project.pbxproj|app.yml|\.entitlements|Info.plist' && exit 1 || true
 git diff --cached --name-only | grep -E 'SalemX.xcodeproj/project.pbxproj|app.yml|\.entitlements|Info.plist' && exit 1 || true
 ```
 
-Privacy scan changed files/diff for raw sensitive values. Allowed hits are field names, redacted labels, negative statements, synthetic test values, and stable hashes only.
+Privacy scan changed docs/diff for raw sensitive values. Allowed hits are field names, redacted labels, negative statements, synthetic test values, and stable hashes only.
 
 ## Expected Output
 
 Return:
 
-- implementation summary
-- whether local publish is now explicitly classified
-- whether audio route is now explicitly classified
-- whether simulator-backed remote peer readiness is explicit
-- whether remote participant/audio track/liveness not-observed cases are explicit
-- whether cleanup remains explicit
-- whether default runtime remains no-connect
-- commit hash
+- whether remote audio/liveness proof succeeded or was safely classified
+- proof generation number
+- CallKit report result
+- pending metadata result
+- media credentials result
+- first attempt result bucket
+- LiveKit join result
+- local audio publish result and not-required reason if present
+- remote peer kind / simulator limitation classification
+- remote participant/audio track/liveness result
+- cleanup result
+- whether camera permission remained false
+- whether Matrix event emit remained false
+- whether full call flow remained false
+- whether first attempt repeated=false
+- whether hook was consumed
+- commit hash if docs were updated
 - commit message
 - changed files
 - checks run
 - final `git status --short --branch`
-- explicit statement that no APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, repeated connect, video, camera permission, Matrix event emit, or full call flow were performed
+- explicit statement that no repeated APNs, production APNs, `dev/invite`, repeated connect, repeated LiveKit join, video, camera permission, Matrix event emit, or full call flow were performed

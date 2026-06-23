@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Y — one-shot remote audio/liveness physical proof was safely classified. One sandbox APNs reached PushKit, one CallKit Answer was received, pending metadata and media credentials succeeded, and one controlled audio-only LiveKit join succeeded. The second-device path used the simulator and remote participant/audio/liveness was not observed; no retry was performed. Video stayed disabled, camera permission stayed false, Matrix events were not emitted, and full call flow did not start. The next phase is `2.48Y-RemoteAudioPublishLivenessRepair — fix local publish and simulator remote liveness observability before any APNs retry`.
+After 2.48Y-RemoteAudioPublishLivenessRepair — local publish and remote liveness proof classification was repaired without APNs/connect. The DEBUG proof now distinguishes receive-only local publish, join-blocked publish/liveness, simulator-assisted peer limitation, physical peer readiness, remote participant missing, remote audio track missing, liveness observed, and liveness not observed. Default runtime remains no-connect. The next phase is `2.48Y-Physical2 — one-shot simulator-assisted remote audio/liveness proof`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,59 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48Y-RemoteAudioPublishLivenessRepair classifies local publish and remote liveness without APNs/connect:
+  - This was a code/test repair phase only. It did not send APNs, run production APNs, repeat APNs, use `dev/invite`, perform a physical media connect, join LiveKit on device, request microphone/camera permission on device, emit Matrix events, reset or re-arm the one-shot hook, or start full call flow.
+  - The proof now emits the repair guard fields:
+    ```text
+    remote_audio_publish_liveness_repair_present=true
+    remote_audio_publish_liveness_repair_debug_only=true
+    remote_audio_publish_liveness_repair_requires_livekit_join_success=true
+    remote_audio_publish_liveness_repair_classifies_publish_not_requested=true
+    remote_audio_publish_liveness_repair_classifies_publish_success=true
+    remote_audio_publish_liveness_repair_classifies_publish_failure=true
+    remote_audio_publish_liveness_repair_classifies_simulator_peer=true
+    remote_audio_publish_liveness_repair_classifies_remote_missing=true
+    remote_audio_publish_liveness_repair_classifies_remote_track_missing=true
+    remote_audio_publish_liveness_repair_classifies_liveness_observed=true
+    remote_audio_publish_liveness_repair_no_video=true
+    remote_audio_publish_liveness_repair_no_matrix_events=true
+    remote_audio_publish_liveness_repair_raw_identifiers_logged=false
+    ```
+  - After a successful LiveKit audio join, the current receive-only bridge no longer leaves local publish as generic `not_requested`; it classifies the condition explicitly:
+    ```text
+    local_audio_publish_requested=false
+    local_audio_publish_result=not_required_redacted
+    local_audio_publish_not_required_reason=receive_only_audio_connect_redacted
+    ```
+  - If LiveKit join is not successful, local publish and liveness are now blocked with redacted buckets rather than ambiguous not-requested state:
+    ```text
+    local_audio_publish_result=blocked_redacted
+    local_audio_publish_error_bucket=livekit_join_not_success_redacted
+    livekit_audio_liveness_result=not_observed_redacted
+    livekit_audio_liveness_error_bucket=livekit_join_not_success_redacted
+    ```
+  - Remote peer type and simulator limitation are classified:
+    ```text
+    remote_peer_kind=<ios_simulator_redacted_or_physical_ios_redacted_or_unknown_redacted>
+    remote_peer_physical_device=<true_or_false_or_unknown>
+    simulator_assisted_remote_audio_proof=<true_or_false>
+    production_like_two_physical_device_proof=<true_or_false>
+    remote_audio_liveness_limitation=<simulator_assisted_redacted_or_redacted_bucket>
+    ```
+  - Remote liveness failure buckets distinguish missing participant from missing audio track:
+    ```text
+    livekit_audio_liveness_error_bucket=remote_participant_missing_redacted
+    livekit_audio_liveness_error_bucket=remote_audio_track_missing_redacted
+    ```
+  - Safety defaults remain preserved:
+    ```text
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    controlled_connect_first_attempt_repeated=false
+    media_credentials_reuse_allowed=false
+    ```
+  - Next phase: `2.48Y-Physical2 — one-shot simulator-assisted remote audio/liveness proof`.
 - 2.48Y one-shot remote audio/liveness physical proof is safely classified:
   - Phase-specific proof path: `/tmp/salemx-voip-push-receipt-proof-2.48y-remote-audio-liveness-polled.txt`.
   - Classification: `2.48Y = one-shot remote audio/liveness physical proof classified safely`.
