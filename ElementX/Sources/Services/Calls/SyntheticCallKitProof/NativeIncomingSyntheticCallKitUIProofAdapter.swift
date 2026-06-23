@@ -3842,6 +3842,12 @@ private struct SalemXRemotePeerContextHandoff {
                                                                simulatorAssisted: true,
                                                                readiness: "ready_redacted",
                                                                armedBeforeAPNs: true)
+    static let physicalIOSReady = SalemXRemotePeerContextHandoff(source: "debug_hook_redacted",
+                                                                 peerKind: "physical_ios_redacted",
+                                                                 physicalDevice: "true",
+                                                                 simulatorAssisted: false,
+                                                                 readiness: "ready_redacted",
+                                                                 armedBeforeAPNs: true)
 
     let source: String
     let peerKind: String
@@ -3946,7 +3952,13 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         }
 
         if url.path == remotePeerContextHandoffURLHookPath {
-            armSimulatorRemotePeerContextHandoffURLHook()
+            let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            let peerKind = components?.queryItems?.first { $0.name == "peer_kind" || $0.name == "remote_peer_kind" }?.value ?? ""
+            if peerKind == "physical_ios" || peerKind == "physical_ios_redacted" {
+                armPhysicalIOSRemotePeerContextHandoffURLHook()
+            } else {
+                armSimulatorRemotePeerContextHandoffURLHook()
+            }
             return true
         }
 
@@ -3975,10 +3987,18 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     }
 
     private static func armSimulatorRemotePeerContextHandoffURLHook() {
+        armRemotePeerContextHandoffURLHook(.simulatorReady)
+    }
+
+    private static func armPhysicalIOSRemotePeerContextHandoffURLHook() {
+        armRemotePeerContextHandoffURLHook(.physicalIOSReady)
+    }
+
+    private static func armRemotePeerContextHandoffURLHook(_ context: SalemXRemotePeerContextHandoff) {
         lock.lock()
-        pendingRemotePeerContextHandoff = .simulatorReady
+        pendingRemotePeerContextHandoff = context
         var summary = latestVoIPPushReceiptSummary
-        summary.recordRemotePeerContextHandoff(.simulatorReady,
+        summary.recordRemotePeerContextHandoff(context,
                                                receivedByRuntime: false,
                                                survivedPushKit: false,
                                                survivedAnswer: false)
