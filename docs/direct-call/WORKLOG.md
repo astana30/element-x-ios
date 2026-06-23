@@ -4,7 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
-- Closed 2.48Z-Physical1 as safely classified: one sandbox APNs, PushKit, CallKit Answer, pending metadata, media credentials, one controlled audio-only connect, and LiveKit join succeeded on the two-physical-device path, but remote participant/audio/liveness was not observed; no retry was performed.
+- Closed 2.48Z-Physical1-RemoteParticipantMissingTriage as safely classified, not remote-audio success: one sandbox APNs, PushKit, CallKit Answer, pending metadata, media credentials, one controlled audio-only connect, and LiveKit join succeeded on the two-physical-device path, but remote participant/audio/liveness was not observed; no retry was performed.
 - Added 2.48X-RemoteAudioLivenessDiagnostics: the DEBUG proof now emits redacted fields for LiveKit join result, local audio publish, microphone requested/not-required classification, audio route availability, remote participant/audio track/liveness observation, and LiveKit/audio cleanup while preserving default no-connect, one-shot, no-video, no-camera, no-Matrix, no-full-flow safety.
 - Closed 2.48X as a docs-only second-device remote audio/liveness readiness review: Physical8 generation 14 proves one successful controlled audio-only connect and preserved one-shot/no-repeat/no-video/no-Matrix/full-flow safety, but explicit LiveKit join result, room state, local publish, remote participant/audio track, audio liveness, microphone-result, audio-route, and Physical8 disconnect-cleanup diagnostics are missing; next is targeted no-APNs/no-connect diagnostics.
 - Added 2.48W-DisconnectCleanupDiagnostics: redacted DEBUG proof fields now classify provider/local cleanup without expected CallKit End action, require delivery/fulfillment/matching/timing when an End action is expected, preserve audio-session deactivation and non-reusable credentials, and keep default runtime no-connect.
@@ -7466,9 +7466,9 @@ No APNs, no production APNs, no repeated APNs, no `dev/invite`, no connect, no L
 
 Next phase: `2.48Z-Physical1 — one-shot two-physical-device remote audio/liveness proof`.
 
-## 2026-06-23 — 2.48Z-Physical1
+## 2026-06-23 — 2.48Z-Physical1-RemoteParticipantMissingTriage
 
-Ran the first one-shot two-physical-device remote audio/liveness proof and safely classified the result.
+Ran the first one-shot two-physical-device remote audio/liveness proof and safely classified the result as not remote-audio success.
 
 Preflight and send:
 
@@ -7584,7 +7584,7 @@ blocked_reason=none
 Conclusion:
 
 ```text
-2.48Z-Physical1 = two-physical-device remote audio/liveness proof safely classified
+2.48Z-Physical1 = two-physical-device remote audio/liveness safely classified, not remote-audio success
 first controlled audio connect attempted
 LiveKit join result=success_redacted
 remote audio/liveness result=not_observed_redacted
@@ -7594,4 +7594,4 @@ no retry performed
 
 No repeated APNs, no production APNs, no `dev/invite`, no repeated connect, no repeated LiveKit join, no video, no camera permission, no Matrix event emit, no full call flow, and no project/signing changes were performed.
 
-Next phase: `2.48Z-RemoteParticipantDiagnostics — diagnose missing physical remote participant, no APNs/connect retry`.
+Next phase: `2.48Z-RemoteParticipantPresenceRepair — enable/classify second physical device LiveKit participant presence, no APNs/connect`.

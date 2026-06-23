@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-Physical1 — the first two-physical-device remote audio/liveness proof is safely classified. One sandbox APNs was sent after explicit confirmation, PushKit and CallKit Answer succeeded, pending metadata and media credentials succeeded, and one controlled audio-only media connect/LiveKit join completed. Remote audio/liveness was not observed because no remote participant was seen. No retry was performed. The next phase is `2.48Z-RemoteParticipantDiagnostics — diagnose missing physical remote participant, no APNs/connect retry`.
+After 2.48Z-Physical1-RemoteParticipantMissingTriage — the first two-physical-device remote audio/liveness proof is safely classified, not remote-audio success. One sandbox APNs was sent after explicit confirmation, PushKit and CallKit Answer succeeded, pending metadata and media credentials succeeded, and one controlled audio-only media connect/LiveKit join completed. Remote audio/liveness was not observed because no remote participant was seen. No retry was performed. The next phase is `2.48Z-RemoteParticipantPresenceRepair — enable/classify second physical device LiveKit participant presence, no APNs/connect`.
 
 ## Latest App Code Checkpoint
 
@@ -39,7 +39,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
-- 2.48Z-Physical1 safely classifies the first two-physical-device remote audio/liveness proof:
+- 2.48Z-Physical1-RemoteParticipantMissingTriage safely classifies the first two-physical-device remote audio/liveness proof:
   - This was a one-shot two-physical-device proof with iPhone PRO as the receiver and the second physical iPhone as the remote peer context. Exactly one sandbox APNs was sent after explicit `SEND_2_48Z_PHYSICAL1` confirmation; no APNs retry, connect retry, or LiveKit retry was performed.
   - APNs and PushKit/CallKit path:
     ```text
@@ -132,14 +132,14 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
     ```
   - Conclusion:
     ```text
-    2.48Z-Physical1 = two-physical-device remote audio/liveness proof safely classified
+    2.48Z-Physical1 = two-physical-device remote audio/liveness safely classified, not remote-audio success
     first controlled audio connect attempted
     LiveKit join result=success_redacted
     remote audio/liveness result=not_observed_redacted
     remote liveness blocker=remote_participant_missing_redacted
     no retry performed
     ```
-  - Next phase: `2.48Z-RemoteParticipantDiagnostics — diagnose missing physical remote participant, no APNs/connect retry`.
+  - Next phase: `2.48Z-RemoteParticipantPresenceRepair — enable/classify second physical device LiveKit participant presence, no APNs/connect`.
 - 2.48Z-SecondPhysicalDeviceSetup prepares the second physical iPhone remote peer:
   - This was a setup/readiness phase only. It did not send APNs, run production APNs, repeat APNs, use `dev/invite`, start media connect, join LiveKit, request microphone/camera permission, enable video, emit Matrix events, start full call flow, reset/re-arm the one-shot hook, or perform another physical call attempt.
   - Physical device setup:

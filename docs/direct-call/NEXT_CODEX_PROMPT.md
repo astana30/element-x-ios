@@ -13,12 +13,12 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48Z-Physical1` is complete and safely classified.
+`2.48Z-Physical1-RemoteParticipantMissingTriage` is complete and safely classified, not remote-audio success.
 
 Conclusion:
 
 ```text
-2.48Z-Physical1 = two-physical-device remote audio/liveness proof safely classified
+2.48Z-Physical1 = two-physical-device remote audio/liveness safely classified, not remote-audio success
 first controlled audio connect attempted
 LiveKit join result=success_redacted
 remote audio/liveness result=not_observed_redacted
@@ -123,13 +123,13 @@ No repeated APNs, no production APNs, no `dev/invite`, no repeated connect, no r
 
 ## Next Phase
 
-`2.48Z-RemoteParticipantDiagnostics — diagnose missing physical remote participant, no APNs/connect retry`
+`2.48Z-RemoteParticipantPresenceRepair — enable/classify second physical device LiveKit participant presence, no APNs/connect`
 
 This phase is diagnostics/planning only unless a narrow code-level diagnostic repair is required. Do not run another physical APNs or connect attempt.
 
 ## Goal
 
-Explain why `2.48Z-Physical1` reached a successful receiver-side LiveKit join but did not observe the second physical device as a remote participant.
+Explain why `2.48Z-Physical1` reached a successful receiver-side LiveKit join but did not observe the second physical device as a remote participant, then design the narrow boundary needed to enable/classify second-device participant presence without an APNs/connect retry.
 
 Investigate only local code/docs/log-safe artifacts and existing redacted proof fields. Focus likely areas:
 
@@ -140,6 +140,8 @@ receive-only connect path did not publish local audio and did not require microp
 LiveKit room/token participant identity expectations
 server invite/credentials path creates receiver credentials only
 missing caller-side controlled join trigger
+DEBUG-only second-device remote peer join hook
+same LiveKit room/token allocation verification
 ```
 
 Required diagnostic questions:
