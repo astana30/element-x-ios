@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Repaired the 2.48T-Physical6 Answer -> metadata/credentials boundary so real CallKit Answer triggers pending metadata handling, metadata success permits credentials, hook consumption stays after credentials, and default runtime remains no-connect.
 - Closed 2.48T-Physical6 as answered / metadata-credentials boundary blocked / no-connect triage: one sandbox APNs, PushKit received, CallKit report completed, Answer received/fulfilled, pending metadata and credentials not requested, and no media connect.
 - Added the 2.48T-Physical6 DEBUG-only one-shot physical connect enablement URL hook, default-disabled and audio-only, with no APNs or physical media connect performed.
 - Closed 2.48T-Physical5 as a successful physical CallKit surface/Answer proof: one sandbox APNs, PushKit received, CallKit report completed, PushKit completion called, Answer action delivered/received/fulfilled, and no media connect.
@@ -113,6 +114,61 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48T-Physical6-MetadataCredentialsBoundaryRepair — Answer to Metadata/Credentials Boundary
+
+Implemented the minimal DEBUG proof/runtime repair for the Physical6 answered no-connect triage. The repair makes the Answer path advance to the pending metadata boundary after real CallKit Answer, without sending APNs or starting media.
+
+After Answer, the boundary now records the handoff/fetch trigger:
+
+```text
+foreground_pending_call_metadata_handoff_requested=true
+foreground_pending_call_metadata_handoff_observed=true
+pending_metadata_fetch_requested=true
+```
+
+If the real invite lacks a usable pending metadata reference after Answer, the proof now classifies that state precisely and keeps credentials/connect closed:
+
+```text
+pending_metadata_fetch_result=blocked_redacted
+pending_metadata_fetch_failure_reason=missing_reference_after_answer
+media_credentials_requested=false
+media_credentials_result=blocked_redacted
+blocked_reason=pending_metadata_missing_after_answer_no_credentials
+```
+
+If pending metadata succeeds, the credentials boundary is reachable:
+
+```text
+pending_metadata_fetch_result=success_redacted
+pending_metadata_fetch_http_status_bucket=2xx
+pending_metadata_fetch_errcode=none
+media_credentials_request_planned=true
+media_credentials_requested=true
+media_credentials_request_authorized=true
+```
+
+Added redacted proof fields for the repair:
+
+```text
+metadata_credentials_boundary_repair_present=true
+metadata_credentials_boundary_repair_debug_only=true
+metadata_credentials_boundary_repair_requires_answer=true
+metadata_credentials_boundary_repair_blocks_without_answer=true
+metadata_credentials_boundary_repair_triggers_metadata_after_answer=true
+metadata_credentials_boundary_repair_triggers_credentials_after_metadata=true
+metadata_credentials_boundary_repair_blocks_connect_until_credentials=true
+metadata_credentials_boundary_repair_does_not_consume_hook_before_credentials=true
+metadata_credentials_boundary_repair_allows_hook_consumption_after_credentials=<credentials-dependent>
+metadata_credentials_boundary_repair_no_direct_connect_bypass=true
+metadata_credentials_boundary_repair_raw_credentials_logged=false
+```
+
+Focused tests/source guards cover no metadata/credentials/connect before Answer, Answer-triggered metadata handoff/fetch, metadata success permitting credentials, metadata failure blocking credentials/connect, hook consumption staying after credentials eligibility, one-shot hook consumption, default no-connect behavior, camera/Matrix/video/full-flow closure, and raw credential/identifier log guards.
+
+Next phase: `2.48T-Physical7 — one-shot Answer -> metadata/credentials -> first controlled audio-connect physical attempt`.
+
+No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, real LiveKit join, microphone/camera permission on device, Matrix event emission, video, full direct-call flow, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 
 ### 2.48T-Physical6-MetadataCredentialsBoundaryTriage — Answered No-Connect Triage
 

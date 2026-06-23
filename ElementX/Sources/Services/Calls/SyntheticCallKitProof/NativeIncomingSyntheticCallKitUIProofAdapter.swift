@@ -1568,6 +1568,17 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var callKitSurfaceRepairBlocksMetadataWithoutAnswer = true
     var callKitSurfaceRepairNoDirectAnswerBypass = true
     var callKitSurfaceRepairNoMediaConnectOnNoAnswer = true
+    var metadataCredentialsBoundaryRepairPresent = true
+    var metadataCredentialsBoundaryRepairDebugOnly = true
+    var metadataCredentialsBoundaryRepairRequiresAnswer = true
+    var metadataCredentialsBoundaryRepairBlocksWithoutAnswer = true
+    var metadataCredentialsBoundaryRepairTriggersMetadataAfterAnswer = true
+    var metadataCredentialsBoundaryRepairTriggersCredentialsAfterMetadata = true
+    var metadataCredentialsBoundaryRepairBlocksConnectUntilCredentials = true
+    var metadataCredentialsBoundaryRepairDoesNotConsumeHookBeforeCredentials = true
+    var metadataCredentialsBoundaryRepairAllowsHookConsumptionAfterCredentials = false
+    var metadataCredentialsBoundaryRepairNoDirectConnectBypass = true
+    var metadataCredentialsBoundaryRepairRawCredentialsLogged = false
     var pushKitCompletionAnswerableWindowRequested = false
     var pushKitCompletionAnswerableWindowResult = "not_requested"
     var pushKitCompletionAnswerableWindowDurationBucket = "not_requested"
@@ -1894,6 +1905,17 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "callkit_surface_repair_blocks_metadata_without_answer=\(callKitSurfaceRepairBlocksMetadataWithoutAnswer)",
             "callkit_surface_repair_no_direct_answer_bypass=\(callKitSurfaceRepairNoDirectAnswerBypass)",
             "callkit_surface_repair_no_media_connect_on_no_answer=\(callKitSurfaceRepairNoMediaConnectOnNoAnswer)",
+            "metadata_credentials_boundary_repair_present=\(metadataCredentialsBoundaryRepairPresent)",
+            "metadata_credentials_boundary_repair_debug_only=\(metadataCredentialsBoundaryRepairDebugOnly)",
+            "metadata_credentials_boundary_repair_requires_answer=\(metadataCredentialsBoundaryRepairRequiresAnswer)",
+            "metadata_credentials_boundary_repair_blocks_without_answer=\(metadataCredentialsBoundaryRepairBlocksWithoutAnswer)",
+            "metadata_credentials_boundary_repair_triggers_metadata_after_answer=\(metadataCredentialsBoundaryRepairTriggersMetadataAfterAnswer)",
+            "metadata_credentials_boundary_repair_triggers_credentials_after_metadata=\(metadataCredentialsBoundaryRepairTriggersCredentialsAfterMetadata)",
+            "metadata_credentials_boundary_repair_blocks_connect_until_credentials=\(metadataCredentialsBoundaryRepairBlocksConnectUntilCredentials)",
+            "metadata_credentials_boundary_repair_does_not_consume_hook_before_credentials=\(metadataCredentialsBoundaryRepairDoesNotConsumeHookBeforeCredentials)",
+            "metadata_credentials_boundary_repair_allows_hook_consumption_after_credentials=\(metadataCredentialsBoundaryRepairAllowsHookConsumptionAfterCredentials)",
+            "metadata_credentials_boundary_repair_no_direct_connect_bypass=\(metadataCredentialsBoundaryRepairNoDirectConnectBypass)",
+            "metadata_credentials_boundary_repair_raw_credentials_logged=\(metadataCredentialsBoundaryRepairRawCredentialsLogged)",
             "pushkit_completion_answerable_window_requested=\(pushKitCompletionAnswerableWindowRequested)",
             "pushkit_completion_answerable_window_result=\(pushKitCompletionAnswerableWindowResult)",
             "pushkit_completion_answerable_window_duration_bucket=\(pushKitCompletionAnswerableWindowDurationBucket)",
@@ -2178,6 +2200,61 @@ private struct SalemXVoIPPushReceiptProofSummary {
 }
 
 private extension SalemXVoIPPushReceiptProofSummary {
+    mutating func recordMetadataCredentialsBoundaryRepairProof(allowsHookConsumptionAfterCredentials: Bool = false) {
+        metadataCredentialsBoundaryRepairPresent = true
+        metadataCredentialsBoundaryRepairDebugOnly = true
+        metadataCredentialsBoundaryRepairRequiresAnswer = true
+        metadataCredentialsBoundaryRepairBlocksWithoutAnswer = true
+        metadataCredentialsBoundaryRepairTriggersMetadataAfterAnswer = true
+        metadataCredentialsBoundaryRepairTriggersCredentialsAfterMetadata = true
+        metadataCredentialsBoundaryRepairBlocksConnectUntilCredentials = true
+        metadataCredentialsBoundaryRepairDoesNotConsumeHookBeforeCredentials = true
+        metadataCredentialsBoundaryRepairAllowsHookConsumptionAfterCredentials = allowsHookConsumptionAfterCredentials
+        metadataCredentialsBoundaryRepairNoDirectConnectBypass = true
+        metadataCredentialsBoundaryRepairRawCredentialsLogged = false
+    }
+
+    mutating func recordAnswerTriggeredPendingMetadataBoundary(source: String) {
+        recordMetadataCredentialsBoundaryRepairProof()
+        pendingMetadataFetchRequired = true
+        foregroundPendingCallMetadataHandoffRequested = true
+        foregroundPendingCallMetadataHandoffObserved = true
+        foregroundPendingCallMetadataSource = source
+        foregroundPendingCallMetadataPayloadRedacted = true
+        foregroundPendingCallMetadataHasCallIdentifier = false
+        foregroundPendingCallMetadataHasRoomBinding = false
+        foregroundPendingCallMetadataHasPeer = false
+        foregroundPendingCallMetadataDirection = "none"
+        foregroundPendingCallMetadataIntent = "pending_metadata_fetch"
+        mediaCredentialsRequestMetadataAvailable = false
+        mediaCredentialsRequestMetadataRedacted = true
+        mediaCredentialsRequestMetadataSource = source
+        mediaCredentialsBoundaryReached = true
+        mediaCredentialsRequestPlanned = false
+        mediaCredentialsRequested = false
+        mediaCredentialsRequestAuthorized = false
+        mediaCredentialsResult = "blocked_redacted"
+        mediaCredentialsTokenReceived = false
+        mediaCredentialsTokenRedacted = true
+        mediaCredentialsURLReceived = false
+        mediaCredentialsURLRedacted = true
+        mediaCredentialsExpiresAtPresent = false
+        mediaCredentialsPayloadRedacted = true
+        mediaCredentialsLocalPersistenceRequested = false
+        mediaCredentialsCleanupRequested = false
+        mediaCredentialsCleanupResult = "not_requested"
+        mediaCredentialsPostCleanupTokenPresent = false
+        mediaCredentialsPostCleanupURLPresent = false
+        mediaCredentialsPostCleanupExpiresAtPresent = false
+        mediaCredentialsPostCleanupPayloadPresent = false
+        mediaCredentialsReuseAttempted = false
+        mediaCredentialsReuseAllowed = false
+        mediaCredentialsExpiryReferencePresent = false
+        mediaCredentialsExpiryCheckRequested = false
+        mediaCredentialsExpiryCheckResult = "not_requested"
+        recordControlledAudioConnectFirstAttemptProof(.defaultDisabled)
+    }
+
     mutating func recordControlledMediaCredentialsRequestBoundaryNotReady() {
         foregroundPendingCallMetadataHandoffRequested = true
         foregroundPendingCallMetadataHandoffObserved = false
@@ -2215,6 +2292,19 @@ private extension SalemXVoIPPushReceiptProofSummary {
         mediaCredentialsExpiryCheckRequested = false
         mediaCredentialsExpiryCheckResult = "not_requested"
         blockedReason = "media_credentials_request_boundary_not_ready"
+    }
+
+    mutating func recordMetadataCredentialsBoundaryMissingAfterAnswer(physical6RuntimeEnablementHook: SalemXPhysical6RuntimeEnablementURLHook) {
+        recordAnswerTriggeredPendingMetadataBoundary(source: "callkit_answer_pending_metadata_missing_reference")
+        pendingMetadataFetchRequested = true
+        pendingMetadataFetchAuthorized = false
+        pendingMetadataFetchResult = "blocked_redacted"
+        pendingMetadataFetchHTTPStatusBucket = "not_requested"
+        pendingMetadataFetchErrcode = "none"
+        pendingMetadataFetchFailureReason = "missing_reference_after_answer"
+        pendingMetadataPayloadRedacted = true
+        recordPhysical6RuntimeEnablementURLHook(physical6RuntimeEnablementHook)
+        blockedReason = "pending_metadata_missing_after_answer_no_credentials"
     }
 
     mutating func recordForegroundPendingCallMetadataHandoff(session: DirectCallSession, source: String) {
@@ -2260,6 +2350,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
     }
 
     mutating func recordPendingMetadataFetchRequested() {
+        recordAnswerTriggeredPendingMetadataBoundary(source: "callkit_answer_pending_metadata_fetch")
         pendingMetadataFetchRequested = true
         pendingMetadataFetchAuthorized = false
         pendingMetadataFetchResult = "requested"
@@ -2271,6 +2362,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
     }
 
     mutating func recordAuthenticatedPendingMetadataFetch(session: DirectCallSession) {
+        recordMetadataCredentialsBoundaryRepairProof()
         pendingMetadataFetchRequested = true
         pendingMetadataFetchAuthorized = true
         pendingMetadataFetchResult = "success_redacted"
@@ -2280,6 +2372,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         pendingMetadataPayloadRedacted = true
         recordForegroundPendingCallMetadataHandoff(session: session, source: "authenticated_pending_metadata_fetch")
         mediaCredentialsResult = "blocked_redacted"
+        mediaCredentialsRequestPlanned = true
         mediaCredentialsRequested = false
         mediaCredentialsRequestAuthorized = false
         mediaCredentialsTokenReceived = false
@@ -2294,6 +2387,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
                                                                  httpStatusBucket: String = "unknown",
                                                                  errcode: String = "none",
                                                                  failureReason: String = "unknown") {
+        recordMetadataCredentialsBoundaryRepairProof()
         pendingMetadataFetchRequested = true
         pendingMetadataFetchAuthorized = authorized
         pendingMetadataFetchResult = "blocked_redacted"
@@ -2325,6 +2419,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         mediaCredentialsExpiryReferencePresent = false
         mediaCredentialsExpiryCheckRequested = false
         mediaCredentialsExpiryCheckResult = "not_requested"
+        recordControlledAudioConnectFirstAttemptProof(.defaultDisabled)
         blockedReason = reason
     }
 
@@ -2349,6 +2444,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
                                                           diagnostics: DirectCallDiagnosticSnapshot = .empty,
                                                           physical6RuntimeEnablementHook: SalemXPhysical6RuntimeEnablementURLHook = .defaultDisabled) {
         recordForegroundPendingCallMetadataHandoff(session: session, source: source)
+        recordMetadataCredentialsBoundaryRepairProof(allowsHookConsumptionAfterCredentials: succeeded && mediaCredentialsRequestMetadataAvailable)
         mediaCredentialsBoundaryReached = true
         mediaCredentialsRequestPlanned = false
         mediaCredentialsRequested = true
@@ -4378,6 +4474,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         var pendingMetadataReferenceToFetch: String?
         lock.lock()
         var summary = latestVoIPPushReceiptSummary
+        let physical6RuntimeEnablementURLHookSnapshot = physical6RuntimeEnablementURLHook
         let screenSource = summary.realInvitePayloadMappingObserved ? "callkit_answer_real_invite_controlled" : "callkit_answer_sandbox_voip_smoke"
         summary.callKitAnswerActionDelivered = true
         summary.answerActionUUIDMatched = true
@@ -4404,7 +4501,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                     summary.recordPendingMetadataFetchRequested()
                     pendingMetadataReferenceToFetch = pendingAuthenticatedMetadataReference
                 } else {
-                    summary.recordControlledMediaCredentialsRequestBoundaryNotReady()
+                    summary.recordMetadataCredentialsBoundaryMissingAfterAnswer(physical6RuntimeEnablementHook: physical6RuntimeEnablementURLHookSnapshot)
                 }
             }
         } else {
