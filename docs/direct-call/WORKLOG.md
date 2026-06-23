@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Closed 2.48Z-Physical2-PreAPNsSenderReadinessBlocked before APNs: both physical app sessions validated and receiver hooks armed, but the repaired sender LiveKit readiness diagnostics still classified matrix-session/same-room readiness as false before APNs, so no invite/APNs/connect/LiveKit attempt was performed.
 - Added 2.48Z-RemoteParticipantPresenceRepair: the DEBUG proof now exposes default-disabled sender-side LiveKit readiness/join-path fields and receiver remote participant observer classifications for sender-not-joined, remote-missing, remote-seen, audio-track-missing, and liveness-not-observed without device APNs/connect/LiveKit.
 - Closed 2.48Z-Physical1-RemoteParticipantMissingTriage as safely classified, not remote-audio success: one sandbox APNs, PushKit, CallKit Answer, pending metadata, media credentials, one controlled audio-only connect, and LiveKit join succeeded on the two-physical-device path, but remote participant/audio/liveness was not observed; no retry was performed.
 - Added 2.48X-RemoteAudioLivenessDiagnostics: the DEBUG proof now emits redacted fields for LiveKit join result, local audio publish, microphone requested/not-required classification, audio route availability, remote participant/audio track/liveness observation, and LiveKit/audio cleanup while preserving default no-connect, one-shot, no-video, no-camera, no-Matrix, no-full-flow safety.
@@ -7674,3 +7675,79 @@ DirectCall subset: 149 tests passed
 No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission on device, Matrix event emit, full call flow, physical hook reset/re-arm, or physical call attempt was performed.
 
 Next phase: `2.48Z-Physical2 — one-shot two-physical-device sender-join/remote-participant proof`.
+
+## 2026-06-23 — 2.48Z-Physical2-PreAPNsSenderReadinessBlocked
+
+Prepared the post-repair two-physical-device proof but stopped before APNs because the repaired sender readiness diagnostics remained false before invite/APNs.
+
+Both physical devices were on the repaired Debug app from `1af50e240`. Receiver app session validation passed:
+
+```text
+receiver_iphone_matrix_session_whoami_result=success_redacted
+receiver_iphone_matrix_session_user_hash=497015f5745c933a
+receiver_iphone_pending_metadata_auth_ready=true
+APNs_sent=false
+blocked_reason=none
+```
+
+Second physical sender app session validation passed:
+
+```text
+second_physical_device_matrix_session_whoami_result=success_redacted
+second_physical_device_matrix_session_user_hash=7d434d7f252427fb
+second_physical_device_matrix_session_user_hash_matches_expected=true
+second_physical_device_pending_metadata_auth_ready=true
+APNs_sent=false
+blocked_reason=none
+```
+
+Receiver one-shot controlled-audio and physical remote-peer context hooks armed without side effects:
+
+```text
+physical6_runtime_enablement_url_hook_armed=true
+physical6_runtime_enablement_url_hook_audio_only=true
+physical6_runtime_enablement_url_hook_video_allowed=false
+physical6_runtime_enablement_url_hook_matrix_events_allowed=false
+physical6_runtime_enablement_url_hook_consumed=false
+physical6_runtime_enablement_url_hook_blocked_reason=armed_waiting_for_one_incoming_answer
+
+remote_peer_context_handoff_armed_before_apns=true
+remote_peer_context_handoff_received_by_runtime=false
+remote_peer_kind=physical_ios_redacted
+remote_peer_physical_device=true
+simulator_assisted_remote_audio_proof=false
+production_like_two_physical_device_proof=true
+second_device_remote_audio_readiness=ready_redacted
+```
+
+The repaired proof fields were present, but the pre-APNs sender readiness gate was not satisfied:
+
+```text
+remote_participant_presence_repair_present=true
+second_physical_sender_livekit_readiness_present=true
+second_physical_sender_livekit_readiness_matrix_session_ready=false
+second_physical_sender_livekit_readiness_same_room_ready=false
+second_physical_sender_livekit_join_path_present=true
+second_physical_sender_livekit_join_path_audio_only=true
+second_physical_sender_livekit_join_path_video_allowed=false
+second_physical_sender_livekit_join_path_matrix_events_allowed=false
+```
+
+Conclusion:
+
+```text
+2.48Z-Physical2 = pre-APNs sender LiveKit readiness safely blocked
+sender readiness result=not_ready_redacted
+APNs_sent=false
+invite_send_attempted=false
+receiver_media_connect_attempted=false
+receiver_livekit_join_requested=false
+sender_livekit_join_attempted=false
+receiver_remote_participant_observer_result=not_started_redacted
+remote_audio_liveness_result=not_requested
+no retry performed
+```
+
+No sandbox APNs, production APNs, repeated APNs, `dev/invite`, media connect, LiveKit join, microphone/camera permission, video, Matrix event emit, or full call flow was performed.
+
+Next phase: `2.48Z-SenderLiveKitReadinessHookRepair — make second physical sender readiness/join path activatable before any APNs retry`.

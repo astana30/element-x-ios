@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-RemoteParticipantPresenceRepair — the proof surface can now classify second physical sender LiveKit readiness, the default-disabled sender join path, same-room/two-physical-device requirements, and receiver-side remote participant observer outcomes. This was a code/test diagnostics phase only; no APNs, device media connect, or device LiveKit join was run. The next phase is `2.48Z-Physical2 — one-shot two-physical-device sender-join/remote-participant proof`.
+After 2.48Z-Physical2-PreAPNsSenderReadinessBlocked — both physical iPhones were installed/launched from the repaired Debug build and app Matrix sessions validated, but the receiver proof still classified the second physical sender LiveKit readiness as not ready before APNs. The one-shot proof stopped before APNs, before token/room invite preflight, and before any media connect or LiveKit join. The next phase is `2.48Z-SenderLiveKitReadinessHookRepair — make second physical sender readiness/join path activatable before any APNs retry`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,78 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48Z-Physical2-PreAPNsSenderReadinessBlocked safely stopped the post-repair two-physical-device proof before APNs:
+  - Worktree was clean except the intentionally untracked repeat-call diagnostics file. A stale root `.xcappdata` artifact was absent before the phase continued.
+  - The freshly built Debug app from `1af50e240` was installed and launched on both physical iPhones.
+  - Receiver app session validated:
+    ```text
+    receiver_iphone_matrix_session_whoami_result=success_redacted
+    receiver_iphone_matrix_session_user_hash=497015f5745c933a
+    receiver_iphone_pending_metadata_auth_ready=true
+    APNs_sent=false
+    blocked_reason=none
+    ```
+  - Second physical sender app session validated:
+    ```text
+    second_physical_device_matrix_session_whoami_result=success_redacted
+    second_physical_device_matrix_session_user_hash=7d434d7f252427fb
+    second_physical_device_matrix_session_user_hash_matches_expected=true
+    second_physical_device_pending_metadata_auth_ready=true
+    APNs_sent=false
+    blocked_reason=none
+    ```
+  - The receiver one-shot controlled-audio hook and physical remote-peer context handoff were armed without sending APNs or starting connect:
+    ```text
+    physical6_runtime_enablement_url_hook_armed=true
+    physical6_runtime_enablement_url_hook_audio_only=true
+    physical6_runtime_enablement_url_hook_video_allowed=false
+    physical6_runtime_enablement_url_hook_matrix_events_allowed=false
+    physical6_runtime_enablement_url_hook_consumed=false
+    physical6_runtime_enablement_url_hook_blocked_reason=armed_waiting_for_one_incoming_answer
+
+    remote_peer_context_handoff_armed_before_apns=true
+    remote_peer_context_handoff_received_by_runtime=false
+    remote_peer_kind=physical_ios_redacted
+    remote_peer_physical_device=true
+    simulator_assisted_remote_audio_proof=false
+    production_like_two_physical_device_proof=true
+    second_device_remote_audio_readiness=ready_redacted
+    ```
+  - The repaired diagnostics were present, but the sender readiness pre-APNs gate remained false:
+    ```text
+    remote_participant_presence_repair_present=true
+    second_physical_sender_livekit_readiness_present=true
+    second_physical_sender_livekit_readiness_matrix_session_ready=false
+    second_physical_sender_livekit_readiness_same_room_ready=false
+    second_physical_sender_livekit_join_path_present=true
+    second_physical_sender_livekit_join_path_audio_only=true
+    second_physical_sender_livekit_join_path_video_allowed=false
+    second_physical_sender_livekit_join_path_matrix_events_allowed=false
+    ```
+  - Classification:
+    ```text
+    2.48Z-Physical2 = pre-APNs sender LiveKit readiness safely blocked
+    sender readiness result=not_ready_redacted
+    APNs_sent=false
+    invite_send_attempted=false
+    receiver_media_connect_attempted=false
+    receiver_livekit_join_requested=false
+    sender_livekit_join_attempted=false
+    receiver_remote_participant_observer_result=not_started_redacted
+    remote_audio_liveness_result=not_requested
+    no retry performed
+    ```
+  - Safety stayed closed:
+    ```text
+    media_connect_requested=false
+    media_connect_attempted=false
+    livekit_join_requested=false
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    ```
+  - Next phase: `2.48Z-SenderLiveKitReadinessHookRepair — make second physical sender readiness/join path activatable before any APNs retry`.
 - 2.48Z-RemoteParticipantPresenceRepair adds sender-side and receiver-observer diagnostics for the missing remote participant:
   - This was a code/test diagnostics repair only. It did not send APNs, run production APNs, repeat APNs, use `dev/invite`, start physical media connect, join LiveKit on a real device, request microphone/camera permission on device, enable video, emit Matrix events, start full call flow, reset/re-arm physical one-shot hooks, or perform another physical call attempt.
   - The receiver proof surface now records the remote participant presence repair boundary:
