@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Closed 2.48T-Physical5 as a successful physical CallKit surface/Answer proof: one sandbox APNs, PushKit received, CallKit report completed, PushKit completion called, Answer action delivered/received/fulfilled, and no media connect.
 - Completed 2.48T-CallKitSurfaceRepair with explicit CallKit surface repair proof fields, report-completion timeout classification, PushKit completion safety states, provider/delegate/active UUID retention proof, and default no-answer/no-connect behavior preserved.
 - Replaced the 2.48T fake-only boundary with a real controlled audio-connect bridge that remains default-disabled and can reach the real runtime connect-media boundary only when every gate is true.
 - Wired 2.48T-RealRuntime so authenticated pending metadata and media credentials can reach the controlled runtime gate, default disabled and no physical connect.
@@ -110,6 +111,91 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48T-Physical5 — CallKit Surface/Answer Physical Proof
+
+Closed the one-shot physical CallKit surface/Answer proof after installing and launching the Debug app from the CallKit surface repair checkpoint. The iPhone app Matrix session validated through redacted local `/whoami` proof, then the visible in-memory helper validated fresh receiver/sender tokens, room membership/encryption, corrected flat local schema, and explicit `SEND_2_48T_PHYSICAL5` confirmation before sending exactly one sandbox APNs through the non-dev invite path.
+
+Redacted preflight/send result:
+
+```text
+receiver_token_found=true
+sender_token_found=true
+receiver_user_hash=497015f5745c933a
+sender_user_hash=7d434d7f252427fb
+sender_equals_receiver=false
+room_validation_preflight=pass
+local_schema_valid=true
+corrected_flat_schema_used=true
+nested_invite_body_used=false
+safe_to_send_apns=true
+invite_send_attempted=true
+invite_http_code=200
+real_non_dev_invite_used=true
+dev_invite_used=false
+background_apns_push_requested=true
+background_apns_push_result=sandbox_success
+APNs_sent=true
+```
+
+Phase-specific proof generation `generation_7` showed PushKit receipt, CallKit report completion, PushKit completion, and a real CallKit Answer action:
+
+```text
+physical_voip_push_received=true
+pushkit_callback_invoked=true
+pushkit_payload_kind=real_invite_controlled
+callkit_report_requested=true
+callkit_report_result=reported
+callkit_report_completion_observed=true
+pushkit_completion_called=true
+callkit_surface_repair_provider_retention_verified=true
+callkit_surface_repair_delegate_retention_verified=true
+callkit_surface_repair_active_uuid_retention_verified=true
+callkit_first_action_kind=answer
+callkit_answer_action_delivered=true
+callkit_answer_action_received=true
+callkit_answer_action_fulfilled=true
+callkit_event_order=report_completion_then_answer
+app_activation_observed=true
+controlled_in_app_activation_observed=true
+```
+
+The proof also recorded that the answerable-window safety completed after timeout before the late Answer action was observed. This means 2.48T-Physical5 closes CallKit surface/Answer, not first controlled audio connect:
+
+```text
+pushkit_completion_answerable_window_result=timeout_elapsed
+callkit_surface_repair_pushkit_completion_safety_result=completed_after_answerable_window_timeout
+```
+
+Pending metadata, credentials, connect, LiveKit, permissions, Matrix events, and full flow stayed closed:
+
+```text
+pending_metadata_reference_present=false
+pending_metadata_fetch_requested=false
+pending_metadata_fetch_result=not_requested
+media_credentials_requested=false
+media_credentials_result=blocked_redacted
+controlled_connect_enablement_enabled=false
+controlled_connect_enablement_execution_allowed=false
+controlled_connect_enablement_blocked_reason=enablement_disabled_no_connect
+controlled_connect_first_attempt_requested=false
+controlled_connect_first_attempt_allowed=false
+controlled_connect_first_attempt_started=false
+controlled_connect_first_attempt_completed=false
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+livekit_connect_audio_invoked=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+blocked_reason=media_credentials_request_boundary_not_ready
+```
+
+Next phase: `2.48T-Physical6 — one-shot first controlled audio-connect physical attempt`.
+
+No repeated APNs, production APNs, `dev/invite`, media connect, LiveKit join, microphone/camera permission request, Matrix event emission, full direct-call flow, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 
 ### 2.48T-CallKitSurfaceRepair — CallKit Report/Surface Repair
 
