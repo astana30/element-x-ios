@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Closed 2.48T-Physical7 as answered / missing pending metadata / no-connect triage: PushKit received, CallKit report completed, Answer delivered/received/fulfilled, pending metadata requested but blocked on missing reference, credentials/connect/LiveKit stayed closed, and no retry was performed.
 - Repaired the 2.48T-Physical6 Answer -> metadata/credentials boundary so real CallKit Answer triggers pending metadata handling, metadata success permits credentials, hook consumption stays after credentials, and default runtime remains no-connect.
 - Closed 2.48T-Physical6 as answered / metadata-credentials boundary blocked / no-connect triage: one sandbox APNs, PushKit received, CallKit report completed, Answer received/fulfilled, pending metadata and credentials not requested, and no media connect.
 - Added the 2.48T-Physical6 DEBUG-only one-shot physical connect enablement URL hook, default-disabled and audio-only, with no APNs or physical media connect performed.
@@ -114,6 +115,112 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48T-Physical7-MissingMetadataResult — Answered, Missing Pending Metadata, No Connect
+
+Closed the one-shot Physical7 attempt as answered / missing pending metadata / no-connect triage. This is not a completed first controlled audio-connect proof because the controlled first attempt never started.
+
+The fresh Debug app was built, installed, and launched from `746f19bee1ae97cf8e7d38db113dc0fe30ca7b0a`. The receiver app session proved ready before APNs:
+
+```text
+iphone_app_matrix_session_whoami_result=success_redacted
+iphone_app_matrix_session_user_hash=497015f5745c933a
+iphone_app_pending_metadata_auth_ready=true
+APNs_sent=false
+blocked_reason=none
+```
+
+The DEBUG hook was activated before APNs and proved armed, one-shot, audio-only, and side-effect free in the pre-send proof:
+
+```text
+physical6_runtime_enablement_url_hook_armed=true
+physical6_runtime_enablement_url_hook_one_shot=true
+physical6_runtime_enablement_url_hook_audio_only=true
+physical6_runtime_enablement_url_hook_video_allowed=false
+physical6_runtime_enablement_url_hook_matrix_events_allowed=false
+physical6_runtime_enablement_url_hook_consumed=false
+media_connect_requested=false
+livekit_join_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+The phase-specific post-Answer proof path was:
+
+```text
+/tmp/salemx-voip-push-receipt-proof-2.48t-physical7-first-audio-connect-polled.txt
+```
+
+Observed proof:
+
+```text
+proof_generation=generation_7
+proof_last_updated_by=voip_push_callback
+physical_voip_push_received=true
+pushkit_callback_invoked=true
+pushkit_payload_kind=real_invite_controlled
+callkit_report_requested=true
+callkit_report_result=reported
+callkit_report_completion_observed=true
+pushkit_completion_called=true
+callkit_first_action_kind=answer
+callkit_answer_action_delivered=true
+callkit_answer_action_received=true
+callkit_answer_action_fulfilled=true
+```
+
+The repaired Answer boundary ran, but the incoming invite did not include a pending metadata reference. The attempt therefore stopped before credentials/connect:
+
+```text
+metadata_credentials_boundary_repair_present=true
+metadata_credentials_boundary_repair_requires_answer=true
+metadata_credentials_boundary_repair_triggers_metadata_after_answer=true
+metadata_credentials_boundary_repair_triggers_credentials_after_metadata=true
+metadata_credentials_boundary_repair_blocks_connect_until_credentials=true
+metadata_credentials_boundary_repair_no_direct_connect_bypass=true
+metadata_credentials_boundary_repair_raw_credentials_logged=false
+foreground_pending_call_metadata_handoff_requested=true
+foreground_pending_call_metadata_handoff_observed=true
+pending_metadata_reference_present=false
+pending_metadata_fetch_requested=true
+pending_metadata_fetch_result=blocked_redacted
+pending_metadata_fetch_http_status_bucket=not_requested
+pending_metadata_fetch_failure_reason=missing_reference_after_answer
+blocked_reason=pending_metadata_missing_after_answer_no_credentials
+```
+
+Credentials, media, LiveKit, camera, Matrix events, and full flow stayed closed:
+
+```text
+media_credentials_requested=false
+media_credentials_result=blocked_redacted
+controlled_connect_first_attempt_requested=false
+controlled_connect_first_attempt_started=false
+controlled_connect_first_attempt_completed=false
+controlled_connect_first_attempt_repeated=false
+controlled_connect_first_attempt_result=not_requested
+controlled_connect_first_attempt_error_bucket=none
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+livekit_connect_audio_invoked=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+The final callback proof did not consume the hook because metadata/credentials failed closed first:
+
+```text
+physical6_runtime_enablement_url_hook_present=true
+physical6_runtime_enablement_url_hook_consumed=false
+```
+
+Next phase: `2.48T-ResultTriage — classify first controlled audio-connect result, no retry`.
+
+No repeated APNs, production APNs, `dev/invite`, repeated connect, video, camera permission, Matrix event emission, full call flow, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
 
 ### 2.48T-Physical6-MetadataCredentialsBoundaryRepair — Answer to Metadata/Credentials Boundary
 

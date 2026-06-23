@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48T-Physical6-MetadataCredentialsBoundaryRepair — the Answer path now records the foreground pending metadata boundary after real CallKit Answer, requests pending metadata when a reference is present, classifies missing metadata with a precise no-credentials state, and allows media credentials only after metadata success. The Physical6 hook is not consumed before credentials, default runtime remains no-connect, and no APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, real LiveKit join, microphone/camera permission, Matrix event emission, video, or full call flow was performed. The next phase is `2.48T-Physical7 — one-shot Answer -> metadata/credentials -> first controlled audio-connect physical attempt`.
+After 2.48T-Physical7-MissingMetadataResult — the one-shot physical attempt reached PushKit, CallKit report completion, and a real Answer action, then stopped safely before credentials/connect because the received invite had no pending metadata reference. Pending metadata was requested but blocked locally with `missing_reference_after_answer`; media credentials, media connect, LiveKit join, microphone permission, camera permission, Matrix event emission, video, and full call flow stayed closed. No repeated APNs, production APNs, `dev/invite`, or repeated connect was performed. The next phase is `2.48T-ResultTriage — classify first controlled audio-connect result, no retry`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,69 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48T-Physical7-MissingMetadataResult closes the one-shot physical attempt as answered / missing pending metadata / no-connect triage:
+  - This is not a completed first controlled audio-connect proof. The first controlled audio-connect attempt did not start.
+  - The phase-specific proof path is `/tmp/salemx-voip-push-receipt-proof-2.48t-physical7-first-audio-connect-polled.txt`.
+  - The physical proof generation was `generation_7`.
+  - PushKit and CallKit reached the Answer boundary:
+    ```text
+    physical_voip_push_received=true
+    pushkit_callback_invoked=true
+    pushkit_payload_kind=real_invite_controlled
+    callkit_report_requested=true
+    callkit_report_result=reported
+    callkit_report_completion_observed=true
+    pushkit_completion_called=true
+    callkit_first_action_kind=answer
+    callkit_answer_action_delivered=true
+    callkit_answer_action_received=true
+    callkit_answer_action_fulfilled=true
+    ```
+  - The repaired metadata boundary ran after Answer, but no pending metadata reference was present:
+    ```text
+    metadata_credentials_boundary_repair_present=true
+    metadata_credentials_boundary_repair_requires_answer=true
+    metadata_credentials_boundary_repair_triggers_metadata_after_answer=true
+    metadata_credentials_boundary_repair_triggers_credentials_after_metadata=true
+    metadata_credentials_boundary_repair_blocks_connect_until_credentials=true
+    metadata_credentials_boundary_repair_no_direct_connect_bypass=true
+    metadata_credentials_boundary_repair_raw_credentials_logged=false
+    foreground_pending_call_metadata_handoff_requested=true
+    foreground_pending_call_metadata_handoff_observed=true
+    pending_metadata_reference_present=false
+    pending_metadata_fetch_requested=true
+    pending_metadata_fetch_result=blocked_redacted
+    pending_metadata_fetch_http_status_bucket=not_requested
+    pending_metadata_fetch_failure_reason=missing_reference_after_answer
+    blocked_reason=pending_metadata_missing_after_answer_no_credentials
+    ```
+  - Credentials and connect stayed closed:
+    ```text
+    media_credentials_requested=false
+    media_credentials_result=blocked_redacted
+    controlled_connect_first_attempt_requested=false
+    controlled_connect_first_attempt_started=false
+    controlled_connect_first_attempt_completed=false
+    controlled_connect_first_attempt_repeated=false
+    controlled_connect_first_attempt_result=not_requested
+    controlled_connect_first_attempt_error_bucket=none
+    media_connect_requested=false
+    media_connect_attempted=false
+    livekit_join_requested=false
+    livekit_connect_audio_invoked=false
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    ```
+  - The final callback proof showed the runtime hook was not consumed:
+    ```text
+    physical6_runtime_enablement_url_hook_present=true
+    physical6_runtime_enablement_url_hook_consumed=false
+    ```
+  - Pre-APNs setup had separately proved the DEBUG hook was armed and audio-only, but the final callback proof did not reach hook consumption because metadata/credentials failed closed first.
+  - No repeated APNs, production APNs, `dev/invite`, repeated connect, video, camera permission, Matrix event emission, full call flow, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
+  - Next phase: `2.48T-ResultTriage — classify first controlled audio-connect result, no retry`.
 - 2.48T-Physical6-MetadataCredentialsBoundaryRepair fixes the Answer -> metadata/credentials boundary without running a physical call:
   - This is a code/test repair phase only. It did not send APNs, run production APNs, repeat APNs, use `dev/invite`, start physical media connect, join real LiveKit, request microphone/camera permission on device, emit Matrix events, enable video, or start full call flow.
   - After real CallKit Answer, the proof can now show the metadata boundary handoff and fetch trigger:
