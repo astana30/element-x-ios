@@ -7200,3 +7200,151 @@ real_call_flow_started=false
 No APNs, no production APNs, no repeated APNs, no `dev/invite`, no media connect retry, no LiveKit join retry, no video, no microphone/camera permission, no Matrix event emit, no full call flow, and no project/signing changes were performed.
 
 Next phase: `2.48Y-Physical3 — one-shot simulator-assisted remote peer context/liveness proof`.
+
+## 2026-06-23 — 2.48Y-Physical3 Simulator Context/Liveness
+
+Closed the one-shot simulator-assisted remote peer context/liveness proof as safely classified, not as production-like two-physical-device remote audio success.
+
+Setup and send boundary:
+
+```text
+one_sandbox_apns_sent=true
+repeated_apns=false
+physical_debug_app_built_from_head=true
+physical_debug_app_installed_launched=true
+simulator_debug_app_installed_launched=true
+remote_peer_kind=ios_simulator_redacted
+remote_peer_physical_device=false
+simulator_assisted_remote_audio_proof=true
+production_like_two_physical_device_proof=false
+second_device_remote_audio_readiness=ready_redacted
+iphone_app_matrix_session_whoami_result=success_redacted
+iphone_app_matrix_session_user_hash=497015f5745c933a
+iphone_app_pending_metadata_auth_ready=true
+physical6_runtime_enablement_url_hook_armed=true
+remote_peer_context_handoff_armed_before_apns=true
+```
+
+Phase-specific proof path:
+
+```text
+/tmp/salemx-voip-push-receipt-proof-2.48y-physical3-simulator-context-liveness-polled.txt
+```
+
+Physical proof generation:
+
+```text
+proof_generation=generation_15
+physical_voip_push_received=true
+pushkit_callback_invoked=true
+pushkit_payload_kind=real_invite_controlled
+```
+
+CallKit, metadata, credentials, and the first controlled audio attempt succeeded:
+
+```text
+callkit_report_result=reported
+callkit_report_completion_observed=true
+callkit_first_action_kind=answer
+callkit_answer_action_received=true
+callkit_answer_action_fulfilled=true
+pending_metadata_fetch_requested=true
+pending_metadata_fetch_result=success_redacted
+pending_metadata_fetch_http_status_bucket=2xx
+media_credentials_requested=true
+media_credentials_result=success_redacted
+controlled_connect_first_attempt_requested=true
+controlled_connect_first_attempt_completed=true
+controlled_connect_first_attempt_repeated=false
+controlled_connect_first_attempt_result=success_redacted
+controlled_connect_first_attempt_error_bucket=none
+media_connect_requested=true
+media_connect_attempted=true
+livekit_join_requested=true
+livekit_connect_audio_invoked=true
+```
+
+LiveKit joined and cleanup completed once:
+
+```text
+livekit_join_result=success_redacted
+livekit_join_error_bucket=none
+livekit_room_connected=true
+livekit_room_disconnected=true
+livekit_cleanup_requested=true
+livekit_cleanup_completed=true
+livekit_cleanup_result=completed_redacted
+```
+
+The redacted simulator remote peer context reached the runtime proof:
+
+```text
+remote_peer_context_handoff_present=true
+remote_peer_context_handoff_debug_only=true
+remote_peer_context_handoff_source=debug_hook_redacted
+remote_peer_context_handoff_armed_before_apns=true
+remote_peer_context_handoff_received_by_runtime=true
+remote_peer_context_handoff_survived_pushkit=true
+remote_peer_context_handoff_survived_answer=true
+remote_peer_context_handoff_raw_identifiers_logged=false
+remote_peer_kind=ios_simulator_redacted
+remote_peer_physical_device=false
+simulator_assisted_remote_audio_proof=true
+production_like_two_physical_device_proof=false
+second_device_remote_audio_readiness=ready_redacted
+remote_audio_liveness_limitation=simulator_assisted_redacted
+```
+
+Remote audio/liveness did not succeed because the remote LiveKit participant was not observed:
+
+```text
+livekit_remote_participant_seen=false
+livekit_remote_participant_count_bucket=0
+livekit_remote_audio_track_subscribed=false
+livekit_remote_audio_track_unmuted=false
+livekit_remote_audio_level_observed=false
+livekit_audio_liveness_observed=false
+livekit_audio_liveness_result=not_observed_redacted
+livekit_audio_liveness_error_bucket=remote_participant_missing_redacted
+remote_audio_liveness_result=not_observed_redacted
+remote_audio_liveness_error_bucket=remote_participant_missing_redacted
+```
+
+Local publish stayed receive-only and microphone permission was not requested:
+
+```text
+local_audio_publish_requested=false
+local_audio_publish_started=false
+local_audio_publish_result=not_required_redacted
+local_audio_publish_not_required_reason=receive_only_audio_connect_redacted
+microphone_permission_requested=false
+microphone_permission_result=not_requested_or_not_required_redacted
+microphone_permission_not_required_reason=receive_only_audio_session_redacted
+```
+
+Safety stayed closed:
+
+```text
+physical6_runtime_enablement_url_hook_consumed=true
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+blocked_reason=none
+```
+
+Conclusion:
+
+```text
+2.48Y-Physical3 = simulator-assisted remote peer context/liveness proof safely classified.
+One sandbox APNs sent.
+Remote peer context successfully handed into runtime proof.
+First controlled audio connect attempted and succeeded.
+LiveKit join result=success_redacted.
+Remote audio/liveness result=not_observed_redacted.
+Simulator-assisted limitation recorded.
+No retry performed.
+```
+
+No repeated APNs, no production APNs, no `dev/invite`, no repeated connect, no repeated LiveKit join, no video, no camera permission, no Matrix event emit, no full call flow, and no project/signing changes were performed.
+
+Next phase: `2.48Z — two-physical-device remote audio proof readiness, no repeated connect`.
