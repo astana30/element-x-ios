@@ -13,135 +13,161 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48Z-Physical2-PreAPNsSenderReadinessBlocked` is complete.
+`2.48Z-SenderLiveKitReadinessHookRepair` is complete.
 
-Both physical iPhones were installed and launched from the repaired Debug build at:
+The DEBUG/test-controlled sender LiveKit readiness hook now exists and is default-disabled/no-connect:
 
 ```text
-1af50e240a3bc5e99d1160fe8db2781c46940f94
-Add remote participant presence repair diagnostics
+sender_livekit_readiness_hook_present=true
+sender_livekit_readiness_hook_debug_only=true
+sender_livekit_readiness_hook_default_disabled=true
+sender_livekit_readiness_hook_armed=false
+sender_livekit_readiness_hook_audio_only=true
+sender_livekit_readiness_hook_video_allowed=false
+sender_livekit_readiness_hook_matrix_events_allowed=false
+sender_livekit_readiness_hook_raw_identifiers_logged=false
+sender_livekit_readiness_hook_blocked_reason=default_disabled_no_connect
 ```
 
-Receiver app session validated:
+It can be armed from redacted pre-APNs inputs only:
 
 ```text
-receiver_iphone_matrix_session_whoami_result=success_redacted
-receiver_iphone_matrix_session_user_hash=497015f5745c933a
-receiver_iphone_pending_metadata_auth_ready=true
-APNs_sent=false
-blocked_reason=none
+sender_matrix_session_ready=true
+sender_expected_hash_matches=true
+sender_same_room_ready=true
 ```
 
-Second physical sender app session validated:
+When armed with the validated second physical sender readiness, the proof can classify:
 
 ```text
-second_physical_device_matrix_session_whoami_result=success_redacted
-second_physical_device_matrix_session_user_hash=7d434d7f252427fb
-second_physical_device_matrix_session_user_hash_matches_expected=true
-second_physical_device_pending_metadata_auth_ready=true
-APNs_sent=false
-blocked_reason=none
+sender_livekit_readiness_hook_armed=true
+sender_livekit_readiness_hook_matrix_session_ready=true
+sender_livekit_readiness_hook_expected_user_matched=true
+sender_livekit_readiness_hook_same_room_ready=true
+sender_livekit_readiness_hook_blocked_reason=armed_waiting_for_future_sender_join
+
+second_physical_sender_livekit_readiness_matrix_session_ready=true
+second_physical_sender_livekit_readiness_same_room_ready=true
 ```
 
-Receiver hooks armed without side effects:
+The sender join path remains present but default-disabled/audio-only:
 
 ```text
-physical6_runtime_enablement_url_hook_armed=true
-physical6_runtime_enablement_url_hook_audio_only=true
-physical6_runtime_enablement_url_hook_video_allowed=false
-physical6_runtime_enablement_url_hook_matrix_events_allowed=false
-physical6_runtime_enablement_url_hook_consumed=false
-physical6_runtime_enablement_url_hook_blocked_reason=armed_waiting_for_one_incoming_answer
-
-remote_peer_context_handoff_armed_before_apns=true
-remote_peer_context_handoff_received_by_runtime=false
-remote_peer_kind=physical_ios_redacted
-remote_peer_physical_device=true
-simulator_assisted_remote_audio_proof=false
-production_like_two_physical_device_proof=true
-second_device_remote_audio_readiness=ready_redacted
-```
-
-The pre-APNs sender readiness gate was not satisfied:
-
-```text
-remote_participant_presence_repair_present=true
-second_physical_sender_livekit_readiness_present=true
-second_physical_sender_livekit_readiness_matrix_session_ready=false
-second_physical_sender_livekit_readiness_same_room_ready=false
-second_physical_sender_livekit_join_path_present=true
-second_physical_sender_livekit_join_path_audio_only=true
-second_physical_sender_livekit_join_path_video_allowed=false
-second_physical_sender_livekit_join_path_matrix_events_allowed=false
-```
-
-Classification:
-
-```text
-2.48Z-Physical2 = pre-APNs sender LiveKit readiness safely blocked
-sender readiness result=not_ready_redacted
-APNs_sent=false
-invite_send_attempted=false
-receiver_media_connect_attempted=false
-receiver_livekit_join_requested=false
-sender_livekit_join_attempted=false
-receiver_remote_participant_observer_result=not_started_redacted
-remote_audio_liveness_result=not_requested
-no retry performed
-```
-
-No APNs, production APNs, repeated APNs, `dev/invite`, media connect, LiveKit join, microphone/camera permission, video, Matrix event emit, or full call flow was performed.
-
-## Next Phase
-
-`2.48Z-SenderLiveKitReadinessHookRepair — make second physical sender readiness/join path activatable before any APNs retry`
-
-This is a code/test diagnostics repair only.
-
-Do not send APNs. Do not run production APNs. Do not use `dev/invite`. Do not run physical media connect. Do not join LiveKit on a real device. Do not request microphone/camera permission. Do not enable video. Do not emit Matrix events. Do not start full call flow.
-
-## Goal
-
-Repair the DEBUG-only second physical sender readiness/join boundary so a future `2.48Z-Physical2-Retry` can determine, before APNs, whether the sender app session and room readiness are available and whether the sender join path is explicitly armed.
-
-The repair should preserve default no-connect and no-join behavior. It should not start a real sender LiveKit join during the repair phase.
-
-## Required Behavior
-
-Add or adjust the redacted proof surface so the future physical proof can distinguish:
-
-```text
-second_physical_sender_livekit_readiness_present=true
-second_physical_sender_livekit_readiness_debug_only=true
-second_physical_sender_livekit_readiness_default_disabled=true
-second_physical_sender_livekit_readiness_matrix_session_ready=<true_or_false>
-second_physical_sender_livekit_readiness_same_room_ready=<true_or_false>
-second_physical_sender_livekit_readiness_credentials_ready=false
 second_physical_sender_livekit_join_path_present=true
 second_physical_sender_livekit_join_path_default_disabled=true
 second_physical_sender_livekit_join_path_audio_only=true
 second_physical_sender_livekit_join_path_video_allowed=false
 second_physical_sender_livekit_join_path_matrix_events_allowed=false
 second_physical_sender_livekit_join_path_raw_credentials_logged=false
-second_physical_sender_livekit_join_path_armed=<true_or_false>
-second_physical_sender_livekit_join_path_consumed=false
-second_physical_sender_livekit_join_path_blocked_reason=<redacted_bucket>
 ```
 
-The future physical helper must be able to stop before APNs when sender readiness is false, without relying on stale post-PushKit receiver state.
+The repair was code/test diagnostics only. No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, real-device LiveKit join, video, microphone/camera permission, Matrix event emit, or full call flow was performed.
 
-## Required Checks
+## Next Phase
 
-Run:
+`2.48Z-Physical2-Retry1 — one-shot two-physical-device sender-join/remote-participant proof`
 
-```bash
-swiftformat ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift UnitTests/Sources/DirectCallEngineTests.swift
-swiftlint lint ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift UnitTests/Sources/DirectCallEngineTests.swift
-DIRECT_CALL_ONLY_TESTING='UnitTests/DirectCallEngineTests UnitTests/NativeIncomingCallLifecycleContractTests' Tools/Scripts/verify_direct_call_unit.sh
-git diff --check
-git diff --cached --check
-git diff --name-only | grep -E 'SalemX.xcodeproj/project.pbxproj|app.yml|\.entitlements|Info.plist' && exit 1 || true
-git diff --cached --name-only | grep -E 'SalemX.xcodeproj/project.pbxproj|app.yml|\.entitlements|Info.plist' && exit 1 || true
+This is the next physical attempt only after fresh operator confirmation.
+
+## Required Safety Limits
+
+Do not send APNs until all preflight gates pass and the explicit one-shot confirmation is reached.
+
+Do not run production APNs. Do not send repeated APNs. Do not use `dev/invite`. Do not retry connect. Do not enable video. Do not request camera permission. Do not emit Matrix events. Do not start a full call flow.
+
+The next proof may perform at most one sandbox APNs, one operator Answer, and one controlled audio-only sender/receiver LiveKit attempt after all gates pass.
+
+## Preflight Requirements
+
+Before APNs, verify without raw values:
+
+```text
+receiver_token_found=true
+sender_token_found=true
+receiver_user_hash=497015f5745c933a
+sender_user_hash=7d434d7f252427fb
+sender_equals_receiver=false
+room_validation_preflight=pass
+local_schema_valid=true
+corrected_flat_schema_used=true
+nested_invite_body_used=false
 ```
 
-Run a privacy scan over changed files/diff. Allowed hits are field names, redacted labels, negative statements, synthetic test values, and stable hashes only.
+Verify both physical app sessions are ready:
+
+```text
+receiver_iphone_matrix_session_whoami_result=success_redacted
+receiver_iphone_matrix_session_user_hash=497015f5745c933a
+receiver_iphone_pending_metadata_auth_ready=true
+second_physical_device_matrix_session_whoami_result=success_redacted
+second_physical_device_matrix_session_user_hash=7d434d7f252427fb
+second_physical_device_matrix_session_user_hash_matches_expected=true
+second_physical_device_pending_metadata_auth_ready=true
+```
+
+Arm the sender readiness hook before APNs using only redacted booleans and confirm:
+
+```text
+sender_livekit_readiness_hook_armed=true
+sender_livekit_readiness_hook_matrix_session_ready=true
+sender_livekit_readiness_hook_expected_user_matched=true
+sender_livekit_readiness_hook_same_room_ready=true
+sender_livekit_readiness_hook_video_allowed=false
+sender_livekit_readiness_hook_matrix_events_allowed=false
+sender_livekit_readiness_hook_raw_identifiers_logged=false
+sender_livekit_readiness_hook_blocked_reason=armed_waiting_for_future_sender_join
+
+second_physical_sender_livekit_readiness_matrix_session_ready=true
+second_physical_sender_livekit_readiness_same_room_ready=true
+second_physical_sender_livekit_join_path_default_disabled=true
+```
+
+Continue only if:
+
+```text
+safe_to_send_apns=true
+APNs_sent=false
+```
+
+After `background_apns_push_result=sandbox_success`, do not send another APNs. The operator should press green Answer once and then copy/poll the phase-specific proof.
+
+## Expected Proof Close Fields
+
+Classify the result using redacted proof fields:
+
+```text
+physical_voip_push_received
+pushkit_callback_invoked
+callkit_report_result
+callkit_answer_action_received
+pending_metadata_fetch_result
+media_credentials_result
+physical6_runtime_enablement_url_hook_consumed
+controlled_connect_first_attempt_result
+controlled_connect_first_attempt_repeated
+media_connect_requested
+media_connect_attempted
+livekit_join_requested
+livekit_connect_audio_invoked
+livekit_join_result
+livekit_remote_participant_seen
+livekit_remote_audio_track_subscribed
+livekit_audio_liveness_result
+receiver_remote_participant_observer_result
+microphone_permission_requested
+camera_permission_requested
+matrix_event_emit_requested
+real_call_flow_started
+blocked_reason
+```
+
+Stop and classify if any safety regression appears:
+
+```text
+controlled_connect_first_attempt_repeated=true
+camera_permission_requested=true
+matrix_event_emit_requested=true
+real_call_flow_started=true
+```
+
+Run docs/code checks only after the physical proof is classified; do not set the next phase to production or broader rollout.

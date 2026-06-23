@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-Physical2-PreAPNsSenderReadinessBlocked — both physical iPhones were installed/launched from the repaired Debug build and app Matrix sessions validated, but the receiver proof still classified the second physical sender LiveKit readiness as not ready before APNs. The one-shot proof stopped before APNs, before token/room invite preflight, and before any media connect or LiveKit join. The next phase is `2.48Z-SenderLiveKitReadinessHookRepair — make second physical sender readiness/join path activatable before any APNs retry`.
+After 2.48Z-SenderLiveKitReadinessHookRepair — the DEBUG/test-controlled sender LiveKit readiness hook can now be armed from redacted Matrix-session, expected-user, and same-room readiness booleans, and the existing second physical sender readiness fields map from that hook instead of stale receiver runtime state. The hook remains default-disabled, audio-only, no-raw-identifiers, no-connect, and no-join by itself. The next phase is `2.48Z-Physical2-Retry1 — one-shot two-physical-device sender-join/remote-participant proof`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,59 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48Z-SenderLiveKitReadinessHookRepair makes second physical sender readiness activatable before any APNs retry:
+  - This was a code/test diagnostics repair only. It did not send APNs, run production APNs, repeat APNs, use `dev/invite`, start physical media connect, join LiveKit on a real device, request microphone/camera permission, enable video, emit Matrix events, start full call flow, reset physical call hooks for an actual run, or perform a physical call attempt.
+  - Added a DEBUG/test-controlled sender readiness hook with redacted inputs only:
+    ```text
+    sender_livekit_readiness_hook_present=true
+    sender_livekit_readiness_hook_debug_only=true
+    sender_livekit_readiness_hook_default_disabled=true
+    sender_livekit_readiness_hook_armed=<redacted_bool>
+    sender_livekit_readiness_hook_matrix_session_ready=<redacted_bool>
+    sender_livekit_readiness_hook_expected_user_matched=<redacted_bool>
+    sender_livekit_readiness_hook_same_room_ready=<redacted_bool>
+    sender_livekit_readiness_hook_credentials_ready=<redacted_bool>
+    sender_livekit_readiness_hook_audio_only=true
+    sender_livekit_readiness_hook_video_allowed=false
+    sender_livekit_readiness_hook_matrix_events_allowed=false
+    sender_livekit_readiness_hook_raw_identifiers_logged=false
+    sender_livekit_readiness_hook_blocked_reason=<redacted_bucket>
+    ```
+  - Default classification stays blocked and non-executing:
+    ```text
+    sender_livekit_readiness_hook_armed=false
+    sender_livekit_readiness_hook_blocked_reason=default_disabled_no_connect
+    second_physical_sender_livekit_join_path_default_disabled=true
+    second_physical_sender_livekit_join_path_audio_only=true
+    second_physical_sender_livekit_join_path_video_allowed=false
+    second_physical_sender_livekit_join_path_matrix_events_allowed=false
+    second_physical_sender_livekit_join_path_raw_credentials_logged=false
+    ```
+  - Future pre-APNs arming can now classify the already validated second physical sender readiness without raw identifiers:
+    ```text
+    sender_livekit_readiness_hook_armed=true
+    sender_livekit_readiness_hook_matrix_session_ready=true
+    sender_livekit_readiness_hook_expected_user_matched=true
+    sender_livekit_readiness_hook_same_room_ready=true
+    sender_livekit_readiness_hook_blocked_reason=armed_waiting_for_future_sender_join
+
+    second_physical_sender_livekit_readiness_matrix_session_ready=true
+    second_physical_sender_livekit_readiness_same_room_ready=true
+    ```
+  - The hook distinguishes `sender_app_session_missing_redacted`, `sender_wrong_account_redacted`, `sender_same_room_readiness_missing_redacted`, and `armed_waiting_for_future_sender_join`.
+  - Hook arming explicitly keeps runtime side effects closed:
+    ```text
+    media_connect_requested=false
+    media_connect_attempted=false
+    livekit_join_requested=false
+    livekit_connect_audio_invoked=false
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    ```
+  - Targeted DirectCall unit subset passed with 150 tests.
+  - Next phase: `2.48Z-Physical2-Retry1 — one-shot two-physical-device sender-join/remote-participant proof`.
 - 2.48Z-Physical2-PreAPNsSenderReadinessBlocked safely stopped the post-repair two-physical-device proof before APNs:
   - Worktree was clean except the intentionally untracked repeat-call diagnostics file. A stale root `.xcappdata` artifact was absent before the phase continued.
   - The freshly built Debug app from `1af50e240` was installed and launched on both physical iPhones.

@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Added 2.48Z-SenderLiveKitReadinessHookRepair: the DEBUG/test-controlled sender LiveKit readiness hook can now classify redacted sender Matrix-session readiness and same-room readiness as true before a future APNs retry while the sender join path remains default-disabled/no-connect/no-join.
 - Closed 2.48Z-Physical2-PreAPNsSenderReadinessBlocked before APNs: both physical app sessions validated and receiver hooks armed, but the repaired sender LiveKit readiness diagnostics still classified matrix-session/same-room readiness as false before APNs, so no invite/APNs/connect/LiveKit attempt was performed.
 - Added 2.48Z-RemoteParticipantPresenceRepair: the DEBUG proof now exposes default-disabled sender-side LiveKit readiness/join-path fields and receiver remote participant observer classifications for sender-not-joined, remote-missing, remote-seen, audio-track-missing, and liveness-not-observed without device APNs/connect/LiveKit.
 - Closed 2.48Z-Physical1-RemoteParticipantMissingTriage as safely classified, not remote-audio success: one sandbox APNs, PushKit, CallKit Answer, pending metadata, media credentials, one controlled audio-only connect, and LiveKit join succeeded on the two-physical-device path, but remote participant/audio/liveness was not observed; no retry was performed.
@@ -126,6 +127,42 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48Z-SenderLiveKitReadinessHookRepair — Sender LiveKit Readiness Hook
+
+Implemented the sender readiness hook repair without APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, real-device LiveKit join, video, microphone/camera permission, Matrix event emission, or full call flow.
+
+The proof surface now exposes DEBUG/test-controlled redacted hook fields:
+
+```text
+sender_livekit_readiness_hook_present=true
+sender_livekit_readiness_hook_debug_only=true
+sender_livekit_readiness_hook_default_disabled=true
+sender_livekit_readiness_hook_armed=<redacted_bool>
+sender_livekit_readiness_hook_matrix_session_ready=<redacted_bool>
+sender_livekit_readiness_hook_expected_user_matched=<redacted_bool>
+sender_livekit_readiness_hook_same_room_ready=<redacted_bool>
+sender_livekit_readiness_hook_credentials_ready=<redacted_bool>
+sender_livekit_readiness_hook_audio_only=true
+sender_livekit_readiness_hook_video_allowed=false
+sender_livekit_readiness_hook_matrix_events_allowed=false
+sender_livekit_readiness_hook_raw_identifiers_logged=false
+sender_livekit_readiness_hook_blocked_reason=<redacted_bucket>
+```
+
+The existing second physical sender readiness diagnostics now map from the hook:
+
+```text
+second_physical_sender_livekit_readiness_matrix_session_ready=sender_livekit_readiness_hook_matrix_session_ready
+second_physical_sender_livekit_readiness_same_room_ready=sender_livekit_readiness_hook_same_room_ready
+second_physical_sender_livekit_readiness_credentials_ready=sender_livekit_readiness_hook_credentials_ready
+```
+
+The hook can classify missing sender app session, wrong expected account, missing same-room readiness, and a future armed sender-join boundary. It does not start APNs, media connect, LiveKit join, permissions, Matrix events, video, or full call flow, and the sender join path remains audio-only and default-disabled.
+
+Targeted source-guard tests prove the hook fields, default-disabled state, classification buckets, redacted URL arming inputs, no raw identifiers, and no runtime side effects. The DirectCall subset passed with 150 tests.
+
+Next phase: `2.48Z-Physical2-Retry1 — one-shot two-physical-device sender-join/remote-participant proof`.
 
 ### 2.48X-RemoteAudioLivenessDiagnostics — Remote Audio/Liveness Diagnostics
 

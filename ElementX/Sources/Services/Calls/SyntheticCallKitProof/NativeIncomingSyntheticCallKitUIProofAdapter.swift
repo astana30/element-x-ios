@@ -823,6 +823,49 @@ private struct SalemXPhysical6RuntimeEnablementURLHook {
     }
 }
 
+private struct SalemXSenderLiveKitReadinessHook {
+    static let defaultDisabledNoConnectReason = "default_disabled_no_connect"
+    static let appSessionMissingReason = "sender_app_session_missing_redacted"
+    static let wrongAccountReason = "sender_wrong_account_redacted"
+    static let sameRoomReadinessMissingReason = "sender_same_room_readiness_missing_redacted"
+    static let armedWaitingForFutureSenderJoinReason = "armed_waiting_for_future_sender_join"
+    static let defaultDisabled = SalemXSenderLiveKitReadinessHook(armed: false,
+                                                                  matrixSessionReady: false,
+                                                                  expectedUserMatched: false,
+                                                                  sameRoomReady: false,
+                                                                  credentialsReady: false)
+
+    let armed: Bool
+    let matrixSessionReady: Bool
+    let expectedUserMatched: Bool
+    let sameRoomReady: Bool
+    let credentialsReady: Bool
+
+    let present = true
+    let debugOnly = true
+    let isDefaultDisabled = true
+    let audioOnly = true
+    let videoAllowed = false
+    let matrixEventsAllowed = false
+    let rawIdentifiersLogged = false
+
+    var blockedReason: String {
+        if !armed {
+            return Self.defaultDisabledNoConnectReason
+        }
+        if !matrixSessionReady {
+            return Self.appSessionMissingReason
+        }
+        if !expectedUserMatched {
+            return Self.wrongAccountReason
+        }
+        if !sameRoomReady {
+            return Self.sameRoomReadinessMissingReason
+        }
+        return Self.armedWaitingForFutureSenderJoinReason
+    }
+}
+
 private struct SalemXControlledAudioConnectExecutionGate {
     static let futurePhaseNotPermittedNoConnectReason = "future_phase_not_permitted_no_connect"
     static let credentialsMissingNoConnectReason = "credentials_missing_no_connect"
@@ -1923,6 +1966,19 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var remoteParticipantPresenceRepairNoVideo = true
     var remoteParticipantPresenceRepairNoMatrixEvents = true
     var remoteParticipantPresenceRepairRawIdentifiersLogged = false
+    var senderLiveKitReadinessHookPresent = SalemXSenderLiveKitReadinessHook.defaultDisabled.present
+    var senderLiveKitReadinessHookDebugOnly = SalemXSenderLiveKitReadinessHook.defaultDisabled.debugOnly
+    var senderLiveKitReadinessHookDefaultDisabled = SalemXSenderLiveKitReadinessHook.defaultDisabled.isDefaultDisabled
+    var senderLiveKitReadinessHookArmed = SalemXSenderLiveKitReadinessHook.defaultDisabled.armed
+    var senderLiveKitReadinessHookMatrixSessionReady = SalemXSenderLiveKitReadinessHook.defaultDisabled.matrixSessionReady
+    var senderLiveKitReadinessHookExpectedUserMatched = SalemXSenderLiveKitReadinessHook.defaultDisabled.expectedUserMatched
+    var senderLiveKitReadinessHookSameRoomReady = SalemXSenderLiveKitReadinessHook.defaultDisabled.sameRoomReady
+    var senderLiveKitReadinessHookCredentialsReady = SalemXSenderLiveKitReadinessHook.defaultDisabled.credentialsReady
+    var senderLiveKitReadinessHookAudioOnly = SalemXSenderLiveKitReadinessHook.defaultDisabled.audioOnly
+    var senderLiveKitReadinessHookVideoAllowed = SalemXSenderLiveKitReadinessHook.defaultDisabled.videoAllowed
+    var senderLiveKitReadinessHookMatrixEventsAllowed = SalemXSenderLiveKitReadinessHook.defaultDisabled.matrixEventsAllowed
+    var senderLiveKitReadinessHookRawIdentifiersLogged = SalemXSenderLiveKitReadinessHook.defaultDisabled.rawIdentifiersLogged
+    var senderLiveKitReadinessHookBlockedReason = SalemXSenderLiveKitReadinessHook.defaultDisabled.blockedReason
     var secondPhysicalSenderLiveKitReadinessPresent = true
     var secondPhysicalSenderLiveKitReadinessDebugOnly = true
     var secondPhysicalSenderLiveKitReadinessDefaultDisabled = true
@@ -2389,6 +2445,19 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "remote_participant_presence_repair_no_video=\(remoteParticipantPresenceRepairNoVideo)",
             "remote_participant_presence_repair_no_matrix_events=\(remoteParticipantPresenceRepairNoMatrixEvents)",
             "remote_participant_presence_repair_raw_identifiers_logged=\(remoteParticipantPresenceRepairRawIdentifiersLogged)",
+            "sender_livekit_readiness_hook_present=\(senderLiveKitReadinessHookPresent)",
+            "sender_livekit_readiness_hook_debug_only=\(senderLiveKitReadinessHookDebugOnly)",
+            "sender_livekit_readiness_hook_default_disabled=\(senderLiveKitReadinessHookDefaultDisabled)",
+            "sender_livekit_readiness_hook_armed=\(senderLiveKitReadinessHookArmed)",
+            "sender_livekit_readiness_hook_matrix_session_ready=\(senderLiveKitReadinessHookMatrixSessionReady)",
+            "sender_livekit_readiness_hook_expected_user_matched=\(senderLiveKitReadinessHookExpectedUserMatched)",
+            "sender_livekit_readiness_hook_same_room_ready=\(senderLiveKitReadinessHookSameRoomReady)",
+            "sender_livekit_readiness_hook_credentials_ready=\(senderLiveKitReadinessHookCredentialsReady)",
+            "sender_livekit_readiness_hook_audio_only=\(senderLiveKitReadinessHookAudioOnly)",
+            "sender_livekit_readiness_hook_video_allowed=\(senderLiveKitReadinessHookVideoAllowed)",
+            "sender_livekit_readiness_hook_matrix_events_allowed=\(senderLiveKitReadinessHookMatrixEventsAllowed)",
+            "sender_livekit_readiness_hook_raw_identifiers_logged=\(senderLiveKitReadinessHookRawIdentifiersLogged)",
+            "sender_livekit_readiness_hook_blocked_reason=\(senderLiveKitReadinessHookBlockedReason)",
             "second_physical_sender_livekit_readiness_present=\(secondPhysicalSenderLiveKitReadinessPresent)",
             "second_physical_sender_livekit_readiness_debug_only=\(secondPhysicalSenderLiveKitReadinessDebugOnly)",
             "second_physical_sender_livekit_readiness_default_disabled=\(secondPhysicalSenderLiveKitReadinessDefaultDisabled)",
@@ -2624,9 +2693,9 @@ private extension SalemXVoIPPushReceiptProofSummary {
         secondPhysicalSenderLiveKitReadinessPresent = true
         secondPhysicalSenderLiveKitReadinessDebugOnly = true
         secondPhysicalSenderLiveKitReadinessDefaultDisabled = true
-        secondPhysicalSenderLiveKitReadinessMatrixSessionReady = remotePeerContextHandoffReceivedByRuntime
-        secondPhysicalSenderLiveKitReadinessSameRoomReady = productionLikeTwoPhysicalDeviceProof && remotePeerContextHandoffReceivedByRuntime
-        secondPhysicalSenderLiveKitReadinessCredentialsReady = false
+        secondPhysicalSenderLiveKitReadinessMatrixSessionReady = senderLiveKitReadinessHookMatrixSessionReady
+        secondPhysicalSenderLiveKitReadinessSameRoomReady = senderLiveKitReadinessHookSameRoomReady
+        secondPhysicalSenderLiveKitReadinessCredentialsReady = senderLiveKitReadinessHookCredentialsReady
         secondPhysicalSenderLiveKitJoinPathPresent = true
         secondPhysicalSenderLiveKitJoinPathDefaultDisabled = true
         secondPhysicalSenderLiveKitJoinPathAudioOnly = true
@@ -2659,6 +2728,23 @@ private extension SalemXVoIPPushReceiptProofSummary {
             receiverRemoteParticipantObserverErrorBucket = "sender_not_joined_or_remote_missing_redacted"
             receiverRemoteParticipantObserverTimeoutBucket = "not_observed_redacted"
         }
+    }
+
+    mutating func recordSenderLiveKitReadinessHook(_ hook: SalemXSenderLiveKitReadinessHook) {
+        senderLiveKitReadinessHookPresent = hook.present
+        senderLiveKitReadinessHookDebugOnly = hook.debugOnly
+        senderLiveKitReadinessHookDefaultDisabled = hook.isDefaultDisabled
+        senderLiveKitReadinessHookArmed = hook.armed
+        senderLiveKitReadinessHookMatrixSessionReady = hook.matrixSessionReady
+        senderLiveKitReadinessHookExpectedUserMatched = hook.expectedUserMatched
+        senderLiveKitReadinessHookSameRoomReady = hook.sameRoomReady
+        senderLiveKitReadinessHookCredentialsReady = hook.credentialsReady
+        senderLiveKitReadinessHookAudioOnly = hook.audioOnly
+        senderLiveKitReadinessHookVideoAllowed = hook.videoAllowed
+        senderLiveKitReadinessHookMatrixEventsAllowed = hook.matrixEventsAllowed
+        senderLiveKitReadinessHookRawIdentifiersLogged = hook.rawIdentifiersLogged
+        senderLiveKitReadinessHookBlockedReason = hook.blockedReason
+        refreshRemoteParticipantPresenceRepairDiagnostics()
     }
 
     mutating func recordRemoteAudioLivenessJoinResult(succeeded: Bool, errorBucket: String = "none") {
@@ -3997,6 +4083,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let matrixSessionWhoamiSmokeURLPath = "/pushkit-token-upload-smoke/session-whoami"
     private static let physical6RuntimeEnablementURLHookPath = "/direct-call/physical6-enable-controlled-audio-connect"
     private static let remotePeerContextHandoffURLHookPath = "/direct-call/remote-peer-context-handoff"
+    private static let senderLiveKitReadinessURLHookPath = "/direct-call/sender-livekit-readiness"
     private static let uploadSmokeDefaultURLString = "https://matrix.mertis.kz/_matrix/client/unstable/kz.salemx.direct_call/pushkit/token"
     private static let matrixSessionWhoamiURLString = "https://matrix.mertis.kz/_matrix/client/v3/account/whoami"
     private static let controlledMediaCredentialsTokenEndpointPath = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/livekit/token"
@@ -4034,6 +4121,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var pendingAuthenticatedMetadataReference: String?
     private static var physical6RuntimeEnablementURLHook = SalemXPhysical6RuntimeEnablementURLHook.defaultDisabled
     private static var pendingRemotePeerContextHandoff: SalemXRemotePeerContextHandoff?
+    private static var senderLiveKitReadinessHook = SalemXSenderLiveKitReadinessHook.defaultDisabled
     #if canImport(CallKit) && os(iOS)
     private static var callKitProofHarness: NativeIncomingSyntheticCallKitUIProofHarness?
     private static var callKitProofGeneration = 0
@@ -4094,6 +4182,12 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             return true
         }
 
+        if url.path == senderLiveKitReadinessURLHookPath {
+            let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            armSenderLiveKitReadinessURLHook(components)
+            return true
+        }
+
         return false
     }
 
@@ -4137,6 +4231,40 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         lock.unlock()
 
         updateLatestVoIPPushReceiptSummary(summary)
+    }
+
+    private static func armSenderLiveKitReadinessURLHook(_ components: URLComponents?) {
+        let hook = SalemXSenderLiveKitReadinessHook(armed: true,
+                                                    matrixSessionReady: redactedBoolQueryItem(components,
+                                                                                              names: ["sender_matrix_session_ready", "matrix_session_ready"]),
+                                                    expectedUserMatched: redactedBoolQueryItem(components,
+                                                                                               names: ["sender_expected_hash_matches", "expected_user_matched", "expected_user_hash_matches"]),
+                                                    sameRoomReady: redactedBoolQueryItem(components,
+                                                                                         names: ["sender_same_room_ready", "same_room_ready"]),
+                                                    credentialsReady: redactedBoolQueryItem(components,
+                                                                                            names: ["sender_credentials_ready", "credentials_ready"]))
+        lock.lock()
+        senderLiveKitReadinessHook = hook
+        var summary = latestVoIPPushReceiptSummary
+        summary.recordSenderLiveKitReadinessHook(hook)
+        summary.mediaConnectRequested = false
+        summary.mediaConnectAttempted = false
+        summary.liveKitJoinRequested = false
+        summary.liveKitConnectAudioInvoked = false
+        summary.microphonePermissionRequested = false
+        summary.cameraPermissionRequested = false
+        summary.matrixEventEmitRequested = false
+        summary.realCallFlowStarted = false
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+    }
+
+    private static func redactedBoolQueryItem(_ components: URLComponents?, names: [String]) -> Bool {
+        guard let value = components?.queryItems?.first(where: { names.contains($0.name) })?.value?.lowercased() else {
+            return false
+        }
+        return value == "true" || value == "1"
     }
 
     @objc static func redactedStateSummary() -> String {
