@@ -6807,3 +6807,131 @@ blocked_reason=none
 Next phase: `2.48T-CallKitSurfaceRepair — fix CallKit report completion/surface before any APNs retry`.
 
 No repeated APNs, production APNs, `dev/invite`, connect retry, LiveKit join, microphone/camera permission request, Matrix event emission, full call flow, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, or forbidden project/signing file change was introduced.
+
+## 2026-06-23 — 2.48Y remote audio/liveness safe classification
+
+Closed the one-shot `2.48Y` physical proof as safely classified, not as remote audio/liveness success.
+
+The phase-specific proof copy was:
+
+```text
+/tmp/salemx-voip-push-receipt-proof-2.48y-remote-audio-liveness-polled.txt
+```
+
+Reviewed proof generation:
+
+```text
+proof_generation=generation_12
+proof_last_updated_by=voip_push_callback
+```
+
+PushKit and CallKit Answer succeeded:
+
+```text
+physical_voip_push_received=true
+pushkit_callback_invoked=true
+pushkit_payload_kind=real_invite_controlled
+callkit_report_result=reported
+callkit_report_completion_observed=true
+pushkit_completion_called=true
+callkit_first_action_kind=answer
+callkit_answer_action_delivered=true
+callkit_answer_action_received=true
+callkit_answer_action_fulfilled=true
+```
+
+Pending metadata and media credentials succeeded:
+
+```text
+pending_metadata_reference_present=true
+pending_metadata_reference_redacted=true
+pending_metadata_fetch_requested=true
+pending_metadata_fetch_result=success_redacted
+pending_metadata_fetch_http_status_bucket=2xx
+pending_metadata_fetch_errcode=none
+media_credentials_requested=true
+media_credentials_request_authorized=true
+media_credentials_result=success_redacted
+media_credentials_token_received=true
+media_credentials_url_received=true
+media_credentials_expires_at_present=true
+media_credentials_payload_redacted=true
+```
+
+The one-shot hook was consumed by exactly one controlled audio-only connect attempt:
+
+```text
+physical6_runtime_enablement_url_hook_consumed=true
+controlled_connect_first_attempt_requested=true
+controlled_connect_first_attempt_allowed=true
+controlled_connect_first_attempt_started=true
+controlled_connect_first_attempt_completed=true
+controlled_connect_first_attempt_repeated=false
+controlled_connect_first_attempt_result=success_redacted
+controlled_connect_first_attempt_error_bucket=none
+media_connect_requested=true
+media_connect_attempted=true
+livekit_join_requested=true
+livekit_connect_audio_invoked=true
+livekit_join_result=success_redacted
+livekit_join_error_bucket=none
+livekit_room_connected=true
+livekit_local_participant_present=true
+```
+
+Remote audio/liveness was not observed and was classified safely. The second-device side used the simulator for this attempt, so the proof does not fake remote liveness success:
+
+```text
+remote_audio_liveness_diagnostics_present=true
+remote_audio_liveness_diagnostics_debug_only=true
+remote_audio_liveness_diagnostics_audio_only=true
+remote_audio_liveness_diagnostics_video_allowed=false
+remote_audio_liveness_diagnostics_matrix_events_allowed=false
+remote_audio_liveness_diagnostics_raw_identifiers_logged=false
+local_audio_publish_requested=false
+local_audio_publish_started=false
+local_audio_publish_result=not_requested
+microphone_permission_requested=false
+microphone_permission_result=not_requested_or_not_required_redacted
+microphone_permission_not_required_reason=receive_only_audio_session_redacted
+audio_route_available=false
+audio_route_result=not_observed_redacted
+livekit_remote_participant_seen=false
+livekit_remote_participant_count_bucket=0
+livekit_remote_audio_track_subscribed=false
+livekit_remote_audio_track_unmuted=false
+livekit_remote_audio_level_observed=false
+livekit_audio_liveness_observed=false
+livekit_audio_liveness_result=not_observed_redacted
+livekit_audio_liveness_error_bucket=none
+livekit_cleanup_requested=true
+livekit_cleanup_completed=true
+livekit_cleanup_result=completed_redacted
+```
+
+Safety remained closed:
+
+```text
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+blocked_reason=none
+```
+
+Conclusion:
+
+```text
+2.48Y = one-shot remote audio/liveness physical proof classified safely.
+One sandbox APNs reached PushKit.
+One green Answer was received and fulfilled.
+Pending metadata succeeded.
+Media credentials succeeded.
+One audio-only media connect attempt completed.
+LiveKit join result=success_redacted.
+Remote participant/audio/liveness result=not_observed_redacted.
+No retry performed.
+```
+
+No repeated APNs, production APNs, `dev/invite`, repeated connect, repeated LiveKit join, video, camera permission request, Matrix event emission, full call flow, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, or forbidden project/signing file change was introduced.
+
+Next phase: `2.48Y-RemoteAudioPublishLivenessRepair — fix local publish and simulator remote liveness observability before any APNs retry`.

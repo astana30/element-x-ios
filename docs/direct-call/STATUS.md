@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48X-RemoteAudioLivenessDiagnostics — redacted remote audio/liveness proof fields were added without APNs/connect. The DEBUG proof can now classify LiveKit join result, local audio publish, microphone requested/not-required state, audio route availability, remote participant/audio track/liveness observation, and LiveKit/audio cleanup without logging raw identifiers. Default runtime remains no-connect. The next phase is `2.48Y — one-shot second-device remote audio/liveness physical proof`.
+After 2.48Y — one-shot remote audio/liveness physical proof was safely classified. One sandbox APNs reached PushKit, one CallKit Answer was received, pending metadata and media credentials succeeded, and one controlled audio-only LiveKit join succeeded. The second-device path used the simulator and remote participant/audio/liveness was not observed; no retry was performed. Video stayed disabled, camera permission stayed false, Matrix events were not emitted, and full call flow did not start. The next phase is `2.48Y-RemoteAudioPublishLivenessRepair — fix local publish and simulator remote liveness observability before any APNs retry`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,101 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48Y one-shot remote audio/liveness physical proof is safely classified:
+  - Phase-specific proof path: `/tmp/salemx-voip-push-receipt-proof-2.48y-remote-audio-liveness-polled.txt`.
+  - Classification: `2.48Y = one-shot remote audio/liveness physical proof classified safely`.
+  - The second-device side used the simulator, so remote audio/liveness was allowed to classify as not observed, not faked as success.
+  - Reviewed proof generation:
+    ```text
+    proof_generation=generation_12
+    proof_last_updated_by=voip_push_callback
+    ```
+  - PushKit and CallKit Answer succeeded:
+    ```text
+    physical_voip_push_received=true
+    pushkit_callback_invoked=true
+    pushkit_payload_kind=real_invite_controlled
+    callkit_report_requested=true
+    callkit_report_result=reported
+    callkit_report_completion_observed=true
+    pushkit_completion_called=true
+    callkit_first_action_kind=answer
+    callkit_answer_action_delivered=true
+    callkit_answer_action_received=true
+    callkit_answer_action_fulfilled=true
+    ```
+  - Pending metadata and media credentials succeeded:
+    ```text
+    pending_metadata_reference_present=true
+    pending_metadata_reference_redacted=true
+    pending_metadata_fetch_requested=true
+    pending_metadata_fetch_result=success_redacted
+    pending_metadata_fetch_http_status_bucket=2xx
+    pending_metadata_fetch_errcode=none
+    media_credentials_requested=true
+    media_credentials_request_authorized=true
+    media_credentials_result=success_redacted
+    media_credentials_token_received=true
+    media_credentials_url_received=true
+    media_credentials_expires_at_present=true
+    media_credentials_payload_redacted=true
+    ```
+  - Exactly one controlled audio-only connect/LiveKit attempt completed and consumed the hook:
+    ```text
+    physical6_runtime_enablement_url_hook_consumed=true
+    controlled_connect_first_attempt_requested=true
+    controlled_connect_first_attempt_allowed=true
+    controlled_connect_first_attempt_started=true
+    controlled_connect_first_attempt_completed=true
+    controlled_connect_first_attempt_repeated=false
+    controlled_connect_first_attempt_result=success_redacted
+    controlled_connect_first_attempt_error_bucket=none
+    media_connect_requested=true
+    media_connect_attempted=true
+    livekit_join_requested=true
+    livekit_connect_audio_invoked=true
+    livekit_join_result=success_redacted
+    livekit_join_error_bucket=none
+    livekit_room_connected=true
+    livekit_local_participant_present=true
+    ```
+  - Remote audio/liveness was explicitly classified as not observed:
+    ```text
+    remote_audio_liveness_diagnostics_present=true
+    remote_audio_liveness_diagnostics_debug_only=true
+    remote_audio_liveness_diagnostics_audio_only=true
+    remote_audio_liveness_diagnostics_video_allowed=false
+    remote_audio_liveness_diagnostics_matrix_events_allowed=false
+    remote_audio_liveness_diagnostics_raw_identifiers_logged=false
+    local_audio_publish_requested=false
+    local_audio_publish_started=false
+    local_audio_publish_result=not_requested
+    microphone_permission_requested=false
+    microphone_permission_result=not_requested_or_not_required_redacted
+    microphone_permission_not_required_reason=receive_only_audio_session_redacted
+    audio_route_available=false
+    audio_route_result=not_observed_redacted
+    livekit_remote_participant_seen=false
+    livekit_remote_participant_count_bucket=0
+    livekit_remote_audio_track_subscribed=false
+    livekit_remote_audio_track_unmuted=false
+    livekit_remote_audio_level_observed=false
+    livekit_audio_liveness_observed=false
+    livekit_audio_liveness_result=not_observed_redacted
+    livekit_audio_liveness_error_bucket=none
+    livekit_cleanup_requested=true
+    livekit_cleanup_completed=true
+    livekit_cleanup_result=completed_redacted
+    ```
+  - Safety remained closed:
+    ```text
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    blocked_reason=none
+    ```
+  - No repeated APNs, production APNs, `dev/invite`, repeated connect, repeated LiveKit join, video, camera permission request, Matrix event emission, or full call flow was performed during classification.
+  - Next phase: `2.48Y-RemoteAudioPublishLivenessRepair — fix local publish and simulator remote liveness observability before any APNs retry`.
 - 2.48X-RemoteAudioLivenessDiagnostics adds targeted redacted remote audio/liveness diagnostics without APNs/connect:
   - This was a code/test diagnostics phase only. It did not send APNs, run production APNs, repeat APNs, use `dev/invite`, start another media connect, join LiveKit on device, request microphone/camera permission on device, emit Matrix events, enable video, or start full call flow.
   - The proof now emits DEBUG-only redacted diagnostics fields:
