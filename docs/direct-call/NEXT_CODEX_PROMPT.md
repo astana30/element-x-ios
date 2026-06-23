@@ -13,160 +13,167 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48Z-Physical1-RemoteParticipantMissingTriage` is complete and safely classified, not remote-audio success.
+`2.48Z-RemoteParticipantPresenceRepair` is complete.
 
-Conclusion:
+The previous physical proof was closed as:
 
 ```text
 2.48Z-Physical1 = two-physical-device remote audio/liveness safely classified, not remote-audio success
-first controlled audio connect attempted
 LiveKit join result=success_redacted
 remote audio/liveness result=not_observed_redacted
 remote liveness blocker=remote_participant_missing_redacted
 no retry performed
 ```
 
-One sandbox APNs was sent after explicit confirmation:
+The repair added redacted diagnostics for the next proof:
 
 ```text
-confirmation_reached=true
-invite_send_attempted=true
-invite_http_code=200
-real_non_dev_invite_used=true
-dev_invite_used=false
-background_apns_push_requested=true
-background_apns_push_result=sandbox_success
-APNs_sent=true
+remote_participant_presence_repair_present=true
+remote_participant_presence_repair_debug_only=true
+remote_participant_presence_repair_requires_two_physical_devices=true
+remote_participant_presence_repair_requires_same_room=true
+remote_participant_presence_repair_requires_sender_livekit_readiness=true
+remote_participant_presence_repair_sender_join_path_present=true
+remote_participant_presence_repair_sender_join_default_disabled=true
+remote_participant_presence_repair_receiver_observer_present=true
+remote_participant_presence_repair_same_livekit_room_required=true
+remote_participant_presence_repair_classifies_sender_not_joined=true
+remote_participant_presence_repair_classifies_remote_missing=true
+remote_participant_presence_repair_classifies_remote_seen=true
+remote_participant_presence_repair_no_video=true
+remote_participant_presence_repair_no_matrix_events=true
+remote_participant_presence_repair_raw_identifiers_logged=false
 ```
 
-Receiver physical proof:
+Sender-side readiness/join-path proof fields are now present and default-disabled:
 
 ```text
-proof_generation=generation_13
-physical_voip_push_received=true
-pushkit_callback_invoked=true
-pushkit_payload_kind=real_invite_controlled
-callkit_report_result=reported
-callkit_report_completion_observed=true
-pushkit_completion_called=true
-callkit_first_action_kind=answer
-callkit_answer_action_delivered=true
-callkit_answer_action_received=true
-callkit_answer_action_fulfilled=true
-pending_metadata_fetch_result=success_redacted
-pending_metadata_fetch_http_status_bucket=2xx
-media_credentials_requested=true
-media_credentials_request_authorized=true
-media_credentials_result=success_redacted
-controlled_connect_first_attempt_requested=true
-controlled_connect_first_attempt_allowed=true
-controlled_connect_first_attempt_started=true
-controlled_connect_first_attempt_completed=true
-controlled_connect_first_attempt_repeated=false
-controlled_connect_first_attempt_result=success_redacted
-livekit_join_requested=true
-livekit_join_result=success_redacted
+second_physical_sender_livekit_readiness_present=true
+second_physical_sender_livekit_readiness_debug_only=true
+second_physical_sender_livekit_readiness_default_disabled=true
+second_physical_sender_livekit_readiness_matrix_session_ready=<redacted_bool>
+second_physical_sender_livekit_readiness_same_room_ready=<redacted_bool>
+second_physical_sender_livekit_readiness_credentials_ready=false
+second_physical_sender_livekit_join_path_present=true
+second_physical_sender_livekit_join_path_default_disabled=true
+second_physical_sender_livekit_join_path_audio_only=true
+second_physical_sender_livekit_join_path_video_allowed=false
+second_physical_sender_livekit_join_path_matrix_events_allowed=false
+second_physical_sender_livekit_join_path_raw_credentials_logged=false
 ```
 
-Physical remote peer context survived into runtime:
+Receiver observer fields can now classify sender-not-joined/remote-missing, remote seen, audio-track missing, liveness missing, or success:
 
 ```text
-remote_peer_context_handoff_present=true
-remote_peer_context_handoff_debug_only=true
-remote_peer_context_handoff_armed_before_apns=true
-remote_peer_context_handoff_received_by_runtime=true
-remote_peer_context_handoff_survived_pushkit=true
-remote_peer_context_handoff_survived_answer=true
-remote_peer_context_handoff_raw_identifiers_logged=false
-remote_peer_kind=physical_ios_redacted
-remote_peer_physical_device=true
-simulator_assisted_remote_audio_proof=false
-production_like_two_physical_device_proof=true
-second_device_remote_audio_readiness=ready_redacted
+receiver_remote_participant_observer_present=true
+receiver_remote_participant_observer_debug_only=true
+receiver_remote_participant_observer_started=<redacted_bool>
+receiver_remote_participant_observer_result=<success_or_not_observed_redacted>
+receiver_remote_participant_observer_error_bucket=<none_or_redacted_bucket>
+receiver_remote_participant_observer_timeout_bucket=<none_or_not_observed_redacted>
+receiver_remote_participant_observer_remote_seen=<redacted_bool>
+receiver_remote_participant_observer_audio_track_seen=<redacted_bool>
+receiver_remote_participant_observer_liveness_seen=<redacted_bool>
+receiver_remote_participant_observer_raw_identifiers_logged=false
 ```
 
-Remote participant/audio/liveness was not observed:
+Default runtime remains no-connect:
 
 ```text
-livekit_room_connected=true
-livekit_room_disconnected=true
-livekit_local_participant_present=true
-local_audio_publish_requested=false
-local_audio_publish_result=not_required_redacted
-microphone_permission_requested=false
-microphone_permission_result=not_requested_or_not_required_redacted
-livekit_remote_participant_seen=false
-livekit_remote_participant_count_bucket=0
-livekit_remote_audio_track_subscribed=false
-livekit_remote_audio_track_unmuted=false
-livekit_remote_audio_level_observed=false
-livekit_audio_liveness_observed=false
-livekit_audio_liveness_result=not_observed_redacted
-livekit_audio_liveness_error_bucket=remote_participant_missing_redacted
-remote_audio_liveness_result=not_observed_redacted
-remote_audio_liveness_error_bucket=remote_participant_missing_redacted
-livekit_cleanup_requested=true
-livekit_cleanup_completed=true
-livekit_cleanup_result=completed_redacted
-```
-
-Safety stayed closed:
-
-```text
+second_physical_sender_livekit_join_path_default_disabled=true
+second_physical_sender_livekit_readiness_credentials_ready=false
 camera_permission_requested=false
 matrix_event_emit_requested=false
 real_call_flow_started=false
-blocked_reason=none
 ```
 
-No repeated APNs, no production APNs, no `dev/invite`, no repeated connect, no repeated LiveKit join, no video, no camera permission, no Matrix event emit, no full call flow, and no project/signing changes were performed.
+Checks from the repair:
+
+```text
+swiftformat changed Swift files: passed
+swiftlint changed Swift files: passed with existing file-length warning only
+DirectCall subset: 149 tests passed
+```
+
+No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission on device, Matrix event emit, full call flow, physical hook reset/re-arm, or physical call attempt was performed during the repair.
 
 ## Next Phase
 
-`2.48Z-RemoteParticipantPresenceRepair — enable/classify second physical device LiveKit participant presence, no APNs/connect`
+`2.48Z-Physical2 — one-shot two-physical-device sender-join/remote-participant proof`
 
-This phase is diagnostics/planning only unless a narrow code-level diagnostic repair is required. Do not run another physical APNs or connect attempt.
+This is the next physical proof. It is not a repeated Physical1 connect. It must be one-shot only and must not begin until fresh preflight and explicit phase confirmation are complete.
 
 ## Goal
 
-Explain why `2.48Z-Physical1` reached a successful receiver-side LiveKit join but did not observe the second physical device as a remote participant, then design the narrow boundary needed to enable/classify second-device participant presence without an APNs/connect retry.
+Run exactly one two-physical-device proof that can classify whether the second physical iPhone joins the same LiveKit room as the receiver and whether receiver-side remote participant/audio/liveness is observed.
 
-Investigate only local code/docs/log-safe artifacts and existing redacted proof fields. Focus likely areas:
-
-```text
-remote peer only represented as receiver-side DEBUG context, not an actual sender-side LiveKit participant
-caller/sender app did not join LiveKit
-receive-only connect path did not publish local audio and did not require microphone permission
-LiveKit room/token participant identity expectations
-server invite/credentials path creates receiver credentials only
-missing caller-side controlled join trigger
-DEBUG-only second-device remote peer join hook
-same LiveKit room/token allocation verification
-```
-
-Required diagnostic questions:
+Before APNs, validate again:
 
 ```text
-did_second_physical_device_join_livekit=false_or_unknown
-was_sender_side_livekit_token_requested=false_or_unknown
-was_sender_side_livekit_join_requested=false_or_unknown
-was_remote_peer_context_only_diagnostic=true_or_false
-is_receiver_receive_only_path_expected_to_see_remote_participant_without_sender_join=true_or_false
-next_required_boundary=<redacted_plan>
+receiver_token_found=true
+sender_token_found=true
+receiver_user_hash=497015f5745c933a
+sender_user_hash=7d434d7f252427fb
+sender_equals_receiver=false
+receiver_room_membership=join
+sender_room_membership=join
+room_encryption_algorithm_present=true
+room_validation_preflight=pass
+receiver_iphone_pending_metadata_auth_ready=true
+second_physical_device_pending_metadata_auth_ready=true
+remote_participant_presence_repair_present=true
+second_physical_sender_livekit_readiness_present=true
+receiver_remote_participant_observer_present=true
+APNs_sent=false
+safe_to_send_apns=true
 ```
+
+Send exactly one sandbox APNs only after explicit phase-specific confirmation:
+
+```text
+SEND_2_48Z_PHYSICAL2
+```
+
+After `background_apns_push_result=sandbox_success`, do not send another APNs.
+
+The future proof must classify:
+
+```text
+second_physical_sender_livekit_readiness_matrix_session_ready=<true_or_false>
+second_physical_sender_livekit_readiness_same_room_ready=<true_or_false>
+second_physical_sender_livekit_readiness_credentials_ready=<true_or_false>
+second_physical_sender_livekit_join_path_present=true
+second_physical_sender_livekit_join_path_default_disabled=<true_or_false_after_explicit_phase_gate>
+second_physical_sender_livekit_join_path_audio_only=true
+second_physical_sender_livekit_join_path_video_allowed=false
+second_physical_sender_livekit_join_path_matrix_events_allowed=false
+receiver_remote_participant_observer_result=<success_or_not_observed_redacted>
+receiver_remote_participant_observer_error_bucket=<none_or_redacted_bucket>
+receiver_remote_participant_observer_remote_seen=<true_or_false>
+receiver_remote_participant_observer_audio_track_seen=<true_or_false>
+receiver_remote_participant_observer_liveness_seen=<true_or_false>
+livekit_remote_participant_seen=<true_or_false>
+livekit_remote_audio_track_subscribed=<true_or_false>
+livekit_audio_liveness_result=<success_redacted_or_not_observed_redacted_or_failed_redacted>
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+Do not fake sender join or remote audio success. If the sender does not join or the receiver does not observe the remote participant/audio, classify the exact redacted bucket and stop.
 
 ## Hard Limits
 
 Do not:
 
-- send APNs
+- send APNs before explicit one-shot confirmation
 - run production APNs
 - run repeated APNs
 - use `dev/invite`
-- retry media connect
-- retry LiveKit join
-- start a physical call attempt
-- request microphone permission
+- run more than one media connect attempt
+- run more than one LiveKit join attempt per controlled path
+- retry media connect after the first result
+- retry LiveKit join after the first result
 - request camera permission
 - enable video
 - emit Matrix events
@@ -177,7 +184,7 @@ Do not:
 - modify `.entitlements`
 - modify `Info.plist`
 
-## Required Checks Before Commit
+## Required Checks Before Close
 
 Run:
 
@@ -201,11 +208,16 @@ Allowed hits are field names, redacted labels, negative statements, synthetic te
 
 Return:
 
-- diagnostic conclusion
-- whether a sender-side LiveKit participant was actually expected from 2.48Z-Physical1
-- whether remote peer context was diagnostic-only
-- next required boundary/repair
-- commit hash if docs/code were updated
+- physical proof classification
+- proof generation number if available
+- sender-side LiveKit readiness classification
+- sender-side join path result
+- receiver remote participant observer result
+- remote participant/audio/liveness result
+- whether same LiveKit room requirement was satisfied
+- whether two-physical-device requirement was satisfied
+- whether camera/video/Matrix/full-flow safety stayed closed
+- commit hash if docs were updated
 - commit message
 - changed files
 - checks run

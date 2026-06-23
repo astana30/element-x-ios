@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Added 2.48Z-RemoteParticipantPresenceRepair: the DEBUG proof now exposes default-disabled sender-side LiveKit readiness/join-path fields and receiver remote participant observer classifications for sender-not-joined, remote-missing, remote-seen, audio-track-missing, and liveness-not-observed without device APNs/connect/LiveKit.
 - Closed 2.48Z-Physical1-RemoteParticipantMissingTriage as safely classified, not remote-audio success: one sandbox APNs, PushKit, CallKit Answer, pending metadata, media credentials, one controlled audio-only connect, and LiveKit join succeeded on the two-physical-device path, but remote participant/audio/liveness was not observed; no retry was performed.
 - Added 2.48X-RemoteAudioLivenessDiagnostics: the DEBUG proof now emits redacted fields for LiveKit join result, local audio publish, microphone requested/not-required classification, audio route availability, remote participant/audio track/liveness observation, and LiveKit/audio cleanup while preserving default no-connect, one-shot, no-video, no-camera, no-Matrix, no-full-flow safety.
 - Closed 2.48X as a docs-only second-device remote audio/liveness readiness review: Physical8 generation 14 proves one successful controlled audio-only connect and preserved one-shot/no-repeat/no-video/no-Matrix/full-flow safety, but explicit LiveKit join result, room state, local publish, remote participant/audio track, audio liveness, microphone-result, audio-route, and Physical8 disconnect-cleanup diagnostics are missing; next is targeted no-APNs/no-connect diagnostics.
@@ -7595,3 +7596,81 @@ no retry performed
 No repeated APNs, no production APNs, no `dev/invite`, no repeated connect, no repeated LiveKit join, no video, no camera permission, no Matrix event emit, no full call flow, and no project/signing changes were performed.
 
 Next phase: `2.48Z-RemoteParticipantPresenceRepair — enable/classify second physical device LiveKit participant presence, no APNs/connect`.
+
+## 2026-06-23 — 2.48Z-RemoteParticipantPresenceRepair
+
+Implemented the redacted diagnostics needed to classify second physical sender LiveKit readiness and receiver-side remote participant observation before the next one-shot physical proof.
+
+The receiver proof surface now records the remote participant presence repair boundary:
+
+```text
+remote_participant_presence_repair_present=true
+remote_participant_presence_repair_debug_only=true
+remote_participant_presence_repair_requires_two_physical_devices=true
+remote_participant_presence_repair_requires_same_room=true
+remote_participant_presence_repair_requires_sender_livekit_readiness=true
+remote_participant_presence_repair_sender_join_path_present=true
+remote_participant_presence_repair_sender_join_default_disabled=true
+remote_participant_presence_repair_receiver_observer_present=true
+remote_participant_presence_repair_same_livekit_room_required=true
+remote_participant_presence_repair_classifies_sender_not_joined=true
+remote_participant_presence_repair_classifies_remote_missing=true
+remote_participant_presence_repair_classifies_remote_seen=true
+remote_participant_presence_repair_no_video=true
+remote_participant_presence_repair_no_matrix_events=true
+remote_participant_presence_repair_raw_identifiers_logged=false
+```
+
+Sender-side LiveKit readiness and join-path classification are represented without enabling a real device join:
+
+```text
+second_physical_sender_livekit_readiness_present=true
+second_physical_sender_livekit_readiness_debug_only=true
+second_physical_sender_livekit_readiness_default_disabled=true
+second_physical_sender_livekit_readiness_matrix_session_ready=<redacted_bool>
+second_physical_sender_livekit_readiness_same_room_ready=<redacted_bool>
+second_physical_sender_livekit_readiness_credentials_ready=false
+second_physical_sender_livekit_join_path_present=true
+second_physical_sender_livekit_join_path_default_disabled=true
+second_physical_sender_livekit_join_path_audio_only=true
+second_physical_sender_livekit_join_path_video_allowed=false
+second_physical_sender_livekit_join_path_matrix_events_allowed=false
+second_physical_sender_livekit_join_path_raw_credentials_logged=false
+```
+
+Receiver observer classification now distinguishes the missing remote-participant cases without faking success:
+
+```text
+receiver_remote_participant_observer_present=true
+receiver_remote_participant_observer_debug_only=true
+receiver_remote_participant_observer_started=<redacted_bool>
+receiver_remote_participant_observer_result=<success_or_not_observed_redacted>
+receiver_remote_participant_observer_error_bucket=<none_or_redacted_bucket>
+receiver_remote_participant_observer_timeout_bucket=<none_or_not_observed_redacted>
+receiver_remote_participant_observer_remote_seen=<redacted_bool>
+receiver_remote_participant_observer_audio_track_seen=<redacted_bool>
+receiver_remote_participant_observer_liveness_seen=<redacted_bool>
+receiver_remote_participant_observer_raw_identifiers_logged=false
+```
+
+Default runtime remains no-connect:
+
+```text
+second_physical_sender_livekit_join_path_default_disabled=true
+second_physical_sender_livekit_readiness_credentials_ready=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+Checks:
+
+```text
+swiftformat changed Swift files: passed
+swiftlint changed Swift files: passed with existing file-length warning only
+DirectCall subset: 149 tests passed
+```
+
+No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission on device, Matrix event emit, full call flow, physical hook reset/re-arm, or physical call attempt was performed.
+
+Next phase: `2.48Z-Physical2 — one-shot two-physical-device sender-join/remote-participant proof`.

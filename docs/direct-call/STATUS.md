@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-Physical1-RemoteParticipantMissingTriage — the first two-physical-device remote audio/liveness proof is safely classified, not remote-audio success. One sandbox APNs was sent after explicit confirmation, PushKit and CallKit Answer succeeded, pending metadata and media credentials succeeded, and one controlled audio-only media connect/LiveKit join completed. Remote audio/liveness was not observed because no remote participant was seen. No retry was performed. The next phase is `2.48Z-RemoteParticipantPresenceRepair — enable/classify second physical device LiveKit participant presence, no APNs/connect`.
+After 2.48Z-RemoteParticipantPresenceRepair — the proof surface can now classify second physical sender LiveKit readiness, the default-disabled sender join path, same-room/two-physical-device requirements, and receiver-side remote participant observer outcomes. This was a code/test diagnostics phase only; no APNs, device media connect, or device LiveKit join was run. The next phase is `2.48Z-Physical2 — one-shot two-physical-device sender-join/remote-participant proof`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,63 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48Z-RemoteParticipantPresenceRepair adds sender-side and receiver-observer diagnostics for the missing remote participant:
+  - This was a code/test diagnostics repair only. It did not send APNs, run production APNs, repeat APNs, use `dev/invite`, start physical media connect, join LiveKit on a real device, request microphone/camera permission on device, enable video, emit Matrix events, start full call flow, reset/re-arm physical one-shot hooks, or perform another physical call attempt.
+  - The receiver proof surface now records the remote participant presence repair boundary:
+    ```text
+    remote_participant_presence_repair_present=true
+    remote_participant_presence_repair_debug_only=true
+    remote_participant_presence_repair_requires_two_physical_devices=true
+    remote_participant_presence_repair_requires_same_room=true
+    remote_participant_presence_repair_requires_sender_livekit_readiness=true
+    remote_participant_presence_repair_sender_join_path_present=true
+    remote_participant_presence_repair_sender_join_default_disabled=true
+    remote_participant_presence_repair_receiver_observer_present=true
+    remote_participant_presence_repair_same_livekit_room_required=true
+    remote_participant_presence_repair_classifies_sender_not_joined=true
+    remote_participant_presence_repair_classifies_remote_missing=true
+    remote_participant_presence_repair_classifies_remote_seen=true
+    remote_participant_presence_repair_no_video=true
+    remote_participant_presence_repair_no_matrix_events=true
+    remote_participant_presence_repair_raw_identifiers_logged=false
+    ```
+  - Sender-side LiveKit readiness and join-path classification is represented without enabling a real device join:
+    ```text
+    second_physical_sender_livekit_readiness_present=true
+    second_physical_sender_livekit_readiness_debug_only=true
+    second_physical_sender_livekit_readiness_default_disabled=true
+    second_physical_sender_livekit_readiness_matrix_session_ready=<redacted_bool>
+    second_physical_sender_livekit_readiness_same_room_ready=<redacted_bool>
+    second_physical_sender_livekit_readiness_credentials_ready=false
+    second_physical_sender_livekit_join_path_present=true
+    second_physical_sender_livekit_join_path_default_disabled=true
+    second_physical_sender_livekit_join_path_audio_only=true
+    second_physical_sender_livekit_join_path_video_allowed=false
+    second_physical_sender_livekit_join_path_matrix_events_allowed=false
+    second_physical_sender_livekit_join_path_raw_credentials_logged=false
+    ```
+  - Receiver-side observation can classify sender-not-joined/remote-missing, remote seen, audio-track missing, liveness missing, or success without faking liveness:
+    ```text
+    receiver_remote_participant_observer_present=true
+    receiver_remote_participant_observer_debug_only=true
+    receiver_remote_participant_observer_started=<redacted_bool>
+    receiver_remote_participant_observer_result=<success_or_not_observed_redacted>
+    receiver_remote_participant_observer_error_bucket=<none_or_redacted_bucket>
+    receiver_remote_participant_observer_timeout_bucket=<none_or_not_observed_redacted>
+    receiver_remote_participant_observer_remote_seen=<redacted_bool>
+    receiver_remote_participant_observer_audio_track_seen=<redacted_bool>
+    receiver_remote_participant_observer_liveness_seen=<redacted_bool>
+    receiver_remote_participant_observer_raw_identifiers_logged=false
+    ```
+  - Defaults remain no-connect and safety stays closed:
+    ```text
+    second_physical_sender_livekit_join_path_default_disabled=true
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    ```
+  - Targeted DirectCall unit subset passed with 149 tests.
+  - Next phase: `2.48Z-Physical2 — one-shot two-physical-device sender-join/remote-participant proof`.
 - 2.48Z-Physical1-RemoteParticipantMissingTriage safely classifies the first two-physical-device remote audio/liveness proof:
   - This was a one-shot two-physical-device proof with iPhone PRO as the receiver and the second physical iPhone as the remote peer context. Exactly one sandbox APNs was sent after explicit `SEND_2_48Z_PHYSICAL1` confirmation; no APNs retry, connect retry, or LiveKit retry was performed.
   - APNs and PushKit/CallKit path:

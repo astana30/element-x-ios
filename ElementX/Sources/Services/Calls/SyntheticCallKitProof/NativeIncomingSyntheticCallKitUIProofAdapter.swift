@@ -1908,6 +1908,43 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var remoteAudioPublishLivenessRepairNoVideo = true
     var remoteAudioPublishLivenessRepairNoMatrixEvents = true
     var remoteAudioPublishLivenessRepairRawIdentifiersLogged = false
+    var remoteParticipantPresenceRepairPresent = true
+    var remoteParticipantPresenceRepairDebugOnly = true
+    var remoteParticipantPresenceRepairRequiresTwoPhysicalDevices = true
+    var remoteParticipantPresenceRepairRequiresSameRoom = true
+    var remoteParticipantPresenceRepairRequiresSenderLiveKitReadiness = true
+    var remoteParticipantPresenceRepairSenderJoinPathPresent = true
+    var remoteParticipantPresenceRepairSenderJoinDefaultDisabled = true
+    var remoteParticipantPresenceRepairReceiverObserverPresent = true
+    var remoteParticipantPresenceRepairSameLiveKitRoomRequired = true
+    var remoteParticipantPresenceRepairClassifiesSenderNotJoined = true
+    var remoteParticipantPresenceRepairClassifiesRemoteMissing = true
+    var remoteParticipantPresenceRepairClassifiesRemoteSeen = true
+    var remoteParticipantPresenceRepairNoVideo = true
+    var remoteParticipantPresenceRepairNoMatrixEvents = true
+    var remoteParticipantPresenceRepairRawIdentifiersLogged = false
+    var secondPhysicalSenderLiveKitReadinessPresent = true
+    var secondPhysicalSenderLiveKitReadinessDebugOnly = true
+    var secondPhysicalSenderLiveKitReadinessDefaultDisabled = true
+    var secondPhysicalSenderLiveKitReadinessMatrixSessionReady = false
+    var secondPhysicalSenderLiveKitReadinessSameRoomReady = false
+    var secondPhysicalSenderLiveKitReadinessCredentialsReady = false
+    var secondPhysicalSenderLiveKitJoinPathPresent = true
+    var secondPhysicalSenderLiveKitJoinPathDefaultDisabled = true
+    var secondPhysicalSenderLiveKitJoinPathAudioOnly = true
+    var secondPhysicalSenderLiveKitJoinPathVideoAllowed = false
+    var secondPhysicalSenderLiveKitJoinPathMatrixEventsAllowed = false
+    var secondPhysicalSenderLiveKitJoinPathRawCredentialsLogged = false
+    var receiverRemoteParticipantObserverPresent = true
+    var receiverRemoteParticipantObserverDebugOnly = true
+    var receiverRemoteParticipantObserverStarted = false
+    var receiverRemoteParticipantObserverResult = "not_observed_redacted"
+    var receiverRemoteParticipantObserverErrorBucket = "sender_not_joined_or_remote_missing_redacted"
+    var receiverRemoteParticipantObserverTimeoutBucket = "not_observed_redacted"
+    var receiverRemoteParticipantObserverRemoteSeen = false
+    var receiverRemoteParticipantObserverAudioTrackSeen = false
+    var receiverRemoteParticipantObserverLivenessSeen = false
+    var receiverRemoteParticipantObserverRawIdentifiersLogged = false
     var remotePeerContextHandoffPresent = true
     var remotePeerContextHandoffDebugOnly = true
     var remotePeerContextHandoffSource = "unknown_redacted"
@@ -2337,6 +2374,43 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "remote_audio_publish_liveness_repair_no_video=\(remoteAudioPublishLivenessRepairNoVideo)",
             "remote_audio_publish_liveness_repair_no_matrix_events=\(remoteAudioPublishLivenessRepairNoMatrixEvents)",
             "remote_audio_publish_liveness_repair_raw_identifiers_logged=\(remoteAudioPublishLivenessRepairRawIdentifiersLogged)",
+            "remote_participant_presence_repair_present=\(remoteParticipantPresenceRepairPresent)",
+            "remote_participant_presence_repair_debug_only=\(remoteParticipantPresenceRepairDebugOnly)",
+            "remote_participant_presence_repair_requires_two_physical_devices=\(remoteParticipantPresenceRepairRequiresTwoPhysicalDevices)",
+            "remote_participant_presence_repair_requires_same_room=\(remoteParticipantPresenceRepairRequiresSameRoom)",
+            "remote_participant_presence_repair_requires_sender_livekit_readiness=\(remoteParticipantPresenceRepairRequiresSenderLiveKitReadiness)",
+            "remote_participant_presence_repair_sender_join_path_present=\(remoteParticipantPresenceRepairSenderJoinPathPresent)",
+            "remote_participant_presence_repair_sender_join_default_disabled=\(remoteParticipantPresenceRepairSenderJoinDefaultDisabled)",
+            "remote_participant_presence_repair_receiver_observer_present=\(remoteParticipantPresenceRepairReceiverObserverPresent)",
+            "remote_participant_presence_repair_same_livekit_room_required=\(remoteParticipantPresenceRepairSameLiveKitRoomRequired)",
+            "remote_participant_presence_repair_classifies_sender_not_joined=\(remoteParticipantPresenceRepairClassifiesSenderNotJoined)",
+            "remote_participant_presence_repair_classifies_remote_missing=\(remoteParticipantPresenceRepairClassifiesRemoteMissing)",
+            "remote_participant_presence_repair_classifies_remote_seen=\(remoteParticipantPresenceRepairClassifiesRemoteSeen)",
+            "remote_participant_presence_repair_no_video=\(remoteParticipantPresenceRepairNoVideo)",
+            "remote_participant_presence_repair_no_matrix_events=\(remoteParticipantPresenceRepairNoMatrixEvents)",
+            "remote_participant_presence_repair_raw_identifiers_logged=\(remoteParticipantPresenceRepairRawIdentifiersLogged)",
+            "second_physical_sender_livekit_readiness_present=\(secondPhysicalSenderLiveKitReadinessPresent)",
+            "second_physical_sender_livekit_readiness_debug_only=\(secondPhysicalSenderLiveKitReadinessDebugOnly)",
+            "second_physical_sender_livekit_readiness_default_disabled=\(secondPhysicalSenderLiveKitReadinessDefaultDisabled)",
+            "second_physical_sender_livekit_readiness_matrix_session_ready=\(secondPhysicalSenderLiveKitReadinessMatrixSessionReady)",
+            "second_physical_sender_livekit_readiness_same_room_ready=\(secondPhysicalSenderLiveKitReadinessSameRoomReady)",
+            "second_physical_sender_livekit_readiness_credentials_ready=\(secondPhysicalSenderLiveKitReadinessCredentialsReady)",
+            "second_physical_sender_livekit_join_path_present=\(secondPhysicalSenderLiveKitJoinPathPresent)",
+            "second_physical_sender_livekit_join_path_default_disabled=\(secondPhysicalSenderLiveKitJoinPathDefaultDisabled)",
+            "second_physical_sender_livekit_join_path_audio_only=\(secondPhysicalSenderLiveKitJoinPathAudioOnly)",
+            "second_physical_sender_livekit_join_path_video_allowed=\(secondPhysicalSenderLiveKitJoinPathVideoAllowed)",
+            "second_physical_sender_livekit_join_path_matrix_events_allowed=\(secondPhysicalSenderLiveKitJoinPathMatrixEventsAllowed)",
+            "second_physical_sender_livekit_join_path_raw_credentials_logged=\(secondPhysicalSenderLiveKitJoinPathRawCredentialsLogged)",
+            "receiver_remote_participant_observer_present=\(receiverRemoteParticipantObserverPresent)",
+            "receiver_remote_participant_observer_debug_only=\(receiverRemoteParticipantObserverDebugOnly)",
+            "receiver_remote_participant_observer_started=\(receiverRemoteParticipantObserverStarted)",
+            "receiver_remote_participant_observer_result=\(receiverRemoteParticipantObserverResult)",
+            "receiver_remote_participant_observer_error_bucket=\(receiverRemoteParticipantObserverErrorBucket)",
+            "receiver_remote_participant_observer_timeout_bucket=\(receiverRemoteParticipantObserverTimeoutBucket)",
+            "receiver_remote_participant_observer_remote_seen=\(receiverRemoteParticipantObserverRemoteSeen)",
+            "receiver_remote_participant_observer_audio_track_seen=\(receiverRemoteParticipantObserverAudioTrackSeen)",
+            "receiver_remote_participant_observer_liveness_seen=\(receiverRemoteParticipantObserverLivenessSeen)",
+            "receiver_remote_participant_observer_raw_identifiers_logged=\(receiverRemoteParticipantObserverRawIdentifiersLogged)",
             "remote_peer_context_handoff_present=\(remotePeerContextHandoffPresent)",
             "remote_peer_context_handoff_debug_only=\(remotePeerContextHandoffDebugOnly)",
             "remote_peer_context_handoff_source=\(remotePeerContextHandoffSource)",
@@ -2473,6 +2547,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         remoteAudioPublishLivenessRepairNoVideo = !controlledConnectFirstAttemptVideoAllowed && !cameraPermissionRequested
         remoteAudioPublishLivenessRepairNoMatrixEvents = !controlledConnectFirstAttemptMatrixEventsAllowed && !matrixEventEmitRequested
         remoteAudioPublishLivenessRepairRawIdentifiersLogged = false
+        refreshRemoteParticipantPresenceRepairDiagnostics()
         remotePeerContextHandoffPresent = true
         remotePeerContextHandoffDebugOnly = true
         remotePeerContextHandoffRawIdentifiersLogged = false
@@ -2527,6 +2602,63 @@ private extension SalemXVoIPPushReceiptProofSummary {
         liveKitCleanupRequested = disconnectCleanupDiagnosticsLiveKitCleanupRequested
         liveKitCleanupCompleted = disconnectCleanupDiagnosticsLiveKitCleanupCompleted
         liveKitCleanupResult = liveKitCleanupCompleted ? "completed_redacted" : (liveKitCleanupRequested ? "not_completed_redacted" : "not_requested")
+    }
+
+    mutating func refreshRemoteParticipantPresenceRepairDiagnostics() {
+        remoteParticipantPresenceRepairPresent = true
+        remoteParticipantPresenceRepairDebugOnly = true
+        remoteParticipantPresenceRepairRequiresTwoPhysicalDevices = true
+        remoteParticipantPresenceRepairRequiresSameRoom = true
+        remoteParticipantPresenceRepairRequiresSenderLiveKitReadiness = true
+        remoteParticipantPresenceRepairSenderJoinPathPresent = true
+        remoteParticipantPresenceRepairSenderJoinDefaultDisabled = true
+        remoteParticipantPresenceRepairReceiverObserverPresent = true
+        remoteParticipantPresenceRepairSameLiveKitRoomRequired = true
+        remoteParticipantPresenceRepairClassifiesSenderNotJoined = true
+        remoteParticipantPresenceRepairClassifiesRemoteMissing = true
+        remoteParticipantPresenceRepairClassifiesRemoteSeen = true
+        remoteParticipantPresenceRepairNoVideo = !controlledConnectFirstAttemptVideoAllowed && !cameraPermissionRequested
+        remoteParticipantPresenceRepairNoMatrixEvents = !controlledConnectFirstAttemptMatrixEventsAllowed && !matrixEventEmitRequested
+        remoteParticipantPresenceRepairRawIdentifiersLogged = false
+
+        secondPhysicalSenderLiveKitReadinessPresent = true
+        secondPhysicalSenderLiveKitReadinessDebugOnly = true
+        secondPhysicalSenderLiveKitReadinessDefaultDisabled = true
+        secondPhysicalSenderLiveKitReadinessMatrixSessionReady = remotePeerContextHandoffReceivedByRuntime
+        secondPhysicalSenderLiveKitReadinessSameRoomReady = productionLikeTwoPhysicalDeviceProof && remotePeerContextHandoffReceivedByRuntime
+        secondPhysicalSenderLiveKitReadinessCredentialsReady = false
+        secondPhysicalSenderLiveKitJoinPathPresent = true
+        secondPhysicalSenderLiveKitJoinPathDefaultDisabled = true
+        secondPhysicalSenderLiveKitJoinPathAudioOnly = true
+        secondPhysicalSenderLiveKitJoinPathVideoAllowed = false
+        secondPhysicalSenderLiveKitJoinPathMatrixEventsAllowed = false
+        secondPhysicalSenderLiveKitJoinPathRawCredentialsLogged = false
+
+        receiverRemoteParticipantObserverPresent = true
+        receiverRemoteParticipantObserverDebugOnly = true
+        receiverRemoteParticipantObserverStarted = liveKitJoinResult == "success_redacted" || liveKitJoinRequested
+        receiverRemoteParticipantObserverRemoteSeen = liveKitRemoteParticipantSeen
+        receiverRemoteParticipantObserverAudioTrackSeen = liveKitRemoteAudioTrackSubscribed
+        receiverRemoteParticipantObserverLivenessSeen = liveKitAudioLivenessObserved
+        receiverRemoteParticipantObserverRawIdentifiersLogged = false
+
+        if liveKitAudioLivenessObserved {
+            receiverRemoteParticipantObserverResult = "success_redacted"
+            receiverRemoteParticipantObserverErrorBucket = "none"
+            receiverRemoteParticipantObserverTimeoutBucket = "none"
+        } else if liveKitRemoteParticipantSeen, !liveKitRemoteAudioTrackSubscribed {
+            receiverRemoteParticipantObserverResult = "not_observed_redacted"
+            receiverRemoteParticipantObserverErrorBucket = "remote_audio_track_missing_redacted"
+            receiverRemoteParticipantObserverTimeoutBucket = "not_observed_redacted"
+        } else if liveKitRemoteParticipantSeen {
+            receiverRemoteParticipantObserverResult = "not_observed_redacted"
+            receiverRemoteParticipantObserverErrorBucket = "remote_liveness_not_observed_redacted"
+            receiverRemoteParticipantObserverTimeoutBucket = "not_observed_redacted"
+        } else {
+            receiverRemoteParticipantObserverResult = "not_observed_redacted"
+            receiverRemoteParticipantObserverErrorBucket = "sender_not_joined_or_remote_missing_redacted"
+            receiverRemoteParticipantObserverTimeoutBucket = "not_observed_redacted"
+        }
     }
 
     mutating func recordRemoteAudioLivenessJoinResult(succeeded: Bool, errorBucket: String = "none") {
