@@ -13,157 +13,116 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48Y-Physical3` is complete and safely classified.
+`2.48Z` is complete and blocked at second physical device setup/session readiness.
 
 Conclusion:
 
 ```text
-2.48Y-Physical3 = simulator-assisted remote peer context/liveness proof safely classified.
-One sandbox APNs sent.
-Remote peer context successfully reached runtime proof and survived PushKit plus Answer.
-First controlled audio connect succeeded and LiveKit join succeeded once.
-Remote audio/liveness was not observed because no remote LiveKit participant appeared.
-Simulator-assisted limitation recorded.
-No retry performed.
+2.48Z = two-physical-device readiness blocked
+reason=second_device_session_not_ready_redacted
+no APNs
+no connect
+no LiveKit join
+no permissions
 ```
 
-This was not a production-like two-physical-device remote audio proof:
+Readiness review found a second physical iPhone and the app is installed, but the app did not produce the redacted Matrix session proof after the DEBUG `/whoami` URL trigger:
 
 ```text
-remote_peer_kind=ios_simulator_redacted
-remote_peer_physical_device=false
-simulator_assisted_remote_audio_proof=true
+second_physical_device_available=true
+second_physical_device_kind=iphone
+second_physical_device_app_installed=true
+second_physical_device_matrix_session_ready=false
+second_physical_device_expected_user_hash=7d434d7f252427fb
+second_physical_device_same_room_ready=false
+second_physical_device_livekit_remote_peer_ready=false
+second_physical_device_session_proof_requested=true
+second_physical_device_session_proof_available=false
+second_physical_device_session_proof_failure=proof_file_missing_redacted
+```
+
+Because the second physical app-session proof was unavailable, this phase did not freshly validate distinct accounts, same encrypted room readiness, or LiveKit remote peer readiness:
+
+```text
+distinct_accounts_validated=false
+same_encrypted_room_readiness_validated=false
 production_like_two_physical_device_proof=false
-remote_audio_liveness_limitation=simulator_assisted_redacted
+second_device_remote_audio_readiness=not_ready_redacted
 ```
 
-Phase-specific proof path:
-
-```text
-/tmp/salemx-voip-push-receipt-proof-2.48y-physical3-simulator-context-liveness-polled.txt
-```
-
-Key proof fields:
-
-```text
-proof_generation=generation_15
-physical_voip_push_received=true
-pushkit_callback_invoked=true
-pushkit_payload_kind=real_invite_controlled
-
-callkit_report_result=reported
-callkit_report_completion_observed=true
-callkit_first_action_kind=answer
-callkit_answer_action_received=true
-callkit_answer_action_fulfilled=true
-
-pending_metadata_fetch_requested=true
-pending_metadata_fetch_result=success_redacted
-pending_metadata_fetch_http_status_bucket=2xx
-
-media_credentials_requested=true
-media_credentials_result=success_redacted
-
-controlled_connect_first_attempt_requested=true
-controlled_connect_first_attempt_completed=true
-controlled_connect_first_attempt_repeated=false
-controlled_connect_first_attempt_result=success_redacted
-controlled_connect_first_attempt_error_bucket=none
-
-media_connect_requested=true
-media_connect_attempted=true
-livekit_join_requested=true
-livekit_connect_audio_invoked=true
-livekit_join_result=success_redacted
-livekit_cleanup_result=completed_redacted
-```
-
-The remote peer context handoff worked:
-
-```text
-remote_peer_context_handoff_present=true
-remote_peer_context_handoff_debug_only=true
-remote_peer_context_handoff_source=debug_hook_redacted
-remote_peer_context_handoff_armed_before_apns=true
-remote_peer_context_handoff_received_by_runtime=true
-remote_peer_context_handoff_survived_pushkit=true
-remote_peer_context_handoff_survived_answer=true
-remote_peer_context_handoff_raw_identifiers_logged=false
-```
-
-Remote audio/liveness did not succeed:
-
-```text
-livekit_remote_participant_seen=false
-livekit_remote_participant_count_bucket=0
-livekit_remote_audio_track_subscribed=false
-livekit_remote_audio_track_unmuted=false
-livekit_remote_audio_level_observed=false
-livekit_audio_liveness_observed=false
-livekit_audio_liveness_result=not_observed_redacted
-livekit_audio_liveness_error_bucket=remote_participant_missing_redacted
-remote_audio_liveness_result=not_observed_redacted
-remote_audio_liveness_error_bucket=remote_participant_missing_redacted
-```
-
-Safety stayed closed:
-
-```text
-local_audio_publish_result=not_required_redacted
-microphone_permission_requested=false
-camera_permission_requested=false
-matrix_event_emit_requested=false
-real_call_flow_started=false
-blocked_reason=none
-```
-
-No repeated APNs, no production APNs, no `dev/invite`, no repeated connect, no repeated LiveKit join, no video, no camera permission, no Matrix event emit, no full call flow, and no project/signing changes were performed.
+No APNs, no production APNs, no repeated APNs, no `dev/invite`, no repeated connect, no LiveKit join, no video, no microphone/camera permission, no Matrix event emit, no full call flow, no one-shot hook reset/re-arm, and no physical call attempt were performed.
 
 ## Next Phase
 
-`2.48Z — two-physical-device remote audio proof readiness, no repeated connect`
+`2.48Z-SecondPhysicalDeviceSetup — prepare second physical device remote peer, no APNs/connect`
 
-Do not repeat the simulator-assisted Physical3 attempt. The next phase should prepare a real second physical iOS device or explicitly classify why it is not ready.
+This is setup/readiness only. Do not run APNs or any media/connect path.
 
 ## Goal
 
-Prepare for a production-like two-physical-device remote audio proof without sending APNs or starting another connect until the second physical device is verified ready and the task explicitly requests a one-shot proof.
+Prepare the second physical iOS device as the future remote peer for a production-like two-physical-device remote audio/liveness proof.
 
-Required readiness classification:
+Required setup target:
 
 ```text
+second_physical_device_available=true
+second_physical_device_kind=iphone
+second_physical_device_app_installed=true
+second_physical_device_matrix_session_ready=true
+second_physical_device_expected_user_hash=7d434d7f252427fb
+second_physical_device_same_room_ready=true
+second_physical_device_livekit_remote_peer_ready=true
 remote_peer_kind=physical_ios_redacted
 remote_peer_physical_device=true
 simulator_assisted_remote_audio_proof=false
 production_like_two_physical_device_proof=true
-second_device_remote_audio_readiness=<ready_redacted_or_not_ready_redacted>
-remote_audio_liveness_limitation=<none_or_redacted_reason>
+second_device_remote_audio_readiness=ready_redacted
 ```
 
-If the second physical device is not available, stop and classify readiness only:
+Allowed readiness-only work:
+
+- verify the second physical device is connected and online
+- install or launch the Debug app on the second physical device if needed
+- run redacted app-session `/whoami` proof on the second physical device
+- validate distinct account hashes using redacted/stable hashes only
+- validate same encrypted room membership using local-only tokens if supplied by the user
+- classify readiness without sending APNs
+
+If the second physical device session still cannot be validated, stop and classify:
 
 ```text
-second_device_remote_audio_readiness=not_ready_redacted
-production_like_two_physical_device_proof=false
+2.48Z-SecondPhysicalDeviceSetup = blocked
+reason=second_device_session_not_ready_redacted
 APNs_sent=false
 media_connect_requested=false
 livekit_join_requested=false
 ```
 
+If the second physical device is ready, set next phase to:
+
+```text
+2.48Z-Physical1 — one-shot two-physical-device remote audio/liveness proof
+```
+
+Do not set the next phase to a physical APNs attempt unless the second physical device session and room readiness are both validated.
+
 ## Hard Limits
 
 Do not:
 
-- send APNs unless a new one-shot physical proof task explicitly asks for it
+- send APNs
 - run production APNs
 - run repeated APNs
 - use `dev/invite`
-- retry media connect from Physical3
-- retry LiveKit join from Physical3
+- start media connect
+- join LiveKit
+- request microphone permission
 - request camera permission
 - enable video
 - emit Matrix events
 - start full direct-call flow
+- reset or re-arm the one-shot physical connect hook
+- perform another physical call attempt
 - log/document raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer user ID/user ID/device ID
 - modify `SalemX.xcodeproj/project.pbxproj`
 - modify `app.yml`
@@ -194,10 +153,15 @@ Allowed hits are field names, redacted labels, negative statements, synthetic te
 
 Return:
 
-- second physical device readiness classification
-- whether simulator-assisted proof is no longer being used for production-like success
-- whether APNs remained unsent during readiness work
-- whether no repeated connect or LiveKit join was performed
+- second physical device setup classification
+- whether second physical app/session is ready
+- whether distinct accounts are validated
+- whether same encrypted room readiness is validated
+- whether APNs remained unsent
+- whether no connect or LiveKit join was performed
 - whether camera/video/Matrix/full-flow safety stayed closed
+- commit hash if docs were updated
+- commit message
+- changed files
 - checks run
 - final `git status --short --branch`

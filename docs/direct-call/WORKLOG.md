@@ -7348,3 +7348,51 @@ No retry performed.
 No repeated APNs, no production APNs, no `dev/invite`, no repeated connect, no repeated LiveKit join, no video, no camera permission, no Matrix event emit, no full call flow, and no project/signing changes were performed.
 
 Next phase: `2.48Z — two-physical-device remote audio proof readiness, no repeated connect`.
+
+## 2026-06-23 — 2.48Z Two-Physical-Device Readiness
+
+Reviewed readiness for a future production-like two-physical-device remote audio proof without APNs/connect.
+
+Observed physical-device readiness:
+
+```text
+second_physical_device_available=true
+second_physical_device_kind=iphone
+second_physical_device_app_installed=true
+second_physical_device_matrix_session_ready=false
+second_physical_device_expected_user_hash=7d434d7f252427fb
+second_physical_device_same_room_ready=false
+second_physical_device_livekit_remote_peer_ready=false
+```
+
+The second physical app launched from the redacted DEBUG session proof URL, but no redacted `/whoami` proof file was available to copy from the app container:
+
+```text
+second_physical_device_session_proof_requested=true
+second_physical_device_session_proof_available=false
+second_physical_device_session_proof_failure=proof_file_missing_redacted
+```
+
+Because the second physical device session proof was unavailable, distinct-account readiness and same encrypted room readiness were not freshly validated in this phase:
+
+```text
+distinct_accounts_validated=false
+same_encrypted_room_readiness_validated=false
+production_like_two_physical_device_proof=false
+second_device_remote_audio_readiness=not_ready_redacted
+```
+
+Conclusion:
+
+```text
+2.48Z = two-physical-device readiness blocked
+reason=second_device_session_not_ready_redacted
+no APNs
+no connect
+no LiveKit join
+no permissions
+```
+
+No APNs, no production APNs, no repeated APNs, no `dev/invite`, no repeated connect, no LiveKit join, no video, no microphone/camera permission, no Matrix event emit, no full call flow, no one-shot hook reset/re-arm, and no physical call attempt were performed.
+
+Next phase: `2.48Z-SecondPhysicalDeviceSetup — prepare second physical device remote peer, no APNs/connect`.

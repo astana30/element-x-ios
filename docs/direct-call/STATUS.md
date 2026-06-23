@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Y-Physical3 — the simulator-assisted remote peer context/liveness proof is safely classified. The redacted simulator context reached the iPhone runtime proof and survived PushKit plus Answer; metadata, credentials, one controlled audio connect, and one LiveKit join succeeded. Remote audio/liveness was not observed because no remote LiveKit participant appeared. The next phase is `2.48Z — two-physical-device remote audio proof readiness, no repeated connect`.
+After 2.48Z — two-physical-device remote audio proof readiness is blocked at second physical device session setup. A second physical iPhone is connected and has the app installed, but the redacted app-session `/whoami` proof file was not available after the DEBUG URL trigger, so the sender session and same encrypted room readiness were not validated. No APNs/connect/LiveKit was run. The next phase is `2.48Z-SecondPhysicalDeviceSetup — prepare second physical device remote peer, no APNs/connect`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,34 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48Z blocks two-physical-device proof readiness until second-device session setup:
+  - This was a readiness/review phase only. It did not send APNs, run production APNs, repeat APNs, use `dev/invite`, start media connect, join LiveKit, request microphone/camera permission, enable video, emit Matrix events, start full call flow, reset/re-arm the one-shot hook, or perform another physical call attempt.
+  - Physical device review:
+    ```text
+    second_physical_device_available=true
+    second_physical_device_kind=iphone
+    second_physical_device_app_installed=true
+    second_physical_device_matrix_session_ready=false
+    second_physical_device_expected_user_hash=7d434d7f252427fb
+    second_physical_device_same_room_ready=false
+    second_physical_device_livekit_remote_peer_ready=false
+    ```
+  - The second physical app launched from the redacted DEBUG session proof URL, but the expected redacted proof file was unavailable:
+    ```text
+    second_physical_device_session_proof_requested=true
+    second_physical_device_session_proof_available=false
+    second_physical_device_session_proof_failure=proof_file_missing_redacted
+    ```
+  - Readiness classification:
+    ```text
+    2.48Z = two-physical-device readiness blocked
+    reason=second_device_session_not_ready_redacted
+    no APNs
+    no connect
+    no LiveKit join
+    no permissions
+    ```
+  - Next phase: `2.48Z-SecondPhysicalDeviceSetup — prepare second physical device remote peer, no APNs/connect`.
 - 2.48Y-Physical3 safely classifies simulator-assisted remote peer context/liveness:
   - This was a one-shot physical/simulator-assisted proof with iPhone PRO as the real PushKit/CallKit/Answer receiver and iOS Simulator as the redacted remote peer context. It is not a production-like two-physical-device proof.
   - Exactly one sandbox APNs was sent after explicit one-shot confirmation; no APNs retry was performed.
