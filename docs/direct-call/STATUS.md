@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48T-Physical7-PendingMetadataReferenceRepair — the real non-dev invite path now fails closed before APNs when a pending metadata reference is absent, and records redacted proof fields for reference creation, APNs payload presence, PushKit observation, Answer handoff, and credentials/connect blocking. No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, real LiveKit join, microphone/camera permission on device, Matrix event emission, video, or full call flow was performed. The next phase is `2.48T-Physical8 — one-shot Answer -> metadata reference -> credentials -> first controlled audio-connect physical attempt`.
+After 2.48T-Physical8 — the one-shot physical proof reached PushKit, CallKit Answer, pending metadata reference handoff/fetch, media credentials, and the first controlled audio-only connect attempt. The attempt completed with `controlled_connect_first_attempt_result=success_redacted`, `controlled_connect_first_attempt_repeated=false`, camera/video/Matrix/full-flow stayed closed, and the DEBUG one-shot hook was consumed. One sandbox APNs was sent; no production APNs, repeated APNs, `dev/invite`, repeated connect, video, camera permission, Matrix event emission, or full call flow was performed. The next phase is `2.48U — first-connect result review and cleanup verification, no repeated connect`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,70 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48T-Physical8 physically proves the one-shot Answer -> metadata reference -> credentials -> first controlled audio-connect path:
+  - Initial helper preflight correctly stopped before APNs when staging still served stale foreground-signaling diagnostics. The staging call-service was updated with only the repaired `app.py`, remote compileall passed, `salemx-call-service` restarted successfully, route safety remained `dev/invite=404`, unauthenticated non-dev invite `401`, unauthenticated stream `401`, and unauthenticated foreground LiveKit token `401`, then app session and hook proofs were refreshed before retrying the helper.
+  - The phase-specific proof path is `/tmp/salemx-voip-push-receipt-proof-2.48t-physical8-first-audio-connect-polled.txt`.
+  - The physical proof generation was `generation_14`.
+  - PushKit, CallKit report completion, and CallKit Answer all completed:
+    ```text
+    physical_voip_push_received=true
+    pushkit_callback_invoked=true
+    pushkit_payload_kind=real_invite_controlled
+    callkit_report_requested=true
+    callkit_report_result=reported
+    callkit_report_completion_observed=true
+    pushkit_completion_called=true
+    callkit_first_action_kind=answer
+    callkit_answer_action_delivered=true
+    callkit_answer_action_received=true
+    callkit_answer_action_fulfilled=true
+    ```
+  - The pending metadata reference repair and metadata fetch succeeded:
+    ```text
+    pending_metadata_reference_present=true
+    pending_metadata_reference_repair_reference_observed_by_pushkit=true
+    pending_metadata_reference_repair_reference_handed_to_answer_pipeline=true
+    pending_metadata_fetch_requested=true
+    pending_metadata_fetch_result=success_redacted
+    pending_metadata_fetch_http_status_bucket=2xx
+    pending_metadata_fetch_errcode=none
+    foreground_pending_call_metadata_handoff_observed=true
+    ```
+  - Media credentials and the controlled first attempt succeeded through the DEBUG-only one-shot audio path:
+    ```text
+    media_credentials_requested=true
+    media_credentials_request_authorized=true
+    media_credentials_result=success_redacted
+    media_credentials_token_received=true
+    media_credentials_url_received=true
+    physical6_runtime_enablement_url_hook_consumed=true
+    controlled_connect_real_bridge_allowed=true
+    controlled_connect_first_attempt_requested=true
+    controlled_connect_first_attempt_allowed=true
+    controlled_connect_first_attempt_started=true
+    controlled_connect_first_attempt_completed=true
+    controlled_connect_first_attempt_repeated=false
+    controlled_connect_first_attempt_result=success_redacted
+    controlled_connect_first_attempt_error_bucket=none
+    ```
+  - Runtime scope stayed audio-only and closed outside the one attempt:
+    ```text
+    media_connect_requested=true
+    media_connect_attempted=true
+    livekit_join_requested=true
+    livekit_connect_audio_invoked=true
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    controlled_connect_first_attempt_audio_only=true
+    controlled_connect_first_attempt_video_allowed=false
+    controlled_connect_first_attempt_matrix_events_allowed=false
+    controlled_connect_first_attempt_raw_credentials_logged=false
+    blocked_reason=none
+    ```
+  - No raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
+  - Next phase: `2.48U — first-connect result review and cleanup verification, no repeated connect`.
 - 2.48T-Physical7-PendingMetadataReferenceRepair ensures real invites carry a usable pending metadata reference before any future APNs retry:
   - This was a code/test repair phase only. It did not send APNs, run production APNs, repeat APNs, use `dev/invite`, start physical media connect, join real LiveKit, request microphone/camera permission on device, emit Matrix events, enable video, or start full call flow.
   - The server real non-dev invite path blocks before APNs when the pending metadata source/reference is absent:
