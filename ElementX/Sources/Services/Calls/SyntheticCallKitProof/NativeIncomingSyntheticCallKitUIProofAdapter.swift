@@ -1908,6 +1908,17 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var remoteAudioPublishLivenessRepairNoVideo = true
     var remoteAudioPublishLivenessRepairNoMatrixEvents = true
     var remoteAudioPublishLivenessRepairRawIdentifiersLogged = false
+    var remotePeerContextHandoffPresent = true
+    var remotePeerContextHandoffDebugOnly = true
+    var remotePeerContextHandoffSource = "unknown_redacted"
+    var remotePeerContextHandoffArmedBeforeAPNs = false
+    var remotePeerContextHandoffReceivedByRuntime = false
+    var remotePeerContextHandoffSurvivedPushKit = false
+    var remotePeerContextHandoffSurvivedAnswer = false
+    var remotePeerContextHandoffRawIdentifiersLogged = false
+    var remotePeerContextHandoffBlocksSuccessWithoutContext = true
+    var remotePeerContextHandoffClassifiesMissingRemoteParticipant = true
+    var remotePeerContextHandoffClassifiesSimulatorLimitation = true
     var liveKitJoinResult = "not_requested"
     var liveKitJoinErrorBucket = "none"
     var liveKitRoomConnected = false
@@ -1926,6 +1937,7 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var remotePeerPhysicalDevice = "unknown"
     var simulatorAssistedRemoteAudioProof = false
     var productionLikeTwoPhysicalDeviceProof = false
+    var secondDeviceRemoteAudioReadiness = "unknown_redacted"
     var remoteAudioLivenessLimitation = "unknown_redacted"
     var liveKitRemoteParticipantSeen = false
     var liveKitRemoteParticipantCountBucket = "0"
@@ -2325,6 +2337,17 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "remote_audio_publish_liveness_repair_no_video=\(remoteAudioPublishLivenessRepairNoVideo)",
             "remote_audio_publish_liveness_repair_no_matrix_events=\(remoteAudioPublishLivenessRepairNoMatrixEvents)",
             "remote_audio_publish_liveness_repair_raw_identifiers_logged=\(remoteAudioPublishLivenessRepairRawIdentifiersLogged)",
+            "remote_peer_context_handoff_present=\(remotePeerContextHandoffPresent)",
+            "remote_peer_context_handoff_debug_only=\(remotePeerContextHandoffDebugOnly)",
+            "remote_peer_context_handoff_source=\(remotePeerContextHandoffSource)",
+            "remote_peer_context_handoff_armed_before_apns=\(remotePeerContextHandoffArmedBeforeAPNs)",
+            "remote_peer_context_handoff_received_by_runtime=\(remotePeerContextHandoffReceivedByRuntime)",
+            "remote_peer_context_handoff_survived_pushkit=\(remotePeerContextHandoffSurvivedPushKit)",
+            "remote_peer_context_handoff_survived_answer=\(remotePeerContextHandoffSurvivedAnswer)",
+            "remote_peer_context_handoff_raw_identifiers_logged=\(remotePeerContextHandoffRawIdentifiersLogged)",
+            "remote_peer_context_handoff_blocks_success_without_context=\(remotePeerContextHandoffBlocksSuccessWithoutContext)",
+            "remote_peer_context_handoff_classifies_missing_remote_participant=\(remotePeerContextHandoffClassifiesMissingRemoteParticipant)",
+            "remote_peer_context_handoff_classifies_simulator_limitation=\(remotePeerContextHandoffClassifiesSimulatorLimitation)",
             "livekit_join_result=\(liveKitJoinResult)",
             "livekit_join_error_bucket=\(liveKitJoinErrorBucket)",
             "livekit_room_connected=\(liveKitRoomConnected)",
@@ -2343,6 +2366,7 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "remote_peer_physical_device=\(remotePeerPhysicalDevice)",
             "simulator_assisted_remote_audio_proof=\(simulatorAssistedRemoteAudioProof)",
             "production_like_two_physical_device_proof=\(productionLikeTwoPhysicalDeviceProof)",
+            "second_device_remote_audio_readiness=\(secondDeviceRemoteAudioReadiness)",
             "remote_audio_liveness_limitation=\(remoteAudioLivenessLimitation)",
             "livekit_remote_participant_seen=\(liveKitRemoteParticipantSeen)",
             "livekit_remote_participant_count_bucket=\(liveKitRemoteParticipantCountBucket)",
@@ -2352,6 +2376,8 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "livekit_audio_liveness_observed=\(liveKitAudioLivenessObserved)",
             "livekit_audio_liveness_result=\(liveKitAudioLivenessResult)",
             "livekit_audio_liveness_error_bucket=\(liveKitAudioLivenessErrorBucket)",
+            "remote_audio_liveness_result=\(liveKitAudioLivenessResult)",
+            "remote_audio_liveness_error_bucket=\(liveKitAudioLivenessErrorBucket)",
             "livekit_cleanup_requested=\(liveKitCleanupRequested)",
             "livekit_cleanup_completed=\(liveKitCleanupCompleted)",
             "livekit_cleanup_result=\(liveKitCleanupResult)",
@@ -2447,6 +2473,12 @@ private extension SalemXVoIPPushReceiptProofSummary {
         remoteAudioPublishLivenessRepairNoVideo = !controlledConnectFirstAttemptVideoAllowed && !cameraPermissionRequested
         remoteAudioPublishLivenessRepairNoMatrixEvents = !controlledConnectFirstAttemptMatrixEventsAllowed && !matrixEventEmitRequested
         remoteAudioPublishLivenessRepairRawIdentifiersLogged = false
+        remotePeerContextHandoffPresent = true
+        remotePeerContextHandoffDebugOnly = true
+        remotePeerContextHandoffRawIdentifiersLogged = false
+        remotePeerContextHandoffBlocksSuccessWithoutContext = true
+        remotePeerContextHandoffClassifiesMissingRemoteParticipant = true
+        remotePeerContextHandoffClassifiesSimulatorLimitation = true
 
         if liveKitJoinRequested {
             liveKitJoinResult = controlledConnectFirstAttemptResult == "success_redacted" ? "success_redacted" : "failed_redacted"
@@ -2474,6 +2506,17 @@ private extension SalemXVoIPPushReceiptProofSummary {
             liveKitRoomConnected = false
             liveKitLocalParticipantPresent = false
             localAudioPublishNotRequiredReason = localAudioPublishResult == "not_requested" ? "none" : localAudioPublishNotRequiredReason
+        }
+
+        if liveKitJoinResult == "success_redacted",
+           !remotePeerContextHandoffReceivedByRuntime {
+            recordMissingRemotePeerContextHandoff()
+        } else if liveKitJoinResult == "success_redacted",
+                  !liveKitRemoteParticipantSeen,
+                  !liveKitAudioLivenessObserved,
+                  liveKitAudioLivenessErrorBucket == "none" {
+            liveKitAudioLivenessResult = "not_observed_redacted"
+            liveKitAudioLivenessErrorBucket = "remote_participant_missing_redacted"
         }
 
         liveKitRoomDisconnected = controlledCallKitCleanupResult == "ended"
@@ -2510,6 +2553,71 @@ private extension SalemXVoIPPushReceiptProofSummary {
         microphonePermissionRequested = requested
         microphonePermissionResult = requested ? "requested_redacted" : "not_requested_or_not_required_redacted"
         microphonePermissionNotRequiredReason = requested ? "requested_redacted" : notRequiredReason
+    }
+
+    mutating func recordRemotePeerContextHandoff(_ context: SalemXRemotePeerContextHandoff,
+                                                 receivedByRuntime: Bool,
+                                                 survivedPushKit: Bool,
+                                                 survivedAnswer: Bool) {
+        remotePeerContextHandoffPresent = true
+        remotePeerContextHandoffDebugOnly = true
+        remotePeerContextHandoffSource = context.source
+        remotePeerContextHandoffArmedBeforeAPNs = context.armedBeforeAPNs
+        remotePeerContextHandoffReceivedByRuntime = receivedByRuntime
+        remotePeerContextHandoffSurvivedPushKit = survivedPushKit
+        remotePeerContextHandoffSurvivedAnswer = survivedAnswer
+        remotePeerContextHandoffRawIdentifiersLogged = false
+        remotePeerContextHandoffBlocksSuccessWithoutContext = true
+        remotePeerContextHandoffClassifiesMissingRemoteParticipant = true
+        remotePeerContextHandoffClassifiesSimulatorLimitation = true
+        secondDeviceRemoteAudioReadiness = context.readiness
+        recordRemoteAudioPeerClassification(peerKind: context.peerKind,
+                                            physicalDevice: context.physicalDevice,
+                                            simulatorAssisted: context.simulatorAssisted)
+    }
+
+    mutating func recordRemotePeerContextHandoff(_ context: SalemXRemotePeerContextHandoff?) {
+        guard let context else {
+            recordMissingRemotePeerContextHandoff()
+            return
+        }
+
+        recordRemotePeerContextHandoff(context,
+                                       receivedByRuntime: true,
+                                       survivedPushKit: true,
+                                       survivedAnswer: false)
+    }
+
+    mutating func markRemotePeerContextHandoffSurvivedAnswer() {
+        guard remotePeerContextHandoffReceivedByRuntime else {
+            recordMissingRemotePeerContextHandoff()
+            return
+        }
+
+        remotePeerContextHandoffSurvivedAnswer = true
+    }
+
+    mutating func recordMissingRemotePeerContextHandoff() {
+        remotePeerContextHandoffPresent = true
+        remotePeerContextHandoffDebugOnly = true
+        remotePeerContextHandoffSource = "unknown_redacted"
+        remotePeerContextHandoffArmedBeforeAPNs = false
+        remotePeerContextHandoffReceivedByRuntime = false
+        remotePeerContextHandoffSurvivedPushKit = false
+        remotePeerContextHandoffSurvivedAnswer = false
+        remotePeerContextHandoffRawIdentifiersLogged = false
+        remotePeerContextHandoffBlocksSuccessWithoutContext = true
+        remotePeerContextHandoffClassifiesMissingRemoteParticipant = true
+        remotePeerContextHandoffClassifiesSimulatorLimitation = true
+        remotePeerKind = "unknown_redacted"
+        remotePeerPhysicalDevice = "unknown"
+        simulatorAssistedRemoteAudioProof = false
+        productionLikeTwoPhysicalDeviceProof = false
+        secondDeviceRemoteAudioReadiness = "unknown_redacted"
+        remoteAudioLivenessLimitation = "remote_peer_context_not_handed_off_redacted"
+        liveKitAudioLivenessObserved = false
+        liveKitAudioLivenessResult = "not_observed_redacted"
+        liveKitAudioLivenessErrorBucket = "remote_peer_context_missing_redacted"
     }
 
     mutating func recordRemoteAudioPeerClassification(peerKind: String,
@@ -3727,6 +3835,22 @@ private struct MatrixSessionWhoamiSmokeAvailability {
     var homeserverURLAvailable: Bool
 }
 
+private struct SalemXRemotePeerContextHandoff {
+    static let simulatorReady = SalemXRemotePeerContextHandoff(source: "debug_hook_redacted",
+                                                               peerKind: "ios_simulator_redacted",
+                                                               physicalDevice: "false",
+                                                               simulatorAssisted: true,
+                                                               readiness: "ready_redacted",
+                                                               armedBeforeAPNs: true)
+
+    let source: String
+    let peerKind: String
+    let physicalDevice: String
+    let simulatorAssisted: Bool
+    let readiness: String
+    let armedBeforeAPNs: Bool
+}
+
 @objc(SalemXPushKitRegistrationSmokeDebugBridge)
 // swiftlint:disable:next type_body_length
 final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
@@ -3734,6 +3858,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let uploadSmokeURLPath = "/pushkit-token-upload-smoke/start"
     private static let matrixSessionWhoamiSmokeURLPath = "/pushkit-token-upload-smoke/session-whoami"
     private static let physical6RuntimeEnablementURLHookPath = "/direct-call/physical6-enable-controlled-audio-connect"
+    private static let remotePeerContextHandoffURLHookPath = "/direct-call/remote-peer-context-handoff"
     private static let uploadSmokeDefaultURLString = "https://matrix.mertis.kz/_matrix/client/unstable/kz.salemx.direct_call/pushkit/token"
     private static let matrixSessionWhoamiURLString = "https://matrix.mertis.kz/_matrix/client/v3/account/whoami"
     private static let controlledMediaCredentialsTokenEndpointPath = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/livekit/token"
@@ -3770,6 +3895,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var pendingForegroundCallMetadataRecordedAt: Date?
     private static var pendingAuthenticatedMetadataReference: String?
     private static var physical6RuntimeEnablementURLHook = SalemXPhysical6RuntimeEnablementURLHook.defaultDisabled
+    private static var pendingRemotePeerContextHandoff: SalemXRemotePeerContextHandoff?
     #if canImport(CallKit) && os(iOS)
     private static var callKitProofHarness: NativeIncomingSyntheticCallKitUIProofHarness?
     private static var callKitProofGeneration = 0
@@ -3819,6 +3945,11 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             return true
         }
 
+        if url.path == remotePeerContextHandoffURLHookPath {
+            armSimulatorRemotePeerContextHandoffURLHook()
+            return true
+        }
+
         return false
     }
 
@@ -3838,6 +3969,19 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         summary.mediaConnectExecutionAllowed = false
         summary.mediaConnectEngineInvoked = false
         summary.recordControlledAudioConnectFirstAttemptProof(.defaultDisabled)
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+    }
+
+    private static func armSimulatorRemotePeerContextHandoffURLHook() {
+        lock.lock()
+        pendingRemotePeerContextHandoff = .simulatorReady
+        var summary = latestVoIPPushReceiptSummary
+        summary.recordRemotePeerContextHandoff(.simulatorReady,
+                                               receivedByRuntime: false,
+                                               survivedPushKit: false,
+                                               survivedAnswer: false)
         lock.unlock()
 
         updateLatestVoIPPushReceiptSummary(summary)
@@ -4257,10 +4401,13 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         let operatorReadyToAnswer = pendingOperatorReadyToAnswer
         let operatorExpectedSurface = pendingOperatorExpectedSurface
         let physical6RuntimeEnablementURLHookSnapshot = physical6RuntimeEnablementURLHook
+        let remotePeerContextHandoffSnapshot = pendingRemotePeerContextHandoff
+        pendingRemotePeerContextHandoff = nil
         lock.unlock()
         baseSummary.operatorReadyToAnswer = operatorReadyToAnswer
         baseSummary.operatorExpectedSurface = operatorExpectedSurface
         baseSummary.recordPhysical6RuntimeEnablementURLHook(physical6RuntimeEnablementURLHookSnapshot)
+        baseSummary.recordRemotePeerContextHandoff(remotePeerContextHandoffSnapshot)
         if isControlledPayload {
             baseSummary.callKitReportSubmittedAtMsRedacted = true
             baseSummary.callKitUpdateHasGenericHandle = true
@@ -4849,6 +4996,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         summary.controlledInAppScreenRequested = true
         summary.controlledInAppScreenPresented = true
         summary.controlledInAppScreenSource = screenSource
+        summary.markRemotePeerContextHandoffSurvivedAnswer()
         if summary.realInvitePayloadMappingObserved {
             summary.foregroundCallStateHandoffRequested = true
             summary.foregroundCallStateHandoffObserved = true

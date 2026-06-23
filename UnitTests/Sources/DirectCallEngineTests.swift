@@ -2553,6 +2553,7 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    // swiftlint:disable:next function_body_length
     func remoteAudioLivenessDiagnosticsFieldsAndDefaultsAreRedacted() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
 
@@ -2575,6 +2576,17 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("remote_audio_publish_liveness_repair_no_video=\\(remoteAudioPublishLivenessRepairNoVideo)"))
         #expect(adapterSource.contains("remote_audio_publish_liveness_repair_no_matrix_events=\\(remoteAudioPublishLivenessRepairNoMatrixEvents)"))
         #expect(adapterSource.contains("remote_audio_publish_liveness_repair_raw_identifiers_logged=\\(remoteAudioPublishLivenessRepairRawIdentifiersLogged)"))
+        #expect(adapterSource.contains("remote_peer_context_handoff_present=\\(remotePeerContextHandoffPresent)"))
+        #expect(adapterSource.contains("remote_peer_context_handoff_debug_only=\\(remotePeerContextHandoffDebugOnly)"))
+        #expect(adapterSource.contains("remote_peer_context_handoff_source=\\(remotePeerContextHandoffSource)"))
+        #expect(adapterSource.contains("remote_peer_context_handoff_armed_before_apns=\\(remotePeerContextHandoffArmedBeforeAPNs)"))
+        #expect(adapterSource.contains("remote_peer_context_handoff_received_by_runtime=\\(remotePeerContextHandoffReceivedByRuntime)"))
+        #expect(adapterSource.contains("remote_peer_context_handoff_survived_pushkit=\\(remotePeerContextHandoffSurvivedPushKit)"))
+        #expect(adapterSource.contains("remote_peer_context_handoff_survived_answer=\\(remotePeerContextHandoffSurvivedAnswer)"))
+        #expect(adapterSource.contains("remote_peer_context_handoff_raw_identifiers_logged=\\(remotePeerContextHandoffRawIdentifiersLogged)"))
+        #expect(adapterSource.contains("remote_peer_context_handoff_blocks_success_without_context=\\(remotePeerContextHandoffBlocksSuccessWithoutContext)"))
+        #expect(adapterSource.contains("remote_peer_context_handoff_classifies_missing_remote_participant=\\(remotePeerContextHandoffClassifiesMissingRemoteParticipant)"))
+        #expect(adapterSource.contains("remote_peer_context_handoff_classifies_simulator_limitation=\\(remotePeerContextHandoffClassifiesSimulatorLimitation)"))
         #expect(adapterSource.contains("livekit_join_result=\\(liveKitJoinResult)"))
         #expect(adapterSource.contains("livekit_join_error_bucket=\\(liveKitJoinErrorBucket)"))
         #expect(adapterSource.contains("livekit_room_connected=\\(liveKitRoomConnected)"))
@@ -2593,6 +2605,7 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("remote_peer_physical_device=\\(remotePeerPhysicalDevice)"))
         #expect(adapterSource.contains("simulator_assisted_remote_audio_proof=\\(simulatorAssistedRemoteAudioProof)"))
         #expect(adapterSource.contains("production_like_two_physical_device_proof=\\(productionLikeTwoPhysicalDeviceProof)"))
+        #expect(adapterSource.contains("second_device_remote_audio_readiness=\\(secondDeviceRemoteAudioReadiness)"))
         #expect(adapterSource.contains("remote_audio_liveness_limitation=\\(remoteAudioLivenessLimitation)"))
         #expect(adapterSource.contains("livekit_remote_participant_seen=\\(liveKitRemoteParticipantSeen)"))
         #expect(adapterSource.contains("livekit_remote_participant_count_bucket=\\(liveKitRemoteParticipantCountBucket)"))
@@ -2602,6 +2615,8 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("livekit_audio_liveness_observed=\\(liveKitAudioLivenessObserved)"))
         #expect(adapterSource.contains("livekit_audio_liveness_result=\\(liveKitAudioLivenessResult)"))
         #expect(adapterSource.contains("livekit_audio_liveness_error_bucket=\\(liveKitAudioLivenessErrorBucket)"))
+        #expect(adapterSource.contains("remote_audio_liveness_result=\\(liveKitAudioLivenessResult)"))
+        #expect(adapterSource.contains("remote_audio_liveness_error_bucket=\\(liveKitAudioLivenessErrorBucket)"))
         #expect(adapterSource.contains("livekit_cleanup_requested=\\(liveKitCleanupRequested)"))
         #expect(adapterSource.contains("livekit_cleanup_completed=\\(liveKitCleanupCompleted)"))
         #expect(adapterSource.contains("livekit_cleanup_result=\\(liveKitCleanupResult)"))
@@ -2618,6 +2633,17 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("var remoteAudioPublishLivenessRepairNoVideo = true"))
         #expect(adapterSource.contains("var remoteAudioPublishLivenessRepairNoMatrixEvents = true"))
         #expect(adapterSource.contains("var remoteAudioPublishLivenessRepairRawIdentifiersLogged = false"))
+        #expect(adapterSource.contains("var remotePeerContextHandoffPresent = true"))
+        #expect(adapterSource.contains("var remotePeerContextHandoffDebugOnly = true"))
+        #expect(adapterSource.contains("var remotePeerContextHandoffSource = \"unknown_redacted\""))
+        #expect(adapterSource.contains("var remotePeerContextHandoffArmedBeforeAPNs = false"))
+        #expect(adapterSource.contains("var remotePeerContextHandoffReceivedByRuntime = false"))
+        #expect(adapterSource.contains("var remotePeerContextHandoffSurvivedPushKit = false"))
+        #expect(adapterSource.contains("var remotePeerContextHandoffSurvivedAnswer = false"))
+        #expect(adapterSource.contains("var remotePeerContextHandoffRawIdentifiersLogged = false"))
+        #expect(adapterSource.contains("var remotePeerContextHandoffBlocksSuccessWithoutContext = true"))
+        #expect(adapterSource.contains("var remotePeerContextHandoffClassifiesMissingRemoteParticipant = true"))
+        #expect(adapterSource.contains("var remotePeerContextHandoffClassifiesSimulatorLimitation = true"))
         #expect(adapterSource.contains("var liveKitJoinResult = \"not_requested\""))
         #expect(adapterSource.contains("var localAudioPublishResult = \"not_requested\""))
         #expect(adapterSource.contains("var localAudioPublishNotRequiredReason = \"none\""))
@@ -2626,6 +2652,7 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("var remotePeerPhysicalDevice = \"unknown\""))
         #expect(adapterSource.contains("var simulatorAssistedRemoteAudioProof = false"))
         #expect(adapterSource.contains("var productionLikeTwoPhysicalDeviceProof = false"))
+        #expect(adapterSource.contains("var secondDeviceRemoteAudioReadiness = \"unknown_redacted\""))
         #expect(adapterSource.contains("var remoteAudioLivenessLimitation = \"unknown_redacted\""))
         #expect(adapterSource.contains("var liveKitAudioLivenessResult = \"not_observed_redacted\""))
         #expect(adapterSource.contains("var liveKitCleanupResult = \"not_requested\""))
@@ -2636,6 +2663,7 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("controlled_connect_first_attempt_repeated=\\(controlledConnectFirstAttemptRepeated)"))
         #expect(!adapterSource.contains("remoteAudioLivenessDiagnosticsRawIdentifiersLogged = true"))
         #expect(!adapterSource.contains("remoteAudioPublishLivenessRepairRawIdentifiersLogged = true"))
+        #expect(!adapterSource.contains("remotePeerContextHandoffRawIdentifiersLogged = true"))
     }
 
     @Test
@@ -2709,6 +2737,67 @@ final class NativeIncomingCallLifecycleContractTests {
 
         #expect(adapterSource.contains("refreshRemoteAudioLivenessDiagnostics()"))
         #expect(adapterSource.contains("summary.refreshRemoteAudioLivenessDiagnostics()"))
+    }
+
+    @Test
+    func remotePeerContextHandoffRecordsSimulatorContextAndMissingContextSafely() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+
+        #expect(adapterSource.contains("private struct SalemXRemotePeerContextHandoff"))
+        #expect(adapterSource.contains("static let simulatorReady = SalemXRemotePeerContextHandoff(source: \"debug_hook_redacted\""))
+        #expect(adapterSource.contains("peerKind: \"ios_simulator_redacted\""))
+        #expect(adapterSource.contains("physicalDevice: \"false\""))
+        #expect(adapterSource.contains("simulatorAssisted: true"))
+        #expect(adapterSource.contains("readiness: \"ready_redacted\""))
+        #expect(adapterSource.contains("armedBeforeAPNs: true"))
+        #expect(adapterSource.contains("private static let remotePeerContextHandoffURLHookPath = \"/direct-call/remote-peer-context-handoff\""))
+        #expect(adapterSource.contains("private static var pendingRemotePeerContextHandoff: SalemXRemotePeerContextHandoff?"))
+        #expect(adapterSource.contains("if url.path == remotePeerContextHandoffURLHookPath"))
+        #expect(adapterSource.contains("armSimulatorRemotePeerContextHandoffURLHook()"))
+        #expect(adapterSource.contains("private static func armSimulatorRemotePeerContextHandoffURLHook()"))
+        #expect(adapterSource.contains("pendingRemotePeerContextHandoff = .simulatorReady"))
+        #expect(adapterSource.contains("summary.recordRemotePeerContextHandoff(.simulatorReady,"))
+        #expect(adapterSource.contains("receivedByRuntime: false"))
+        #expect(adapterSource.contains("let remotePeerContextHandoffSnapshot = pendingRemotePeerContextHandoff"))
+        #expect(adapterSource.contains("pendingRemotePeerContextHandoff = nil"))
+        #expect(adapterSource.contains("baseSummary.recordRemotePeerContextHandoff(remotePeerContextHandoffSnapshot)"))
+        #expect(adapterSource.contains("receivedByRuntime: true"))
+        #expect(adapterSource.contains("survivedPushKit: true"))
+        #expect(adapterSource.contains("survivedAnswer: false"))
+        #expect(adapterSource.contains("summary.markRemotePeerContextHandoffSurvivedAnswer()"))
+
+        #expect(adapterSource.contains("mutating func recordRemotePeerContextHandoff(_ context: SalemXRemotePeerContextHandoff,"))
+        #expect(adapterSource.contains("mutating func recordRemotePeerContextHandoff(_ context: SalemXRemotePeerContextHandoff?)"))
+        #expect(adapterSource.contains("guard let context else"))
+        #expect(adapterSource.contains("recordMissingRemotePeerContextHandoff()"))
+        #expect(adapterSource.contains("remotePeerContextHandoffSource = context.source"))
+        #expect(adapterSource.contains("remotePeerContextHandoffArmedBeforeAPNs = context.armedBeforeAPNs"))
+        #expect(adapterSource.contains("remotePeerContextHandoffReceivedByRuntime = receivedByRuntime"))
+        #expect(adapterSource.contains("remotePeerContextHandoffSurvivedPushKit = survivedPushKit"))
+        #expect(adapterSource.contains("remotePeerContextHandoffSurvivedAnswer = survivedAnswer"))
+        #expect(adapterSource.contains("remotePeerContextHandoffRawIdentifiersLogged = false"))
+        #expect(adapterSource.contains("secondDeviceRemoteAudioReadiness = context.readiness"))
+        #expect(adapterSource.contains("recordRemoteAudioPeerClassification(peerKind: context.peerKind,"))
+        #expect(adapterSource.contains("remoteAudioLivenessLimitation = simulatorAssisted ? \"simulator_assisted_redacted\" : limitation"))
+        #expect(adapterSource.contains("productionLikeTwoPhysicalDeviceProof = physicalDevice == \"true\" && !simulatorAssisted"))
+
+        #expect(adapterSource.contains("mutating func recordMissingRemotePeerContextHandoff()"))
+        #expect(adapterSource.contains("remotePeerContextHandoffReceivedByRuntime = false"))
+        #expect(adapterSource.contains("remotePeerKind = \"unknown_redacted\""))
+        #expect(adapterSource.contains("simulatorAssistedRemoteAudioProof = false"))
+        #expect(adapterSource.contains("secondDeviceRemoteAudioReadiness = \"unknown_redacted\""))
+        #expect(adapterSource.contains("remoteAudioLivenessLimitation = \"remote_peer_context_not_handed_off_redacted\""))
+        #expect(adapterSource.contains("liveKitAudioLivenessResult = \"not_observed_redacted\""))
+        #expect(adapterSource.contains("liveKitAudioLivenessErrorBucket = \"remote_peer_context_missing_redacted\""))
+        #expect(adapterSource.contains("liveKitAudioLivenessErrorBucket = \"remote_participant_missing_redacted\""))
+        #expect(adapterSource.contains("liveKitAudioLivenessErrorBucket = \"remote_audio_track_missing_redacted\""))
+
+        #expect(adapterSource.contains("remotePeerContextHandoffBlocksSuccessWithoutContext = true"))
+        #expect(adapterSource.contains("remotePeerContextHandoffClassifiesMissingRemoteParticipant = true"))
+        #expect(adapterSource.contains("remotePeerContextHandoffClassifiesSimulatorLimitation = true"))
+        #expect(adapterSource.contains("cameraPermissionRequested = false"))
+        #expect(adapterSource.contains("matrixEventEmitRequested = false"))
+        #expect(adapterSource.contains("realCallFlowStarted = false"))
     }
 
     @Test

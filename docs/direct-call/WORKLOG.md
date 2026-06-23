@@ -7148,3 +7148,55 @@ No retry performed.
 ```
 
 Next phase: `2.48Y-RemotePeerContextHandoffRepair — carry simulator/remote peer readiness into runtime proof and classify remote participant absence, no APNs/connect`.
+
+## 2026-06-23 — 2.48Y-RemotePeerContextHandoffRepair
+
+Implemented the redacted simulator remote-peer context handoff repair without APNs/connect.
+
+Code changes:
+
+```text
+NativeIncomingSyntheticCallKitUIProofAdapter.swift
+UnitTests/Sources/DirectCallEngineTests.swift
+```
+
+Runtime proof now includes redacted context handoff fields:
+
+```text
+remote_peer_context_handoff_present=true
+remote_peer_context_handoff_debug_only=true
+remote_peer_context_handoff_source=debug_hook_redacted
+remote_peer_context_handoff_armed_before_apns=true
+remote_peer_context_handoff_received_by_runtime=true
+remote_peer_context_handoff_survived_pushkit=true
+remote_peer_context_handoff_survived_answer=true
+remote_peer_context_handoff_raw_identifiers_logged=false
+remote_peer_kind=ios_simulator_redacted
+remote_peer_physical_device=false
+simulator_assisted_remote_audio_proof=true
+production_like_two_physical_device_proof=false
+second_device_remote_audio_readiness=ready_redacted
+remote_audio_liveness_limitation=simulator_assisted_redacted
+```
+
+Missing context now remains remote-audio non-success:
+
+```text
+remote_peer_context_handoff_received_by_runtime=false
+remote_peer_kind=unknown_redacted
+simulator_assisted_remote_audio_proof=false
+remote_audio_liveness_result=not_observed_redacted
+remote_audio_liveness_error_bucket=remote_peer_context_missing_redacted
+```
+
+The repair also preserves safe defaults:
+
+```text
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+No APNs, no production APNs, no repeated APNs, no `dev/invite`, no media connect retry, no LiveKit join retry, no video, no microphone/camera permission, no Matrix event emit, no full call flow, and no project/signing changes were performed.
+
+Next phase: `2.48Y-Physical3 — one-shot simulator-assisted remote peer context/liveness proof`.

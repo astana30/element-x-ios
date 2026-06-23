@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Y-Physical2-SimulatorLivenessTriage — the simulator-assisted remote audio/liveness proof is safely classified, not remote-audio success. One sandbox APNs and one controlled audio connect/LiveKit join succeeded, but the runtime proof did not preserve the helper-side simulator peer classification and did not observe a remote LiveKit participant/audio track/liveness. No retry is allowed from this close-out. The next phase is `2.48Y-RemotePeerContextHandoffRepair — carry simulator/remote peer readiness into runtime proof and classify remote participant absence, no APNs/connect`.
+After 2.48Y-RemotePeerContextHandoffRepair — the runtime proof can now carry redacted simulator remote-peer context from a DEBUG/test-controlled handoff into the PushKit/Answer proof, and missing handoff context is classified as remote-audio non-success. No APNs/connect was run for this repair. The next phase is `2.48Y-Physical3 — one-shot simulator-assisted remote peer context/liveness proof`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,46 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48Y-RemotePeerContextHandoffRepair carries redacted simulator peer readiness into runtime proof without APNs/connect:
+  - Added DEBUG/test-controlled remote peer context handoff state and URL hook:
+    ```text
+    remote_peer_context_handoff_present=true
+    remote_peer_context_handoff_debug_only=true
+    remote_peer_context_handoff_raw_identifiers_logged=false
+    remote_peer_context_handoff_blocks_success_without_context=true
+    remote_peer_context_handoff_classifies_missing_remote_participant=true
+    remote_peer_context_handoff_classifies_simulator_limitation=true
+    ```
+  - Future simulator-assisted runtime proof can record:
+    ```text
+    remote_peer_context_handoff_source=debug_hook_redacted
+    remote_peer_context_handoff_armed_before_apns=true
+    remote_peer_context_handoff_received_by_runtime=true
+    remote_peer_context_handoff_survived_pushkit=true
+    remote_peer_context_handoff_survived_answer=true
+    remote_peer_kind=ios_simulator_redacted
+    remote_peer_physical_device=false
+    simulator_assisted_remote_audio_proof=true
+    production_like_two_physical_device_proof=false
+    second_device_remote_audio_readiness=ready_redacted
+    remote_audio_liveness_limitation=simulator_assisted_redacted
+    ```
+  - Missing context is explicit non-success:
+    ```text
+    remote_peer_context_handoff_received_by_runtime=false
+    remote_peer_kind=unknown_redacted
+    simulator_assisted_remote_audio_proof=false
+    remote_audio_liveness_result=not_observed_redacted
+    remote_audio_liveness_error_bucket=remote_peer_context_missing_redacted
+    ```
+  - Safety remains closed by default:
+    ```text
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    ```
+  - This repair did not send APNs, run production APNs, repeat APNs, use `dev/invite`, retry media connect, retry LiveKit join, request microphone/camera permission, enable video, emit Matrix events, start full call flow, reset/re-arm the physical one-shot connect hook, or modify project/signing files.
+  - Next phase: `2.48Y-Physical3 — one-shot simulator-assisted remote peer context/liveness proof`.
 - 2.48Y-Physical2-SimulatorLivenessTriage safely classifies the simulator-assisted remote audio/liveness proof:
   - This is a docs-only close-out. It did not send APNs again, run production APNs, repeat APNs, use `dev/invite`, retry media connect, retry LiveKit join, request microphone/camera permission, enable video, emit Matrix events, start full call flow, or modify project/signing files.
   - Phase-specific proof path:
