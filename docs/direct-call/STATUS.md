@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48T-Physical6EnablementHook — the DEBUG-only one-shot physical connect enablement URL hook is present, default-disabled, audio-only, and wired into the post-Answer credentials/connect preflight without sending APNs or starting media. No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, real LiveKit join, microphone/camera permission, Matrix event emission, or full call flow was performed. The next phase is `2.48T-Physical6 — one-shot first controlled audio-connect physical attempt`.
+After 2.48T-Physical6-MetadataCredentialsBoundaryTriage — one sandbox APNs was sent after explicit `SEND_2_48T_PHYSICAL6`, PushKit arrived, CallKit report completed, PushKit completion was called, and CallKit Answer was received and fulfilled. This was not a first controlled audio-connect proof close: pending metadata and media credentials did not run, the Physical6 hook was not consumed, and no media connect or LiveKit join was requested. No repeated APNs, production APNs, `dev/invite`, repeated connect, unauthorized LiveKit join, microphone/camera permission, Matrix event emission, video, or full call flow was performed. The next phase is `2.48T-Physical6-MetadataCredentialsBoundaryRepair — Answer received, pending metadata/credentials not requested, no connect`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,68 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48T-Physical6-MetadataCredentialsBoundaryTriage closes the Physical6 attempt as answered / metadata-credentials boundary blocked / no-connect triage:
+  - This was not a first controlled audio-connect proof close.
+  - One sandbox APNs was sent after explicit `SEND_2_48T_PHYSICAL6`.
+  - PushKit received the invite, CallKit report completed, PushKit completion was called, and CallKit Answer action was received and fulfilled:
+    ```text
+    proof_generation=generation_12
+    physical_voip_push_received=true
+    pushkit_callback_invoked=true
+    callkit_report_result=reported
+    callkit_report_completion_observed=true
+    pushkit_completion_called=true
+    callkit_first_action_kind=answer
+    callkit_answer_action_received=true
+    callkit_answer_action_fulfilled=true
+    ```
+  - The flow stopped before pending metadata and credentials:
+    ```text
+    pending_metadata_fetch_requested=false
+    pending_metadata_fetch_result=not_requested
+    media_credentials_requested=false
+    media_credentials_result=blocked_redacted
+    blocked_reason=media_credentials_request_boundary_not_ready
+    ```
+  - The Physical6 enablement hook was not consumed, and the controlled first attempt did not start:
+    ```text
+    physical6_runtime_enablement_url_hook_consumed=false
+    controlled_connect_first_attempt_requested=false
+    media_connect_requested=false
+    livekit_join_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    ```
+  - Required conclusion:
+    ```text
+    2.48T-Physical6 was not a first controlled audio-connect proof close.
+    It was answered / metadata-credentials boundary blocked / no-connect triage.
+    One sandbox APNs was sent after explicit SEND_2_48T_PHYSICAL6.
+    PushKit received the invite.
+    CallKit report completed.
+    PushKit completion was called.
+    CallKit Answer action was received and fulfilled.
+    Pending metadata did not run.
+    Media credentials did not run.
+    The Physical6 enablement hook was not consumed.
+    Controlled first attempt was not requested.
+    Media connect was not requested.
+    LiveKit join was not requested.
+    Camera permission stayed false.
+    Matrix event emit stayed false.
+    Full call flow stayed false.
+    No repeated APNs.
+    No production APNs.
+    No dev/invite.
+    No repeated connect.
+    No unauthorized LiveKit join.
+    No microphone/camera permission.
+    No Matrix event emit.
+    No video.
+    No full call flow.
+    ```
+  - Next phase: `2.48T-Physical6-MetadataCredentialsBoundaryRepair — Answer received, pending metadata/credentials not requested, no connect`.
 - 2.48T-Physical6EnablementHook adds the DEBUG-only one-shot physical connect enablement hook for the future Physical6 attempt:
   - This is code/test prep only. It did not send APNs, run production APNs, repeat APNs, use `dev/invite`, start physical media connect, join real LiveKit, request microphone/camera permission, emit Matrix events, or start full call flow.
   - The local URL hook is DEBUG-only and does not start connect by itself:
