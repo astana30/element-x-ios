@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Added 2.48W-DisconnectCleanupDiagnostics: redacted DEBUG proof fields now classify provider/local cleanup without expected CallKit End action, require delivery/fulfillment/matching/timing when an End action is expected, preserve audio-session deactivation and non-reusable credentials, and keep default runtime no-connect.
 - Classified 2.48W as controlled disconnect/end-call cleanup proof incomplete: Physical8 showed cleanup requested/result ended and valid audio-session deactivation, but CallKit End action delivery/matching/fulfillment was not observed; next is targeted no-APNs/no-connect diagnostics.
 - Closed 2.48V as a docs-only controlled audio session lifecycle review: Physical8's proof showed CallKit/provider audio activation and deactivation, no pre-Answer audio-session activation/deactivation, one-shot hook consumption, non-reusable credentials, and no repeated APNs/connect, video, microphone/camera permission, Matrix event emission, or full call flow.
 - Closed 2.48U as a docs-only first-connect result review and cleanup verification: Physical8's first controlled audio-only connect succeeded once, the one-shot hook was consumed, credentials were cleared and not reusable, and no repeated APNs/connect, video, camera permission, Matrix event emission, or full call flow occurred.
@@ -120,6 +121,64 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48W-DisconnectCleanupDiagnostics — Controlled Disconnect Cleanup Diagnostics
+
+Implemented the targeted diagnostics repair without APNs, physical connect, LiveKit retry, microphone/camera permission, Matrix event emission, video, or full call flow.
+
+The VoIP proof now includes a DEBUG-only redacted diagnostics block:
+
+```text
+disconnect_cleanup_diagnostics_present=true
+disconnect_cleanup_diagnostics_debug_only=true
+disconnect_cleanup_diagnostics_callkit_cleanup_requested=<redacted_bool>
+disconnect_cleanup_diagnostics_callkit_cleanup_result=<redacted_result>
+disconnect_cleanup_diagnostics_end_action_expected=<redacted_bool>
+disconnect_cleanup_diagnostics_end_action_delivered=<redacted_bool>
+disconnect_cleanup_diagnostics_end_action_fulfilled=<redacted_bool>
+disconnect_cleanup_diagnostics_end_action_origin=<redacted_origin>
+disconnect_cleanup_diagnostics_end_action_uuid_matched=<redacted_bool>
+disconnect_cleanup_diagnostics_end_action_generation_matched=<redacted_bool>
+disconnect_cleanup_diagnostics_end_action_source_matched=<redacted_bool>
+disconnect_cleanup_diagnostics_provider_end_reported=<redacted_bool>
+disconnect_cleanup_diagnostics_local_cleanup_completed=<redacted_bool>
+disconnect_cleanup_diagnostics_audio_session_deactivated=<redacted_bool>
+disconnect_cleanup_diagnostics_livekit_cleanup_requested=<redacted_bool>
+disconnect_cleanup_diagnostics_livekit_cleanup_completed=<redacted_bool>
+disconnect_cleanup_diagnostics_one_shot_consumed=<redacted_bool>
+disconnect_cleanup_diagnostics_no_repeated_connect=true
+disconnect_cleanup_diagnostics_no_matrix_events=true
+disconnect_cleanup_diagnostics_no_video=true
+disconnect_cleanup_diagnostics_raw_identifiers_logged=false
+disconnect_cleanup_diagnostics_end_timing_classification=<redacted_bucket>
+disconnect_cleanup_diagnostics_result=<redacted_result>
+```
+
+Provider/local cleanup without a CallKit End action is now classified explicitly instead of being mistaken for an incomplete End action path:
+
+```text
+disconnect_cleanup_diagnostics_end_action_expected=false
+disconnect_cleanup_diagnostics_end_action_delivered=false
+disconnect_cleanup_diagnostics_local_cleanup_completed=true
+disconnect_cleanup_diagnostics_provider_end_reported=true
+disconnect_cleanup_diagnostics_result=local_or_provider_cleanup_sufficient_redacted
+```
+
+When a CallKit End action is expected, the diagnostics require delivery, fulfillment, UUID/generation/source matching, and non-unknown timing before classifying success. Unknown timing is classified as `end_action_timing_unknown_redacted`, not success.
+
+The diagnostics refresh when first-attempt state, End action delivery/fulfillment, audio-session activation/deactivation, or controlled cleanup changes. This keeps the proof tied to the existing one-shot state:
+
+```text
+disconnect_cleanup_diagnostics_one_shot_consumed=true
+disconnect_cleanup_diagnostics_no_repeated_connect=true
+disconnect_cleanup_diagnostics_no_matrix_events=true
+disconnect_cleanup_diagnostics_no_video=true
+disconnect_cleanup_diagnostics_raw_identifiers_logged=false
+```
+
+Targeted tests cover field presence, cleanup requested/result, provider/local cleanup sufficiency without End action, End-action-required matching/fulfillment, unknown timing classification, redacted matching, audio-session deactivation, LiveKit/audio cleanup classification without network, one-shot consumption, first-attempt non-repeat, credential non-reuse, no repeated media connect, no LiveKit rejoin, camera permission false, Matrix event false, video disabled, full flow false, existing 2.48U cleanup, existing 2.48V lifecycle, first-connect expectations, and no raw identifiers.
+
+Next phase: `2.48X — second-device remote audio/liveness readiness review, no repeated connect`.
 
 ### 2.48W — Controlled Disconnect/End-Call Cleanup Review
 

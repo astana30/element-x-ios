@@ -13,132 +13,100 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48W — controlled disconnect/end-call cleanup review, no repeated connect` is complete and classified as incomplete.
+`2.48W-DisconnectCleanupDiagnostics — add/verify controlled disconnect cleanup proof, no APNs/connect` is complete.
 
-This was a docs-only review of the existing Physical8 proof. No APNs, production APNs, repeated APNs, `dev/invite`, repeated connect, new LiveKit join, video, microphone/camera permission, Matrix event emission, or full call flow was performed.
+This was a code/test diagnostics phase. No APNs, production APNs, repeated APNs, `dev/invite`, repeated connect, new LiveKit join, video, microphone/camera permission on device, Matrix event emission, or full call flow was performed.
 
-Latest 2.48V close-out commit:
-
-```text
-1961e09edca46a62377daf442de9cb1db7ad555e Close audio session lifecycle review
-```
-
-## Physical8 Proof Reviewed
-
-Proof path:
+Latest 2.48W close-out commit before this phase:
 
 ```text
-/tmp/salemx-voip-push-receipt-proof-2.48t-physical8-first-audio-connect-polled.txt
+646c8ad1ab1d6e4e7aee84007f4112ea5aaf6c1d Classify disconnect cleanup proof gap
 ```
 
-Classification:
+## Diagnostics Implemented
+
+The VoIP proof now emits DEBUG-only redacted disconnect cleanup diagnostics:
 
 ```text
-2.48W result = controlled disconnect/end-call cleanup proof incomplete; targeted diagnostics needed
+disconnect_cleanup_diagnostics_present=true
+disconnect_cleanup_diagnostics_debug_only=true
+disconnect_cleanup_diagnostics_callkit_cleanup_requested=<redacted_bool>
+disconnect_cleanup_diagnostics_callkit_cleanup_result=<redacted_result>
+disconnect_cleanup_diagnostics_end_action_expected=<redacted_bool>
+disconnect_cleanup_diagnostics_end_action_delivered=<redacted_bool>
+disconnect_cleanup_diagnostics_end_action_fulfilled=<redacted_bool>
+disconnect_cleanup_diagnostics_end_action_origin=<redacted_origin>
+disconnect_cleanup_diagnostics_end_action_uuid_matched=<redacted_bool>
+disconnect_cleanup_diagnostics_end_action_generation_matched=<redacted_bool>
+disconnect_cleanup_diagnostics_end_action_source_matched=<redacted_bool>
+disconnect_cleanup_diagnostics_provider_end_reported=<redacted_bool>
+disconnect_cleanup_diagnostics_local_cleanup_completed=<redacted_bool>
+disconnect_cleanup_diagnostics_audio_session_deactivated=<redacted_bool>
+disconnect_cleanup_diagnostics_livekit_cleanup_requested=<redacted_bool>
+disconnect_cleanup_diagnostics_livekit_cleanup_completed=<redacted_bool>
+disconnect_cleanup_diagnostics_one_shot_consumed=<redacted_bool>
+disconnect_cleanup_diagnostics_no_repeated_connect=true
+disconnect_cleanup_diagnostics_no_matrix_events=true
+disconnect_cleanup_diagnostics_no_video=true
+disconnect_cleanup_diagnostics_raw_identifiers_logged=false
+disconnect_cleanup_diagnostics_end_timing_classification=<redacted_bucket>
+disconnect_cleanup_diagnostics_result=<redacted_result>
 ```
 
-First controlled audio-connect result:
+Provider/local cleanup without an expected CallKit End action is now classified explicitly:
 
 ```text
-proof_generation=generation_14
-controlled_connect_first_attempt_completed=true
-controlled_connect_first_attempt_result=success_redacted
-controlled_connect_first_attempt_error_bucket=none
-controlled_connect_first_attempt_repeated=false
-physical6_runtime_enablement_url_hook_consumed=true
+disconnect_cleanup_diagnostics_end_action_expected=false
+disconnect_cleanup_diagnostics_end_action_delivered=false
+disconnect_cleanup_diagnostics_local_cleanup_completed=true
+disconnect_cleanup_diagnostics_provider_end_reported=true
+disconnect_cleanup_diagnostics_result=local_or_provider_cleanup_sufficient_redacted
 ```
 
-The already-closed Physical8 media and LiveKit activity stayed limited to one audio-only attempt:
+If a CallKit End action is expected, success requires delivery, fulfillment, UUID/generation/source matching, and non-unknown timing:
 
 ```text
-media_connect_requested=true
-media_connect_attempted=true
-livekit_join_requested=true
-livekit_connect_audio_invoked=true
+disconnect_cleanup_diagnostics_end_action_expected=true
+disconnect_cleanup_diagnostics_end_action_delivered=true
+disconnect_cleanup_diagnostics_end_action_fulfilled=true
+disconnect_cleanup_diagnostics_end_action_uuid_matched=true
+disconnect_cleanup_diagnostics_end_action_generation_matched=true
+disconnect_cleanup_diagnostics_end_action_source_matched=true
 ```
 
-Controlled CallKit cleanup was requested and marked ended, but End action observability was incomplete:
+Unknown End action timing is classified as `end_action_timing_unknown_redacted`, not success.
+
+## Preserved Safety
 
 ```text
-controlled_callkit_cleanup_requested=true
-controlled_callkit_cleanup_result=ended
-callkit_end_after_pushkit_completion_ms_bucket=unknown
-callkit_end_action_delivered=false
-end_action_uuid_matched=false
-end_action_generation_matched=false
-end_action_source_matched=false
-end_action_fulfilled=false
-end_action_origin=none
+default_runtime_no_connect=true
+one_shot_hook_consumed=true
+first_attempt_repeated=false
+credentials_non_reusable=true
+no_repeated_media_connect=true
+no_livekit_rejoin=true
+video_disabled=true
+camera_permission_false=true
+matrix_event_emit_false=true
+full_call_flow_false=true
+raw_identifiers_logged=false
 ```
-
-Audio-session deactivation remained valid:
-
-```text
-callkit_provider_did_deactivate_audio_session=true
-callkit_audio_session_did_deactivate=true
-audio_session_did_deactivate_before_first_action=false
-```
-
-Credentials stayed non-reusable:
-
-```text
-media_credentials_cleanup_requested=true
-media_credentials_cleanup_result=cleared
-media_credentials_post_cleanup_token_present=false
-media_credentials_post_cleanup_url_present=false
-media_credentials_post_cleanup_expires_at_present=false
-media_credentials_post_cleanup_payload_present=false
-media_credentials_reuse_attempted=false
-media_credentials_reuse_allowed=false
-media_credentials_expiry_check_requested=true
-media_credentials_expiry_check_result=expired_or_not_reusable_redacted
-```
-
-Safety fields stayed closed:
-
-```text
-microphone_permission_requested=false
-camera_permission_requested=false
-matrix_event_emit_requested=false
-real_call_flow_started=false
-controlled_connect_first_attempt_video_allowed=false
-```
-
-## 2.48W Conclusion
-
-```text
-first controlled audio-connect already succeeded
-no repeated APNs
-no repeated connect
-one-shot hook consumed
-credentials non-reusable
-video disabled
-microphone permission false
-camera permission false
-Matrix event emit false
-full call flow false
-```
-
-Disconnect/end-call cleanup proof is incomplete because CallKit End action delivery/matching/fulfillment was not observed. Do not run another APNs helper or another connect attempt for this result.
 
 ## Next Phase
 
-`2.48W-DisconnectCleanupDiagnostics — add/verify controlled disconnect cleanup proof, no APNs/connect`
+`2.48X — second-device remote audio/liveness readiness review, no repeated connect`
 
-This is a targeted diagnostics phase. It should improve or verify controlled disconnect/end-call cleanup observability without APNs, without a physical call, and without any media/LiveKit retry.
+This is a readiness/review phase only unless a later prompt explicitly authorizes narrow code changes. Do not set up another physical APNs/connect attempt yet.
 
 Suggested scope:
 
 ```text
-diagnose_callkit_end_action_observability=true
-verify_cleanup_result_maps_to_callkit_end_action=true
-verify_end_action_uuid_generation_source_matching=true
-verify_end_action_fulfillment_recorded=true
-verify_audio_session_deactivation_after_cleanup=true
-preserve_no_repeated_connect=true
+review_second_device_remote_audio_liveness_readiness=true
+review_first_connect_success_constraints=true
+review_disconnect_cleanup_diagnostics_before_remote_liveness=true
+review_no_repeated_connect_regression=true
+review_no_video_camera_matrix_full_flow_regression=true
 ```
-
-Do not set the next phase to another APNs/connect attempt.
 
 ## Hard Limits
 
@@ -190,10 +158,10 @@ Privacy scan changed docs/diff for raw sensitive values. Allowed hits are field 
 
 Return:
 
-- diagnostics implementation/review summary
-- whether CallKit End action observability is now sufficient
-- whether audio-session deactivation remains valid
+- 2.48X readiness review result
+- whether disconnect cleanup diagnostics remain sufficient
 - whether one-shot hook stayed consumed
+- whether first attempt repeated=false
 - whether credentials stayed non-reusable
 - whether media connect was not repeated
 - commit hash if docs or code were updated

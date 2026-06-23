@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48W — the controlled disconnect/end-call cleanup review is complete and classified as incomplete. Physical8's existing proof shows the first controlled audio-connect succeeded once, the one-shot hook was consumed, credentials were non-reusable, cleanup was requested and marked ended, and audio-session deactivation remained valid; however, CallKit End action delivery/matching/fulfillment was not observed, so a targeted no-APNs/no-connect diagnostics phase is required. This phase used only the existing Physical8 proof and performed no runtime/APNs/connect action. The next phase is `2.48W-DisconnectCleanupDiagnostics — add/verify controlled disconnect cleanup proof, no APNs/connect`.
+After 2.48W-DisconnectCleanupDiagnostics — controlled disconnect/end-call cleanup can be classified safely without another physical attempt. The DEBUG proof now emits redacted disconnect cleanup diagnostics that distinguish provider/local cleanup without expected CallKit End action from End-action-required cleanup, require delivery/fulfillment/matching/timing when an End action is expected, preserve audio-session deactivation checks, keep credentials non-reusable, and keep the default runtime no-connect. No APNs/connect/runtime action was performed. The next phase is `2.48X — second-device remote audio/liveness readiness review, no repeated connect`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,45 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48W-DisconnectCleanupDiagnostics adds targeted redacted cleanup diagnostics without APNs/connect:
+  - This was a code/test diagnostics phase only. It did not send APNs, run production APNs, repeat APNs, use `dev/invite`, start another media connect, join LiveKit again, request microphone/camera permission on device, emit Matrix events, enable video, or start full call flow.
+  - The proof now emits DEBUG-only redacted diagnostics fields:
+    ```text
+    disconnect_cleanup_diagnostics_present=true
+    disconnect_cleanup_diagnostics_debug_only=true
+    disconnect_cleanup_diagnostics_raw_identifiers_logged=false
+    disconnect_cleanup_diagnostics_no_repeated_connect=true
+    disconnect_cleanup_diagnostics_no_matrix_events=true
+    disconnect_cleanup_diagnostics_no_video=true
+    ```
+  - Provider/local cleanup can be classified as sufficient when no CallKit End action is expected:
+    ```text
+    disconnect_cleanup_diagnostics_end_action_expected=false
+    disconnect_cleanup_diagnostics_end_action_delivered=false
+    disconnect_cleanup_diagnostics_provider_end_reported=true
+    disconnect_cleanup_diagnostics_local_cleanup_completed=true
+    disconnect_cleanup_diagnostics_result=local_or_provider_cleanup_sufficient_redacted
+    ```
+  - If a CallKit End action is expected, the diagnostics require delivery, fulfillment, and redacted matching before success:
+    ```text
+    disconnect_cleanup_diagnostics_end_action_expected=true
+    disconnect_cleanup_diagnostics_end_action_delivered=true
+    disconnect_cleanup_diagnostics_end_action_fulfilled=true
+    disconnect_cleanup_diagnostics_end_action_uuid_matched=true
+    disconnect_cleanup_diagnostics_end_action_generation_matched=true
+    disconnect_cleanup_diagnostics_end_action_source_matched=true
+    ```
+  - Unknown End action timing is classified as `end_action_timing_unknown_redacted` and is not treated as success.
+  - The diagnostics mirror the existing safe boundaries:
+    ```text
+    disconnect_cleanup_diagnostics_audio_session_deactivated=true
+    disconnect_cleanup_diagnostics_livekit_cleanup_requested=true
+    disconnect_cleanup_diagnostics_livekit_cleanup_completed=true
+    disconnect_cleanup_diagnostics_one_shot_consumed=true
+    media_credentials_reuse_allowed=false
+    controlled_connect_first_attempt_repeated=false
+    ```
+  - Next phase: `2.48X — second-device remote audio/liveness readiness review, no repeated connect`.
 - 2.48W controlled disconnect/end-call cleanup review is complete:
   - This was a docs-only review of the existing Physical8 proof at `/tmp/salemx-voip-push-receipt-proof-2.48t-physical8-first-audio-connect-polled.txt`.
   - Classification: `2.48W result = controlled disconnect/end-call cleanup proof incomplete; targeted diagnostics needed`.

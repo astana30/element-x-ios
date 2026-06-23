@@ -2485,6 +2485,74 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func disconnectCleanupDiagnosticsClassifyProviderCleanupWithoutEndAction() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+
+        #expect(adapterSource.contains("disconnect_cleanup_diagnostics_present=\\(disconnectCleanupDiagnosticsPresent)"))
+        #expect(adapterSource.contains("disconnect_cleanup_diagnostics_debug_only=\\(disconnectCleanupDiagnosticsDebugOnly)"))
+        #expect(adapterSource.contains("disconnect_cleanup_diagnostics_callkit_cleanup_requested=\\(disconnectCleanupDiagnosticsCallKitCleanupRequested)"))
+        #expect(adapterSource.contains("disconnect_cleanup_diagnostics_callkit_cleanup_result=\\(disconnectCleanupDiagnosticsCallKitCleanupResult)"))
+        #expect(adapterSource.contains("disconnect_cleanup_diagnostics_end_action_expected=\\(disconnectCleanupDiagnosticsEndActionExpected)"))
+        #expect(adapterSource.contains("disconnect_cleanup_diagnostics_end_action_delivered=\\(disconnectCleanupDiagnosticsEndActionDelivered)"))
+        #expect(adapterSource.contains("disconnect_cleanup_diagnostics_end_action_fulfilled=\\(disconnectCleanupDiagnosticsEndActionFulfilled)"))
+        #expect(adapterSource.contains("disconnect_cleanup_diagnostics_end_action_origin=\\(disconnectCleanupDiagnosticsEndActionOrigin)"))
+        #expect(adapterSource.contains("disconnect_cleanup_diagnostics_end_action_uuid_matched=\\(disconnectCleanupDiagnosticsEndActionUUIDMatched)"))
+        #expect(adapterSource.contains("disconnect_cleanup_diagnostics_end_action_generation_matched=\\(disconnectCleanupDiagnosticsEndActionGenerationMatched)"))
+        #expect(adapterSource.contains("disconnect_cleanup_diagnostics_end_action_source_matched=\\(disconnectCleanupDiagnosticsEndActionSourceMatched)"))
+        #expect(adapterSource.contains("disconnect_cleanup_diagnostics_provider_end_reported=\\(disconnectCleanupDiagnosticsProviderEndReported)"))
+        #expect(adapterSource.contains("disconnect_cleanup_diagnostics_local_cleanup_completed=\\(disconnectCleanupDiagnosticsLocalCleanupCompleted)"))
+        #expect(adapterSource.contains("disconnect_cleanup_diagnostics_audio_session_deactivated=\\(disconnectCleanupDiagnosticsAudioSessionDeactivated)"))
+        #expect(adapterSource.contains("disconnect_cleanup_diagnostics_livekit_cleanup_requested=\\(disconnectCleanupDiagnosticsLiveKitCleanupRequested)"))
+        #expect(adapterSource.contains("disconnect_cleanup_diagnostics_livekit_cleanup_completed=\\(disconnectCleanupDiagnosticsLiveKitCleanupCompleted)"))
+        #expect(adapterSource.contains("disconnect_cleanup_diagnostics_one_shot_consumed=\\(disconnectCleanupDiagnosticsOneShotConsumed)"))
+        #expect(adapterSource.contains("disconnect_cleanup_diagnostics_no_repeated_connect=\\(disconnectCleanupDiagnosticsNoRepeatedConnect)"))
+        #expect(adapterSource.contains("disconnect_cleanup_diagnostics_no_matrix_events=\\(disconnectCleanupDiagnosticsNoMatrixEvents)"))
+        #expect(adapterSource.contains("disconnect_cleanup_diagnostics_no_video=\\(disconnectCleanupDiagnosticsNoVideo)"))
+        #expect(adapterSource.contains("disconnect_cleanup_diagnostics_raw_identifiers_logged=\\(disconnectCleanupDiagnosticsRawIdentifiersLogged)"))
+        #expect(adapterSource.contains("disconnect_cleanup_diagnostics_end_timing_classification=\\(disconnectCleanupDiagnosticsEndTimingClassification)"))
+        #expect(adapterSource.contains("disconnect_cleanup_diagnostics_result=\\(disconnectCleanupDiagnosticsResult)"))
+        #expect(adapterSource.contains("disconnectCleanupDiagnosticsEndActionExpected = callKitEndActionDelivered || endActionFulfilled"))
+        #expect(adapterSource.contains("disconnectCleanupDiagnosticsLocalCleanupCompleted = controlledCallKitCleanupResult == \"ended\""))
+        #expect(adapterSource.contains("disconnectCleanupDiagnosticsProviderEndReported = disconnectCleanupDiagnosticsLocalCleanupCompleted && !disconnectCleanupDiagnosticsEndActionExpected"))
+        #expect(adapterSource.contains("disconnectCleanupDiagnosticsAudioSessionDeactivated = callKitProviderDidDeactivateAudioSession"))
+        #expect(adapterSource.contains("disconnectCleanupDiagnosticsLiveKitCleanupRequested = controlledCallKitCleanupRequested && liveKitConnectAudioInvoked"))
+        #expect(adapterSource.contains("disconnectCleanupDiagnosticsLiveKitCleanupCompleted = disconnectCleanupDiagnosticsLiveKitCleanupRequested && disconnectCleanupDiagnosticsLocalCleanupCompleted"))
+        #expect(adapterSource.contains("disconnectCleanupDiagnosticsOneShotConsumed = physical6RuntimeEnablementURLHookConsumed"))
+        #expect(adapterSource.contains("disconnectCleanupDiagnosticsNoRepeatedConnect = !controlledConnectFirstAttemptRepeated"))
+        #expect(adapterSource.contains("disconnectCleanupDiagnosticsNoMatrixEvents = !matrixEventEmitRequested && !controlledConnectFirstAttemptMatrixEventsAllowed"))
+        #expect(adapterSource.contains("disconnectCleanupDiagnosticsNoVideo = !controlledConnectFirstAttemptVideoAllowed && !cameraPermissionRequested"))
+        #expect(adapterSource.contains("disconnectCleanupDiagnosticsRawIdentifiersLogged = false"))
+        #expect(adapterSource.contains("disconnectCleanupDiagnosticsEndTimingClassification = \"end_action_not_expected\""))
+        #expect(adapterSource.contains("local_or_provider_cleanup_sufficient_redacted"))
+        #expect(adapterSource.contains("summary.refreshDisconnectCleanupDiagnostics()"))
+        #expect(!adapterSource.contains("disconnectCleanupDiagnosticsRawIdentifiersLogged = true"))
+    }
+
+    @Test
+    func disconnectCleanupDiagnosticsRequireMatchingFulfilledEndActionWhenExpected() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+
+        #expect(adapterSource.contains("disconnectCleanupDiagnosticsEndActionDelivered = callKitEndActionDelivered"))
+        #expect(adapterSource.contains("disconnectCleanupDiagnosticsEndActionFulfilled = endActionFulfilled"))
+        #expect(adapterSource.contains("disconnectCleanupDiagnosticsEndActionUUIDMatched = endActionUUIDMatched"))
+        #expect(adapterSource.contains("disconnectCleanupDiagnosticsEndActionGenerationMatched = endActionGenerationMatched"))
+        #expect(adapterSource.contains("disconnectCleanupDiagnosticsEndActionSourceMatched = endActionSourceMatched"))
+        #expect(adapterSource.contains("} else if callKitEndAfterPushKitCompletionMsBucket == \"unknown\" {"))
+        #expect(adapterSource.contains("disconnectCleanupDiagnosticsEndTimingClassification = \"end_action_timing_unknown_redacted\""))
+        #expect(adapterSource.contains("disconnectCleanupDiagnosticsResult = \"end_action_timing_unknown_redacted\""))
+        #expect(adapterSource.contains("disconnectCleanupDiagnosticsEndActionDelivered,"))
+        #expect(adapterSource.contains("disconnectCleanupDiagnosticsEndActionFulfilled,"))
+        #expect(adapterSource.contains("disconnectCleanupDiagnosticsEndActionUUIDMatched,"))
+        #expect(adapterSource.contains("disconnectCleanupDiagnosticsEndActionGenerationMatched,"))
+        #expect(adapterSource.contains("disconnectCleanupDiagnosticsEndActionSourceMatched"))
+        #expect(adapterSource.contains("disconnectCleanupDiagnosticsResult = \"end_action_cleanup_sufficient_redacted\""))
+        #expect(adapterSource.contains("disconnectCleanupDiagnosticsResult = \"end_action_incomplete_redacted\""))
+        #expect(adapterSource.contains("summary.endActionSourceMatched = uuidMatched && generationMatched"))
+        #expect(adapterSource.contains("summary.endActionFulfilled = true"))
+        #expect(adapterSource.contains("callkit_end_after_pushkit_completion_ms_bucket=\\(callKitEndAfterPushKitCompletionMsBucket)"))
+    }
+
+    @Test
     func controlledCallKitReportClearsStaleSyntheticCallBeforeNewReport() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
 

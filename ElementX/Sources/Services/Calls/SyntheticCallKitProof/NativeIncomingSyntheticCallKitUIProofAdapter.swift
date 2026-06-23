@@ -1866,6 +1866,29 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var realCallFlowStarted = SalemXControlledAudioConnectFirstAttempt.defaultDisabled.realCallFlowStarted
     var controlledCallKitCleanupRequested = false
     var controlledCallKitCleanupResult = "not_requested"
+    var disconnectCleanupDiagnosticsPresent = true
+    var disconnectCleanupDiagnosticsDebugOnly = true
+    var disconnectCleanupDiagnosticsCallKitCleanupRequested = false
+    var disconnectCleanupDiagnosticsCallKitCleanupResult = "not_requested"
+    var disconnectCleanupDiagnosticsEndActionExpected = false
+    var disconnectCleanupDiagnosticsEndActionDelivered = false
+    var disconnectCleanupDiagnosticsEndActionFulfilled = false
+    var disconnectCleanupDiagnosticsEndActionOrigin = "none"
+    var disconnectCleanupDiagnosticsEndActionUUIDMatched = false
+    var disconnectCleanupDiagnosticsEndActionGenerationMatched = false
+    var disconnectCleanupDiagnosticsEndActionSourceMatched = false
+    var disconnectCleanupDiagnosticsProviderEndReported = false
+    var disconnectCleanupDiagnosticsLocalCleanupCompleted = false
+    var disconnectCleanupDiagnosticsAudioSessionDeactivated = false
+    var disconnectCleanupDiagnosticsLiveKitCleanupRequested = false
+    var disconnectCleanupDiagnosticsLiveKitCleanupCompleted = false
+    var disconnectCleanupDiagnosticsOneShotConsumed = false
+    var disconnectCleanupDiagnosticsNoRepeatedConnect = true
+    var disconnectCleanupDiagnosticsNoMatrixEvents = true
+    var disconnectCleanupDiagnosticsNoVideo = true
+    var disconnectCleanupDiagnosticsRawIdentifiersLogged = false
+    var disconnectCleanupDiagnosticsEndTimingClassification = "not_requested"
+    var disconnectCleanupDiagnosticsResult = "not_requested"
     var blockedReason = "voip_push_not_received"
 
     var redactedLines: [String] {
@@ -2211,6 +2234,29 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "controlled_connect_first_attempt_blocked_reason=\(controlledConnectFirstAttemptBlockedReason)",
             "controlled_callkit_cleanup_requested=\(controlledCallKitCleanupRequested)",
             "controlled_callkit_cleanup_result=\(controlledCallKitCleanupResult)",
+            "disconnect_cleanup_diagnostics_present=\(disconnectCleanupDiagnosticsPresent)",
+            "disconnect_cleanup_diagnostics_debug_only=\(disconnectCleanupDiagnosticsDebugOnly)",
+            "disconnect_cleanup_diagnostics_callkit_cleanup_requested=\(disconnectCleanupDiagnosticsCallKitCleanupRequested)",
+            "disconnect_cleanup_diagnostics_callkit_cleanup_result=\(disconnectCleanupDiagnosticsCallKitCleanupResult)",
+            "disconnect_cleanup_diagnostics_end_action_expected=\(disconnectCleanupDiagnosticsEndActionExpected)",
+            "disconnect_cleanup_diagnostics_end_action_delivered=\(disconnectCleanupDiagnosticsEndActionDelivered)",
+            "disconnect_cleanup_diagnostics_end_action_fulfilled=\(disconnectCleanupDiagnosticsEndActionFulfilled)",
+            "disconnect_cleanup_diagnostics_end_action_origin=\(disconnectCleanupDiagnosticsEndActionOrigin)",
+            "disconnect_cleanup_diagnostics_end_action_uuid_matched=\(disconnectCleanupDiagnosticsEndActionUUIDMatched)",
+            "disconnect_cleanup_diagnostics_end_action_generation_matched=\(disconnectCleanupDiagnosticsEndActionGenerationMatched)",
+            "disconnect_cleanup_diagnostics_end_action_source_matched=\(disconnectCleanupDiagnosticsEndActionSourceMatched)",
+            "disconnect_cleanup_diagnostics_provider_end_reported=\(disconnectCleanupDiagnosticsProviderEndReported)",
+            "disconnect_cleanup_diagnostics_local_cleanup_completed=\(disconnectCleanupDiagnosticsLocalCleanupCompleted)",
+            "disconnect_cleanup_diagnostics_audio_session_deactivated=\(disconnectCleanupDiagnosticsAudioSessionDeactivated)",
+            "disconnect_cleanup_diagnostics_livekit_cleanup_requested=\(disconnectCleanupDiagnosticsLiveKitCleanupRequested)",
+            "disconnect_cleanup_diagnostics_livekit_cleanup_completed=\(disconnectCleanupDiagnosticsLiveKitCleanupCompleted)",
+            "disconnect_cleanup_diagnostics_one_shot_consumed=\(disconnectCleanupDiagnosticsOneShotConsumed)",
+            "disconnect_cleanup_diagnostics_no_repeated_connect=\(disconnectCleanupDiagnosticsNoRepeatedConnect)",
+            "disconnect_cleanup_diagnostics_no_matrix_events=\(disconnectCleanupDiagnosticsNoMatrixEvents)",
+            "disconnect_cleanup_diagnostics_no_video=\(disconnectCleanupDiagnosticsNoVideo)",
+            "disconnect_cleanup_diagnostics_raw_identifiers_logged=\(disconnectCleanupDiagnosticsRawIdentifiersLogged)",
+            "disconnect_cleanup_diagnostics_end_timing_classification=\(disconnectCleanupDiagnosticsEndTimingClassification)",
+            "disconnect_cleanup_diagnostics_result=\(disconnectCleanupDiagnosticsResult)",
             "media_connect_requested=\(mediaConnectRequested)",
             "media_connect_attempted=\(mediaConnectAttempted)",
             "livekit_join_requested=\(liveKitJoinRequested)",
@@ -2238,6 +2284,49 @@ private extension SalemXVoIPPushReceiptProofSummary {
         pendingMetadataReferenceRepairNoDirectCredentialsBypass = true
         pendingMetadataReferenceRepairNoConnectBypass = true
         pendingMetadataReferenceRepairRawMetadataLogged = false
+    }
+
+    mutating func refreshDisconnectCleanupDiagnostics() {
+        disconnectCleanupDiagnosticsPresent = true
+        disconnectCleanupDiagnosticsDebugOnly = true
+        disconnectCleanupDiagnosticsCallKitCleanupRequested = controlledCallKitCleanupRequested
+        disconnectCleanupDiagnosticsCallKitCleanupResult = controlledCallKitCleanupResult
+        disconnectCleanupDiagnosticsEndActionDelivered = callKitEndActionDelivered
+        disconnectCleanupDiagnosticsEndActionFulfilled = endActionFulfilled
+        disconnectCleanupDiagnosticsEndActionOrigin = endActionOrigin
+        disconnectCleanupDiagnosticsEndActionUUIDMatched = endActionUUIDMatched
+        disconnectCleanupDiagnosticsEndActionGenerationMatched = endActionGenerationMatched
+        disconnectCleanupDiagnosticsEndActionSourceMatched = endActionSourceMatched
+        disconnectCleanupDiagnosticsEndActionExpected = callKitEndActionDelivered || endActionFulfilled
+        disconnectCleanupDiagnosticsLocalCleanupCompleted = controlledCallKitCleanupResult == "ended"
+        disconnectCleanupDiagnosticsProviderEndReported = disconnectCleanupDiagnosticsLocalCleanupCompleted && !disconnectCleanupDiagnosticsEndActionExpected
+        disconnectCleanupDiagnosticsAudioSessionDeactivated = callKitProviderDidDeactivateAudioSession
+        disconnectCleanupDiagnosticsLiveKitCleanupRequested = controlledCallKitCleanupRequested && liveKitConnectAudioInvoked
+        disconnectCleanupDiagnosticsLiveKitCleanupCompleted = disconnectCleanupDiagnosticsLiveKitCleanupRequested && disconnectCleanupDiagnosticsLocalCleanupCompleted
+        disconnectCleanupDiagnosticsOneShotConsumed = physical6RuntimeEnablementURLHookConsumed
+        disconnectCleanupDiagnosticsNoRepeatedConnect = !controlledConnectFirstAttemptRepeated
+        disconnectCleanupDiagnosticsNoMatrixEvents = !matrixEventEmitRequested && !controlledConnectFirstAttemptMatrixEventsAllowed
+        disconnectCleanupDiagnosticsNoVideo = !controlledConnectFirstAttemptVideoAllowed && !cameraPermissionRequested
+        disconnectCleanupDiagnosticsRawIdentifiersLogged = false
+
+        if !disconnectCleanupDiagnosticsEndActionExpected {
+            disconnectCleanupDiagnosticsEndTimingClassification = "end_action_not_expected"
+            disconnectCleanupDiagnosticsResult = disconnectCleanupDiagnosticsLocalCleanupCompleted && disconnectCleanupDiagnosticsProviderEndReported ?
+                "local_or_provider_cleanup_sufficient_redacted" : "local_or_provider_cleanup_incomplete_redacted"
+        } else if callKitEndAfterPushKitCompletionMsBucket == "unknown" {
+            disconnectCleanupDiagnosticsEndTimingClassification = "end_action_timing_unknown_redacted"
+            disconnectCleanupDiagnosticsResult = "end_action_timing_unknown_redacted"
+        } else if disconnectCleanupDiagnosticsEndActionDelivered,
+                  disconnectCleanupDiagnosticsEndActionFulfilled,
+                  disconnectCleanupDiagnosticsEndActionUUIDMatched,
+                  disconnectCleanupDiagnosticsEndActionGenerationMatched,
+                  disconnectCleanupDiagnosticsEndActionSourceMatched {
+            disconnectCleanupDiagnosticsEndTimingClassification = "end_action_timing_bucketed"
+            disconnectCleanupDiagnosticsResult = "end_action_cleanup_sufficient_redacted"
+        } else {
+            disconnectCleanupDiagnosticsEndTimingClassification = "end_action_incomplete_redacted"
+            disconnectCleanupDiagnosticsResult = "end_action_incomplete_redacted"
+        }
     }
 
     mutating func recordMetadataCredentialsBoundaryRepairProof(allowsHookConsumptionAfterCredentials: Bool = false) {
@@ -2745,6 +2834,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         matrixEventEmitRequested = firstAttempt.matrixEventEmitRequested
         realCallFlowStarted = firstAttempt.realCallFlowStarted
         mediaConnectEngineInvoked = firstAttempt.mediaConnectAttempted
+        refreshDisconnectCleanupDiagnostics()
     }
 
     mutating func attemptControlledAudioConnectRuntimeIfAllowed(activationConfiguration: SalemXControlledMediaConnectActivationConfiguration,
@@ -4326,6 +4416,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                 summary.blockedReason = "system_or_user_end_before_answer"
             }
         }
+        summary.refreshDisconnectCleanupDiagnostics()
         lock.unlock()
 
         updateLatestVoIPPushReceiptSummary(summary)
@@ -4341,6 +4432,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         summary.endActionUUIDMatched = uuidMatched
         summary.endActionGenerationMatched = generationMatched
         summary.endActionSourceMatched = uuidMatched && generationMatched
+        summary.refreshDisconnectCleanupDiagnostics()
         lock.unlock()
 
         updateLatestVoIPPushReceiptSummary(summary)
@@ -4385,6 +4477,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         } else {
             summary.callKitProviderDidDeactivateAudioSession = true
         }
+        summary.refreshDisconnectCleanupDiagnostics()
         lock.unlock()
 
         updateLatestVoIPPushReceiptSummary(summary)
@@ -4565,6 +4658,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         var summary = latestVoIPPushReceiptSummary
         summary.controlledCallKitCleanupRequested = true
         summary.controlledCallKitCleanupResult = "ended"
+        summary.refreshDisconnectCleanupDiagnostics()
         lock.unlock()
 
         updateLatestVoIPPushReceiptSummary(summary)
