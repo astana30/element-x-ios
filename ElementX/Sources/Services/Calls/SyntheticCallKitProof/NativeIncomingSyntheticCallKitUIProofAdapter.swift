@@ -866,6 +866,35 @@ private struct SalemXSenderLiveKitReadinessHook {
     }
 }
 
+private struct SalemXSenderSideLiveKitJoinHook {
+    static let notRequestedResult = "not_requested"
+    static let blockedResult = "blocked_redacted"
+    static let successResult = "success_redacted"
+    static let failedResult = "failed_redacted"
+    static let defaultDisabled = SalemXSenderSideLiveKitJoinHook(armed: false,
+                                                                 requested: false,
+                                                                 result: "not_requested",
+                                                                 errorBucket: "none",
+                                                                 repeated: false)
+
+    let armed: Bool
+    let requested: Bool
+    let result: String
+    let errorBucket: String
+    let repeated: Bool
+
+    let present = true
+    let debugOnly = true
+    let audioOnly = true
+    let videoAllowed = false
+    let matrixEventsAllowed = false
+    let rawCredentialsLogged = false
+
+    var isDefaultDisabled: Bool {
+        !armed && !requested && result == Self.notRequestedResult
+    }
+}
+
 private struct SalemXControlledAudioConnectExecutionGate {
     static let futurePhaseNotPermittedNoConnectReason = "future_phase_not_permitted_no_connect"
     static let credentialsMissingNoConnectReason = "credentials_missing_no_connect"
@@ -1565,6 +1594,7 @@ private struct SalemXControlledAudioConnectFirstAttempt {
     let realCallFlowStarted: Bool
 }
 
+// swiftlint:disable:next type_body_length
 private struct SalemXVoIPPushReceiptProofSummary {
     var proofSource = "voip_push_receipt"
     var proofGeneration = "not_started"
@@ -1979,6 +2009,17 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var senderLiveKitReadinessHookMatrixEventsAllowed = SalemXSenderLiveKitReadinessHook.defaultDisabled.matrixEventsAllowed
     var senderLiveKitReadinessHookRawIdentifiersLogged = SalemXSenderLiveKitReadinessHook.defaultDisabled.rawIdentifiersLogged
     var senderLiveKitReadinessHookBlockedReason = SalemXSenderLiveKitReadinessHook.defaultDisabled.blockedReason
+    var senderReadinessRuntimeHandoffPresent = true
+    var senderReadinessRuntimeHandoffDebugOnly = true
+    var senderReadinessRuntimeHandoffArmedBeforeAPNs = false
+    var senderReadinessRuntimeHandoffReceivedByRuntime = false
+    var senderReadinessRuntimeHandoffSurvivedPushKit = false
+    var senderReadinessRuntimeHandoffSurvivedAnswer = false
+    var senderReadinessRuntimeHandoffMatrixSessionReady = false
+    var senderReadinessRuntimeHandoffSameRoomReady = false
+    var senderReadinessRuntimeHandoffExpectedUserMatched = false
+    var senderReadinessRuntimeHandoffRawIdentifiersLogged = false
+    var senderReadinessRuntimeHandoffMissingClassified = true
     var secondPhysicalSenderLiveKitReadinessPresent = true
     var secondPhysicalSenderLiveKitReadinessDebugOnly = true
     var secondPhysicalSenderLiveKitReadinessDefaultDisabled = true
@@ -1991,6 +2032,18 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var secondPhysicalSenderLiveKitJoinPathVideoAllowed = false
     var secondPhysicalSenderLiveKitJoinPathMatrixEventsAllowed = false
     var secondPhysicalSenderLiveKitJoinPathRawCredentialsLogged = false
+    var senderSideLiveKitJoinHookPresent = SalemXSenderSideLiveKitJoinHook.defaultDisabled.present
+    var senderSideLiveKitJoinHookDebugOnly = SalemXSenderSideLiveKitJoinHook.defaultDisabled.debugOnly
+    var senderSideLiveKitJoinHookDefaultDisabled = SalemXSenderSideLiveKitJoinHook.defaultDisabled.isDefaultDisabled
+    var senderSideLiveKitJoinHookArmed = SalemXSenderSideLiveKitJoinHook.defaultDisabled.armed
+    var senderSideLiveKitJoinHookAudioOnly = SalemXSenderSideLiveKitJoinHook.defaultDisabled.audioOnly
+    var senderSideLiveKitJoinHookVideoAllowed = SalemXSenderSideLiveKitJoinHook.defaultDisabled.videoAllowed
+    var senderSideLiveKitJoinHookMatrixEventsAllowed = SalemXSenderSideLiveKitJoinHook.defaultDisabled.matrixEventsAllowed
+    var senderSideLiveKitJoinHookRawCredentialsLogged = SalemXSenderSideLiveKitJoinHook.defaultDisabled.rawCredentialsLogged
+    var senderSideLiveKitJoinRequested = SalemXSenderSideLiveKitJoinHook.defaultDisabled.requested
+    var senderSideLiveKitJoinResult = SalemXSenderSideLiveKitJoinHook.defaultDisabled.result
+    var senderSideLiveKitJoinErrorBucket = SalemXSenderSideLiveKitJoinHook.defaultDisabled.errorBucket
+    var senderSideLiveKitJoinRepeated = SalemXSenderSideLiveKitJoinHook.defaultDisabled.repeated
     var receiverRemoteParticipantObserverPresent = true
     var receiverRemoteParticipantObserverDebugOnly = true
     var receiverRemoteParticipantObserverStarted = false
@@ -2458,6 +2511,17 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "sender_livekit_readiness_hook_matrix_events_allowed=\(senderLiveKitReadinessHookMatrixEventsAllowed)",
             "sender_livekit_readiness_hook_raw_identifiers_logged=\(senderLiveKitReadinessHookRawIdentifiersLogged)",
             "sender_livekit_readiness_hook_blocked_reason=\(senderLiveKitReadinessHookBlockedReason)",
+            "sender_readiness_runtime_handoff_present=\(senderReadinessRuntimeHandoffPresent)",
+            "sender_readiness_runtime_handoff_debug_only=\(senderReadinessRuntimeHandoffDebugOnly)",
+            "sender_readiness_runtime_handoff_armed_before_apns=\(senderReadinessRuntimeHandoffArmedBeforeAPNs)",
+            "sender_readiness_runtime_handoff_received_by_runtime=\(senderReadinessRuntimeHandoffReceivedByRuntime)",
+            "sender_readiness_runtime_handoff_survived_pushkit=\(senderReadinessRuntimeHandoffSurvivedPushKit)",
+            "sender_readiness_runtime_handoff_survived_answer=\(senderReadinessRuntimeHandoffSurvivedAnswer)",
+            "sender_readiness_runtime_handoff_matrix_session_ready=\(senderReadinessRuntimeHandoffMatrixSessionReady)",
+            "sender_readiness_runtime_handoff_same_room_ready=\(senderReadinessRuntimeHandoffSameRoomReady)",
+            "sender_readiness_runtime_handoff_expected_user_matched=\(senderReadinessRuntimeHandoffExpectedUserMatched)",
+            "sender_readiness_runtime_handoff_raw_identifiers_logged=\(senderReadinessRuntimeHandoffRawIdentifiersLogged)",
+            "sender_readiness_runtime_handoff_missing_classified=\(senderReadinessRuntimeHandoffMissingClassified)",
             "second_physical_sender_livekit_readiness_present=\(secondPhysicalSenderLiveKitReadinessPresent)",
             "second_physical_sender_livekit_readiness_debug_only=\(secondPhysicalSenderLiveKitReadinessDebugOnly)",
             "second_physical_sender_livekit_readiness_default_disabled=\(secondPhysicalSenderLiveKitReadinessDefaultDisabled)",
@@ -2470,6 +2534,18 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "second_physical_sender_livekit_join_path_video_allowed=\(secondPhysicalSenderLiveKitJoinPathVideoAllowed)",
             "second_physical_sender_livekit_join_path_matrix_events_allowed=\(secondPhysicalSenderLiveKitJoinPathMatrixEventsAllowed)",
             "second_physical_sender_livekit_join_path_raw_credentials_logged=\(secondPhysicalSenderLiveKitJoinPathRawCredentialsLogged)",
+            "sender_side_livekit_join_hook_present=\(senderSideLiveKitJoinHookPresent)",
+            "sender_side_livekit_join_hook_debug_only=\(senderSideLiveKitJoinHookDebugOnly)",
+            "sender_side_livekit_join_hook_default_disabled=\(senderSideLiveKitJoinHookDefaultDisabled)",
+            "sender_side_livekit_join_hook_armed=\(senderSideLiveKitJoinHookArmed)",
+            "sender_side_livekit_join_hook_audio_only=\(senderSideLiveKitJoinHookAudioOnly)",
+            "sender_side_livekit_join_hook_video_allowed=\(senderSideLiveKitJoinHookVideoAllowed)",
+            "sender_side_livekit_join_hook_matrix_events_allowed=\(senderSideLiveKitJoinHookMatrixEventsAllowed)",
+            "sender_side_livekit_join_hook_raw_credentials_logged=\(senderSideLiveKitJoinHookRawCredentialsLogged)",
+            "sender_side_livekit_join_requested=\(senderSideLiveKitJoinRequested)",
+            "sender_side_livekit_join_result=\(senderSideLiveKitJoinResult)",
+            "sender_side_livekit_join_error_bucket=\(senderSideLiveKitJoinErrorBucket)",
+            "sender_side_livekit_join_repeated=\(senderSideLiveKitJoinRepeated)",
             "receiver_remote_participant_observer_present=\(receiverRemoteParticipantObserverPresent)",
             "receiver_remote_participant_observer_debug_only=\(receiverRemoteParticipantObserverDebugOnly)",
             "receiver_remote_participant_observer_started=\(receiverRemoteParticipantObserverStarted)",
@@ -2697,11 +2773,11 @@ private extension SalemXVoIPPushReceiptProofSummary {
         secondPhysicalSenderLiveKitReadinessSameRoomReady = senderLiveKitReadinessHookSameRoomReady
         secondPhysicalSenderLiveKitReadinessCredentialsReady = senderLiveKitReadinessHookCredentialsReady
         secondPhysicalSenderLiveKitJoinPathPresent = true
-        secondPhysicalSenderLiveKitJoinPathDefaultDisabled = true
-        secondPhysicalSenderLiveKitJoinPathAudioOnly = true
-        secondPhysicalSenderLiveKitJoinPathVideoAllowed = false
-        secondPhysicalSenderLiveKitJoinPathMatrixEventsAllowed = false
-        secondPhysicalSenderLiveKitJoinPathRawCredentialsLogged = false
+        secondPhysicalSenderLiveKitJoinPathDefaultDisabled = senderSideLiveKitJoinHookDefaultDisabled
+        secondPhysicalSenderLiveKitJoinPathAudioOnly = senderSideLiveKitJoinHookAudioOnly
+        secondPhysicalSenderLiveKitJoinPathVideoAllowed = senderSideLiveKitJoinHookVideoAllowed
+        secondPhysicalSenderLiveKitJoinPathMatrixEventsAllowed = senderSideLiveKitJoinHookMatrixEventsAllowed
+        secondPhysicalSenderLiveKitJoinPathRawCredentialsLogged = senderSideLiveKitJoinHookRawCredentialsLogged
 
         receiverRemoteParticipantObserverPresent = true
         receiverRemoteParticipantObserverDebugOnly = true
@@ -2711,7 +2787,15 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverRemoteParticipantObserverLivenessSeen = liveKitAudioLivenessObserved
         receiverRemoteParticipantObserverRawIdentifiersLogged = false
 
-        if liveKitAudioLivenessObserved {
+        if receiverRemoteParticipantObserverStarted,
+           senderReadinessRuntimeHandoffMissingClassified {
+            receiverRemoteParticipantObserverResult = "not_observed_redacted"
+            receiverRemoteParticipantObserverErrorBucket = "sender_readiness_context_missing_redacted"
+            receiverRemoteParticipantObserverTimeoutBucket = "not_observed_redacted"
+            liveKitAudioLivenessObserved = false
+            liveKitAudioLivenessResult = "not_observed_redacted"
+            liveKitAudioLivenessErrorBucket = "sender_readiness_context_missing_redacted"
+        } else if liveKitAudioLivenessObserved {
             receiverRemoteParticipantObserverResult = "success_redacted"
             receiverRemoteParticipantObserverErrorBucket = "none"
             receiverRemoteParticipantObserverTimeoutBucket = "none"
@@ -2722,6 +2806,14 @@ private extension SalemXVoIPPushReceiptProofSummary {
         } else if liveKitRemoteParticipantSeen {
             receiverRemoteParticipantObserverResult = "not_observed_redacted"
             receiverRemoteParticipantObserverErrorBucket = "remote_liveness_not_observed_redacted"
+            receiverRemoteParticipantObserverTimeoutBucket = "not_observed_redacted"
+        } else if receiverRemoteParticipantObserverStarted, !senderSideLiveKitJoinRequested {
+            receiverRemoteParticipantObserverResult = "not_observed_redacted"
+            receiverRemoteParticipantObserverErrorBucket = "sender_not_joined_redacted"
+            receiverRemoteParticipantObserverTimeoutBucket = "not_observed_redacted"
+        } else if receiverRemoteParticipantObserverStarted {
+            receiverRemoteParticipantObserverResult = "not_observed_redacted"
+            receiverRemoteParticipantObserverErrorBucket = "remote_participant_missing_redacted"
             receiverRemoteParticipantObserverTimeoutBucket = "not_observed_redacted"
         } else {
             receiverRemoteParticipantObserverResult = "not_observed_redacted"
@@ -2745,6 +2837,94 @@ private extension SalemXVoIPPushReceiptProofSummary {
         senderLiveKitReadinessHookRawIdentifiersLogged = hook.rawIdentifiersLogged
         senderLiveKitReadinessHookBlockedReason = hook.blockedReason
         refreshRemoteParticipantPresenceRepairDiagnostics()
+    }
+
+    mutating func recordSenderReadinessRuntimeHandoff(_ hook: SalemXSenderLiveKitReadinessHook,
+                                                      receivedByRuntime: Bool,
+                                                      survivedPushKit: Bool,
+                                                      survivedAnswer: Bool) {
+        recordSenderLiveKitReadinessHook(hook)
+        senderReadinessRuntimeHandoffPresent = true
+        senderReadinessRuntimeHandoffDebugOnly = true
+        senderReadinessRuntimeHandoffArmedBeforeAPNs = hook.armed
+        senderReadinessRuntimeHandoffReceivedByRuntime = receivedByRuntime && hook.armed
+        senderReadinessRuntimeHandoffSurvivedPushKit = survivedPushKit && hook.armed
+        senderReadinessRuntimeHandoffSurvivedAnswer = survivedAnswer && hook.armed
+        senderReadinessRuntimeHandoffMatrixSessionReady = hook.matrixSessionReady
+        senderReadinessRuntimeHandoffSameRoomReady = hook.sameRoomReady
+        senderReadinessRuntimeHandoffExpectedUserMatched = hook.expectedUserMatched
+        senderReadinessRuntimeHandoffRawIdentifiersLogged = false
+        senderReadinessRuntimeHandoffMissingClassified = !senderReadinessRuntimeHandoffReceivedByRuntime
+        refreshRemoteParticipantPresenceRepairDiagnostics()
+    }
+
+    mutating func recordSenderReadinessRuntimeHandoff(_ hook: SalemXSenderLiveKitReadinessHook?) {
+        guard let hook else {
+            recordMissingSenderReadinessRuntimeHandoff()
+            return
+        }
+
+        recordSenderReadinessRuntimeHandoff(hook,
+                                            receivedByRuntime: true,
+                                            survivedPushKit: true,
+                                            survivedAnswer: false)
+    }
+
+    mutating func markSenderReadinessRuntimeHandoffSurvivedAnswer() {
+        guard senderReadinessRuntimeHandoffReceivedByRuntime else {
+            recordMissingSenderReadinessRuntimeHandoff()
+            return
+        }
+
+        senderReadinessRuntimeHandoffSurvivedAnswer = true
+        refreshRemoteParticipantPresenceRepairDiagnostics()
+    }
+
+    mutating func recordMissingSenderReadinessRuntimeHandoff() {
+        recordSenderLiveKitReadinessHook(.defaultDisabled)
+        senderReadinessRuntimeHandoffPresent = true
+        senderReadinessRuntimeHandoffDebugOnly = true
+        senderReadinessRuntimeHandoffArmedBeforeAPNs = false
+        senderReadinessRuntimeHandoffReceivedByRuntime = false
+        senderReadinessRuntimeHandoffSurvivedPushKit = false
+        senderReadinessRuntimeHandoffSurvivedAnswer = false
+        senderReadinessRuntimeHandoffMatrixSessionReady = false
+        senderReadinessRuntimeHandoffSameRoomReady = false
+        senderReadinessRuntimeHandoffExpectedUserMatched = false
+        senderReadinessRuntimeHandoffRawIdentifiersLogged = false
+        senderReadinessRuntimeHandoffMissingClassified = true
+        liveKitAudioLivenessObserved = false
+        liveKitAudioLivenessResult = "not_observed_redacted"
+        liveKitAudioLivenessErrorBucket = "sender_readiness_context_missing_redacted"
+        refreshRemoteParticipantPresenceRepairDiagnostics()
+    }
+
+    mutating func recordSenderSideLiveKitJoinHook(_ hook: SalemXSenderSideLiveKitJoinHook) {
+        senderSideLiveKitJoinHookPresent = hook.present
+        senderSideLiveKitJoinHookDebugOnly = hook.debugOnly
+        senderSideLiveKitJoinHookDefaultDisabled = hook.isDefaultDisabled
+        senderSideLiveKitJoinHookArmed = hook.armed
+        senderSideLiveKitJoinHookAudioOnly = hook.audioOnly
+        senderSideLiveKitJoinHookVideoAllowed = hook.videoAllowed
+        senderSideLiveKitJoinHookMatrixEventsAllowed = hook.matrixEventsAllowed
+        senderSideLiveKitJoinHookRawCredentialsLogged = hook.rawCredentialsLogged
+        senderSideLiveKitJoinRequested = hook.requested
+        senderSideLiveKitJoinResult = hook.result
+        senderSideLiveKitJoinErrorBucket = hook.errorBucket
+        senderSideLiveKitJoinRepeated = hook.repeated
+        refreshRemoteParticipantPresenceRepairDiagnostics()
+    }
+
+    mutating func recordSenderSideLiveKitJoinResult(requested: Bool,
+                                                    result: String,
+                                                    errorBucket: String = "none",
+                                                    repeated: Bool = false) {
+        let hook = SalemXSenderSideLiveKitJoinHook(armed: requested,
+                                                   requested: requested,
+                                                   result: result,
+                                                   errorBucket: errorBucket,
+                                                   repeated: repeated)
+        recordSenderSideLiveKitJoinHook(hook)
     }
 
     mutating func recordRemoteAudioLivenessJoinResult(succeeded: Bool, errorBucket: String = "none") {
@@ -4084,6 +4264,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let physical6RuntimeEnablementURLHookPath = "/direct-call/physical6-enable-controlled-audio-connect"
     private static let remotePeerContextHandoffURLHookPath = "/direct-call/remote-peer-context-handoff"
     private static let senderLiveKitReadinessURLHookPath = "/direct-call/sender-livekit-readiness"
+    private static let senderSideLiveKitJoinURLHookPath = "/direct-call/sender-side-livekit-join"
     private static let uploadSmokeDefaultURLString = "https://matrix.mertis.kz/_matrix/client/unstable/kz.salemx.direct_call/pushkit/token"
     private static let matrixSessionWhoamiURLString = "https://matrix.mertis.kz/_matrix/client/v3/account/whoami"
     private static let controlledMediaCredentialsTokenEndpointPath = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/livekit/token"
@@ -4122,6 +4303,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var physical6RuntimeEnablementURLHook = SalemXPhysical6RuntimeEnablementURLHook.defaultDisabled
     private static var pendingRemotePeerContextHandoff: SalemXRemotePeerContextHandoff?
     private static var senderLiveKitReadinessHook = SalemXSenderLiveKitReadinessHook.defaultDisabled
+    private static var senderSideLiveKitJoinHook = SalemXSenderSideLiveKitJoinHook.defaultDisabled
     #if canImport(CallKit) && os(iOS)
     private static var callKitProofHarness: NativeIncomingSyntheticCallKitUIProofHarness?
     private static var callKitProofGeneration = 0
@@ -4188,6 +4370,12 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             return true
         }
 
+        if url.path == senderSideLiveKitJoinURLHookPath {
+            let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            armSenderSideLiveKitJoinURLHook(components)
+            return true
+        }
+
         return false
     }
 
@@ -4246,7 +4434,10 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         lock.lock()
         senderLiveKitReadinessHook = hook
         var summary = latestVoIPPushReceiptSummary
-        summary.recordSenderLiveKitReadinessHook(hook)
+        summary.recordSenderReadinessRuntimeHandoff(hook,
+                                                    receivedByRuntime: false,
+                                                    survivedPushKit: false,
+                                                    survivedAnswer: false)
         summary.mediaConnectRequested = false
         summary.mediaConnectAttempted = false
         summary.liveKitJoinRequested = false
@@ -4258,6 +4449,49 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         lock.unlock()
 
         updateLatestVoIPPushReceiptSummary(summary)
+    }
+
+    private static func armSenderSideLiveKitJoinURLHook(_ components: URLComponents?) {
+        let requested = redactedBoolQueryItem(components,
+                                              names: ["sender_join_requested", "join_requested"])
+        let result = redactedSenderSideLiveKitJoinResultQueryItem(components)
+        let errorBucket = result == SalemXSenderSideLiveKitJoinHook.failedResult ? "sender_join_failed_redacted" : "none"
+        let hook = SalemXSenderSideLiveKitJoinHook(armed: true,
+                                                   requested: requested,
+                                                   result: requested ? result : SalemXSenderSideLiveKitJoinHook.notRequestedResult,
+                                                   errorBucket: requested ? errorBucket : "none",
+                                                   repeated: false)
+        lock.lock()
+        senderSideLiveKitJoinHook = hook
+        var summary = latestVoIPPushReceiptSummary
+        summary.recordSenderSideLiveKitJoinHook(hook)
+        summary.mediaConnectRequested = false
+        summary.mediaConnectAttempted = false
+        summary.liveKitJoinRequested = false
+        summary.liveKitConnectAudioInvoked = false
+        summary.microphonePermissionRequested = false
+        summary.cameraPermissionRequested = false
+        summary.matrixEventEmitRequested = false
+        summary.realCallFlowStarted = false
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+    }
+
+    private static func redactedSenderSideLiveKitJoinResultQueryItem(_ components: URLComponents?) -> String {
+        guard let value = components?.queryItems?.first(where: { $0.name == "sender_join_result" || $0.name == "join_result" })?.value?.lowercased() else {
+            return SalemXSenderSideLiveKitJoinHook.notRequestedResult
+        }
+        if value == SalemXSenderSideLiveKitJoinHook.blockedResult {
+            return SalemXSenderSideLiveKitJoinHook.blockedResult
+        }
+        if value == SalemXSenderSideLiveKitJoinHook.successResult {
+            return SalemXSenderSideLiveKitJoinHook.successResult
+        }
+        if value == SalemXSenderSideLiveKitJoinHook.failedResult {
+            return SalemXSenderSideLiveKitJoinHook.failedResult
+        }
+        return SalemXSenderSideLiveKitJoinHook.notRequestedResult
     }
 
     private static func redactedBoolQueryItem(_ components: URLComponents?, names: [String]) -> Bool {
@@ -4682,12 +4916,16 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         let operatorExpectedSurface = pendingOperatorExpectedSurface
         let physical6RuntimeEnablementURLHookSnapshot = physical6RuntimeEnablementURLHook
         let remotePeerContextHandoffSnapshot = pendingRemotePeerContextHandoff
+        let senderLiveKitReadinessHookSnapshot = senderLiveKitReadinessHook
+        let senderSideLiveKitJoinHookSnapshot = senderSideLiveKitJoinHook
         pendingRemotePeerContextHandoff = nil
         lock.unlock()
         baseSummary.operatorReadyToAnswer = operatorReadyToAnswer
         baseSummary.operatorExpectedSurface = operatorExpectedSurface
         baseSummary.recordPhysical6RuntimeEnablementURLHook(physical6RuntimeEnablementURLHookSnapshot)
         baseSummary.recordRemotePeerContextHandoff(remotePeerContextHandoffSnapshot)
+        baseSummary.recordSenderReadinessRuntimeHandoff(senderLiveKitReadinessHookSnapshot)
+        baseSummary.recordSenderSideLiveKitJoinHook(senderSideLiveKitJoinHookSnapshot)
         if isControlledPayload {
             baseSummary.callKitReportSubmittedAtMsRedacted = true
             baseSummary.callKitUpdateHasGenericHandle = true
@@ -5277,6 +5515,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         summary.controlledInAppScreenPresented = true
         summary.controlledInAppScreenSource = screenSource
         summary.markRemotePeerContextHandoffSurvivedAnswer()
+        summary.markSenderReadinessRuntimeHandoffSurvivedAnswer()
         if summary.realInvitePayloadMappingObserved {
             summary.foregroundCallStateHandoffRequested = true
             summary.foregroundCallStateHandoffObserved = true

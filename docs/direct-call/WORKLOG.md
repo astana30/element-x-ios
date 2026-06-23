@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Added 2.48Z-SenderReadinessRuntimeHandoffRepair: sender readiness is now snapshotted from the pre-APNs hook into the PushKit runtime proof, survives Answer, keeps same-room/matrix readiness available in final proof, and adds default-disabled sender-side LiveKit join classification without APNs/connect/real-device LiveKit/permissions/video/Matrix/full-flow side effects.
 - Closed 2.48Z-Physical2-Retry1 as safe remote-missing triage: one sandbox APNs, PushKit/CallKit Answer, pending metadata, media credentials, one receiver controlled audio-only connect, and receiver LiveKit join succeeded, but the final proof reset sender readiness to default-disabled and remote participant/audio/liveness was not observed; no retry was performed.
 - Added 2.48Z-SenderLiveKitReadinessHookRepair: the DEBUG/test-controlled sender LiveKit readiness hook can now classify redacted sender Matrix-session readiness and same-room readiness as true before a future APNs retry while the sender join path remains default-disabled/no-connect/no-join.
 - Closed 2.48Z-Physical2-PreAPNsSenderReadinessBlocked before APNs: both physical app sessions validated and receiver hooks armed, but the repaired sender LiveKit readiness diagnostics still classified matrix-session/same-room readiness as false before APNs, so no invite/APNs/connect/LiveKit attempt was performed.
@@ -128,6 +129,85 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48Z-SenderReadinessRuntimeHandoffRepair — Sender Readiness Runtime Handoff
+
+Implemented the sender readiness runtime handoff repair without APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emission, or full call flow.
+
+The proof now carries the sender readiness hook into the runtime receipt proof:
+
+```text
+sender_readiness_runtime_handoff_present=true
+sender_readiness_runtime_handoff_debug_only=true
+sender_readiness_runtime_handoff_armed_before_apns=<redacted_bool>
+sender_readiness_runtime_handoff_received_by_runtime=<redacted_bool>
+sender_readiness_runtime_handoff_survived_pushkit=<redacted_bool>
+sender_readiness_runtime_handoff_survived_answer=<redacted_bool>
+sender_readiness_runtime_handoff_matrix_session_ready=<redacted_bool>
+sender_readiness_runtime_handoff_same_room_ready=<redacted_bool>
+sender_readiness_runtime_handoff_expected_user_matched=<redacted_bool>
+sender_readiness_runtime_handoff_raw_identifiers_logged=false
+sender_readiness_runtime_handoff_missing_classified=<redacted_bool>
+```
+
+The runtime boundary now snapshots `senderLiveKitReadinessHook` at PushKit receipt, marks it as received/survived PushKit, and marks it survived Answer when CallKit Answer is handled. That lets these fields remain true in a future final proof when the pre-APNs hook was armed with a valid second physical sender:
+
+```text
+sender_livekit_readiness_hook_armed=true
+sender_livekit_readiness_hook_matrix_session_ready=true
+sender_livekit_readiness_hook_expected_user_matched=true
+sender_livekit_readiness_hook_same_room_ready=true
+second_physical_sender_livekit_readiness_matrix_session_ready=true
+second_physical_sender_livekit_readiness_same_room_ready=true
+```
+
+Missing sender readiness is now an explicit not-observed classification and cannot become remote-audio success:
+
+```text
+receiver_remote_participant_observer_result=not_observed_redacted
+receiver_remote_participant_observer_error_bucket=sender_readiness_context_missing_redacted
+livekit_audio_liveness_result=not_observed_redacted
+livekit_audio_liveness_error_bucket=sender_readiness_context_missing_redacted
+```
+
+Added a default-disabled sender-side LiveKit join hook/result classification surface:
+
+```text
+sender_side_livekit_join_hook_present=true
+sender_side_livekit_join_hook_debug_only=true
+sender_side_livekit_join_hook_default_disabled=true
+sender_side_livekit_join_hook_armed=false
+sender_side_livekit_join_hook_audio_only=true
+sender_side_livekit_join_hook_video_allowed=false
+sender_side_livekit_join_hook_matrix_events_allowed=false
+sender_side_livekit_join_hook_raw_credentials_logged=false
+sender_side_livekit_join_requested=false
+sender_side_livekit_join_result=not_requested
+sender_side_livekit_join_error_bucket=none
+sender_side_livekit_join_repeated=false
+```
+
+Receiver observer classification now distinguishes sender readiness missing, sender not joined, remote participant missing, remote audio track missing, and remote liveness not observed:
+
+```text
+sender_readiness_context_missing_redacted
+sender_not_joined_redacted
+remote_participant_missing_redacted
+remote_audio_track_missing_redacted
+remote_liveness_not_observed_redacted
+```
+
+Checks:
+
+```bash
+swiftformat ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift UnitTests/Sources/DirectCallEngineTests.swift
+swiftlint lint ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift UnitTests/Sources/DirectCallEngineTests.swift
+DIRECT_CALL_ONLY_TESTING='UnitTests/DirectCallEngineTests UnitTests/NativeIncomingCallLifecycleContractTests' Tools/Scripts/verify_direct_call_unit.sh
+```
+
+Result: DirectCall subset passed, 151 tests. SwiftLint reported only the existing `file_length` warning for `NativeIncomingSyntheticCallKitUIProofAdapter.swift`.
+
+Next phase: `2.48Z-Physical2-Retry2 — one-shot two-physical-device sender readiness handoff / remote participant proof`.
 
 ### 2.48Z-Physical2-Retry1 — Remote Participant Missing Triage
 

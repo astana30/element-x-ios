@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-Physical2-Retry1-RemoteMissingTriage — the one-shot two-physical-device proof delivered one sandbox APNs, received PushKit/CallKit Answer, fetched pending metadata, received media credentials, and completed one receiver controlled audio-only LiveKit join. The receiver remote participant observer safely classified the remote participant/audio/liveness as not observed, and the final VoIP proof showed the sender readiness hook had fallen back to default-disabled after PushKit/Answer despite being true before APNs. No retry was performed. The next phase is `2.48Z-SenderReadinessPersistenceRepair — preserve sender readiness and add sender join result proof before any APNs retry`.
+After 2.48Z-SenderReadinessRuntimeHandoffRepair — the DEBUG proof now carries sender readiness from the pre-APNs hook into the PushKit runtime proof and through Answer, adds default-disabled sender-side LiveKit join classification, and lets the receiver observer distinguish sender-readiness-missing, sender-not-joined, and remote-participant-missing outcomes. This was a code/test repair only; no APNs, connect, real-device LiveKit join, permissions, video, Matrix event emission, or full call flow was performed. The next phase is `2.48Z-Physical2-Retry2 — one-shot two-physical-device sender readiness handoff / remote participant proof`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,60 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48Z-SenderReadinessRuntimeHandoffRepair preserves sender readiness into runtime proof without running a physical attempt:
+  - Added explicit redacted sender readiness runtime handoff fields:
+    ```text
+    sender_readiness_runtime_handoff_present=true
+    sender_readiness_runtime_handoff_debug_only=true
+    sender_readiness_runtime_handoff_armed_before_apns=<redacted_bool>
+    sender_readiness_runtime_handoff_received_by_runtime=<redacted_bool>
+    sender_readiness_runtime_handoff_survived_pushkit=<redacted_bool>
+    sender_readiness_runtime_handoff_survived_answer=<redacted_bool>
+    sender_readiness_runtime_handoff_matrix_session_ready=<redacted_bool>
+    sender_readiness_runtime_handoff_same_room_ready=<redacted_bool>
+    sender_readiness_runtime_handoff_expected_user_matched=<redacted_bool>
+    sender_readiness_runtime_handoff_raw_identifiers_logged=false
+    sender_readiness_runtime_handoff_missing_classified=<redacted_bool>
+    ```
+  - When sender readiness is armed before APNs, PushKit receipt snapshots it into the VoIP runtime proof, marks it survived PushKit, and Answer marks it survived Answer. The existing `sender_livekit_readiness_hook_*` and `second_physical_sender_livekit_readiness_*` fields therefore remain capable of showing matrix-session and same-room readiness as true in the final proof.
+  - Missing sender readiness is classified explicitly and cannot become remote-audio success:
+    ```text
+    receiver_remote_participant_observer_result=not_observed_redacted
+    receiver_remote_participant_observer_error_bucket=sender_readiness_context_missing_redacted
+    livekit_audio_liveness_result=not_observed_redacted
+    livekit_audio_liveness_error_bucket=sender_readiness_context_missing_redacted
+    ```
+  - Added default-disabled sender-side LiveKit join classification fields without performing a join:
+    ```text
+    sender_side_livekit_join_hook_present=true
+    sender_side_livekit_join_hook_debug_only=true
+    sender_side_livekit_join_hook_default_disabled=true
+    sender_side_livekit_join_hook_armed=false
+    sender_side_livekit_join_hook_audio_only=true
+    sender_side_livekit_join_hook_video_allowed=false
+    sender_side_livekit_join_hook_matrix_events_allowed=false
+    sender_side_livekit_join_hook_raw_credentials_logged=false
+    sender_side_livekit_join_requested=false
+    sender_side_livekit_join_result=not_requested
+    sender_side_livekit_join_error_bucket=none
+    sender_side_livekit_join_repeated=false
+    ```
+  - Receiver observer buckets now separate:
+    ```text
+    sender_readiness_context_missing_redacted
+    sender_not_joined_redacted
+    remote_participant_missing_redacted
+    remote_audio_track_missing_redacted
+    remote_liveness_not_observed_redacted
+    ```
+  - Default runtime remains no-connect/no-join/no-video/no-Matrix-event. No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, microphone/camera permission, video, Matrix event emission, or full call flow was performed.
+  - Checks:
+    ```text
+    swiftformat ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift UnitTests/Sources/DirectCallEngineTests.swift
+    swiftlint lint ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift UnitTests/Sources/DirectCallEngineTests.swift
+    DIRECT_CALL_ONLY_TESTING='UnitTests/DirectCallEngineTests UnitTests/NativeIncomingCallLifecycleContractTests' Tools/Scripts/verify_direct_call_unit.sh
+    ```
+  - Next phase: `2.48Z-Physical2-Retry2 — one-shot two-physical-device sender readiness handoff / remote participant proof`.
 - 2.48Z-Physical2-Retry1-RemoteMissingTriage safely classified the one-shot two-physical-device sender/remote-participant proof:
   - Proof path:
     ```text
