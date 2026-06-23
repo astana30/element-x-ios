@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z — two-physical-device remote audio proof readiness is blocked at second physical device session setup. A second physical iPhone is connected and has the app installed, but the redacted app-session `/whoami` proof file was not available after the DEBUG URL trigger, so the sender session and same encrypted room readiness were not validated. No APNs/connect/LiveKit was run. The next phase is `2.48Z-SecondPhysicalDeviceSetup — prepare second physical device remote peer, no APNs/connect`.
+After 2.48Z-SecondPhysicalDeviceSetup — the second physical iPhone is ready as the future remote peer. Both physical app sessions validated with redacted `/whoami` proofs, the expected sender and receiver stable hashes are distinct, and the same encrypted room preflight passed using in-memory tokens. No APNs/connect/LiveKit was run. The next phase is `2.48Z-Physical1 — one-shot two-physical-device remote audio/liveness proof`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,54 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48Z-SecondPhysicalDeviceSetup prepares the second physical iPhone remote peer:
+  - This was a setup/readiness phase only. It did not send APNs, run production APNs, repeat APNs, use `dev/invite`, start media connect, join LiveKit, request microphone/camera permission, enable video, emit Matrix events, start full call flow, reset/re-arm the one-shot hook, or perform another physical call attempt.
+  - Physical device setup:
+    ```text
+    primary_receiver_device_present=true
+    second_physical_device_present=true
+    second_physical_device_kind=iphone
+    second_physical_device_app_installed=true
+    second_physical_device_app_launched=true
+    ```
+  - Redacted app-session proofs:
+    ```text
+    second_physical_device_matrix_session_present=true
+    second_physical_device_matrix_session_whoami_result=success_redacted
+    second_physical_device_matrix_session_user_hash=7d434d7f252427fb
+    second_physical_device_matrix_session_user_hash_matches_expected=true
+    second_physical_device_matrix_session_device_present=true
+    second_physical_device_pending_metadata_auth_ready=true
+    receiver_iphone_matrix_session_present=true
+    receiver_iphone_matrix_session_whoami_result=success_redacted
+    receiver_iphone_matrix_session_user_hash=497015f5745c933a
+    receiver_iphone_matrix_session_device_present=true
+    receiver_iphone_pending_metadata_auth_ready=true
+    ```
+  - In-memory room readiness helper passed without printing raw tokens or room IDs:
+    ```text
+    receiver_token_found=true
+    sender_token_found=true
+    receiver_user_hash=497015f5745c933a
+    sender_user_hash=7d434d7f252427fb
+    sender_equals_receiver=false
+    receiver_room_membership=join
+    sender_room_membership=join
+    room_encryption_algorithm_present=true
+    distinct_accounts_validated=true
+    same_encrypted_room_validated=true
+    room_validation_preflight=pass
+    APNs_sent=false
+    ```
+  - Readiness classification:
+    ```text
+    2.48Z-SecondPhysicalDeviceSetup result = ready for one-shot two-physical-device remote audio proof
+    second_physical_device_available=true
+    second_physical_device_app_session_ready=true
+    distinct_accounts_validated=true
+    same_encrypted_room_validated=true
+    ```
+  - Next phase: `2.48Z-Physical1 — one-shot two-physical-device remote audio/liveness proof`.
 - 2.48Z blocks two-physical-device proof readiness until second-device session setup:
   - This was a readiness/review phase only. It did not send APNs, run production APNs, repeat APNs, use `dev/invite`, start media connect, join LiveKit, request microphone/camera permission, enable video, emit Matrix events, start full call flow, reset/re-arm the one-shot hook, or perform another physical call attempt.
   - Physical device review:

@@ -7396,3 +7396,71 @@ no permissions
 No APNs, no production APNs, no repeated APNs, no `dev/invite`, no repeated connect, no LiveKit join, no video, no microphone/camera permission, no Matrix event emit, no full call flow, no one-shot hook reset/re-arm, and no physical call attempt were performed.
 
 Next phase: `2.48Z-SecondPhysicalDeviceSetup — prepare second physical device remote peer, no APNs/connect`.
+
+## 2026-06-23 — 2.48Z-SecondPhysicalDeviceSetup
+
+Prepared and verified the second physical iPhone as the future remote peer without APNs/connect.
+
+Physical device and app setup:
+
+```text
+primary_receiver_device_present=true
+second_physical_device_present=true
+second_physical_device_kind=iphone
+second_physical_device_app_installed=true
+second_physical_device_app_launched=true
+```
+
+Second physical app-session proof succeeded:
+
+```text
+second_physical_device_matrix_session_present=true
+second_physical_device_matrix_session_whoami_result=success_redacted
+second_physical_device_matrix_session_user_hash=7d434d7f252427fb
+second_physical_device_matrix_session_user_hash_matches_expected=true
+second_physical_device_matrix_session_device_present=true
+second_physical_device_pending_metadata_auth_ready=true
+```
+
+Receiver iPhone session remained ready:
+
+```text
+receiver_iphone_matrix_session_present=true
+receiver_iphone_matrix_session_whoami_result=success_redacted
+receiver_iphone_matrix_session_user_hash=497015f5745c933a
+receiver_iphone_matrix_session_device_present=true
+receiver_iphone_pending_metadata_auth_ready=true
+```
+
+The in-memory room readiness helper validated distinct accounts and same encrypted room membership without printing raw tokens or room IDs:
+
+```text
+receiver_token_found=true
+sender_token_found=true
+receiver_user_hash=497015f5745c933a
+sender_user_hash=7d434d7f252427fb
+sender_equals_receiver=false
+sender_room_membership=join
+receiver_room_membership=join
+room_encryption_algorithm_present=true
+distinct_accounts_validated=true
+same_encrypted_room_validated=true
+room_validation_preflight=pass
+blocked_reason=none
+safe_for_future_two_physical_proof=true
+APNs_sent=false
+```
+
+Conclusion:
+
+```text
+2.48Z-SecondPhysicalDeviceSetup result = ready for one-shot two-physical-device remote audio proof
+second_physical_device_available=true
+second_physical_device_app_session_ready=true
+distinct_accounts_validated=true
+same_encrypted_room_validated=true
+```
+
+No APNs, no production APNs, no repeated APNs, no `dev/invite`, no connect, no LiveKit join, no video, no microphone/camera permission, no Matrix event emit, no full call flow, no one-shot hook reset/re-arm, and no physical call attempt were performed.
+
+Next phase: `2.48Z-Physical1 — one-shot two-physical-device remote audio/liveness proof`.
