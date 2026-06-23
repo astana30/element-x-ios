@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Repaired the 2.48T-Physical7 pending metadata reference boundary so real non-dev invite/APNs preflight blocks when no reference exists, valid server-created references stay opaque/redacted, PushKit/Answer proof records reference observation and handoff, and credentials/connect remain blocked without metadata success.
 - Closed 2.48T-Physical7 as answered / missing pending metadata / no-connect triage: PushKit received, CallKit report completed, Answer delivered/received/fulfilled, pending metadata requested but blocked on missing reference, credentials/connect/LiveKit stayed closed, and no retry was performed.
 - Repaired the 2.48T-Physical6 Answer -> metadata/credentials boundary so real CallKit Answer triggers pending metadata handling, metadata success permits credentials, hook consumption stays after credentials, and default runtime remains no-connect.
 - Closed 2.48T-Physical6 as answered / metadata-credentials boundary blocked / no-connect triage: one sandbox APNs, PushKit received, CallKit report completed, Answer received/fulfilled, pending metadata and credentials not requested, and no media connect.
@@ -115,6 +116,65 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48T-Physical7-PendingMetadataReferenceRepair — Real Invite Metadata Reference Boundary
+
+Implemented the narrow code/test repair after Physical7 proved Answer could arrive without a pending metadata reference. This was not a physical APNs or media-connect task.
+
+Server-side repair:
+
+```text
+pending_metadata_reference_present=false
+safe_to_send_apns=false
+APNs_sent=false
+blocked_reason=pending_metadata_reference_missing_before_apns
+```
+
+When valid pending metadata is supplied, the real non-dev invite path creates a durable pending metadata reference before APNs and emits only the opaque redacted reference into the APNs payload:
+
+```text
+pending_metadata_source_created=true
+pending_metadata_reference_present=true
+pending_metadata_payload_redacted=true
+pending_metadata_has_call_identifier=true
+pending_metadata_has_room_binding=true
+pending_metadata_has_peer=true
+pending_metadata_reference_repair_reference_created_before_apns=true
+pending_metadata_reference_repair_reference_present_in_apns_payload=true
+```
+
+iOS proof repair:
+
+```text
+pending_metadata_reference_repair_present=true
+pending_metadata_reference_repair_debug_only=true
+pending_metadata_reference_repair_real_invite_required=true
+pending_metadata_reference_repair_reference_created_before_apns=true
+pending_metadata_reference_repair_reference_present_in_apns_payload=true
+pending_metadata_reference_repair_reference_observed_by_pushkit=true
+pending_metadata_reference_repair_reference_handed_to_answer_pipeline=true
+pending_metadata_reference_repair_blocks_apns_without_reference=true
+pending_metadata_reference_repair_blocks_credentials_without_metadata_success=true
+pending_metadata_reference_repair_no_direct_credentials_bypass=true
+pending_metadata_reference_repair_no_connect_bypass=true
+pending_metadata_reference_repair_raw_metadata_logged=false
+```
+
+Credentials/connect safety stayed closed by default:
+
+```text
+media_credentials_requested=false
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, real LiveKit join, microphone/camera permission on device, Matrix event emission, video, full call flow, raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
+
+Next phase: `2.48T-Physical8 — one-shot Answer -> metadata reference -> credentials -> first controlled audio-connect physical attempt`.
 
 ### 2.48T-Physical7-MissingMetadataResult — Answered, Missing Pending Metadata, No Connect
 

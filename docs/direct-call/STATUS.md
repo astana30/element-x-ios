@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48T-Physical7-MissingMetadataResult — the one-shot physical attempt reached PushKit, CallKit report completion, and a real Answer action, then stopped safely before credentials/connect because the received invite had no pending metadata reference. Pending metadata was requested but blocked locally with `missing_reference_after_answer`; media credentials, media connect, LiveKit join, microphone permission, camera permission, Matrix event emission, video, and full call flow stayed closed. No repeated APNs, production APNs, `dev/invite`, or repeated connect was performed. The next phase is `2.48T-ResultTriage — classify first controlled audio-connect result, no retry`.
+After 2.48T-Physical7-PendingMetadataReferenceRepair — the real non-dev invite path now fails closed before APNs when a pending metadata reference is absent, and records redacted proof fields for reference creation, APNs payload presence, PushKit observation, Answer handoff, and credentials/connect blocking. No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, real LiveKit join, microphone/camera permission on device, Matrix event emission, video, or full call flow was performed. The next phase is `2.48T-Physical8 — one-shot Answer -> metadata reference -> credentials -> first controlled audio-connect physical attempt`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,56 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48T-Physical7-PendingMetadataReferenceRepair ensures real invites carry a usable pending metadata reference before any future APNs retry:
+  - This was a code/test repair phase only. It did not send APNs, run production APNs, repeat APNs, use `dev/invite`, start physical media connect, join real LiveKit, request microphone/camera permission on device, emit Matrix events, enable video, or start full call flow.
+  - The server real non-dev invite path blocks before APNs when the pending metadata source/reference is absent:
+    ```text
+    pending_metadata_reference_present=false
+    safe_to_send_apns=false
+    APNs_sent=false
+    blocked_reason=pending_metadata_reference_missing_before_apns
+    ```
+  - When pending metadata is supplied and stored, the server emits only an opaque redacted reference into the APNs payload and keeps credentials/connect closed:
+    ```text
+    pending_metadata_source_created=true
+    pending_metadata_reference_present=true
+    pending_metadata_payload_redacted=true
+    pending_metadata_has_call_identifier=true
+    pending_metadata_has_room_binding=true
+    pending_metadata_has_peer=true
+    pending_metadata_reference_repair_reference_created_before_apns=true
+    pending_metadata_reference_repair_reference_present_in_apns_payload=true
+    media_credentials_requested=false
+    media_connect_requested=false
+    matrix_event_emit_requested=false
+    ```
+  - The iOS PushKit receipt proof now records whether the pending metadata reference was observed in the payload and whether Answer handed it to the metadata fetch pipeline:
+    ```text
+    pending_metadata_reference_repair_present=true
+    pending_metadata_reference_repair_debug_only=true
+    pending_metadata_reference_repair_real_invite_required=true
+    pending_metadata_reference_repair_reference_created_before_apns=true
+    pending_metadata_reference_repair_reference_present_in_apns_payload=true
+    pending_metadata_reference_repair_reference_observed_by_pushkit=true
+    pending_metadata_reference_repair_reference_handed_to_answer_pipeline=true
+    pending_metadata_reference_repair_blocks_apns_without_reference=true
+    pending_metadata_reference_repair_blocks_credentials_without_metadata_success=true
+    pending_metadata_reference_repair_no_direct_credentials_bypass=true
+    pending_metadata_reference_repair_no_connect_bypass=true
+    pending_metadata_reference_repair_raw_metadata_logged=false
+    ```
+  - Credentials remain blocked without metadata fetch success, the runtime hook is not consumed before metadata plus credentials eligibility, and default runtime remains no-connect:
+    ```text
+    media_credentials_requested=false
+    media_connect_requested=false
+    media_connect_attempted=false
+    livekit_join_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    ```
+  - No raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer/user/device ID exposure, forbidden project/signing file change, or staged `REPEAT_CALL_FASTPATH_DIAGNOSTICS.md` was introduced.
+  - Next phase: `2.48T-Physical8 — one-shot Answer -> metadata reference -> credentials -> first controlled audio-connect physical attempt`.
 - 2.48T-Physical7-MissingMetadataResult closes the one-shot physical attempt as answered / missing pending metadata / no-connect triage:
   - This is not a completed first controlled audio-connect proof. The first controlled audio-connect attempt did not start.
   - The phase-specific proof path is `/tmp/salemx-voip-push-receipt-proof-2.48t-physical7-first-audio-connect-polled.txt`.

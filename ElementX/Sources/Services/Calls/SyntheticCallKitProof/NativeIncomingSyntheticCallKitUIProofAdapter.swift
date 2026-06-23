@@ -1579,6 +1579,18 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var metadataCredentialsBoundaryRepairAllowsHookConsumptionAfterCredentials = false
     var metadataCredentialsBoundaryRepairNoDirectConnectBypass = true
     var metadataCredentialsBoundaryRepairRawCredentialsLogged = false
+    var pendingMetadataReferenceRepairPresent = true
+    var pendingMetadataReferenceRepairDebugOnly = true
+    var pendingMetadataReferenceRepairRealInviteRequired = true
+    var pendingMetadataReferenceRepairReferenceCreatedBeforeAPNs = false
+    var pendingMetadataReferenceRepairReferencePresentInAPNsPayload = false
+    var pendingMetadataReferenceRepairReferenceObservedByPushKit = false
+    var pendingMetadataReferenceRepairReferenceHandedToAnswerPipeline = false
+    var pendingMetadataReferenceRepairBlocksAPNsWithoutReference = true
+    var pendingMetadataReferenceRepairBlocksCredentialsWithoutMetadataSuccess = true
+    var pendingMetadataReferenceRepairNoDirectCredentialsBypass = true
+    var pendingMetadataReferenceRepairNoConnectBypass = true
+    var pendingMetadataReferenceRepairRawMetadataLogged = false
     var pushKitCompletionAnswerableWindowRequested = false
     var pushKitCompletionAnswerableWindowResult = "not_requested"
     var pushKitCompletionAnswerableWindowDurationBucket = "not_requested"
@@ -1916,6 +1928,18 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "metadata_credentials_boundary_repair_allows_hook_consumption_after_credentials=\(metadataCredentialsBoundaryRepairAllowsHookConsumptionAfterCredentials)",
             "metadata_credentials_boundary_repair_no_direct_connect_bypass=\(metadataCredentialsBoundaryRepairNoDirectConnectBypass)",
             "metadata_credentials_boundary_repair_raw_credentials_logged=\(metadataCredentialsBoundaryRepairRawCredentialsLogged)",
+            "pending_metadata_reference_repair_present=\(pendingMetadataReferenceRepairPresent)",
+            "pending_metadata_reference_repair_debug_only=\(pendingMetadataReferenceRepairDebugOnly)",
+            "pending_metadata_reference_repair_real_invite_required=\(pendingMetadataReferenceRepairRealInviteRequired)",
+            "pending_metadata_reference_repair_reference_created_before_apns=\(pendingMetadataReferenceRepairReferenceCreatedBeforeAPNs)",
+            "pending_metadata_reference_repair_reference_present_in_apns_payload=\(pendingMetadataReferenceRepairReferencePresentInAPNsPayload)",
+            "pending_metadata_reference_repair_reference_observed_by_pushkit=\(pendingMetadataReferenceRepairReferenceObservedByPushKit)",
+            "pending_metadata_reference_repair_reference_handed_to_answer_pipeline=\(pendingMetadataReferenceRepairReferenceHandedToAnswerPipeline)",
+            "pending_metadata_reference_repair_blocks_apns_without_reference=\(pendingMetadataReferenceRepairBlocksAPNsWithoutReference)",
+            "pending_metadata_reference_repair_blocks_credentials_without_metadata_success=\(pendingMetadataReferenceRepairBlocksCredentialsWithoutMetadataSuccess)",
+            "pending_metadata_reference_repair_no_direct_credentials_bypass=\(pendingMetadataReferenceRepairNoDirectCredentialsBypass)",
+            "pending_metadata_reference_repair_no_connect_bypass=\(pendingMetadataReferenceRepairNoConnectBypass)",
+            "pending_metadata_reference_repair_raw_metadata_logged=\(pendingMetadataReferenceRepairRawMetadataLogged)",
             "pushkit_completion_answerable_window_requested=\(pushKitCompletionAnswerableWindowRequested)",
             "pushkit_completion_answerable_window_result=\(pushKitCompletionAnswerableWindowResult)",
             "pushkit_completion_answerable_window_duration_bucket=\(pushKitCompletionAnswerableWindowDurationBucket)",
@@ -2200,6 +2224,22 @@ private struct SalemXVoIPPushReceiptProofSummary {
 }
 
 private extension SalemXVoIPPushReceiptProofSummary {
+    mutating func recordPendingMetadataReferenceRepairProof(referencePresent: Bool,
+                                                            handedToAnswerPipeline: Bool = false) {
+        pendingMetadataReferenceRepairPresent = true
+        pendingMetadataReferenceRepairDebugOnly = true
+        pendingMetadataReferenceRepairRealInviteRequired = true
+        pendingMetadataReferenceRepairReferenceCreatedBeforeAPNs = referencePresent
+        pendingMetadataReferenceRepairReferencePresentInAPNsPayload = referencePresent
+        pendingMetadataReferenceRepairReferenceObservedByPushKit = referencePresent
+        pendingMetadataReferenceRepairReferenceHandedToAnswerPipeline = referencePresent && handedToAnswerPipeline
+        pendingMetadataReferenceRepairBlocksAPNsWithoutReference = true
+        pendingMetadataReferenceRepairBlocksCredentialsWithoutMetadataSuccess = true
+        pendingMetadataReferenceRepairNoDirectCredentialsBypass = true
+        pendingMetadataReferenceRepairNoConnectBypass = true
+        pendingMetadataReferenceRepairRawMetadataLogged = false
+    }
+
     mutating func recordMetadataCredentialsBoundaryRepairProof(allowsHookConsumptionAfterCredentials: Bool = false) {
         metadataCredentialsBoundaryRepairPresent = true
         metadataCredentialsBoundaryRepairDebugOnly = true
@@ -2296,6 +2336,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
 
     mutating func recordMetadataCredentialsBoundaryMissingAfterAnswer(physical6RuntimeEnablementHook: SalemXPhysical6RuntimeEnablementURLHook) {
         recordAnswerTriggeredPendingMetadataBoundary(source: "callkit_answer_pending_metadata_missing_reference")
+        recordPendingMetadataReferenceRepairProof(referencePresent: false)
         pendingMetadataFetchRequested = true
         pendingMetadataFetchAuthorized = false
         pendingMetadataFetchResult = "blocked_redacted"
@@ -2351,6 +2392,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
 
     mutating func recordPendingMetadataFetchRequested() {
         recordAnswerTriggeredPendingMetadataBoundary(source: "callkit_answer_pending_metadata_fetch")
+        recordPendingMetadataReferenceRepairProof(referencePresent: true, handedToAnswerPipeline: true)
         pendingMetadataFetchRequested = true
         pendingMetadataFetchAuthorized = false
         pendingMetadataFetchResult = "requested"
@@ -2363,6 +2405,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
 
     mutating func recordAuthenticatedPendingMetadataFetch(session: DirectCallSession) {
         recordMetadataCredentialsBoundaryRepairProof()
+        recordPendingMetadataReferenceRepairProof(referencePresent: true, handedToAnswerPipeline: true)
         pendingMetadataFetchRequested = true
         pendingMetadataFetchAuthorized = true
         pendingMetadataFetchResult = "success_redacted"
@@ -2388,6 +2431,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
                                                                  errcode: String = "none",
                                                                  failureReason: String = "unknown") {
         recordMetadataCredentialsBoundaryRepairProof()
+        recordPendingMetadataReferenceRepairProof(referencePresent: true, handedToAnswerPipeline: true)
         pendingMetadataFetchRequested = true
         pendingMetadataFetchAuthorized = authorized
         pendingMetadataFetchResult = "blocked_redacted"
@@ -3897,6 +3941,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                                                             callKitReportRequested: isControlledPayload,
                                                             callKitReportResult: isControlledPayload ? "pending" : "not_requested",
                                                             blockedReason: isControlledPayload ? "none" : "unsupported_redacted_payload")
+        baseSummary.recordPendingMetadataReferenceRepairProof(referencePresent: pendingMetadataReferencePresent)
         baseSummary.appStateAtPushKitReceipt = currentApplicationStateProof()
         lock.lock()
         let operatorReadyToAnswer = pendingOperatorReadyToAnswer

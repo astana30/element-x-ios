@@ -613,6 +613,37 @@ def _background_invite_apns_diagnostics(
             "blocked_reason": "real_invite_payload_mapping_blocked",
         }
 
+    if pending_metadata_reference is None:
+        return {
+            "real_non_dev_invite_used": True,
+            "dev_invite_used": False,
+            "background_apns_push_requested": False,
+            "background_apns_push_result": "skipped_redacted",
+            "background_apns_failure_reason": "none",
+            "persisted_pushkit_token_lookup_result": "not_requested",
+            "pushkit_token_redacted": True,
+            "apns_environment": "sandbox",
+            "apns_topic_resolved": False,
+            "media_credentials_requested": False,
+            "media_connect_requested": False,
+            "matrix_event_emit_requested": False,
+            "safe_to_send_apns": False,
+            "APNs_sent": False,
+            "pending_metadata_reference_repair_present": True,
+            "pending_metadata_reference_repair_debug_only": True,
+            "pending_metadata_reference_repair_real_invite_required": True,
+            "pending_metadata_reference_repair_reference_created_before_apns": False,
+            "pending_metadata_reference_repair_reference_present_in_apns_payload": False,
+            "pending_metadata_reference_repair_reference_observed_by_pushkit": False,
+            "pending_metadata_reference_repair_reference_handed_to_answer_pipeline": False,
+            "pending_metadata_reference_repair_blocks_apns_without_reference": True,
+            "pending_metadata_reference_repair_blocks_credentials_without_metadata_success": True,
+            "pending_metadata_reference_repair_no_direct_credentials_bypass": True,
+            "pending_metadata_reference_repair_no_connect_bypass": True,
+            "pending_metadata_reference_repair_raw_metadata_logged": False,
+            "blocked_reason": "pending_metadata_reference_missing_before_apns",
+        }
+
     token_record = token_store.retrieve_latest_for_user(invite_request.recipient, "development")
     lookup_store_key_redacted = redacted_latest_user_record_key(invite_request.recipient, "development")
     if token_record is None:
@@ -636,6 +667,20 @@ def _background_invite_apns_diagnostics(
             "real_invite_lookup_environment": "development",
             "real_invite_lookup_token_is_hex": False,
             "upload_invite_store_key_match": False,
+            "safe_to_send_apns": False,
+            "APNs_sent": False,
+            "pending_metadata_reference_repair_present": True,
+            "pending_metadata_reference_repair_debug_only": True,
+            "pending_metadata_reference_repair_real_invite_required": True,
+            "pending_metadata_reference_repair_reference_created_before_apns": True,
+            "pending_metadata_reference_repair_reference_present_in_apns_payload": False,
+            "pending_metadata_reference_repair_reference_observed_by_pushkit": False,
+            "pending_metadata_reference_repair_reference_handed_to_answer_pipeline": False,
+            "pending_metadata_reference_repair_blocks_apns_without_reference": True,
+            "pending_metadata_reference_repair_blocks_credentials_without_metadata_success": True,
+            "pending_metadata_reference_repair_no_direct_credentials_bypass": True,
+            "pending_metadata_reference_repair_no_connect_bypass": True,
+            "pending_metadata_reference_repair_raw_metadata_logged": False,
             "blocked_reason": "receiver_pushkit_token_missing",
         }
 
@@ -667,6 +712,20 @@ def _background_invite_apns_diagnostics(
         "real_invite_lookup_environment": "development",
         "real_invite_lookup_token_is_hex": is_hex_pushkit_token(token_record.token),
         "upload_invite_store_key_match": True,
+        "safe_to_send_apns": True,
+        "APNs_sent": diagnostics.apns_voip_push_send_result == "sandbox_success",
+        "pending_metadata_reference_repair_present": True,
+        "pending_metadata_reference_repair_debug_only": True,
+        "pending_metadata_reference_repair_real_invite_required": True,
+        "pending_metadata_reference_repair_reference_created_before_apns": True,
+        "pending_metadata_reference_repair_reference_present_in_apns_payload": True,
+        "pending_metadata_reference_repair_reference_observed_by_pushkit": False,
+        "pending_metadata_reference_repair_reference_handed_to_answer_pipeline": False,
+        "pending_metadata_reference_repair_blocks_apns_without_reference": True,
+        "pending_metadata_reference_repair_blocks_credentials_without_metadata_success": True,
+        "pending_metadata_reference_repair_no_direct_credentials_bypass": True,
+        "pending_metadata_reference_repair_no_connect_bypass": True,
+        "pending_metadata_reference_repair_raw_metadata_logged": False,
         "blocked_reason": "none" if diagnostics.apns_voip_push_send_result == "sandbox_success" else diagnostics.blocked_reason,
     }
 
