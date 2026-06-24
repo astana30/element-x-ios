@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-SenderConnectPendingParityRepair — the sender LiveKit connect proof now exposes DEBUG/test-controlled parity fields showing that the sender path is aligned to the receiver-proven audio-only connect wrapper, retains room/delegate/state observer/task until terminal state, uses a bounded wait, keeps timeout bucket classification available for connect-call-pending, and preserves default no-connect/no-join safety. The next phase is `2.48Z-Physical2-Retry11 — one-shot two-physical-device sender connect parity proof`.
+After 2.48Z-Physical2-Retry11-SenderConnectParityTimeoutTriage — the one-shot two-physical-device sender connect parity proof confirmed receiver PushKit/CallKit Answer, pending metadata, credentials, receiver controlled audio connect, and receiver LiveKit join succeeded once. Sender connect parity fields were present and aligned to the receiver-proven audio-only wrapper, but the sender LiveKit SDK connect still timed out as connect-call-pending, so remote participant/audio/liveness was not observed. This is not remote-audio success. The next phase is `2.48Z-SenderLiveKitConnectPendingRuntimeRepair — investigate sender SDK connect-call-pending despite parity, no APNs/connect`.
 
 ## Latest App Code Checkpoint
 
@@ -38,6 +38,101 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Checksum: `654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e`
 
 ## Proven Checkpoints
+
+- 2.48Z-Physical2-Retry11-SenderConnectParityTimeoutTriage closes the one-shot two-physical-device sender connect parity proof as safe sender SDK connect-call-pending timeout / remote participant not observed triage. This is not remote-audio success:
+  - Proof path:
+    ```text
+    /tmp/salemx-voip-push-receipt-proof-2.48z-physical2-retry11-sender-connect-parity-polled.txt
+    ```
+  - Physical proof generation:
+    ```text
+    proof_generation=generation_16
+    ```
+  - Receiver path succeeded once:
+    ```text
+    physical_voip_push_received=true
+    callkit_report_result=reported
+    callkit_first_action_kind=answer
+    callkit_answer_action_received=true
+    callkit_answer_action_fulfilled=true
+    pending_metadata_fetch_result=success_redacted
+    media_credentials_result=success_redacted
+    controlled_connect_first_attempt_result=success_redacted
+    controlled_connect_first_attempt_repeated=false
+    livekit_join_result=success_redacted
+    ```
+  - Sender connect parity was present and aligned to the receiver-proven audio-only wrapper:
+    ```text
+    sender_connect_parity_present=true
+    sender_connect_parity_uses_receiver_proven_connect_wrapper=true
+    sender_connect_parity_uses_audio_only=true
+    sender_connect_parity_video_allowed=false
+    sender_connect_parity_matrix_events_allowed=false
+    sender_connect_parity_room_retained_until_terminal=true
+    sender_connect_parity_delegate_retained_until_terminal=true
+    sender_connect_parity_state_observer_retained_until_terminal=true
+    sender_connect_parity_task_retained_until_terminal=true
+    sender_connect_parity_bounded_wait_used=true
+    ```
+  - Sender join activation fired once, but the sender SDK connect remained pending:
+    ```text
+    sender_side_livekit_join_activation_triggered=true
+    sender_side_livekit_join_activation_consumed=true
+    sender_side_livekit_join_activation_repeated=false
+    sender_side_livekit_join_requested=true
+    sender_side_livekit_join_result=failed_redacted
+    sender_side_livekit_join_error_bucket=transport_livekit_sdk_unknown_error_redacted
+    sender_side_livekit_join_repeated=false
+    sender_livekit_sdk_timeline_connect_invoked=true
+    sender_livekit_sdk_timeline_connect_returned=false
+    sender_livekit_sdk_timeline_connect_threw=false
+    sender_livekit_sdk_timeline_task_cancelled=false
+    sender_livekit_sdk_timeline_final_classification=sdk_connect_timeout_connect_call_pending_redacted
+    sender_livekit_sdk_timeout_diagnostics_connect_call_pending_at_timeout=true
+    sender_livekit_sdk_timeout_diagnostics_task_running_at_timeout=true
+    sender_livekit_sdk_timeout_diagnostics_delegate_attached=true
+    sender_livekit_sdk_timeout_diagnostics_state_observer_attached=true
+    sender_livekit_sdk_timeout_diagnostics_network_path_bucket=satisfied_redacted
+    sender_livekit_sdk_timeout_diagnostics_final_classification=sdk_connect_timeout_connect_call_pending_redacted
+    ```
+  - Sender trigger orchestration reached terminal state:
+    ```text
+    sender_join_trigger_orchestration_apns_success_seen=true
+    sender_join_trigger_orchestration_receiver_answer_seen=true
+    sender_join_trigger_orchestration_receiver_connect_terminal_seen=true
+    sender_join_trigger_orchestration_sender_trigger_completed=true
+    sender_join_trigger_orchestration_poll_allowed=true
+    sender_join_trigger_orchestration_poll_blocked_reason=none
+    sender_join_trigger_orchestration_final_classification=sender_trigger_completed_sdk_timeline_terminal_redacted
+    ```
+  - Remote participant/audio/liveness were not observed:
+    ```text
+    receiver_remote_participant_observer_result=not_observed_redacted
+    receiver_remote_participant_observer_error_bucket=sender_join_failed_redacted
+    receiver_remote_participant_observer_remote_seen=false
+    receiver_remote_participant_observer_audio_track_seen=false
+    receiver_remote_participant_observer_liveness_seen=false
+    livekit_remote_participant_seen=false
+    livekit_remote_audio_track_subscribed=false
+    livekit_audio_liveness_result=not_observed_redacted
+    ```
+  - Safety stayed closed during close-out:
+    ```text
+    no_repeated_apns=true
+    no_production_apns=true
+    dev_invite_used=false
+    no_repeated_connect=true
+    no_repeated_livekit_join=true
+    video_enabled=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    ```
+  - Conclusion:
+    ```text
+    Retry11 proved sender connect parity is present but did not clear the sender SDK connect-call-pending timeout. The sender path now has receiver-proven wrapper parity, retention, and bounded wait, yet connect did not return, throw, reach connected, failed, or disconnected state before the terminal timeout. Remote participant/audio/liveness were not observed.
+    ```
+  - Next phase: `2.48Z-SenderLiveKitConnectPendingRuntimeRepair — investigate sender SDK connect-call-pending despite parity, no APNs/connect`.
 
 - 2.48Z-SenderConnectPendingParityRepair adds sender LiveKit connect parity proof fields without APNs/connect:
   - Required parity fields are now available for the next physical proof:
