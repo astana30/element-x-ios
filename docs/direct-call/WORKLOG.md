@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Closed 2.48Z-Physical2-Retry10 as safe sender SDK connect-call-pending timeout / remote participant not observed triage, not remote-audio success: receiver PushKit, CallKit Answer, pending metadata, media credentials, one receiver controlled audio connect, and receiver LiveKit join succeeded once; sender-side LiveKit join activation triggered and consumed exactly once; orchestration reached terminal sender timeline classification; sender SDK connect was invoked and remained pending while the task stayed running, delegate/state observer were attached, actor context was available, and network path was satisfied; remote participant/audio/liveness was not observed. No repeated APNs, production APNs, `dev/invite`, repeated connect, repeated LiveKit join, video, camera permission, Matrix event emit, or full call flow was performed during close-out.
 - Added 2.48Z-SenderSDKConnectTimeoutRepair: sender LiveKit SDK connect timeouts now expose DEBUG/test-controlled redacted timeout diagnostics with wait-window, pending connect, task running/cancelled, delegate/state observer attachment, state/delegate event-count, app-state, actor-context, and network/auth pending buckets. The specific timeout bucket maps into SDK timeline, SDK failure surface, transport surface, transport diagnostics, and sender-side join error bucket while keeping sender join success-but-remote-missing separate and default runtime no-connect/no-join. No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, or physical hook reset/re-arm was performed.
 - Closed 2.48Z-Physical2-Retry9 as safe sender SDK timeline timeout / remote participant not observed triage, not remote-audio success: receiver PushKit, CallKit Answer, pending metadata, media credentials, one receiver controlled audio connect, and receiver LiveKit join succeeded once; the sender trigger orchestration guard waited until the sender trigger completed and the sender SDK timeline reached a terminal classification; sender-side LiveKit join was triggered once but the SDK connect timeline timed out, and receiver remote participant/audio/liveness was not observed. No repeated APNs, production APNs, `dev/invite`, repeated connect, repeated LiveKit join, video, microphone/camera permission, Matrix event emit, or full call flow was performed during close-out.
 - Added 2.48Z-SenderJoinTriggerOrchestrationRepair: the proof now has a DEBUG-only redacted sender join trigger orchestration guard that blocks early terminal polling until APNs success, receiver Answer, receiver connect terminal state, sender activation, sender trigger completion, and sender SDK timeline terminal classification are coherently observed. Receiver terminal fields alone can no longer close the phase, `not_requested` classifies as a required-but-not-started sender trigger when a trigger is required, and default runtime remains no-connect/no-join. No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, or physical hook reset/re-arm was performed.
@@ -144,6 +145,143 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48Z-Physical2-Retry10 — Sender Connect-Call-Pending Timeout / Remote Participant Not Observed Triage
+
+Closed the one-shot two-physical-device sender SDK timeout-bucket proof as safe sender SDK connect-call-pending timeout / remote participant not observed triage. This is not remote-audio success.
+
+Proof path:
+
+```text
+/tmp/salemx-voip-push-receipt-proof-2.48z-physical2-retry10-sender-sdk-timeout-bucket-polled.txt
+```
+
+Proof generation:
+
+```text
+proof_generation=generation_16
+```
+
+Receiver path:
+
+```text
+physical_voip_push_received=true
+callkit_report_result=reported
+callkit_first_action_kind=answer
+callkit_answer_action_received=true
+callkit_answer_action_fulfilled=true
+pending_metadata_fetch_result=success_redacted
+media_credentials_result=success_redacted
+controlled_connect_first_attempt_result=success_redacted
+controlled_connect_first_attempt_repeated=false
+livekit_join_result=success_redacted
+```
+
+Sender join:
+
+```text
+sender_side_livekit_join_activation_triggered=true
+sender_side_livekit_join_activation_consumed=true
+sender_side_livekit_join_activation_repeated=false
+sender_side_livekit_join_requested=true
+sender_side_livekit_join_result=failed_redacted
+sender_side_livekit_join_error_bucket=transport_livekit_sdk_unknown_error_redacted
+sender_side_livekit_join_repeated=false
+```
+
+Orchestration:
+
+```text
+sender_join_trigger_orchestration_apns_success_seen=true
+sender_join_trigger_orchestration_receiver_answer_seen=true
+sender_join_trigger_orchestration_receiver_connect_terminal_seen=true
+sender_join_trigger_orchestration_sender_activation_armed=true
+sender_join_trigger_orchestration_sender_trigger_required=true
+sender_join_trigger_orchestration_sender_trigger_allowed=true
+sender_join_trigger_orchestration_sender_trigger_started=true
+sender_join_trigger_orchestration_sender_trigger_completed=true
+sender_join_trigger_orchestration_poll_allowed=true
+sender_join_trigger_orchestration_poll_blocked_reason=none
+sender_join_trigger_orchestration_final_classification=sender_trigger_completed_sdk_timeline_terminal_redacted
+```
+
+SDK timeline:
+
+```text
+sender_livekit_sdk_timeline_trigger_received=true
+sender_livekit_sdk_timeline_task_created=true
+sender_livekit_sdk_timeline_task_started=true
+sender_livekit_sdk_timeline_connect_invoked=true
+sender_livekit_sdk_timeline_connect_returned=false
+sender_livekit_sdk_timeline_connect_threw=false
+sender_livekit_sdk_timeline_delegate_attached=true
+sender_livekit_sdk_timeline_state_observer_attached=true
+sender_livekit_sdk_timeline_connected_state_seen=false
+sender_livekit_sdk_timeline_failed_state_seen=false
+sender_livekit_sdk_timeline_disconnected_state_seen=false
+sender_livekit_sdk_timeline_task_cancelled=false
+sender_livekit_sdk_timeline_task_completed=false
+sender_livekit_sdk_timeline_timeout_elapsed=true
+sender_livekit_sdk_timeline_proof_written_after_terminal_state=true
+sender_livekit_sdk_timeline_final_classification=sdk_connect_timeout_connect_call_pending_redacted
+```
+
+Timeout diagnostics:
+
+```text
+sender_livekit_sdk_timeout_diagnostics_wait_window_bucket=normal_redacted
+sender_livekit_sdk_timeout_diagnostics_connect_invoked=true
+sender_livekit_sdk_timeout_diagnostics_connect_call_pending_at_timeout=true
+sender_livekit_sdk_timeout_diagnostics_task_running_at_timeout=true
+sender_livekit_sdk_timeout_diagnostics_task_cancelled_at_timeout=false
+sender_livekit_sdk_timeout_diagnostics_delegate_attached=true
+sender_livekit_sdk_timeout_diagnostics_state_observer_attached=true
+sender_livekit_sdk_timeout_diagnostics_state_event_count_bucket=1_3
+sender_livekit_sdk_timeout_diagnostics_delegate_event_count_bucket=0
+sender_livekit_sdk_timeout_diagnostics_app_state_bucket=foreground
+sender_livekit_sdk_timeout_diagnostics_actor_context_available=true
+sender_livekit_sdk_timeout_diagnostics_network_path_bucket=satisfied_redacted
+sender_livekit_sdk_timeout_diagnostics_final_classification=sdk_connect_timeout_connect_call_pending_redacted
+```
+
+Remote participant/audio/liveness:
+
+```text
+receiver_remote_participant_observer_result=not_observed_redacted
+receiver_remote_participant_observer_error_bucket=sender_join_failed_redacted
+receiver_remote_participant_observer_remote_seen=false
+receiver_remote_participant_observer_audio_track_seen=false
+receiver_remote_participant_observer_liveness_seen=false
+livekit_remote_participant_seen=false
+livekit_remote_audio_track_subscribed=false
+livekit_audio_liveness_result=not_observed_redacted
+```
+
+Conclusion:
+
+```text
+Retry10 narrowed the sender failure to SDK connect-call-pending timeout. Sender trigger fired exactly once, task was created/started, connect was invoked, task remained running and was not cancelled, delegate and state observer were attached, actor context was available, network path was satisfied, and proof was written after terminal timeout. Connect did not return, throw, reach connected, failed, or disconnected state. Remote participant/audio/liveness were not observed.
+```
+
+Safety:
+
+```text
+no_repeated_apns=true
+no_production_apns=true
+dev_invite_used=false
+no_repeated_connect=true
+no_repeated_livekit_join=true
+video_enabled=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+Next phase:
+
+```text
+2.48Z-SenderConnectPendingParityRepair — align sender LiveKit connect with receiver-proven connect path, no APNs/connect
+```
 
 ### 2.48Z-SenderSDKConnectTimeoutRepair — Redacted Timeout Bucket Diagnostics / No APNs
 
