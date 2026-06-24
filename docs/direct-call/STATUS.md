@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-Physical2-Retry5 — the one-shot two-physical-device sender transport bucket proof reached receiver PushKit, CallKit Answer, pending metadata, media credentials, one receiver controlled audio connect, and receiver LiveKit join. Sender readiness survived into runtime and Answer; sender-side join activation triggered and consumed exactly once. Sender transport diagnostics classified the first sender-side transport attempt as `transport_unknown_failed_redacted`; LiveKit room and token-authority matches were true, but receiver remote participant/audio/liveness were not observed. This is safe classified sender transport bucket triage, not remote-audio success. The next phase is `2.48Z-SenderTransportUnknownFailureRepair — map unknown sender transport failure before any APNs retry, no APNs/connect`.
+After 2.48Z-SenderTransportUnknownFailureSurfaceRepair — sender-side LiveKit transport failures now surface a DEBUG-only redacted error source and bucket set before the next physical APNs retry. The proof surface keeps raw error, URL, and token logging false, preserves redacted LiveKit room/token-authority comparisons, keeps pre-transport failures classified before transport, maps specific transport errors into sender transport diagnostics and sender-side LiveKit join result buckets, and leaves sender-join-success-but-remote-missing as a separate receiver-observer classification. Default runtime remains no-connect/no-join. The next phase is `2.48Z-Physical2-Retry6 — one-shot two-physical-device sender transport error-source proof`.
 
 ## Latest App Code Checkpoint
 
@@ -38,6 +38,62 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Checksum: `654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e`
 
 ## Proven Checkpoints
+
+- 2.48Z-SenderTransportUnknownFailureSurfaceRepair adds a DEBUG/test-controlled redacted sender transport error surface without APNs/connect/real-device LiveKit:
+  - New proof fields:
+    ```text
+    sender_transport_error_surface_present=true
+    sender_transport_error_surface_debug_only=true
+    sender_transport_error_surface_raw_error_logged=false
+    sender_transport_error_surface_raw_url_logged=false
+    sender_transport_error_surface_raw_token_logged=false
+    sender_transport_error_surface_source=<redacted_source>
+    sender_transport_error_surface_sdk_error_bucket=<redacted_bucket>
+    sender_transport_error_surface_disconnect_reason_bucket=<redacted_bucket>
+    sender_transport_error_surface_websocket_bucket=<redacted_bucket>
+    sender_transport_error_surface_auth_bucket=<redacted_bucket>
+    sender_transport_error_surface_timeout_observed=<redacted_bool>
+    sender_transport_error_surface_connected_state_observed=<redacted_bool>
+    sender_transport_error_surface_disconnected_before_connected=<redacted_bool>
+    sender_transport_error_surface_final_classification=<redacted_transport_bucket>
+    ```
+  - Specific redacted mappings now exist for:
+    ```text
+    transport_connect_throw_redacted
+    transport_room_connect_callback_failed_redacted
+    transport_websocket_close_redacted
+    transport_websocket_upgrade_failed_redacted
+    transport_auth_rejected_redacted
+    transport_token_expired_or_invalid_redacted
+    transport_tls_or_certificate_failed_redacted
+    transport_network_unreachable_redacted
+    transport_timeout_waiting_for_connected_state_redacted
+    transport_disconnected_before_connected_redacted
+    transport_livekit_sdk_unknown_error_redacted
+    transport_unknown_failed_redacted
+    ```
+  - Mapping behavior:
+    ```text
+    sender_transport_failure_diagnostics_error_bucket=<specific_redacted_transport_bucket>
+    sender_transport_failure_diagnostics_classification=<specific_redacted_transport_bucket>
+    sender_side_livekit_join_error_bucket=<specific_redacted_transport_bucket>
+    sender_side_livekit_join_result=failed_redacted
+    ```
+  - Safety and classification boundaries:
+    ```text
+    pre_transport_failures_classify_before_transport=true
+    sender_transport_unknown_fallback_only=true
+    room_token_authority_comparisons_redacted=true
+    sender_join_success_but_remote_missing_separate=true
+    media_connect_requested=false
+    media_connect_attempted=false
+    livekit_join_requested=false
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    ```
+  - No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, or physical hook reset/re-arm was performed.
 
 - 2.48Z-Physical2-Retry5-SenderTransportUnknownTriage closes the one-shot two-physical-device sender transport bucket proof as safe classified sender transport triage, not remote-audio success:
   - Proof path:

@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Added 2.48Z-SenderTransportUnknownFailureSurfaceRepair: sender-side LiveKit transport failures now expose a DEBUG-only redacted error surface with source, SDK/disconnect/websocket/auth buckets, timeout and disconnected-before-connected flags, and final classification. Specific redacted source buckets now map into sender transport diagnostics and sender-side LiveKit join error buckets; raw error/URL/token logging remains false, room/token-authority comparisons remain redacted, pre-transport failures still classify before transport, sender-join-success-but-remote-missing remains separate, and default runtime remains no-connect/no-join. No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, or physical hook reset/re-arm was performed.
 - Closed 2.48Z-Physical2-Retry5 as safe sender transport bucket triage, not remote-audio success: receiver PushKit, CallKit Answer, pending metadata, credentials, one receiver controlled audio connect, and receiver LiveKit join succeeded; sender readiness survived into runtime and Answer; sender-side join activation triggered and consumed once; the sender transport diagnostics classified the transport attempt as `transport_unknown_failed_redacted` with LiveKit room/token-authority matches true; remote participant/audio/liveness was not observed. No repeated APNs, production APNs, `dev/invite`, repeated connect, repeated LiveKit join, video, camera permission, Matrix event emit, or full call flow was performed.
 - Added 2.48Z-SenderTransportFailureRepair: sender-side LiveKit transport diagnostics now expose precise redacted transport buckets, transport started/completed/result fields, URL/token/room-binding presence, same LiveKit room and token-authority comparisons, and receiver/sender room/token-authority match booleans without raw identifiers; existing pre-transport credential/token/URL/room-binding buckets still classify before transport, transport failure is distinct from sender join success but receiver remote missing, and default runtime remains no-connect/no-join with no APNs/connect/real-device LiveKit/permissions/video/Matrix/full-flow side effects.
 - Closed 2.48Z-Physical2-Retry4 as safe sender transport-failed / remote participant not observed triage: receiver PushKit, CallKit Answer, pending metadata, credentials, one receiver controlled audio connect, and receiver LiveKit join succeeded; sender readiness survived into runtime and Answer; sender-side join activation triggered and consumed once; the repaired sender join failure diagnostics classified the sender attempt as `transport_failed_redacted`; remote participant/audio/liveness was not observed. No repeated APNs, production APNs, `dev/invite`, repeated connect, repeated LiveKit join, video, camera permission, Matrix event emit, or full call flow was performed.
@@ -8652,3 +8653,66 @@ no retry performed
 No sandbox APNs, production APNs, repeated APNs, `dev/invite`, media connect, LiveKit join, microphone/camera permission, video, Matrix event emit, or full call flow was performed.
 
 Next phase: `2.48Z-SenderLiveKitReadinessHookRepair — make second physical sender readiness/join path activatable before any APNs retry`.
+
+## 2026-06-24 — 2.48Z-SenderTransportUnknownFailureSurfaceRepair
+
+Implemented a no-APNs/no-connect diagnostics repair for the Retry5 `transport_unknown_failed_redacted` sender-side LiveKit failure.
+
+New redacted proof fields:
+
+```text
+sender_transport_error_surface_present=true
+sender_transport_error_surface_debug_only=true
+sender_transport_error_surface_raw_error_logged=false
+sender_transport_error_surface_raw_url_logged=false
+sender_transport_error_surface_raw_token_logged=false
+sender_transport_error_surface_source=<redacted_source>
+sender_transport_error_surface_sdk_error_bucket=<redacted_bucket>
+sender_transport_error_surface_disconnect_reason_bucket=<redacted_bucket>
+sender_transport_error_surface_websocket_bucket=<redacted_bucket>
+sender_transport_error_surface_auth_bucket=<redacted_bucket>
+sender_transport_error_surface_timeout_observed=<redacted_bool>
+sender_transport_error_surface_connected_state_observed=<redacted_bool>
+sender_transport_error_surface_disconnected_before_connected=<redacted_bool>
+sender_transport_error_surface_final_classification=<redacted_transport_bucket>
+```
+
+Specific source classifications now available:
+
+```text
+transport_connect_throw_redacted
+transport_room_connect_callback_failed_redacted
+transport_websocket_close_redacted
+transport_websocket_upgrade_failed_redacted
+transport_auth_rejected_redacted
+transport_token_expired_or_invalid_redacted
+transport_tls_or_certificate_failed_redacted
+transport_network_unreachable_redacted
+transport_timeout_waiting_for_connected_state_redacted
+transport_disconnected_before_connected_redacted
+transport_livekit_sdk_unknown_error_redacted
+transport_unknown_failed_redacted
+```
+
+Boundary results:
+
+```text
+sender_transport_unknown_can_now_classify_specific_error_source=true
+sender_transport_unknown_fallback_only=true
+sender_side_livekit_join_error_bucket_uses_transport_surface=true
+raw_error_logged=false
+raw_url_logged=false
+raw_token_logged=false
+room_token_authority_comparisons_redacted=true
+pre_transport_failures_classify_before_transport=true
+sender_join_success_but_remote_missing_separate=true
+default_runtime_no_connect=true
+```
+
+Next phase:
+
+```text
+2.48Z-Physical2-Retry6 — one-shot two-physical-device sender transport error-source proof
+```
+
+No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, or physical hook reset/re-arm was performed.
