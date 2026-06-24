@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-Physical2-Retry7 — the one-shot two-physical-device sender LiveKit SDK failure-source proof is closed as safe sender SDK internal unknown / remote participant not observed triage, not remote-audio success. Receiver PushKit, CallKit Answer, pending metadata, media credentials, one controlled receiver audio connect, and receiver LiveKit join succeeded; sender-side LiveKit join activation triggered and consumed once, but the sender SDK connect call started and did not return, throw, reach connected/failed/delegate/disconnected states, or surface remote participant/audio/liveness. The next phase is `2.48Z-SenderLiveKitSDKTimelineRepair — add redacted sender SDK connect lifecycle timeline, no APNs/connect`.
+After 2.48Z-SenderLiveKitSDKTimelineRepair — the sender-side LiveKit SDK connect lifecycle now has a redacted DEBUG/test-controlled timeline that maps task, callback, timeout, proof-timing, lifecycle, and pending classifications into the existing sender SDK/transport/join diagnostics. The repair did not run APNs, physical media connect, or real-device LiveKit join. The next phase is `2.48Z-Physical2-Retry8 — one-shot two-physical-device sender SDK timeline proof`.
 
 ## Latest App Code Checkpoint
 
@@ -38,6 +38,70 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Checksum: `654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e`
 
 ## Proven Checkpoints
+
+- 2.48Z-SenderLiveKitSDKTimelineRepair adds a redacted sender SDK connect lifecycle timeline without APNs/connect:
+  - New proof fields:
+    ```text
+    sender_livekit_sdk_timeline_present=true
+    sender_livekit_sdk_timeline_debug_only=true
+    sender_livekit_sdk_timeline_raw_error_logged=false
+    sender_livekit_sdk_timeline_raw_url_logged=false
+    sender_livekit_sdk_timeline_raw_token_logged=false
+    sender_livekit_sdk_timeline_raw_room_logged=false
+    sender_livekit_sdk_timeline_raw_identity_logged=false
+    sender_livekit_sdk_timeline_trigger_received=<redacted_bool>
+    sender_livekit_sdk_timeline_task_created=<redacted_bool>
+    sender_livekit_sdk_timeline_task_started=<redacted_bool>
+    sender_livekit_sdk_timeline_connect_invoked=<redacted_bool>
+    sender_livekit_sdk_timeline_connect_returned=<redacted_bool>
+    sender_livekit_sdk_timeline_connect_threw=<redacted_bool>
+    sender_livekit_sdk_timeline_delegate_attached=<redacted_bool>
+    sender_livekit_sdk_timeline_state_observer_attached=<redacted_bool>
+    sender_livekit_sdk_timeline_connected_state_seen=<redacted_bool>
+    sender_livekit_sdk_timeline_failed_state_seen=<redacted_bool>
+    sender_livekit_sdk_timeline_disconnected_state_seen=<redacted_bool>
+    sender_livekit_sdk_timeline_task_cancelled=<redacted_bool>
+    sender_livekit_sdk_timeline_task_completed=<redacted_bool>
+    sender_livekit_sdk_timeline_timeout_elapsed=<redacted_bool>
+    sender_livekit_sdk_timeline_proof_written_after_terminal_state=<redacted_bool>
+    sender_livekit_sdk_timeline_final_classification=<redacted_timeline_bucket>
+    ```
+  - Redacted timeline classifications:
+    ```text
+    sdk_timeline_task_not_created_redacted
+    sdk_timeline_task_created_not_started_redacted
+    sdk_timeline_task_cancelled_before_connect_redacted
+    sdk_timeline_connect_invoked_no_return_redacted
+    sdk_timeline_connect_timeout_redacted
+    sdk_timeline_delegate_not_attached_redacted
+    sdk_timeline_state_observer_not_attached_redacted
+    sdk_timeline_callback_not_observed_redacted
+    sdk_timeline_proof_written_before_terminal_state_redacted
+    sdk_timeline_app_lifecycle_interrupted_redacted
+    sdk_timeline_actor_isolation_lost_callback_redacted
+    sdk_timeline_internal_pending_redacted
+    ```
+  - Mapping:
+    ```text
+    sender_livekit_sdk_failure_surface_final_classification=<redacted_sdk_or_timeline_bucket>
+    sender_transport_error_surface_final_classification=<specific_redacted_transport_bucket>
+    sender_transport_failure_diagnostics_classification=<specific_redacted_transport_bucket>
+    sender_side_livekit_join_error_bucket=<specific_redacted_transport_bucket>
+    sender_side_livekit_join_result=failed_redacted
+    existing_sdk_transport_buckets_remain_intact=true
+    sender_join_success_but_remote_missing_separate=true
+    ```
+  - Safety stayed closed:
+    ```text
+    default_runtime_no_connect=true
+    default_runtime_no_join=true
+    raw_error_url_token_room_identity_logged=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    ```
+  - No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, or physical hook reset/re-arm was performed.
+  - Next phase: `2.48Z-Physical2-Retry8 — one-shot two-physical-device sender SDK timeline proof`.
 
 - 2.48Z-Physical2-Retry7-SenderSDKInternalUnknownTriage closes the one-shot two-physical-device sender SDK failure-source proof as safe classified sender SDK triage, not remote-audio success:
   - Proof path:

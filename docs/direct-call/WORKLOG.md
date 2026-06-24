@@ -9041,3 +9041,84 @@ Next phase:
 ```
 
 No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, or physical hook reset/re-arm was performed.
+
+## 2026-06-24 — 2.48Z-SenderLiveKitSDKTimelineRepair
+
+Implemented a no-APNs/no-connect sender SDK timeline diagnostics repair for the Retry7 `sdk_internal_unknown_redacted` sender-side LiveKit failure.
+
+New redacted proof fields:
+
+```text
+sender_livekit_sdk_timeline_present=true
+sender_livekit_sdk_timeline_debug_only=true
+sender_livekit_sdk_timeline_raw_error_logged=false
+sender_livekit_sdk_timeline_raw_url_logged=false
+sender_livekit_sdk_timeline_raw_token_logged=false
+sender_livekit_sdk_timeline_raw_room_logged=false
+sender_livekit_sdk_timeline_raw_identity_logged=false
+sender_livekit_sdk_timeline_trigger_received=<redacted_bool>
+sender_livekit_sdk_timeline_task_created=<redacted_bool>
+sender_livekit_sdk_timeline_task_started=<redacted_bool>
+sender_livekit_sdk_timeline_connect_invoked=<redacted_bool>
+sender_livekit_sdk_timeline_connect_returned=<redacted_bool>
+sender_livekit_sdk_timeline_connect_threw=<redacted_bool>
+sender_livekit_sdk_timeline_delegate_attached=<redacted_bool>
+sender_livekit_sdk_timeline_state_observer_attached=<redacted_bool>
+sender_livekit_sdk_timeline_connected_state_seen=<redacted_bool>
+sender_livekit_sdk_timeline_failed_state_seen=<redacted_bool>
+sender_livekit_sdk_timeline_disconnected_state_seen=<redacted_bool>
+sender_livekit_sdk_timeline_task_cancelled=<redacted_bool>
+sender_livekit_sdk_timeline_task_completed=<redacted_bool>
+sender_livekit_sdk_timeline_timeout_elapsed=<redacted_bool>
+sender_livekit_sdk_timeline_proof_written_after_terminal_state=<redacted_bool>
+sender_livekit_sdk_timeline_final_classification=<redacted_timeline_bucket>
+```
+
+Timeline classifications now available:
+
+```text
+sdk_timeline_task_not_created_redacted
+sdk_timeline_task_created_not_started_redacted
+sdk_timeline_task_cancelled_before_connect_redacted
+sdk_timeline_connect_invoked_no_return_redacted
+sdk_timeline_connect_timeout_redacted
+sdk_timeline_delegate_not_attached_redacted
+sdk_timeline_state_observer_not_attached_redacted
+sdk_timeline_callback_not_observed_redacted
+sdk_timeline_proof_written_before_terminal_state_redacted
+sdk_timeline_app_lifecycle_interrupted_redacted
+sdk_timeline_actor_isolation_lost_callback_redacted
+sdk_timeline_internal_pending_redacted
+```
+
+The timeline maps into the existing SDK failure, sender transport, sender transport failure, and sender join diagnostics while preserving existing buckets:
+
+```text
+sender_livekit_sdk_failure_surface_final_classification=<redacted_sdk_or_timeline_bucket>
+sender_transport_error_surface_final_classification=<specific_redacted_transport_bucket>
+sender_transport_failure_diagnostics_classification=<specific_redacted_transport_bucket>
+sender_side_livekit_join_error_bucket=<specific_redacted_transport_bucket>
+sender_side_livekit_join_result=failed_redacted
+existing_sdk_transport_buckets_remain_intact=true
+sender_join_success_but_remote_missing_separate=true
+```
+
+Boundary results:
+
+```text
+sender_sdk_timeline_distinguishes_task_callback_timeout_proof_timing=true
+raw_error_url_token_room_identity_logged=false
+default_runtime_no_connect=true
+default_runtime_no_join=true
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+Next phase:
+
+```text
+2.48Z-Physical2-Retry8 — one-shot two-physical-device sender SDK timeline proof
+```
+
+No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, or physical hook reset/re-arm was performed.

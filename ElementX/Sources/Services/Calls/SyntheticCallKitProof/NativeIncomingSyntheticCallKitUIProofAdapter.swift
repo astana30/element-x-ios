@@ -1124,6 +1124,203 @@ private struct SalemXSenderJoinFailureDiagnostics {
     }
 }
 
+private struct SalemXSenderLiveKitSDKTimelineInput {
+    static let defaultDisabled = SalemXSenderLiveKitSDKTimelineInput(provided: false,
+                                                                     requestedClassification: nil,
+                                                                     triggerReceived: false,
+                                                                     taskCreated: false,
+                                                                     taskStarted: false,
+                                                                     connectInvoked: false,
+                                                                     connectReturned: false,
+                                                                     connectThrew: false,
+                                                                     delegateAttached: false,
+                                                                     stateObserverAttached: false,
+                                                                     connectedStateSeen: false,
+                                                                     failedStateSeen: false,
+                                                                     disconnectedStateSeen: false,
+                                                                     taskCancelled: false,
+                                                                     taskCompleted: false,
+                                                                     timeoutElapsed: false,
+                                                                     proofWrittenAfterTerminalState: false)
+
+    let provided: Bool
+    let requestedClassification: String?
+    let triggerReceived: Bool
+    let taskCreated: Bool
+    let taskStarted: Bool
+    let connectInvoked: Bool
+    let connectReturned: Bool
+    let connectThrew: Bool
+    let delegateAttached: Bool
+    let stateObserverAttached: Bool
+    let connectedStateSeen: Bool
+    let failedStateSeen: Bool
+    let disconnectedStateSeen: Bool
+    let taskCancelled: Bool
+    let taskCompleted: Bool
+    let timeoutElapsed: Bool
+    let proofWrittenAfterTerminalState: Bool
+}
+
+private struct SalemXSenderLiveKitSDKTimeline {
+    static let notRequestedClassification = "not_requested"
+    static let noneClassification = "none"
+    static let taskNotCreatedClassification = "sdk_timeline_task_not_created_redacted"
+    static let taskCreatedNotStartedClassification = "sdk_timeline_task_created_not_started_redacted"
+    static let taskCancelledBeforeConnectClassification = "sdk_timeline_task_cancelled_before_connect_redacted"
+    static let connectInvokedNoReturnClassification = "sdk_timeline_connect_invoked_no_return_redacted"
+    static let connectTimeoutClassification = "sdk_timeline_connect_timeout_redacted"
+    static let delegateNotAttachedClassification = "sdk_timeline_delegate_not_attached_redacted"
+    static let stateObserverNotAttachedClassification = "sdk_timeline_state_observer_not_attached_redacted"
+    static let callbackNotObservedClassification = "sdk_timeline_callback_not_observed_redacted"
+    static let proofWrittenBeforeTerminalStateClassification = "sdk_timeline_proof_written_before_terminal_state_redacted"
+    static let appLifecycleInterruptedClassification = "sdk_timeline_app_lifecycle_interrupted_redacted"
+    static let actorIsolationLostCallbackClassification = "sdk_timeline_actor_isolation_lost_callback_redacted"
+    static let internalPendingClassification = "sdk_timeline_internal_pending_redacted"
+    static let allowedClassifications: Set<String> = [
+        taskNotCreatedClassification,
+        taskCreatedNotStartedClassification,
+        taskCancelledBeforeConnectClassification,
+        connectInvokedNoReturnClassification,
+        connectTimeoutClassification,
+        delegateNotAttachedClassification,
+        stateObserverNotAttachedClassification,
+        callbackNotObservedClassification,
+        proofWrittenBeforeTerminalStateClassification,
+        appLifecycleInterruptedClassification,
+        actorIsolationLostCallbackClassification,
+        internalPendingClassification
+    ]
+    static let defaultDisabled = SalemXSenderLiveKitSDKTimeline(triggerReceived: false,
+                                                                taskCreated: false,
+                                                                taskStarted: false,
+                                                                connectInvoked: false,
+                                                                connectReturned: false,
+                                                                connectThrew: false,
+                                                                delegateAttached: false,
+                                                                stateObserverAttached: false,
+                                                                connectedStateSeen: false,
+                                                                failedStateSeen: false,
+                                                                disconnectedStateSeen: false,
+                                                                taskCancelled: false,
+                                                                taskCompleted: false,
+                                                                timeoutElapsed: false,
+                                                                proofWrittenAfterTerminalState: false,
+                                                                finalClassification: notRequestedClassification)
+
+    let triggerReceived: Bool
+    let taskCreated: Bool
+    let taskStarted: Bool
+    let connectInvoked: Bool
+    let connectReturned: Bool
+    let connectThrew: Bool
+    let delegateAttached: Bool
+    let stateObserverAttached: Bool
+    let connectedStateSeen: Bool
+    let failedStateSeen: Bool
+    let disconnectedStateSeen: Bool
+    let taskCancelled: Bool
+    let taskCompleted: Bool
+    let timeoutElapsed: Bool
+    let proofWrittenAfterTerminalState: Bool
+    let finalClassification: String
+
+    let present = true
+    let debugOnly = true
+    let rawErrorLogged = false
+    let rawURLLogged = false
+    let rawTokenLogged = false
+    let rawRoomLogged = false
+    let rawIdentityLogged = false
+
+    static func classify(requested: Bool,
+                         transportResult: String,
+                         input: SalemXSenderLiveKitSDKTimelineInput) -> SalemXSenderLiveKitSDKTimeline {
+        guard requested, input.provided else {
+            return defaultDisabled
+        }
+
+        let classification = resolvedClassification(transportResult: transportResult, input: input)
+        return .init(triggerReceived: input.triggerReceived,
+                     taskCreated: input.taskCreated,
+                     taskStarted: input.taskStarted,
+                     connectInvoked: input.connectInvoked,
+                     connectReturned: input.connectReturned,
+                     connectThrew: input.connectThrew,
+                     delegateAttached: input.delegateAttached,
+                     stateObserverAttached: input.stateObserverAttached,
+                     connectedStateSeen: input.connectedStateSeen,
+                     failedStateSeen: input.failedStateSeen,
+                     disconnectedStateSeen: input.disconnectedStateSeen,
+                     taskCancelled: input.taskCancelled,
+                     taskCompleted: input.taskCompleted,
+                     timeoutElapsed: input.timeoutElapsed,
+                     proofWrittenAfterTerminalState: input.proofWrittenAfterTerminalState,
+                     finalClassification: classification)
+    }
+
+    private static func resolvedClassification(transportResult: String, input: SalemXSenderLiveKitSDKTimelineInput) -> String {
+        if transportResult == SalemXSenderTransportFailureDiagnostics.successTransportResult {
+            return noneClassification
+        }
+        if let requestedClassification = input.requestedClassification {
+            return requestedClassification
+        }
+        if let taskClassification = taskClassification(input) {
+            return taskClassification
+        }
+        if let observerClassification = observerClassification(input) {
+            return observerClassification
+        }
+        if let pendingClassification = pendingConnectClassification(input) {
+            return pendingClassification
+        }
+        return internalPendingClassification
+    }
+
+    private static func taskClassification(_ input: SalemXSenderLiveKitSDKTimelineInput) -> String? {
+        if input.taskCancelled {
+            return taskCancelledBeforeConnectClassification
+        }
+        if !input.taskCreated {
+            return taskNotCreatedClassification
+        }
+        if input.taskCreated, !input.taskStarted {
+            return taskCreatedNotStartedClassification
+        }
+        if input.timeoutElapsed {
+            return connectTimeoutClassification
+        }
+        return nil
+    }
+
+    private static func observerClassification(_ input: SalemXSenderLiveKitSDKTimelineInput) -> String? {
+        if !input.delegateAttached {
+            return delegateNotAttachedClassification
+        }
+        if !input.stateObserverAttached {
+            return stateObserverNotAttachedClassification
+        }
+        return nil
+    }
+
+    private static func pendingConnectClassification(_ input: SalemXSenderLiveKitSDKTimelineInput) -> String? {
+        if !input.proofWrittenAfterTerminalState, input.taskStarted || input.connectInvoked {
+            return proofWrittenBeforeTerminalStateClassification
+        }
+        if input.connectInvoked, !input.connectReturned, !input.connectThrew, !input.connectedStateSeen, !input.failedStateSeen, !input.disconnectedStateSeen {
+            return connectInvokedNoReturnClassification
+        }
+        if input.connectInvoked, !input.connectedStateSeen, !input.failedStateSeen, !input.disconnectedStateSeen {
+            return callbackNotObservedClassification
+        }
+        if input.taskStarted, !input.taskCompleted {
+            return internalPendingClassification
+        }
+        return nil
+    }
+}
+
 private struct SalemXSenderLiveKitSDKFailureSurfaceInput {
     let requestedClassification: String?
     let connectCallStarted: Bool
@@ -1140,6 +1337,7 @@ private struct SalemXSenderLiveKitSDKFailureSurfaceInput {
     let permissionRequired: Bool
     let captureStarted: Bool
     let networkTransportErrorObserved: Bool
+    let timeline: SalemXSenderLiveKitSDKTimelineInput
 }
 
 private struct SalemXSenderLiveKitSDKFailureSurface {
@@ -1170,6 +1368,7 @@ private struct SalemXSenderLiveKitSDKFailureSurface {
                                                                       audioSessionReady: false,
                                                                       permissionRequired: false,
                                                                       captureStarted: false,
+                                                                      timeline: .defaultDisabled,
                                                                       finalClassification: notRequestedClassification)
 
     let connectCallStarted: Bool
@@ -1185,6 +1384,7 @@ private struct SalemXSenderLiveKitSDKFailureSurface {
     let audioSessionReady: Bool
     let permissionRequired: Bool
     let captureStarted: Bool
+    let timeline: SalemXSenderLiveKitSDKTimeline
     let finalClassification: String
 
     let present = true
@@ -1207,9 +1407,13 @@ private struct SalemXSenderLiveKitSDKFailureSurface {
             return defaultDisabled
         }
 
+        let timeline = SalemXSenderLiveKitSDKTimeline.classify(requested: requested,
+                                                               transportResult: transportResult,
+                                                               input: input.timeline)
         let classification = resolvedClassification(transportAttempted: transportAttempted,
                                                     transportResult: transportResult,
-                                                    input: input)
+                                                    input: input,
+                                                    timeline: timeline)
         return .init(connectCallStarted: input.connectCallStarted,
                      connectCallReturned: input.connectCallReturned,
                      connectCallThrew: input.connectCallThrew,
@@ -1223,12 +1427,14 @@ private struct SalemXSenderLiveKitSDKFailureSurface {
                      audioSessionReady: input.audioSessionReady ?? false,
                      permissionRequired: input.permissionRequired,
                      captureStarted: input.captureStarted,
+                     timeline: timeline,
                      finalClassification: classification)
     }
 
     private static func resolvedClassification(transportAttempted: Bool,
                                                transportResult: String,
-                                               input: SalemXSenderLiveKitSDKFailureSurfaceInput) -> String {
+                                               input: SalemXSenderLiveKitSDKFailureSurfaceInput,
+                                               timeline: SalemXSenderLiveKitSDKTimeline) -> String {
         if transportResult == SalemXSenderTransportFailureDiagnostics.successTransportResult {
             return noneClassification
         }
@@ -1246,6 +1452,10 @@ private struct SalemXSenderLiveKitSDKFailureSurface {
         }
         if input.connectCallReturned, !input.connectedStateObserved {
             return connectReturnedWithoutConnectedClassification
+        }
+        if timeline.finalClassification != SalemXSenderLiveKitSDKTimeline.notRequestedClassification,
+           timeline.finalClassification != SalemXSenderLiveKitSDKTimeline.noneClassification {
+            return timeline.finalClassification
         }
         if transportAttempted, transportResult == SalemXSenderTransportFailureDiagnostics.failedTransportResult {
             return internalUnknownClassification
@@ -1296,6 +1506,14 @@ private struct SalemXSenderLiveKitSDKFailureSurface {
             return SalemXSenderTransportErrorSurface.transportTimeoutWaitingForConnectedStateClassification
         case delegateFailedBeforeConnectedClassification:
             return SalemXSenderTransportErrorSurface.transportRoomConnectCallbackFailedClassification
+        case SalemXSenderLiveKitSDKTimeline.connectTimeoutClassification,
+             SalemXSenderLiveKitSDKTimeline.proofWrittenBeforeTerminalStateClassification:
+            return SalemXSenderTransportErrorSurface.transportTimeoutWaitingForConnectedStateClassification
+        case SalemXSenderLiveKitSDKTimeline.delegateNotAttachedClassification,
+             SalemXSenderLiveKitSDKTimeline.stateObserverNotAttachedClassification,
+             SalemXSenderLiveKitSDKTimeline.callbackNotObservedClassification,
+             SalemXSenderLiveKitSDKTimeline.actorIsolationLostCallbackClassification:
+            return SalemXSenderTransportErrorSurface.transportRoomConnectCallbackFailedClassification
         case disconnectedBeforeConnectedClassification:
             return SalemXSenderTransportErrorSurface.transportDisconnectedBeforeConnectedClassification
         case identityConflictClassification:
@@ -1308,7 +1526,13 @@ private struct SalemXSenderLiveKitSDKFailureSurface {
              roomAlreadyConnectedClassification,
              audioSessionBlockedClassification,
              permissionOrCaptureBlockedClassification,
-             internalUnknownClassification:
+             internalUnknownClassification,
+             SalemXSenderLiveKitSDKTimeline.taskNotCreatedClassification,
+             SalemXSenderLiveKitSDKTimeline.taskCreatedNotStartedClassification,
+             SalemXSenderLiveKitSDKTimeline.taskCancelledBeforeConnectClassification,
+             SalemXSenderLiveKitSDKTimeline.connectInvokedNoReturnClassification,
+             SalemXSenderLiveKitSDKTimeline.appLifecycleInterruptedClassification,
+             SalemXSenderLiveKitSDKTimeline.internalPendingClassification:
             return SalemXSenderTransportErrorSurface.transportLiveKitSDKUnknownErrorClassification
         default:
             return nil
@@ -2855,6 +3079,29 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var senderLiveKitSDKFailureSurfacePermissionRequired = SalemXSenderLiveKitSDKFailureSurface.defaultDisabled.permissionRequired
     var senderLiveKitSDKFailureSurfaceCaptureStarted = SalemXSenderLiveKitSDKFailureSurface.defaultDisabled.captureStarted
     var senderLiveKitSDKFailureSurfaceFinalClassification = SalemXSenderLiveKitSDKFailureSurface.defaultDisabled.finalClassification
+    var senderLiveKitSDKTimelinePresent = SalemXSenderLiveKitSDKTimeline.defaultDisabled.present
+    var senderLiveKitSDKTimelineDebugOnly = SalemXSenderLiveKitSDKTimeline.defaultDisabled.debugOnly
+    var senderLiveKitSDKTimelineRawErrorLogged = SalemXSenderLiveKitSDKTimeline.defaultDisabled.rawErrorLogged
+    var senderLiveKitSDKTimelineRawURLLogged = SalemXSenderLiveKitSDKTimeline.defaultDisabled.rawURLLogged
+    var senderLiveKitSDKTimelineRawTokenLogged = SalemXSenderLiveKitSDKTimeline.defaultDisabled.rawTokenLogged
+    var senderLiveKitSDKTimelineRawRoomLogged = SalemXSenderLiveKitSDKTimeline.defaultDisabled.rawRoomLogged
+    var senderLiveKitSDKTimelineRawIdentityLogged = SalemXSenderLiveKitSDKTimeline.defaultDisabled.rawIdentityLogged
+    var senderLiveKitSDKTimelineTriggerReceived = SalemXSenderLiveKitSDKTimeline.defaultDisabled.triggerReceived
+    var senderLiveKitSDKTimelineTaskCreated = SalemXSenderLiveKitSDKTimeline.defaultDisabled.taskCreated
+    var senderLiveKitSDKTimelineTaskStarted = SalemXSenderLiveKitSDKTimeline.defaultDisabled.taskStarted
+    var senderLiveKitSDKTimelineConnectInvoked = SalemXSenderLiveKitSDKTimeline.defaultDisabled.connectInvoked
+    var senderLiveKitSDKTimelineConnectReturned = SalemXSenderLiveKitSDKTimeline.defaultDisabled.connectReturned
+    var senderLiveKitSDKTimelineConnectThrew = SalemXSenderLiveKitSDKTimeline.defaultDisabled.connectThrew
+    var senderLiveKitSDKTimelineDelegateAttached = SalemXSenderLiveKitSDKTimeline.defaultDisabled.delegateAttached
+    var senderLiveKitSDKTimelineStateObserverAttached = SalemXSenderLiveKitSDKTimeline.defaultDisabled.stateObserverAttached
+    var senderLiveKitSDKTimelineConnectedStateSeen = SalemXSenderLiveKitSDKTimeline.defaultDisabled.connectedStateSeen
+    var senderLiveKitSDKTimelineFailedStateSeen = SalemXSenderLiveKitSDKTimeline.defaultDisabled.failedStateSeen
+    var senderLiveKitSDKTimelineDisconnectedStateSeen = SalemXSenderLiveKitSDKTimeline.defaultDisabled.disconnectedStateSeen
+    var senderLiveKitSDKTimelineTaskCancelled = SalemXSenderLiveKitSDKTimeline.defaultDisabled.taskCancelled
+    var senderLiveKitSDKTimelineTaskCompleted = SalemXSenderLiveKitSDKTimeline.defaultDisabled.taskCompleted
+    var senderLiveKitSDKTimelineTimeoutElapsed = SalemXSenderLiveKitSDKTimeline.defaultDisabled.timeoutElapsed
+    var senderLiveKitSDKTimelineProofWrittenAfterTerminalState = SalemXSenderLiveKitSDKTimeline.defaultDisabled.proofWrittenAfterTerminalState
+    var senderLiveKitSDKTimelineFinalClassification = SalemXSenderLiveKitSDKTimeline.defaultDisabled.finalClassification
     var senderTransportErrorSurfaceSource = SalemXSenderTransportErrorSurface.defaultDisabled.source
     var senderTransportErrorSurfaceSDKErrorBucket = SalemXSenderTransportErrorSurface.defaultDisabled.sdkErrorBucket
     var senderTransportErrorSurfaceDisconnectReasonBucket = SalemXSenderTransportErrorSurface.defaultDisabled.disconnectReasonBucket
@@ -3440,6 +3687,29 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "sender_livekit_sdk_failure_surface_permission_required=\(senderLiveKitSDKFailureSurfacePermissionRequired)",
             "sender_livekit_sdk_failure_surface_capture_started=\(senderLiveKitSDKFailureSurfaceCaptureStarted)",
             "sender_livekit_sdk_failure_surface_final_classification=\(senderLiveKitSDKFailureSurfaceFinalClassification)",
+            "sender_livekit_sdk_timeline_present=\(senderLiveKitSDKTimelinePresent)",
+            "sender_livekit_sdk_timeline_debug_only=\(senderLiveKitSDKTimelineDebugOnly)",
+            "sender_livekit_sdk_timeline_raw_error_logged=\(senderLiveKitSDKTimelineRawErrorLogged)",
+            "sender_livekit_sdk_timeline_raw_url_logged=\(senderLiveKitSDKTimelineRawURLLogged)",
+            "sender_livekit_sdk_timeline_raw_token_logged=\(senderLiveKitSDKTimelineRawTokenLogged)",
+            "sender_livekit_sdk_timeline_raw_room_logged=\(senderLiveKitSDKTimelineRawRoomLogged)",
+            "sender_livekit_sdk_timeline_raw_identity_logged=\(senderLiveKitSDKTimelineRawIdentityLogged)",
+            "sender_livekit_sdk_timeline_trigger_received=\(senderLiveKitSDKTimelineTriggerReceived)",
+            "sender_livekit_sdk_timeline_task_created=\(senderLiveKitSDKTimelineTaskCreated)",
+            "sender_livekit_sdk_timeline_task_started=\(senderLiveKitSDKTimelineTaskStarted)",
+            "sender_livekit_sdk_timeline_connect_invoked=\(senderLiveKitSDKTimelineConnectInvoked)",
+            "sender_livekit_sdk_timeline_connect_returned=\(senderLiveKitSDKTimelineConnectReturned)",
+            "sender_livekit_sdk_timeline_connect_threw=\(senderLiveKitSDKTimelineConnectThrew)",
+            "sender_livekit_sdk_timeline_delegate_attached=\(senderLiveKitSDKTimelineDelegateAttached)",
+            "sender_livekit_sdk_timeline_state_observer_attached=\(senderLiveKitSDKTimelineStateObserverAttached)",
+            "sender_livekit_sdk_timeline_connected_state_seen=\(senderLiveKitSDKTimelineConnectedStateSeen)",
+            "sender_livekit_sdk_timeline_failed_state_seen=\(senderLiveKitSDKTimelineFailedStateSeen)",
+            "sender_livekit_sdk_timeline_disconnected_state_seen=\(senderLiveKitSDKTimelineDisconnectedStateSeen)",
+            "sender_livekit_sdk_timeline_task_cancelled=\(senderLiveKitSDKTimelineTaskCancelled)",
+            "sender_livekit_sdk_timeline_task_completed=\(senderLiveKitSDKTimelineTaskCompleted)",
+            "sender_livekit_sdk_timeline_timeout_elapsed=\(senderLiveKitSDKTimelineTimeoutElapsed)",
+            "sender_livekit_sdk_timeline_proof_written_after_terminal_state=\(senderLiveKitSDKTimelineProofWrittenAfterTerminalState)",
+            "sender_livekit_sdk_timeline_final_classification=\(senderLiveKitSDKTimelineFinalClassification)",
             "sender_transport_error_surface_source=\(senderTransportErrorSurfaceSource)",
             "sender_transport_error_surface_sdk_error_bucket=\(senderTransportErrorSurfaceSDKErrorBucket)",
             "sender_transport_error_surface_disconnect_reason_bucket=\(senderTransportErrorSurfaceDisconnectReasonBucket)",
@@ -3945,7 +4215,34 @@ private extension SalemXVoIPPushReceiptProofSummary {
         senderLiveKitSDKFailureSurfacePermissionRequired = sdkFailureSurface.permissionRequired
         senderLiveKitSDKFailureSurfaceCaptureStarted = sdkFailureSurface.captureStarted
         senderLiveKitSDKFailureSurfaceFinalClassification = sdkFailureSurface.finalClassification
+        recordSenderLiveKitSDKTimeline(sdkFailureSurface.timeline)
         refreshRemoteParticipantPresenceRepairDiagnostics()
+    }
+
+    mutating func recordSenderLiveKitSDKTimeline(_ timeline: SalemXSenderLiveKitSDKTimeline) {
+        senderLiveKitSDKTimelinePresent = timeline.present
+        senderLiveKitSDKTimelineDebugOnly = timeline.debugOnly
+        senderLiveKitSDKTimelineRawErrorLogged = timeline.rawErrorLogged
+        senderLiveKitSDKTimelineRawURLLogged = timeline.rawURLLogged
+        senderLiveKitSDKTimelineRawTokenLogged = timeline.rawTokenLogged
+        senderLiveKitSDKTimelineRawRoomLogged = timeline.rawRoomLogged
+        senderLiveKitSDKTimelineRawIdentityLogged = timeline.rawIdentityLogged
+        senderLiveKitSDKTimelineTriggerReceived = timeline.triggerReceived
+        senderLiveKitSDKTimelineTaskCreated = timeline.taskCreated
+        senderLiveKitSDKTimelineTaskStarted = timeline.taskStarted
+        senderLiveKitSDKTimelineConnectInvoked = timeline.connectInvoked
+        senderLiveKitSDKTimelineConnectReturned = timeline.connectReturned
+        senderLiveKitSDKTimelineConnectThrew = timeline.connectThrew
+        senderLiveKitSDKTimelineDelegateAttached = timeline.delegateAttached
+        senderLiveKitSDKTimelineStateObserverAttached = timeline.stateObserverAttached
+        senderLiveKitSDKTimelineConnectedStateSeen = timeline.connectedStateSeen
+        senderLiveKitSDKTimelineFailedStateSeen = timeline.failedStateSeen
+        senderLiveKitSDKTimelineDisconnectedStateSeen = timeline.disconnectedStateSeen
+        senderLiveKitSDKTimelineTaskCancelled = timeline.taskCancelled
+        senderLiveKitSDKTimelineTaskCompleted = timeline.taskCompleted
+        senderLiveKitSDKTimelineTimeoutElapsed = timeline.timeoutElapsed
+        senderLiveKitSDKTimelineProofWrittenAfterTerminalState = timeline.proofWrittenAfterTerminalState
+        senderLiveKitSDKTimelineFinalClassification = timeline.finalClassification
     }
 
     mutating func recordSenderTransportErrorSurface(_ errorSurface: SalemXSenderTransportErrorSurface) {
@@ -5851,26 +6148,92 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                                                   captureStarted: redactedBoolQueryItem(components,
                                                                                         names: ["sender_livekit_sdk_failure_surface_capture_started", "sender_sdk_capture_started"]),
                                                   networkTransportErrorObserved: redactedBoolQueryItem(components,
-                                                                                                       names: ["sender_livekit_sdk_failure_surface_network_transport_error_observed", "sender_sdk_network_transport_error_observed"]))
+                                                                                                       names: ["sender_livekit_sdk_failure_surface_network_transport_error_observed", "sender_sdk_network_transport_error_observed"]),
+                                                  timeline: redactedSenderLiveKitSDKTimelineInput(components))
     }
 
     private static func redactedSenderLiveKitSDKFailureClassificationQueryItem(_ components: URLComponents?) -> String? {
+        let allowedClassifications: Set<String> = [
+            SalemXSenderLiveKitSDKFailureSurface.connectCallThrewClassification,
+            SalemXSenderLiveKitSDKFailureSurface.connectReturnedWithoutConnectedClassification,
+            SalemXSenderLiveKitSDKFailureSurface.delegateFailedBeforeConnectedClassification,
+            SalemXSenderLiveKitSDKFailureSurface.disconnectedBeforeConnectedClassification,
+            SalemXSenderLiveKitSDKFailureSurface.stateFailedClassification,
+            SalemXSenderLiveKitSDKFailureSurface.roomAlreadyConnectedClassification,
+            SalemXSenderLiveKitSDKFailureSurface.identityConflictClassification,
+            SalemXSenderLiveKitSDKFailureSurface.tokenIdentityMismatchClassification,
+            SalemXSenderLiveKitSDKFailureSurface.audioSessionBlockedClassification,
+            SalemXSenderLiveKitSDKFailureSurface.permissionOrCaptureBlockedClassification,
+            SalemXSenderLiveKitSDKFailureSurface.networkTransportErrorClassification,
+            SalemXSenderLiveKitSDKFailureSurface.internalUnknownClassification
+        ]
+        return redactedStringQueryItem(components,
+                                       names: ["sender_livekit_sdk_failure_surface_final_classification", "sender_sdk_failure_classification"],
+                                       allowedValues: allowedClassifications.union(SalemXSenderLiveKitSDKTimeline.allowedClassifications))
+    }
+
+    private static func redactedSenderLiveKitSDKTimelineInput(_ components: URLComponents?) -> SalemXSenderLiveKitSDKTimelineInput {
+        let timelineNames: Set = [
+            "sender_livekit_sdk_timeline_final_classification",
+            "sender_livekit_sdk_timeline_trigger_received",
+            "sender_livekit_sdk_timeline_task_created",
+            "sender_livekit_sdk_timeline_task_started",
+            "sender_livekit_sdk_timeline_connect_invoked",
+            "sender_livekit_sdk_timeline_connect_returned",
+            "sender_livekit_sdk_timeline_connect_threw",
+            "sender_livekit_sdk_timeline_delegate_attached",
+            "sender_livekit_sdk_timeline_state_observer_attached",
+            "sender_livekit_sdk_timeline_connected_state_seen",
+            "sender_livekit_sdk_timeline_failed_state_seen",
+            "sender_livekit_sdk_timeline_disconnected_state_seen",
+            "sender_livekit_sdk_timeline_task_cancelled",
+            "sender_livekit_sdk_timeline_task_completed",
+            "sender_livekit_sdk_timeline_timeout_elapsed",
+            "sender_livekit_sdk_timeline_proof_written_after_terminal_state"
+        ]
+        return SalemXSenderLiveKitSDKTimelineInput(provided: redactedAnyQueryItem(components,
+                                                                                  names: timelineNames),
+                                                   requestedClassification: redactedSenderLiveKitSDKTimelineClassificationQueryItem(components),
+                                                   triggerReceived: redactedBoolQueryItem(components,
+                                                                                          names: ["sender_livekit_sdk_timeline_trigger_received"]),
+                                                   taskCreated: redactedBoolQueryItem(components,
+                                                                                      names: ["sender_livekit_sdk_timeline_task_created"]),
+                                                   taskStarted: redactedBoolQueryItem(components,
+                                                                                      names: ["sender_livekit_sdk_timeline_task_started"]),
+                                                   connectInvoked: redactedBoolQueryItem(components,
+                                                                                         names: ["sender_livekit_sdk_timeline_connect_invoked"]),
+                                                   connectReturned: redactedBoolQueryItem(components,
+                                                                                          names: ["sender_livekit_sdk_timeline_connect_returned"]),
+                                                   connectThrew: redactedBoolQueryItem(components,
+                                                                                       names: ["sender_livekit_sdk_timeline_connect_threw"]),
+                                                   delegateAttached: redactedBoolQueryItem(components,
+                                                                                           names: ["sender_livekit_sdk_timeline_delegate_attached"]),
+                                                   stateObserverAttached: redactedBoolQueryItem(components,
+                                                                                                names: ["sender_livekit_sdk_timeline_state_observer_attached"]),
+                                                   connectedStateSeen: redactedBoolQueryItem(components,
+                                                                                             names: ["sender_livekit_sdk_timeline_connected_state_seen"]),
+                                                   failedStateSeen: redactedBoolQueryItem(components,
+                                                                                          names: ["sender_livekit_sdk_timeline_failed_state_seen"]),
+                                                   disconnectedStateSeen: redactedBoolQueryItem(components,
+                                                                                                names: ["sender_livekit_sdk_timeline_disconnected_state_seen"]),
+                                                   taskCancelled: redactedBoolQueryItem(components,
+                                                                                        names: ["sender_livekit_sdk_timeline_task_cancelled"]),
+                                                   taskCompleted: redactedBoolQueryItem(components,
+                                                                                        names: ["sender_livekit_sdk_timeline_task_completed"]),
+                                                   timeoutElapsed: redactedBoolQueryItem(components,
+                                                                                         names: ["sender_livekit_sdk_timeline_timeout_elapsed"]),
+                                                   proofWrittenAfterTerminalState: redactedBoolQueryItem(components,
+                                                                                                         names: ["sender_livekit_sdk_timeline_proof_written_after_terminal_state"]))
+    }
+
+    private static func redactedSenderLiveKitSDKTimelineClassificationQueryItem(_ components: URLComponents?) -> String? {
         redactedStringQueryItem(components,
-                                names: ["sender_livekit_sdk_failure_surface_final_classification", "sender_sdk_failure_classification"],
-                                allowedValues: [
-                                    SalemXSenderLiveKitSDKFailureSurface.connectCallThrewClassification,
-                                    SalemXSenderLiveKitSDKFailureSurface.connectReturnedWithoutConnectedClassification,
-                                    SalemXSenderLiveKitSDKFailureSurface.delegateFailedBeforeConnectedClassification,
-                                    SalemXSenderLiveKitSDKFailureSurface.disconnectedBeforeConnectedClassification,
-                                    SalemXSenderLiveKitSDKFailureSurface.stateFailedClassification,
-                                    SalemXSenderLiveKitSDKFailureSurface.roomAlreadyConnectedClassification,
-                                    SalemXSenderLiveKitSDKFailureSurface.identityConflictClassification,
-                                    SalemXSenderLiveKitSDKFailureSurface.tokenIdentityMismatchClassification,
-                                    SalemXSenderLiveKitSDKFailureSurface.audioSessionBlockedClassification,
-                                    SalemXSenderLiveKitSDKFailureSurface.permissionOrCaptureBlockedClassification,
-                                    SalemXSenderLiveKitSDKFailureSurface.networkTransportErrorClassification,
-                                    SalemXSenderLiveKitSDKFailureSurface.internalUnknownClassification
-                                ])
+                                names: ["sender_livekit_sdk_timeline_final_classification"],
+                                allowedValues: SalemXSenderLiveKitSDKTimeline.allowedClassifications)
+    }
+
+    private static func redactedAnyQueryItem(_ components: URLComponents?, names: Set<String>) -> Bool {
+        components?.queryItems?.contains { names.contains($0.name) } ?? false
     }
 
     private static func redactedSenderTransportErrorSurfaceInput(_ components: URLComponents?,
