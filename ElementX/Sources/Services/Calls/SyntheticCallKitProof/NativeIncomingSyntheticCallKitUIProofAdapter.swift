@@ -950,6 +950,46 @@ private struct SalemXSenderConnectParity {
     let boundedWaitUsed = true
 }
 
+private struct SalemXSenderConnectExecutorUnification {
+    static let shared = SalemXSenderConnectExecutorUnification(model: DirectCallLiveKitConnectExecutor.provenAudioModel)
+
+    let present: Bool
+    let debugOnly: Bool
+    let receiverExecutorShared: Bool
+    let senderExecutorShared: Bool
+    let sameConnectOptionsShape: Bool
+    let sameRoomRetentionModel: Bool
+    let sameDelegateRetentionModel: Bool
+    let sameStateObserverModel: Bool
+    let sameBoundedWaitModel: Bool
+    let audioOnly: Bool
+    let videoAllowed: Bool
+    let matrixEventsAllowed: Bool
+    let rawURLLogged: Bool
+    let rawTokenLogged: Bool
+    let rawRoomLogged: Bool
+    let rawIdentityLogged: Bool
+
+    init(model: DirectCallLiveKitConnectExecutorModel) {
+        present = model.present
+        debugOnly = model.debugOnly
+        receiverExecutorShared = model.receiverExecutorShared
+        senderExecutorShared = model.senderExecutorShared
+        sameConnectOptionsShape = model.sameConnectOptionsShape
+        sameRoomRetentionModel = model.sameRoomRetentionModel
+        sameDelegateRetentionModel = model.sameDelegateRetentionModel
+        sameStateObserverModel = model.sameStateObserverModel
+        sameBoundedWaitModel = model.sameBoundedWaitModel
+        audioOnly = model.audioOnly
+        videoAllowed = model.videoAllowed
+        matrixEventsAllowed = model.matrixEventsAllowed
+        rawURLLogged = model.rawURLLogged
+        rawTokenLogged = model.rawTokenLogged
+        rawRoomLogged = model.rawRoomLogged
+        rawIdentityLogged = model.rawIdentityLogged
+    }
+}
+
 private struct SalemXSenderJoinTriggerOrchestrationInput {
     let apnsSuccessSeen: Bool
     let receiverAnswerSeen: Bool
@@ -3453,6 +3493,22 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var senderConnectParityStateObserverRetainedUntilTerminal = SalemXSenderConnectParity.defaultEnabled.stateObserverRetainedUntilTerminal
     var senderConnectParityTaskRetainedUntilTerminal = SalemXSenderConnectParity.defaultEnabled.taskRetainedUntilTerminal
     var senderConnectParityBoundedWaitUsed = SalemXSenderConnectParity.defaultEnabled.boundedWaitUsed
+    var senderConnectExecutorUnificationPresent = SalemXSenderConnectExecutorUnification.shared.present
+    var senderConnectExecutorUnificationDebugOnly = SalemXSenderConnectExecutorUnification.shared.debugOnly
+    var senderConnectExecutorUnificationReceiverExecutorShared = SalemXSenderConnectExecutorUnification.shared.receiverExecutorShared
+    var senderConnectExecutorUnificationSenderExecutorShared = SalemXSenderConnectExecutorUnification.shared.senderExecutorShared
+    var senderConnectExecutorUnificationSameConnectOptionsShape = SalemXSenderConnectExecutorUnification.shared.sameConnectOptionsShape
+    var senderConnectExecutorUnificationSameRoomRetentionModel = SalemXSenderConnectExecutorUnification.shared.sameRoomRetentionModel
+    var senderConnectExecutorUnificationSameDelegateRetentionModel = SalemXSenderConnectExecutorUnification.shared.sameDelegateRetentionModel
+    var senderConnectExecutorUnificationSameStateObserverModel = SalemXSenderConnectExecutorUnification.shared.sameStateObserverModel
+    var senderConnectExecutorUnificationSameBoundedWaitModel = SalemXSenderConnectExecutorUnification.shared.sameBoundedWaitModel
+    var senderConnectExecutorUnificationAudioOnly = SalemXSenderConnectExecutorUnification.shared.audioOnly
+    var senderConnectExecutorUnificationVideoAllowed = SalemXSenderConnectExecutorUnification.shared.videoAllowed
+    var senderConnectExecutorUnificationMatrixEventsAllowed = SalemXSenderConnectExecutorUnification.shared.matrixEventsAllowed
+    var senderConnectExecutorUnificationRawURLLogged = SalemXSenderConnectExecutorUnification.shared.rawURLLogged
+    var senderConnectExecutorUnificationRawTokenLogged = SalemXSenderConnectExecutorUnification.shared.rawTokenLogged
+    var senderConnectExecutorUnificationRawRoomLogged = SalemXSenderConnectExecutorUnification.shared.rawRoomLogged
+    var senderConnectExecutorUnificationRawIdentityLogged = SalemXSenderConnectExecutorUnification.shared.rawIdentityLogged
     var senderJoinFailureDiagnosticsPresent = SalemXSenderJoinFailureDiagnostics.defaultDisabled.present
     var senderJoinFailureDiagnosticsDebugOnly = SalemXSenderJoinFailureDiagnostics.defaultDisabled.debugOnly
     var senderJoinFailureDiagnosticsAudioOnly = SalemXSenderJoinFailureDiagnostics.defaultDisabled.audioOnly
@@ -4111,6 +4167,22 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "sender_connect_parity_state_observer_retained_until_terminal=\(senderConnectParityStateObserverRetainedUntilTerminal)",
             "sender_connect_parity_task_retained_until_terminal=\(senderConnectParityTaskRetainedUntilTerminal)",
             "sender_connect_parity_bounded_wait_used=\(senderConnectParityBoundedWaitUsed)",
+            "sender_connect_executor_unification_present=\(senderConnectExecutorUnificationPresent)",
+            "sender_connect_executor_unification_debug_only=\(senderConnectExecutorUnificationDebugOnly)",
+            "sender_connect_executor_unification_receiver_executor_shared=\(senderConnectExecutorUnificationReceiverExecutorShared)",
+            "sender_connect_executor_unification_sender_executor_shared=\(senderConnectExecutorUnificationSenderExecutorShared)",
+            "sender_connect_executor_unification_same_connect_options_shape=\(senderConnectExecutorUnificationSameConnectOptionsShape)",
+            "sender_connect_executor_unification_same_room_retention_model=\(senderConnectExecutorUnificationSameRoomRetentionModel)",
+            "sender_connect_executor_unification_same_delegate_retention_model=\(senderConnectExecutorUnificationSameDelegateRetentionModel)",
+            "sender_connect_executor_unification_same_state_observer_model=\(senderConnectExecutorUnificationSameStateObserverModel)",
+            "sender_connect_executor_unification_same_bounded_wait_model=\(senderConnectExecutorUnificationSameBoundedWaitModel)",
+            "sender_connect_executor_unification_audio_only=\(senderConnectExecutorUnificationAudioOnly)",
+            "sender_connect_executor_unification_video_allowed=\(senderConnectExecutorUnificationVideoAllowed)",
+            "sender_connect_executor_unification_matrix_events_allowed=\(senderConnectExecutorUnificationMatrixEventsAllowed)",
+            "sender_connect_executor_unification_raw_url_logged=\(senderConnectExecutorUnificationRawURLLogged)",
+            "sender_connect_executor_unification_raw_token_logged=\(senderConnectExecutorUnificationRawTokenLogged)",
+            "sender_connect_executor_unification_raw_room_logged=\(senderConnectExecutorUnificationRawRoomLogged)",
+            "sender_connect_executor_unification_raw_identity_logged=\(senderConnectExecutorUnificationRawIdentityLogged)",
             "sender_join_failure_diagnostics_present=\(senderJoinFailureDiagnosticsPresent)",
             "sender_join_failure_diagnostics_debug_only=\(senderJoinFailureDiagnosticsDebugOnly)",
             "sender_join_failure_diagnostics_audio_only=\(senderJoinFailureDiagnosticsAudioOnly)",
@@ -4732,6 +4804,25 @@ private extension SalemXVoIPPushReceiptProofSummary {
         senderConnectParityStateObserverRetainedUntilTerminal = parity.stateObserverRetainedUntilTerminal
         senderConnectParityTaskRetainedUntilTerminal = parity.taskRetainedUntilTerminal
         senderConnectParityBoundedWaitUsed = parity.boundedWaitUsed
+    }
+
+    mutating func recordSenderConnectExecutorUnification(_ unification: SalemXSenderConnectExecutorUnification) {
+        senderConnectExecutorUnificationPresent = unification.present
+        senderConnectExecutorUnificationDebugOnly = unification.debugOnly
+        senderConnectExecutorUnificationReceiverExecutorShared = unification.receiverExecutorShared
+        senderConnectExecutorUnificationSenderExecutorShared = unification.senderExecutorShared
+        senderConnectExecutorUnificationSameConnectOptionsShape = unification.sameConnectOptionsShape
+        senderConnectExecutorUnificationSameRoomRetentionModel = unification.sameRoomRetentionModel
+        senderConnectExecutorUnificationSameDelegateRetentionModel = unification.sameDelegateRetentionModel
+        senderConnectExecutorUnificationSameStateObserverModel = unification.sameStateObserverModel
+        senderConnectExecutorUnificationSameBoundedWaitModel = unification.sameBoundedWaitModel
+        senderConnectExecutorUnificationAudioOnly = unification.audioOnly
+        senderConnectExecutorUnificationVideoAllowed = unification.videoAllowed
+        senderConnectExecutorUnificationMatrixEventsAllowed = unification.matrixEventsAllowed
+        senderConnectExecutorUnificationRawURLLogged = unification.rawURLLogged
+        senderConnectExecutorUnificationRawTokenLogged = unification.rawTokenLogged
+        senderConnectExecutorUnificationRawRoomLogged = unification.rawRoomLogged
+        senderConnectExecutorUnificationRawIdentityLogged = unification.rawIdentityLogged
     }
 
     mutating func recordSenderJoinFailureDiagnostics(_ diagnostics: SalemXSenderJoinFailureDiagnostics) {
@@ -6337,6 +6428,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var senderSideLiveKitJoinHook = SalemXSenderSideLiveKitJoinHook.defaultDisabled
     private static var senderSideLiveKitJoinActivation = SalemXSenderSideLiveKitJoinActivation.defaultDisabled
     private static var senderConnectParity = SalemXSenderConnectParity.defaultEnabled
+    private static var senderConnectExecutorUnification = SalemXSenderConnectExecutorUnification.shared
     private static var senderJoinFailureDiagnostics = SalemXSenderJoinFailureDiagnostics.defaultDisabled
     private static var senderTransportFailureDiagnostics = SalemXSenderTransportFailureDiagnostics.defaultDisabled
     private static var senderTransportErrorSurface = SalemXSenderTransportErrorSurface.defaultDisabled
@@ -6565,6 +6657,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         var summary = latestVoIPPushReceiptSummary
         summary.recordSenderSideLiveKitJoinHook(hook)
         summary.recordSenderConnectParity(senderConnectParity)
+        summary.recordSenderConnectExecutorUnification(senderConnectExecutorUnification)
         summary.recordSenderJoinFailureDiagnostics(joinDiagnostics)
         summary.recordSenderTransportFailureDiagnostics(transportDiagnostics)
         summary.recordSenderTransportErrorSurface(transportErrorSurface)
@@ -7376,6 +7469,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         let senderSideLiveKitJoinHookSnapshot = senderSideLiveKitJoinHook
         let senderSideLiveKitJoinActivationSnapshot = senderSideLiveKitJoinActivation
         let senderConnectParitySnapshot = senderConnectParity
+        let senderConnectExecutorUnificationSnapshot = senderConnectExecutorUnification
         let senderJoinFailureDiagnosticsSnapshot = senderJoinFailureDiagnostics
         let senderTransportFailureDiagnosticsSnapshot = senderTransportFailureDiagnostics
         let senderTransportErrorSurfaceSnapshot = senderTransportErrorSurface
@@ -7389,6 +7483,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         baseSummary.recordSenderReadinessRuntimeHandoff(senderLiveKitReadinessHookSnapshot)
         baseSummary.recordSenderSideLiveKitJoinHook(senderSideLiveKitJoinHookSnapshot)
         baseSummary.recordSenderConnectParity(senderConnectParitySnapshot)
+        baseSummary.recordSenderConnectExecutorUnification(senderConnectExecutorUnificationSnapshot)
         baseSummary.recordSenderJoinFailureDiagnostics(senderJoinFailureDiagnosticsSnapshot)
         baseSummary.recordSenderTransportFailureDiagnostics(senderTransportFailureDiagnosticsSnapshot)
         baseSummary.recordSenderTransportErrorSurface(senderTransportErrorSurfaceSnapshot)

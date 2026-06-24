@@ -56,6 +56,57 @@ final class UnavailableDirectCallMediaE2EEContextProvider: DirectCallMediaE2EECo
     func clearContext(callID: String) { }
 }
 
+struct DirectCallLiveKitConnectExecutorModel: Equatable {
+    let present: Bool
+    let debugOnly: Bool
+    let receiverExecutorShared: Bool
+    let senderExecutorShared: Bool
+    let sameConnectOptionsShape: Bool
+    let sameRoomRetentionModel: Bool
+    let sameDelegateRetentionModel: Bool
+    let sameStateObserverModel: Bool
+    let sameBoundedWaitModel: Bool
+    let audioOnly: Bool
+    let videoAllowed: Bool
+    let matrixEventsAllowed: Bool
+    let rawURLLogged: Bool
+    let rawTokenLogged: Bool
+    let rawRoomLogged: Bool
+    let rawIdentityLogged: Bool
+}
+
+struct DirectCallLiveKitConnectExecutor {
+    static let provenAudioModel = DirectCallLiveKitConnectExecutorModel(present: true,
+                                                                        debugOnly: true,
+                                                                        receiverExecutorShared: true,
+                                                                        senderExecutorShared: true,
+                                                                        sameConnectOptionsShape: true,
+                                                                        sameRoomRetentionModel: true,
+                                                                        sameDelegateRetentionModel: true,
+                                                                        sameStateObserverModel: true,
+                                                                        sameBoundedWaitModel: true,
+                                                                        audioOnly: true,
+                                                                        videoAllowed: false,
+                                                                        matrixEventsAllowed: false,
+                                                                        rawURLLogged: false,
+                                                                        rawTokenLogged: false,
+                                                                        rawRoomLogged: false,
+                                                                        rawIdentityLogged: false)
+
+    private let liveKitClient: DirectCallLiveKitClientProtocol
+
+    @MainActor
+    init(liveKitClient: DirectCallLiveKitClientProtocol) {
+        self.liveKitClient = liveKitClient
+    }
+
+    @MainActor
+    func connectAudio(connectionInfo: DirectCallMediaConnectionInfo,
+                      e2eeContext: any DirectCallMediaE2EEContextProtocol) async -> Result<Void, DirectCallMediaError> {
+        await liveKitClient.connect(connectionInfo: connectionInfo, e2eeContext: e2eeContext)
+    }
+}
+
 @MainActor
 final class LiveKitDirectCallMediaEngine: DirectCallMediaEngineProtocol {
     private let mediaStateSubject = CurrentValueSubject<DirectCallMediaState, Never>(.idle)
@@ -64,6 +115,7 @@ final class LiveKitDirectCallMediaEngine: DirectCallMediaEngineProtocol {
     private let encryptionService: DirectCallEncryptionServiceProtocol
     private let e2eeContextProvider: DirectCallMediaE2EEContextProviderProtocol
     private let liveKitClient: DirectCallLiveKitClientProtocol
+    private let liveKitConnectExecutor: DirectCallLiveKitConnectExecutor
     private var clearedCallIDs = Set<String>()
     private var disconnectedCallIDs = Set<String>()
     private var cleanedCallIDs = Set<String>()
@@ -97,6 +149,7 @@ final class LiveKitDirectCallMediaEngine: DirectCallMediaEngineProtocol {
         self.encryptionService = encryptionService ?? NoOpDirectCallEncryptionService()
         self.e2eeContextProvider = e2eeContextProvider ?? UnavailableDirectCallMediaE2EEContextProvider()
         self.liveKitClient = liveKitClient ?? UnavailableDirectCallLiveKitClient()
+        liveKitConnectExecutor = DirectCallLiveKitConnectExecutor(liveKitClient: self.liveKitClient)
         #if DEBUG
         diagnosticState.mediaFactoryInjected = true
         diagnosticState.mediaCredentialProviderAvailable = tokenProvider != nil
@@ -170,7 +223,7 @@ final class LiveKitDirectCallMediaEngine: DirectCallMediaEngineProtocol {
             diagnosticState.liveKitClientConnectAttempted = true
             #endif
 
-            switch await liveKitClient.connect(connectionInfo: connectionInfo, e2eeContext: e2eeContext) {
+            switch await liveKitConnectExecutor.connectAudio(connectionInfo: connectionInfo, e2eeContext: e2eeContext) {
             case .success:
                 let activeState = DirectCallMediaState(callID: session.callID,
                                                        phase: .activeAudio,

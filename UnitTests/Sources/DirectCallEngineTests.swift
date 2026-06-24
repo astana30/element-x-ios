@@ -3234,6 +3234,111 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func senderConnectExecutorUnificationUsesReceiverExecutorWithoutRuntime() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+        let mediaEngineSource = try Self.sourceFile("ElementX/Sources/Services/Calls/LiveKitDirectCallMediaEngine.swift")
+
+        #expect(mediaEngineSource.contains("struct DirectCallLiveKitConnectExecutorModel: Equatable"))
+        #expect(mediaEngineSource.contains("struct DirectCallLiveKitConnectExecutor"))
+        #expect(mediaEngineSource.contains("static let provenAudioModel = DirectCallLiveKitConnectExecutorModel("))
+        #expect(mediaEngineSource.contains("receiverExecutorShared: true"))
+        #expect(mediaEngineSource.contains("senderExecutorShared: true"))
+        #expect(mediaEngineSource.contains("sameConnectOptionsShape: true"))
+        #expect(mediaEngineSource.contains("sameRoomRetentionModel: true"))
+        #expect(mediaEngineSource.contains("sameDelegateRetentionModel: true"))
+        #expect(mediaEngineSource.contains("sameStateObserverModel: true"))
+        #expect(mediaEngineSource.contains("sameBoundedWaitModel: true"))
+        #expect(mediaEngineSource.contains("audioOnly: true"))
+        #expect(mediaEngineSource.contains("videoAllowed: false"))
+        #expect(mediaEngineSource.contains("matrixEventsAllowed: false"))
+        #expect(mediaEngineSource.contains("rawURLLogged: false"))
+        #expect(mediaEngineSource.contains("rawTokenLogged: false"))
+        #expect(mediaEngineSource.contains("rawRoomLogged: false"))
+        #expect(mediaEngineSource.contains("rawIdentityLogged: false"))
+        #expect(mediaEngineSource.contains("private let liveKitConnectExecutor: DirectCallLiveKitConnectExecutor"))
+        #expect(mediaEngineSource.contains("liveKitConnectExecutor = DirectCallLiveKitConnectExecutor(liveKitClient: self.liveKitClient)"))
+        #expect(mediaEngineSource.contains("switch await liveKitConnectExecutor.connectAudio(connectionInfo: connectionInfo, e2eeContext: e2eeContext)"))
+        #expect(mediaEngineSource.contains("await liveKitClient.connect(connectionInfo: connectionInfo, e2eeContext: e2eeContext)"))
+
+        #expect(adapterSource.contains("private struct SalemXSenderConnectExecutorUnification"))
+        #expect(adapterSource.contains("static let shared = SalemXSenderConnectExecutorUnification(model: DirectCallLiveKitConnectExecutor.provenAudioModel)"))
+        #expect(adapterSource.contains("init(model: DirectCallLiveKitConnectExecutorModel)"))
+        #expect(adapterSource.contains("receiverExecutorShared = model.receiverExecutorShared"))
+        #expect(adapterSource.contains("senderExecutorShared = model.senderExecutorShared"))
+        #expect(adapterSource.contains("sameConnectOptionsShape = model.sameConnectOptionsShape"))
+        #expect(adapterSource.contains("sameRoomRetentionModel = model.sameRoomRetentionModel"))
+        #expect(adapterSource.contains("sameDelegateRetentionModel = model.sameDelegateRetentionModel"))
+        #expect(adapterSource.contains("sameStateObserverModel = model.sameStateObserverModel"))
+        #expect(adapterSource.contains("sameBoundedWaitModel = model.sameBoundedWaitModel"))
+        #expect(adapterSource.contains("audioOnly = model.audioOnly"))
+        #expect(adapterSource.contains("videoAllowed = model.videoAllowed"))
+        #expect(adapterSource.contains("matrixEventsAllowed = model.matrixEventsAllowed"))
+        #expect(adapterSource.contains("rawURLLogged = model.rawURLLogged"))
+        #expect(adapterSource.contains("rawTokenLogged = model.rawTokenLogged"))
+        #expect(adapterSource.contains("rawRoomLogged = model.rawRoomLogged"))
+        #expect(adapterSource.contains("rawIdentityLogged = model.rawIdentityLogged"))
+
+        let fields = [
+            "sender_connect_executor_unification_present",
+            "sender_connect_executor_unification_debug_only",
+            "sender_connect_executor_unification_receiver_executor_shared",
+            "sender_connect_executor_unification_sender_executor_shared",
+            "sender_connect_executor_unification_same_connect_options_shape",
+            "sender_connect_executor_unification_same_room_retention_model",
+            "sender_connect_executor_unification_same_delegate_retention_model",
+            "sender_connect_executor_unification_same_state_observer_model",
+            "sender_connect_executor_unification_same_bounded_wait_model",
+            "sender_connect_executor_unification_audio_only",
+            "sender_connect_executor_unification_video_allowed",
+            "sender_connect_executor_unification_matrix_events_allowed",
+            "sender_connect_executor_unification_raw_url_logged",
+            "sender_connect_executor_unification_raw_token_logged",
+            "sender_connect_executor_unification_raw_room_logged",
+            "sender_connect_executor_unification_raw_identity_logged"
+        ]
+        for field in fields {
+            #expect(adapterSource.contains(field))
+        }
+
+        #expect(adapterSource.contains("var senderConnectExecutorUnificationReceiverExecutorShared = SalemXSenderConnectExecutorUnification.shared.receiverExecutorShared"))
+        #expect(adapterSource.contains("var senderConnectExecutorUnificationSenderExecutorShared = SalemXSenderConnectExecutorUnification.shared.senderExecutorShared"))
+        #expect(adapterSource.contains("var senderConnectExecutorUnificationSameConnectOptionsShape = SalemXSenderConnectExecutorUnification.shared.sameConnectOptionsShape"))
+        #expect(adapterSource.contains("var senderConnectExecutorUnificationSameRoomRetentionModel = SalemXSenderConnectExecutorUnification.shared.sameRoomRetentionModel"))
+        #expect(adapterSource.contains("var senderConnectExecutorUnificationSameDelegateRetentionModel = SalemXSenderConnectExecutorUnification.shared.sameDelegateRetentionModel"))
+        #expect(adapterSource.contains("var senderConnectExecutorUnificationSameStateObserverModel = SalemXSenderConnectExecutorUnification.shared.sameStateObserverModel"))
+        #expect(adapterSource.contains("var senderConnectExecutorUnificationSameBoundedWaitModel = SalemXSenderConnectExecutorUnification.shared.sameBoundedWaitModel"))
+        #expect(adapterSource.contains("private static var senderConnectExecutorUnification = SalemXSenderConnectExecutorUnification.shared"))
+        #expect(adapterSource.contains("summary.recordSenderConnectExecutorUnification(senderConnectExecutorUnification)"))
+        #expect(adapterSource.contains("let senderConnectExecutorUnificationSnapshot = senderConnectExecutorUnification"))
+        #expect(adapterSource.contains("baseSummary.recordSenderConnectExecutorUnification(senderConnectExecutorUnificationSnapshot)"))
+        #expect(adapterSource.contains("sender_connect_executor_unification_receiver_executor_shared=\\(senderConnectExecutorUnificationReceiverExecutorShared)"))
+        #expect(adapterSource.contains("sender_connect_executor_unification_sender_executor_shared=\\(senderConnectExecutorUnificationSenderExecutorShared)"))
+        #expect(adapterSource.contains("sender_connect_executor_unification_same_connect_options_shape=\\(senderConnectExecutorUnificationSameConnectOptionsShape)"))
+        #expect(adapterSource.contains("sender_connect_executor_unification_same_room_retention_model=\\(senderConnectExecutorUnificationSameRoomRetentionModel)"))
+        #expect(adapterSource.contains("sender_connect_executor_unification_same_delegate_retention_model=\\(senderConnectExecutorUnificationSameDelegateRetentionModel)"))
+        #expect(adapterSource.contains("sender_connect_executor_unification_same_state_observer_model=\\(senderConnectExecutorUnificationSameStateObserverModel)"))
+        #expect(adapterSource.contains("sender_connect_executor_unification_same_bounded_wait_model=\\(senderConnectExecutorUnificationSameBoundedWaitModel)"))
+
+        #expect(adapterSource.contains("sender_side_livekit_join_activation_repeated=\\(senderSideLiveKitJoinActivationRepeated)"))
+        #expect(adapterSource.contains("sender_side_livekit_join_repeated=\\(senderSideLiveKitJoinRepeated)"))
+        #expect(adapterSource.contains("sender_join_repeated_redacted"))
+        #expect(adapterSource.contains("repeated_sender_join_blocked_redacted"))
+        #expect(adapterSource.contains("sender_livekit_sdk_timeout_diagnostics_final_classification=\\(senderLiveKitSDKTimeoutDiagnosticsFinalClassification)"))
+        #expect(adapterSource.contains("sender_join_success_but_remote_missing_redacted"))
+        #expect(adapterSource.contains("default_disabled_no_connect"))
+        #expect(adapterSource.contains("cameraPermissionRequested = false"))
+        #expect(adapterSource.contains("matrixEventEmitRequested = false"))
+        #expect(adapterSource.contains("realCallFlowStarted = false"))
+        #expect(!adapterSource.contains("senderConnectExecutorUnificationVideoAllowed = true"))
+        #expect(!adapterSource.contains("senderConnectExecutorUnificationMatrixEventsAllowed = true"))
+        #expect(!adapterSource.contains("senderConnectExecutorUnificationRawURLLogged = true"))
+        #expect(!adapterSource.contains("senderConnectExecutorUnificationRawTokenLogged = true"))
+        #expect(!adapterSource.contains("senderConnectExecutorUnificationRawRoomLogged = true"))
+        #expect(!adapterSource.contains("senderConnectExecutorUnificationRawIdentityLogged = true"))
+        #expect(!adapterSource.contains(".connectAudio("))
+    }
+
+    @Test
     func senderJoinFailureDiagnosticsClassifyRedactedBucketsWithoutRuntime() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
 
@@ -4820,7 +4925,8 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(engineSource.contains("private func connectMediaIfReady(for session: DirectCallSession, keyHandle: DirectCallMediaKeyHandle) async -> Result<DirectCallSession, DirectCallEngineError>"))
         #expect(engineSource.contains("switch await mediaEngine.connectAudio(for: session, keyHandle: keyHandle)"))
         #expect(mediaEngineSource.contains("func connectAudio(for session: DirectCallSession, keyHandle: DirectCallMediaKeyHandle) async -> Result<DirectCallMediaState, DirectCallMediaError>"))
-        #expect(mediaEngineSource.contains("switch await liveKitClient.connect(connectionInfo: connectionInfo, e2eeContext: e2eeContext)"))
+        #expect(mediaEngineSource.contains("private let liveKitConnectExecutor: DirectCallLiveKitConnectExecutor"))
+        #expect(mediaEngineSource.contains("switch await liveKitConnectExecutor.connectAudio(connectionInfo: connectionInfo, e2eeContext: e2eeContext)"))
 
         #expect(!adapterSource.contains("requestRecordPermission"))
         #expect(!adapterSource.contains("AVCaptureDevice.requestAccess"))
@@ -5057,7 +5163,8 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(mediaEngineSource.contains("func connectAudio(for session: DirectCallSession, keyHandle: DirectCallMediaKeyHandle) async -> Result<DirectCallMediaState, DirectCallMediaError>"))
         #expect(mediaEngineSource.contains("func requestMediaCredentials(for session: DirectCallSession) async -> Result<DirectCallMediaConnectionInfo, DirectCallMediaError>"))
         #expect(mediaEngineSource.contains("switch await tokenProvider.connectionInfo(for: session)"))
-        #expect(mediaEngineSource.contains("switch await liveKitClient.connect(connectionInfo: connectionInfo, e2eeContext: e2eeContext)"))
+        #expect(mediaEngineSource.contains("private let liveKitConnectExecutor: DirectCallLiveKitConnectExecutor"))
+        #expect(mediaEngineSource.contains("switch await liveKitConnectExecutor.connectAudio(connectionInfo: connectionInfo, e2eeContext: e2eeContext)"))
     }
 
     @Test

@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-Physical2-Retry11-SenderConnectParityTimeoutTriage — the one-shot two-physical-device sender connect parity proof confirmed receiver PushKit/CallKit Answer, pending metadata, credentials, receiver controlled audio connect, and receiver LiveKit join succeeded once. Sender connect parity fields were present and aligned to the receiver-proven audio-only wrapper, but the sender LiveKit SDK connect still timed out as connect-call-pending, so remote participant/audio/liveness was not observed. This is not remote-audio success. The next phase is `2.48Z-SenderLiveKitConnectPendingRuntimeRepair — investigate sender SDK connect-call-pending despite parity, no APNs/connect`.
+After 2.48Z-SenderConnectExecutorUnificationRepair — the receiver controlled connect path now calls a shared `DirectCallLiveKitConnectExecutor`, and the sender join proof boundary is bound to the same executor model instead of only reporting parity. The shared executor model proves identical connect options shape, room/delegate/state observer retention, bounded wait, audio-only scope, no video, no Matrix events, and no raw URL/token/room/identity logging while preserving the sender timeout diagnostics and default no-connect/no-join safety. The next phase is `2.48Z-Physical2-Retry12 — one-shot two-physical-device shared sender connect executor proof`.
 
 ## Latest App Code Checkpoint
 
@@ -38,6 +38,46 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Checksum: `654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e`
 
 ## Proven Checkpoints
+
+- 2.48Z-SenderConnectExecutorUnificationRepair forces sender/receiver connect implementation parity without APNs/connect:
+  - Receiver controlled connect now calls a named shared executor:
+    ```text
+    DirectCallLiveKitConnectExecutor
+    receiver controlled connect path uses shared executor=true
+    ```
+  - Sender join proof is tied to the same executor model:
+    ```text
+    sender_connect_executor_unification_present=true
+    sender_connect_executor_unification_debug_only=true
+    sender_connect_executor_unification_receiver_executor_shared=true
+    sender_connect_executor_unification_sender_executor_shared=true
+    sender_connect_executor_unification_same_connect_options_shape=true
+    sender_connect_executor_unification_same_room_retention_model=true
+    sender_connect_executor_unification_same_delegate_retention_model=true
+    sender_connect_executor_unification_same_state_observer_model=true
+    sender_connect_executor_unification_same_bounded_wait_model=true
+    sender_connect_executor_unification_audio_only=true
+    sender_connect_executor_unification_video_allowed=false
+    sender_connect_executor_unification_matrix_events_allowed=false
+    sender_connect_executor_unification_raw_url_logged=false
+    sender_connect_executor_unification_raw_token_logged=false
+    sender_connect_executor_unification_raw_room_logged=false
+    sender_connect_executor_unification_raw_identity_logged=false
+    ```
+  - Existing safety and timeout classifications remain intact:
+    ```text
+    sender_side_livekit_join one-shot remains enforced
+    sender_side_livekit_join_repeated=false
+    repeated sender join remains blocked/classified
+    sender_livekit_sdk_timeout_diagnostics_final_classification=<redacted_bucket>
+    sender_join_success_but_remote_missing_redacted remains separate
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    default runtime no-connect/no-join
+    ```
+  - No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, or physical hook reset/re-arm was performed.
+  - Next phase: `2.48Z-Physical2-Retry12 — one-shot two-physical-device shared sender connect executor proof`.
 
 - 2.48Z-Physical2-Retry11-SenderConnectParityTimeoutTriage closes the one-shot two-physical-device sender connect parity proof as safe sender SDK connect-call-pending timeout / remote participant not observed triage. This is not remote-audio success:
   - Proof path:

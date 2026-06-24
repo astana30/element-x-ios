@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Added 2.48Z-SenderConnectExecutorUnificationRepair: the receiver controlled connect path now uses a shared `DirectCallLiveKitConnectExecutor`, and the sender join proof boundary records that it is bound to the same executor model with identical connect options shape, room/delegate/state observer retention, bounded wait, audio-only scope, no video, no Matrix events, and no raw URL/token/room/identity logging. Sender one-shot join, repeated join blocking, sender timeout diagnostics, success-but-remote-missing separation, and default no-connect/no-join runtime remain intact. No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, or physical hook reset/re-arm was performed.
 - Closed 2.48Z-Physical2-Retry11 as safe sender connect parity timeout / remote participant not observed triage, not remote-audio success: receiver PushKit, CallKit Answer, pending metadata, media credentials, one receiver controlled audio connect, and receiver LiveKit join succeeded once; sender connect parity fields were present and aligned to the receiver-proven audio-only wrapper with room/delegate/state observer/task retention and bounded wait; sender-side LiveKit join activation triggered and consumed exactly once, but the sender SDK connect stayed pending at timeout and remote participant/audio/liveness was not observed. No repeated APNs, production APNs, `dev/invite`, repeated connect, repeated LiveKit join, video, camera permission, Matrix event emit, or full call flow was performed during close-out.
 - Added 2.48Z-SenderConnectPendingParityRepair: sender LiveKit connect proof now reports DEBUG/test-controlled parity with the receiver-proven audio-only connect wrapper, false raw URL/token/room/identity logging, no video or Matrix events, room/delegate/state observer/task retention until terminal state, and a bounded wait while preserving the connect-call-pending timeout bucket, sender one-shot join enforcement, success-but-remote-missing separation, and default no-connect/no-join runtime. No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, or physical hook reset/re-arm was performed.
 - Closed 2.48Z-Physical2-Retry10 as safe sender SDK connect-call-pending timeout / remote participant not observed triage, not remote-audio success: receiver PushKit, CallKit Answer, pending metadata, media credentials, one receiver controlled audio connect, and receiver LiveKit join succeeded once; sender-side LiveKit join activation triggered and consumed exactly once; orchestration reached terminal sender timeline classification; sender SDK connect was invoked and remained pending while the task stayed running, delegate/state observer were attached, actor context was available, and network path was satisfied; remote participant/audio/liveness was not observed. No repeated APNs, production APNs, `dev/invite`, repeated connect, repeated LiveKit join, video, camera permission, Matrix event emit, or full call flow was performed during close-out.
@@ -147,6 +148,62 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48Z-SenderConnectExecutorUnificationRepair — Shared Sender/Receiver Connect Executor / No APNs
+
+Implemented a code/test repair that makes the receiver controlled connect path call a named shared LiveKit connect executor and binds the sender join proof boundary to the same executor model.
+
+Shared executor:
+
+```text
+DirectCallLiveKitConnectExecutor
+DirectCallLiveKitConnectExecutorModel
+receiver controlled connect path uses shared executor=true
+sender proof boundary uses shared executor model=true
+```
+
+New proof/source-guard fields:
+
+```text
+sender_connect_executor_unification_present=true
+sender_connect_executor_unification_debug_only=true
+sender_connect_executor_unification_receiver_executor_shared=true
+sender_connect_executor_unification_sender_executor_shared=true
+sender_connect_executor_unification_same_connect_options_shape=true
+sender_connect_executor_unification_same_room_retention_model=true
+sender_connect_executor_unification_same_delegate_retention_model=true
+sender_connect_executor_unification_same_state_observer_model=true
+sender_connect_executor_unification_same_bounded_wait_model=true
+sender_connect_executor_unification_audio_only=true
+sender_connect_executor_unification_video_allowed=false
+sender_connect_executor_unification_matrix_events_allowed=false
+sender_connect_executor_unification_raw_url_logged=false
+sender_connect_executor_unification_raw_token_logged=false
+sender_connect_executor_unification_raw_room_logged=false
+sender_connect_executor_unification_raw_identity_logged=false
+```
+
+Safety retained:
+
+```text
+sender join remains one-shot
+repeated sender join remains blocked/classified
+sender_livekit_sdk_timeout_diagnostics_final_classification=<redacted_bucket>
+sender_join_success_but_remote_missing_redacted remains separate
+default_runtime_no_connect=true
+default_runtime_no_join=true
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, or physical hook reset/re-arm was performed.
+
+Next phase:
+
+```text
+2.48Z-Physical2-Retry12 — one-shot two-physical-device shared sender connect executor proof
+```
 
 ### 2.48Z-Physical2-Retry11 — Sender Connect Parity Timeout / Remote Participant Not Observed Triage
 
