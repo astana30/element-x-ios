@@ -13,103 +13,93 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48Z-Physical2-Retry3-SenderJoinFailedTriage` is complete.
+`2.48Z-SenderJoinFailureDiagnostics` is complete.
 
-This was a one-shot two-physical-device proof close-out. It must be treated as sender-join-failed / remote participant not observed triage, not remote-audio success.
+This was a code/test/docs diagnostics repair phase only. It did not send APNs, did not run physical connect, and did not join LiveKit on a device.
 
-Proof path:
+The sender-side LiveKit join failure proof now emits redacted diagnostics:
 
 ```text
-/tmp/salemx-voip-push-receipt-proof-2.48z-physical2-retry3-sender-join-activation-polled.txt
+sender_join_failure_diagnostics_present=true
+sender_join_failure_diagnostics_debug_only=true
+sender_join_failure_diagnostics_audio_only=true
+sender_join_failure_diagnostics_video_allowed=false
+sender_join_failure_diagnostics_matrix_events_allowed=false
+sender_join_failure_diagnostics_raw_identifiers_logged=false
+sender_join_failure_diagnostics_credentials_present=<redacted_bool>
+sender_join_failure_diagnostics_token_present=<redacted_bool>
+sender_join_failure_diagnostics_url_present=<redacted_bool>
+sender_join_failure_diagnostics_room_binding_present=<redacted_bool>
+sender_join_failure_diagnostics_same_livekit_room=<redacted_bool>
+sender_join_failure_diagnostics_transport_attempted=<redacted_bool>
+sender_join_failure_diagnostics_transport_result=<redacted_bucket>
+sender_join_failure_diagnostics_error_bucket=<redacted_bucket>
+sender_join_failure_diagnostics_classification=<redacted_bucket>
 ```
 
-APNs audit:
+Missing sender prerequisites are classified before transport:
 
 ```text
-APNs_sent=true
-background_apns_push_result=sandbox_success
+credentials_missing_redacted
+token_missing_redacted
+url_missing_redacted
+room_binding_missing_redacted
+same_livekit_room_mismatch_redacted
+sender_join_repeated_redacted
 ```
 
-One sandbox APNs was sent by the operator-run one-shot helper after explicit confirmation for this phase. Do not send another APNs for this proof.
-
-Receiver path reached Answer, metadata, credentials, controlled connect, and receiver LiveKit join:
+Transport/join failure buckets are separate:
 
 ```text
-proof_generation=generation_16
-physical_voip_push_received=true
-pushkit_callback_invoked=true
-pushkit_payload_kind=real_invite_controlled
-callkit_report_result=reported
-callkit_first_action_kind=answer
-callkit_answer_action_received=true
-callkit_answer_action_fulfilled=true
-pending_metadata_fetch_result=success_redacted
-pending_metadata_fetch_http_status_bucket=2xx
-media_credentials_requested=true
-media_credentials_result=success_redacted
-controlled_connect_first_attempt_requested=true
-controlled_connect_first_attempt_allowed=true
-controlled_connect_first_attempt_started=true
-controlled_connect_first_attempt_completed=true
-controlled_connect_first_attempt_repeated=false
-controlled_connect_first_attempt_result=success_redacted
-controlled_connect_first_attempt_error_bucket=none
-livekit_join_result=success_redacted
+transport_failed_redacted
+join_failed_redacted
+unknown_sender_join_failure_redacted
 ```
 
-Sender readiness reached runtime and survived Answer:
+Receiver observer classification remains separate for sender join success with receiver remote missing:
 
 ```text
-sender_readiness_runtime_handoff_present=true
-sender_readiness_runtime_handoff_armed_before_apns=true
-sender_readiness_runtime_handoff_received_by_runtime=true
-sender_readiness_runtime_handoff_survived_pushkit=true
-sender_readiness_runtime_handoff_survived_answer=true
-sender_readiness_runtime_handoff_matrix_session_ready=true
-sender_readiness_runtime_handoff_same_room_ready=true
-sender_readiness_runtime_handoff_expected_user_matched=true
-sender_readiness_runtime_handoff_raw_identifiers_logged=false
+sender_join_failed_redacted
+sender_join_success_but_remote_missing_redacted
+remote_participant_seen_redacted
+remote_audio_track_missing_redacted
+remote_liveness_not_observed_redacted
 ```
 
-Sender-side join activation triggered and consumed once:
+Safety remains closed by default:
 
 ```text
-sender_side_livekit_join_activation_armed=true
-sender_side_livekit_join_activation_triggered=true
-sender_side_livekit_join_activation_consumed=true
-sender_side_livekit_join_activation_repeated=false
+sender_side_livekit_join_requested=false
+sender_side_livekit_join_result=not_requested
+sender_join_failure_diagnostics_transport_attempted=false
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+livekit_connect_audio_invoked=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
 ```
 
-Sender-side LiveKit join failed and receiver remote participant/audio/liveness was not observed:
+Conclusion:
 
 ```text
-sender_side_livekit_join_requested=true
-sender_side_livekit_join_result=failed_redacted
-sender_side_livekit_join_error_bucket=sender_join_failed_redacted
-sender_side_livekit_join_repeated=false
-receiver_remote_participant_observer_result=not_observed_redacted
-receiver_remote_participant_observer_error_bucket=sender_join_failed_redacted
-receiver_remote_participant_observer_remote_seen=false
-receiver_remote_participant_observer_audio_track_seen=false
-receiver_remote_participant_observer_liveness_seen=false
-livekit_remote_participant_seen=false
-livekit_remote_participant_count_bucket=0
-livekit_remote_audio_track_subscribed=false
-livekit_remote_audio_track_unmuted=false
-livekit_audio_liveness_observed=false
-livekit_audio_liveness_result=not_observed_redacted
-livekit_audio_liveness_error_bucket=remote_participant_missing_redacted
-```
-
-Safety remained closed:
-
-```text
-No repeated APNs.
+2.48Z-SenderJoinFailureDiagnostics = sender-side join failures can now be classified into precise redacted buckets before the next physical retry.
+Missing credentials/token/URL/room binding classify before transport.
+Same LiveKit room mismatch classifies before transport.
+Transport failure is separate from join failure.
+Sender join success but receiver remote missing remains separate.
+Sender join activation remains one-shot.
+Default runtime remains no-connect/no-join.
+No APNs.
 No production APNs.
+No repeated APNs.
 No dev/invite.
-No repeated connect.
-No repeated LiveKit join.
+No physical media connect.
+No physical LiveKit join.
 No video.
+No microphone permission.
 No camera permission.
 No Matrix event emit.
 No full call flow.
@@ -117,29 +107,34 @@ No full call flow.
 
 ## Next Phase
 
-`2.48Z-SenderJoinFailureDiagnostics — diagnose sender-side LiveKit join failure before any APNs retry, no APNs/connect`
+`2.48Z-Physical2-Retry4 — one-shot two-physical-device sender join failure-bucket proof`
 
-Do not set the phase to another physical APNs retry yet.
+This is a one-shot physical retry only after fresh operator confirmation and validated two-physical-device readiness. Do not run it automatically from this docs prompt.
 
-## Diagnostic Goals
+## Retry4 Goals
 
-Investigate why sender-side join activation reached the runtime and was consumed once but ended in:
+The next proof should capture which sender join failure bucket appears after the one-shot physical path:
 
 ```text
-sender_side_livekit_join_result=failed_redacted
-sender_side_livekit_join_error_bucket=sender_join_failed_redacted
-receiver_remote_participant_observer_error_bucket=sender_join_failed_redacted
+sender_join_failure_diagnostics_classification=<redacted_bucket>
+sender_join_failure_diagnostics_error_bucket=<redacted_bucket>
+sender_join_failure_diagnostics_transport_attempted=<redacted_bool>
+sender_join_failure_diagnostics_transport_result=<redacted_bucket>
 ```
 
-Focus on local/code diagnostics only:
+Expected diagnostic outcomes include:
 
 ```text
-sender-side LiveKit token/credentials handoff shape
-sender-side join path runtime dependency availability
-audio-only sender join preconditions
-redacted join error bucket mapping
-receiver observer wait/classification timing
-default-disabled and one-shot protections
+credentials_missing_redacted
+token_missing_redacted
+url_missing_redacted
+room_binding_missing_redacted
+same_livekit_room_mismatch_redacted
+transport_failed_redacted
+join_failed_redacted
+unknown_sender_join_failure_redacted
+sender_join_success_but_remote_missing_redacted
+remote_participant_seen_redacted
 ```
 
 ## Hard Limits

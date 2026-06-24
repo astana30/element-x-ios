@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-Physical2-Retry3 — the one-shot two-physical-device proof reached receiver Answer, pending metadata, credentials, controlled receiver audio connect, and receiver LiveKit join, then triggered and consumed the sender-side join activation once. Sender-side join failed with a redacted sender-join bucket, so the receiver did not observe a remote participant, remote audio track, or audio liveness. This is sender-join-failed / remote participant not observed triage, not remote-audio success. The next phase is `2.48Z-SenderJoinFailureDiagnostics — diagnose sender-side LiveKit join failure before any APNs retry, no APNs/connect`.
+After 2.48Z-SenderJoinFailureDiagnostics — sender-side LiveKit join failure proof now exposes redacted diagnostics for credentials, token, URL, room binding, same LiveKit room matching, transport attempt/result, error bucket, and classification while preserving default no-connect/no-join safety. Missing credentials/token/URL/room binding and same-room mismatch are classified before transport, transport failure and join failure have separate buckets, sender join success with receiver remote missing remains a separate receiver observer bucket, and sender join activation remains one-shot. The next phase is `2.48Z-Physical2-Retry4 — one-shot two-physical-device sender join failure-bucket proof`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,83 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48Z-SenderJoinFailureDiagnostics adds redacted sender-side join failure classification without APNs/connect/real-device LiveKit:
+  - New proof fields are emitted:
+    ```text
+    sender_join_failure_diagnostics_present=true
+    sender_join_failure_diagnostics_debug_only=true
+    sender_join_failure_diagnostics_audio_only=true
+    sender_join_failure_diagnostics_video_allowed=false
+    sender_join_failure_diagnostics_matrix_events_allowed=false
+    sender_join_failure_diagnostics_raw_identifiers_logged=false
+    sender_join_failure_diagnostics_credentials_present=<redacted_bool>
+    sender_join_failure_diagnostics_token_present=<redacted_bool>
+    sender_join_failure_diagnostics_url_present=<redacted_bool>
+    sender_join_failure_diagnostics_room_binding_present=<redacted_bool>
+    sender_join_failure_diagnostics_same_livekit_room=<redacted_bool>
+    sender_join_failure_diagnostics_transport_attempted=<redacted_bool>
+    sender_join_failure_diagnostics_transport_result=<redacted_bucket>
+    sender_join_failure_diagnostics_error_bucket=<redacted_bucket>
+    sender_join_failure_diagnostics_classification=<redacted_bucket>
+    ```
+  - Pre-transport classifications are available for:
+    ```text
+    credentials_missing_redacted
+    token_missing_redacted
+    url_missing_redacted
+    room_binding_missing_redacted
+    same_livekit_room_mismatch_redacted
+    sender_join_repeated_redacted
+    ```
+  - Runtime failure classifications are available for:
+    ```text
+    transport_failed_redacted
+    join_failed_redacted
+    unknown_sender_join_failure_redacted
+    ```
+  - Existing receiver observer buckets remain distinct, including:
+    ```text
+    sender_join_failed_redacted
+    sender_join_success_but_remote_missing_redacted
+    remote_participant_seen_redacted
+    remote_audio_track_missing_redacted
+    remote_liveness_not_observed_redacted
+    ```
+  - Default runtime remains closed:
+    ```text
+    sender_side_livekit_join_requested=false
+    sender_side_livekit_join_result=not_requested
+    sender_join_failure_diagnostics_transport_attempted=false
+    media_connect_requested=false
+    media_connect_attempted=false
+    livekit_join_requested=false
+    livekit_connect_audio_invoked=false
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    ```
+  - Conclusion:
+    ```text
+    2.48Z-SenderJoinFailureDiagnostics = sender-side join failures can now be classified into precise redacted buckets before the next physical retry.
+    Missing credentials, token, URL, room binding, and same LiveKit room mismatch classify before transport.
+    Transport failure is classified separately from join failure.
+    Sender join success but receiver remote missing remains a separate receiver observer classification.
+    Sender join activation remains one-shot.
+    Default runtime remains no-connect/no-join.
+    No APNs.
+    No production APNs.
+    No repeated APNs.
+    No dev/invite.
+    No physical media connect.
+    No physical LiveKit join.
+    No video.
+    No microphone permission.
+    No camera permission.
+    No Matrix event emit.
+    No full call flow.
+    ```
+  - Next phase: `2.48Z-Physical2-Retry4 — one-shot two-physical-device sender join failure-bucket proof`.
 - 2.48Z-Physical2-Retry3-SenderJoinFailedTriage closes the one-shot two-physical-device sender join activation / remote participant proof as safe sender-join-failed triage, not remote-audio success:
   - Proof path:
     ```text

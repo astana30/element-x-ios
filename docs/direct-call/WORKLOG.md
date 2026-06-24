@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Added 2.48Z-SenderJoinFailureDiagnostics: sender-side LiveKit join failures now emit redacted diagnostics for credentials, token, URL, room binding, same LiveKit room matching, transport attempt/result, error bucket, and classification; missing inputs classify before transport, transport failure and join failure are distinct, sender join success but receiver remote missing remains separate, sender activation stays one-shot, and default runtime remains no-connect/no-join with no APNs/connect/real-device LiveKit/permissions/video/Matrix/full-flow side effects.
 - Closed 2.48Z-Physical2-Retry3 as safe sender-join-failed / remote participant not observed triage: receiver PushKit, CallKit Answer, pending metadata, credentials, one controlled receiver audio connect, and receiver LiveKit join succeeded; sender readiness survived into runtime and Answer; sender-side join activation triggered and consumed once, but the sender join result was `failed_redacted`, so remote participant/audio/liveness was not observed. No repeated APNs, production APNs, `dev/invite`, repeated connect, repeated LiveKit join, video, camera permission, Matrix event emit, or full call flow was performed during close-out.
 - Added 2.48Z-SenderJoinHookActivationRepair: the DEBUG/test-controlled sender-side LiveKit join activation hook now has explicit default-disabled, readiness-gated, same-room-gated, audio-only, one-shot proof fields plus receiver observer buckets for hook-not-armed, join-not-requested, join-blocked, join-failed, success-but-remote-missing, remote-participant-seen, audio-track-missing, and liveness-not-observed, with no APNs/connect/real-device LiveKit/permissions/video/Matrix/full-flow side effects.
 - Closed 2.48Z-Physical2-Retry2 as safe sender-not-joined / remote participant not observed triage: receiver PushKit, CallKit Answer, pending metadata, media credentials, one receiver controlled audio connect, and receiver LiveKit join succeeded, but the sender-side LiveKit join hook stayed unarmed/not requested and remote participant/audio/liveness was not observed. APNs audit records `possible_repeated_apns_observed=true`; no further APNs may be sent for this phase.
@@ -132,6 +133,88 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48Z-SenderJoinFailureDiagnostics — Sender Join Failure Buckets
+
+Added redacted sender-side LiveKit join failure diagnostics without running APNs, physical connect, real-device LiveKit, permissions, video, Matrix events, or a full call flow.
+
+New proof fields:
+
+```text
+sender_join_failure_diagnostics_present=true
+sender_join_failure_diagnostics_debug_only=true
+sender_join_failure_diagnostics_audio_only=true
+sender_join_failure_diagnostics_video_allowed=false
+sender_join_failure_diagnostics_matrix_events_allowed=false
+sender_join_failure_diagnostics_raw_identifiers_logged=false
+sender_join_failure_diagnostics_credentials_present=<redacted_bool>
+sender_join_failure_diagnostics_token_present=<redacted_bool>
+sender_join_failure_diagnostics_url_present=<redacted_bool>
+sender_join_failure_diagnostics_room_binding_present=<redacted_bool>
+sender_join_failure_diagnostics_same_livekit_room=<redacted_bool>
+sender_join_failure_diagnostics_transport_attempted=<redacted_bool>
+sender_join_failure_diagnostics_transport_result=<redacted_bucket>
+sender_join_failure_diagnostics_error_bucket=<redacted_bucket>
+sender_join_failure_diagnostics_classification=<redacted_bucket>
+```
+
+Pre-transport classification buckets:
+
+```text
+credentials_missing_redacted
+token_missing_redacted
+url_missing_redacted
+room_binding_missing_redacted
+same_livekit_room_mismatch_redacted
+sender_join_repeated_redacted
+```
+
+Runtime classification buckets:
+
+```text
+transport_failed_redacted
+join_failed_redacted
+unknown_sender_join_failure_redacted
+```
+
+Receiver observer classification still distinguishes sender join failure from sender join success with receiver remote missing:
+
+```text
+sender_join_failed_redacted
+sender_join_success_but_remote_missing_redacted
+remote_participant_seen_redacted
+remote_audio_track_missing_redacted
+remote_liveness_not_observed_redacted
+```
+
+Safety conclusion:
+
+```text
+2.48Z-SenderJoinFailureDiagnostics = sender-side join failure diagnostics repaired.
+Missing credentials/token/URL/room binding classify before transport.
+Same LiveKit room mismatch classifies before transport.
+Transport failure is separate from join failure.
+Sender join success but receiver remote missing remains separate.
+Sender join activation remains one-shot.
+Default runtime remains no-connect/no-join.
+No APNs.
+No production APNs.
+No repeated APNs.
+No dev/invite.
+No physical media connect.
+No physical LiveKit join.
+No video.
+No microphone permission.
+No camera permission.
+No Matrix event emit.
+No full call flow.
+```
+
+Next phase:
+
+```text
+2.48Z-Physical2-Retry4 — one-shot two-physical-device sender join failure-bucket proof
+```
 
 ### 2.48Z-Physical2-Retry3 — Sender Join Failed / Remote Participant Not Observed Triage
 
