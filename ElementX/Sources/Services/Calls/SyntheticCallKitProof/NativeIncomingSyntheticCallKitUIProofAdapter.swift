@@ -1124,6 +1124,198 @@ private struct SalemXSenderJoinFailureDiagnostics {
     }
 }
 
+private struct SalemXSenderLiveKitSDKFailureSurfaceInput {
+    let requestedClassification: String?
+    let connectCallStarted: Bool
+    let connectCallReturned: Bool
+    let connectCallThrew: Bool
+    let connectedStateObserved: Bool
+    let failedStateObserved: Bool
+    let disconnectedBeforeConnected: Bool
+    let delegateFailureObserved: Bool
+    let roomAlreadyConnected: Bool
+    let identityConflictObserved: Bool
+    let tokenIdentityMatch: Bool?
+    let audioSessionReady: Bool?
+    let permissionRequired: Bool
+    let captureStarted: Bool
+    let networkTransportErrorObserved: Bool
+}
+
+private struct SalemXSenderLiveKitSDKFailureSurface {
+    static let notRequestedClassification = "not_requested"
+    static let noneClassification = "none"
+    static let connectCallThrewClassification = "sdk_connect_call_threw_redacted"
+    static let connectReturnedWithoutConnectedClassification = "sdk_connect_returned_without_connected_redacted"
+    static let delegateFailedBeforeConnectedClassification = "sdk_delegate_failed_before_connected_redacted"
+    static let disconnectedBeforeConnectedClassification = "sdk_disconnected_before_connected_redacted"
+    static let stateFailedClassification = "sdk_state_failed_redacted"
+    static let roomAlreadyConnectedClassification = "sdk_room_already_connected_redacted"
+    static let identityConflictClassification = "sdk_identity_conflict_redacted"
+    static let tokenIdentityMismatchClassification = "sdk_token_identity_mismatch_redacted"
+    static let audioSessionBlockedClassification = "sdk_audio_session_blocked_redacted"
+    static let permissionOrCaptureBlockedClassification = "sdk_permission_or_capture_blocked_redacted"
+    static let networkTransportErrorClassification = "sdk_network_transport_error_redacted"
+    static let internalUnknownClassification = "sdk_internal_unknown_redacted"
+    static let defaultDisabled = SalemXSenderLiveKitSDKFailureSurface(connectCallStarted: false,
+                                                                      connectCallReturned: false,
+                                                                      connectCallThrew: false,
+                                                                      connectedStateObserved: false,
+                                                                      failedStateObserved: false,
+                                                                      disconnectedBeforeConnected: false,
+                                                                      delegateFailureObserved: false,
+                                                                      roomAlreadyConnected: false,
+                                                                      identityConflictObserved: false,
+                                                                      tokenIdentityMatch: false,
+                                                                      audioSessionReady: false,
+                                                                      permissionRequired: false,
+                                                                      captureStarted: false,
+                                                                      finalClassification: notRequestedClassification)
+
+    let connectCallStarted: Bool
+    let connectCallReturned: Bool
+    let connectCallThrew: Bool
+    let connectedStateObserved: Bool
+    let failedStateObserved: Bool
+    let disconnectedBeforeConnected: Bool
+    let delegateFailureObserved: Bool
+    let roomAlreadyConnected: Bool
+    let identityConflictObserved: Bool
+    let tokenIdentityMatch: Bool
+    let audioSessionReady: Bool
+    let permissionRequired: Bool
+    let captureStarted: Bool
+    let finalClassification: String
+
+    let present = true
+    let debugOnly = true
+    let rawErrorLogged = false
+    let rawURLLogged = false
+    let rawTokenLogged = false
+    let rawRoomLogged = false
+    let rawIdentityLogged = false
+
+    var transportClassification: String? {
+        Self.transportClassification(for: finalClassification)
+    }
+
+    static func classify(requested: Bool,
+                         transportAttempted: Bool,
+                         transportResult: String,
+                         input: SalemXSenderLiveKitSDKFailureSurfaceInput) -> SalemXSenderLiveKitSDKFailureSurface {
+        guard requested else {
+            return defaultDisabled
+        }
+
+        let classification = resolvedClassification(transportAttempted: transportAttempted,
+                                                    transportResult: transportResult,
+                                                    input: input)
+        return .init(connectCallStarted: input.connectCallStarted,
+                     connectCallReturned: input.connectCallReturned,
+                     connectCallThrew: input.connectCallThrew,
+                     connectedStateObserved: input.connectedStateObserved,
+                     failedStateObserved: input.failedStateObserved,
+                     disconnectedBeforeConnected: input.disconnectedBeforeConnected,
+                     delegateFailureObserved: input.delegateFailureObserved,
+                     roomAlreadyConnected: input.roomAlreadyConnected,
+                     identityConflictObserved: input.identityConflictObserved,
+                     tokenIdentityMatch: input.tokenIdentityMatch ?? false,
+                     audioSessionReady: input.audioSessionReady ?? false,
+                     permissionRequired: input.permissionRequired,
+                     captureStarted: input.captureStarted,
+                     finalClassification: classification)
+    }
+
+    private static func resolvedClassification(transportAttempted: Bool,
+                                               transportResult: String,
+                                               input: SalemXSenderLiveKitSDKFailureSurfaceInput) -> String {
+        if transportResult == SalemXSenderTransportFailureDiagnostics.successTransportResult {
+            return noneClassification
+        }
+        if let requestedClassification = input.requestedClassification {
+            return requestedClassification
+        }
+        if let lifecycleClassification = lifecycleClassification(input) {
+            return lifecycleClassification
+        }
+        if let boundaryClassification = boundaryClassification(input) {
+            return boundaryClassification
+        }
+        if input.networkTransportErrorObserved {
+            return networkTransportErrorClassification
+        }
+        if input.connectCallReturned, !input.connectedStateObserved {
+            return connectReturnedWithoutConnectedClassification
+        }
+        if transportAttempted, transportResult == SalemXSenderTransportFailureDiagnostics.failedTransportResult {
+            return internalUnknownClassification
+        }
+        return notRequestedClassification
+    }
+
+    private static func lifecycleClassification(_ input: SalemXSenderLiveKitSDKFailureSurfaceInput) -> String? {
+        if input.connectCallThrew {
+            return connectCallThrewClassification
+        }
+        if input.delegateFailureObserved, !input.connectedStateObserved {
+            return delegateFailedBeforeConnectedClassification
+        }
+        if input.disconnectedBeforeConnected {
+            return disconnectedBeforeConnectedClassification
+        }
+        if input.failedStateObserved {
+            return stateFailedClassification
+        }
+        if input.roomAlreadyConnected {
+            return roomAlreadyConnectedClassification
+        }
+        if input.identityConflictObserved {
+            return identityConflictClassification
+        }
+        return nil
+    }
+
+    private static func boundaryClassification(_ input: SalemXSenderLiveKitSDKFailureSurfaceInput) -> String? {
+        if input.tokenIdentityMatch == false {
+            return tokenIdentityMismatchClassification
+        }
+        if input.audioSessionReady == false {
+            return audioSessionBlockedClassification
+        }
+        if input.permissionRequired, !input.captureStarted {
+            return permissionOrCaptureBlockedClassification
+        }
+        return nil
+    }
+
+    private static func transportClassification(for classification: String) -> String? {
+        switch classification {
+        case connectCallThrewClassification:
+            return SalemXSenderTransportErrorSurface.transportConnectThrowClassification
+        case connectReturnedWithoutConnectedClassification:
+            return SalemXSenderTransportErrorSurface.transportTimeoutWaitingForConnectedStateClassification
+        case delegateFailedBeforeConnectedClassification:
+            return SalemXSenderTransportErrorSurface.transportRoomConnectCallbackFailedClassification
+        case disconnectedBeforeConnectedClassification:
+            return SalemXSenderTransportErrorSurface.transportDisconnectedBeforeConnectedClassification
+        case identityConflictClassification:
+            return SalemXSenderTransportErrorSurface.transportAuthRejectedClassification
+        case tokenIdentityMismatchClassification:
+            return SalemXSenderTransportErrorSurface.transportTokenExpiredOrInvalidClassification
+        case networkTransportErrorClassification:
+            return SalemXSenderTransportErrorSurface.transportNetworkUnreachableClassification
+        case stateFailedClassification,
+             roomAlreadyConnectedClassification,
+             audioSessionBlockedClassification,
+             permissionOrCaptureBlockedClassification,
+             internalUnknownClassification:
+            return SalemXSenderTransportErrorSurface.transportLiveKitSDKUnknownErrorClassification
+        default:
+            return nil
+        }
+    }
+}
+
 private struct SalemXSenderTransportErrorSurfaceInput {
     let source: String?
     let sdkErrorBucket: String?
@@ -1133,6 +1325,7 @@ private struct SalemXSenderTransportErrorSurfaceInput {
     let timeoutObserved: Bool
     let connectedStateObserved: Bool
     let disconnectedBeforeConnected: Bool
+    let sdkFailureSurface: SalemXSenderLiveKitSDKFailureSurface
 }
 
 private struct SalemXSenderTransportErrorSurface {
@@ -1169,6 +1362,7 @@ private struct SalemXSenderTransportErrorSurface {
                                                                    timeoutObserved: false,
                                                                    connectedStateObserved: false,
                                                                    disconnectedBeforeConnected: false,
+                                                                   sdkFailureSurface: .defaultDisabled,
                                                                    finalClassification: notRequestedClassification)
 
     let source: String
@@ -1179,6 +1373,7 @@ private struct SalemXSenderTransportErrorSurface {
     let timeoutObserved: Bool
     let connectedStateObserved: Bool
     let disconnectedBeforeConnected: Bool
+    let sdkFailureSurface: SalemXSenderLiveKitSDKFailureSurface
     let finalClassification: String
 
     let present = true
@@ -1208,6 +1403,7 @@ private struct SalemXSenderTransportErrorSurface {
                      timeoutObserved: input.timeoutObserved,
                      connectedStateObserved: input.connectedStateObserved,
                      disconnectedBeforeConnected: input.disconnectedBeforeConnected,
+                     sdkFailureSurface: input.sdkFailureSurface,
                      finalClassification: classification)
     }
 
@@ -1216,6 +1412,9 @@ private struct SalemXSenderTransportErrorSurface {
                                                input: SalemXSenderTransportErrorSurfaceInput) -> String {
         if transportResult == SalemXSenderTransportFailureDiagnostics.successTransportResult {
             return noneClassification
+        }
+        if let classification = input.sdkFailureSurface.transportClassification {
+            return classification
         }
         if let classification = sourceClassification(input.source) {
             return classification
@@ -2635,6 +2834,27 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var senderTransportErrorSurfaceRawErrorLogged = SalemXSenderTransportErrorSurface.defaultDisabled.rawErrorLogged
     var senderTransportErrorSurfaceRawURLLogged = SalemXSenderTransportErrorSurface.defaultDisabled.rawURLLogged
     var senderTransportErrorSurfaceRawTokenLogged = SalemXSenderTransportErrorSurface.defaultDisabled.rawTokenLogged
+    var senderLiveKitSDKFailureSurfacePresent = SalemXSenderLiveKitSDKFailureSurface.defaultDisabled.present
+    var senderLiveKitSDKFailureSurfaceDebugOnly = SalemXSenderLiveKitSDKFailureSurface.defaultDisabled.debugOnly
+    var senderLiveKitSDKFailureSurfaceRawErrorLogged = SalemXSenderLiveKitSDKFailureSurface.defaultDisabled.rawErrorLogged
+    var senderLiveKitSDKFailureSurfaceRawURLLogged = SalemXSenderLiveKitSDKFailureSurface.defaultDisabled.rawURLLogged
+    var senderLiveKitSDKFailureSurfaceRawTokenLogged = SalemXSenderLiveKitSDKFailureSurface.defaultDisabled.rawTokenLogged
+    var senderLiveKitSDKFailureSurfaceRawRoomLogged = SalemXSenderLiveKitSDKFailureSurface.defaultDisabled.rawRoomLogged
+    var senderLiveKitSDKFailureSurfaceRawIdentityLogged = SalemXSenderLiveKitSDKFailureSurface.defaultDisabled.rawIdentityLogged
+    var senderLiveKitSDKFailureSurfaceConnectCallStarted = SalemXSenderLiveKitSDKFailureSurface.defaultDisabled.connectCallStarted
+    var senderLiveKitSDKFailureSurfaceConnectCallReturned = SalemXSenderLiveKitSDKFailureSurface.defaultDisabled.connectCallReturned
+    var senderLiveKitSDKFailureSurfaceConnectCallThrew = SalemXSenderLiveKitSDKFailureSurface.defaultDisabled.connectCallThrew
+    var senderLiveKitSDKFailureSurfaceConnectedStateObserved = SalemXSenderLiveKitSDKFailureSurface.defaultDisabled.connectedStateObserved
+    var senderLiveKitSDKFailureSurfaceFailedStateObserved = SalemXSenderLiveKitSDKFailureSurface.defaultDisabled.failedStateObserved
+    var senderLiveKitSDKFailureSurfaceDisconnectedBeforeConnected = SalemXSenderLiveKitSDKFailureSurface.defaultDisabled.disconnectedBeforeConnected
+    var senderLiveKitSDKFailureSurfaceDelegateFailureObserved = SalemXSenderLiveKitSDKFailureSurface.defaultDisabled.delegateFailureObserved
+    var senderLiveKitSDKFailureSurfaceRoomAlreadyConnected = SalemXSenderLiveKitSDKFailureSurface.defaultDisabled.roomAlreadyConnected
+    var senderLiveKitSDKFailureSurfaceIdentityConflictObserved = SalemXSenderLiveKitSDKFailureSurface.defaultDisabled.identityConflictObserved
+    var senderLiveKitSDKFailureSurfaceTokenIdentityMatch = SalemXSenderLiveKitSDKFailureSurface.defaultDisabled.tokenIdentityMatch
+    var senderLiveKitSDKFailureSurfaceAudioSessionReady = SalemXSenderLiveKitSDKFailureSurface.defaultDisabled.audioSessionReady
+    var senderLiveKitSDKFailureSurfacePermissionRequired = SalemXSenderLiveKitSDKFailureSurface.defaultDisabled.permissionRequired
+    var senderLiveKitSDKFailureSurfaceCaptureStarted = SalemXSenderLiveKitSDKFailureSurface.defaultDisabled.captureStarted
+    var senderLiveKitSDKFailureSurfaceFinalClassification = SalemXSenderLiveKitSDKFailureSurface.defaultDisabled.finalClassification
     var senderTransportErrorSurfaceSource = SalemXSenderTransportErrorSurface.defaultDisabled.source
     var senderTransportErrorSurfaceSDKErrorBucket = SalemXSenderTransportErrorSurface.defaultDisabled.sdkErrorBucket
     var senderTransportErrorSurfaceDisconnectReasonBucket = SalemXSenderTransportErrorSurface.defaultDisabled.disconnectReasonBucket
@@ -3199,6 +3419,27 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "sender_transport_error_surface_raw_error_logged=\(senderTransportErrorSurfaceRawErrorLogged)",
             "sender_transport_error_surface_raw_url_logged=\(senderTransportErrorSurfaceRawURLLogged)",
             "sender_transport_error_surface_raw_token_logged=\(senderTransportErrorSurfaceRawTokenLogged)",
+            "sender_livekit_sdk_failure_surface_present=\(senderLiveKitSDKFailureSurfacePresent)",
+            "sender_livekit_sdk_failure_surface_debug_only=\(senderLiveKitSDKFailureSurfaceDebugOnly)",
+            "sender_livekit_sdk_failure_surface_raw_error_logged=\(senderLiveKitSDKFailureSurfaceRawErrorLogged)",
+            "sender_livekit_sdk_failure_surface_raw_url_logged=\(senderLiveKitSDKFailureSurfaceRawURLLogged)",
+            "sender_livekit_sdk_failure_surface_raw_token_logged=\(senderLiveKitSDKFailureSurfaceRawTokenLogged)",
+            "sender_livekit_sdk_failure_surface_raw_room_logged=\(senderLiveKitSDKFailureSurfaceRawRoomLogged)",
+            "sender_livekit_sdk_failure_surface_raw_identity_logged=\(senderLiveKitSDKFailureSurfaceRawIdentityLogged)",
+            "sender_livekit_sdk_failure_surface_connect_call_started=\(senderLiveKitSDKFailureSurfaceConnectCallStarted)",
+            "sender_livekit_sdk_failure_surface_connect_call_returned=\(senderLiveKitSDKFailureSurfaceConnectCallReturned)",
+            "sender_livekit_sdk_failure_surface_connect_call_threw=\(senderLiveKitSDKFailureSurfaceConnectCallThrew)",
+            "sender_livekit_sdk_failure_surface_connected_state_observed=\(senderLiveKitSDKFailureSurfaceConnectedStateObserved)",
+            "sender_livekit_sdk_failure_surface_failed_state_observed=\(senderLiveKitSDKFailureSurfaceFailedStateObserved)",
+            "sender_livekit_sdk_failure_surface_disconnected_before_connected=\(senderLiveKitSDKFailureSurfaceDisconnectedBeforeConnected)",
+            "sender_livekit_sdk_failure_surface_delegate_failure_observed=\(senderLiveKitSDKFailureSurfaceDelegateFailureObserved)",
+            "sender_livekit_sdk_failure_surface_room_already_connected=\(senderLiveKitSDKFailureSurfaceRoomAlreadyConnected)",
+            "sender_livekit_sdk_failure_surface_identity_conflict_observed=\(senderLiveKitSDKFailureSurfaceIdentityConflictObserved)",
+            "sender_livekit_sdk_failure_surface_token_identity_match=\(senderLiveKitSDKFailureSurfaceTokenIdentityMatch)",
+            "sender_livekit_sdk_failure_surface_audio_session_ready=\(senderLiveKitSDKFailureSurfaceAudioSessionReady)",
+            "sender_livekit_sdk_failure_surface_permission_required=\(senderLiveKitSDKFailureSurfacePermissionRequired)",
+            "sender_livekit_sdk_failure_surface_capture_started=\(senderLiveKitSDKFailureSurfaceCaptureStarted)",
+            "sender_livekit_sdk_failure_surface_final_classification=\(senderLiveKitSDKFailureSurfaceFinalClassification)",
             "sender_transport_error_surface_source=\(senderTransportErrorSurfaceSource)",
             "sender_transport_error_surface_sdk_error_bucket=\(senderTransportErrorSurfaceSDKErrorBucket)",
             "sender_transport_error_surface_disconnect_reason_bucket=\(senderTransportErrorSurfaceDisconnectReasonBucket)",
@@ -3682,6 +3923,31 @@ private extension SalemXVoIPPushReceiptProofSummary {
         refreshRemoteParticipantPresenceRepairDiagnostics()
     }
 
+    mutating func recordSenderLiveKitSDKFailureSurface(_ sdkFailureSurface: SalemXSenderLiveKitSDKFailureSurface) {
+        senderLiveKitSDKFailureSurfacePresent = sdkFailureSurface.present
+        senderLiveKitSDKFailureSurfaceDebugOnly = sdkFailureSurface.debugOnly
+        senderLiveKitSDKFailureSurfaceRawErrorLogged = sdkFailureSurface.rawErrorLogged
+        senderLiveKitSDKFailureSurfaceRawURLLogged = sdkFailureSurface.rawURLLogged
+        senderLiveKitSDKFailureSurfaceRawTokenLogged = sdkFailureSurface.rawTokenLogged
+        senderLiveKitSDKFailureSurfaceRawRoomLogged = sdkFailureSurface.rawRoomLogged
+        senderLiveKitSDKFailureSurfaceRawIdentityLogged = sdkFailureSurface.rawIdentityLogged
+        senderLiveKitSDKFailureSurfaceConnectCallStarted = sdkFailureSurface.connectCallStarted
+        senderLiveKitSDKFailureSurfaceConnectCallReturned = sdkFailureSurface.connectCallReturned
+        senderLiveKitSDKFailureSurfaceConnectCallThrew = sdkFailureSurface.connectCallThrew
+        senderLiveKitSDKFailureSurfaceConnectedStateObserved = sdkFailureSurface.connectedStateObserved
+        senderLiveKitSDKFailureSurfaceFailedStateObserved = sdkFailureSurface.failedStateObserved
+        senderLiveKitSDKFailureSurfaceDisconnectedBeforeConnected = sdkFailureSurface.disconnectedBeforeConnected
+        senderLiveKitSDKFailureSurfaceDelegateFailureObserved = sdkFailureSurface.delegateFailureObserved
+        senderLiveKitSDKFailureSurfaceRoomAlreadyConnected = sdkFailureSurface.roomAlreadyConnected
+        senderLiveKitSDKFailureSurfaceIdentityConflictObserved = sdkFailureSurface.identityConflictObserved
+        senderLiveKitSDKFailureSurfaceTokenIdentityMatch = sdkFailureSurface.tokenIdentityMatch
+        senderLiveKitSDKFailureSurfaceAudioSessionReady = sdkFailureSurface.audioSessionReady
+        senderLiveKitSDKFailureSurfacePermissionRequired = sdkFailureSurface.permissionRequired
+        senderLiveKitSDKFailureSurfaceCaptureStarted = sdkFailureSurface.captureStarted
+        senderLiveKitSDKFailureSurfaceFinalClassification = sdkFailureSurface.finalClassification
+        refreshRemoteParticipantPresenceRepairDiagnostics()
+    }
+
     mutating func recordSenderTransportErrorSurface(_ errorSurface: SalemXSenderTransportErrorSurface) {
         senderTransportErrorSurfacePresent = errorSurface.present
         senderTransportErrorSurfaceDebugOnly = errorSurface.debugOnly
@@ -3697,7 +3963,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         senderTransportErrorSurfaceConnectedStateObserved = errorSurface.connectedStateObserved
         senderTransportErrorSurfaceDisconnectedBeforeConnected = errorSurface.disconnectedBeforeConnected
         senderTransportErrorSurfaceFinalClassification = errorSurface.finalClassification
-        refreshRemoteParticipantPresenceRepairDiagnostics()
+        recordSenderLiveKitSDKFailureSurface(errorSurface.sdkFailureSurface)
     }
 
     private func senderSideLiveKitJoinActivationBlockedReason(for hook: SalemXSenderSideLiveKitJoinHook) -> String {
@@ -5426,10 +5692,15 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             SalemXSenderTransportFailureDiagnostics.notRequestedTransportResult)
         let requestedFailureClassification = redactedSenderJoinFailureClassificationQueryItem(components)
         let requestedTransportFailureClassification = redactedSenderTransportFailureClassificationQueryItem(components)
+        let sdkFailureSurface = SalemXSenderLiveKitSDKFailureSurface.classify(requested: requested,
+                                                                              transportAttempted: resolvedTransportAttempted,
+                                                                              transportResult: resolvedTransportResult,
+                                                                              input: redactedSenderLiveKitSDKFailureSurfaceInput(components))
         let errorSurface = SalemXSenderTransportErrorSurface.classify(requested: requested,
                                                                       transportAttempted: resolvedTransportAttempted,
                                                                       transportResult: resolvedTransportResult,
-                                                                      input: redactedSenderTransportErrorSurfaceInput(components))
+                                                                      input: redactedSenderTransportErrorSurfaceInput(components,
+                                                                                                                      sdkFailureSurface: sdkFailureSurface))
         let credentialsPresent = redactedOptionalBoolQueryItem(components,
                                                                names: ["sender_credentials_present", "credentials_present"]) ?? readinessHook.credentialsReady
         let tokenPresent = redactedOptionalBoolQueryItem(components,
@@ -5551,7 +5822,59 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         return allowedClassifications.contains(value) ? value : nil
     }
 
-    private static func redactedSenderTransportErrorSurfaceInput(_ components: URLComponents?) -> SalemXSenderTransportErrorSurfaceInput {
+    private static func redactedSenderLiveKitSDKFailureSurfaceInput(_ components: URLComponents?) -> SalemXSenderLiveKitSDKFailureSurfaceInput {
+        SalemXSenderLiveKitSDKFailureSurfaceInput(requestedClassification: redactedSenderLiveKitSDKFailureClassificationQueryItem(components),
+                                                  connectCallStarted: redactedBoolQueryItem(components,
+                                                                                            names: ["sender_livekit_sdk_failure_surface_connect_call_started", "sender_sdk_connect_call_started"]),
+                                                  connectCallReturned: redactedBoolQueryItem(components,
+                                                                                             names: ["sender_livekit_sdk_failure_surface_connect_call_returned", "sender_sdk_connect_call_returned"]),
+                                                  connectCallThrew: redactedBoolQueryItem(components,
+                                                                                          names: ["sender_livekit_sdk_failure_surface_connect_call_threw", "sender_sdk_connect_call_threw"]),
+                                                  connectedStateObserved: redactedBoolQueryItem(components,
+                                                                                                names: ["sender_livekit_sdk_failure_surface_connected_state_observed", "sender_sdk_connected_state_observed"]),
+                                                  failedStateObserved: redactedBoolQueryItem(components,
+                                                                                             names: ["sender_livekit_sdk_failure_surface_failed_state_observed", "sender_sdk_failed_state_observed"]),
+                                                  disconnectedBeforeConnected: redactedBoolQueryItem(components,
+                                                                                                     names: ["sender_livekit_sdk_failure_surface_disconnected_before_connected", "sender_sdk_disconnected_before_connected"]),
+                                                  delegateFailureObserved: redactedBoolQueryItem(components,
+                                                                                                 names: ["sender_livekit_sdk_failure_surface_delegate_failure_observed", "sender_sdk_delegate_failure_observed"]),
+                                                  roomAlreadyConnected: redactedBoolQueryItem(components,
+                                                                                              names: ["sender_livekit_sdk_failure_surface_room_already_connected", "sender_sdk_room_already_connected"]),
+                                                  identityConflictObserved: redactedBoolQueryItem(components,
+                                                                                                  names: ["sender_livekit_sdk_failure_surface_identity_conflict_observed", "sender_sdk_identity_conflict_observed"]),
+                                                  tokenIdentityMatch: redactedOptionalBoolQueryItem(components,
+                                                                                                    names: ["sender_livekit_sdk_failure_surface_token_identity_match", "sender_sdk_token_identity_match"]),
+                                                  audioSessionReady: redactedOptionalBoolQueryItem(components,
+                                                                                                   names: ["sender_livekit_sdk_failure_surface_audio_session_ready", "sender_sdk_audio_session_ready"]),
+                                                  permissionRequired: redactedBoolQueryItem(components,
+                                                                                            names: ["sender_livekit_sdk_failure_surface_permission_required", "sender_sdk_permission_required"]),
+                                                  captureStarted: redactedBoolQueryItem(components,
+                                                                                        names: ["sender_livekit_sdk_failure_surface_capture_started", "sender_sdk_capture_started"]),
+                                                  networkTransportErrorObserved: redactedBoolQueryItem(components,
+                                                                                                       names: ["sender_livekit_sdk_failure_surface_network_transport_error_observed", "sender_sdk_network_transport_error_observed"]))
+    }
+
+    private static func redactedSenderLiveKitSDKFailureClassificationQueryItem(_ components: URLComponents?) -> String? {
+        redactedStringQueryItem(components,
+                                names: ["sender_livekit_sdk_failure_surface_final_classification", "sender_sdk_failure_classification"],
+                                allowedValues: [
+                                    SalemXSenderLiveKitSDKFailureSurface.connectCallThrewClassification,
+                                    SalemXSenderLiveKitSDKFailureSurface.connectReturnedWithoutConnectedClassification,
+                                    SalemXSenderLiveKitSDKFailureSurface.delegateFailedBeforeConnectedClassification,
+                                    SalemXSenderLiveKitSDKFailureSurface.disconnectedBeforeConnectedClassification,
+                                    SalemXSenderLiveKitSDKFailureSurface.stateFailedClassification,
+                                    SalemXSenderLiveKitSDKFailureSurface.roomAlreadyConnectedClassification,
+                                    SalemXSenderLiveKitSDKFailureSurface.identityConflictClassification,
+                                    SalemXSenderLiveKitSDKFailureSurface.tokenIdentityMismatchClassification,
+                                    SalemXSenderLiveKitSDKFailureSurface.audioSessionBlockedClassification,
+                                    SalemXSenderLiveKitSDKFailureSurface.permissionOrCaptureBlockedClassification,
+                                    SalemXSenderLiveKitSDKFailureSurface.networkTransportErrorClassification,
+                                    SalemXSenderLiveKitSDKFailureSurface.internalUnknownClassification
+                                ])
+    }
+
+    private static func redactedSenderTransportErrorSurfaceInput(_ components: URLComponents?,
+                                                                 sdkFailureSurface: SalemXSenderLiveKitSDKFailureSurface) -> SalemXSenderTransportErrorSurfaceInput {
         SalemXSenderTransportErrorSurfaceInput(source: redactedSenderTransportErrorSourceQueryItem(components),
                                                sdkErrorBucket: redactedSenderTransportErrorBucketQueryItem(components,
                                                                                                            names: ["sender_transport_error_surface_sdk_error_bucket", "transport_sdk_error_bucket"]),
@@ -5566,7 +5889,8 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                                                connectedStateObserved: redactedBoolQueryItem(components,
                                                                                              names: ["sender_transport_error_surface_connected_state_observed", "transport_connected_state_observed"]),
                                                disconnectedBeforeConnected: redactedBoolQueryItem(components,
-                                                                                                  names: ["sender_transport_error_surface_disconnected_before_connected", "transport_disconnected_before_connected"]))
+                                                                                                  names: ["sender_transport_error_surface_disconnected_before_connected", "transport_disconnected_before_connected"]),
+                                               sdkFailureSurface: sdkFailureSurface)
     }
 
     private static func redactedSenderTransportErrorSourceQueryItem(_ components: URLComponents?) -> String? {

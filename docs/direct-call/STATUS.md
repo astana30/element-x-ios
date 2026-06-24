@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-Physical2-Retry6-SenderTransportErrorSourceTriage — the one-shot two-physical-device physical proof safely classified the sender-side transport failure with the repaired redacted error surface. Receiver PushKit, CallKit Answer, pending metadata, credentials, one controlled receiver audio connect, and receiver LiveKit join succeeded. Sender-side join activation triggered and consumed once, then classified as `transport_livekit_sdk_unknown_error_redacted`; LiveKit room/token-authority comparisons remained true without raw IDs or tokens. Receiver remote participant/audio/liveness was not observed, so this is not remote-audio success. The next phase is `2.48Z-SenderLiveKitSDKUnknownTransportDiagnostics — inspect sender LiveKit SDK unknown transport source, no APNs/connect`.
+After 2.48Z-SenderLiveKitSDKUnknownErrorRepair — sender-side LiveKit SDK unknown failures now have a DEBUG/test-controlled redacted SDK failure surface that splits the previous broad `transport_livekit_sdk_unknown_error_redacted` bucket into specific redacted SDK buckets without raw SDK error, URL, token, room, identity, APNs payload, auth header, or invite body logging. The refined SDK classification maps into `sender_transport_error_surface_final_classification`, `sender_transport_failure_diagnostics_classification`, `sender_side_livekit_join_error_bucket`, and `sender_side_livekit_join_result`; existing transport buckets remain intact, sender-join-success-but-remote-missing remains separate, and the default runtime remains no-connect/no-join. The next phase is `2.48Z-Physical2-Retry7 — one-shot two-physical-device sender LiveKit SDK failure-source proof`.
 
 ## Latest App Code Checkpoint
 
@@ -38,6 +38,68 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Checksum: `654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e`
 
 ## Proven Checkpoints
+
+- 2.48Z-SenderLiveKitSDKUnknownErrorRepair breaks down the sender LiveKit SDK unknown failure source with redacted DEBUG/test-controlled diagnostics and no APNs/connect:
+  - New sender SDK failure surface fields:
+    ```text
+    sender_livekit_sdk_failure_surface_present=true
+    sender_livekit_sdk_failure_surface_debug_only=true
+    sender_livekit_sdk_failure_surface_raw_error_logged=false
+    sender_livekit_sdk_failure_surface_raw_url_logged=false
+    sender_livekit_sdk_failure_surface_raw_token_logged=false
+    sender_livekit_sdk_failure_surface_raw_room_logged=false
+    sender_livekit_sdk_failure_surface_raw_identity_logged=false
+    sender_livekit_sdk_failure_surface_connect_call_started=<redacted_bool>
+    sender_livekit_sdk_failure_surface_connect_call_returned=<redacted_bool>
+    sender_livekit_sdk_failure_surface_connect_call_threw=<redacted_bool>
+    sender_livekit_sdk_failure_surface_connected_state_observed=<redacted_bool>
+    sender_livekit_sdk_failure_surface_failed_state_observed=<redacted_bool>
+    sender_livekit_sdk_failure_surface_disconnected_before_connected=<redacted_bool>
+    sender_livekit_sdk_failure_surface_delegate_failure_observed=<redacted_bool>
+    sender_livekit_sdk_failure_surface_room_already_connected=<redacted_bool>
+    sender_livekit_sdk_failure_surface_identity_conflict_observed=<redacted_bool>
+    sender_livekit_sdk_failure_surface_token_identity_match=<redacted_bool>
+    sender_livekit_sdk_failure_surface_audio_session_ready=<redacted_bool>
+    sender_livekit_sdk_failure_surface_permission_required=<redacted_bool>
+    sender_livekit_sdk_failure_surface_capture_started=<redacted_bool>
+    sender_livekit_sdk_failure_surface_final_classification=<redacted_sdk_bucket>
+    ```
+  - Specific redacted SDK buckets now exist for:
+    ```text
+    sdk_connect_call_threw_redacted
+    sdk_connect_returned_without_connected_redacted
+    sdk_delegate_failed_before_connected_redacted
+    sdk_disconnected_before_connected_redacted
+    sdk_state_failed_redacted
+    sdk_room_already_connected_redacted
+    sdk_identity_conflict_redacted
+    sdk_token_identity_mismatch_redacted
+    sdk_audio_session_blocked_redacted
+    sdk_permission_or_capture_blocked_redacted
+    sdk_network_transport_error_redacted
+    sdk_internal_unknown_redacted
+    ```
+  - The SDK surface maps into the existing sender transport and join diagnostics while preserving prior transport buckets:
+    ```text
+    sender_transport_error_surface_final_classification=<specific_redacted_transport_bucket>
+    sender_transport_failure_diagnostics_classification=<specific_redacted_transport_bucket>
+    sender_side_livekit_join_error_bucket=<specific_redacted_transport_bucket>
+    sender_side_livekit_join_result=failed_redacted
+    existing_transport_buckets_remain_intact=true
+    sender_join_success_but_remote_missing_separate=true
+    ```
+  - Safety stayed closed:
+    ```text
+    default_runtime_no_connect=true
+    media_connect_requested=false
+    media_connect_attempted=false
+    livekit_join_requested=false
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    ```
+  - No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, or signing/project file edit was performed.
 
 - 2.48Z-Physical2-Retry6-SenderTransportErrorSourceTriage closes the one-shot two-physical-device sender transport error-source proof as safe classified sender transport triage, not remote-audio success:
   - Proof path:

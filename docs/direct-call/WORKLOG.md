@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Added 2.48Z-SenderLiveKitSDKUnknownErrorRepair: sender LiveKit SDK unknown failures now expose a DEBUG/test-controlled redacted SDK failure surface with connect-call, room-state, delegate, disconnect, identity, token-match, audio-session, permission/capture, network, and internal-unknown buckets. The refined SDK classification maps into sender transport error surface, sender transport diagnostics, and sender-side LiveKit join result/error buckets while preserving existing transport buckets, keeping sender-join-success-but-remote-missing separate, and leaving default runtime no-connect/no-join. Raw SDK error, URL, token, room, and identity logging remain false. No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, or signing/project file edit was performed.
 - Closed 2.48Z-Physical2-Retry6 as safe sender transport error-source triage, not remote-audio success: receiver PushKit, CallKit Answer, pending metadata, credentials, one receiver controlled audio connect, and receiver LiveKit join succeeded; sender readiness survived into runtime and Answer; sender-side join activation triggered and consumed once; the repaired sender transport error surface classified the sender transport attempt as `transport_livekit_sdk_unknown_error_redacted` with LiveKit room/token-authority matches true; remote participant/audio/liveness was not observed. No repeated APNs, production APNs, `dev/invite`, repeated connect, repeated LiveKit join, video, camera permission, Matrix event emit, or full call flow was performed.
 - Added 2.48Z-SenderTransportUnknownFailureSurfaceRepair: sender-side LiveKit transport failures now expose a DEBUG-only redacted error surface with source, SDK/disconnect/websocket/auth buckets, timeout and disconnected-before-connected flags, and final classification. Specific redacted source buckets now map into sender transport diagnostics and sender-side LiveKit join error buckets; raw error/URL/token logging remains false, room/token-authority comparisons remain redacted, pre-transport failures still classify before transport, sender-join-success-but-remote-missing remains separate, and default runtime remains no-connect/no-join. No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, or physical hook reset/re-arm was performed.
 - Closed 2.48Z-Physical2-Retry5 as safe sender transport bucket triage, not remote-audio success: receiver PushKit, CallKit Answer, pending metadata, credentials, one receiver controlled audio connect, and receiver LiveKit join succeeded; sender readiness survived into runtime and Answer; sender-side join activation triggered and consumed once; the sender transport diagnostics classified the transport attempt as `transport_unknown_failed_redacted` with LiveKit room/token-authority matches true; remote participant/audio/liveness was not observed. No repeated APNs, production APNs, `dev/invite`, repeated connect, repeated LiveKit join, video, camera permission, Matrix event emit, or full call flow was performed.
@@ -138,6 +139,83 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48Z-SenderLiveKitSDKUnknownErrorRepair — Redacted SDK Failure Surface / No APNs
+
+Implemented a DEBUG/test-controlled sender LiveKit SDK failure surface to split the previous broad SDK-unknown transport bucket into specific redacted SDK buckets without running APNs, physical media connect, or physical LiveKit.
+
+New proof fields:
+
+```text
+sender_livekit_sdk_failure_surface_present=true
+sender_livekit_sdk_failure_surface_debug_only=true
+sender_livekit_sdk_failure_surface_raw_error_logged=false
+sender_livekit_sdk_failure_surface_raw_url_logged=false
+sender_livekit_sdk_failure_surface_raw_token_logged=false
+sender_livekit_sdk_failure_surface_raw_room_logged=false
+sender_livekit_sdk_failure_surface_raw_identity_logged=false
+sender_livekit_sdk_failure_surface_connect_call_started=<redacted_bool>
+sender_livekit_sdk_failure_surface_connect_call_returned=<redacted_bool>
+sender_livekit_sdk_failure_surface_connect_call_threw=<redacted_bool>
+sender_livekit_sdk_failure_surface_connected_state_observed=<redacted_bool>
+sender_livekit_sdk_failure_surface_failed_state_observed=<redacted_bool>
+sender_livekit_sdk_failure_surface_disconnected_before_connected=<redacted_bool>
+sender_livekit_sdk_failure_surface_delegate_failure_observed=<redacted_bool>
+sender_livekit_sdk_failure_surface_room_already_connected=<redacted_bool>
+sender_livekit_sdk_failure_surface_identity_conflict_observed=<redacted_bool>
+sender_livekit_sdk_failure_surface_token_identity_match=<redacted_bool>
+sender_livekit_sdk_failure_surface_audio_session_ready=<redacted_bool>
+sender_livekit_sdk_failure_surface_permission_required=<redacted_bool>
+sender_livekit_sdk_failure_surface_capture_started=<redacted_bool>
+sender_livekit_sdk_failure_surface_final_classification=<redacted_sdk_bucket>
+```
+
+Specific redacted SDK buckets:
+
+```text
+sdk_connect_call_threw_redacted
+sdk_connect_returned_without_connected_redacted
+sdk_delegate_failed_before_connected_redacted
+sdk_disconnected_before_connected_redacted
+sdk_state_failed_redacted
+sdk_room_already_connected_redacted
+sdk_identity_conflict_redacted
+sdk_token_identity_mismatch_redacted
+sdk_audio_session_blocked_redacted
+sdk_permission_or_capture_blocked_redacted
+sdk_network_transport_error_redacted
+sdk_internal_unknown_redacted
+```
+
+Mapping and safety:
+
+```text
+sender_transport_error_surface_final_classification=<specific_redacted_transport_bucket>
+sender_transport_failure_diagnostics_classification=<specific_redacted_transport_bucket>
+sender_side_livekit_join_error_bucket=<specific_redacted_transport_bucket>
+sender_side_livekit_join_result=failed_redacted
+existing_transport_buckets_remain_intact=true
+sender_join_success_but_remote_missing_separate=true
+default_runtime_no_connect=true
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+Tests/checks:
+
+```text
+swiftformat_passed=true
+swiftlint_expected_file_length_warning_only=true
+direct_call_subset_passed=true
+direct_call_subset_tests=156
+```
+
+Next phase: `2.48Z-Physical2-Retry7 — one-shot two-physical-device sender LiveKit SDK failure-source proof`.
 
 ### 2.48Z-Physical2-Retry6 — Sender Transport Error Source / Remote Participant Not Observed Triage
 

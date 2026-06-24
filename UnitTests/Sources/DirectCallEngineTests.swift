@@ -3341,7 +3341,7 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("return transportTimeoutWaitingForConnectedStateClassification"))
         #expect(adapterSource.contains("return transportDisconnectedBeforeConnectedClassification"))
         #expect(adapterSource.contains("classification != transportUnknownFailedClassification"))
-        #expect(adapterSource.contains("redactedSenderTransportErrorSurfaceInput(components)"))
+        #expect(adapterSource.contains("redactedSenderTransportErrorSurfaceInput(components,"))
         #expect(adapterSource.contains("redactedStringQueryItem(components,"))
         #expect(adapterSource.contains("allowedValues.contains(value) ? value : nil"))
         #expect(adapterSource.contains("names: [\"sender_transport_error_surface_source\", \"transport_error_surface_source\"]"))
@@ -3368,6 +3368,115 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(!adapterSource.contains("senderTransportErrorSurfaceRawErrorLogged = true"))
         #expect(!adapterSource.contains("senderTransportErrorSurfaceRawURLLogged = true"))
         #expect(!adapterSource.contains("senderTransportErrorSurfaceRawTokenLogged = true"))
+    }
+
+    @Test
+    func senderLiveKitSDKFailureSurfaceClassifiesRedactedBucketsWithoutRuntime() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+
+        let sdkBuckets = [
+            "sdk_connect_call_threw_redacted",
+            "sdk_connect_returned_without_connected_redacted",
+            "sdk_delegate_failed_before_connected_redacted",
+            "sdk_disconnected_before_connected_redacted",
+            "sdk_state_failed_redacted",
+            "sdk_room_already_connected_redacted",
+            "sdk_identity_conflict_redacted",
+            "sdk_token_identity_mismatch_redacted",
+            "sdk_audio_session_blocked_redacted",
+            "sdk_permission_or_capture_blocked_redacted",
+            "sdk_network_transport_error_redacted",
+            "sdk_internal_unknown_redacted"
+        ]
+        for bucket in sdkBuckets {
+            #expect(adapterSource.contains(bucket))
+        }
+
+        #expect(adapterSource.contains("private struct SalemXSenderLiveKitSDKFailureSurface"))
+        #expect(adapterSource.contains("sender_livekit_sdk_failure_surface_present=\\(senderLiveKitSDKFailureSurfacePresent)"))
+        #expect(adapterSource.contains("sender_livekit_sdk_failure_surface_debug_only=\\(senderLiveKitSDKFailureSurfaceDebugOnly)"))
+        #expect(adapterSource.contains("sender_livekit_sdk_failure_surface_raw_error_logged=\\(senderLiveKitSDKFailureSurfaceRawErrorLogged)"))
+        #expect(adapterSource.contains("sender_livekit_sdk_failure_surface_raw_url_logged=\\(senderLiveKitSDKFailureSurfaceRawURLLogged)"))
+        #expect(adapterSource.contains("sender_livekit_sdk_failure_surface_raw_token_logged=\\(senderLiveKitSDKFailureSurfaceRawTokenLogged)"))
+        #expect(adapterSource.contains("sender_livekit_sdk_failure_surface_raw_room_logged=\\(senderLiveKitSDKFailureSurfaceRawRoomLogged)"))
+        #expect(adapterSource.contains("sender_livekit_sdk_failure_surface_raw_identity_logged=\\(senderLiveKitSDKFailureSurfaceRawIdentityLogged)"))
+        #expect(adapterSource.contains("sender_livekit_sdk_failure_surface_connect_call_started=\\(senderLiveKitSDKFailureSurfaceConnectCallStarted)"))
+        #expect(adapterSource.contains("sender_livekit_sdk_failure_surface_connect_call_returned=\\(senderLiveKitSDKFailureSurfaceConnectCallReturned)"))
+        #expect(adapterSource.contains("sender_livekit_sdk_failure_surface_connect_call_threw=\\(senderLiveKitSDKFailureSurfaceConnectCallThrew)"))
+        #expect(adapterSource.contains("sender_livekit_sdk_failure_surface_connected_state_observed=\\(senderLiveKitSDKFailureSurfaceConnectedStateObserved)"))
+        #expect(adapterSource.contains("sender_livekit_sdk_failure_surface_failed_state_observed=\\(senderLiveKitSDKFailureSurfaceFailedStateObserved)"))
+        #expect(adapterSource.contains("sender_livekit_sdk_failure_surface_disconnected_before_connected=\\(senderLiveKitSDKFailureSurfaceDisconnectedBeforeConnected)"))
+        #expect(adapterSource.contains("sender_livekit_sdk_failure_surface_delegate_failure_observed=\\(senderLiveKitSDKFailureSurfaceDelegateFailureObserved)"))
+        #expect(adapterSource.contains("sender_livekit_sdk_failure_surface_room_already_connected=\\(senderLiveKitSDKFailureSurfaceRoomAlreadyConnected)"))
+        #expect(adapterSource.contains("sender_livekit_sdk_failure_surface_identity_conflict_observed=\\(senderLiveKitSDKFailureSurfaceIdentityConflictObserved)"))
+        #expect(adapterSource.contains("sender_livekit_sdk_failure_surface_token_identity_match=\\(senderLiveKitSDKFailureSurfaceTokenIdentityMatch)"))
+        #expect(adapterSource.contains("sender_livekit_sdk_failure_surface_audio_session_ready=\\(senderLiveKitSDKFailureSurfaceAudioSessionReady)"))
+        #expect(adapterSource.contains("sender_livekit_sdk_failure_surface_permission_required=\\(senderLiveKitSDKFailureSurfacePermissionRequired)"))
+        #expect(adapterSource.contains("sender_livekit_sdk_failure_surface_capture_started=\\(senderLiveKitSDKFailureSurfaceCaptureStarted)"))
+        #expect(adapterSource.contains("sender_livekit_sdk_failure_surface_final_classification=\\(senderLiveKitSDKFailureSurfaceFinalClassification)"))
+
+        #expect(adapterSource.contains("let debugOnly = true"))
+        #expect(adapterSource.contains("let rawErrorLogged = false"))
+        #expect(adapterSource.contains("let rawURLLogged = false"))
+        #expect(adapterSource.contains("let rawTokenLogged = false"))
+        #expect(adapterSource.contains("let rawRoomLogged = false"))
+        #expect(adapterSource.contains("let rawIdentityLogged = false"))
+        #expect(adapterSource.contains("redactedSenderLiveKitSDKFailureSurfaceInput(components)"))
+        #expect(adapterSource.contains("redactedSenderLiveKitSDKFailureClassificationQueryItem(components)"))
+        #expect(adapterSource.contains("names: [\"sender_livekit_sdk_failure_surface_connect_call_threw\", \"sender_sdk_connect_call_threw\"]"))
+        #expect(adapterSource.contains("names: [\"sender_livekit_sdk_failure_surface_token_identity_match\", \"sender_sdk_token_identity_match\"]"))
+        #expect(adapterSource.contains("names: [\"sender_livekit_sdk_failure_surface_audio_session_ready\", \"sender_sdk_audio_session_ready\"]"))
+        #expect(adapterSource.contains("names: [\"sender_livekit_sdk_failure_surface_network_transport_error_observed\", \"sender_sdk_network_transport_error_observed\"]"))
+
+        #expect(adapterSource.contains("return connectCallThrewClassification"))
+        #expect(adapterSource.contains("return connectReturnedWithoutConnectedClassification"))
+        #expect(adapterSource.contains("return delegateFailedBeforeConnectedClassification"))
+        #expect(adapterSource.contains("return disconnectedBeforeConnectedClassification"))
+        #expect(adapterSource.contains("return stateFailedClassification"))
+        #expect(adapterSource.contains("return roomAlreadyConnectedClassification"))
+        #expect(adapterSource.contains("return identityConflictClassification"))
+        #expect(adapterSource.contains("return tokenIdentityMismatchClassification"))
+        #expect(adapterSource.contains("return audioSessionBlockedClassification"))
+        #expect(adapterSource.contains("return permissionOrCaptureBlockedClassification"))
+        #expect(adapterSource.contains("return networkTransportErrorClassification"))
+        #expect(adapterSource.contains("return internalUnknownClassification"))
+
+        #expect(adapterSource.contains("Self.transportClassification(for: finalClassification)"))
+        #expect(adapterSource.contains("case connectCallThrewClassification:"))
+        #expect(adapterSource.contains("case connectReturnedWithoutConnectedClassification:"))
+        #expect(adapterSource.contains("case delegateFailedBeforeConnectedClassification:"))
+        #expect(adapterSource.contains("case disconnectedBeforeConnectedClassification:"))
+        #expect(adapterSource.contains("case identityConflictClassification:"))
+        #expect(adapterSource.contains("case tokenIdentityMismatchClassification:"))
+        #expect(adapterSource.contains("case networkTransportErrorClassification:"))
+        #expect(adapterSource.contains("case stateFailedClassification,"))
+        #expect(adapterSource.contains("return SalemXSenderTransportErrorSurface.transportLiveKitSDKUnknownErrorClassification"))
+        #expect(adapterSource.contains("if let classification = input.sdkFailureSurface.transportClassification"))
+
+        #expect(adapterSource.contains("senderLiveKitSDKFailureSurfaceRawErrorLogged = sdkFailureSurface.rawErrorLogged"))
+        #expect(adapterSource.contains("senderLiveKitSDKFailureSurfaceRawURLLogged = sdkFailureSurface.rawURLLogged"))
+        #expect(adapterSource.contains("senderLiveKitSDKFailureSurfaceRawTokenLogged = sdkFailureSurface.rawTokenLogged"))
+        #expect(adapterSource.contains("senderLiveKitSDKFailureSurfaceRawRoomLogged = sdkFailureSurface.rawRoomLogged"))
+        #expect(adapterSource.contains("senderLiveKitSDKFailureSurfaceRawIdentityLogged = sdkFailureSurface.rawIdentityLogged"))
+        #expect(adapterSource.contains("recordSenderLiveKitSDKFailureSurface(errorSurface.sdkFailureSurface)"))
+        #expect(adapterSource.contains("summary.recordSenderTransportErrorSurface(transportErrorSurface)"))
+        #expect(adapterSource.contains("baseSummary.recordSenderTransportErrorSurface(senderTransportErrorSurfaceSnapshot)"))
+        #expect(adapterSource.contains("finalErrorBucket = transportDiagnostics.errorBucket == \"none\" ? joinDiagnostics.errorBucket"))
+        #expect(adapterSource.contains("sender_join_success_but_remote_missing_redacted"))
+
+        #expect(adapterSource.contains("summary.mediaConnectRequested = false"))
+        #expect(adapterSource.contains("summary.mediaConnectAttempted = false"))
+        #expect(adapterSource.contains("summary.liveKitJoinRequested = false"))
+        #expect(adapterSource.contains("summary.liveKitConnectAudioInvoked = false"))
+        #expect(adapterSource.contains("summary.microphonePermissionRequested = false"))
+        #expect(adapterSource.contains("summary.cameraPermissionRequested = false"))
+        #expect(adapterSource.contains("summary.matrixEventEmitRequested = false"))
+        #expect(adapterSource.contains("summary.realCallFlowStarted = false"))
+        #expect(!adapterSource.contains("senderLiveKitSDKFailureSurfaceRawErrorLogged = true"))
+        #expect(!adapterSource.contains("senderLiveKitSDKFailureSurfaceRawURLLogged = true"))
+        #expect(!adapterSource.contains("senderLiveKitSDKFailureSurfaceRawTokenLogged = true"))
+        #expect(!adapterSource.contains("senderLiveKitSDKFailureSurfaceRawRoomLogged = true"))
+        #expect(!adapterSource.contains("senderLiveKitSDKFailureSurfaceRawIdentityLogged = true"))
     }
 
     @Test
