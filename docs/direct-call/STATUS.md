@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-Physical2-Retry4 — the one-shot two-physical-device proof reached receiver PushKit, CallKit Answer, pending metadata, media credentials, one receiver controlled audio connect, and receiver LiveKit join. Sender readiness survived into runtime and Answer, sender-side join activation triggered and consumed exactly once, and the repaired diagnostics classified the sender join failure as `transport_failed_redacted`. Receiver remote participant/audio/liveness were not observed. This is safe sender transport-failed / remote participant not observed triage, not remote-audio success. The next phase is `2.48Z-SenderJoinTransportFailureRepair — investigate sender-side LiveKit transport failure before any APNs retry, no APNs/connect`.
+After 2.48Z-SenderTransportFailureRepair — sender-side LiveKit transport diagnostics now expose precise redacted transport buckets, same LiveKit room and token-authority match booleans, receiver/sender room and token-authority match booleans, and safe default-disabled proof fields. Pre-transport credential/token/URL/room-binding failures still classify before transport, while sender transport failure is separated from sender join success-but-remote-missing. No APNs/connect/real-device LiveKit/permissions/video/Matrix/full-flow path was run. The next phase is `2.48Z-Physical2-Retry5 — one-shot two-physical-device sender transport bucket proof`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,95 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48Z-SenderTransportFailureRepair adds precise redacted sender-side LiveKit transport failure diagnostics without APNs/connect/real-device LiveKit:
+  - New proof fields are emitted:
+    ```text
+    sender_transport_failure_diagnostics_present=true
+    sender_transport_failure_diagnostics_debug_only=true
+    sender_transport_failure_diagnostics_audio_only=true
+    sender_transport_failure_diagnostics_video_allowed=false
+    sender_transport_failure_diagnostics_matrix_events_allowed=false
+    sender_transport_failure_diagnostics_raw_identifiers_logged=false
+    sender_transport_failure_diagnostics_transport_attempted=<redacted_bool>
+    sender_transport_failure_diagnostics_transport_started=<redacted_bool>
+    sender_transport_failure_diagnostics_transport_completed=<redacted_bool>
+    sender_transport_failure_diagnostics_transport_result=<redacted_bucket>
+    sender_transport_failure_diagnostics_error_bucket=<redacted_bucket>
+    sender_transport_failure_diagnostics_classification=<redacted_bucket>
+    sender_transport_failure_diagnostics_livekit_url_present=<redacted_bool>
+    sender_transport_failure_diagnostics_token_present=<redacted_bool>
+    sender_transport_failure_diagnostics_room_binding_present=<redacted_bool>
+    sender_transport_failure_diagnostics_same_livekit_room=<redacted_bool>
+    sender_transport_failure_diagnostics_same_token_authority=<redacted_bool>
+    sender_transport_failure_diagnostics_receiver_sender_room_match=<redacted_bool>
+    sender_transport_failure_diagnostics_receiver_sender_token_authority_match=<redacted_bool>
+    ```
+  - Transport failure classifications now distinguish:
+    ```text
+    transport_not_attempted_redacted
+    transport_timeout_redacted
+    transport_tls_or_certificate_failed_redacted
+    transport_websocket_failed_redacted
+    transport_auth_rejected_redacted
+    transport_room_not_found_or_mismatch_redacted
+    transport_network_unreachable_redacted
+    transport_livekit_server_rejected_redacted
+    transport_unknown_failed_redacted
+    ```
+  - Receiver/sender comparison stays redacted:
+    ```text
+    sender_transport_failure_diagnostics_same_livekit_room=<redacted_bool>
+    sender_transport_failure_diagnostics_same_token_authority=<redacted_bool>
+    sender_transport_failure_diagnostics_receiver_sender_room_match=<redacted_bool>
+    sender_transport_failure_diagnostics_receiver_sender_token_authority_match=<redacted_bool>
+    ```
+  - Existing sender join failure diagnostics still classify pre-transport failures before any transport attempt:
+    ```text
+    credentials_missing_redacted
+    token_missing_redacted
+    url_missing_redacted
+    room_binding_missing_redacted
+    same_livekit_room_mismatch_redacted
+    ```
+  - Transport failure remains separate from receiver observer success-but-remote-missing:
+    ```text
+    sender_transport_failure_diagnostics_transport_result=failed_redacted
+    sender_transport_failure_diagnostics_classification=<redacted_transport_bucket>
+    receiver_remote_participant_observer_error_bucket=sender_join_success_but_remote_missing_redacted
+    ```
+  - Default runtime remains closed:
+    ```text
+    sender_transport_failure_diagnostics_transport_attempted=false
+    sender_transport_failure_diagnostics_transport_result=not_requested
+    media_connect_requested=false
+    media_connect_attempted=false
+    livekit_join_requested=false
+    livekit_connect_audio_invoked=false
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    ```
+  - Conclusion:
+    ```text
+    2.48Z-SenderTransportFailureRepair = sender transport failures can now be classified into precise redacted buckets before the next physical retry.
+    Same LiveKit room and token-authority comparisons are recorded without raw IDs or tokens.
+    Pre-transport credential/token/URL/room-binding failures still classify before transport.
+    Sender transport failure is separated from sender join success-but-remote-missing.
+    Default runtime remains no-connect/no-join.
+    No APNs.
+    No production APNs.
+    No repeated APNs.
+    No dev/invite.
+    No physical media connect.
+    No physical LiveKit join.
+    No video.
+    No microphone permission.
+    No camera permission.
+    No Matrix event emit.
+    No full call flow.
+    ```
+  - Next phase: `2.48Z-Physical2-Retry5 — one-shot two-physical-device sender transport bucket proof`.
 - 2.48Z-Physical2-Retry4-SenderTransportFailedTriage closes the one-shot two-physical-device sender join failure-bucket proof as safe sender transport-failed triage, not remote-audio success:
   - Proof path:
     ```text

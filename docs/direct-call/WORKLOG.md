@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Added 2.48Z-SenderTransportFailureRepair: sender-side LiveKit transport diagnostics now expose precise redacted transport buckets, transport started/completed/result fields, URL/token/room-binding presence, same LiveKit room and token-authority comparisons, and receiver/sender room/token-authority match booleans without raw identifiers; existing pre-transport credential/token/URL/room-binding buckets still classify before transport, transport failure is distinct from sender join success but receiver remote missing, and default runtime remains no-connect/no-join with no APNs/connect/real-device LiveKit/permissions/video/Matrix/full-flow side effects.
 - Closed 2.48Z-Physical2-Retry4 as safe sender transport-failed / remote participant not observed triage: receiver PushKit, CallKit Answer, pending metadata, credentials, one receiver controlled audio connect, and receiver LiveKit join succeeded; sender readiness survived into runtime and Answer; sender-side join activation triggered and consumed once; the repaired sender join failure diagnostics classified the sender attempt as `transport_failed_redacted`; remote participant/audio/liveness was not observed. No repeated APNs, production APNs, `dev/invite`, repeated connect, repeated LiveKit join, video, camera permission, Matrix event emit, or full call flow was performed.
 - Added 2.48Z-SenderJoinFailureDiagnostics: sender-side LiveKit join failures now emit redacted diagnostics for credentials, token, URL, room binding, same LiveKit room matching, transport attempt/result, error bucket, and classification; missing inputs classify before transport, transport failure and join failure are distinct, sender join success but receiver remote missing remains separate, sender activation stays one-shot, and default runtime remains no-connect/no-join with no APNs/connect/real-device LiveKit/permissions/video/Matrix/full-flow side effects.
 - Closed 2.48Z-Physical2-Retry3 as safe sender-join-failed / remote participant not observed triage: receiver PushKit, CallKit Answer, pending metadata, credentials, one controlled receiver audio connect, and receiver LiveKit join succeeded; sender readiness survived into runtime and Answer; sender-side join activation triggered and consumed once, but the sender join result was `failed_redacted`, so remote participant/audio/liveness was not observed. No repeated APNs, production APNs, `dev/invite`, repeated connect, repeated LiveKit join, video, camera permission, Matrix event emit, or full call flow was performed during close-out.
@@ -134,6 +135,75 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48Z-SenderTransportFailureRepair — Sender Transport Failure Buckets
+
+Added precise redacted sender transport failure diagnostics without running APNs, physical connect, real-device LiveKit, permissions, video, Matrix events, or a full call flow.
+
+New proof fields:
+
+```text
+sender_transport_failure_diagnostics_present=true
+sender_transport_failure_diagnostics_debug_only=true
+sender_transport_failure_diagnostics_audio_only=true
+sender_transport_failure_diagnostics_video_allowed=false
+sender_transport_failure_diagnostics_matrix_events_allowed=false
+sender_transport_failure_diagnostics_raw_identifiers_logged=false
+sender_transport_failure_diagnostics_transport_attempted=<redacted_bool>
+sender_transport_failure_diagnostics_transport_started=<redacted_bool>
+sender_transport_failure_diagnostics_transport_completed=<redacted_bool>
+sender_transport_failure_diagnostics_transport_result=<redacted_bucket>
+sender_transport_failure_diagnostics_error_bucket=<redacted_bucket>
+sender_transport_failure_diagnostics_classification=<redacted_bucket>
+sender_transport_failure_diagnostics_livekit_url_present=<redacted_bool>
+sender_transport_failure_diagnostics_token_present=<redacted_bool>
+sender_transport_failure_diagnostics_room_binding_present=<redacted_bool>
+sender_transport_failure_diagnostics_same_livekit_room=<redacted_bool>
+sender_transport_failure_diagnostics_same_token_authority=<redacted_bool>
+sender_transport_failure_diagnostics_receiver_sender_room_match=<redacted_bool>
+sender_transport_failure_diagnostics_receiver_sender_token_authority_match=<redacted_bool>
+```
+
+Transport classification buckets:
+
+```text
+transport_not_attempted_redacted
+transport_timeout_redacted
+transport_tls_or_certificate_failed_redacted
+transport_websocket_failed_redacted
+transport_auth_rejected_redacted
+transport_room_not_found_or_mismatch_redacted
+transport_network_unreachable_redacted
+transport_livekit_server_rejected_redacted
+transport_unknown_failed_redacted
+```
+
+Safety conclusion:
+
+```text
+2.48Z-SenderTransportFailureRepair = sender transport failure diagnostics repaired.
+Same LiveKit room and token-authority comparisons are recorded without raw IDs or tokens.
+Pre-transport credential/token/URL/room-binding failures still classify before transport.
+Transport failure is separate from sender join success but receiver remote missing.
+Default runtime remains no-connect/no-join.
+No APNs.
+No production APNs.
+No repeated APNs.
+No dev/invite.
+No physical media connect.
+No physical LiveKit join.
+No video.
+No microphone permission.
+No camera permission.
+No Matrix event emit.
+No full call flow.
+```
+
+Next phase:
+
+```text
+2.48Z-Physical2-Retry5 — one-shot two-physical-device sender transport bucket proof
+```
 
 ### 2.48Z-SenderJoinFailureDiagnostics — Sender Join Failure Buckets
 

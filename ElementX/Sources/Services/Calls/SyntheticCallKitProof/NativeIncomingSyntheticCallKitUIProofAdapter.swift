@@ -1118,6 +1118,125 @@ private struct SalemXSenderJoinFailureDiagnostics {
     }
 }
 
+private struct SalemXSenderTransportFailureDiagnosticInput {
+    let requested: Bool
+    let liveKitURLPresent: Bool
+    let tokenPresent: Bool
+    let roomBindingPresent: Bool
+    let sameLiveKitRoom: Bool
+    let sameTokenAuthority: Bool
+    let receiverSenderRoomMatch: Bool
+    let receiverSenderTokenAuthorityMatch: Bool
+    let transportAttempted: Bool?
+    let transportStarted: Bool?
+    let transportCompleted: Bool?
+    let transportResult: String?
+    let classification: String?
+}
+
+private struct SalemXSenderTransportFailureDiagnostics {
+    static let notRequestedClassification = "not_requested"
+    static let transportNotAttemptedClassification = "transport_not_attempted_redacted"
+    static let transportTimeoutClassification = "transport_timeout_redacted"
+    static let transportTLSOrCertificateFailedClassification = "transport_tls_or_certificate_failed_redacted"
+    static let transportWebSocketFailedClassification = "transport_websocket_failed_redacted"
+    static let transportAuthRejectedClassification = "transport_auth_rejected_redacted"
+    static let transportRoomNotFoundOrMismatchClassification = "transport_room_not_found_or_mismatch_redacted"
+    static let transportNetworkUnreachableClassification = "transport_network_unreachable_redacted"
+    static let transportLiveKitServerRejectedClassification = "transport_livekit_server_rejected_redacted"
+    static let transportUnknownFailedClassification = "transport_unknown_failed_redacted"
+    static let notRequestedTransportResult = "not_requested"
+    static let successTransportResult = "success_redacted"
+    static let failedTransportResult = "failed_redacted"
+    static let defaultDisabled = SalemXSenderTransportFailureDiagnostics(transportAttempted: false,
+                                                                         transportStarted: false,
+                                                                         transportCompleted: false,
+                                                                         transportResult: notRequestedTransportResult,
+                                                                         errorBucket: "none",
+                                                                         classification: notRequestedClassification,
+                                                                         liveKitURLPresent: false,
+                                                                         tokenPresent: false,
+                                                                         roomBindingPresent: false,
+                                                                         sameLiveKitRoom: false,
+                                                                         sameTokenAuthority: false,
+                                                                         receiverSenderRoomMatch: false,
+                                                                         receiverSenderTokenAuthorityMatch: false)
+
+    let transportAttempted: Bool
+    let transportStarted: Bool
+    let transportCompleted: Bool
+    let transportResult: String
+    let errorBucket: String
+    let classification: String
+    let liveKitURLPresent: Bool
+    let tokenPresent: Bool
+    let roomBindingPresent: Bool
+    let sameLiveKitRoom: Bool
+    let sameTokenAuthority: Bool
+    let receiverSenderRoomMatch: Bool
+    let receiverSenderTokenAuthorityMatch: Bool
+
+    let present = true
+    let debugOnly = true
+    let audioOnly = true
+    let videoAllowed = false
+    let matrixEventsAllowed = false
+    let rawIdentifiersLogged = false
+
+    static func classify(_ input: SalemXSenderTransportFailureDiagnosticInput) -> SalemXSenderTransportFailureDiagnostics {
+        guard input.requested else {
+            return defaultDisabled
+        }
+
+        let attempted = input.transportAttempted ?? false
+        let started = input.transportStarted ?? attempted
+        let completed = input.transportCompleted ?? (input.transportResult == successTransportResult || input.transportResult == failedTransportResult)
+        let result = input.transportResult ?? defaultTransportResult(attempted: attempted)
+        let classification = resolvedClassification(input: input,
+                                                    transportAttempted: attempted,
+                                                    transportResult: result)
+
+        return .init(transportAttempted: attempted,
+                     transportStarted: started,
+                     transportCompleted: completed,
+                     transportResult: result,
+                     errorBucket: classification == "none" ? "none" : classification,
+                     classification: classification,
+                     liveKitURLPresent: input.liveKitURLPresent,
+                     tokenPresent: input.tokenPresent,
+                     roomBindingPresent: input.roomBindingPresent,
+                     sameLiveKitRoom: input.sameLiveKitRoom,
+                     sameTokenAuthority: input.sameTokenAuthority,
+                     receiverSenderRoomMatch: input.receiverSenderRoomMatch,
+                     receiverSenderTokenAuthorityMatch: input.receiverSenderTokenAuthorityMatch)
+    }
+
+    private static func defaultTransportResult(attempted: Bool) -> String {
+        attempted ? failedTransportResult : notRequestedTransportResult
+    }
+
+    private static func resolvedClassification(input: SalemXSenderTransportFailureDiagnosticInput,
+                                               transportAttempted: Bool,
+                                               transportResult: String) -> String {
+        if !input.liveKitURLPresent || !input.tokenPresent || !input.roomBindingPresent || !transportAttempted {
+            return transportNotAttemptedClassification
+        }
+        if !input.sameLiveKitRoom || !input.receiverSenderRoomMatch {
+            return transportRoomNotFoundOrMismatchClassification
+        }
+        if !input.sameTokenAuthority || !input.receiverSenderTokenAuthorityMatch {
+            return transportAuthRejectedClassification
+        }
+        if let classification = input.classification {
+            return classification
+        }
+        if transportResult == successTransportResult {
+            return "none"
+        }
+        return transportUnknownFailedClassification
+    }
+}
+
 private struct SalemXRemoteParticipantObserverClassification {
     let result: String
     let errorBucket: String
@@ -2289,6 +2408,25 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var senderJoinFailureDiagnosticsTransportResult = SalemXSenderJoinFailureDiagnostics.defaultDisabled.transportResult
     var senderJoinFailureDiagnosticsErrorBucket = SalemXSenderJoinFailureDiagnostics.defaultDisabled.errorBucket
     var senderJoinFailureDiagnosticsClassification = SalemXSenderJoinFailureDiagnostics.defaultDisabled.classification
+    var senderTransportFailureDiagnosticsPresent = SalemXSenderTransportFailureDiagnostics.defaultDisabled.present
+    var senderTransportFailureDiagnosticsDebugOnly = SalemXSenderTransportFailureDiagnostics.defaultDisabled.debugOnly
+    var senderTransportFailureDiagnosticsAudioOnly = SalemXSenderTransportFailureDiagnostics.defaultDisabled.audioOnly
+    var senderTransportFailureDiagnosticsVideoAllowed = SalemXSenderTransportFailureDiagnostics.defaultDisabled.videoAllowed
+    var senderTransportFailureDiagnosticsMatrixEventsAllowed = SalemXSenderTransportFailureDiagnostics.defaultDisabled.matrixEventsAllowed
+    var senderTransportFailureDiagnosticsRawIdentifiersLogged = SalemXSenderTransportFailureDiagnostics.defaultDisabled.rawIdentifiersLogged
+    var senderTransportFailureDiagnosticsTransportAttempted = SalemXSenderTransportFailureDiagnostics.defaultDisabled.transportAttempted
+    var senderTransportFailureDiagnosticsTransportStarted = SalemXSenderTransportFailureDiagnostics.defaultDisabled.transportStarted
+    var senderTransportFailureDiagnosticsTransportCompleted = SalemXSenderTransportFailureDiagnostics.defaultDisabled.transportCompleted
+    var senderTransportFailureDiagnosticsTransportResult = SalemXSenderTransportFailureDiagnostics.defaultDisabled.transportResult
+    var senderTransportFailureDiagnosticsErrorBucket = SalemXSenderTransportFailureDiagnostics.defaultDisabled.errorBucket
+    var senderTransportFailureDiagnosticsClassification = SalemXSenderTransportFailureDiagnostics.defaultDisabled.classification
+    var senderTransportFailureDiagnosticsLiveKitURLPresent = SalemXSenderTransportFailureDiagnostics.defaultDisabled.liveKitURLPresent
+    var senderTransportFailureDiagnosticsTokenPresent = SalemXSenderTransportFailureDiagnostics.defaultDisabled.tokenPresent
+    var senderTransportFailureDiagnosticsRoomBindingPresent = SalemXSenderTransportFailureDiagnostics.defaultDisabled.roomBindingPresent
+    var senderTransportFailureDiagnosticsSameLiveKitRoom = SalemXSenderTransportFailureDiagnostics.defaultDisabled.sameLiveKitRoom
+    var senderTransportFailureDiagnosticsSameTokenAuthority = SalemXSenderTransportFailureDiagnostics.defaultDisabled.sameTokenAuthority
+    var senderTransportFailureDiagnosticsReceiverSenderRoomMatch = SalemXSenderTransportFailureDiagnostics.defaultDisabled.receiverSenderRoomMatch
+    var senderTransportFailureDiagnosticsReceiverSenderTokenAuthorityMatch = SalemXSenderTransportFailureDiagnostics.defaultDisabled.receiverSenderTokenAuthorityMatch
     var senderSideLiveKitJoinActivationPresent = SalemXSenderSideLiveKitJoinActivation.defaultDisabled.present
     var senderSideLiveKitJoinActivationDebugOnly = SalemXSenderSideLiveKitJoinActivation.defaultDisabled.debugOnly
     var senderSideLiveKitJoinActivationDefaultDisabled = SalemXSenderSideLiveKitJoinActivation.defaultDisabled.isDefaultDisabled
@@ -2820,6 +2958,25 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "sender_join_failure_diagnostics_transport_result=\(senderJoinFailureDiagnosticsTransportResult)",
             "sender_join_failure_diagnostics_error_bucket=\(senderJoinFailureDiagnosticsErrorBucket)",
             "sender_join_failure_diagnostics_classification=\(senderJoinFailureDiagnosticsClassification)",
+            "sender_transport_failure_diagnostics_present=\(senderTransportFailureDiagnosticsPresent)",
+            "sender_transport_failure_diagnostics_debug_only=\(senderTransportFailureDiagnosticsDebugOnly)",
+            "sender_transport_failure_diagnostics_audio_only=\(senderTransportFailureDiagnosticsAudioOnly)",
+            "sender_transport_failure_diagnostics_video_allowed=\(senderTransportFailureDiagnosticsVideoAllowed)",
+            "sender_transport_failure_diagnostics_matrix_events_allowed=\(senderTransportFailureDiagnosticsMatrixEventsAllowed)",
+            "sender_transport_failure_diagnostics_raw_identifiers_logged=\(senderTransportFailureDiagnosticsRawIdentifiersLogged)",
+            "sender_transport_failure_diagnostics_transport_attempted=\(senderTransportFailureDiagnosticsTransportAttempted)",
+            "sender_transport_failure_diagnostics_transport_started=\(senderTransportFailureDiagnosticsTransportStarted)",
+            "sender_transport_failure_diagnostics_transport_completed=\(senderTransportFailureDiagnosticsTransportCompleted)",
+            "sender_transport_failure_diagnostics_transport_result=\(senderTransportFailureDiagnosticsTransportResult)",
+            "sender_transport_failure_diagnostics_error_bucket=\(senderTransportFailureDiagnosticsErrorBucket)",
+            "sender_transport_failure_diagnostics_classification=\(senderTransportFailureDiagnosticsClassification)",
+            "sender_transport_failure_diagnostics_livekit_url_present=\(senderTransportFailureDiagnosticsLiveKitURLPresent)",
+            "sender_transport_failure_diagnostics_token_present=\(senderTransportFailureDiagnosticsTokenPresent)",
+            "sender_transport_failure_diagnostics_room_binding_present=\(senderTransportFailureDiagnosticsRoomBindingPresent)",
+            "sender_transport_failure_diagnostics_same_livekit_room=\(senderTransportFailureDiagnosticsSameLiveKitRoom)",
+            "sender_transport_failure_diagnostics_same_token_authority=\(senderTransportFailureDiagnosticsSameTokenAuthority)",
+            "sender_transport_failure_diagnostics_receiver_sender_room_match=\(senderTransportFailureDiagnosticsReceiverSenderRoomMatch)",
+            "sender_transport_failure_diagnostics_receiver_sender_token_authority_match=\(senderTransportFailureDiagnosticsReceiverSenderTokenAuthorityMatch)",
             "sender_side_livekit_join_activation_present=\(senderSideLiveKitJoinActivationPresent)",
             "sender_side_livekit_join_activation_debug_only=\(senderSideLiveKitJoinActivationDebugOnly)",
             "sender_side_livekit_join_activation_default_disabled=\(senderSideLiveKitJoinActivationDefaultDisabled)",
@@ -3070,6 +3227,10 @@ private extension SalemXVoIPPushReceiptProofSummary {
         senderJoinFailureDiagnosticsVideoAllowed = senderSideLiveKitJoinHookVideoAllowed
         senderJoinFailureDiagnosticsMatrixEventsAllowed = senderSideLiveKitJoinHookMatrixEventsAllowed
         senderJoinFailureDiagnosticsRawIdentifiersLogged = false
+        senderTransportFailureDiagnosticsAudioOnly = senderSideLiveKitJoinHookAudioOnly
+        senderTransportFailureDiagnosticsVideoAllowed = senderSideLiveKitJoinHookVideoAllowed
+        senderTransportFailureDiagnosticsMatrixEventsAllowed = senderSideLiveKitJoinHookMatrixEventsAllowed
+        senderTransportFailureDiagnosticsRawIdentifiersLogged = false
 
         receiverRemoteParticipantObserverPresent = true
         receiverRemoteParticipantObserverDebugOnly = true
@@ -3263,6 +3424,29 @@ private extension SalemXVoIPPushReceiptProofSummary {
         refreshRemoteParticipantPresenceRepairDiagnostics()
     }
 
+    mutating func recordSenderTransportFailureDiagnostics(_ diagnostics: SalemXSenderTransportFailureDiagnostics) {
+        senderTransportFailureDiagnosticsPresent = diagnostics.present
+        senderTransportFailureDiagnosticsDebugOnly = diagnostics.debugOnly
+        senderTransportFailureDiagnosticsAudioOnly = diagnostics.audioOnly
+        senderTransportFailureDiagnosticsVideoAllowed = diagnostics.videoAllowed
+        senderTransportFailureDiagnosticsMatrixEventsAllowed = diagnostics.matrixEventsAllowed
+        senderTransportFailureDiagnosticsRawIdentifiersLogged = diagnostics.rawIdentifiersLogged
+        senderTransportFailureDiagnosticsTransportAttempted = diagnostics.transportAttempted
+        senderTransportFailureDiagnosticsTransportStarted = diagnostics.transportStarted
+        senderTransportFailureDiagnosticsTransportCompleted = diagnostics.transportCompleted
+        senderTransportFailureDiagnosticsTransportResult = diagnostics.transportResult
+        senderTransportFailureDiagnosticsErrorBucket = diagnostics.errorBucket
+        senderTransportFailureDiagnosticsClassification = diagnostics.classification
+        senderTransportFailureDiagnosticsLiveKitURLPresent = diagnostics.liveKitURLPresent
+        senderTransportFailureDiagnosticsTokenPresent = diagnostics.tokenPresent
+        senderTransportFailureDiagnosticsRoomBindingPresent = diagnostics.roomBindingPresent
+        senderTransportFailureDiagnosticsSameLiveKitRoom = diagnostics.sameLiveKitRoom
+        senderTransportFailureDiagnosticsSameTokenAuthority = diagnostics.sameTokenAuthority
+        senderTransportFailureDiagnosticsReceiverSenderRoomMatch = diagnostics.receiverSenderRoomMatch
+        senderTransportFailureDiagnosticsReceiverSenderTokenAuthorityMatch = diagnostics.receiverSenderTokenAuthorityMatch
+        refreshRemoteParticipantPresenceRepairDiagnostics()
+    }
+
     private func senderSideLiveKitJoinActivationBlockedReason(for hook: SalemXSenderSideLiveKitJoinHook) -> String {
         if hook.repeated {
             return SalemXSenderSideLiveKitJoinActivation.repeatedSenderJoinBlockedReason
@@ -3323,8 +3507,22 @@ private extension SalemXVoIPPushReceiptProofSummary {
                                                                             transportAttempted: nil,
                                                                             transportResult: nil,
                                                                             classification: nil))
+        let transportDiagnostics = SalemXSenderTransportFailureDiagnostics.classify(.init(requested: requested,
+                                                                                          liveKitURLPresent: requested,
+                                                                                          tokenPresent: requested,
+                                                                                          roomBindingPresent: requested,
+                                                                                          sameLiveKitRoom: requested,
+                                                                                          sameTokenAuthority: requested,
+                                                                                          receiverSenderRoomMatch: requested,
+                                                                                          receiverSenderTokenAuthorityMatch: requested,
+                                                                                          transportAttempted: nil,
+                                                                                          transportStarted: nil,
+                                                                                          transportCompleted: nil,
+                                                                                          transportResult: nil,
+                                                                                          classification: nil))
         recordSenderSideLiveKitJoinHook(hook)
         recordSenderJoinFailureDiagnostics(diagnostics)
+        recordSenderTransportFailureDiagnostics(transportDiagnostics)
         recordSenderSideLiveKitJoinActivation(.init(armed: requested,
                                                     triggered: requested,
                                                     consumed: requested && !repeated,
@@ -4711,6 +4909,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var senderSideLiveKitJoinHook = SalemXSenderSideLiveKitJoinHook.defaultDisabled
     private static var senderSideLiveKitJoinActivation = SalemXSenderSideLiveKitJoinActivation.defaultDisabled
     private static var senderJoinFailureDiagnostics = SalemXSenderJoinFailureDiagnostics.defaultDisabled
+    private static var senderTransportFailureDiagnostics = SalemXSenderTransportFailureDiagnostics.defaultDisabled
     #if canImport(CallKit) && os(iOS)
     private static var callKitProofHarness: NativeIncomingSyntheticCallKitUIProofHarness?
     private static var callKitProofGeneration = 0
@@ -4862,35 +5061,17 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         let requested = redactedBoolQueryItem(components,
                                               names: ["sender_join_requested", "join_requested"])
         let requestedResult = redactedSenderSideLiveKitJoinResultQueryItem(components)
-        let transportAttempted = redactedOptionalBoolQueryItem(components,
-                                                               names: ["sender_transport_attempted", "transport_attempted"])
-        let transportResult = redactedSenderJoinTransportResultQueryItem(components)
-        let requestedFailureClassification = redactedSenderJoinFailureClassificationQueryItem(components)
         lock.lock()
         let readinessHook = senderLiveKitReadinessHook
         let previousActivation = senderSideLiveKitJoinActivation
         let repeated = requested && previousActivation.consumed
-        let credentialsPresent = redactedOptionalBoolQueryItem(components,
-                                                               names: ["sender_credentials_present", "credentials_present"]) ?? readinessHook.credentialsReady
-        let tokenPresent = redactedOptionalBoolQueryItem(components,
-                                                         names: ["sender_token_present", "token_present"]) ?? readinessHook.credentialsReady
-        let urlPresent = redactedOptionalBoolQueryItem(components,
-                                                       names: ["sender_url_present", "url_present"]) ?? readinessHook.credentialsReady
-        let roomBindingPresent = redactedOptionalBoolQueryItem(components,
-                                                               names: ["sender_room_binding_present", "room_binding_present"]) ?? readinessHook.sameRoomReady
-        let sameLiveKitRoom = redactedOptionalBoolQueryItem(components,
-                                                            names: ["sender_same_livekit_room", "same_livekit_room"]) ?? readinessHook.sameRoomReady
-        let diagnostics = SalemXSenderJoinFailureDiagnostics.classify(.init(requested: requested,
-                                                                            repeated: repeated,
-                                                                            credentialsPresent: credentialsPresent,
-                                                                            tokenPresent: tokenPresent,
-                                                                            urlPresent: urlPresent,
-                                                                            roomBindingPresent: roomBindingPresent,
-                                                                            sameLiveKitRoom: sameLiveKitRoom,
-                                                                            requestedResult: requestedResult,
-                                                                            transportAttempted: transportAttempted,
-                                                                            transportResult: transportResult,
-                                                                            classification: requestedFailureClassification))
+        let diagnostics = senderJoinDiagnostics(components: components,
+                                                requested: requested,
+                                                repeated: repeated,
+                                                readinessHook: readinessHook,
+                                                requestedResult: requestedResult)
+        let joinDiagnostics = diagnostics.joinFailure
+        let transportDiagnostics = diagnostics.transportFailure
         let senderReadinessMissing = !readinessHook.armed
             || !readinessHook.matrixSessionReady
             || !readinessHook.expectedUserMatched
@@ -4902,23 +5083,23 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
 
         if repeated {
             finalResult = SalemXSenderSideLiveKitJoinHook.blockedResult
-            finalErrorBucket = diagnostics.errorBucket
+            finalErrorBucket = joinDiagnostics.errorBucket
             activationBlockedReason = SalemXSenderSideLiveKitJoinActivation.repeatedSenderJoinBlockedReason
         } else if requested, senderReadinessMissing {
             finalResult = SalemXSenderSideLiveKitJoinHook.blockedResult
-            finalErrorBucket = diagnostics.errorBucket == "none" ? SalemXSenderSideLiveKitJoinActivation.senderReadinessMissingReason : diagnostics.errorBucket
+            finalErrorBucket = joinDiagnostics.errorBucket == "none" ? SalemXSenderSideLiveKitJoinActivation.senderReadinessMissingReason : joinDiagnostics.errorBucket
             activationBlockedReason = SalemXSenderSideLiveKitJoinActivation.senderReadinessMissingReason
         } else if requested, sameRoomReadinessMissing {
             finalResult = SalemXSenderSideLiveKitJoinHook.blockedResult
-            finalErrorBucket = diagnostics.errorBucket == "none" ? SalemXSenderSideLiveKitJoinActivation.sameRoomReadinessMissingReason : diagnostics.errorBucket
+            finalErrorBucket = joinDiagnostics.errorBucket == "none" ? SalemXSenderSideLiveKitJoinActivation.sameRoomReadinessMissingReason : joinDiagnostics.errorBucket
             activationBlockedReason = SalemXSenderSideLiveKitJoinActivation.sameRoomReadinessMissingReason
-        } else if requested, diagnostics.blocksBeforeTransport {
+        } else if requested, joinDiagnostics.blocksBeforeTransport {
             finalResult = SalemXSenderSideLiveKitJoinHook.blockedResult
-            finalErrorBucket = diagnostics.errorBucket
+            finalErrorBucket = joinDiagnostics.errorBucket
             activationBlockedReason = SalemXSenderSideLiveKitJoinActivation.senderJoinBlockedReason
         } else if requested {
             finalResult = requestedResult
-            finalErrorBucket = diagnostics.errorBucket == "none" ? "none" : diagnostics.errorBucket
+            finalErrorBucket = joinDiagnostics.errorBucket == "none" ? "none" : joinDiagnostics.errorBucket
             if requestedResult == SalemXSenderSideLiveKitJoinHook.blockedResult {
                 activationBlockedReason = SalemXSenderSideLiveKitJoinActivation.senderJoinBlockedReason
             } else if requestedResult == SalemXSenderSideLiveKitJoinHook.failedResult {
@@ -4946,10 +5127,12 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                                                                blockedReason: activationBlockedReason)
         senderSideLiveKitJoinHook = hook
         senderSideLiveKitJoinActivation = activation
-        senderJoinFailureDiagnostics = diagnostics
+        senderJoinFailureDiagnostics = joinDiagnostics
+        senderTransportFailureDiagnostics = transportDiagnostics
         var summary = latestVoIPPushReceiptSummary
         summary.recordSenderSideLiveKitJoinHook(hook)
-        summary.recordSenderJoinFailureDiagnostics(diagnostics)
+        summary.recordSenderJoinFailureDiagnostics(joinDiagnostics)
+        summary.recordSenderTransportFailureDiagnostics(transportDiagnostics)
         summary.recordSenderSideLiveKitJoinActivation(activation)
         summary.mediaConnectRequested = false
         summary.mediaConnectAttempted = false
@@ -4962,6 +5145,63 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         lock.unlock()
 
         updateLatestVoIPPushReceiptSummary(summary)
+    }
+
+    private static func senderJoinDiagnostics(components: URLComponents?,
+                                              requested: Bool,
+                                              repeated: Bool,
+                                              readinessHook: SalemXSenderLiveKitReadinessHook,
+                                              requestedResult: String) -> (joinFailure: SalemXSenderJoinFailureDiagnostics, transportFailure: SalemXSenderTransportFailureDiagnostics) {
+        let transportAttempted = redactedOptionalBoolQueryItem(components,
+                                                               names: ["sender_transport_attempted", "transport_attempted"])
+        let transportStarted = redactedOptionalBoolQueryItem(components,
+                                                             names: ["sender_transport_started", "transport_started"])
+        let transportCompleted = redactedOptionalBoolQueryItem(components,
+                                                               names: ["sender_transport_completed", "transport_completed"])
+        let transportResult = redactedSenderJoinTransportResultQueryItem(components)
+        let requestedFailureClassification = redactedSenderJoinFailureClassificationQueryItem(components)
+        let requestedTransportFailureClassification = redactedSenderTransportFailureClassificationQueryItem(components)
+        let credentialsPresent = redactedOptionalBoolQueryItem(components,
+                                                               names: ["sender_credentials_present", "credentials_present"]) ?? readinessHook.credentialsReady
+        let tokenPresent = redactedOptionalBoolQueryItem(components,
+                                                         names: ["sender_token_present", "token_present"]) ?? readinessHook.credentialsReady
+        let urlPresent = redactedOptionalBoolQueryItem(components,
+                                                       names: ["sender_url_present", "url_present"]) ?? readinessHook.credentialsReady
+        let roomBindingPresent = redactedOptionalBoolQueryItem(components,
+                                                               names: ["sender_room_binding_present", "room_binding_present"]) ?? readinessHook.sameRoomReady
+        let sameLiveKitRoom = redactedOptionalBoolQueryItem(components,
+                                                            names: ["sender_same_livekit_room", "same_livekit_room"]) ?? readinessHook.sameRoomReady
+        let sameTokenAuthority = redactedOptionalBoolQueryItem(components,
+                                                               names: ["sender_same_token_authority", "same_token_authority"]) ?? credentialsPresent
+        let receiverSenderRoomMatch = redactedOptionalBoolQueryItem(components,
+                                                                    names: ["sender_receiver_room_match", "receiver_sender_room_match"]) ?? sameLiveKitRoom
+        let receiverSenderTokenAuthorityMatch = redactedOptionalBoolQueryItem(components,
+                                                                              names: ["sender_receiver_token_authority_match", "receiver_sender_token_authority_match"]) ?? sameTokenAuthority
+        let joinDiagnostics = SalemXSenderJoinFailureDiagnostics.classify(.init(requested: requested,
+                                                                                repeated: repeated,
+                                                                                credentialsPresent: credentialsPresent,
+                                                                                tokenPresent: tokenPresent,
+                                                                                urlPresent: urlPresent,
+                                                                                roomBindingPresent: roomBindingPresent,
+                                                                                sameLiveKitRoom: sameLiveKitRoom,
+                                                                                requestedResult: requestedResult,
+                                                                                transportAttempted: transportAttempted,
+                                                                                transportResult: transportResult,
+                                                                                classification: requestedFailureClassification))
+        let transportDiagnostics = SalemXSenderTransportFailureDiagnostics.classify(.init(requested: requested,
+                                                                                          liveKitURLPresent: urlPresent,
+                                                                                          tokenPresent: tokenPresent,
+                                                                                          roomBindingPresent: roomBindingPresent,
+                                                                                          sameLiveKitRoom: sameLiveKitRoom,
+                                                                                          sameTokenAuthority: sameTokenAuthority,
+                                                                                          receiverSenderRoomMatch: receiverSenderRoomMatch,
+                                                                                          receiverSenderTokenAuthorityMatch: receiverSenderTokenAuthorityMatch,
+                                                                                          transportAttempted: transportAttempted,
+                                                                                          transportStarted: transportStarted,
+                                                                                          transportCompleted: transportCompleted,
+                                                                                          transportResult: transportResult,
+                                                                                          classification: requestedTransportFailureClassification))
+        return (joinDiagnostics, transportDiagnostics)
     }
 
     private static func redactedSenderSideLiveKitJoinResultQueryItem(_ components: URLComponents?) -> String {
@@ -5009,6 +5249,24 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             SalemXSenderJoinFailureDiagnostics.transportFailedClassification,
             SalemXSenderJoinFailureDiagnostics.joinFailedClassification,
             SalemXSenderJoinFailureDiagnostics.unknownFailureClassification
+        ]
+        return allowedClassifications.contains(value) ? value : nil
+    }
+
+    private static func redactedSenderTransportFailureClassificationQueryItem(_ components: URLComponents?) -> String? {
+        guard let value = components?.queryItems?.first(where: { $0.name == "sender_transport_failure_classification" || $0.name == "transport_failure_classification" })?.value?.lowercased() else {
+            return nil
+        }
+        let allowedClassifications: Set<String> = [
+            SalemXSenderTransportFailureDiagnostics.transportNotAttemptedClassification,
+            SalemXSenderTransportFailureDiagnostics.transportTimeoutClassification,
+            SalemXSenderTransportFailureDiagnostics.transportTLSOrCertificateFailedClassification,
+            SalemXSenderTransportFailureDiagnostics.transportWebSocketFailedClassification,
+            SalemXSenderTransportFailureDiagnostics.transportAuthRejectedClassification,
+            SalemXSenderTransportFailureDiagnostics.transportRoomNotFoundOrMismatchClassification,
+            SalemXSenderTransportFailureDiagnostics.transportNetworkUnreachableClassification,
+            SalemXSenderTransportFailureDiagnostics.transportLiveKitServerRejectedClassification,
+            SalemXSenderTransportFailureDiagnostics.transportUnknownFailedClassification
         ]
         return allowedClassifications.contains(value) ? value : nil
     }
@@ -5423,6 +5681,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         let senderSideLiveKitJoinHookSnapshot = senderSideLiveKitJoinHook
         let senderSideLiveKitJoinActivationSnapshot = senderSideLiveKitJoinActivation
         let senderJoinFailureDiagnosticsSnapshot = senderJoinFailureDiagnostics
+        let senderTransportFailureDiagnosticsSnapshot = senderTransportFailureDiagnostics
         pendingRemotePeerContextHandoff = nil
         lock.unlock()
 
@@ -5433,6 +5692,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         baseSummary.recordSenderReadinessRuntimeHandoff(senderLiveKitReadinessHookSnapshot)
         baseSummary.recordSenderSideLiveKitJoinHook(senderSideLiveKitJoinHookSnapshot)
         baseSummary.recordSenderJoinFailureDiagnostics(senderJoinFailureDiagnosticsSnapshot)
+        baseSummary.recordSenderTransportFailureDiagnostics(senderTransportFailureDiagnosticsSnapshot)
         baseSummary.recordSenderSideLiveKitJoinActivation(senderSideLiveKitJoinActivationSnapshot)
     }
 
