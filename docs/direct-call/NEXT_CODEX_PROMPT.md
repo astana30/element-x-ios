@@ -13,158 +13,63 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48Z-SenderReadinessRuntimeHandoffRepair` is complete.
-
-This was a code/test diagnostics repair only. No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emission, or full call flow was performed.
-
-The repair adds runtime proof fields for sender readiness handoff:
+`2.48Z-Physical2-Retry2` is closed as:
 
 ```text
-sender_readiness_runtime_handoff_present=true
-sender_readiness_runtime_handoff_debug_only=true
-sender_readiness_runtime_handoff_armed_before_apns=<redacted_bool>
-sender_readiness_runtime_handoff_received_by_runtime=<redacted_bool>
-sender_readiness_runtime_handoff_survived_pushkit=<redacted_bool>
-sender_readiness_runtime_handoff_survived_answer=<redacted_bool>
-sender_readiness_runtime_handoff_matrix_session_ready=<redacted_bool>
-sender_readiness_runtime_handoff_same_room_ready=<redacted_bool>
-sender_readiness_runtime_handoff_expected_user_matched=<redacted_bool>
-sender_readiness_runtime_handoff_raw_identifiers_logged=false
-sender_readiness_runtime_handoff_missing_classified=<redacted_bool>
+safe sender-not-joined / remote participant not observed triage, not remote-audio success
 ```
 
-Expected future safe values after pre-APNs sender readiness is armed, PushKit is received, and Answer is handled:
+Proof path:
 
 ```text
-sender_readiness_runtime_handoff_armed_before_apns=true
-sender_readiness_runtime_handoff_received_by_runtime=true
-sender_readiness_runtime_handoff_survived_pushkit=true
-sender_readiness_runtime_handoff_survived_answer=true
-sender_readiness_runtime_handoff_matrix_session_ready=true
-sender_readiness_runtime_handoff_same_room_ready=true
-sender_readiness_runtime_handoff_expected_user_matched=true
-sender_readiness_runtime_handoff_raw_identifiers_logged=false
+/tmp/salemx-voip-push-receipt-proof-2.48z-physical2-retry2-sender-readiness-remote-participant-polled.txt
+```
 
+Proof generation:
+
+```text
+proof_generation=generation_18
+```
+
+Receiver-side result:
+
+```text
+physical_voip_push_received=true
+pushkit_callback_invoked=true
+pushkit_payload_kind=real_invite_controlled
+callkit_report_result=reported
+callkit_first_action_kind=answer
+callkit_answer_action_received=true
+callkit_answer_action_fulfilled=true
+foreground_pending_call_metadata_handoff_observed=true
+pending_metadata_fetch_result=success_redacted
+pending_metadata_fetch_http_status_bucket=2xx
+media_credentials_requested=true
+media_credentials_result=success_redacted
+controlled_connect_real_bridge_present=true
+controlled_connect_real_bridge_allowed=true
+controlled_connect_first_attempt_requested=true
+controlled_connect_first_attempt_allowed=true
+controlled_connect_first_attempt_started=true
+controlled_connect_first_attempt_completed=true
+controlled_connect_first_attempt_repeated=false
+controlled_connect_first_attempt_result=success_redacted
+controlled_connect_first_attempt_error_bucket=none
+media_connect_requested=true
+media_connect_attempted=true
+livekit_join_requested=true
+livekit_connect_audio_invoked=true
+```
+
+Sender readiness result:
+
+```text
+sender_livekit_readiness_hook_present=true
 sender_livekit_readiness_hook_armed=true
 sender_livekit_readiness_hook_matrix_session_ready=true
-sender_livekit_readiness_hook_expected_user_matched=true
 sender_livekit_readiness_hook_same_room_ready=true
-second_physical_sender_livekit_readiness_matrix_session_ready=true
-second_physical_sender_livekit_readiness_same_room_ready=true
-```
-
-Missing sender readiness is now explicit and not a remote-audio success:
-
-```text
-receiver_remote_participant_observer_result=not_observed_redacted
-receiver_remote_participant_observer_error_bucket=sender_readiness_context_missing_redacted
-livekit_audio_liveness_result=not_observed_redacted
-livekit_audio_liveness_error_bucket=sender_readiness_context_missing_redacted
-```
-
-Sender-side LiveKit join classification exists and is default-disabled:
-
-```text
-sender_side_livekit_join_hook_present=true
-sender_side_livekit_join_hook_debug_only=true
-sender_side_livekit_join_hook_default_disabled=true
-sender_side_livekit_join_hook_armed=false
-sender_side_livekit_join_hook_audio_only=true
-sender_side_livekit_join_hook_video_allowed=false
-sender_side_livekit_join_hook_matrix_events_allowed=false
-sender_side_livekit_join_hook_raw_credentials_logged=false
-sender_side_livekit_join_requested=false
-sender_side_livekit_join_result=not_requested
-sender_side_livekit_join_error_bucket=none
-sender_side_livekit_join_repeated=false
-```
-
-Receiver observer classification now distinguishes:
-
-```text
-sender_readiness_context_missing_redacted
-sender_not_joined_redacted
-remote_participant_missing_redacted
-remote_audio_track_missing_redacted
-remote_liveness_not_observed_redacted
-```
-
-Checks passed:
-
-```bash
-swiftformat ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift UnitTests/Sources/DirectCallEngineTests.swift
-swiftlint lint ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift UnitTests/Sources/DirectCallEngineTests.swift
-DIRECT_CALL_ONLY_TESTING='UnitTests/DirectCallEngineTests UnitTests/NativeIncomingCallLifecycleContractTests' Tools/Scripts/verify_direct_call_unit.sh
-```
-
-SwiftLint reported only the existing `file_length` warning for `NativeIncomingSyntheticCallKitUIProofAdapter.swift`. DirectCall subset passed with 151 tests.
-
-## Next Phase
-
-`2.48Z-Physical2-Retry2 — one-shot two-physical-device sender readiness handoff / remote participant proof`
-
-This is the next physical proof. It is not a planning-only phase.
-
-## Hard Limits
-
-Do not:
-
-* send APNs before all preflight gates pass and explicit one-shot confirmation is reached
-* send production APNs
-* send repeated APNs
-* use `dev/invite`
-* run more than one receiver controlled connect
-* run more than one receiver LiveKit join
-* run more than one sender-side join trigger
-* enable video
-* request camera permission
-* emit Matrix events
-* start full call flow
-* log raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/roomID/callID/peerUserID/userID/deviceID
-* stage or commit `docs/direct-call/REPEAT_CALL_FASTPATH_DIAGNOSTICS.md`
-
-## Required Preflight
-
-Use local/in-memory inputs only. Do not print raw token values.
-
-Validate:
-
-```text
-receiver_token_found=true
-sender_token_found=true
-receiver_user_hash=497015f5745c933a
-sender_user_hash=7d434d7f252427fb
-sender_equals_receiver=false
-sender_room_membership=join
-receiver_room_membership=join
-room_encryption_algorithm_present=true
-room_validation_preflight=pass
-corrected_flat_schema_used=true
-nested_invite_body_used=false
-second_physical_sender_app_session_ready=true
-second_physical_sender_same_room_ready=true
-sender_readiness_runtime_handoff_armed_before_apns=true
-sender_side_livekit_join_hook_default_disabled=true
-safe_to_send_apns=true
-APNs_sent=false
-```
-
-## One-Shot Physical Proof
-
-Only after preflight passes and explicit confirmation is reached:
-
-1. Send exactly one sandbox APNs with the corrected flat schema and non-dev invite.
-2. Stop sending APNs after `background_apns_push_result=sandbox_success`.
-3. Operator presses green Answer once on the receiver.
-4. Allow exactly one receiver audio-only controlled connect / LiveKit join attempt.
-5. Allow the sender-side join trigger classification to run at most once, without video and without Matrix events.
-6. Poll the phase-specific proof.
-
-## Required Future Proof Fields
-
-The proof should show sender readiness survived into runtime and Answer:
-
-```text
+sender_livekit_readiness_hook_credentials_ready=true
+sender_readiness_runtime_handoff_present=true
 sender_readiness_runtime_handoff_armed_before_apns=true
 sender_readiness_runtime_handoff_received_by_runtime=true
 sender_readiness_runtime_handoff_survived_pushkit=true
@@ -174,77 +79,147 @@ sender_readiness_runtime_handoff_same_room_ready=true
 sender_readiness_runtime_handoff_expected_user_matched=true
 sender_readiness_runtime_handoff_raw_identifiers_logged=false
 sender_readiness_runtime_handoff_missing_classified=false
-
-sender_livekit_readiness_hook_armed=true
-sender_livekit_readiness_hook_matrix_session_ready=true
-sender_livekit_readiness_hook_expected_user_matched=true
-sender_livekit_readiness_hook_same_room_ready=true
-second_physical_sender_livekit_readiness_matrix_session_ready=true
-second_physical_sender_livekit_readiness_same_room_ready=true
 ```
 
-The sender-side join classification should identify whether the sender actually joined:
+Sender-side join hook result:
 
 ```text
 sender_side_livekit_join_hook_present=true
-sender_side_livekit_join_hook_debug_only=true
-sender_side_livekit_join_hook_audio_only=true
-sender_side_livekit_join_hook_video_allowed=false
-sender_side_livekit_join_hook_matrix_events_allowed=false
-sender_side_livekit_join_hook_raw_credentials_logged=false
-sender_side_livekit_join_requested=<redacted_bool>
-sender_side_livekit_join_result=<success_redacted_or_blocked_redacted_or_failed_redacted_or_not_requested>
-sender_side_livekit_join_error_bucket=<none_or_redacted_bucket>
+sender_side_livekit_join_hook_armed=false
+sender_side_livekit_join_requested=false
+sender_side_livekit_join_result=not_requested
+sender_side_livekit_join_error_bucket=none
 sender_side_livekit_join_repeated=false
 ```
 
-Receiver observer/liveness classification must remain explicit:
+Receiver observer/liveness result:
 
 ```text
-receiver_remote_participant_observer_result=<success_redacted_or_not_observed_redacted>
-receiver_remote_participant_observer_error_bucket=<none_or_sender_not_joined_redacted_or_remote_participant_missing_redacted_or_remote_audio_track_missing_redacted_or_remote_liveness_not_observed_redacted>
-livekit_remote_participant_seen=<redacted_bool>
-livekit_remote_audio_track_subscribed=<redacted_bool>
-livekit_audio_liveness_result=<success_redacted_or_not_observed_redacted>
+receiver_remote_participant_observer_result=not_observed_redacted
+receiver_remote_participant_observer_error_bucket=sender_not_joined_redacted
+livekit_remote_participant_seen=false
+livekit_remote_participant_count_bucket=0
+livekit_remote_audio_track_subscribed=false
+livekit_remote_audio_track_unmuted=false
+livekit_audio_liveness_observed=false
+livekit_audio_liveness_result=not_observed_redacted
+livekit_audio_liveness_error_bucket=remote_participant_missing_redacted
 ```
 
-Safety must remain:
+Safety:
 
 ```text
-controlled_connect_first_attempt_repeated=false
 microphone_permission_requested=false
 camera_permission_requested=false
 matrix_event_emit_requested=false
 real_call_flow_started=false
+blocked_reason=none
 ```
 
-## Stop Conditions
-
-Stop and classify instead of retrying if:
+APNs audit:
 
 ```text
 APNs_sent=true
 background_apns_push_result=sandbox_success
+possible_repeated_apns_observed=true
+repeated_apns_observed=unknown
 ```
 
-Stop if any of these are observed:
+The local phase marker proves at least one sandbox APNs success. The terminal transcript reported an `APNs_sent=true` block before a restored session and then another `SEND_2_48Z_PHYSICAL2_RETRY2` helper confirmation. The retained local marker cannot distinguish whether those were the same helper session or two separate sends, so the close-out records possible repeated APNs explicitly. Do not send APNs again for this phase.
+
+Key conclusion:
 
 ```text
-sender_readiness_runtime_handoff_received_by_runtime=false
-sender_readiness_runtime_handoff_missing_classified=true
-sender_side_livekit_join_repeated=true
-controlled_connect_first_attempt_repeated=true
-camera_permission_requested=true
-matrix_event_emit_requested=true
-real_call_flow_started=true
+Receiver-side controlled connect succeeded again.
+Receiver LiveKit join was invoked.
+Remote participant was not observed.
+The receiver observer classified the result as sender_not_joined_redacted.
+The sender LiveKit readiness hook was armed, but the sender-side LiveKit join hook was not armed/requested.
+No remote audio/liveness success.
+No video.
+No camera permission.
+No Matrix event emit.
+No full call flow.
 ```
 
-Expected next output after the physical attempt:
+## Next Phase
 
-* proof generation
-* whether sender readiness reached runtime and survived Answer
-* whether sender matrix/same-room readiness remained true in final proof
-* sender-side join result classification
-* receiver remote participant/audio/liveness classification
-* safety fields
-* final recommendation: close as remote-audio success, sender-not-joined triage, remote-missing triage, or repair before retry
+`2.48Z-SenderJoinHookActivationRepair — make sender-side LiveKit join hook explicitly arm/trigger once, no APNs/connect`
+
+This is a repair phase only. Do not set the next phase to another physical APNs/connect attempt.
+
+## Investigation Targets
+
+Investigate and repair:
+
+```text
+why sender_side_livekit_join_hook_armed=false despite sender readiness hook armed=true
+why sender_side_livekit_join_requested=false
+whether a separate DEBUG sender join hook must be activated after receiver Answer
+whether sender-side join requires its own metadata/credentials/token allocation
+whether sender-side LiveKit join is currently only classified, not executable
+whether receiver observer is correctly waiting long enough for sender join result
+```
+
+Expected repair outcome:
+
+```text
+sender-side LiveKit join hook can be explicitly armed/triggered once under DEBUG/test control
+default runtime remains no-connect/no-join
+no video
+no camera permission
+no Matrix event emit
+no full call flow
+raw tokens/JWTs/auth headers/APNs payloads/invite bodies/LiveKit URLs/room IDs/call IDs/peer user IDs/user IDs/device IDs are not logged
+```
+
+## Hard Limits
+
+Do not:
+
+* send APNs
+* run production APNs
+* run repeated APNs
+* run `dev/invite`
+* retry receiver connect
+* retry sender LiveKit join on device
+* request microphone/camera permission
+* enable video
+* emit Matrix events
+* start full call flow
+* touch signing/project files
+* stage or commit `docs/direct-call/REPEAT_CALL_FASTPATH_DIAGNOSTICS.md`
+
+## Suggested Checks
+
+Run focused format/lint/tests appropriate to the files changed. If Swift proof code or DirectCall tests change, run:
+
+```bash
+swiftformat ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift UnitTests/Sources/DirectCallEngineTests.swift
+swiftlint lint ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift UnitTests/Sources/DirectCallEngineTests.swift
+DIRECT_CALL_ONLY_TESTING='UnitTests/DirectCallEngineTests UnitTests/NativeIncomingCallLifecycleContractTests' Tools/Scripts/verify_direct_call_unit.sh
+```
+
+Also run:
+
+```bash
+git diff --check
+git diff --cached --check
+git diff --name-only | grep -E 'SalemX.xcodeproj/project.pbxproj|app.yml|\.entitlements|Info.plist' && exit 1 || true
+git diff --cached --name-only | grep -E 'SalemX.xcodeproj/project.pbxproj|app.yml|\.entitlements|Info.plist' && exit 1 || true
+```
+
+Run privacy scans over changed files/diff. Allowed hits are field names, redacted labels, negative statements, synthetic test values, and stable hashes only.
+
+## Expected Output
+
+Return:
+
+* implementation summary
+* whether sender-side join hook can now be explicitly armed once
+* whether sender-side join remains default-disabled before the hook
+* whether no APNs/connect/LiveKit/device permissions/full flow were performed
+* checks run
+* commit hash/message
+* changed files
+* final `git status --short --branch`
