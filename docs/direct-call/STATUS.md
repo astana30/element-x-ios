@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-SenderTransportUnknownFailureSurfaceRepair — sender-side LiveKit transport failures now surface a DEBUG-only redacted error source and bucket set before the next physical APNs retry. The proof surface keeps raw error, URL, and token logging false, preserves redacted LiveKit room/token-authority comparisons, keeps pre-transport failures classified before transport, maps specific transport errors into sender transport diagnostics and sender-side LiveKit join result buckets, and leaves sender-join-success-but-remote-missing as a separate receiver-observer classification. Default runtime remains no-connect/no-join. The next phase is `2.48Z-Physical2-Retry6 — one-shot two-physical-device sender transport error-source proof`.
+After 2.48Z-Physical2-Retry6-SenderTransportErrorSourceTriage — the one-shot two-physical-device physical proof safely classified the sender-side transport failure with the repaired redacted error surface. Receiver PushKit, CallKit Answer, pending metadata, credentials, one controlled receiver audio connect, and receiver LiveKit join succeeded. Sender-side join activation triggered and consumed once, then classified as `transport_livekit_sdk_unknown_error_redacted`; LiveKit room/token-authority comparisons remained true without raw IDs or tokens. Receiver remote participant/audio/liveness was not observed, so this is not remote-audio success. The next phase is `2.48Z-SenderLiveKitSDKUnknownTransportDiagnostics — inspect sender LiveKit SDK unknown transport source, no APNs/connect`.
 
 ## Latest App Code Checkpoint
 
@@ -38,6 +38,118 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Checksum: `654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e`
 
 ## Proven Checkpoints
+
+- 2.48Z-Physical2-Retry6-SenderTransportErrorSourceTriage closes the one-shot two-physical-device sender transport error-source proof as safe classified sender transport triage, not remote-audio success:
+  - Proof path:
+    ```text
+    /tmp/salemx-voip-push-receipt-proof-2.48z-physical2-retry6-sender-transport-error-source-polled.txt
+    ```
+  - One sandbox APNs was sent by the operator-run one-shot helper after explicit confirmation for this phase; no APNs was repeated during close-out:
+    ```text
+    APNs_sent=true
+    background_apns_push_result=sandbox_success
+    ```
+  - Physical proof generation and receiver path:
+    ```text
+    proof_generation=generation_22
+    physical_voip_push_received=true
+    pushkit_callback_invoked=true
+    pushkit_payload_kind=real_invite_controlled
+    callkit_report_result=reported
+    callkit_first_action_kind=answer
+    callkit_answer_action_received=true
+    callkit_answer_action_fulfilled=true
+    pending_metadata_fetch_result=success_redacted
+    pending_metadata_fetch_http_status_bucket=2xx
+    media_credentials_requested=true
+    media_credentials_result=success_redacted
+    controlled_connect_first_attempt_completed=true
+    controlled_connect_first_attempt_repeated=false
+    controlled_connect_first_attempt_result=success_redacted
+    livekit_join_result=success_redacted
+    ```
+  - Sender-side join activation triggered and consumed exactly once:
+    ```text
+    sender_side_livekit_join_activation_triggered=true
+    sender_side_livekit_join_activation_consumed=true
+    sender_side_livekit_join_activation_repeated=false
+    sender_side_livekit_join_requested=true
+    sender_side_livekit_join_result=failed_redacted
+    sender_side_livekit_join_error_bucket=transport_livekit_sdk_unknown_error_redacted
+    sender_side_livekit_join_repeated=false
+    ```
+  - Sender transport diagnostics reached transport and preserved room/token-authority comparison without raw IDs or tokens:
+    ```text
+    sender_transport_failure_diagnostics_transport_attempted=true
+    sender_transport_failure_diagnostics_transport_started=true
+    sender_transport_failure_diagnostics_transport_completed=true
+    sender_transport_failure_diagnostics_transport_result=failed_redacted
+    sender_transport_failure_diagnostics_error_bucket=transport_livekit_sdk_unknown_error_redacted
+    sender_transport_failure_diagnostics_classification=transport_livekit_sdk_unknown_error_redacted
+    sender_transport_failure_diagnostics_livekit_url_present=true
+    sender_transport_failure_diagnostics_token_present=true
+    sender_transport_failure_diagnostics_room_binding_present=true
+    sender_transport_failure_diagnostics_same_livekit_room=true
+    sender_transport_failure_diagnostics_same_token_authority=true
+    sender_transport_failure_diagnostics_receiver_sender_room_match=true
+    sender_transport_failure_diagnostics_receiver_sender_token_authority_match=true
+    ```
+  - Repaired sender transport error surface classified a specific redacted source and kept raw values unlogged:
+    ```text
+    sender_transport_error_surface_present=true
+    sender_transport_error_surface_raw_error_logged=false
+    sender_transport_error_surface_raw_url_logged=false
+    sender_transport_error_surface_raw_token_logged=false
+    sender_transport_error_surface_source=livekit_sdk_unknown_error_redacted
+    sender_transport_error_surface_sdk_error_bucket=livekit_sdk_unknown_error_redacted
+    sender_transport_error_surface_disconnect_reason_bucket=none
+    sender_transport_error_surface_websocket_bucket=none
+    sender_transport_error_surface_auth_bucket=none
+    sender_transport_error_surface_timeout_observed=false
+    sender_transport_error_surface_connected_state_observed=false
+    sender_transport_error_surface_disconnected_before_connected=false
+    sender_transport_error_surface_final_classification=transport_livekit_sdk_unknown_error_redacted
+    ```
+  - Receiver remote participant/audio/liveness was not observed:
+    ```text
+    receiver_remote_participant_observer_result=not_observed_redacted
+    receiver_remote_participant_observer_error_bucket=sender_join_failed_redacted
+    receiver_remote_participant_observer_remote_seen=false
+    receiver_remote_participant_observer_audio_track_seen=false
+    receiver_remote_participant_observer_liveness_seen=false
+    livekit_remote_participant_seen=false
+    livekit_remote_audio_track_subscribed=false
+    livekit_audio_liveness_result=not_observed_redacted
+    ```
+  - Safety remained closed:
+    ```text
+    controlled_connect_first_attempt_repeated=false
+    sender_side_livekit_join_repeated=false
+    media_connect_requested=false
+    media_connect_attempted=false
+    livekit_join_requested=false
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    blocked_reason=none
+    ```
+  - Conclusion:
+    ```text
+    2.48Z-Physical2-Retry6 = safe sender transport error-source triage, not remote-audio success.
+    Sender transport error surface classified the first sender-side transport attempt as transport_livekit_sdk_unknown_error_redacted.
+    Same LiveKit room and token-authority comparisons were true without raw IDs or tokens.
+    Remote participant, remote audio track, and audio liveness were not observed.
+    No repeated APNs.
+    No production APNs.
+    No dev/invite.
+    No repeated connect.
+    No repeated LiveKit join.
+    No video.
+    No camera permission.
+    No Matrix event emit.
+    No full call flow.
+    ```
 
 - 2.48Z-SenderTransportUnknownFailureSurfaceRepair adds a DEBUG/test-controlled redacted sender transport error surface without APNs/connect/real-device LiveKit:
   - New proof fields:
