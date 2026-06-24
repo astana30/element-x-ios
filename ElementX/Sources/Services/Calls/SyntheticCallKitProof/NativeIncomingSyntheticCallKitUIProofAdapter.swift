@@ -930,6 +930,101 @@ private struct SalemXSenderSideLiveKitJoinActivation {
     }
 }
 
+private struct SalemXSenderJoinTriggerOrchestrationInput {
+    let apnsSuccessSeen: Bool
+    let receiverAnswerSeen: Bool
+    let receiverConnectTerminalSeen: Bool
+    let senderActivationArmed: Bool
+    let senderTriggerStarted: Bool
+    let senderTriggerCompleted: Bool
+    let senderSDKTimelineTerminalSeen: Bool
+}
+
+private struct SalemXSenderJoinTriggerOrchestration {
+    static let waitingForAnswerClassification = "sender_trigger_waiting_for_answer_redacted"
+    static let waitingForReceiverConnectClassification = "sender_trigger_waiting_for_receiver_connect_redacted"
+    static let activationNotArmedClassification = "sender_trigger_activation_not_armed_redacted"
+    static let requiredButNotStartedClassification = "sender_trigger_required_but_not_started_redacted"
+    static let startedNotCompletedClassification = "sender_trigger_started_not_completed_redacted"
+    static let completedWaitingForSDKTimelineClassification = "sender_trigger_completed_waiting_for_sdk_timeline_redacted"
+    static let completedSDKTimelineTerminalClassification = "sender_trigger_completed_sdk_timeline_terminal_redacted"
+    static let pollBlockedUntilSenderTerminalClassification = "sender_trigger_poll_blocked_until_sender_terminal_redacted"
+    static let defaultBlocked = SalemXSenderJoinTriggerOrchestration(input: .init(apnsSuccessSeen: false,
+                                                                                  receiverAnswerSeen: false,
+                                                                                  receiverConnectTerminalSeen: false,
+                                                                                  senderActivationArmed: false,
+                                                                                  senderTriggerStarted: false,
+                                                                                  senderTriggerCompleted: false,
+                                                                                  senderSDKTimelineTerminalSeen: false))
+
+    let apnsSuccessSeen: Bool
+    let receiverAnswerSeen: Bool
+    let receiverConnectTerminalSeen: Bool
+    let senderActivationArmed: Bool
+    let senderTriggerStarted: Bool
+    let senderTriggerCompleted: Bool
+    let senderSDKTimelineTerminalSeen: Bool
+
+    let present = true
+    let debugOnly = true
+    let rawIdentifiersLogged = false
+    let senderTriggerRequired = true
+
+    var senderTriggerAllowed: Bool {
+        apnsSuccessSeen && receiverAnswerSeen && receiverConnectTerminalSeen && senderActivationArmed
+    }
+
+    var senderTriggerMissingClassified: Bool {
+        finalClassification == Self.requiredButNotStartedClassification
+    }
+
+    var pollAllowed: Bool {
+        senderTriggerCompleted && senderSDKTimelineTerminalSeen
+    }
+
+    var pollBlockedReason: String {
+        if pollAllowed {
+            return "none"
+        }
+        if finalClassification == Self.completedWaitingForSDKTimelineClassification {
+            return finalClassification
+        }
+        return Self.pollBlockedUntilSenderTerminalClassification
+    }
+
+    var finalClassification: String {
+        if !apnsSuccessSeen || !receiverAnswerSeen {
+            return Self.waitingForAnswerClassification
+        }
+        if !receiverConnectTerminalSeen {
+            return Self.waitingForReceiverConnectClassification
+        }
+        if !senderActivationArmed {
+            return Self.activationNotArmedClassification
+        }
+        if !senderTriggerStarted {
+            return Self.requiredButNotStartedClassification
+        }
+        if !senderTriggerCompleted {
+            return Self.startedNotCompletedClassification
+        }
+        if !senderSDKTimelineTerminalSeen {
+            return Self.completedWaitingForSDKTimelineClassification
+        }
+        return Self.completedSDKTimelineTerminalClassification
+    }
+
+    init(input: SalemXSenderJoinTriggerOrchestrationInput) {
+        apnsSuccessSeen = input.apnsSuccessSeen
+        receiverAnswerSeen = input.receiverAnswerSeen
+        receiverConnectTerminalSeen = input.receiverConnectTerminalSeen
+        senderActivationArmed = input.senderActivationArmed
+        senderTriggerStarted = input.senderTriggerStarted
+        senderTriggerCompleted = input.senderTriggerCompleted
+        senderSDKTimelineTerminalSeen = input.senderSDKTimelineTerminalSeen
+    }
+}
+
 private struct SalemXSenderJoinFailureDiagnosticInput {
     let requested: Bool
     let repeated: Bool
@@ -3125,6 +3220,21 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var senderSideLiveKitJoinActivationConsumed = SalemXSenderSideLiveKitJoinActivation.defaultDisabled.consumed
     var senderSideLiveKitJoinActivationRepeated = SalemXSenderSideLiveKitJoinActivation.defaultDisabled.repeated
     var senderSideLiveKitJoinActivationBlockedReason = SalemXSenderSideLiveKitJoinActivation.defaultDisabled.blockedReason
+    var senderJoinTriggerOrchestrationPresent = SalemXSenderJoinTriggerOrchestration.defaultBlocked.present
+    var senderJoinTriggerOrchestrationDebugOnly = SalemXSenderJoinTriggerOrchestration.defaultBlocked.debugOnly
+    var senderJoinTriggerOrchestrationRawIdentifiersLogged = SalemXSenderJoinTriggerOrchestration.defaultBlocked.rawIdentifiersLogged
+    var senderJoinTriggerOrchestrationAPNsSuccessSeen = SalemXSenderJoinTriggerOrchestration.defaultBlocked.apnsSuccessSeen
+    var senderJoinTriggerOrchestrationReceiverAnswerSeen = SalemXSenderJoinTriggerOrchestration.defaultBlocked.receiverAnswerSeen
+    var senderJoinTriggerOrchestrationReceiverConnectTerminalSeen = SalemXSenderJoinTriggerOrchestration.defaultBlocked.receiverConnectTerminalSeen
+    var senderJoinTriggerOrchestrationSenderActivationArmed = SalemXSenderJoinTriggerOrchestration.defaultBlocked.senderActivationArmed
+    var senderJoinTriggerOrchestrationSenderTriggerRequired = SalemXSenderJoinTriggerOrchestration.defaultBlocked.senderTriggerRequired
+    var senderJoinTriggerOrchestrationSenderTriggerAllowed = SalemXSenderJoinTriggerOrchestration.defaultBlocked.senderTriggerAllowed
+    var senderJoinTriggerOrchestrationSenderTriggerStarted = SalemXSenderJoinTriggerOrchestration.defaultBlocked.senderTriggerStarted
+    var senderJoinTriggerOrchestrationSenderTriggerCompleted = SalemXSenderJoinTriggerOrchestration.defaultBlocked.senderTriggerCompleted
+    var senderJoinTriggerOrchestrationSenderTriggerMissingClassified = SalemXSenderJoinTriggerOrchestration.defaultBlocked.senderTriggerMissingClassified
+    var senderJoinTriggerOrchestrationPollAllowed = SalemXSenderJoinTriggerOrchestration.defaultBlocked.pollAllowed
+    var senderJoinTriggerOrchestrationPollBlockedReason = SalemXSenderJoinTriggerOrchestration.defaultBlocked.pollBlockedReason
+    var senderJoinTriggerOrchestrationFinalClassification = SalemXSenderJoinTriggerOrchestration.defaultBlocked.finalClassification
     var receiverRemoteParticipantObserverPresent = true
     var receiverRemoteParticipantObserverDebugOnly = true
     var receiverRemoteParticipantObserverStarted = false
@@ -3733,6 +3843,21 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "sender_side_livekit_join_activation_consumed=\(senderSideLiveKitJoinActivationConsumed)",
             "sender_side_livekit_join_activation_repeated=\(senderSideLiveKitJoinActivationRepeated)",
             "sender_side_livekit_join_activation_blocked_reason=\(senderSideLiveKitJoinActivationBlockedReason)",
+            "sender_join_trigger_orchestration_present=\(senderJoinTriggerOrchestrationPresent)",
+            "sender_join_trigger_orchestration_debug_only=\(senderJoinTriggerOrchestrationDebugOnly)",
+            "sender_join_trigger_orchestration_raw_identifiers_logged=\(senderJoinTriggerOrchestrationRawIdentifiersLogged)",
+            "sender_join_trigger_orchestration_apns_success_seen=\(senderJoinTriggerOrchestrationAPNsSuccessSeen)",
+            "sender_join_trigger_orchestration_receiver_answer_seen=\(senderJoinTriggerOrchestrationReceiverAnswerSeen)",
+            "sender_join_trigger_orchestration_receiver_connect_terminal_seen=\(senderJoinTriggerOrchestrationReceiverConnectTerminalSeen)",
+            "sender_join_trigger_orchestration_sender_activation_armed=\(senderJoinTriggerOrchestrationSenderActivationArmed)",
+            "sender_join_trigger_orchestration_sender_trigger_required=\(senderJoinTriggerOrchestrationSenderTriggerRequired)",
+            "sender_join_trigger_orchestration_sender_trigger_allowed=\(senderJoinTriggerOrchestrationSenderTriggerAllowed)",
+            "sender_join_trigger_orchestration_sender_trigger_started=\(senderJoinTriggerOrchestrationSenderTriggerStarted)",
+            "sender_join_trigger_orchestration_sender_trigger_completed=\(senderJoinTriggerOrchestrationSenderTriggerCompleted)",
+            "sender_join_trigger_orchestration_sender_trigger_missing_classified=\(senderJoinTriggerOrchestrationSenderTriggerMissingClassified)",
+            "sender_join_trigger_orchestration_poll_allowed=\(senderJoinTriggerOrchestrationPollAllowed)",
+            "sender_join_trigger_orchestration_poll_blocked_reason=\(senderJoinTriggerOrchestrationPollBlockedReason)",
+            "sender_join_trigger_orchestration_final_classification=\(senderJoinTriggerOrchestrationFinalClassification)",
             "receiver_remote_participant_observer_present=\(receiverRemoteParticipantObserverPresent)",
             "receiver_remote_participant_observer_debug_only=\(receiverRemoteParticipantObserverDebugOnly)",
             "receiver_remote_participant_observer_started=\(receiverRemoteParticipantObserverStarted)",
@@ -3987,6 +4112,53 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverRemoteParticipantObserverRawIdentifiersLogged = false
 
         refreshReceiverRemoteParticipantObserverClassification()
+        refreshSenderJoinTriggerOrchestration()
+    }
+
+    mutating func refreshSenderJoinTriggerOrchestration() {
+        let orchestration = SalemXSenderJoinTriggerOrchestration(input: .init(apnsSuccessSeen: physicalVoIPPushReceived,
+                                                                              receiverAnswerSeen: receiverAnswerSeen,
+                                                                              receiverConnectTerminalSeen: receiverConnectTerminalSeen,
+                                                                              senderActivationArmed: senderSideLiveKitJoinActivationArmed,
+                                                                              senderTriggerStarted: senderTriggerStarted,
+                                                                              senderTriggerCompleted: senderTriggerCompleted,
+                                                                              senderSDKTimelineTerminalSeen: senderSDKTimelineTerminalSeen))
+        senderJoinTriggerOrchestrationPresent = orchestration.present
+        senderJoinTriggerOrchestrationDebugOnly = orchestration.debugOnly
+        senderJoinTriggerOrchestrationRawIdentifiersLogged = orchestration.rawIdentifiersLogged
+        senderJoinTriggerOrchestrationAPNsSuccessSeen = orchestration.apnsSuccessSeen
+        senderJoinTriggerOrchestrationReceiverAnswerSeen = orchestration.receiverAnswerSeen
+        senderJoinTriggerOrchestrationReceiverConnectTerminalSeen = orchestration.receiverConnectTerminalSeen
+        senderJoinTriggerOrchestrationSenderActivationArmed = orchestration.senderActivationArmed
+        senderJoinTriggerOrchestrationSenderTriggerRequired = orchestration.senderTriggerRequired
+        senderJoinTriggerOrchestrationSenderTriggerAllowed = orchestration.senderTriggerAllowed
+        senderJoinTriggerOrchestrationSenderTriggerStarted = orchestration.senderTriggerStarted
+        senderJoinTriggerOrchestrationSenderTriggerCompleted = orchestration.senderTriggerCompleted
+        senderJoinTriggerOrchestrationSenderTriggerMissingClassified = orchestration.senderTriggerMissingClassified
+        senderJoinTriggerOrchestrationPollAllowed = orchestration.pollAllowed
+        senderJoinTriggerOrchestrationPollBlockedReason = orchestration.pollBlockedReason
+        senderJoinTriggerOrchestrationFinalClassification = orchestration.finalClassification
+    }
+
+    private var receiverAnswerSeen: Bool {
+        callKitFirstActionKind == "answer" && callKitAnswerActionReceived && callKitAnswerActionFulfilled
+    }
+
+    private var receiverConnectTerminalSeen: Bool {
+        controlledConnectFirstAttemptCompleted || controlledConnectFirstAttemptResult != SalemXControlledAudioConnectFirstAttempt.defaultDisabled.result
+    }
+
+    private var senderTriggerStarted: Bool {
+        senderSideLiveKitJoinActivationTriggered || senderSideLiveKitJoinRequested || senderLiveKitSDKTimelineTriggerReceived
+    }
+
+    private var senderTriggerCompleted: Bool {
+        senderSideLiveKitJoinActivationConsumed || (senderSideLiveKitJoinRequested && senderSideLiveKitJoinResult != SalemXSenderSideLiveKitJoinHook.notRequestedResult)
+    }
+
+    private var senderSDKTimelineTerminalSeen: Bool {
+        senderLiveKitSDKTimelineFinalClassification != SalemXSenderLiveKitSDKTimeline.notRequestedClassification &&
+            senderLiveKitSDKTimelineFinalClassification != SalemXSenderLiveKitSDKTimeline.internalPendingClassification
     }
 
     private mutating func refreshReceiverRemoteParticipantObserverClassification() {
@@ -4243,6 +4415,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         senderLiveKitSDKTimelineTimeoutElapsed = timeline.timeoutElapsed
         senderLiveKitSDKTimelineProofWrittenAfterTerminalState = timeline.proofWrittenAfterTerminalState
         senderLiveKitSDKTimelineFinalClassification = timeline.finalClassification
+        refreshSenderJoinTriggerOrchestration()
     }
 
     mutating func recordSenderTransportErrorSurface(_ errorSurface: SalemXSenderTransportErrorSurface) {
@@ -4982,6 +5155,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         mediaConnectEngineInvoked = firstAttempt.mediaConnectAttempted
         refreshDisconnectCleanupDiagnostics()
         refreshRemoteAudioLivenessDiagnostics()
+        refreshSenderJoinTriggerOrchestration()
     }
 
     mutating func attemptControlledAudioConnectRuntimeIfAllowed(activationConfiguration: SalemXControlledMediaConnectActivationConfiguration,

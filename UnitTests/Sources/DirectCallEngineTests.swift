@@ -3581,6 +3581,123 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    // swiftlint:disable:next function_body_length
+    func senderJoinTriggerOrchestrationBlocksEarlyProofPollingUntilSenderTimelineTerminal() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+
+        let orchestrationFields = [
+            "sender_join_trigger_orchestration_present=\\(senderJoinTriggerOrchestrationPresent)",
+            "sender_join_trigger_orchestration_debug_only=\\(senderJoinTriggerOrchestrationDebugOnly)",
+            "sender_join_trigger_orchestration_raw_identifiers_logged=\\(senderJoinTriggerOrchestrationRawIdentifiersLogged)",
+            "sender_join_trigger_orchestration_apns_success_seen=\\(senderJoinTriggerOrchestrationAPNsSuccessSeen)",
+            "sender_join_trigger_orchestration_receiver_answer_seen=\\(senderJoinTriggerOrchestrationReceiverAnswerSeen)",
+            "sender_join_trigger_orchestration_receiver_connect_terminal_seen=\\(senderJoinTriggerOrchestrationReceiverConnectTerminalSeen)",
+            "sender_join_trigger_orchestration_sender_activation_armed=\\(senderJoinTriggerOrchestrationSenderActivationArmed)",
+            "sender_join_trigger_orchestration_sender_trigger_required=\\(senderJoinTriggerOrchestrationSenderTriggerRequired)",
+            "sender_join_trigger_orchestration_sender_trigger_allowed=\\(senderJoinTriggerOrchestrationSenderTriggerAllowed)",
+            "sender_join_trigger_orchestration_sender_trigger_started=\\(senderJoinTriggerOrchestrationSenderTriggerStarted)",
+            "sender_join_trigger_orchestration_sender_trigger_completed=\\(senderJoinTriggerOrchestrationSenderTriggerCompleted)",
+            "sender_join_trigger_orchestration_sender_trigger_missing_classified=\\(senderJoinTriggerOrchestrationSenderTriggerMissingClassified)",
+            "sender_join_trigger_orchestration_poll_allowed=\\(senderJoinTriggerOrchestrationPollAllowed)",
+            "sender_join_trigger_orchestration_poll_blocked_reason=\\(senderJoinTriggerOrchestrationPollBlockedReason)",
+            "sender_join_trigger_orchestration_final_classification=\\(senderJoinTriggerOrchestrationFinalClassification)"
+        ]
+        for field in orchestrationFields {
+            #expect(adapterSource.contains(field))
+        }
+
+        let orchestrationBuckets = [
+            "sender_trigger_waiting_for_answer_redacted",
+            "sender_trigger_waiting_for_receiver_connect_redacted",
+            "sender_trigger_activation_not_armed_redacted",
+            "sender_trigger_required_but_not_started_redacted",
+            "sender_trigger_started_not_completed_redacted",
+            "sender_trigger_completed_waiting_for_sdk_timeline_redacted",
+            "sender_trigger_completed_sdk_timeline_terminal_redacted",
+            "sender_trigger_poll_blocked_until_sender_terminal_redacted"
+        ]
+        for bucket in orchestrationBuckets {
+            #expect(adapterSource.contains(bucket))
+        }
+
+        #expect(adapterSource.contains("private struct SalemXSenderJoinTriggerOrchestration"))
+        #expect(adapterSource.contains("private struct SalemXSenderJoinTriggerOrchestrationInput"))
+        #expect(adapterSource.contains("static let defaultBlocked = SalemXSenderJoinTriggerOrchestration(input: .init(apnsSuccessSeen: false,"))
+        #expect(adapterSource.contains("let present = true"))
+        #expect(adapterSource.contains("let debugOnly = true"))
+        #expect(adapterSource.contains("let rawIdentifiersLogged = false"))
+        #expect(adapterSource.contains("let senderTriggerRequired = true"))
+        #expect(adapterSource.contains("var senderTriggerAllowed: Bool"))
+        #expect(adapterSource.contains("apnsSuccessSeen && receiverAnswerSeen && receiverConnectTerminalSeen && senderActivationArmed"))
+        #expect(adapterSource.contains("var pollAllowed: Bool"))
+        #expect(adapterSource.contains("senderTriggerCompleted && senderSDKTimelineTerminalSeen"))
+        #expect(adapterSource.contains("var pollBlockedReason: String"))
+        #expect(adapterSource.contains("return Self.pollBlockedUntilSenderTerminalClassification"))
+        #expect(adapterSource.contains("if !apnsSuccessSeen || !receiverAnswerSeen"))
+        #expect(adapterSource.contains("return Self.waitingForAnswerClassification"))
+        #expect(adapterSource.contains("if !receiverConnectTerminalSeen"))
+        #expect(adapterSource.contains("return Self.waitingForReceiverConnectClassification"))
+        #expect(adapterSource.contains("if !senderActivationArmed"))
+        #expect(adapterSource.contains("return Self.activationNotArmedClassification"))
+        #expect(adapterSource.contains("if !senderTriggerStarted"))
+        #expect(adapterSource.contains("return Self.requiredButNotStartedClassification"))
+        #expect(adapterSource.contains("if !senderTriggerCompleted"))
+        #expect(adapterSource.contains("return Self.startedNotCompletedClassification"))
+        #expect(adapterSource.contains("if !senderSDKTimelineTerminalSeen"))
+        #expect(adapterSource.contains("return Self.completedWaitingForSDKTimelineClassification"))
+        #expect(adapterSource.contains("return Self.completedSDKTimelineTerminalClassification"))
+
+        #expect(adapterSource.contains("mutating func refreshSenderJoinTriggerOrchestration()"))
+        #expect(adapterSource.contains("apnsSuccessSeen: physicalVoIPPushReceived"))
+        #expect(adapterSource.contains("receiverAnswerSeen: receiverAnswerSeen"))
+        #expect(adapterSource.contains("receiverConnectTerminalSeen: receiverConnectTerminalSeen"))
+        #expect(adapterSource.contains("senderActivationArmed: senderSideLiveKitJoinActivationArmed"))
+        #expect(adapterSource.contains("senderTriggerStarted: senderTriggerStarted"))
+        #expect(adapterSource.contains("senderTriggerCompleted: senderTriggerCompleted"))
+        #expect(adapterSource.contains("senderSDKTimelineTerminalSeen: senderSDKTimelineTerminalSeen"))
+        #expect(adapterSource.contains("senderJoinTriggerOrchestrationSenderTriggerRequired = orchestration.senderTriggerRequired"))
+        #expect(adapterSource.contains("senderJoinTriggerOrchestrationSenderTriggerAllowed = orchestration.senderTriggerAllowed"))
+        #expect(adapterSource.contains("senderJoinTriggerOrchestrationPollAllowed = orchestration.pollAllowed"))
+        #expect(adapterSource.contains("senderJoinTriggerOrchestrationFinalClassification = orchestration.finalClassification"))
+
+        #expect(adapterSource.contains("callKitFirstActionKind == \"answer\" && callKitAnswerActionReceived && callKitAnswerActionFulfilled"))
+        #expect(adapterSource.contains("controlledConnectFirstAttemptCompleted || controlledConnectFirstAttemptResult != SalemXControlledAudioConnectFirstAttempt.defaultDisabled.result"))
+        #expect(adapterSource.contains("senderSideLiveKitJoinActivationTriggered || senderSideLiveKitJoinRequested || senderLiveKitSDKTimelineTriggerReceived"))
+        #expect(adapterSource.contains("senderSideLiveKitJoinActivationConsumed || (senderSideLiveKitJoinRequested && senderSideLiveKitJoinResult != SalemXSenderSideLiveKitJoinHook.notRequestedResult)"))
+        #expect(adapterSource.contains("senderLiveKitSDKTimelineFinalClassification != SalemXSenderLiveKitSDKTimeline.notRequestedClassification"))
+        #expect(adapterSource.contains("senderLiveKitSDKTimelineFinalClassification != SalemXSenderLiveKitSDKTimeline.internalPendingClassification"))
+
+        #expect(adapterSource.contains("recordSenderLiveKitSDKTimeline(sdkFailureSurface.timeline)"))
+        #expect(adapterSource.contains("recordSenderSideLiveKitJoinActivation(activation)"))
+        #expect(adapterSource.contains("refreshSenderJoinTriggerOrchestration()"))
+        #expect(adapterSource.contains("sender_side_livekit_join_result=\\(senderSideLiveKitJoinResult)"))
+        #expect(adapterSource.contains("senderSideLiveKitJoinResult == SalemXSenderSideLiveKitJoinHook.notRequestedResult"))
+        #expect(adapterSource.contains("receiverRemoteParticipantObserverResult = classification.result"))
+        #expect(adapterSource.contains("liveKitAudioLivenessResult = \"not_observed_redacted\""))
+
+        #expect(adapterSource.contains("sender_livekit_sdk_timeline_final_classification=\\(senderLiveKitSDKTimelineFinalClassification)"))
+        #expect(adapterSource.contains("sender_livekit_sdk_failure_surface_final_classification=\\(senderLiveKitSDKFailureSurfaceFinalClassification)"))
+        #expect(adapterSource.contains("sender_transport_failure_diagnostics_classification=\\(senderTransportFailureDiagnosticsClassification)"))
+        #expect(adapterSource.contains("sender_readiness_runtime_handoff_survived_answer=\\(senderReadinessRuntimeHandoffSurvivedAnswer)"))
+        #expect(adapterSource.contains("receiver_remote_participant_observer_result=\\(receiverRemoteParticipantObserverResult)"))
+
+        #expect(adapterSource.contains("summary.mediaConnectRequested = false"))
+        #expect(adapterSource.contains("summary.mediaConnectAttempted = false"))
+        #expect(adapterSource.contains("summary.liveKitJoinRequested = false"))
+        #expect(adapterSource.contains("summary.liveKitConnectAudioInvoked = false"))
+        #expect(adapterSource.contains("summary.microphonePermissionRequested = false"))
+        #expect(adapterSource.contains("summary.cameraPermissionRequested = false"))
+        #expect(adapterSource.contains("summary.matrixEventEmitRequested = false"))
+        #expect(adapterSource.contains("summary.realCallFlowStarted = false"))
+        #expect(adapterSource.contains("cameraPermissionRequested = false"))
+        #expect(adapterSource.contains("matrixEventEmitRequested = false"))
+        #expect(adapterSource.contains("realCallFlowStarted = false"))
+        #expect(!adapterSource.contains("senderJoinTriggerOrchestrationRawIdentifiersLogged = true"))
+        #expect(!adapterSource.contains("senderJoinTriggerOrchestrationPollAllowed = true"))
+        #expect(!adapterSource.contains("senderJoinTriggerOrchestrationSenderTriggerRequired = false"))
+    }
+
+    @Test
     func remotePeerContextHandoffRecordsSimulatorContextAndMissingContextSafely() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
 

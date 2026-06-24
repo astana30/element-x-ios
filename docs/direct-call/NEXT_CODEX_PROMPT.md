@@ -13,108 +13,97 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48Z-Physical2-Retry8` is complete and closed as safe sender-join-not-requested / remote participant not observed triage, not remote-audio success.
+`2.48Z-SenderJoinTriggerOrchestrationRepair` is complete.
 
-Proof path:
+The proof now has a DEBUG-only redacted sender join trigger orchestration guard that prevents early terminal polling before the sender trigger and sender SDK timeline reach terminal classification.
 
-```text
-/tmp/salemx-voip-push-receipt-proof-2.48z-physical2-retry8-sender-sdk-timeline-polled.txt
-```
-
-Proof generation:
+New proof fields:
 
 ```text
-proof_generation=generation_17
+sender_join_trigger_orchestration_present=true
+sender_join_trigger_orchestration_debug_only=true
+sender_join_trigger_orchestration_raw_identifiers_logged=false
+sender_join_trigger_orchestration_apns_success_seen=<redacted_bool>
+sender_join_trigger_orchestration_receiver_answer_seen=<redacted_bool>
+sender_join_trigger_orchestration_receiver_connect_terminal_seen=<redacted_bool>
+sender_join_trigger_orchestration_sender_activation_armed=<redacted_bool>
+sender_join_trigger_orchestration_sender_trigger_required=true
+sender_join_trigger_orchestration_sender_trigger_allowed=<redacted_bool>
+sender_join_trigger_orchestration_sender_trigger_started=<redacted_bool>
+sender_join_trigger_orchestration_sender_trigger_completed=<redacted_bool>
+sender_join_trigger_orchestration_sender_trigger_missing_classified=<redacted_bool>
+sender_join_trigger_orchestration_poll_allowed=<redacted_bool>
+sender_join_trigger_orchestration_poll_blocked_reason=<redacted_bucket>
+sender_join_trigger_orchestration_final_classification=<redacted_bucket>
 ```
 
-Receiver path succeeded once:
+Safe defaults:
 
 ```text
-physical_voip_push_received=true
-callkit_report_result=reported
-callkit_first_action_kind=answer
-callkit_answer_action_received=true
-callkit_answer_action_fulfilled=true
-pending_metadata_fetch_result=success_redacted
-media_credentials_result=success_redacted
-controlled_connect_first_attempt_result=success_redacted
-controlled_connect_first_attempt_repeated=false
-livekit_join_result=success_redacted
+sender_join_trigger_orchestration_present=true
+sender_join_trigger_orchestration_debug_only=true
+sender_join_trigger_orchestration_raw_identifiers_logged=false
+sender_join_trigger_orchestration_sender_trigger_required=true
+sender_join_trigger_orchestration_sender_trigger_allowed=false
+sender_join_trigger_orchestration_poll_allowed=false
 ```
 
-Sender-side join and SDK timeline stayed not requested:
+Redacted classifications:
 
 ```text
-sender_side_livekit_join_activation_triggered=false
-sender_side_livekit_join_activation_consumed=false
-sender_side_livekit_join_activation_repeated=false
-sender_side_livekit_join_requested=false
-sender_side_livekit_join_result=not_requested
-sender_side_livekit_join_error_bucket=none
-sender_side_livekit_join_repeated=false
-sender_livekit_sdk_failure_surface_present=true
-sender_livekit_sdk_failure_surface_final_classification=not_requested
-sender_livekit_sdk_timeline_present=true
-sender_livekit_sdk_timeline_final_classification=not_requested
+sender_trigger_waiting_for_answer_redacted
+sender_trigger_waiting_for_receiver_connect_redacted
+sender_trigger_activation_not_armed_redacted
+sender_trigger_required_but_not_started_redacted
+sender_trigger_started_not_completed_redacted
+sender_trigger_completed_waiting_for_sdk_timeline_redacted
+sender_trigger_completed_sdk_timeline_terminal_redacted
+sender_trigger_poll_blocked_until_sender_terminal_redacted
 ```
 
-Remote participant/audio/liveness was not observed:
+Boundary results:
 
 ```text
-receiver_remote_participant_observer_present=true
-receiver_remote_participant_observer_result=not_observed_redacted
-receiver_remote_participant_observer_remote_seen=false
-receiver_remote_participant_observer_audio_track_seen=false
-receiver_remote_participant_observer_liveness_seen=false
-livekit_remote_participant_seen=false
-livekit_remote_audio_track_subscribed=false
-livekit_audio_liveness_result=not_observed_redacted
+early_proof_polling_blocked_until_sender_trigger_terminal=true
+receiver_terminal_fields_alone_can_close_phase=false
+not_requested_classified_as_missing_sender_trigger_when_required=true
+sender_sdk_timeline_terminal_required_before_final_poll=true
+default_runtime_no_connect=true
+default_runtime_no_join=true
 ```
 
-Safety remained closed:
-
-```text
-camera_permission_requested=false
-matrix_event_emit_requested=false
-real_call_flow_started=false
-no_repeated_apns=true
-no_production_apns=true
-dev_invite_used=false
-no_repeated_connect=true
-no_repeated_livekit_join=true
-video_enabled=false
-```
-
-Conclusion:
-
-```text
-Retry8 proved the receiver controlled audio path can complete once after APNs/Answer, but the sender-side LiveKit join safe point was not triggered before terminal observer classification. Because terminal fields were already present, no sender hook retry or repeated connect was performed.
-```
+No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, or physical hook reset/re-arm was performed.
 
 ## Next Phase
 
-`2.48Z-SenderJoinSafePointRepair — trigger sender-side LiveKit join after receiver Answer/credentials without repeated connect`
+`2.48Z-Physical2-Retry9 — one-shot two-physical-device sender SDK timeline proof with trigger-orchestration guard`
 
-Repair target:
+Retry9 target:
 
 ```text
-sender-side LiveKit join should be triggered only after receiver Answer, pending metadata success, media credentials success, and controlled receiver connect eligibility are established
-sender-side join must remain one-shot
-sender-side join must not be triggered before APNs
-sender-side join must not be retried after any result/classification
-receiver remote participant/liveness observer should run after sender join classification is available
+sender_join_trigger_orchestration_apns_success_seen=true
+sender_join_trigger_orchestration_receiver_answer_seen=true
+sender_join_trigger_orchestration_receiver_connect_terminal_seen=true
+sender_join_trigger_orchestration_sender_activation_armed=true
+sender_join_trigger_orchestration_sender_trigger_required=true
+sender_join_trigger_orchestration_sender_trigger_allowed=true
+sender_join_trigger_orchestration_sender_trigger_started=true
+sender_join_trigger_orchestration_sender_trigger_completed=true
+sender_join_trigger_orchestration_poll_allowed=true only after sender SDK timeline terminal classification
+sender_join_trigger_orchestration_final_classification=sender_trigger_completed_sdk_timeline_terminal_redacted
 ```
 
-Required repaired proof fields should make a future one-shot distinguish:
+Stop/classify if:
 
 ```text
-sender_side_livekit_join_activation_triggered=true
-sender_side_livekit_join_activation_consumed=true
-sender_side_livekit_join_activation_repeated=false
-sender_side_livekit_join_requested=true
-sender_side_livekit_join_result=<success_redacted_or_failed_redacted_or_blocked_redacted>
-sender_livekit_sdk_timeline_final_classification=<redacted_timeline_bucket_or_success_redacted>
-receiver_remote_participant_observer_result=<success_redacted_or_not_observed_redacted>
+sender_join_trigger_orchestration_final_classification=sender_trigger_waiting_for_answer_redacted
+sender_join_trigger_orchestration_final_classification=sender_trigger_waiting_for_receiver_connect_redacted
+sender_join_trigger_orchestration_final_classification=sender_trigger_activation_not_armed_redacted
+sender_join_trigger_orchestration_final_classification=sender_trigger_required_but_not_started_redacted
+sender_join_trigger_orchestration_final_classification=sender_trigger_started_not_completed_redacted
+sender_join_trigger_orchestration_final_classification=sender_trigger_completed_waiting_for_sdk_timeline_redacted
+sender_join_trigger_orchestration_poll_allowed=false
+sender_join_trigger_orchestration_poll_blocked_reason=sender_trigger_poll_blocked_until_sender_terminal_redacted
 ```
 
 Keep existing safety:
@@ -136,12 +125,12 @@ raw_error_url_token_room_identity_logged=false
 
 Do not:
 
-* send APNs
+* send APNs unless the explicit one-shot Retry9 helper confirmation is reached
 * run production APNs
 * run repeated APNs
 * run `dev/invite`
-* start physical media connect
-* start real LiveKit join
+* start repeated physical media connect
+* start repeated real LiveKit join
 * request camera permission
 * enable video
 * emit Matrix events
@@ -174,9 +163,8 @@ Run privacy scans over changed files/diff. Allowed hits are field names, redacte
 Return:
 
 * implementation summary
-* whether sender join safe point is after Answer/metadata/credentials
-* whether sender join remains one-shot
-* whether observer waits for sender join classification
+* whether trigger orchestration guard allows final poll only after sender terminal classification
+* whether receiver terminal fields alone did not close the sender path
 * whether default runtime remains no-connect/no-join
 * commit hash/message
 * changed files

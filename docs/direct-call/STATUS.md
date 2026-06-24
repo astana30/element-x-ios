@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-Physical2-Retry8 — one sandbox APNs and the receiver Answer path completed one controlled audio connect/LiveKit join, but the sender-side LiveKit join hook remained not requested and remote participant/audio/liveness was not observed. This is safe sender-join-not-requested / remote participant not observed triage, not remote-audio success. The next phase is `2.48Z-SenderJoinSafePointRepair — trigger sender-side LiveKit join after receiver Answer/credentials without repeated connect`.
+After 2.48Z-SenderJoinTriggerOrchestrationRepair — early terminal proof polling is now blocked until the sender join trigger and sender SDK timeline reach a terminal classification. Receiver terminal fields alone can no longer close the sender proof path; `not_requested` is classified as a missing sender trigger when a trigger is required. The next phase is `2.48Z-Physical2-Retry9 — one-shot two-physical-device sender SDK timeline proof with trigger-orchestration guard`.
 
 ## Latest App Code Checkpoint
 
@@ -38,6 +38,57 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Checksum: `654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e`
 
 ## Proven Checkpoints
+
+- 2.48Z-SenderJoinTriggerOrchestrationRepair adds a DEBUG-only redacted sender join trigger orchestration guard without APNs/connect:
+  - New proof fields:
+    ```text
+    sender_join_trigger_orchestration_present=true
+    sender_join_trigger_orchestration_debug_only=true
+    sender_join_trigger_orchestration_raw_identifiers_logged=false
+    sender_join_trigger_orchestration_apns_success_seen=<redacted_bool>
+    sender_join_trigger_orchestration_receiver_answer_seen=<redacted_bool>
+    sender_join_trigger_orchestration_receiver_connect_terminal_seen=<redacted_bool>
+    sender_join_trigger_orchestration_sender_activation_armed=<redacted_bool>
+    sender_join_trigger_orchestration_sender_trigger_required=true
+    sender_join_trigger_orchestration_sender_trigger_allowed=<redacted_bool>
+    sender_join_trigger_orchestration_sender_trigger_started=<redacted_bool>
+    sender_join_trigger_orchestration_sender_trigger_completed=<redacted_bool>
+    sender_join_trigger_orchestration_sender_trigger_missing_classified=<redacted_bool>
+    sender_join_trigger_orchestration_poll_allowed=<redacted_bool>
+    sender_join_trigger_orchestration_poll_blocked_reason=<redacted_bucket>
+    sender_join_trigger_orchestration_final_classification=<redacted_bucket>
+    ```
+  - Safe defaults:
+    ```text
+    sender_join_trigger_orchestration_present=true
+    sender_join_trigger_orchestration_debug_only=true
+    sender_join_trigger_orchestration_raw_identifiers_logged=false
+    sender_join_trigger_orchestration_sender_trigger_required=true
+    sender_join_trigger_orchestration_sender_trigger_allowed=false
+    sender_join_trigger_orchestration_poll_allowed=false
+    ```
+  - Redacted classifications:
+    ```text
+    sender_trigger_waiting_for_answer_redacted
+    sender_trigger_waiting_for_receiver_connect_redacted
+    sender_trigger_activation_not_armed_redacted
+    sender_trigger_required_but_not_started_redacted
+    sender_trigger_started_not_completed_redacted
+    sender_trigger_completed_waiting_for_sdk_timeline_redacted
+    sender_trigger_completed_sdk_timeline_terminal_redacted
+    sender_trigger_poll_blocked_until_sender_terminal_redacted
+    ```
+  - Boundary results:
+    ```text
+    early_proof_polling_blocked_until_sender_trigger_terminal=true
+    receiver_terminal_fields_alone_can_close_phase=false
+    not_requested_classified_as_missing_sender_trigger_when_required=true
+    sender_sdk_timeline_terminal_required_before_final_poll=true
+    default_runtime_no_connect=true
+    default_runtime_no_join=true
+    ```
+  - No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, or physical hook reset/re-arm was performed.
+  - Next phase: `2.48Z-Physical2-Retry9 — one-shot two-physical-device sender SDK timeline proof with trigger-orchestration guard`.
 
 - 2.48Z-Physical2-Retry8 closes the one-shot two-physical-device sender SDK timeline proof as safe sender-join-not-requested / remote participant not observed triage, not remote-audio success:
   - Proof path:

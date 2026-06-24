@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Added 2.48Z-SenderJoinTriggerOrchestrationRepair: the proof now has a DEBUG-only redacted sender join trigger orchestration guard that blocks early terminal polling until APNs success, receiver Answer, receiver connect terminal state, sender activation, sender trigger completion, and sender SDK timeline terminal classification are coherently observed. Receiver terminal fields alone can no longer close the phase, `not_requested` classifies as a required-but-not-started sender trigger when a trigger is required, and default runtime remains no-connect/no-join. No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, or physical hook reset/re-arm was performed.
 - Closed 2.48Z-Physical2-Retry8 as safe sender-join-not-requested / remote participant not observed triage, not remote-audio success: one sandbox APNs and one receiver Answer completed pending metadata, media credentials, one receiver controlled audio connect, and receiver LiveKit join, but the sender-side LiveKit join activation was not triggered/consumed and the sender SDK failure/timeline classifications stayed `not_requested`; receiver remote participant/audio/liveness was not observed. No repeated APNs, production APNs, `dev/invite`, repeated connect, repeated LiveKit join, video, camera permission, Matrix event emit, or full call flow was performed during close-out. Next is a no-repeat sender join safe-point repair.
 - Closed 2.48Z-Physical2-Retry7 as safe sender SDK internal unknown / remote participant not observed triage, not remote-audio success: receiver PushKit, CallKit Answer, pending metadata, credentials, one receiver controlled audio connect, and receiver LiveKit join succeeded; sender-side LiveKit join activation triggered and consumed once, but SDK connect started without return, throw, connected/failed/delegate/disconnected state, or remote participant/audio/liveness observation. Final SDK bucket is `sdk_internal_unknown_redacted`; raw SDK error, URL, token, room, and identity logging stayed false. No repeated APNs, production APNs, `dev/invite`, repeated connect, repeated LiveKit join, video, camera permission, Matrix event emit, or full call flow was performed during close-out.
 - Added 2.48Z-SenderLiveKitSDKUnknownErrorRepair: sender LiveKit SDK unknown failures now expose a DEBUG/test-controlled redacted SDK failure surface with connect-call, room-state, delegate, disconnect, identity, token-match, audio-session, permission/capture, network, and internal-unknown buckets. The refined SDK classification maps into sender transport error surface, sender transport diagnostics, and sender-side LiveKit join result/error buckets while preserving existing transport buckets, keeping sender-join-success-but-remote-missing separate, and leaving default runtime no-connect/no-join. Raw SDK error, URL, token, room, and identity logging remain false. No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, or signing/project file edit was performed.
@@ -141,6 +142,62 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48Z-SenderJoinTriggerOrchestrationRepair — Early Poll Guard / No APNs
+
+Implemented a no-APNs/no-connect proof orchestration guard for the Retry8 early-close shape where receiver terminal fields existed but sender join remained `not_requested`.
+
+New redacted proof fields:
+
+```text
+sender_join_trigger_orchestration_present=true
+sender_join_trigger_orchestration_debug_only=true
+sender_join_trigger_orchestration_raw_identifiers_logged=false
+sender_join_trigger_orchestration_apns_success_seen=<redacted_bool>
+sender_join_trigger_orchestration_receiver_answer_seen=<redacted_bool>
+sender_join_trigger_orchestration_receiver_connect_terminal_seen=<redacted_bool>
+sender_join_trigger_orchestration_sender_activation_armed=<redacted_bool>
+sender_join_trigger_orchestration_sender_trigger_required=true
+sender_join_trigger_orchestration_sender_trigger_allowed=<redacted_bool>
+sender_join_trigger_orchestration_sender_trigger_started=<redacted_bool>
+sender_join_trigger_orchestration_sender_trigger_completed=<redacted_bool>
+sender_join_trigger_orchestration_sender_trigger_missing_classified=<redacted_bool>
+sender_join_trigger_orchestration_poll_allowed=<redacted_bool>
+sender_join_trigger_orchestration_poll_blocked_reason=<redacted_bucket>
+sender_join_trigger_orchestration_final_classification=<redacted_bucket>
+```
+
+Classifications:
+
+```text
+sender_trigger_waiting_for_answer_redacted
+sender_trigger_waiting_for_receiver_connect_redacted
+sender_trigger_activation_not_armed_redacted
+sender_trigger_required_but_not_started_redacted
+sender_trigger_started_not_completed_redacted
+sender_trigger_completed_waiting_for_sdk_timeline_redacted
+sender_trigger_completed_sdk_timeline_terminal_redacted
+sender_trigger_poll_blocked_until_sender_terminal_redacted
+```
+
+Boundary results:
+
+```text
+early_proof_polling_blocked_until_sender_trigger_terminal=true
+receiver_terminal_fields_alone_can_close_phase=false
+not_requested_classified_as_missing_sender_trigger_when_required=true
+sender_sdk_timeline_terminal_required_before_final_poll=true
+default_runtime_no_connect=true
+default_runtime_no_join=true
+```
+
+Next phase:
+
+```text
+2.48Z-Physical2-Retry9 — one-shot two-physical-device sender SDK timeline proof with trigger-orchestration guard
+```
+
+No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, or physical hook reset/re-arm was performed.
 
 ### 2.48Z-Physical2-Retry8 — Sender Join Not Requested / Remote Participant Not Observed Triage
 
