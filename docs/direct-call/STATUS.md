@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-SenderTransportFailureRepair — sender-side LiveKit transport diagnostics now expose precise redacted transport buckets, same LiveKit room and token-authority match booleans, receiver/sender room and token-authority match booleans, and safe default-disabled proof fields. Pre-transport credential/token/URL/room-binding failures still classify before transport, while sender transport failure is separated from sender join success-but-remote-missing. No APNs/connect/real-device LiveKit/permissions/video/Matrix/full-flow path was run. The next phase is `2.48Z-Physical2-Retry5 — one-shot two-physical-device sender transport bucket proof`.
+After 2.48Z-Physical2-Retry5 — the one-shot two-physical-device sender transport bucket proof reached receiver PushKit, CallKit Answer, pending metadata, media credentials, one receiver controlled audio connect, and receiver LiveKit join. Sender readiness survived into runtime and Answer; sender-side join activation triggered and consumed exactly once. Sender transport diagnostics classified the first sender-side transport attempt as `transport_unknown_failed_redacted`; LiveKit room and token-authority matches were true, but receiver remote participant/audio/liveness were not observed. This is safe classified sender transport bucket triage, not remote-audio success. The next phase is `2.48Z-SenderTransportUnknownFailureRepair — map unknown sender transport failure before any APNs retry, no APNs/connect`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,112 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48Z-Physical2-Retry5-SenderTransportUnknownTriage closes the one-shot two-physical-device sender transport bucket proof as safe classified sender transport triage, not remote-audio success:
+  - Proof path:
+    ```text
+    /tmp/salemx-voip-push-receipt-proof-2.48z-physical2-retry5-sender-transport-bucket-polled.txt
+    ```
+  - One sandbox APNs was already sent by the operator-run one-shot helper after explicit confirmation for this phase; no APNs was repeated during close-out:
+    ```text
+    APNs_sent=true
+    background_apns_push_result=sandbox_success
+    ```
+  - Physical proof generation:
+    ```text
+    proof_generation=generation_16
+    physical_voip_push_received=true
+    pushkit_callback_invoked=true
+    pushkit_payload_kind=real_invite_controlled
+    callkit_report_result=reported
+    callkit_first_action_kind=answer
+    callkit_answer_action_received=true
+    callkit_answer_action_fulfilled=true
+    ```
+  - Receiver metadata, credentials, one controlled connect, and receiver LiveKit join succeeded:
+    ```text
+    pending_metadata_fetch_result=success_redacted
+    pending_metadata_fetch_http_status_bucket=2xx
+    media_credentials_requested=true
+    media_credentials_result=success_redacted
+    controlled_connect_first_attempt_requested=true
+    controlled_connect_first_attempt_allowed=true
+    controlled_connect_first_attempt_started=true
+    controlled_connect_first_attempt_completed=true
+    controlled_connect_first_attempt_repeated=false
+    controlled_connect_first_attempt_result=success_redacted
+    controlled_connect_first_attempt_error_bucket=none
+    livekit_join_result=success_redacted
+    ```
+  - Sender-side join activation triggered and consumed exactly once:
+    ```text
+    sender_side_livekit_join_activation_triggered=true
+    sender_side_livekit_join_activation_consumed=true
+    sender_side_livekit_join_activation_repeated=false
+    sender_side_livekit_join_requested=true
+    sender_side_livekit_join_result=failed_redacted
+    sender_side_livekit_join_error_bucket=transport_failed_redacted
+    sender_side_livekit_join_repeated=false
+    ```
+  - Sender transport diagnostics reached transport and classified the bucket without raw IDs or tokens:
+    ```text
+    sender_transport_failure_diagnostics_transport_attempted=true
+    sender_transport_failure_diagnostics_transport_started=true
+    sender_transport_failure_diagnostics_transport_completed=true
+    sender_transport_failure_diagnostics_transport_result=failed_redacted
+    sender_transport_failure_diagnostics_error_bucket=transport_unknown_failed_redacted
+    sender_transport_failure_diagnostics_classification=transport_unknown_failed_redacted
+    sender_transport_failure_diagnostics_livekit_url_present=true
+    sender_transport_failure_diagnostics_token_present=true
+    sender_transport_failure_diagnostics_room_binding_present=true
+    sender_transport_failure_diagnostics_same_livekit_room=true
+    sender_transport_failure_diagnostics_same_token_authority=true
+    sender_transport_failure_diagnostics_receiver_sender_room_match=true
+    sender_transport_failure_diagnostics_receiver_sender_token_authority_match=true
+    ```
+  - Receiver remote participant/audio/liveness was not observed:
+    ```text
+    receiver_remote_participant_observer_result=not_observed_redacted
+    receiver_remote_participant_observer_error_bucket=sender_join_failed_redacted
+    receiver_remote_participant_observer_remote_seen=false
+    receiver_remote_participant_observer_audio_track_seen=false
+    receiver_remote_participant_observer_liveness_seen=false
+    livekit_remote_participant_seen=false
+    livekit_remote_audio_track_subscribed=false
+    livekit_audio_liveness_result=not_observed_redacted
+    ```
+  - Safety remained closed:
+    ```text
+    controlled_connect_first_attempt_repeated=false
+    sender_side_livekit_join_repeated=false
+    media_connect_requested=false
+    media_connect_attempted=false
+    livekit_join_requested=false
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    blocked_reason=none
+    ```
+  - Conclusion:
+    ```text
+    2.48Z-Physical2-Retry5 = safe sender transport bucket triage, not remote-audio success.
+    Receiver-side Answer, pending metadata, credentials, controlled connect, and receiver LiveKit join succeeded.
+    Sender readiness reached runtime and survived Answer.
+    Sender-side join activation triggered and consumed once.
+    Sender transport diagnostics classified the transport failure as transport_unknown_failed_redacted.
+    Same LiveKit room and token-authority comparisons were true without raw IDs or tokens.
+    Remote participant, remote audio track, and audio liveness were not observed.
+    No repeated APNs.
+    No production APNs.
+    No dev/invite.
+    No repeated connect.
+    No repeated LiveKit join.
+    No video.
+    No camera permission.
+    No Matrix event emit.
+    No full call flow.
+    ```
+  - Next phase: `2.48Z-SenderTransportUnknownFailureRepair — map unknown sender transport failure before any APNs retry, no APNs/connect`.
 - 2.48Z-SenderTransportFailureRepair adds precise redacted sender-side LiveKit transport failure diagnostics without APNs/connect/real-device LiveKit:
   - New proof fields are emitted:
     ```text
