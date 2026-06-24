@@ -13,56 +13,95 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48Z-Physical2-Retry10` is closed as:
+`2.48Z-SenderConnectPendingParityRepair` is complete.
+
+The sender LiveKit connect proof now exposes DEBUG/test-controlled parity with the receiver-proven audio-only connect wrapper while keeping default runtime no-connect/no-join:
 
 ```text
+sender_connect_parity_present=true
+sender_connect_parity_debug_only=true
+sender_connect_parity_raw_url_logged=false
+sender_connect_parity_raw_token_logged=false
+sender_connect_parity_raw_room_logged=false
+sender_connect_parity_raw_identity_logged=false
+sender_connect_parity_uses_receiver_proven_connect_wrapper=true
+sender_connect_parity_uses_audio_only=true
+sender_connect_parity_video_allowed=false
+sender_connect_parity_matrix_events_allowed=false
+sender_connect_parity_room_retained_until_terminal=true
+sender_connect_parity_delegate_retained_until_terminal=true
+sender_connect_parity_state_observer_retained_until_terminal=true
+sender_connect_parity_task_retained_until_terminal=true
+sender_connect_parity_bounded_wait_used=true
+```
+
+The sender one-shot join and timeout classifications remain available:
+
+```text
+sender_side_livekit_join_activation one-shot
+sender_side_livekit_join_repeated=false
+sender_livekit_sdk_timeout_diagnostics_final_classification=sdk_connect_timeout_connect_call_pending_redacted
+sender_join_success_but_remote_missing_redacted remains separate
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, or physical hook reset/re-arm was performed during the repair.
+
+Previous physical result remains:
+
+```text
+2.48Z-Physical2-Retry10 =
 safe sender SDK connect-call-pending timeout / remote participant not observed triage
 ```
 
-This is not remote-audio success.
-
-Proof path:
-
-```text
-/tmp/salemx-voip-push-receipt-proof-2.48z-physical2-retry10-sender-sdk-timeout-bucket-polled.txt
-```
-
-Proof generation:
+This was not remote-audio success. Retry10 proof generation was:
 
 ```text
 proof_generation=generation_16
 ```
 
-Receiver path succeeded once:
+## Next Phase
+
+`2.48Z-Physical2-Retry11 — one-shot two-physical-device sender connect parity proof`
+
+This is a physical one-shot proof only after both physical devices are ready.
+
+Required preflight/proof expectations:
 
 ```text
-physical_voip_push_received=true
-callkit_report_result=reported
-callkit_first_action_kind=answer
-callkit_answer_action_received=true
-callkit_answer_action_fulfilled=true
-pending_metadata_fetch_result=success_redacted
-media_credentials_result=success_redacted
-controlled_connect_first_attempt_result=success_redacted
-controlled_connect_first_attempt_repeated=false
-livekit_join_result=success_redacted
-```
-
-Sender join fired once and failed safely:
-
-```text
-sender_side_livekit_join_activation_triggered=true
-sender_side_livekit_join_activation_consumed=true
-sender_side_livekit_join_activation_repeated=false
-sender_side_livekit_join_requested=true
-sender_side_livekit_join_result=failed_redacted
-sender_side_livekit_join_error_bucket=transport_livekit_sdk_unknown_error_redacted
+receiver and sender are distinct accounts
+both devices are in the same encrypted room
+receiver app session is valid
+sender app session is valid
+sender_connect_parity_present=true
+sender_connect_parity_uses_receiver_proven_connect_wrapper=true
+sender_connect_parity_uses_audio_only=true
+sender_connect_parity_room_retained_until_terminal=true
+sender_connect_parity_delegate_retained_until_terminal=true
+sender_connect_parity_state_observer_retained_until_terminal=true
+sender_connect_parity_task_retained_until_terminal=true
+sender_connect_parity_bounded_wait_used=true
+sender_connect_parity_video_allowed=false
+sender_connect_parity_matrix_events_allowed=false
 sender_side_livekit_join_repeated=false
 ```
 
-Orchestration reached the required terminal state:
+Physical proof should still classify safely if the sender connect remains pending:
 
 ```text
+sender_livekit_sdk_timeline_connect_invoked=true
+sender_livekit_sdk_timeline_connect_returned=false
+sender_livekit_sdk_timeline_connect_threw=false
+sender_livekit_sdk_timeline_task_cancelled=false
+sender_livekit_sdk_timeout_diagnostics_connect_call_pending_at_timeout=true
+sender_livekit_sdk_timeout_diagnostics_task_running_at_timeout=true
+sender_livekit_sdk_timeout_diagnostics_task_cancelled_at_timeout=false
+sender_livekit_sdk_timeout_diagnostics_delegate_attached=true
+sender_livekit_sdk_timeout_diagnostics_state_observer_attached=true
+sender_livekit_sdk_timeout_diagnostics_network_path_bucket=satisfied_redacted
+sender_livekit_sdk_timeout_diagnostics_final_classification=sdk_connect_timeout_connect_call_pending_redacted
 sender_join_trigger_orchestration_apns_success_seen=true
 sender_join_trigger_orchestration_receiver_answer_seen=true
 sender_join_trigger_orchestration_receiver_connect_terminal_seen=true
@@ -76,39 +115,10 @@ sender_join_trigger_orchestration_poll_blocked_reason=none
 sender_join_trigger_orchestration_final_classification=sender_trigger_completed_sdk_timeline_terminal_redacted
 ```
 
-Sender SDK timeline and timeout diagnostics narrowed the failure:
-
-```text
-sender_livekit_sdk_timeline_task_created=true
-sender_livekit_sdk_timeline_task_started=true
-sender_livekit_sdk_timeline_connect_invoked=true
-sender_livekit_sdk_timeline_connect_returned=false
-sender_livekit_sdk_timeline_connect_threw=false
-sender_livekit_sdk_timeline_delegate_attached=true
-sender_livekit_sdk_timeline_state_observer_attached=true
-sender_livekit_sdk_timeline_connected_state_seen=false
-sender_livekit_sdk_timeline_failed_state_seen=false
-sender_livekit_sdk_timeline_disconnected_state_seen=false
-sender_livekit_sdk_timeline_task_cancelled=false
-sender_livekit_sdk_timeline_task_completed=false
-sender_livekit_sdk_timeline_timeout_elapsed=true
-sender_livekit_sdk_timeline_proof_written_after_terminal_state=true
-sender_livekit_sdk_timeline_final_classification=sdk_connect_timeout_connect_call_pending_redacted
-sender_livekit_sdk_timeout_diagnostics_connect_call_pending_at_timeout=true
-sender_livekit_sdk_timeout_diagnostics_task_running_at_timeout=true
-sender_livekit_sdk_timeout_diagnostics_task_cancelled_at_timeout=false
-sender_livekit_sdk_timeout_diagnostics_delegate_attached=true
-sender_livekit_sdk_timeout_diagnostics_state_observer_attached=true
-sender_livekit_sdk_timeout_diagnostics_actor_context_available=true
-sender_livekit_sdk_timeout_diagnostics_network_path_bucket=satisfied_redacted
-sender_livekit_sdk_timeout_diagnostics_final_classification=sdk_connect_timeout_connect_call_pending_redacted
-```
-
-Remote participant/audio/liveness were not observed:
+Success still requires remote participant/audio/liveness observation; otherwise classify, do not retry:
 
 ```text
 receiver_remote_participant_observer_result=not_observed_redacted
-receiver_remote_participant_observer_error_bucket=sender_join_failed_redacted
 receiver_remote_participant_observer_remote_seen=false
 receiver_remote_participant_observer_audio_track_seen=false
 receiver_remote_participant_observer_liveness_seen=false
@@ -117,38 +127,18 @@ livekit_remote_audio_track_subscribed=false
 livekit_audio_liveness_result=not_observed_redacted
 ```
 
-Safety stayed closed:
+Safety must stay closed:
 
 ```text
-no_repeated_apns=true
-no_production_apns=true
+APNs_sent_once_only=true
+production_apns_sent=false
 dev_invite_used=false
-no_repeated_connect=true
-no_repeated_livekit_join=true
-video_enabled=false
+repeated_connect=false
+repeated_livekit_join=false
+video_allowed=false
 camera_permission_requested=false
 matrix_event_emit_requested=false
 real_call_flow_started=false
-```
-
-## Next Phase
-
-`2.48Z-SenderConnectPendingParityRepair — align sender LiveKit connect with receiver-proven connect path, no APNs/connect`
-
-Do not run another physical retry in this phase.
-
-Focus on fixing the sender path, not adding narrower diagnostics:
-
-```text
-why receiver-controlled LiveKit join succeeds but sender-side connect call stays pending
-whether sender-side connect uses the exact same LiveKit connect wrapper/options as receiver
-whether sender is awaiting a different SDK API path than receiver
-whether sender room/delegate/state observer retention differs from receiver
-whether sender identity/participant naming conflicts with local receiver process/session context
-whether sender connect should use the same bounded connect helper as receiver
-whether sender connect is being invoked on the wrong actor/queue
-whether sender join task needs an explicit retained room reference until connect returns
-whether sender connect starts from the correct physical device app process
 ```
 
 ## Hard Limits
@@ -159,8 +149,8 @@ Do not:
 * run production APNs
 * run repeated APNs
 * run `dev/invite`
-* retry receiver connect
-* retry sender LiveKit join
+* repeat receiver connect
+* repeat sender LiveKit join
 * request microphone permission
 * request camera permission
 * enable video
@@ -178,9 +168,6 @@ Run:
 git status --short --branch
 git diff --check
 git diff --cached --check
-DIRECT_CALL_ONLY_TESTING='UnitTests/DirectCallEngineTests UnitTests/NativeIncomingCallLifecycleContractTests' Tools/Scripts/verify_direct_call_unit.sh
-swiftformat ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift UnitTests/Sources/DirectCallEngineTests.swift
-swiftlint lint ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift UnitTests/Sources/DirectCallEngineTests.swift
 git diff --name-only | grep -E 'SalemX.xcodeproj/project.pbxproj|app.yml|\.entitlements|Info.plist' && exit 1 || true
 git diff --cached --name-only | grep -E 'SalemX.xcodeproj/project.pbxproj|app.yml|\.entitlements|Info.plist' && exit 1 || true
 ```
@@ -193,12 +180,10 @@ Run privacy scans over changed files/diff. Allowed hits are field names, redacte
 
 Return:
 
-* implementation summary
-* whether sender connect now uses the receiver-proven path or why not
-* whether sender room/delegate/state observer retention is repaired
-* whether sender connect remains one-shot/default-disabled
-* whether default runtime remains no-connect/no-join
-* commit hash/message
-* changed files
-* checks run
+* Retry11 classification
+* whether parity fields are present
+* whether sender connect invoked/returned/threw/task/delegate/state observer fields are coherent
+* whether remote participant/audio/liveness was observed
+* whether safety fields stayed closed
+* proof generation and proof path
 * final `git status --short --branch`

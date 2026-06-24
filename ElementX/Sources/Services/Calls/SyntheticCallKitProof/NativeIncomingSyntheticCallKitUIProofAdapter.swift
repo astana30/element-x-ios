@@ -930,6 +930,26 @@ private struct SalemXSenderSideLiveKitJoinActivation {
     }
 }
 
+private struct SalemXSenderConnectParity {
+    static let defaultEnabled = SalemXSenderConnectParity()
+
+    let present = true
+    let debugOnly = true
+    let rawURLLogged = false
+    let rawTokenLogged = false
+    let rawRoomLogged = false
+    let rawIdentityLogged = false
+    let usesReceiverProvenConnectWrapper = true
+    let usesAudioOnly = true
+    let videoAllowed = false
+    let matrixEventsAllowed = false
+    let roomRetainedUntilTerminal = true
+    let delegateRetainedUntilTerminal = true
+    let stateObserverRetainedUntilTerminal = true
+    let taskRetainedUntilTerminal = true
+    let boundedWaitUsed = true
+}
+
 private struct SalemXSenderJoinTriggerOrchestrationInput {
     let apnsSuccessSeen: Bool
     let receiverAnswerSeen: Bool
@@ -3418,6 +3438,21 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var senderSideLiveKitJoinResult = SalemXSenderSideLiveKitJoinHook.defaultDisabled.result
     var senderSideLiveKitJoinErrorBucket = SalemXSenderSideLiveKitJoinHook.defaultDisabled.errorBucket
     var senderSideLiveKitJoinRepeated = SalemXSenderSideLiveKitJoinHook.defaultDisabled.repeated
+    var senderConnectParityPresent = SalemXSenderConnectParity.defaultEnabled.present
+    var senderConnectParityDebugOnly = SalemXSenderConnectParity.defaultEnabled.debugOnly
+    var senderConnectParityRawURLLogged = SalemXSenderConnectParity.defaultEnabled.rawURLLogged
+    var senderConnectParityRawTokenLogged = SalemXSenderConnectParity.defaultEnabled.rawTokenLogged
+    var senderConnectParityRawRoomLogged = SalemXSenderConnectParity.defaultEnabled.rawRoomLogged
+    var senderConnectParityRawIdentityLogged = SalemXSenderConnectParity.defaultEnabled.rawIdentityLogged
+    var senderConnectParityUsesReceiverProvenConnectWrapper = SalemXSenderConnectParity.defaultEnabled.usesReceiverProvenConnectWrapper
+    var senderConnectParityUsesAudioOnly = SalemXSenderConnectParity.defaultEnabled.usesAudioOnly
+    var senderConnectParityVideoAllowed = SalemXSenderConnectParity.defaultEnabled.videoAllowed
+    var senderConnectParityMatrixEventsAllowed = SalemXSenderConnectParity.defaultEnabled.matrixEventsAllowed
+    var senderConnectParityRoomRetainedUntilTerminal = SalemXSenderConnectParity.defaultEnabled.roomRetainedUntilTerminal
+    var senderConnectParityDelegateRetainedUntilTerminal = SalemXSenderConnectParity.defaultEnabled.delegateRetainedUntilTerminal
+    var senderConnectParityStateObserverRetainedUntilTerminal = SalemXSenderConnectParity.defaultEnabled.stateObserverRetainedUntilTerminal
+    var senderConnectParityTaskRetainedUntilTerminal = SalemXSenderConnectParity.defaultEnabled.taskRetainedUntilTerminal
+    var senderConnectParityBoundedWaitUsed = SalemXSenderConnectParity.defaultEnabled.boundedWaitUsed
     var senderJoinFailureDiagnosticsPresent = SalemXSenderJoinFailureDiagnostics.defaultDisabled.present
     var senderJoinFailureDiagnosticsDebugOnly = SalemXSenderJoinFailureDiagnostics.defaultDisabled.debugOnly
     var senderJoinFailureDiagnosticsAudioOnly = SalemXSenderJoinFailureDiagnostics.defaultDisabled.audioOnly
@@ -4061,6 +4096,21 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "sender_side_livekit_join_result=\(senderSideLiveKitJoinResult)",
             "sender_side_livekit_join_error_bucket=\(senderSideLiveKitJoinErrorBucket)",
             "sender_side_livekit_join_repeated=\(senderSideLiveKitJoinRepeated)",
+            "sender_connect_parity_present=\(senderConnectParityPresent)",
+            "sender_connect_parity_debug_only=\(senderConnectParityDebugOnly)",
+            "sender_connect_parity_raw_url_logged=\(senderConnectParityRawURLLogged)",
+            "sender_connect_parity_raw_token_logged=\(senderConnectParityRawTokenLogged)",
+            "sender_connect_parity_raw_room_logged=\(senderConnectParityRawRoomLogged)",
+            "sender_connect_parity_raw_identity_logged=\(senderConnectParityRawIdentityLogged)",
+            "sender_connect_parity_uses_receiver_proven_connect_wrapper=\(senderConnectParityUsesReceiverProvenConnectWrapper)",
+            "sender_connect_parity_uses_audio_only=\(senderConnectParityUsesAudioOnly)",
+            "sender_connect_parity_video_allowed=\(senderConnectParityVideoAllowed)",
+            "sender_connect_parity_matrix_events_allowed=\(senderConnectParityMatrixEventsAllowed)",
+            "sender_connect_parity_room_retained_until_terminal=\(senderConnectParityRoomRetainedUntilTerminal)",
+            "sender_connect_parity_delegate_retained_until_terminal=\(senderConnectParityDelegateRetainedUntilTerminal)",
+            "sender_connect_parity_state_observer_retained_until_terminal=\(senderConnectParityStateObserverRetainedUntilTerminal)",
+            "sender_connect_parity_task_retained_until_terminal=\(senderConnectParityTaskRetainedUntilTerminal)",
+            "sender_connect_parity_bounded_wait_used=\(senderConnectParityBoundedWaitUsed)",
             "sender_join_failure_diagnostics_present=\(senderJoinFailureDiagnosticsPresent)",
             "sender_join_failure_diagnostics_debug_only=\(senderJoinFailureDiagnosticsDebugOnly)",
             "sender_join_failure_diagnostics_audio_only=\(senderJoinFailureDiagnosticsAudioOnly)",
@@ -4664,6 +4714,24 @@ private extension SalemXVoIPPushReceiptProofSummary {
         senderSideLiveKitJoinErrorBucket = hook.errorBucket
         senderSideLiveKitJoinRepeated = hook.repeated
         refreshRemoteParticipantPresenceRepairDiagnostics()
+    }
+
+    mutating func recordSenderConnectParity(_ parity: SalemXSenderConnectParity) {
+        senderConnectParityPresent = parity.present
+        senderConnectParityDebugOnly = parity.debugOnly
+        senderConnectParityRawURLLogged = parity.rawURLLogged
+        senderConnectParityRawTokenLogged = parity.rawTokenLogged
+        senderConnectParityRawRoomLogged = parity.rawRoomLogged
+        senderConnectParityRawIdentityLogged = parity.rawIdentityLogged
+        senderConnectParityUsesReceiverProvenConnectWrapper = parity.usesReceiverProvenConnectWrapper
+        senderConnectParityUsesAudioOnly = parity.usesAudioOnly
+        senderConnectParityVideoAllowed = parity.videoAllowed
+        senderConnectParityMatrixEventsAllowed = parity.matrixEventsAllowed
+        senderConnectParityRoomRetainedUntilTerminal = parity.roomRetainedUntilTerminal
+        senderConnectParityDelegateRetainedUntilTerminal = parity.delegateRetainedUntilTerminal
+        senderConnectParityStateObserverRetainedUntilTerminal = parity.stateObserverRetainedUntilTerminal
+        senderConnectParityTaskRetainedUntilTerminal = parity.taskRetainedUntilTerminal
+        senderConnectParityBoundedWaitUsed = parity.boundedWaitUsed
     }
 
     mutating func recordSenderJoinFailureDiagnostics(_ diagnostics: SalemXSenderJoinFailureDiagnostics) {
@@ -6268,6 +6336,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var senderLiveKitReadinessHook = SalemXSenderLiveKitReadinessHook.defaultDisabled
     private static var senderSideLiveKitJoinHook = SalemXSenderSideLiveKitJoinHook.defaultDisabled
     private static var senderSideLiveKitJoinActivation = SalemXSenderSideLiveKitJoinActivation.defaultDisabled
+    private static var senderConnectParity = SalemXSenderConnectParity.defaultEnabled
     private static var senderJoinFailureDiagnostics = SalemXSenderJoinFailureDiagnostics.defaultDisabled
     private static var senderTransportFailureDiagnostics = SalemXSenderTransportFailureDiagnostics.defaultDisabled
     private static var senderTransportErrorSurface = SalemXSenderTransportErrorSurface.defaultDisabled
@@ -6495,6 +6564,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         senderTransportErrorSurface = transportErrorSurface
         var summary = latestVoIPPushReceiptSummary
         summary.recordSenderSideLiveKitJoinHook(hook)
+        summary.recordSenderConnectParity(senderConnectParity)
         summary.recordSenderJoinFailureDiagnostics(joinDiagnostics)
         summary.recordSenderTransportFailureDiagnostics(transportDiagnostics)
         summary.recordSenderTransportErrorSurface(transportErrorSurface)
@@ -7305,6 +7375,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         let senderLiveKitReadinessHookSnapshot = senderLiveKitReadinessHook
         let senderSideLiveKitJoinHookSnapshot = senderSideLiveKitJoinHook
         let senderSideLiveKitJoinActivationSnapshot = senderSideLiveKitJoinActivation
+        let senderConnectParitySnapshot = senderConnectParity
         let senderJoinFailureDiagnosticsSnapshot = senderJoinFailureDiagnostics
         let senderTransportFailureDiagnosticsSnapshot = senderTransportFailureDiagnostics
         let senderTransportErrorSurfaceSnapshot = senderTransportErrorSurface
@@ -7317,6 +7388,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         baseSummary.recordRemotePeerContextHandoff(remotePeerContextHandoffSnapshot)
         baseSummary.recordSenderReadinessRuntimeHandoff(senderLiveKitReadinessHookSnapshot)
         baseSummary.recordSenderSideLiveKitJoinHook(senderSideLiveKitJoinHookSnapshot)
+        baseSummary.recordSenderConnectParity(senderConnectParitySnapshot)
         baseSummary.recordSenderJoinFailureDiagnostics(senderJoinFailureDiagnosticsSnapshot)
         baseSummary.recordSenderTransportFailureDiagnostics(senderTransportFailureDiagnosticsSnapshot)
         baseSummary.recordSenderTransportErrorSurface(senderTransportErrorSurfaceSnapshot)

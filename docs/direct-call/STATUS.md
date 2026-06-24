@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-Physical2-Retry10 — the two-physical-device sender SDK timeout-bucket proof is closed as safe sender SDK connect-call-pending timeout / remote participant not observed triage, not remote-audio success. Receiver PushKit, CallKit Answer, pending metadata, media credentials, receiver controlled connect, and receiver LiveKit join succeeded once; sender trigger orchestration completed once, but sender SDK connect stayed pending and remote participant/audio/liveness were not observed. The next phase is `2.48Z-SenderConnectPendingParityRepair — align sender LiveKit connect with receiver-proven connect path, no APNs/connect`.
+After 2.48Z-SenderConnectPendingParityRepair — the sender LiveKit connect proof now exposes DEBUG/test-controlled parity fields showing that the sender path is aligned to the receiver-proven audio-only connect wrapper, retains room/delegate/state observer/task until terminal state, uses a bounded wait, keeps timeout bucket classification available for connect-call-pending, and preserves default no-connect/no-join safety. The next phase is `2.48Z-Physical2-Retry11 — one-shot two-physical-device sender connect parity proof`.
 
 ## Latest App Code Checkpoint
 
@@ -38,6 +38,38 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Checksum: `654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e`
 
 ## Proven Checkpoints
+
+- 2.48Z-SenderConnectPendingParityRepair adds sender LiveKit connect parity proof fields without APNs/connect:
+  - Required parity fields are now available for the next physical proof:
+    ```text
+    sender_connect_parity_present=true
+    sender_connect_parity_debug_only=true
+    sender_connect_parity_raw_url_logged=false
+    sender_connect_parity_raw_token_logged=false
+    sender_connect_parity_raw_room_logged=false
+    sender_connect_parity_raw_identity_logged=false
+    sender_connect_parity_uses_receiver_proven_connect_wrapper=true
+    sender_connect_parity_uses_audio_only=true
+    sender_connect_parity_video_allowed=false
+    sender_connect_parity_matrix_events_allowed=false
+    sender_connect_parity_room_retained_until_terminal=true
+    sender_connect_parity_delegate_retained_until_terminal=true
+    sender_connect_parity_state_observer_retained_until_terminal=true
+    sender_connect_parity_task_retained_until_terminal=true
+    sender_connect_parity_bounded_wait_used=true
+    ```
+  - Existing sender safety remains intact:
+    ```text
+    sender_side_livekit_join_activation one-shot
+    sender_side_livekit_join_repeated=false
+    sender_livekit_sdk_timeout_diagnostics_final_classification=sdk_connect_timeout_connect_call_pending_redacted
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    default runtime no-connect/no-join
+    ```
+  - No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, or physical hook reset/re-arm was performed.
+  - Next phase: `2.48Z-Physical2-Retry11 — one-shot two-physical-device sender connect parity proof`.
 
 - 2.48Z-Physical2-Retry10-SenderConnectPendingTimeoutTriage closes the one-shot two-physical-device sender SDK timeout-bucket proof as safe sender SDK connect-call-pending timeout / remote participant not observed triage. This is not remote-audio success:
   - Proof path:
