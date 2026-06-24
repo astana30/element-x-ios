@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-Physical2-Retry2 — the two-physical-device proof is safely closed as sender-not-joined / remote participant not observed triage, not remote-audio success. Receiver PushKit, CallKit Answer, pending metadata, media credentials, one controlled receiver audio connect, and receiver LiveKit join succeeded, but the sender-side LiveKit join hook remained unarmed/not requested and the receiver observer classified `sender_not_joined_redacted`. APNs audit records `possible_repeated_apns_observed=true` because the terminal transcript reported an earlier `APNs_sent=true` block before a restored session followed by another confirmed helper send; no further APNs may be sent for this phase. The next phase is `2.48Z-SenderJoinHookActivationRepair — make sender-side LiveKit join hook explicitly arm/trigger once, no APNs/connect`.
+After 2.48Z-SenderJoinHookActivationRepair — the DEBUG/test-controlled sender-side LiveKit join activation proof fields are present, default-disabled, sender-readiness and same-room gated, audio-only, raw-identifier-free, and one-shot classified without APNs/connect/device LiveKit/permissions/video/Matrix/full-flow side effects. The receiver observer now distinguishes hook-not-armed, join-not-requested, join-blocked, join-failed, success-but-remote-missing, remote-participant-seen, remote-audio-track-missing, and remote-liveness-not-observed buckets. The next phase is `2.48Z-Physical2-Retry3 — one-shot two-physical-device sender join activation / remote participant proof`.
 
 ## Latest App Code Checkpoint
 
@@ -39,6 +39,70 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 
 ## Proven Checkpoints
 
+- 2.48Z-SenderJoinHookActivationRepair makes the sender-side LiveKit join hook explicitly armable/triggerable once under DEBUG/test control without running a physical attempt:
+  - Added redacted sender-side join activation proof fields:
+    ```text
+    sender_side_livekit_join_activation_present=true
+    sender_side_livekit_join_activation_debug_only=true
+    sender_side_livekit_join_activation_default_disabled=true
+    sender_side_livekit_join_activation_requires_sender_readiness=true
+    sender_side_livekit_join_activation_requires_same_room=true
+    sender_side_livekit_join_activation_audio_only=true
+    sender_side_livekit_join_activation_video_allowed=false
+    sender_side_livekit_join_activation_matrix_events_allowed=false
+    sender_side_livekit_join_activation_raw_identifiers_logged=false
+    sender_side_livekit_join_activation_armed=<redacted_bool>
+    sender_side_livekit_join_activation_triggered=<redacted_bool>
+    sender_side_livekit_join_activation_consumed=<redacted_bool>
+    sender_side_livekit_join_activation_repeated=<redacted_bool>
+    sender_side_livekit_join_activation_blocked_reason=<redacted_bucket>
+    ```
+  - Default runtime remains closed:
+    ```text
+    sender_side_livekit_join_activation_armed=false
+    sender_side_livekit_join_activation_triggered=false
+    sender_side_livekit_join_activation_consumed=false
+    sender_side_livekit_join_activation_repeated=false
+    sender_side_livekit_join_activation_blocked_reason=default_disabled_no_connect
+    sender_side_livekit_join_requested=false
+    sender_side_livekit_join_result=not_requested
+    media_connect_requested=false
+    media_connect_attempted=false
+    livekit_join_requested=false
+    livekit_connect_audio_invoked=false
+    microphone_permission_requested=false
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    ```
+  - When the DEBUG hook is armed in tests, activation records `sender_side_livekit_join_hook_armed=true`, `sender_side_livekit_join_activation_armed=true`, trigger/consume state, repeated-attempt blocking, and sender join result/error buckets without performing a real LiveKit join.
+  - Receiver observer classification now distinguishes:
+    ```text
+    sender_join_hook_not_armed_redacted
+    sender_join_not_requested_redacted
+    sender_join_blocked_redacted
+    sender_join_failed_redacted
+    sender_join_success_but_remote_missing_redacted
+    remote_participant_seen_redacted
+    remote_audio_track_missing_redacted
+    remote_liveness_not_observed_redacted
+    ```
+  - Conclusion:
+    ```text
+    2.48Z-SenderJoinHookActivationRepair = sender-side LiveKit join activation hook is DEBUG/test-controlled, default-disabled, one-shot, and classified before the next physical retry.
+    No APNs.
+    No production APNs.
+    No repeated APNs.
+    No dev/invite.
+    No physical media connect.
+    No real-device LiveKit join.
+    No microphone permission.
+    No camera permission.
+    No video.
+    No Matrix event emit.
+    No full call flow.
+    ```
+  - Next phase: `2.48Z-Physical2-Retry3 — one-shot two-physical-device sender join activation / remote participant proof`.
 - 2.48Z-Physical2-Retry2-SenderNotJoinedTriage safely classifies the one-shot two-physical-device sender readiness / remote participant proof as sender-not-joined, not remote-audio success:
   - Proof path:
     ```text

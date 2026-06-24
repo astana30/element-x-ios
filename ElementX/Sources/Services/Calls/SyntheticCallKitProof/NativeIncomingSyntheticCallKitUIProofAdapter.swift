@@ -895,6 +895,48 @@ private struct SalemXSenderSideLiveKitJoinHook {
     }
 }
 
+private struct SalemXSenderSideLiveKitJoinActivation {
+    static let defaultDisabledNoConnectReason = "default_disabled_no_connect"
+    static let senderReadinessMissingReason = "sender_readiness_missing_redacted"
+    static let sameRoomReadinessMissingReason = "sender_same_room_readiness_missing_redacted"
+    static let armedWaitingForTriggerReason = "armed_waiting_for_sender_join_trigger"
+    static let repeatedSenderJoinBlockedReason = "repeated_sender_join_blocked_redacted"
+    static let senderJoinBlockedReason = "sender_join_blocked_redacted"
+    static let senderJoinFailedReason = "sender_join_failed_redacted"
+    static let senderJoinSuccessReason = "sender_join_success_redacted"
+    static let defaultDisabled = SalemXSenderSideLiveKitJoinActivation(armed: false,
+                                                                       triggered: false,
+                                                                       consumed: false,
+                                                                       repeated: false,
+                                                                       blockedReason: defaultDisabledNoConnectReason)
+
+    let armed: Bool
+    let triggered: Bool
+    let consumed: Bool
+    let repeated: Bool
+    let blockedReason: String
+
+    let present = true
+    let debugOnly = true
+    let requiresSenderReadiness = true
+    let requiresSameRoom = true
+    let audioOnly = true
+    let videoAllowed = false
+    let matrixEventsAllowed = false
+    let rawIdentifiersLogged = false
+
+    var isDefaultDisabled: Bool {
+        !armed && !triggered && !consumed && !repeated
+    }
+}
+
+private struct SalemXRemoteParticipantObserverClassification {
+    let result: String
+    let errorBucket: String
+    let timeoutBucket: String
+    let livenessErrorBucket: String?
+}
+
 private struct SalemXControlledAudioConnectExecutionGate {
     static let futurePhaseNotPermittedNoConnectReason = "future_phase_not_permitted_no_connect"
     static let credentialsMissingNoConnectReason = "credentials_missing_no_connect"
@@ -2044,6 +2086,20 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var senderSideLiveKitJoinResult = SalemXSenderSideLiveKitJoinHook.defaultDisabled.result
     var senderSideLiveKitJoinErrorBucket = SalemXSenderSideLiveKitJoinHook.defaultDisabled.errorBucket
     var senderSideLiveKitJoinRepeated = SalemXSenderSideLiveKitJoinHook.defaultDisabled.repeated
+    var senderSideLiveKitJoinActivationPresent = SalemXSenderSideLiveKitJoinActivation.defaultDisabled.present
+    var senderSideLiveKitJoinActivationDebugOnly = SalemXSenderSideLiveKitJoinActivation.defaultDisabled.debugOnly
+    var senderSideLiveKitJoinActivationDefaultDisabled = SalemXSenderSideLiveKitJoinActivation.defaultDisabled.isDefaultDisabled
+    var senderSideLiveKitJoinActivationRequiresSenderReadiness = SalemXSenderSideLiveKitJoinActivation.defaultDisabled.requiresSenderReadiness
+    var senderSideLiveKitJoinActivationRequiresSameRoom = SalemXSenderSideLiveKitJoinActivation.defaultDisabled.requiresSameRoom
+    var senderSideLiveKitJoinActivationAudioOnly = SalemXSenderSideLiveKitJoinActivation.defaultDisabled.audioOnly
+    var senderSideLiveKitJoinActivationVideoAllowed = SalemXSenderSideLiveKitJoinActivation.defaultDisabled.videoAllowed
+    var senderSideLiveKitJoinActivationMatrixEventsAllowed = SalemXSenderSideLiveKitJoinActivation.defaultDisabled.matrixEventsAllowed
+    var senderSideLiveKitJoinActivationRawIdentifiersLogged = SalemXSenderSideLiveKitJoinActivation.defaultDisabled.rawIdentifiersLogged
+    var senderSideLiveKitJoinActivationArmed = SalemXSenderSideLiveKitJoinActivation.defaultDisabled.armed
+    var senderSideLiveKitJoinActivationTriggered = SalemXSenderSideLiveKitJoinActivation.defaultDisabled.triggered
+    var senderSideLiveKitJoinActivationConsumed = SalemXSenderSideLiveKitJoinActivation.defaultDisabled.consumed
+    var senderSideLiveKitJoinActivationRepeated = SalemXSenderSideLiveKitJoinActivation.defaultDisabled.repeated
+    var senderSideLiveKitJoinActivationBlockedReason = SalemXSenderSideLiveKitJoinActivation.defaultDisabled.blockedReason
     var receiverRemoteParticipantObserverPresent = true
     var receiverRemoteParticipantObserverDebugOnly = true
     var receiverRemoteParticipantObserverStarted = false
@@ -2546,6 +2602,20 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "sender_side_livekit_join_result=\(senderSideLiveKitJoinResult)",
             "sender_side_livekit_join_error_bucket=\(senderSideLiveKitJoinErrorBucket)",
             "sender_side_livekit_join_repeated=\(senderSideLiveKitJoinRepeated)",
+            "sender_side_livekit_join_activation_present=\(senderSideLiveKitJoinActivationPresent)",
+            "sender_side_livekit_join_activation_debug_only=\(senderSideLiveKitJoinActivationDebugOnly)",
+            "sender_side_livekit_join_activation_default_disabled=\(senderSideLiveKitJoinActivationDefaultDisabled)",
+            "sender_side_livekit_join_activation_requires_sender_readiness=\(senderSideLiveKitJoinActivationRequiresSenderReadiness)",
+            "sender_side_livekit_join_activation_requires_same_room=\(senderSideLiveKitJoinActivationRequiresSameRoom)",
+            "sender_side_livekit_join_activation_audio_only=\(senderSideLiveKitJoinActivationAudioOnly)",
+            "sender_side_livekit_join_activation_video_allowed=\(senderSideLiveKitJoinActivationVideoAllowed)",
+            "sender_side_livekit_join_activation_matrix_events_allowed=\(senderSideLiveKitJoinActivationMatrixEventsAllowed)",
+            "sender_side_livekit_join_activation_raw_identifiers_logged=\(senderSideLiveKitJoinActivationRawIdentifiersLogged)",
+            "sender_side_livekit_join_activation_armed=\(senderSideLiveKitJoinActivationArmed)",
+            "sender_side_livekit_join_activation_triggered=\(senderSideLiveKitJoinActivationTriggered)",
+            "sender_side_livekit_join_activation_consumed=\(senderSideLiveKitJoinActivationConsumed)",
+            "sender_side_livekit_join_activation_repeated=\(senderSideLiveKitJoinActivationRepeated)",
+            "sender_side_livekit_join_activation_blocked_reason=\(senderSideLiveKitJoinActivationBlockedReason)",
             "receiver_remote_participant_observer_present=\(receiverRemoteParticipantObserverPresent)",
             "receiver_remote_participant_observer_debug_only=\(receiverRemoteParticipantObserverDebugOnly)",
             "receiver_remote_participant_observer_started=\(receiverRemoteParticipantObserverStarted)",
@@ -2787,39 +2857,76 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverRemoteParticipantObserverLivenessSeen = liveKitAudioLivenessObserved
         receiverRemoteParticipantObserverRawIdentifiersLogged = false
 
-        if receiverRemoteParticipantObserverStarted,
-           senderReadinessRuntimeHandoffMissingClassified {
-            receiverRemoteParticipantObserverResult = "not_observed_redacted"
-            receiverRemoteParticipantObserverErrorBucket = "sender_readiness_context_missing_redacted"
-            receiverRemoteParticipantObserverTimeoutBucket = "not_observed_redacted"
-            liveKitAudioLivenessObserved = false
-            liveKitAudioLivenessResult = "not_observed_redacted"
-            liveKitAudioLivenessErrorBucket = "sender_readiness_context_missing_redacted"
-        } else if liveKitAudioLivenessObserved {
-            receiverRemoteParticipantObserverResult = "success_redacted"
-            receiverRemoteParticipantObserverErrorBucket = "none"
-            receiverRemoteParticipantObserverTimeoutBucket = "none"
-        } else if liveKitRemoteParticipantSeen, !liveKitRemoteAudioTrackSubscribed {
-            receiverRemoteParticipantObserverResult = "not_observed_redacted"
-            receiverRemoteParticipantObserverErrorBucket = "remote_audio_track_missing_redacted"
-            receiverRemoteParticipantObserverTimeoutBucket = "not_observed_redacted"
-        } else if liveKitRemoteParticipantSeen {
-            receiverRemoteParticipantObserverResult = "not_observed_redacted"
-            receiverRemoteParticipantObserverErrorBucket = "remote_liveness_not_observed_redacted"
-            receiverRemoteParticipantObserverTimeoutBucket = "not_observed_redacted"
-        } else if receiverRemoteParticipantObserverStarted, !senderSideLiveKitJoinRequested {
-            receiverRemoteParticipantObserverResult = "not_observed_redacted"
-            receiverRemoteParticipantObserverErrorBucket = "sender_not_joined_redacted"
-            receiverRemoteParticipantObserverTimeoutBucket = "not_observed_redacted"
-        } else if receiverRemoteParticipantObserverStarted {
-            receiverRemoteParticipantObserverResult = "not_observed_redacted"
-            receiverRemoteParticipantObserverErrorBucket = "remote_participant_missing_redacted"
-            receiverRemoteParticipantObserverTimeoutBucket = "not_observed_redacted"
-        } else {
-            receiverRemoteParticipantObserverResult = "not_observed_redacted"
-            receiverRemoteParticipantObserverErrorBucket = "sender_not_joined_or_remote_missing_redacted"
-            receiverRemoteParticipantObserverTimeoutBucket = "not_observed_redacted"
+        refreshReceiverRemoteParticipantObserverClassification()
+    }
+
+    private mutating func refreshReceiverRemoteParticipantObserverClassification() {
+        if let classification = remoteParticipantSeenObserverClassification()
+            ?? senderJoinObserverClassification() {
+            receiverRemoteParticipantObserverResult = classification.result
+            receiverRemoteParticipantObserverErrorBucket = classification.errorBucket
+            receiverRemoteParticipantObserverTimeoutBucket = classification.timeoutBucket
+            if let livenessErrorBucket = classification.livenessErrorBucket {
+                liveKitAudioLivenessObserved = false
+                liveKitAudioLivenessResult = "not_observed_redacted"
+                liveKitAudioLivenessErrorBucket = livenessErrorBucket
+            }
+            return
         }
+
+        receiverRemoteParticipantObserverResult = "not_observed_redacted"
+        receiverRemoteParticipantObserverErrorBucket = "sender_not_joined_or_remote_missing_redacted"
+        receiverRemoteParticipantObserverTimeoutBucket = "not_observed_redacted"
+    }
+
+    private func remoteParticipantSeenObserverClassification() -> SalemXRemoteParticipantObserverClassification? {
+        if liveKitAudioLivenessObserved {
+            return .init(result: "success_redacted", errorBucket: "none", timeoutBucket: "none", livenessErrorBucket: nil)
+        }
+        if liveKitRemoteParticipantSeen, !liveKitRemoteAudioTrackSubscribed {
+            return .init(result: "remote_participant_seen_redacted",
+                         errorBucket: "remote_audio_track_missing_redacted",
+                         timeoutBucket: "not_observed_redacted",
+                         livenessErrorBucket: nil)
+        }
+        if liveKitRemoteParticipantSeen {
+            return .init(result: "remote_participant_seen_redacted",
+                         errorBucket: "remote_liveness_not_observed_redacted",
+                         timeoutBucket: "not_observed_redacted",
+                         livenessErrorBucket: nil)
+        }
+        return nil
+    }
+
+    private func senderJoinObserverClassification() -> SalemXRemoteParticipantObserverClassification? {
+        guard receiverRemoteParticipantObserverStarted else {
+            return nil
+        }
+        if senderReadinessRuntimeHandoffMissingClassified {
+            return .init(result: "not_observed_redacted",
+                         errorBucket: "sender_readiness_context_missing_redacted",
+                         timeoutBucket: "not_observed_redacted",
+                         livenessErrorBucket: "sender_readiness_context_missing_redacted")
+        }
+        if !senderSideLiveKitJoinActivationArmed {
+            return .init(result: "not_observed_redacted", errorBucket: "sender_join_hook_not_armed_redacted", timeoutBucket: "not_observed_redacted", livenessErrorBucket: nil)
+        }
+        if !senderSideLiveKitJoinActivationTriggered || senderSideLiveKitJoinResult == SalemXSenderSideLiveKitJoinHook.notRequestedResult {
+            return .init(result: "not_observed_redacted", errorBucket: "sender_join_not_requested_redacted", timeoutBucket: "not_observed_redacted", livenessErrorBucket: nil)
+        }
+        if senderSideLiveKitJoinResult == SalemXSenderSideLiveKitJoinHook.blockedResult {
+            return .init(result: "not_observed_redacted", errorBucket: "sender_join_blocked_redacted", timeoutBucket: "not_observed_redacted", livenessErrorBucket: nil)
+        }
+        if senderSideLiveKitJoinResult == SalemXSenderSideLiveKitJoinHook.failedResult {
+            return .init(result: "not_observed_redacted", errorBucket: "sender_join_failed_redacted", timeoutBucket: "not_observed_redacted", livenessErrorBucket: nil)
+        }
+        if senderSideLiveKitJoinResult == SalemXSenderSideLiveKitJoinHook.successResult {
+            return .init(result: "not_observed_redacted",
+                         errorBucket: "sender_join_success_but_remote_missing_redacted",
+                         timeoutBucket: "not_observed_redacted",
+                         livenessErrorBucket: nil)
+        }
+        return .init(result: "not_observed_redacted", errorBucket: "remote_participant_missing_redacted", timeoutBucket: "not_observed_redacted", livenessErrorBucket: nil)
     }
 
     mutating func recordSenderLiveKitReadinessHook(_ hook: SalemXSenderLiveKitReadinessHook) {
@@ -2915,6 +3022,46 @@ private extension SalemXVoIPPushReceiptProofSummary {
         refreshRemoteParticipantPresenceRepairDiagnostics()
     }
 
+    private func senderSideLiveKitJoinActivationBlockedReason(for hook: SalemXSenderSideLiveKitJoinHook) -> String {
+        if hook.repeated {
+            return SalemXSenderSideLiveKitJoinActivation.repeatedSenderJoinBlockedReason
+        }
+        if !hook.armed {
+            return SalemXSenderSideLiveKitJoinActivation.defaultDisabledNoConnectReason
+        }
+        if !hook.requested {
+            return SalemXSenderSideLiveKitJoinActivation.armedWaitingForTriggerReason
+        }
+        if hook.result == SalemXSenderSideLiveKitJoinHook.blockedResult {
+            return SalemXSenderSideLiveKitJoinActivation.senderJoinBlockedReason
+        }
+        if hook.result == SalemXSenderSideLiveKitJoinHook.failedResult {
+            return SalemXSenderSideLiveKitJoinActivation.senderJoinFailedReason
+        }
+        if hook.result == SalemXSenderSideLiveKitJoinHook.successResult {
+            return SalemXSenderSideLiveKitJoinActivation.senderJoinSuccessReason
+        }
+        return SalemXSenderSideLiveKitJoinActivation.armedWaitingForTriggerReason
+    }
+
+    mutating func recordSenderSideLiveKitJoinActivation(_ activation: SalemXSenderSideLiveKitJoinActivation) {
+        senderSideLiveKitJoinActivationPresent = activation.present
+        senderSideLiveKitJoinActivationDebugOnly = activation.debugOnly
+        senderSideLiveKitJoinActivationDefaultDisabled = activation.isDefaultDisabled
+        senderSideLiveKitJoinActivationRequiresSenderReadiness = activation.requiresSenderReadiness
+        senderSideLiveKitJoinActivationRequiresSameRoom = activation.requiresSameRoom
+        senderSideLiveKitJoinActivationAudioOnly = activation.audioOnly
+        senderSideLiveKitJoinActivationVideoAllowed = activation.videoAllowed
+        senderSideLiveKitJoinActivationMatrixEventsAllowed = activation.matrixEventsAllowed
+        senderSideLiveKitJoinActivationRawIdentifiersLogged = activation.rawIdentifiersLogged
+        senderSideLiveKitJoinActivationArmed = activation.armed
+        senderSideLiveKitJoinActivationTriggered = activation.triggered
+        senderSideLiveKitJoinActivationConsumed = activation.consumed
+        senderSideLiveKitJoinActivationRepeated = activation.repeated
+        senderSideLiveKitJoinActivationBlockedReason = activation.blockedReason
+        refreshRemoteParticipantPresenceRepairDiagnostics()
+    }
+
     mutating func recordSenderSideLiveKitJoinResult(requested: Bool,
                                                     result: String,
                                                     errorBucket: String = "none",
@@ -2925,6 +3072,11 @@ private extension SalemXVoIPPushReceiptProofSummary {
                                                    errorBucket: errorBucket,
                                                    repeated: repeated)
         recordSenderSideLiveKitJoinHook(hook)
+        recordSenderSideLiveKitJoinActivation(.init(armed: requested,
+                                                    triggered: requested,
+                                                    consumed: requested && !repeated,
+                                                    repeated: repeated,
+                                                    blockedReason: senderSideLiveKitJoinActivationBlockedReason(for: hook)))
     }
 
     mutating func recordRemoteAudioLivenessJoinResult(succeeded: Bool, errorBucket: String = "none") {
@@ -4304,6 +4456,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var pendingRemotePeerContextHandoff: SalemXRemotePeerContextHandoff?
     private static var senderLiveKitReadinessHook = SalemXSenderLiveKitReadinessHook.defaultDisabled
     private static var senderSideLiveKitJoinHook = SalemXSenderSideLiveKitJoinHook.defaultDisabled
+    private static var senderSideLiveKitJoinActivation = SalemXSenderSideLiveKitJoinActivation.defaultDisabled
     #if canImport(CallKit) && os(iOS)
     private static var callKitProofHarness: NativeIncomingSyntheticCallKitUIProofHarness?
     private static var callKitProofGeneration = 0
@@ -4454,17 +4607,65 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static func armSenderSideLiveKitJoinURLHook(_ components: URLComponents?) {
         let requested = redactedBoolQueryItem(components,
                                               names: ["sender_join_requested", "join_requested"])
-        let result = redactedSenderSideLiveKitJoinResultQueryItem(components)
-        let errorBucket = result == SalemXSenderSideLiveKitJoinHook.failedResult ? "sender_join_failed_redacted" : "none"
+        let requestedResult = redactedSenderSideLiveKitJoinResultQueryItem(components)
+        lock.lock()
+        let readinessHook = senderLiveKitReadinessHook
+        let previousActivation = senderSideLiveKitJoinActivation
+        let repeated = requested && previousActivation.consumed
+        let senderReadinessMissing = !readinessHook.armed
+            || !readinessHook.matrixSessionReady
+            || !readinessHook.expectedUserMatched
+            || !readinessHook.credentialsReady
+        let sameRoomReadinessMissing = !readinessHook.sameRoomReady
+        let finalResult: String
+        let finalErrorBucket: String
+        let activationBlockedReason: String
+
+        if repeated {
+            finalResult = SalemXSenderSideLiveKitJoinHook.blockedResult
+            finalErrorBucket = "sender_join_repeated_redacted"
+            activationBlockedReason = SalemXSenderSideLiveKitJoinActivation.repeatedSenderJoinBlockedReason
+        } else if requested, senderReadinessMissing {
+            finalResult = SalemXSenderSideLiveKitJoinHook.blockedResult
+            finalErrorBucket = SalemXSenderSideLiveKitJoinActivation.senderReadinessMissingReason
+            activationBlockedReason = SalemXSenderSideLiveKitJoinActivation.senderReadinessMissingReason
+        } else if requested, sameRoomReadinessMissing {
+            finalResult = SalemXSenderSideLiveKitJoinHook.blockedResult
+            finalErrorBucket = SalemXSenderSideLiveKitJoinActivation.sameRoomReadinessMissingReason
+            activationBlockedReason = SalemXSenderSideLiveKitJoinActivation.sameRoomReadinessMissingReason
+        } else if requested {
+            finalResult = requestedResult
+            finalErrorBucket = requestedResult == SalemXSenderSideLiveKitJoinHook.failedResult ? "sender_join_failed_redacted" : "none"
+            if requestedResult == SalemXSenderSideLiveKitJoinHook.blockedResult {
+                activationBlockedReason = SalemXSenderSideLiveKitJoinActivation.senderJoinBlockedReason
+            } else if requestedResult == SalemXSenderSideLiveKitJoinHook.failedResult {
+                activationBlockedReason = SalemXSenderSideLiveKitJoinActivation.senderJoinFailedReason
+            } else if requestedResult == SalemXSenderSideLiveKitJoinHook.successResult {
+                activationBlockedReason = SalemXSenderSideLiveKitJoinActivation.senderJoinSuccessReason
+            } else {
+                activationBlockedReason = SalemXSenderSideLiveKitJoinActivation.armedWaitingForTriggerReason
+            }
+        } else {
+            finalResult = SalemXSenderSideLiveKitJoinHook.notRequestedResult
+            finalErrorBucket = "none"
+            activationBlockedReason = SalemXSenderSideLiveKitJoinActivation.armedWaitingForTriggerReason
+        }
+
         let hook = SalemXSenderSideLiveKitJoinHook(armed: true,
                                                    requested: requested,
-                                                   result: requested ? result : SalemXSenderSideLiveKitJoinHook.notRequestedResult,
-                                                   errorBucket: requested ? errorBucket : "none",
-                                                   repeated: false)
-        lock.lock()
+                                                   result: finalResult,
+                                                   errorBucket: finalErrorBucket,
+                                                   repeated: repeated)
+        let activation = SalemXSenderSideLiveKitJoinActivation(armed: true,
+                                                               triggered: requested,
+                                                               consumed: requested && !repeated,
+                                                               repeated: repeated,
+                                                               blockedReason: activationBlockedReason)
         senderSideLiveKitJoinHook = hook
+        senderSideLiveKitJoinActivation = activation
         var summary = latestVoIPPushReceiptSummary
         summary.recordSenderSideLiveKitJoinHook(hook)
+        summary.recordSenderSideLiveKitJoinActivation(activation)
         summary.mediaConnectRequested = false
         summary.mediaConnectAttempted = false
         summary.liveKitJoinRequested = false
@@ -4918,6 +5119,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         let remotePeerContextHandoffSnapshot = pendingRemotePeerContextHandoff
         let senderLiveKitReadinessHookSnapshot = senderLiveKitReadinessHook
         let senderSideLiveKitJoinHookSnapshot = senderSideLiveKitJoinHook
+        let senderSideLiveKitJoinActivationSnapshot = senderSideLiveKitJoinActivation
         pendingRemotePeerContextHandoff = nil
         lock.unlock()
         baseSummary.operatorReadyToAnswer = operatorReadyToAnswer
@@ -4926,6 +5128,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         baseSummary.recordRemotePeerContextHandoff(remotePeerContextHandoffSnapshot)
         baseSummary.recordSenderReadinessRuntimeHandoff(senderLiveKitReadinessHookSnapshot)
         baseSummary.recordSenderSideLiveKitJoinHook(senderSideLiveKitJoinHookSnapshot)
+        baseSummary.recordSenderSideLiveKitJoinActivation(senderSideLiveKitJoinActivationSnapshot)
         if isControlledPayload {
             baseSummary.callKitReportSubmittedAtMsRedacted = true
             baseSummary.callKitUpdateHasGenericHandle = true

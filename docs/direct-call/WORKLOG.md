@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Added 2.48Z-SenderJoinHookActivationRepair: the DEBUG/test-controlled sender-side LiveKit join activation hook now has explicit default-disabled, readiness-gated, same-room-gated, audio-only, one-shot proof fields plus receiver observer buckets for hook-not-armed, join-not-requested, join-blocked, join-failed, success-but-remote-missing, remote-participant-seen, audio-track-missing, and liveness-not-observed, with no APNs/connect/real-device LiveKit/permissions/video/Matrix/full-flow side effects.
 - Closed 2.48Z-Physical2-Retry2 as safe sender-not-joined / remote participant not observed triage: receiver PushKit, CallKit Answer, pending metadata, media credentials, one receiver controlled audio connect, and receiver LiveKit join succeeded, but the sender-side LiveKit join hook stayed unarmed/not requested and remote participant/audio/liveness was not observed. APNs audit records `possible_repeated_apns_observed=true`; no further APNs may be sent for this phase.
 - Added 2.48Z-SenderReadinessRuntimeHandoffRepair: sender readiness is now snapshotted from the pre-APNs hook into the PushKit runtime proof, survives Answer, keeps same-room/matrix readiness available in final proof, and adds default-disabled sender-side LiveKit join classification without APNs/connect/real-device LiveKit/permissions/video/Matrix/full-flow side effects.
 - Closed 2.48Z-Physical2-Retry1 as safe remote-missing triage: one sandbox APNs, PushKit/CallKit Answer, pending metadata, media credentials, one receiver controlled audio-only connect, and receiver LiveKit join succeeded, but the final proof reset sender readiness to default-disabled and remote participant/audio/liveness was not observed; no retry was performed.
@@ -130,6 +131,70 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48Z-SenderJoinHookActivationRepair — Sender Join Activation Hook
+
+Implemented a DEBUG/test-controlled sender-side LiveKit join activation proof path so the next two-physical-device retry can explicitly arm and trigger sender join classification once, while default runtime remains no-connect/no-join.
+
+New activation proof fields:
+
+```text
+sender_side_livekit_join_activation_present=true
+sender_side_livekit_join_activation_debug_only=true
+sender_side_livekit_join_activation_default_disabled=true
+sender_side_livekit_join_activation_requires_sender_readiness=true
+sender_side_livekit_join_activation_requires_same_room=true
+sender_side_livekit_join_activation_audio_only=true
+sender_side_livekit_join_activation_video_allowed=false
+sender_side_livekit_join_activation_matrix_events_allowed=false
+sender_side_livekit_join_activation_raw_identifiers_logged=false
+sender_side_livekit_join_activation_armed=<redacted_bool>
+sender_side_livekit_join_activation_triggered=<redacted_bool>
+sender_side_livekit_join_activation_consumed=<redacted_bool>
+sender_side_livekit_join_activation_repeated=<redacted_bool>
+sender_side_livekit_join_activation_blocked_reason=<redacted_bucket>
+```
+
+Default-disabled proof remains:
+
+```text
+sender_side_livekit_join_activation_armed=false
+sender_side_livekit_join_activation_triggered=false
+sender_side_livekit_join_activation_consumed=false
+sender_side_livekit_join_activation_repeated=false
+sender_side_livekit_join_activation_blocked_reason=default_disabled_no_connect
+sender_side_livekit_join_requested=false
+sender_side_livekit_join_result=not_requested
+media_connect_requested=false
+media_connect_attempted=false
+livekit_join_requested=false
+livekit_connect_audio_invoked=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+When armed in tests, the hook now records `sender_side_livekit_join_hook_armed=true`, `sender_side_livekit_join_activation_armed=true`, requested/result/error/repeated classification, one-shot consumption after the first trigger, and repeated-attempt blocking without performing a real LiveKit join.
+
+Receiver observer classification now distinguishes:
+
+```text
+sender_join_hook_not_armed_redacted
+sender_join_not_requested_redacted
+sender_join_blocked_redacted
+sender_join_failed_redacted
+sender_join_success_but_remote_missing_redacted
+remote_participant_seen_redacted
+remote_audio_track_missing_redacted
+remote_liveness_not_observed_redacted
+```
+
+Targeted tests confirm activation defaults, one-shot trigger/consume behavior, repeated-block classification, receiver observer buckets, and safety false fields.
+
+No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, real-device LiveKit join, microphone/camera permission, video, Matrix event emit, or full call flow was performed.
+
+Next phase: `2.48Z-Physical2-Retry3 — one-shot two-physical-device sender join activation / remote participant proof`.
 
 ### 2.48Z-Physical2-Retry2 — Sender Not Joined / Remote Participant Not Observed Triage
 
