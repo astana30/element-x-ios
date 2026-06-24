@@ -13,42 +13,86 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48Z-Physical2-Retry9-SenderTimelineTimeoutTriage` is complete.
+`2.48Z-SenderSDKConnectTimeoutRepair` is complete.
 
-The one-shot two-physical-device sender SDK timeline proof is closed as safe sender SDK timeline timeout / remote participant not observed triage. This is not remote-audio success.
+Sender LiveKit SDK connect timeouts now expose DEBUG/test-controlled redacted timeout diagnostics without raw SDK error, URL, token, room, identity, APNs payload, auth header, invite body, Matrix user/device ID, or localized raw error text.
 
-Proof path:
+New proof fields:
 
 ```text
-/tmp/salemx-voip-push-receipt-proof-2.48z-physical2-retry9-sender-sdk-timeline-orchestrated-polled.txt
+sender_livekit_sdk_timeout_diagnostics_present=true
+sender_livekit_sdk_timeout_diagnostics_debug_only=true
+sender_livekit_sdk_timeout_diagnostics_raw_error_logged=false
+sender_livekit_sdk_timeout_diagnostics_raw_url_logged=false
+sender_livekit_sdk_timeout_diagnostics_raw_token_logged=false
+sender_livekit_sdk_timeout_diagnostics_raw_room_logged=false
+sender_livekit_sdk_timeout_diagnostics_raw_identity_logged=false
+sender_livekit_sdk_timeout_diagnostics_wait_window_bucket=<redacted_bucket>
+sender_livekit_sdk_timeout_diagnostics_connect_invoked=<redacted_bool>
+sender_livekit_sdk_timeout_diagnostics_connect_call_pending_at_timeout=<redacted_bool>
+sender_livekit_sdk_timeout_diagnostics_task_running_at_timeout=<redacted_bool>
+sender_livekit_sdk_timeout_diagnostics_task_cancelled_at_timeout=<redacted_bool>
+sender_livekit_sdk_timeout_diagnostics_delegate_attached=<redacted_bool>
+sender_livekit_sdk_timeout_diagnostics_state_observer_attached=<redacted_bool>
+sender_livekit_sdk_timeout_diagnostics_state_event_count_bucket=<redacted_bucket>
+sender_livekit_sdk_timeout_diagnostics_delegate_event_count_bucket=<redacted_bucket>
+sender_livekit_sdk_timeout_diagnostics_app_state_bucket=<redacted_bucket>
+sender_livekit_sdk_timeout_diagnostics_actor_context_available=<redacted_bool>
+sender_livekit_sdk_timeout_diagnostics_network_path_bucket=<redacted_bucket>
+sender_livekit_sdk_timeout_diagnostics_final_classification=<redacted_timeout_bucket>
 ```
 
-Proof generation:
+Redacted timeout classifications:
 
 ```text
-proof_generation=generation_20
+sdk_connect_timeout_no_state_events_redacted
+sdk_connect_timeout_delegate_missing_redacted
+sdk_connect_timeout_state_observer_missing_redacted
+sdk_connect_timeout_task_suspended_redacted
+sdk_connect_timeout_task_running_no_callback_redacted
+sdk_connect_timeout_connect_call_pending_redacted
+sdk_connect_timeout_network_pending_redacted
+sdk_connect_timeout_auth_pending_redacted
+sdk_connect_timeout_app_lifecycle_interrupted_redacted
+sdk_connect_timeout_actor_isolation_suspected_redacted
+sdk_connect_timeout_wait_window_too_short_redacted
+sdk_connect_timeout_unknown_pending_redacted
 ```
 
-Receiver path succeeded once:
+Mapping:
 
 ```text
-physical_voip_push_received=true
-callkit_report_result=reported
-callkit_first_action_kind=answer
-callkit_answer_action_received=true
-callkit_answer_action_fulfilled=true
-pending_metadata_fetch_result=success_redacted
-media_credentials_result=success_redacted
-controlled_connect_first_attempt_result=success_redacted
-controlled_connect_first_attempt_repeated=false
-controlled_connect_first_attempt_error_bucket=none
-livekit_join_result=success_redacted
+sender_livekit_sdk_timeline_final_classification=<specific_redacted_timeout_bucket>
+sender_livekit_sdk_failure_surface_final_classification=<specific_redacted_timeout_bucket>
+sender_transport_error_surface_final_classification=<specific_redacted_timeout_bucket>
+sender_transport_failure_diagnostics_classification=<specific_redacted_timeout_bucket>
+sender_side_livekit_join_error_bucket=<specific_redacted_timeout_bucket>
+sender_side_livekit_join_result=failed_redacted
 ```
 
-Sender trigger orchestration reached terminal sender timeline classification:
+Safety and compatibility:
 
 ```text
-sender_join_trigger_orchestration_present=true
+existing_sdk_timeline_buckets_remain_intact=true
+existing_sdk_failure_surface_buckets_remain_intact=true
+existing_sender_transport_diagnostics_remain_intact=true
+sender_join_success_but_remote_missing_separate=true
+sdk_timeline_internal_pending_remains_non_terminal=true
+new_timeout_buckets_are_sender_trigger_orchestration_terminal=true
+default_runtime_no_connect=true
+default_runtime_no_join=true
+raw_error_url_token_room_identity_logged=false
+```
+
+No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, or physical hook reset/re-arm was performed in the repair phase.
+
+## Next Phase
+
+`2.48Z-Physical2-Retry10 — one-shot two-physical-device sender SDK timeout-bucket proof`
+
+Retry10 target:
+
+```text
 sender_join_trigger_orchestration_apns_success_seen=true
 sender_join_trigger_orchestration_receiver_answer_seen=true
 sender_join_trigger_orchestration_receiver_connect_terminal_seen=true
@@ -57,113 +101,40 @@ sender_join_trigger_orchestration_sender_trigger_required=true
 sender_join_trigger_orchestration_sender_trigger_allowed=true
 sender_join_trigger_orchestration_sender_trigger_started=true
 sender_join_trigger_orchestration_sender_trigger_completed=true
-sender_join_trigger_orchestration_sender_trigger_missing_classified=false
 sender_join_trigger_orchestration_poll_allowed=true
-sender_join_trigger_orchestration_poll_blocked_reason=none
 sender_join_trigger_orchestration_final_classification=sender_trigger_completed_sdk_timeline_terminal_redacted
-```
-
-Sender-side LiveKit join was triggered once and failed with the SDK timeline timeout bucket:
-
-```text
-sender_side_livekit_join_activation_triggered=true
-sender_side_livekit_join_activation_consumed=true
-sender_side_livekit_join_activation_repeated=false
-sender_side_livekit_join_requested=true
+sender_livekit_sdk_timeout_diagnostics_present=true
+sender_livekit_sdk_timeout_diagnostics_final_classification=<specific_redacted_timeout_bucket>
+sender_livekit_sdk_timeline_final_classification=<specific_redacted_timeout_bucket>
+sender_livekit_sdk_failure_surface_final_classification=<specific_redacted_timeout_bucket>
+sender_transport_error_surface_final_classification=<specific_redacted_timeout_bucket>
+sender_transport_failure_diagnostics_classification=<specific_redacted_timeout_bucket>
+sender_side_livekit_join_error_bucket=<specific_redacted_timeout_bucket>
 sender_side_livekit_join_result=failed_redacted
-sender_side_livekit_join_error_bucket=transport_livekit_sdk_unknown_error_redacted
-sender_side_livekit_join_repeated=false
-sender_livekit_sdk_timeline_present=true
-sender_livekit_sdk_timeline_connect_invoked=true
-sender_livekit_sdk_timeline_connect_returned=false
-sender_livekit_sdk_timeline_connected_state_seen=false
-sender_livekit_sdk_timeline_failed_state_seen=false
-sender_livekit_sdk_timeline_timeout_elapsed=true
-sender_livekit_sdk_timeline_final_classification=sdk_timeline_connect_timeout_redacted
 ```
 
-Receiver remote participant/audio/liveness was not observed:
+Remote audio success still requires explicit receiver remote participant/audio/liveness observation:
 
 ```text
-receiver_remote_participant_observer_present=true
-receiver_remote_participant_observer_result=not_observed_redacted
-receiver_remote_participant_observer_error_bucket=sender_join_failed_redacted
-receiver_remote_participant_observer_remote_seen=false
-receiver_remote_participant_observer_audio_track_seen=false
-receiver_remote_participant_observer_liveness_seen=false
-livekit_remote_participant_seen=false
-livekit_remote_audio_track_subscribed=false
-livekit_audio_liveness_result=not_observed_redacted
-remote_audio_liveness_result=not_observed_redacted
-remote_audio_liveness_error_bucket=remote_participant_missing_redacted
+receiver_remote_participant_observer_result=observed_redacted
+livekit_remote_participant_seen=true
+livekit_remote_audio_track_subscribed=true
+livekit_audio_liveness_result=observed_redacted
 ```
 
-Safety stayed closed:
-
-```text
-no_repeated_apns=true
-no_production_apns=true
-dev_invite_used=false
-no_repeated_connect=true
-no_repeated_livekit_join=true
-video_enabled=false
-microphone_permission_requested=false
-camera_permission_requested=false
-matrix_event_emit_requested=false
-real_call_flow_started=false
-```
-
-## Next Phase
-
-`2.48Z-SenderSDKConnectTimeoutRepair — diagnose sender SDK connect timeout after orchestrated trigger, no APNs/connect`
-
-Goal:
-
-```text
-diagnose_sender_sdk_connect_timeout=true
-no_physical_apns_retry=true
-no_physical_connect_retry=true
-no_sender_livekit_join_retry=true
-preserve_receiver_success_once=true
-preserve_sender_trigger_orchestration_guard=true
-preserve_raw_error_url_token_room_identity_logged_false=true
-```
-
-Investigate the sender SDK timeout path without physical side effects:
-
-```text
-sender_livekit_sdk_timeline_connect_invoked=true
-sender_livekit_sdk_timeline_connect_returned=false
-sender_livekit_sdk_timeline_connected_state_seen=false
-sender_livekit_sdk_timeline_failed_state_seen=false
-sender_livekit_sdk_timeline_timeout_elapsed=true
-sender_livekit_sdk_timeline_final_classification=sdk_timeline_connect_timeout_redacted
-sender_transport_error_surface_final_classification=transport_livekit_sdk_unknown_error_redacted
-sender_join_failure_diagnostics_classification=transport_failed_redacted
-```
-
-Suggested repair areas:
-
-```text
-sender LiveKit Room/connect task lifetime
-sender app lifecycle while triggered from DEBUG hook
-LiveKit delegate/state observer attachment before connect
-audio session readiness before sender connect
-token authority and room-binding comparison redacted diagnostics
-timeout classification versus SDK thrown/failed/disconnected callbacks
-```
+If remote participant/audio/liveness is not observed, close as triage with the specific sender timeout bucket. Do not fake success.
 
 ## Hard Limits
 
 Do not:
 
-* send APNs
+* send APNs unless the explicit one-shot Retry10 helper confirmation is reached
 * run production APNs
 * run repeated APNs
 * run `dev/invite`
-* retry physical media connect
-* retry real LiveKit join
-* request microphone permission
+* start repeated physical media connect
+* start repeated real LiveKit join
+* request microphone permission outside the controlled audio-only proof boundary
 * request camera permission
 * enable video
 * emit Matrix events
@@ -172,11 +143,9 @@ Do not:
 * touch signing/project files
 * stage or commit `docs/direct-call/REPEAT_CALL_FASTPATH_DIAGNOSTICS.md`
 
-Do not re-run any `2.48Z-Physical2-Retry9` one-shot APNs, sender trigger, or poll helper except for read-only proof inspection.
-
 ## Suggested Checks
 
-Run:
+Run before any physical helper:
 
 ```bash
 git status --short --branch
@@ -197,11 +166,13 @@ Run privacy scans over changed files/diff. Allowed hits are field names, redacte
 
 Return:
 
-* implementation summary
-* whether sender SDK timeout diagnostics are more specific without raw values
-* whether trigger orchestration guard remains intact
-* whether default runtime remains no-connect/no-join
-* commit hash/message
-* changed files
-* checks run
+* Retry10 preflight result
+* whether exactly one sandbox APNs was sent, if confirmation was reached
+* proof generation
+* specific sender timeout bucket
+* whether sender trigger orchestration reached terminal classification
+* whether remote participant/audio/liveness was observed
+* whether camera permission stayed false
+* whether Matrix event emit stayed false
+* whether full call flow stayed false
 * final `git status --short --branch`

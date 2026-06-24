@@ -3581,6 +3581,116 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func senderLiveKitSDKTimeoutDiagnosticsClassifiesRedactedTimeoutBucketsWithoutRuntime() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+
+        let timeoutFields = [
+            "sender_livekit_sdk_timeout_diagnostics_present=\\(senderLiveKitSDKTimeoutDiagnosticsPresent)",
+            "sender_livekit_sdk_timeout_diagnostics_debug_only=\\(senderLiveKitSDKTimeoutDiagnosticsDebugOnly)",
+            "sender_livekit_sdk_timeout_diagnostics_raw_error_logged=\\(senderLiveKitSDKTimeoutDiagnosticsRawErrorLogged)",
+            "sender_livekit_sdk_timeout_diagnostics_raw_url_logged=\\(senderLiveKitSDKTimeoutDiagnosticsRawURLLogged)",
+            "sender_livekit_sdk_timeout_diagnostics_raw_token_logged=\\(senderLiveKitSDKTimeoutDiagnosticsRawTokenLogged)",
+            "sender_livekit_sdk_timeout_diagnostics_raw_room_logged=\\(senderLiveKitSDKTimeoutDiagnosticsRawRoomLogged)",
+            "sender_livekit_sdk_timeout_diagnostics_raw_identity_logged=\\(senderLiveKitSDKTimeoutDiagnosticsRawIdentityLogged)",
+            "sender_livekit_sdk_timeout_diagnostics_wait_window_bucket=\\(senderLiveKitSDKTimeoutDiagnosticsWaitWindowBucket)",
+            "sender_livekit_sdk_timeout_diagnostics_connect_invoked=\\(senderLiveKitSDKTimeoutDiagnosticsConnectInvoked)",
+            "sender_livekit_sdk_timeout_diagnostics_connect_call_pending_at_timeout=\\(senderLiveKitSDKTimeoutDiagnosticsConnectCallPendingAtTimeout)",
+            "sender_livekit_sdk_timeout_diagnostics_task_running_at_timeout=\\(senderLiveKitSDKTimeoutDiagnosticsTaskRunningAtTimeout)",
+            "sender_livekit_sdk_timeout_diagnostics_task_cancelled_at_timeout=\\(senderLiveKitSDKTimeoutDiagnosticsTaskCancelledAtTimeout)",
+            "sender_livekit_sdk_timeout_diagnostics_delegate_attached=\\(senderLiveKitSDKTimeoutDiagnosticsDelegateAttached)",
+            "sender_livekit_sdk_timeout_diagnostics_state_observer_attached=\\(senderLiveKitSDKTimeoutDiagnosticsStateObserverAttached)",
+            "sender_livekit_sdk_timeout_diagnostics_state_event_count_bucket=\\(senderLiveKitSDKTimeoutDiagnosticsStateEventCountBucket)",
+            "sender_livekit_sdk_timeout_diagnostics_delegate_event_count_bucket=\\(senderLiveKitSDKTimeoutDiagnosticsDelegateEventCountBucket)",
+            "sender_livekit_sdk_timeout_diagnostics_app_state_bucket=\\(senderLiveKitSDKTimeoutDiagnosticsAppStateBucket)",
+            "sender_livekit_sdk_timeout_diagnostics_actor_context_available=\\(senderLiveKitSDKTimeoutDiagnosticsActorContextAvailable)",
+            "sender_livekit_sdk_timeout_diagnostics_network_path_bucket=\\(senderLiveKitSDKTimeoutDiagnosticsNetworkPathBucket)",
+            "sender_livekit_sdk_timeout_diagnostics_final_classification=\\(senderLiveKitSDKTimeoutDiagnosticsFinalClassification)"
+        ]
+        for field in timeoutFields {
+            #expect(adapterSource.contains(field))
+        }
+
+        let timeoutBuckets = [
+            "sdk_connect_timeout_no_state_events_redacted",
+            "sdk_connect_timeout_delegate_missing_redacted",
+            "sdk_connect_timeout_state_observer_missing_redacted",
+            "sdk_connect_timeout_task_suspended_redacted",
+            "sdk_connect_timeout_task_running_no_callback_redacted",
+            "sdk_connect_timeout_connect_call_pending_redacted",
+            "sdk_connect_timeout_network_pending_redacted",
+            "sdk_connect_timeout_auth_pending_redacted",
+            "sdk_connect_timeout_app_lifecycle_interrupted_redacted",
+            "sdk_connect_timeout_actor_isolation_suspected_redacted",
+            "sdk_connect_timeout_wait_window_too_short_redacted",
+            "sdk_connect_timeout_unknown_pending_redacted"
+        ]
+        for bucket in timeoutBuckets {
+            #expect(adapterSource.contains(bucket))
+        }
+
+        #expect(adapterSource.contains("private struct SalemXSenderLiveKitSDKTimeoutDiagnostics"))
+        #expect(adapterSource.contains("private struct SalemXSenderLiveKitSDKTimeoutDiagnosticsInput"))
+        #expect(adapterSource.contains("senderLiveKitSDKTimeoutDiagnosticQueryItemNames"))
+        #expect(adapterSource.contains("redactedSenderLiveKitSDKTimeoutDiagnosticsInput(components)"))
+        #expect(adapterSource.contains("redactedSenderLiveKitSDKTimeoutDiagnosticsClassificationQueryItem(components)"))
+        #expect(adapterSource.contains("allowedWaitWindowBuckets"))
+        #expect(adapterSource.contains("allowedCountBuckets"))
+        #expect(adapterSource.contains("allowedAppStateBuckets"))
+        #expect(adapterSource.contains("allowedNetworkPathBuckets"))
+        #expect(adapterSource.contains("let present = true"))
+        #expect(adapterSource.contains("let debugOnly = true"))
+        #expect(adapterSource.contains("let rawErrorLogged = false"))
+        #expect(adapterSource.contains("let rawURLLogged = false"))
+        #expect(adapterSource.contains("let rawTokenLogged = false"))
+        #expect(adapterSource.contains("let rawRoomLogged = false"))
+        #expect(adapterSource.contains("let rawIdentityLogged = false"))
+
+        #expect(adapterSource.contains("if !input.delegateAttached"))
+        #expect(adapterSource.contains("return delegateMissingClassification"))
+        #expect(adapterSource.contains("if !input.stateObserverAttached"))
+        #expect(adapterSource.contains("return stateObserverMissingClassification"))
+        #expect(adapterSource.contains("return waitWindowTooShortClassification"))
+        #expect(adapterSource.contains("return taskSuspendedClassification"))
+        #expect(adapterSource.contains("return appLifecycleInterruptedClassification"))
+        #expect(adapterSource.contains("return actorIsolationSuspectedClassification"))
+        #expect(adapterSource.contains("return authPendingClassification"))
+        #expect(adapterSource.contains("return networkPendingClassification"))
+        #expect(adapterSource.contains("return noStateEventsClassification"))
+        #expect(adapterSource.contains("return connectCallPendingClassification"))
+        #expect(adapterSource.contains("return taskRunningNoCallbackClassification"))
+        #expect(adapterSource.contains("return unknownPendingClassification"))
+
+        #expect(adapterSource.contains("timeoutDiagnostics.finalClassification != SalemXSenderLiveKitSDKTimeoutDiagnostics.notRequestedClassification"))
+        #expect(adapterSource.contains("SalemXSenderLiveKitSDKTimeoutDiagnostics.allowedClassifications.contains(classification)"))
+        #expect(adapterSource.contains("SalemXSenderLiveKitSDKTimeoutDiagnostics.allowedClassifications.contains(input.sdkFailureSurface.finalClassification)"))
+        #expect(adapterSource.contains("]).union(SalemXSenderLiveKitSDKTimeoutDiagnostics.allowedClassifications)"))
+        #expect(adapterSource.contains("recordSenderLiveKitSDKTimeoutDiagnostics(sdkFailureSurface.timeline.timeoutDiagnostics)"))
+        #expect(adapterSource.contains("recordSenderLiveKitSDKTimeoutDiagnostics(timeline.timeoutDiagnostics)"))
+        #expect(adapterSource.contains("senderLiveKitSDKTimeoutDiagnosticsRawErrorLogged = diagnostics.rawErrorLogged"))
+        #expect(adapterSource.contains("senderLiveKitSDKTimeoutDiagnosticsRawURLLogged = diagnostics.rawURLLogged"))
+        #expect(adapterSource.contains("senderLiveKitSDKTimeoutDiagnosticsRawTokenLogged = diagnostics.rawTokenLogged"))
+        #expect(adapterSource.contains("senderLiveKitSDKTimeoutDiagnosticsRawRoomLogged = diagnostics.rawRoomLogged"))
+        #expect(adapterSource.contains("senderLiveKitSDKTimeoutDiagnosticsRawIdentityLogged = diagnostics.rawIdentityLogged"))
+
+        #expect(adapterSource.contains("senderTransportFailureDiagnosticsClassification = diagnostics.classification"))
+        #expect(adapterSource.contains("senderSideLiveKitJoinErrorBucket = hook.errorBucket"))
+        #expect(adapterSource.contains("sender_side_livekit_join_result=\\(senderSideLiveKitJoinResult)"))
+        #expect(adapterSource.contains("sender_join_success_but_remote_missing_redacted"))
+        #expect(adapterSource.contains("summary.mediaConnectRequested = false"))
+        #expect(adapterSource.contains("summary.mediaConnectAttempted = false"))
+        #expect(adapterSource.contains("summary.liveKitJoinRequested = false"))
+        #expect(adapterSource.contains("summary.microphonePermissionRequested = false"))
+        #expect(adapterSource.contains("summary.cameraPermissionRequested = false"))
+        #expect(adapterSource.contains("summary.matrixEventEmitRequested = false"))
+        #expect(adapterSource.contains("summary.realCallFlowStarted = false"))
+        #expect(!adapterSource.contains("senderLiveKitSDKTimeoutDiagnosticsRawErrorLogged = true"))
+        #expect(!adapterSource.contains("senderLiveKitSDKTimeoutDiagnosticsRawURLLogged = true"))
+        #expect(!adapterSource.contains("senderLiveKitSDKTimeoutDiagnosticsRawTokenLogged = true"))
+        #expect(!adapterSource.contains("senderLiveKitSDKTimeoutDiagnosticsRawRoomLogged = true"))
+        #expect(!adapterSource.contains("senderLiveKitSDKTimeoutDiagnosticsRawIdentityLogged = true"))
+    }
+
+    @Test
     // swiftlint:disable:next function_body_length
     func senderJoinTriggerOrchestrationBlocksEarlyProofPollingUntilSenderTimelineTerminal() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
@@ -3664,8 +3774,7 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("controlledConnectFirstAttemptCompleted || controlledConnectFirstAttemptResult != SalemXControlledAudioConnectFirstAttempt.defaultDisabled.result"))
         #expect(adapterSource.contains("senderSideLiveKitJoinActivationTriggered || senderSideLiveKitJoinRequested || senderLiveKitSDKTimelineTriggerReceived"))
         #expect(adapterSource.contains("senderSideLiveKitJoinActivationConsumed || (senderSideLiveKitJoinRequested && senderSideLiveKitJoinResult != SalemXSenderSideLiveKitJoinHook.notRequestedResult)"))
-        #expect(adapterSource.contains("senderLiveKitSDKTimelineFinalClassification != SalemXSenderLiveKitSDKTimeline.notRequestedClassification"))
-        #expect(adapterSource.contains("senderLiveKitSDKTimelineFinalClassification != SalemXSenderLiveKitSDKTimeline.internalPendingClassification"))
+        #expect(adapterSource.contains("SalemXSenderLiveKitSDKTimeline.terminalClassifications.contains(senderLiveKitSDKTimelineFinalClassification)"))
 
         #expect(adapterSource.contains("recordSenderLiveKitSDKTimeline(sdkFailureSurface.timeline)"))
         #expect(adapterSource.contains("recordSenderSideLiveKitJoinActivation(activation)"))

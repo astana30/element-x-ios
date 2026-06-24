@@ -1236,7 +1236,8 @@ private struct SalemXSenderLiveKitSDKTimelineInput {
                                                                      taskCancelled: false,
                                                                      taskCompleted: false,
                                                                      timeoutElapsed: false,
-                                                                     proofWrittenAfterTerminalState: false)
+                                                                     proofWrittenAfterTerminalState: false,
+                                                                     timeoutDiagnostics: .defaultDisabled)
 
     let provided: Bool
     let requestedClassification: String?
@@ -1255,6 +1256,262 @@ private struct SalemXSenderLiveKitSDKTimelineInput {
     let taskCompleted: Bool
     let timeoutElapsed: Bool
     let proofWrittenAfterTerminalState: Bool
+    let timeoutDiagnostics: SalemXSenderLiveKitSDKTimeoutDiagnosticsInput
+}
+
+private struct SalemXSenderLiveKitSDKTimeoutDiagnosticsInput {
+    static let defaultDisabled = SalemXSenderLiveKitSDKTimeoutDiagnosticsInput(provided: false,
+                                                                               requestedClassification: nil,
+                                                                               waitWindowBucket: "not_requested",
+                                                                               connectInvoked: false,
+                                                                               connectCallPendingAtTimeout: false,
+                                                                               taskRunningAtTimeout: false,
+                                                                               taskCancelledAtTimeout: false,
+                                                                               delegateAttached: false,
+                                                                               stateObserverAttached: false,
+                                                                               stateEventCountBucket: "not_requested",
+                                                                               delegateEventCountBucket: "not_requested",
+                                                                               appStateBucket: "not_requested",
+                                                                               actorContextAvailable: false,
+                                                                               networkPathBucket: "not_requested")
+
+    let provided: Bool
+    let requestedClassification: String?
+    let waitWindowBucket: String
+    let connectInvoked: Bool
+    let connectCallPendingAtTimeout: Bool
+    let taskRunningAtTimeout: Bool
+    let taskCancelledAtTimeout: Bool
+    let delegateAttached: Bool
+    let stateObserverAttached: Bool
+    let stateEventCountBucket: String
+    let delegateEventCountBucket: String
+    let appStateBucket: String
+    let actorContextAvailable: Bool
+    let networkPathBucket: String
+}
+
+private struct SalemXSenderLiveKitSDKTimeoutDiagnostics {
+    static let notRequestedClassification = "not_requested"
+    static let noneClassification = "none"
+    static let waitWindowNormalBucket = "normal_redacted"
+    static let waitWindowTooShortBucket = "too_short_redacted"
+    static let zeroEventsBucket = "0"
+    static let oneToThreeEventsBucket = "1_3"
+    static let moreThanThreeEventsBucket = "gt3"
+    static let unknownBucket = "unknown"
+    static let appLifecycleInterruptedBucket = "app_lifecycle_interrupted_redacted"
+    static let networkPendingBucket = "network_pending_redacted"
+    static let authPendingBucket = "auth_pending_redacted"
+    static let noStateEventsClassification = "sdk_connect_timeout_no_state_events_redacted"
+    static let delegateMissingClassification = "sdk_connect_timeout_delegate_missing_redacted"
+    static let stateObserverMissingClassification = "sdk_connect_timeout_state_observer_missing_redacted"
+    static let taskSuspendedClassification = "sdk_connect_timeout_task_suspended_redacted"
+    static let taskRunningNoCallbackClassification = "sdk_connect_timeout_task_running_no_callback_redacted"
+    static let connectCallPendingClassification = "sdk_connect_timeout_connect_call_pending_redacted"
+    static let networkPendingClassification = "sdk_connect_timeout_network_pending_redacted"
+    static let authPendingClassification = "sdk_connect_timeout_auth_pending_redacted"
+    static let appLifecycleInterruptedClassification = "sdk_connect_timeout_app_lifecycle_interrupted_redacted"
+    static let actorIsolationSuspectedClassification = "sdk_connect_timeout_actor_isolation_suspected_redacted"
+    static let waitWindowTooShortClassification = "sdk_connect_timeout_wait_window_too_short_redacted"
+    static let unknownPendingClassification = "sdk_connect_timeout_unknown_pending_redacted"
+    static let allowedClassifications: Set<String> = [
+        noStateEventsClassification,
+        delegateMissingClassification,
+        stateObserverMissingClassification,
+        taskSuspendedClassification,
+        taskRunningNoCallbackClassification,
+        connectCallPendingClassification,
+        networkPendingClassification,
+        authPendingClassification,
+        appLifecycleInterruptedClassification,
+        actorIsolationSuspectedClassification,
+        waitWindowTooShortClassification,
+        unknownPendingClassification
+    ]
+    static let allowedCountBuckets: Set<String> = [
+        zeroEventsBucket,
+        oneToThreeEventsBucket,
+        moreThanThreeEventsBucket,
+        unknownBucket,
+        "not_requested"
+    ]
+    static let allowedWaitWindowBuckets: Set<String> = [
+        waitWindowNormalBucket,
+        waitWindowTooShortBucket,
+        unknownBucket,
+        "not_requested"
+    ]
+    static let allowedAppStateBuckets: Set<String> = [
+        "foreground",
+        "background",
+        "inactive",
+        appLifecycleInterruptedBucket,
+        unknownBucket,
+        "not_requested"
+    ]
+    static let allowedNetworkPathBuckets: Set<String> = [
+        "satisfied_redacted",
+        networkPendingBucket,
+        authPendingBucket,
+        unknownBucket,
+        "not_requested"
+    ]
+    static let defaultDisabled = SalemXSenderLiveKitSDKTimeoutDiagnostics(waitWindowBucket: "not_requested",
+                                                                          connectInvoked: false,
+                                                                          connectCallPendingAtTimeout: false,
+                                                                          taskRunningAtTimeout: false,
+                                                                          taskCancelledAtTimeout: false,
+                                                                          delegateAttached: false,
+                                                                          stateObserverAttached: false,
+                                                                          stateEventCountBucket: "not_requested",
+                                                                          delegateEventCountBucket: "not_requested",
+                                                                          appStateBucket: "not_requested",
+                                                                          actorContextAvailable: false,
+                                                                          networkPathBucket: "not_requested",
+                                                                          finalClassification: notRequestedClassification)
+
+    let waitWindowBucket: String
+    let connectInvoked: Bool
+    let connectCallPendingAtTimeout: Bool
+    let taskRunningAtTimeout: Bool
+    let taskCancelledAtTimeout: Bool
+    let delegateAttached: Bool
+    let stateObserverAttached: Bool
+    let stateEventCountBucket: String
+    let delegateEventCountBucket: String
+    let appStateBucket: String
+    let actorContextAvailable: Bool
+    let networkPathBucket: String
+    let finalClassification: String
+
+    let present = true
+    let debugOnly = true
+    let rawErrorLogged = false
+    let rawURLLogged = false
+    let rawTokenLogged = false
+    let rawRoomLogged = false
+    let rawIdentityLogged = false
+
+    static func classify(requested: Bool,
+                         timeline: SalemXSenderLiveKitSDKTimelineInput) -> SalemXSenderLiveKitSDKTimeoutDiagnostics {
+        guard requested else {
+            return defaultDisabled
+        }
+
+        let input = resolvedInput(from: timeline)
+        guard input.provided else {
+            return defaultDisabled
+        }
+        let classification = resolvedClassification(input)
+        return .init(waitWindowBucket: input.waitWindowBucket,
+                     connectInvoked: input.connectInvoked,
+                     connectCallPendingAtTimeout: input.connectCallPendingAtTimeout,
+                     taskRunningAtTimeout: input.taskRunningAtTimeout,
+                     taskCancelledAtTimeout: input.taskCancelledAtTimeout,
+                     delegateAttached: input.delegateAttached,
+                     stateObserverAttached: input.stateObserverAttached,
+                     stateEventCountBucket: input.stateEventCountBucket,
+                     delegateEventCountBucket: input.delegateEventCountBucket,
+                     appStateBucket: input.appStateBucket,
+                     actorContextAvailable: input.actorContextAvailable,
+                     networkPathBucket: input.networkPathBucket,
+                     finalClassification: classification)
+    }
+
+    private static func resolvedInput(from timeline: SalemXSenderLiveKitSDKTimelineInput) -> SalemXSenderLiveKitSDKTimeoutDiagnosticsInput {
+        let input = timeline.timeoutDiagnostics
+        guard input.provided || timeline.timeoutElapsed else {
+            return input
+        }
+        let stateEventCount = input.provided ? input.stateEventCountBucket : inferredStateEventCountBucket(timeline)
+        let delegateEventCount = input.provided ? input.delegateEventCountBucket : inferredDelegateEventCountBucket(timeline)
+        return .init(provided: true,
+                     requestedClassification: input.requestedClassification,
+                     waitWindowBucket: input.provided ? input.waitWindowBucket : waitWindowNormalBucket,
+                     connectInvoked: input.provided ? input.connectInvoked : timeline.connectInvoked,
+                     connectCallPendingAtTimeout: input.provided ? input.connectCallPendingAtTimeout : (timeline.connectInvoked && !timeline.connectReturned && !timeline.connectThrew),
+                     taskRunningAtTimeout: input.provided ? input.taskRunningAtTimeout : (timeline.taskStarted && !timeline.taskCompleted && !timeline.taskCancelled),
+                     taskCancelledAtTimeout: input.provided ? input.taskCancelledAtTimeout : timeline.taskCancelled,
+                     delegateAttached: input.provided ? input.delegateAttached : timeline.delegateAttached,
+                     stateObserverAttached: input.provided ? input.stateObserverAttached : timeline.stateObserverAttached,
+                     stateEventCountBucket: stateEventCount,
+                     delegateEventCountBucket: delegateEventCount,
+                     appStateBucket: input.provided ? input.appStateBucket : unknownBucket,
+                     actorContextAvailable: input.provided ? input.actorContextAvailable : true,
+                     networkPathBucket: input.provided ? input.networkPathBucket : unknownBucket)
+    }
+
+    private static func resolvedClassification(_ input: SalemXSenderLiveKitSDKTimeoutDiagnosticsInput) -> String {
+        if let requestedClassification = input.requestedClassification {
+            return requestedClassification
+        }
+        if let instrumentationClassification = instrumentationClassification(input) {
+            return instrumentationClassification
+        }
+        if let environmentClassification = environmentClassification(input) {
+            return environmentClassification
+        }
+        if let pendingClassification = pendingTimeoutClassification(input) {
+            return pendingClassification
+        }
+        return unknownPendingClassification
+    }
+
+    private static func instrumentationClassification(_ input: SalemXSenderLiveKitSDKTimeoutDiagnosticsInput) -> String? {
+        if !input.delegateAttached {
+            return delegateMissingClassification
+        }
+        if !input.stateObserverAttached {
+            return stateObserverMissingClassification
+        }
+        return nil
+    }
+
+    private static func environmentClassification(_ input: SalemXSenderLiveKitSDKTimeoutDiagnosticsInput) -> String? {
+        if input.waitWindowBucket == waitWindowTooShortBucket {
+            return waitWindowTooShortClassification
+        }
+        if input.taskCancelledAtTimeout {
+            return taskSuspendedClassification
+        }
+        if input.appStateBucket == appLifecycleInterruptedBucket {
+            return appLifecycleInterruptedClassification
+        }
+        if !input.actorContextAvailable {
+            return actorIsolationSuspectedClassification
+        }
+        if input.networkPathBucket == authPendingBucket {
+            return authPendingClassification
+        }
+        if input.networkPathBucket == networkPendingBucket {
+            return networkPendingClassification
+        }
+        return nil
+    }
+
+    private static func pendingTimeoutClassification(_ input: SalemXSenderLiveKitSDKTimeoutDiagnosticsInput) -> String? {
+        if input.connectInvoked,
+           input.stateEventCountBucket == zeroEventsBucket,
+           input.delegateEventCountBucket == zeroEventsBucket {
+            return noStateEventsClassification
+        }
+        if input.taskRunningAtTimeout, input.connectCallPendingAtTimeout {
+            return connectCallPendingClassification
+        }
+        if input.taskRunningAtTimeout {
+            return taskRunningNoCallbackClassification
+        }
+        return nil
+    }
+
+    private static func inferredStateEventCountBucket(_ timeline: SalemXSenderLiveKitSDKTimelineInput) -> String {
+        timeline.connectedStateSeen || timeline.failedStateSeen || timeline.disconnectedStateSeen ? oneToThreeEventsBucket : zeroEventsBucket
+    }
+
+    private static func inferredDelegateEventCountBucket(_ timeline: SalemXSenderLiveKitSDKTimelineInput) -> String {
+        timeline.connectReturned || timeline.connectThrew ? oneToThreeEventsBucket : zeroEventsBucket
+    }
 }
 
 private struct SalemXSenderLiveKitSDKTimeline {
@@ -1272,7 +1529,7 @@ private struct SalemXSenderLiveKitSDKTimeline {
     static let appLifecycleInterruptedClassification = "sdk_timeline_app_lifecycle_interrupted_redacted"
     static let actorIsolationLostCallbackClassification = "sdk_timeline_actor_isolation_lost_callback_redacted"
     static let internalPendingClassification = "sdk_timeline_internal_pending_redacted"
-    static let allowedClassifications: Set<String> = [
+    static let allowedClassifications = Set([
         taskNotCreatedClassification,
         taskCreatedNotStartedClassification,
         taskCancelledBeforeConnectClassification,
@@ -1285,7 +1542,21 @@ private struct SalemXSenderLiveKitSDKTimeline {
         appLifecycleInterruptedClassification,
         actorIsolationLostCallbackClassification,
         internalPendingClassification
-    ]
+    ]).union(SalemXSenderLiveKitSDKTimeoutDiagnostics.allowedClassifications)
+    static let terminalClassifications = Set([
+        noneClassification,
+        taskNotCreatedClassification,
+        taskCreatedNotStartedClassification,
+        taskCancelledBeforeConnectClassification,
+        connectInvokedNoReturnClassification,
+        connectTimeoutClassification,
+        delegateNotAttachedClassification,
+        stateObserverNotAttachedClassification,
+        callbackNotObservedClassification,
+        proofWrittenBeforeTerminalStateClassification,
+        appLifecycleInterruptedClassification,
+        actorIsolationLostCallbackClassification
+    ]).union(SalemXSenderLiveKitSDKTimeoutDiagnostics.allowedClassifications)
     static let defaultDisabled = SalemXSenderLiveKitSDKTimeline(triggerReceived: false,
                                                                 taskCreated: false,
                                                                 taskStarted: false,
@@ -1301,6 +1572,7 @@ private struct SalemXSenderLiveKitSDKTimeline {
                                                                 taskCompleted: false,
                                                                 timeoutElapsed: false,
                                                                 proofWrittenAfterTerminalState: false,
+                                                                timeoutDiagnostics: .defaultDisabled,
                                                                 finalClassification: notRequestedClassification)
 
     let triggerReceived: Bool
@@ -1318,6 +1590,7 @@ private struct SalemXSenderLiveKitSDKTimeline {
     let taskCompleted: Bool
     let timeoutElapsed: Bool
     let proofWrittenAfterTerminalState: Bool
+    let timeoutDiagnostics: SalemXSenderLiveKitSDKTimeoutDiagnostics
     let finalClassification: String
 
     let present = true
@@ -1335,7 +1608,10 @@ private struct SalemXSenderLiveKitSDKTimeline {
             return defaultDisabled
         }
 
-        let classification = resolvedClassification(transportResult: transportResult, input: input)
+        let timeoutDiagnostics = SalemXSenderLiveKitSDKTimeoutDiagnostics.classify(requested: requested, timeline: input)
+        let classification = resolvedClassification(transportResult: transportResult,
+                                                    input: input,
+                                                    timeoutDiagnostics: timeoutDiagnostics)
         return .init(triggerReceived: input.triggerReceived,
                      taskCreated: input.taskCreated,
                      taskStarted: input.taskStarted,
@@ -1351,15 +1627,22 @@ private struct SalemXSenderLiveKitSDKTimeline {
                      taskCompleted: input.taskCompleted,
                      timeoutElapsed: input.timeoutElapsed,
                      proofWrittenAfterTerminalState: input.proofWrittenAfterTerminalState,
+                     timeoutDiagnostics: timeoutDiagnostics,
                      finalClassification: classification)
     }
 
-    private static func resolvedClassification(transportResult: String, input: SalemXSenderLiveKitSDKTimelineInput) -> String {
+    private static func resolvedClassification(transportResult: String,
+                                               input: SalemXSenderLiveKitSDKTimelineInput,
+                                               timeoutDiagnostics: SalemXSenderLiveKitSDKTimeoutDiagnostics) -> String {
         if transportResult == SalemXSenderTransportFailureDiagnostics.successTransportResult {
             return noneClassification
         }
         if let requestedClassification = input.requestedClassification {
             return requestedClassification
+        }
+        if timeoutDiagnostics.finalClassification != SalemXSenderLiveKitSDKTimeoutDiagnostics.notRequestedClassification,
+           timeoutDiagnostics.finalClassification != SalemXSenderLiveKitSDKTimeoutDiagnostics.noneClassification {
+            return timeoutDiagnostics.finalClassification
         }
         if let taskClassification = taskClassification(input) {
             return taskClassification
@@ -1594,6 +1877,9 @@ private struct SalemXSenderLiveKitSDKFailureSurface {
     }
 
     private static func transportClassification(for classification: String) -> String? {
+        if SalemXSenderLiveKitSDKTimeoutDiagnostics.allowedClassifications.contains(classification) {
+            return classification
+        }
         switch classification {
         case connectCallThrewClassification:
             return SalemXSenderTransportErrorSurface.transportConnectThrowClassification
@@ -1732,6 +2018,15 @@ private struct SalemXSenderTransportErrorSurface {
         if transportResult == SalemXSenderTransportFailureDiagnostics.successTransportResult {
             return noneClassification
         }
+        if let classification = specificErrorSurfaceClassification(input) {
+            return classification
+        }
+        return fallbackClassification(transportAttempted: transportAttempted,
+                                      transportResult: transportResult,
+                                      input: input)
+    }
+
+    private static func specificErrorSurfaceClassification(_ input: SalemXSenderTransportErrorSurfaceInput) -> String? {
         if let classification = input.sdkFailureSurface.transportClassification {
             return classification
         }
@@ -1747,6 +2042,15 @@ private struct SalemXSenderTransportErrorSurface {
         if let classification = sdkClassification(input.sdkErrorBucket) {
             return classification
         }
+        if SalemXSenderLiveKitSDKTimeoutDiagnostics.allowedClassifications.contains(input.sdkFailureSurface.finalClassification) {
+            return input.sdkFailureSurface.finalClassification
+        }
+        return nil
+    }
+
+    private static func fallbackClassification(transportAttempted: Bool,
+                                               transportResult: String,
+                                               input: SalemXSenderTransportErrorSurfaceInput) -> String {
         if input.timeoutObserved {
             return transportTimeoutWaitingForConnectedStateClassification
         }
@@ -3197,6 +3501,26 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var senderLiveKitSDKTimelineTimeoutElapsed = SalemXSenderLiveKitSDKTimeline.defaultDisabled.timeoutElapsed
     var senderLiveKitSDKTimelineProofWrittenAfterTerminalState = SalemXSenderLiveKitSDKTimeline.defaultDisabled.proofWrittenAfterTerminalState
     var senderLiveKitSDKTimelineFinalClassification = SalemXSenderLiveKitSDKTimeline.defaultDisabled.finalClassification
+    var senderLiveKitSDKTimeoutDiagnosticsPresent = SalemXSenderLiveKitSDKTimeoutDiagnostics.defaultDisabled.present
+    var senderLiveKitSDKTimeoutDiagnosticsDebugOnly = SalemXSenderLiveKitSDKTimeoutDiagnostics.defaultDisabled.debugOnly
+    var senderLiveKitSDKTimeoutDiagnosticsRawErrorLogged = SalemXSenderLiveKitSDKTimeoutDiagnostics.defaultDisabled.rawErrorLogged
+    var senderLiveKitSDKTimeoutDiagnosticsRawURLLogged = SalemXSenderLiveKitSDKTimeoutDiagnostics.defaultDisabled.rawURLLogged
+    var senderLiveKitSDKTimeoutDiagnosticsRawTokenLogged = SalemXSenderLiveKitSDKTimeoutDiagnostics.defaultDisabled.rawTokenLogged
+    var senderLiveKitSDKTimeoutDiagnosticsRawRoomLogged = SalemXSenderLiveKitSDKTimeoutDiagnostics.defaultDisabled.rawRoomLogged
+    var senderLiveKitSDKTimeoutDiagnosticsRawIdentityLogged = SalemXSenderLiveKitSDKTimeoutDiagnostics.defaultDisabled.rawIdentityLogged
+    var senderLiveKitSDKTimeoutDiagnosticsWaitWindowBucket = SalemXSenderLiveKitSDKTimeoutDiagnostics.defaultDisabled.waitWindowBucket
+    var senderLiveKitSDKTimeoutDiagnosticsConnectInvoked = SalemXSenderLiveKitSDKTimeoutDiagnostics.defaultDisabled.connectInvoked
+    var senderLiveKitSDKTimeoutDiagnosticsConnectCallPendingAtTimeout = SalemXSenderLiveKitSDKTimeoutDiagnostics.defaultDisabled.connectCallPendingAtTimeout
+    var senderLiveKitSDKTimeoutDiagnosticsTaskRunningAtTimeout = SalemXSenderLiveKitSDKTimeoutDiagnostics.defaultDisabled.taskRunningAtTimeout
+    var senderLiveKitSDKTimeoutDiagnosticsTaskCancelledAtTimeout = SalemXSenderLiveKitSDKTimeoutDiagnostics.defaultDisabled.taskCancelledAtTimeout
+    var senderLiveKitSDKTimeoutDiagnosticsDelegateAttached = SalemXSenderLiveKitSDKTimeoutDiagnostics.defaultDisabled.delegateAttached
+    var senderLiveKitSDKTimeoutDiagnosticsStateObserverAttached = SalemXSenderLiveKitSDKTimeoutDiagnostics.defaultDisabled.stateObserverAttached
+    var senderLiveKitSDKTimeoutDiagnosticsStateEventCountBucket = SalemXSenderLiveKitSDKTimeoutDiagnostics.defaultDisabled.stateEventCountBucket
+    var senderLiveKitSDKTimeoutDiagnosticsDelegateEventCountBucket = SalemXSenderLiveKitSDKTimeoutDiagnostics.defaultDisabled.delegateEventCountBucket
+    var senderLiveKitSDKTimeoutDiagnosticsAppStateBucket = SalemXSenderLiveKitSDKTimeoutDiagnostics.defaultDisabled.appStateBucket
+    var senderLiveKitSDKTimeoutDiagnosticsActorContextAvailable = SalemXSenderLiveKitSDKTimeoutDiagnostics.defaultDisabled.actorContextAvailable
+    var senderLiveKitSDKTimeoutDiagnosticsNetworkPathBucket = SalemXSenderLiveKitSDKTimeoutDiagnostics.defaultDisabled.networkPathBucket
+    var senderLiveKitSDKTimeoutDiagnosticsFinalClassification = SalemXSenderLiveKitSDKTimeoutDiagnostics.defaultDisabled.finalClassification
     var senderTransportErrorSurfaceSource = SalemXSenderTransportErrorSurface.defaultDisabled.source
     var senderTransportErrorSurfaceSDKErrorBucket = SalemXSenderTransportErrorSurface.defaultDisabled.sdkErrorBucket
     var senderTransportErrorSurfaceDisconnectReasonBucket = SalemXSenderTransportErrorSurface.defaultDisabled.disconnectReasonBucket
@@ -3820,6 +4144,26 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "sender_livekit_sdk_timeline_timeout_elapsed=\(senderLiveKitSDKTimelineTimeoutElapsed)",
             "sender_livekit_sdk_timeline_proof_written_after_terminal_state=\(senderLiveKitSDKTimelineProofWrittenAfterTerminalState)",
             "sender_livekit_sdk_timeline_final_classification=\(senderLiveKitSDKTimelineFinalClassification)",
+            "sender_livekit_sdk_timeout_diagnostics_present=\(senderLiveKitSDKTimeoutDiagnosticsPresent)",
+            "sender_livekit_sdk_timeout_diagnostics_debug_only=\(senderLiveKitSDKTimeoutDiagnosticsDebugOnly)",
+            "sender_livekit_sdk_timeout_diagnostics_raw_error_logged=\(senderLiveKitSDKTimeoutDiagnosticsRawErrorLogged)",
+            "sender_livekit_sdk_timeout_diagnostics_raw_url_logged=\(senderLiveKitSDKTimeoutDiagnosticsRawURLLogged)",
+            "sender_livekit_sdk_timeout_diagnostics_raw_token_logged=\(senderLiveKitSDKTimeoutDiagnosticsRawTokenLogged)",
+            "sender_livekit_sdk_timeout_diagnostics_raw_room_logged=\(senderLiveKitSDKTimeoutDiagnosticsRawRoomLogged)",
+            "sender_livekit_sdk_timeout_diagnostics_raw_identity_logged=\(senderLiveKitSDKTimeoutDiagnosticsRawIdentityLogged)",
+            "sender_livekit_sdk_timeout_diagnostics_wait_window_bucket=\(senderLiveKitSDKTimeoutDiagnosticsWaitWindowBucket)",
+            "sender_livekit_sdk_timeout_diagnostics_connect_invoked=\(senderLiveKitSDKTimeoutDiagnosticsConnectInvoked)",
+            "sender_livekit_sdk_timeout_diagnostics_connect_call_pending_at_timeout=\(senderLiveKitSDKTimeoutDiagnosticsConnectCallPendingAtTimeout)",
+            "sender_livekit_sdk_timeout_diagnostics_task_running_at_timeout=\(senderLiveKitSDKTimeoutDiagnosticsTaskRunningAtTimeout)",
+            "sender_livekit_sdk_timeout_diagnostics_task_cancelled_at_timeout=\(senderLiveKitSDKTimeoutDiagnosticsTaskCancelledAtTimeout)",
+            "sender_livekit_sdk_timeout_diagnostics_delegate_attached=\(senderLiveKitSDKTimeoutDiagnosticsDelegateAttached)",
+            "sender_livekit_sdk_timeout_diagnostics_state_observer_attached=\(senderLiveKitSDKTimeoutDiagnosticsStateObserverAttached)",
+            "sender_livekit_sdk_timeout_diagnostics_state_event_count_bucket=\(senderLiveKitSDKTimeoutDiagnosticsStateEventCountBucket)",
+            "sender_livekit_sdk_timeout_diagnostics_delegate_event_count_bucket=\(senderLiveKitSDKTimeoutDiagnosticsDelegateEventCountBucket)",
+            "sender_livekit_sdk_timeout_diagnostics_app_state_bucket=\(senderLiveKitSDKTimeoutDiagnosticsAppStateBucket)",
+            "sender_livekit_sdk_timeout_diagnostics_actor_context_available=\(senderLiveKitSDKTimeoutDiagnosticsActorContextAvailable)",
+            "sender_livekit_sdk_timeout_diagnostics_network_path_bucket=\(senderLiveKitSDKTimeoutDiagnosticsNetworkPathBucket)",
+            "sender_livekit_sdk_timeout_diagnostics_final_classification=\(senderLiveKitSDKTimeoutDiagnosticsFinalClassification)",
             "sender_transport_error_surface_source=\(senderTransportErrorSurfaceSource)",
             "sender_transport_error_surface_sdk_error_bucket=\(senderTransportErrorSurfaceSDKErrorBucket)",
             "sender_transport_error_surface_disconnect_reason_bucket=\(senderTransportErrorSurfaceDisconnectReasonBucket)",
@@ -4157,8 +4501,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
     }
 
     private var senderSDKTimelineTerminalSeen: Bool {
-        senderLiveKitSDKTimelineFinalClassification != SalemXSenderLiveKitSDKTimeline.notRequestedClassification &&
-            senderLiveKitSDKTimelineFinalClassification != SalemXSenderLiveKitSDKTimeline.internalPendingClassification
+        SalemXSenderLiveKitSDKTimeline.terminalClassifications.contains(senderLiveKitSDKTimelineFinalClassification)
     }
 
     private mutating func refreshReceiverRemoteParticipantObserverClassification() {
@@ -4388,6 +4731,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         senderLiveKitSDKFailureSurfaceCaptureStarted = sdkFailureSurface.captureStarted
         senderLiveKitSDKFailureSurfaceFinalClassification = sdkFailureSurface.finalClassification
         recordSenderLiveKitSDKTimeline(sdkFailureSurface.timeline)
+        recordSenderLiveKitSDKTimeoutDiagnostics(sdkFailureSurface.timeline.timeoutDiagnostics)
         refreshRemoteParticipantPresenceRepairDiagnostics()
     }
 
@@ -4415,7 +4759,31 @@ private extension SalemXVoIPPushReceiptProofSummary {
         senderLiveKitSDKTimelineTimeoutElapsed = timeline.timeoutElapsed
         senderLiveKitSDKTimelineProofWrittenAfterTerminalState = timeline.proofWrittenAfterTerminalState
         senderLiveKitSDKTimelineFinalClassification = timeline.finalClassification
+        recordSenderLiveKitSDKTimeoutDiagnostics(timeline.timeoutDiagnostics)
         refreshSenderJoinTriggerOrchestration()
+    }
+
+    mutating func recordSenderLiveKitSDKTimeoutDiagnostics(_ diagnostics: SalemXSenderLiveKitSDKTimeoutDiagnostics) {
+        senderLiveKitSDKTimeoutDiagnosticsPresent = diagnostics.present
+        senderLiveKitSDKTimeoutDiagnosticsDebugOnly = diagnostics.debugOnly
+        senderLiveKitSDKTimeoutDiagnosticsRawErrorLogged = diagnostics.rawErrorLogged
+        senderLiveKitSDKTimeoutDiagnosticsRawURLLogged = diagnostics.rawURLLogged
+        senderLiveKitSDKTimeoutDiagnosticsRawTokenLogged = diagnostics.rawTokenLogged
+        senderLiveKitSDKTimeoutDiagnosticsRawRoomLogged = diagnostics.rawRoomLogged
+        senderLiveKitSDKTimeoutDiagnosticsRawIdentityLogged = diagnostics.rawIdentityLogged
+        senderLiveKitSDKTimeoutDiagnosticsWaitWindowBucket = diagnostics.waitWindowBucket
+        senderLiveKitSDKTimeoutDiagnosticsConnectInvoked = diagnostics.connectInvoked
+        senderLiveKitSDKTimeoutDiagnosticsConnectCallPendingAtTimeout = diagnostics.connectCallPendingAtTimeout
+        senderLiveKitSDKTimeoutDiagnosticsTaskRunningAtTimeout = diagnostics.taskRunningAtTimeout
+        senderLiveKitSDKTimeoutDiagnosticsTaskCancelledAtTimeout = diagnostics.taskCancelledAtTimeout
+        senderLiveKitSDKTimeoutDiagnosticsDelegateAttached = diagnostics.delegateAttached
+        senderLiveKitSDKTimeoutDiagnosticsStateObserverAttached = diagnostics.stateObserverAttached
+        senderLiveKitSDKTimeoutDiagnosticsStateEventCountBucket = diagnostics.stateEventCountBucket
+        senderLiveKitSDKTimeoutDiagnosticsDelegateEventCountBucket = diagnostics.delegateEventCountBucket
+        senderLiveKitSDKTimeoutDiagnosticsAppStateBucket = diagnostics.appStateBucket
+        senderLiveKitSDKTimeoutDiagnosticsActorContextAvailable = diagnostics.actorContextAvailable
+        senderLiveKitSDKTimeoutDiagnosticsNetworkPathBucket = diagnostics.networkPathBucket
+        senderLiveKitSDKTimeoutDiagnosticsFinalClassification = diagnostics.finalClassification
     }
 
     mutating func recordSenderTransportErrorSurface(_ errorSurface: SalemXSenderTransportErrorSurface) {
@@ -6271,7 +6639,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         guard let value = components?.queryItems?.first(where: { $0.name == "sender_transport_failure_classification" || $0.name == "transport_failure_classification" })?.value?.lowercased() else {
             return nil
         }
-        let allowedClassifications: Set<String> = [
+        let allowedClassifications = Set([
             SalemXSenderTransportFailureDiagnostics.transportNotAttemptedClassification,
             SalemXSenderTransportFailureDiagnostics.transportTimeoutClassification,
             SalemXSenderTransportFailureDiagnostics.transportTLSOrCertificateFailedClassification,
@@ -6289,7 +6657,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             SalemXSenderTransportFailureDiagnostics.transportTimeoutWaitingForConnectedStateClassification,
             SalemXSenderTransportFailureDiagnostics.transportDisconnectedBeforeConnectedClassification,
             SalemXSenderTransportFailureDiagnostics.transportLiveKitSDKUnknownErrorClassification
-        ]
+        ]).union(SalemXSenderLiveKitSDKTimeoutDiagnostics.allowedClassifications)
         return allowedClassifications.contains(value) ? value : nil
     }
 
@@ -6347,7 +6715,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     }
 
     private static func redactedSenderLiveKitSDKTimelineInput(_ components: URLComponents?) -> SalemXSenderLiveKitSDKTimelineInput {
-        let timelineNames: Set = [
+        let timelineNames = Set([
             "sender_livekit_sdk_timeline_final_classification",
             "sender_livekit_sdk_timeline_trigger_received",
             "sender_livekit_sdk_timeline_task_created",
@@ -6364,7 +6732,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             "sender_livekit_sdk_timeline_task_completed",
             "sender_livekit_sdk_timeline_timeout_elapsed",
             "sender_livekit_sdk_timeline_proof_written_after_terminal_state"
-        ]
+        ]).union(senderLiveKitSDKTimeoutDiagnosticQueryItemNames)
         return SalemXSenderLiveKitSDKTimelineInput(provided: redactedAnyQueryItem(components,
                                                                                   names: timelineNames),
                                                    requestedClassification: redactedSenderLiveKitSDKTimelineClassificationQueryItem(components),
@@ -6397,7 +6765,67 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                                                    timeoutElapsed: redactedBoolQueryItem(components,
                                                                                          names: ["sender_livekit_sdk_timeline_timeout_elapsed"]),
                                                    proofWrittenAfterTerminalState: redactedBoolQueryItem(components,
-                                                                                                         names: ["sender_livekit_sdk_timeline_proof_written_after_terminal_state"]))
+                                                                                                         names: ["sender_livekit_sdk_timeline_proof_written_after_terminal_state"]),
+                                                   timeoutDiagnostics: redactedSenderLiveKitSDKTimeoutDiagnosticsInput(components))
+    }
+
+    private static var senderLiveKitSDKTimeoutDiagnosticQueryItemNames: Set<String> {
+        [
+            "sender_livekit_sdk_timeout_diagnostics_final_classification",
+            "sender_livekit_sdk_timeout_diagnostics_wait_window_bucket",
+            "sender_livekit_sdk_timeout_diagnostics_connect_invoked",
+            "sender_livekit_sdk_timeout_diagnostics_connect_call_pending_at_timeout",
+            "sender_livekit_sdk_timeout_diagnostics_task_running_at_timeout",
+            "sender_livekit_sdk_timeout_diagnostics_task_cancelled_at_timeout",
+            "sender_livekit_sdk_timeout_diagnostics_delegate_attached",
+            "sender_livekit_sdk_timeout_diagnostics_state_observer_attached",
+            "sender_livekit_sdk_timeout_diagnostics_state_event_count_bucket",
+            "sender_livekit_sdk_timeout_diagnostics_delegate_event_count_bucket",
+            "sender_livekit_sdk_timeout_diagnostics_app_state_bucket",
+            "sender_livekit_sdk_timeout_diagnostics_actor_context_available",
+            "sender_livekit_sdk_timeout_diagnostics_network_path_bucket"
+        ]
+    }
+
+    private static func redactedSenderLiveKitSDKTimeoutDiagnosticsInput(_ components: URLComponents?) -> SalemXSenderLiveKitSDKTimeoutDiagnosticsInput {
+        SalemXSenderLiveKitSDKTimeoutDiagnosticsInput(provided: redactedAnyQueryItem(components,
+                                                                                     names: senderLiveKitSDKTimeoutDiagnosticQueryItemNames),
+                                                      requestedClassification: redactedSenderLiveKitSDKTimeoutDiagnosticsClassificationQueryItem(components),
+                                                      waitWindowBucket: redactedStringQueryItem(components,
+                                                                                                names: ["sender_livekit_sdk_timeout_diagnostics_wait_window_bucket"],
+                                                                                                allowedValues: SalemXSenderLiveKitSDKTimeoutDiagnostics.allowedWaitWindowBuckets) ?? "not_requested",
+                                                      connectInvoked: redactedBoolQueryItem(components,
+                                                                                            names: ["sender_livekit_sdk_timeout_diagnostics_connect_invoked"]),
+                                                      connectCallPendingAtTimeout: redactedBoolQueryItem(components,
+                                                                                                         names: ["sender_livekit_sdk_timeout_diagnostics_connect_call_pending_at_timeout"]),
+                                                      taskRunningAtTimeout: redactedBoolQueryItem(components,
+                                                                                                  names: ["sender_livekit_sdk_timeout_diagnostics_task_running_at_timeout"]),
+                                                      taskCancelledAtTimeout: redactedBoolQueryItem(components,
+                                                                                                    names: ["sender_livekit_sdk_timeout_diagnostics_task_cancelled_at_timeout"]),
+                                                      delegateAttached: redactedBoolQueryItem(components,
+                                                                                              names: ["sender_livekit_sdk_timeout_diagnostics_delegate_attached"]),
+                                                      stateObserverAttached: redactedBoolQueryItem(components,
+                                                                                                   names: ["sender_livekit_sdk_timeout_diagnostics_state_observer_attached"]),
+                                                      stateEventCountBucket: redactedStringQueryItem(components,
+                                                                                                     names: ["sender_livekit_sdk_timeout_diagnostics_state_event_count_bucket"],
+                                                                                                     allowedValues: SalemXSenderLiveKitSDKTimeoutDiagnostics.allowedCountBuckets) ?? "not_requested",
+                                                      delegateEventCountBucket: redactedStringQueryItem(components,
+                                                                                                        names: ["sender_livekit_sdk_timeout_diagnostics_delegate_event_count_bucket"],
+                                                                                                        allowedValues: SalemXSenderLiveKitSDKTimeoutDiagnostics.allowedCountBuckets) ?? "not_requested",
+                                                      appStateBucket: redactedStringQueryItem(components,
+                                                                                              names: ["sender_livekit_sdk_timeout_diagnostics_app_state_bucket"],
+                                                                                              allowedValues: SalemXSenderLiveKitSDKTimeoutDiagnostics.allowedAppStateBuckets) ?? "not_requested",
+                                                      actorContextAvailable: redactedBoolQueryItem(components,
+                                                                                                   names: ["sender_livekit_sdk_timeout_diagnostics_actor_context_available"]),
+                                                      networkPathBucket: redactedStringQueryItem(components,
+                                                                                                 names: ["sender_livekit_sdk_timeout_diagnostics_network_path_bucket"],
+                                                                                                 allowedValues: SalemXSenderLiveKitSDKTimeoutDiagnostics.allowedNetworkPathBuckets) ?? "not_requested")
+    }
+
+    private static func redactedSenderLiveKitSDKTimeoutDiagnosticsClassificationQueryItem(_ components: URLComponents?) -> String? {
+        redactedStringQueryItem(components,
+                                names: ["sender_livekit_sdk_timeout_diagnostics_final_classification"],
+                                allowedValues: SalemXSenderLiveKitSDKTimeoutDiagnostics.allowedClassifications)
     }
 
     private static func redactedSenderLiveKitSDKTimelineClassificationQueryItem(_ components: URLComponents?) -> String? {
