@@ -13,99 +13,169 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48Z-SenderLiveKitSDKUnknownErrorRepair` is complete.
-
-Sender-side LiveKit SDK unknown failures now have a DEBUG/test-controlled redacted SDK failure surface. It breaks down the previous broad `transport_livekit_sdk_unknown_error_redacted` bucket into specific redacted SDK buckets and maps the refined classification into:
+`2.48Z-Physical2-Retry7` is closed as:
 
 ```text
-sender_transport_error_surface_final_classification
-sender_transport_failure_diagnostics_classification
-sender_side_livekit_join_error_bucket
-sender_side_livekit_join_result
+safe sender SDK internal unknown / remote participant not observed triage
 ```
 
-New proof fields:
+This is not remote-audio success.
+
+Proof path:
+
+```text
+/tmp/salemx-voip-push-receipt-proof-2.48z-physical2-retry7-sender-livekit-sdk-failure-source-polled.txt
+```
+
+Proof generation:
+
+```text
+proof_generation=generation_18
+```
+
+Receiver path succeeded once:
+
+```text
+physical_voip_push_received=true
+callkit_report_result=reported
+callkit_first_action_kind=answer
+callkit_answer_action_received=true
+callkit_answer_action_fulfilled=true
+pending_metadata_fetch_result=success_redacted
+media_credentials_result=success_redacted
+controlled_connect_first_attempt_result=success_redacted
+controlled_connect_first_attempt_repeated=false
+livekit_join_result=success_redacted
+```
+
+Sender join failed safely after one activation:
+
+```text
+sender_side_livekit_join_activation_triggered=true
+sender_side_livekit_join_activation_consumed=true
+sender_side_livekit_join_activation_repeated=false
+sender_side_livekit_join_requested=true
+sender_side_livekit_join_result=failed_redacted
+sender_side_livekit_join_error_bucket=transport_livekit_sdk_unknown_error_redacted
+sender_side_livekit_join_repeated=false
+```
+
+Sender transport diagnostics:
+
+```text
+sender_transport_failure_diagnostics_transport_attempted=true
+sender_transport_failure_diagnostics_transport_started=true
+sender_transport_failure_diagnostics_transport_completed=true
+sender_transport_failure_diagnostics_transport_result=failed_redacted
+sender_transport_failure_diagnostics_error_bucket=transport_livekit_sdk_unknown_error_redacted
+sender_transport_failure_diagnostics_classification=transport_livekit_sdk_unknown_error_redacted
+sender_transport_failure_diagnostics_livekit_url_present=true
+sender_transport_failure_diagnostics_token_present=true
+sender_transport_failure_diagnostics_room_binding_present=true
+sender_transport_failure_diagnostics_same_livekit_room=true
+sender_transport_failure_diagnostics_same_token_authority=true
+sender_transport_failure_diagnostics_receiver_sender_room_match=true
+sender_transport_failure_diagnostics_receiver_sender_token_authority_match=true
+```
+
+SDK failure surface:
 
 ```text
 sender_livekit_sdk_failure_surface_present=true
-sender_livekit_sdk_failure_surface_debug_only=true
 sender_livekit_sdk_failure_surface_raw_error_logged=false
 sender_livekit_sdk_failure_surface_raw_url_logged=false
 sender_livekit_sdk_failure_surface_raw_token_logged=false
 sender_livekit_sdk_failure_surface_raw_room_logged=false
 sender_livekit_sdk_failure_surface_raw_identity_logged=false
-sender_livekit_sdk_failure_surface_connect_call_started=<redacted_bool>
-sender_livekit_sdk_failure_surface_connect_call_returned=<redacted_bool>
-sender_livekit_sdk_failure_surface_connect_call_threw=<redacted_bool>
-sender_livekit_sdk_failure_surface_connected_state_observed=<redacted_bool>
-sender_livekit_sdk_failure_surface_failed_state_observed=<redacted_bool>
-sender_livekit_sdk_failure_surface_disconnected_before_connected=<redacted_bool>
-sender_livekit_sdk_failure_surface_delegate_failure_observed=<redacted_bool>
-sender_livekit_sdk_failure_surface_room_already_connected=<redacted_bool>
-sender_livekit_sdk_failure_surface_identity_conflict_observed=<redacted_bool>
-sender_livekit_sdk_failure_surface_token_identity_match=<redacted_bool>
-sender_livekit_sdk_failure_surface_audio_session_ready=<redacted_bool>
-sender_livekit_sdk_failure_surface_permission_required=<redacted_bool>
-sender_livekit_sdk_failure_surface_capture_started=<redacted_bool>
-sender_livekit_sdk_failure_surface_final_classification=<redacted_sdk_bucket>
+sender_livekit_sdk_failure_surface_connect_call_started=true
+sender_livekit_sdk_failure_surface_connect_call_returned=false
+sender_livekit_sdk_failure_surface_connect_call_threw=false
+sender_livekit_sdk_failure_surface_connected_state_observed=false
+sender_livekit_sdk_failure_surface_failed_state_observed=false
+sender_livekit_sdk_failure_surface_disconnected_before_connected=false
+sender_livekit_sdk_failure_surface_delegate_failure_observed=false
+sender_livekit_sdk_failure_surface_room_already_connected=false
+sender_livekit_sdk_failure_surface_identity_conflict_observed=false
+sender_livekit_sdk_failure_surface_token_identity_match=true
+sender_livekit_sdk_failure_surface_audio_session_ready=true
+sender_livekit_sdk_failure_surface_permission_required=false
+sender_livekit_sdk_failure_surface_capture_started=true
+sender_livekit_sdk_failure_surface_final_classification=sdk_internal_unknown_redacted
 ```
 
-Specific redacted SDK buckets:
+Observer/liveness:
 
 ```text
-sdk_connect_call_threw_redacted
-sdk_connect_returned_without_connected_redacted
-sdk_delegate_failed_before_connected_redacted
-sdk_disconnected_before_connected_redacted
-sdk_state_failed_redacted
-sdk_room_already_connected_redacted
-sdk_identity_conflict_redacted
-sdk_token_identity_mismatch_redacted
-sdk_audio_session_blocked_redacted
-sdk_permission_or_capture_blocked_redacted
-sdk_network_transport_error_redacted
-sdk_internal_unknown_redacted
+receiver_remote_participant_observer_result=not_observed_redacted
+receiver_remote_participant_observer_error_bucket=sender_join_failed_redacted
+receiver_remote_participant_observer_remote_seen=false
+receiver_remote_participant_observer_audio_track_seen=false
+receiver_remote_participant_observer_liveness_seen=false
+livekit_remote_participant_seen=false
+livekit_remote_audio_track_subscribed=false
+livekit_audio_liveness_result=not_observed_redacted
 ```
 
-Safety and separation remain:
+Conclusion:
 
 ```text
-raw_sdk_error_logged=false
-raw_livekit_url_logged=false
-raw_token_logged=false
-raw_room_logged=false
-raw_identity_logged=false
-existing_transport_buckets_remain_intact=true
-sender_join_success_but_remote_missing_separate=true
-default_runtime_no_connect=true
+Retry7 proved sender-side LiveKit join reached SDK connect start, but did not return, throw, reach connected, failed state, delegate failure, or disconnected-before-connected. Token identity matched, audio session was ready, no permission/capture block was detected, and receiver/sender room/token authority matched. Final SDK bucket is sdk_internal_unknown_redacted.
 ```
 
-Checks completed in the repair phase:
+Safety stayed closed:
 
 ```text
-swiftformat_passed=true
-swiftlint_expected_file_length_warning_only=true
-direct_call_subset_passed=true
-direct_call_subset_tests=156
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+no_repeated_apns=true
+no_production_apns=true
+dev_invite_used=false
+no_repeated_connect=true
+no_repeated_livekit_join=true
+video_enabled=false
 ```
 
 ## Next Phase
 
-`2.48Z-Physical2-Retry7 — one-shot two-physical-device sender LiveKit SDK failure-source proof`
+`2.48Z-SenderLiveKitSDKTimelineRepair — add redacted sender SDK connect lifecycle timeline, no APNs/connect`
 
-Use this phase to run exactly one future physical proof that captures the new sender SDK failure surface. Do not treat the prior Retry6 result as remote-audio success.
+Investigate why the sender proof recorded:
+
+```text
+sender_livekit_sdk_failure_surface_connect_call_started=true
+sender_livekit_sdk_failure_surface_connect_call_returned=false
+sender_livekit_sdk_failure_surface_connect_call_threw=false
+sender_livekit_sdk_failure_surface_connected_state_observed=false
+sender_livekit_sdk_failure_surface_failed_state_observed=false
+sender_livekit_sdk_failure_surface_disconnected_before_connected=false
+sender_livekit_sdk_failure_surface_delegate_failure_observed=false
+sender_livekit_sdk_failure_surface_final_classification=sdk_internal_unknown_redacted
+```
+
+Repair direction:
+
+```text
+add_redacted_sender_sdk_connect_lifecycle_timeline=true
+classify_connect_task_cancelled_or_suspended=true
+classify_helper_exit_before_async_completion=true
+classify_proof_written_before_sdk_callback=true
+classify_bounded_wait_for_state_transition=true
+classify_wrong_device_or_process_lifecycle_context=true
+classify_delegate_or_state_callback_not_retained=true
+classify_actor_task_isolation_callback_gap=true
+```
 
 ## Hard Limits
 
 Do not:
 
-* send APNs until the future one-shot helper reaches explicit confirmation
-* send production APNs
-* send repeated APNs
+* send APNs
+* run production APNs
 * run `dev/invite`
-* run repeated connect
-* run repeated LiveKit join
-* request camera permission
+* retry receiver connect
+* retry sender LiveKit join
+* request microphone/camera permission
 * enable video
 * emit Matrix events
 * start full call flow
@@ -113,64 +183,9 @@ Do not:
 * touch signing/project files
 * stage or commit `docs/direct-call/REPEAT_CALL_FASTPATH_DIAGNOSTICS.md`
 
-## Retry7 Requirements
-
-Before any future APNs send, verify:
-
-```text
-two_physical_devices_connected=true
-receiver_app_session_ready=success_redacted
-sender_app_session_ready=success_redacted
-receiver_sender_distinct=true
-same_encrypted_room_validated=true
-corrected_flat_schema_used=true
-sender_livekit_sdk_failure_surface_present=true
-safe_to_send_apns=true
-```
-
-After the operator presses Answer once, copy/poll the phase-specific proof and classify these fields:
-
-```text
-sender_livekit_sdk_failure_surface_connect_call_started
-sender_livekit_sdk_failure_surface_connect_call_returned
-sender_livekit_sdk_failure_surface_connect_call_threw
-sender_livekit_sdk_failure_surface_connected_state_observed
-sender_livekit_sdk_failure_surface_failed_state_observed
-sender_livekit_sdk_failure_surface_disconnected_before_connected
-sender_livekit_sdk_failure_surface_delegate_failure_observed
-sender_livekit_sdk_failure_surface_room_already_connected
-sender_livekit_sdk_failure_surface_identity_conflict_observed
-sender_livekit_sdk_failure_surface_token_identity_match
-sender_livekit_sdk_failure_surface_audio_session_ready
-sender_livekit_sdk_failure_surface_permission_required
-sender_livekit_sdk_failure_surface_capture_started
-sender_livekit_sdk_failure_surface_final_classification
-sender_transport_error_surface_final_classification
-sender_transport_failure_diagnostics_classification
-sender_side_livekit_join_error_bucket
-sender_side_livekit_join_result
-```
-
-Stop conditions:
-
-```text
-if APNs sent once, do not repeat automatically
-if sender_livekit_sdk_failure_surface_final_classification=not_requested after sender join requested, stop and classify
-if raw_error_logged=true, stop as privacy regression
-if raw_url_logged=true, stop as privacy regression
-if raw_token_logged=true, stop as privacy regression
-if raw_room_logged=true, stop as privacy regression
-if raw_identity_logged=true, stop as privacy regression
-if repeated_apns_observed=true, stop as safety regression
-if repeated_livekit_join_observed=true, stop as safety regression
-if camera_permission_requested=true, stop as safety regression
-if matrix_event_emit_requested=true, stop as safety regression
-if real_call_flow_started=true, stop as safety regression
-```
-
 ## Suggested Checks
 
-Before and after edits or close-out:
+Before and after edits:
 
 ```bash
 git status --short --branch
@@ -186,11 +201,10 @@ Run privacy scans over changed files/diff. Allowed hits are field names, redacte
 
 Return:
 
-* current phase conclusion
-* whether sender SDK failure surface classified into a specific redacted bucket
-* whether raw error/URL/token/room/identity stayed unlogged
-* whether existing transport buckets remained intact
-* whether sender join success-but-remote-missing stayed separate
-* whether default runtime remained no-connect
+* implementation summary
+* whether sender SDK timeline remains redacted
+* whether default runtime remains no-APNs/no-connect/no-join
 * checks run
+* commit hash/message
+* changed files
 * final `git status --short --branch`

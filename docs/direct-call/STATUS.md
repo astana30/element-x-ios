@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-SenderLiveKitSDKUnknownErrorRepair — sender-side LiveKit SDK unknown failures now have a DEBUG/test-controlled redacted SDK failure surface that splits the previous broad `transport_livekit_sdk_unknown_error_redacted` bucket into specific redacted SDK buckets without raw SDK error, URL, token, room, identity, APNs payload, auth header, or invite body logging. The refined SDK classification maps into `sender_transport_error_surface_final_classification`, `sender_transport_failure_diagnostics_classification`, `sender_side_livekit_join_error_bucket`, and `sender_side_livekit_join_result`; existing transport buckets remain intact, sender-join-success-but-remote-missing remains separate, and the default runtime remains no-connect/no-join. The next phase is `2.48Z-Physical2-Retry7 — one-shot two-physical-device sender LiveKit SDK failure-source proof`.
+After 2.48Z-Physical2-Retry7 — the one-shot two-physical-device sender LiveKit SDK failure-source proof is closed as safe sender SDK internal unknown / remote participant not observed triage, not remote-audio success. Receiver PushKit, CallKit Answer, pending metadata, media credentials, one controlled receiver audio connect, and receiver LiveKit join succeeded; sender-side LiveKit join activation triggered and consumed once, but the sender SDK connect call started and did not return, throw, reach connected/failed/delegate/disconnected states, or surface remote participant/audio/liveness. The next phase is `2.48Z-SenderLiveKitSDKTimelineRepair — add redacted sender SDK connect lifecycle timeline, no APNs/connect`.
 
 ## Latest App Code Checkpoint
 
@@ -38,6 +38,106 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Checksum: `654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e`
 
 ## Proven Checkpoints
+
+- 2.48Z-Physical2-Retry7-SenderSDKInternalUnknownTriage closes the one-shot two-physical-device sender SDK failure-source proof as safe classified sender SDK triage, not remote-audio success:
+  - Proof path:
+    ```text
+    /tmp/salemx-voip-push-receipt-proof-2.48z-physical2-retry7-sender-livekit-sdk-failure-source-polled.txt
+    ```
+  - Physical proof generation:
+    ```text
+    proof_generation=generation_18
+    ```
+  - Receiver path succeeded once:
+    ```text
+    physical_voip_push_received=true
+    callkit_report_result=reported
+    callkit_first_action_kind=answer
+    callkit_answer_action_received=true
+    callkit_answer_action_fulfilled=true
+    pending_metadata_fetch_result=success_redacted
+    media_credentials_result=success_redacted
+    controlled_connect_first_attempt_result=success_redacted
+    controlled_connect_first_attempt_repeated=false
+    livekit_join_result=success_redacted
+    ```
+  - Sender join activation triggered and consumed exactly once:
+    ```text
+    sender_side_livekit_join_activation_triggered=true
+    sender_side_livekit_join_activation_consumed=true
+    sender_side_livekit_join_activation_repeated=false
+    sender_side_livekit_join_requested=true
+    sender_side_livekit_join_result=failed_redacted
+    sender_side_livekit_join_error_bucket=transport_livekit_sdk_unknown_error_redacted
+    sender_side_livekit_join_repeated=false
+    ```
+  - Sender transport diagnostics reached SDK transport and preserved redacted room/token authority matches:
+    ```text
+    sender_transport_failure_diagnostics_transport_attempted=true
+    sender_transport_failure_diagnostics_transport_started=true
+    sender_transport_failure_diagnostics_transport_completed=true
+    sender_transport_failure_diagnostics_transport_result=failed_redacted
+    sender_transport_failure_diagnostics_error_bucket=transport_livekit_sdk_unknown_error_redacted
+    sender_transport_failure_diagnostics_classification=transport_livekit_sdk_unknown_error_redacted
+    sender_transport_failure_diagnostics_livekit_url_present=true
+    sender_transport_failure_diagnostics_token_present=true
+    sender_transport_failure_diagnostics_room_binding_present=true
+    sender_transport_failure_diagnostics_same_livekit_room=true
+    sender_transport_failure_diagnostics_same_token_authority=true
+    sender_transport_failure_diagnostics_receiver_sender_room_match=true
+    sender_transport_failure_diagnostics_receiver_sender_token_authority_match=true
+    ```
+  - Sender SDK failure surface classified the result as internal unknown while keeping raw values unlogged:
+    ```text
+    sender_livekit_sdk_failure_surface_present=true
+    sender_livekit_sdk_failure_surface_raw_error_logged=false
+    sender_livekit_sdk_failure_surface_raw_url_logged=false
+    sender_livekit_sdk_failure_surface_raw_token_logged=false
+    sender_livekit_sdk_failure_surface_raw_room_logged=false
+    sender_livekit_sdk_failure_surface_raw_identity_logged=false
+    sender_livekit_sdk_failure_surface_connect_call_started=true
+    sender_livekit_sdk_failure_surface_connect_call_returned=false
+    sender_livekit_sdk_failure_surface_connect_call_threw=false
+    sender_livekit_sdk_failure_surface_connected_state_observed=false
+    sender_livekit_sdk_failure_surface_failed_state_observed=false
+    sender_livekit_sdk_failure_surface_disconnected_before_connected=false
+    sender_livekit_sdk_failure_surface_delegate_failure_observed=false
+    sender_livekit_sdk_failure_surface_room_already_connected=false
+    sender_livekit_sdk_failure_surface_identity_conflict_observed=false
+    sender_livekit_sdk_failure_surface_token_identity_match=true
+    sender_livekit_sdk_failure_surface_audio_session_ready=true
+    sender_livekit_sdk_failure_surface_permission_required=false
+    sender_livekit_sdk_failure_surface_capture_started=true
+    sender_livekit_sdk_failure_surface_final_classification=sdk_internal_unknown_redacted
+    ```
+  - Receiver remote participant/audio/liveness was not observed, so this is not remote-audio success:
+    ```text
+    receiver_remote_participant_observer_result=not_observed_redacted
+    receiver_remote_participant_observer_error_bucket=sender_join_failed_redacted
+    receiver_remote_participant_observer_remote_seen=false
+    receiver_remote_participant_observer_audio_track_seen=false
+    receiver_remote_participant_observer_liveness_seen=false
+    livekit_remote_participant_seen=false
+    livekit_remote_audio_track_subscribed=false
+    livekit_audio_liveness_result=not_observed_redacted
+    ```
+  - Conclusion:
+    ```text
+    Retry7 proved sender-side LiveKit join reached SDK connect start, but did not return, throw, reach connected, failed state, delegate failure, or disconnected-before-connected. Token identity matched, audio session was ready, no permission/capture block was detected, and receiver/sender room/token authority matched. Final SDK bucket is sdk_internal_unknown_redacted.
+    ```
+  - Safety stayed closed during close-out:
+    ```text
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    no_repeated_apns=true
+    no_production_apns=true
+    dev_invite_used=false
+    no_repeated_connect=true
+    no_repeated_livekit_join=true
+    video_enabled=false
+    ```
+  - Next phase: `2.48Z-SenderLiveKitSDKTimelineRepair — add redacted sender SDK connect lifecycle timeline, no APNs/connect`.
 
 - 2.48Z-SenderLiveKitSDKUnknownErrorRepair breaks down the sender LiveKit SDK unknown failure source with redacted DEBUG/test-controlled diagnostics and no APNs/connect:
   - New sender SDK failure surface fields:
