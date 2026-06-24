@@ -13,114 +13,135 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48Z-SenderLiveKitSDKTimelineRepair` is complete.
+`2.48Z-Physical2-Retry8` is complete and closed as safe sender-join-not-requested / remote participant not observed triage, not remote-audio success.
 
-This was a no-APNs/no-connect diagnostics repair after `2.48Z-Physical2-Retry7` closed as safe sender SDK internal unknown / remote participant not observed triage, not remote-audio success.
-
-Retry7 proved:
+Proof path:
 
 ```text
-sender_side_livekit_join_activation_triggered=true
-sender_side_livekit_join_activation_consumed=true
-sender_side_livekit_join_requested=true
-sender_side_livekit_join_result=failed_redacted
-sender_side_livekit_join_error_bucket=transport_livekit_sdk_unknown_error_redacted
-sender_livekit_sdk_failure_surface_connect_call_started=true
-sender_livekit_sdk_failure_surface_connect_call_returned=false
-sender_livekit_sdk_failure_surface_connect_call_threw=false
-sender_livekit_sdk_failure_surface_connected_state_observed=false
-sender_livekit_sdk_failure_surface_failed_state_observed=false
-sender_livekit_sdk_failure_surface_disconnected_before_connected=false
-sender_livekit_sdk_failure_surface_delegate_failure_observed=false
-sender_livekit_sdk_failure_surface_final_classification=sdk_internal_unknown_redacted
+/tmp/salemx-voip-push-receipt-proof-2.48z-physical2-retry8-sender-sdk-timeline-polled.txt
 ```
 
-## Repair Result
-
-The sender SDK connect lifecycle now has a redacted DEBUG/test-controlled timeline:
+Proof generation:
 
 ```text
+proof_generation=generation_17
+```
+
+Receiver path succeeded once:
+
+```text
+physical_voip_push_received=true
+callkit_report_result=reported
+callkit_first_action_kind=answer
+callkit_answer_action_received=true
+callkit_answer_action_fulfilled=true
+pending_metadata_fetch_result=success_redacted
+media_credentials_result=success_redacted
+controlled_connect_first_attempt_result=success_redacted
+controlled_connect_first_attempt_repeated=false
+livekit_join_result=success_redacted
+```
+
+Sender-side join and SDK timeline stayed not requested:
+
+```text
+sender_side_livekit_join_activation_triggered=false
+sender_side_livekit_join_activation_consumed=false
+sender_side_livekit_join_activation_repeated=false
+sender_side_livekit_join_requested=false
+sender_side_livekit_join_result=not_requested
+sender_side_livekit_join_error_bucket=none
+sender_side_livekit_join_repeated=false
+sender_livekit_sdk_failure_surface_present=true
+sender_livekit_sdk_failure_surface_final_classification=not_requested
 sender_livekit_sdk_timeline_present=true
-sender_livekit_sdk_timeline_debug_only=true
-sender_livekit_sdk_timeline_raw_error_logged=false
-sender_livekit_sdk_timeline_raw_url_logged=false
-sender_livekit_sdk_timeline_raw_token_logged=false
-sender_livekit_sdk_timeline_raw_room_logged=false
-sender_livekit_sdk_timeline_raw_identity_logged=false
-sender_livekit_sdk_timeline_trigger_received=<redacted_bool>
-sender_livekit_sdk_timeline_task_created=<redacted_bool>
-sender_livekit_sdk_timeline_task_started=<redacted_bool>
-sender_livekit_sdk_timeline_connect_invoked=<redacted_bool>
-sender_livekit_sdk_timeline_connect_returned=<redacted_bool>
-sender_livekit_sdk_timeline_connect_threw=<redacted_bool>
-sender_livekit_sdk_timeline_delegate_attached=<redacted_bool>
-sender_livekit_sdk_timeline_state_observer_attached=<redacted_bool>
-sender_livekit_sdk_timeline_connected_state_seen=<redacted_bool>
-sender_livekit_sdk_timeline_failed_state_seen=<redacted_bool>
-sender_livekit_sdk_timeline_disconnected_state_seen=<redacted_bool>
-sender_livekit_sdk_timeline_task_cancelled=<redacted_bool>
-sender_livekit_sdk_timeline_task_completed=<redacted_bool>
-sender_livekit_sdk_timeline_timeout_elapsed=<redacted_bool>
-sender_livekit_sdk_timeline_proof_written_after_terminal_state=<redacted_bool>
-sender_livekit_sdk_timeline_final_classification=<redacted_timeline_bucket>
+sender_livekit_sdk_timeline_final_classification=not_requested
 ```
 
-Timeline classifications:
+Remote participant/audio/liveness was not observed:
 
 ```text
-sdk_timeline_task_not_created_redacted
-sdk_timeline_task_created_not_started_redacted
-sdk_timeline_task_cancelled_before_connect_redacted
-sdk_timeline_connect_invoked_no_return_redacted
-sdk_timeline_connect_timeout_redacted
-sdk_timeline_delegate_not_attached_redacted
-sdk_timeline_state_observer_not_attached_redacted
-sdk_timeline_callback_not_observed_redacted
-sdk_timeline_proof_written_before_terminal_state_redacted
-sdk_timeline_app_lifecycle_interrupted_redacted
-sdk_timeline_actor_isolation_lost_callback_redacted
-sdk_timeline_internal_pending_redacted
+receiver_remote_participant_observer_present=true
+receiver_remote_participant_observer_result=not_observed_redacted
+receiver_remote_participant_observer_remote_seen=false
+receiver_remote_participant_observer_audio_track_seen=false
+receiver_remote_participant_observer_liveness_seen=false
+livekit_remote_participant_seen=false
+livekit_remote_audio_track_subscribed=false
+livekit_audio_liveness_result=not_observed_redacted
 ```
 
-Mapping:
+Safety remained closed:
 
 ```text
-sender_livekit_sdk_failure_surface_final_classification=<redacted_sdk_or_timeline_bucket>
-sender_transport_error_surface_final_classification=<specific_redacted_transport_bucket>
-sender_transport_failure_diagnostics_classification=<specific_redacted_transport_bucket>
-sender_side_livekit_join_error_bucket=<specific_redacted_transport_bucket>
-sender_side_livekit_join_result=failed_redacted
-existing_sdk_transport_buckets_remain_intact=true
-sender_join_success_but_remote_missing_separate=true
-```
-
-Safety remains:
-
-```text
-default_runtime_no_connect=true
-default_runtime_no_join=true
-raw_error_url_token_room_identity_logged=false
 camera_permission_requested=false
 matrix_event_emit_requested=false
 real_call_flow_started=false
+no_repeated_apns=true
+no_production_apns=true
+dev_invite_used=false
+no_repeated_connect=true
+no_repeated_livekit_join=true
+video_enabled=false
+```
+
+Conclusion:
+
+```text
+Retry8 proved the receiver controlled audio path can complete once after APNs/Answer, but the sender-side LiveKit join safe point was not triggered before terminal observer classification. Because terminal fields were already present, no sender hook retry or repeated connect was performed.
 ```
 
 ## Next Phase
 
-`2.48Z-Physical2-Retry8 — one-shot two-physical-device sender SDK timeline proof`
+`2.48Z-SenderJoinSafePointRepair — trigger sender-side LiveKit join after receiver Answer/credentials without repeated connect`
 
-Use this phase to run exactly one physical proof only after the usual one-shot preflight and explicit confirmation gates pass. The proof should classify the prior sender SDK internal unknown using the new timeline fields.
+Repair target:
+
+```text
+sender-side LiveKit join should be triggered only after receiver Answer, pending metadata success, media credentials success, and controlled receiver connect eligibility are established
+sender-side join must remain one-shot
+sender-side join must not be triggered before APNs
+sender-side join must not be retried after any result/classification
+receiver remote participant/liveness observer should run after sender join classification is available
+```
+
+Required repaired proof fields should make a future one-shot distinguish:
+
+```text
+sender_side_livekit_join_activation_triggered=true
+sender_side_livekit_join_activation_consumed=true
+sender_side_livekit_join_activation_repeated=false
+sender_side_livekit_join_requested=true
+sender_side_livekit_join_result=<success_redacted_or_failed_redacted_or_blocked_redacted>
+sender_livekit_sdk_timeline_final_classification=<redacted_timeline_bucket_or_success_redacted>
+receiver_remote_participant_observer_result=<success_redacted_or_not_observed_redacted>
+```
+
+Keep existing safety:
+
+```text
+default_runtime_no_connect=true
+default_runtime_no_join=true
+no_repeated_apns=true
+no_repeated_connect=true
+no_repeated_livekit_join=true
+video_enabled=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+raw_error_url_token_room_identity_logged=false
+```
 
 ## Hard Limits
 
 Do not:
 
-* send APNs before the one-shot helper reaches explicit confirmation
+* send APNs
 * run production APNs
 * run repeated APNs
 * run `dev/invite`
-* retry receiver connect outside the one-shot proof
-* retry sender LiveKit join outside the one-shot proof
+* start physical media connect
+* start real LiveKit join
 * request camera permission
 * enable video
 * emit Matrix events
@@ -131,15 +152,20 @@ Do not:
 
 ## Suggested Checks
 
-Before any future physical attempt:
+Run:
 
 ```bash
 git status --short --branch
 git diff --check
 git diff --cached --check
+DIRECT_CALL_ONLY_TESTING='UnitTests/DirectCallEngineTests UnitTests/NativeIncomingCallLifecycleContractTests' Tools/Scripts/verify_direct_call_unit.sh
+swiftformat ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift UnitTests/Sources/DirectCallEngineTests.swift
+swiftlint lint ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift UnitTests/Sources/DirectCallEngineTests.swift
 git diff --name-only | grep -E 'SalemX.xcodeproj/project.pbxproj|app.yml|\.entitlements|Info.plist' && exit 1 || true
 git diff --cached --name-only | grep -E 'SalemX.xcodeproj/project.pbxproj|app.yml|\.entitlements|Info.plist' && exit 1 || true
 ```
+
+Allowed SwiftLint warning: existing file-length warning only.
 
 Run privacy scans over changed files/diff. Allowed hits are field names, redacted labels, negative statements, synthetic test values, and stable hashes only.
 
@@ -147,9 +173,12 @@ Run privacy scans over changed files/diff. Allowed hits are field names, redacte
 
 Return:
 
-* physical proof classification
-* sender SDK timeline final classification
-* whether raw values stayed unlogged
-* whether sender join success-but-remote-missing remains separate
-* whether no repeated APNs/connect/LiveKit join occurred
+* implementation summary
+* whether sender join safe point is after Answer/metadata/credentials
+* whether sender join remains one-shot
+* whether observer waits for sender join classification
+* whether default runtime remains no-connect/no-join
+* commit hash/message
+* changed files
+* checks run
 * final `git status --short --branch`

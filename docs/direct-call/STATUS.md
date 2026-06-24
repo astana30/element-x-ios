@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-SenderLiveKitSDKTimelineRepair — the sender-side LiveKit SDK connect lifecycle now has a redacted DEBUG/test-controlled timeline that maps task, callback, timeout, proof-timing, lifecycle, and pending classifications into the existing sender SDK/transport/join diagnostics. The repair did not run APNs, physical media connect, or real-device LiveKit join. The next phase is `2.48Z-Physical2-Retry8 — one-shot two-physical-device sender SDK timeline proof`.
+After 2.48Z-Physical2-Retry8 — one sandbox APNs and the receiver Answer path completed one controlled audio connect/LiveKit join, but the sender-side LiveKit join hook remained not requested and remote participant/audio/liveness was not observed. This is safe sender-join-not-requested / remote participant not observed triage, not remote-audio success. The next phase is `2.48Z-SenderJoinSafePointRepair — trigger sender-side LiveKit join after receiver Answer/credentials without repeated connect`.
 
 ## Latest App Code Checkpoint
 
@@ -38,6 +38,71 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Checksum: `654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e`
 
 ## Proven Checkpoints
+
+- 2.48Z-Physical2-Retry8 closes the one-shot two-physical-device sender SDK timeline proof as safe sender-join-not-requested / remote participant not observed triage, not remote-audio success:
+  - Proof path:
+    ```text
+    /tmp/salemx-voip-push-receipt-proof-2.48z-physical2-retry8-sender-sdk-timeline-polled.txt
+    ```
+  - Physical proof generation:
+    ```text
+    proof_generation=generation_17
+    ```
+  - Receiver path succeeded once:
+    ```text
+    physical_voip_push_received=true
+    callkit_report_result=reported
+    callkit_first_action_kind=answer
+    callkit_answer_action_received=true
+    callkit_answer_action_fulfilled=true
+    pending_metadata_fetch_result=success_redacted
+    media_credentials_result=success_redacted
+    controlled_connect_first_attempt_result=success_redacted
+    controlled_connect_first_attempt_repeated=false
+    livekit_join_result=success_redacted
+    ```
+  - Sender-side join/timeline remained not requested:
+    ```text
+    sender_side_livekit_join_activation_triggered=false
+    sender_side_livekit_join_activation_consumed=false
+    sender_side_livekit_join_activation_repeated=false
+    sender_side_livekit_join_requested=false
+    sender_side_livekit_join_result=not_requested
+    sender_side_livekit_join_error_bucket=none
+    sender_side_livekit_join_repeated=false
+    sender_livekit_sdk_failure_surface_present=true
+    sender_livekit_sdk_failure_surface_final_classification=not_requested
+    sender_livekit_sdk_timeline_present=true
+    sender_livekit_sdk_timeline_final_classification=not_requested
+    ```
+  - Receiver remote participant/audio/liveness was not observed, so this is not remote-audio success:
+    ```text
+    receiver_remote_participant_observer_present=true
+    receiver_remote_participant_observer_result=not_observed_redacted
+    receiver_remote_participant_observer_remote_seen=false
+    receiver_remote_participant_observer_audio_track_seen=false
+    receiver_remote_participant_observer_liveness_seen=false
+    livekit_remote_participant_seen=false
+    livekit_remote_audio_track_subscribed=false
+    livekit_audio_liveness_result=not_observed_redacted
+    ```
+  - Safety stayed closed during close-out:
+    ```text
+    camera_permission_requested=false
+    matrix_event_emit_requested=false
+    real_call_flow_started=false
+    no_repeated_apns=true
+    no_production_apns=true
+    dev_invite_used=false
+    no_repeated_connect=true
+    no_repeated_livekit_join=true
+    video_enabled=false
+    ```
+  - Conclusion:
+    ```text
+    Retry8 proved the receiver controlled audio path can complete once after APNs/Answer, but the sender-side LiveKit join safe point was not triggered before terminal observer classification. Next work is a no-repeat repair for triggering the sender-side join after receiver Answer, metadata, and credentials eligibility without sending another APNs in this completed attempt.
+    ```
+  - Next phase: `2.48Z-SenderJoinSafePointRepair — trigger sender-side LiveKit join after receiver Answer/credentials without repeated connect`.
 
 - 2.48Z-SenderLiveKitSDKTimelineRepair adds a redacted sender SDK connect lifecycle timeline without APNs/connect:
   - New proof fields:

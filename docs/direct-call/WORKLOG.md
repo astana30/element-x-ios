@@ -4,6 +4,7 @@ This file records durable phase-level progress for future Codex and strategy ses
 
 ## Milestones
 
+- Closed 2.48Z-Physical2-Retry8 as safe sender-join-not-requested / remote participant not observed triage, not remote-audio success: one sandbox APNs and one receiver Answer completed pending metadata, media credentials, one receiver controlled audio connect, and receiver LiveKit join, but the sender-side LiveKit join activation was not triggered/consumed and the sender SDK failure/timeline classifications stayed `not_requested`; receiver remote participant/audio/liveness was not observed. No repeated APNs, production APNs, `dev/invite`, repeated connect, repeated LiveKit join, video, camera permission, Matrix event emit, or full call flow was performed during close-out. Next is a no-repeat sender join safe-point repair.
 - Closed 2.48Z-Physical2-Retry7 as safe sender SDK internal unknown / remote participant not observed triage, not remote-audio success: receiver PushKit, CallKit Answer, pending metadata, credentials, one receiver controlled audio connect, and receiver LiveKit join succeeded; sender-side LiveKit join activation triggered and consumed once, but SDK connect started without return, throw, connected/failed/delegate/disconnected state, or remote participant/audio/liveness observation. Final SDK bucket is `sdk_internal_unknown_redacted`; raw SDK error, URL, token, room, and identity logging stayed false. No repeated APNs, production APNs, `dev/invite`, repeated connect, repeated LiveKit join, video, camera permission, Matrix event emit, or full call flow was performed during close-out.
 - Added 2.48Z-SenderLiveKitSDKUnknownErrorRepair: sender LiveKit SDK unknown failures now expose a DEBUG/test-controlled redacted SDK failure surface with connect-call, room-state, delegate, disconnect, identity, token-match, audio-session, permission/capture, network, and internal-unknown buckets. The refined SDK classification maps into sender transport error surface, sender transport diagnostics, and sender-side LiveKit join result/error buckets while preserving existing transport buckets, keeping sender-join-success-but-remote-missing separate, and leaving default runtime no-connect/no-join. Raw SDK error, URL, token, room, and identity logging remain false. No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, or signing/project file edit was performed.
 - Closed 2.48Z-Physical2-Retry6 as safe sender transport error-source triage, not remote-audio success: receiver PushKit, CallKit Answer, pending metadata, credentials, one receiver controlled audio connect, and receiver LiveKit join succeeded; sender readiness survived into runtime and Answer; sender-side join activation triggered and consumed once; the repaired sender transport error surface classified the sender transport attempt as `transport_livekit_sdk_unknown_error_redacted` with LiveKit room/token-authority matches true; remote participant/audio/liveness was not observed. No repeated APNs, production APNs, `dev/invite`, repeated connect, repeated LiveKit join, video, camera permission, Matrix event emit, or full call flow was performed.
@@ -140,6 +141,92 @@ This file records durable phase-level progress for future Codex and strategy ses
 - Added app-side production token backend smoke coverage through an env-gated, disabled-by-default test harness.
 - Added fail-closed app-side production media-key wrapping seams and shared LiveKit E2EE key-store injection hooks.
 - Inspected Matrix Rust SDK crypto and FFI surfaces for a narrow production direct-call media-key wrapping seam.
+
+### 2.48Z-Physical2-Retry8 — Sender Join Not Requested / Remote Participant Not Observed Triage
+
+Closed the one-shot two-physical-device sender SDK timeline proof as safe sender-join-not-requested / remote participant not observed triage. This is not remote-audio success.
+
+Proof path:
+
+```text
+/tmp/salemx-voip-push-receipt-proof-2.48z-physical2-retry8-sender-sdk-timeline-polled.txt
+```
+
+Proof generation:
+
+```text
+proof_generation=generation_17
+```
+
+Receiver path:
+
+```text
+physical_voip_push_received=true
+callkit_report_result=reported
+callkit_first_action_kind=answer
+callkit_answer_action_received=true
+callkit_answer_action_fulfilled=true
+pending_metadata_fetch_result=success_redacted
+media_credentials_result=success_redacted
+controlled_connect_first_attempt_result=success_redacted
+controlled_connect_first_attempt_repeated=false
+livekit_join_result=success_redacted
+```
+
+Sender join and timeline:
+
+```text
+sender_side_livekit_join_activation_triggered=false
+sender_side_livekit_join_activation_consumed=false
+sender_side_livekit_join_activation_repeated=false
+sender_side_livekit_join_requested=false
+sender_side_livekit_join_result=not_requested
+sender_side_livekit_join_error_bucket=none
+sender_side_livekit_join_repeated=false
+sender_livekit_sdk_failure_surface_present=true
+sender_livekit_sdk_failure_surface_final_classification=not_requested
+sender_livekit_sdk_timeline_present=true
+sender_livekit_sdk_timeline_final_classification=not_requested
+```
+
+Observer/liveness:
+
+```text
+receiver_remote_participant_observer_present=true
+receiver_remote_participant_observer_result=not_observed_redacted
+receiver_remote_participant_observer_remote_seen=false
+receiver_remote_participant_observer_audio_track_seen=false
+receiver_remote_participant_observer_liveness_seen=false
+livekit_remote_participant_seen=false
+livekit_remote_audio_track_subscribed=false
+livekit_audio_liveness_result=not_observed_redacted
+```
+
+Safety:
+
+```text
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+no_repeated_apns=true
+no_production_apns=true
+dev_invite_used=false
+no_repeated_connect=true
+no_repeated_livekit_join=true
+video_enabled=false
+```
+
+Conclusion:
+
+```text
+Retry8 proved the receiver controlled audio path can complete once after APNs/Answer, but the sender-side LiveKit join safe point was not triggered before terminal observer classification. Because terminal fields were already present, no sender hook retry or repeated connect was performed.
+```
+
+Next phase:
+
+```text
+2.48Z-SenderJoinSafePointRepair — trigger sender-side LiveKit join after receiver Answer/credentials without repeated connect
+```
 
 ### 2.48Z-Physical2-Retry7 — Sender SDK Internal Unknown / Remote Participant Not Observed Triage
 
