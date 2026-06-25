@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-SenderConnectExecutorUnificationRepair — the receiver controlled connect path now calls a shared `DirectCallLiveKitConnectExecutor`, and the sender join proof boundary is bound to the same executor model instead of only reporting parity. The shared executor model proves identical connect options shape, room/delegate/state observer retention, bounded wait, audio-only scope, no video, no Matrix events, and no raw URL/token/room/identity logging while preserving the sender timeout diagnostics and default no-connect/no-join safety. The next phase is `2.48Z-Physical2-Retry12 — one-shot two-physical-device shared sender connect executor proof`.
+After 2.48Z-RealSenderRuntimeJoinRepair — the old sender-side LiveKit DEBUG URL no longer trusts query-selected join outcomes, and a separate default-disabled one-shot sender runtime bridge/proof now fetches sender pending metadata, requests sender credentials, and can invoke the shared `DirectCallLiveKitConnectExecutor` with runtime-derived success/failure only. No APNs, physical media connect, LiveKit join, microphone/camera permission, Matrix event emit, or full call flow was performed. The next phase is `2.48Z-Physical2-Retry13 — one-shot real sender runtime join proof`.
 
 ## Latest App Code Checkpoint
 
@@ -78,6 +78,26 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
     ```
   - No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, or physical hook reset/re-arm was performed.
   - Next phase: `2.48Z-Physical2-Retry12 — one-shot two-physical-device shared sender connect executor proof`.
+
+- 2.48Z-RealSenderRuntimeJoinRepair adds the real sender runtime bridge without APNs/connect:
+  - The legacy sender-side LiveKit join URL no longer accepts query-provided join result/transport/timeline outcomes as evidence; it redirects the path to the runtime bridge requirement.
+  - A new DEBUG-only, default-disabled, one-shot sender bridge writes `Documents/salemx-sender-runtime-livekit-join-proof.txt`.
+  - The bridge uses the restored sender Matrix session, fetches the sender view of authenticated pending metadata from the same opaque reference, requests sender credentials, builds a redacted E2EE context, and invokes the shared `DirectCallLiveKitConnectExecutor`.
+  - Sender proof fields are runtime-derived and redacted:
+    ```text
+    sender_runtime_join_query_outcome_ignored=true
+    sender_runtime_join_pending_metadata_fetch_requested=true
+    sender_runtime_join_credentials_requested=true
+    sender_runtime_join_executor_shared=true
+    sender_runtime_join_executor_invoked=<runtime>
+    sender_runtime_join_runtime_derived=true
+    sender_runtime_join_audio_only=true
+    sender_runtime_join_video_allowed=false
+    sender_runtime_join_matrix_events_allowed=false
+    ```
+  - Server pending metadata now exposes a sender-only authenticated projection at the opaque reference `/sender` route, returning outgoing metadata for the original caller without exposing raw IDs in logs/proofs.
+  - No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, microphone/camera permission, Matrix event emit, full call flow, or signing/project file edit was performed.
+  - Next phase: `2.48Z-Physical2-Retry13 — one-shot real sender runtime join proof`.
 
 - 2.48Z-Physical2-Retry11-SenderConnectParityTimeoutTriage closes the one-shot two-physical-device sender connect parity proof as safe sender SDK connect-call-pending timeout / remote participant not observed triage. This is not remote-audio success:
   - Proof path:

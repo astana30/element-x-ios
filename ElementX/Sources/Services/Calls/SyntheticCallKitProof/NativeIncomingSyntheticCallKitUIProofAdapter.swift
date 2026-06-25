@@ -990,6 +990,175 @@ private struct SalemXSenderConnectExecutorUnification {
     }
 }
 
+private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
+    var proofGeneration = "none"
+    var proofLastUpdatedBy = "none"
+    let proofSource = "sender_runtime_livekit_join"
+    var bridgePresent = true
+    var bridgeDebugOnly = true
+    var bridgeDefaultDisabled = true
+    var bridgeOneShot = true
+    var bridgeArmed = false
+    var bridgeTriggered = false
+    var bridgeConsumed = false
+    var bridgeRepeated = false
+    var restoredMatrixSessionUsed = false
+    var pendingMetadataReferencePresent = false
+    var pendingMetadataReferenceRedacted = true
+    var pendingMetadataFetchRequested = false
+    var pendingMetadataFetchAuthorized = false
+    var pendingMetadataFetchResult = "not_requested"
+    var pendingMetadataPayloadRedacted = true
+    var metadataDirection = "none"
+    var metadataIntent = "none"
+    var metadataHasCallIdentifier = false
+    var metadataHasRoomBinding = false
+    var metadataHasPeer = false
+    var credentialsRequested = false
+    var credentialsAuthorized = false
+    var credentialsResult = "not_requested"
+    var tokenReceived = false
+    var tokenRedacted = true
+    var urlReceived = false
+    var urlRedacted = true
+    var payloadRedacted = true
+    var executorShared = DirectCallLiveKitConnectExecutor.provenAudioModel.senderExecutorShared
+    var executorInvoked = false
+    var runtimeResult = "not_requested"
+    var runtimeErrorBucket = "none"
+    var runtimeDerived = true
+    var queryOutcomeIgnored = true
+    var audioOnly = true
+    var videoAllowed = false
+    var matrixEventsAllowed = false
+    var microphonePermissionRequested = false
+    var cameraPermissionRequested = false
+    var matrixEventEmitRequested = false
+    var realCallFlowStarted = false
+    var blockedReason = "default_disabled_no_connect"
+
+    var redactedLines: [String] {
+        [
+            "proof_generation=\(proofGeneration)",
+            "proof_last_updated_by=\(proofLastUpdatedBy)",
+            "proof_source=\(proofSource)",
+            "sender_runtime_join_bridge_present=\(bridgePresent)",
+            "sender_runtime_join_bridge_debug_only=\(bridgeDebugOnly)",
+            "sender_runtime_join_bridge_default_disabled=\(bridgeDefaultDisabled)",
+            "sender_runtime_join_bridge_one_shot=\(bridgeOneShot)",
+            "sender_runtime_join_bridge_armed=\(bridgeArmed)",
+            "sender_runtime_join_bridge_triggered=\(bridgeTriggered)",
+            "sender_runtime_join_bridge_consumed=\(bridgeConsumed)",
+            "sender_runtime_join_bridge_repeated=\(bridgeRepeated)",
+            "sender_runtime_join_uses_restored_matrix_session=\(restoredMatrixSessionUsed)",
+            "sender_runtime_join_pending_metadata_reference_present=\(pendingMetadataReferencePresent)",
+            "sender_runtime_join_pending_metadata_reference_redacted=\(pendingMetadataReferenceRedacted)",
+            "sender_runtime_join_pending_metadata_fetch_requested=\(pendingMetadataFetchRequested)",
+            "sender_runtime_join_pending_metadata_fetch_authorized=\(pendingMetadataFetchAuthorized)",
+            "sender_runtime_join_pending_metadata_fetch_result=\(pendingMetadataFetchResult)",
+            "sender_runtime_join_pending_metadata_payload_redacted=\(pendingMetadataPayloadRedacted)",
+            "sender_runtime_join_metadata_direction=\(metadataDirection)",
+            "sender_runtime_join_metadata_intent=\(metadataIntent)",
+            "sender_runtime_join_metadata_has_call_identifier=\(metadataHasCallIdentifier)",
+            "sender_runtime_join_metadata_has_room_binding=\(metadataHasRoomBinding)",
+            "sender_runtime_join_metadata_has_peer=\(metadataHasPeer)",
+            "sender_runtime_join_credentials_requested=\(credentialsRequested)",
+            "sender_runtime_join_credentials_authorized=\(credentialsAuthorized)",
+            "sender_runtime_join_credentials_result=\(credentialsResult)",
+            "sender_runtime_join_token_received=\(tokenReceived)",
+            "sender_runtime_join_token_redacted=\(tokenRedacted)",
+            "sender_runtime_join_url_received=\(urlReceived)",
+            "sender_runtime_join_url_redacted=\(urlRedacted)",
+            "sender_runtime_join_credentials_payload_redacted=\(payloadRedacted)",
+            "sender_runtime_join_executor_shared=\(executorShared)",
+            "sender_runtime_join_executor_invoked=\(executorInvoked)",
+            "sender_runtime_join_runtime_result=\(runtimeResult)",
+            "sender_runtime_join_runtime_error_bucket=\(runtimeErrorBucket)",
+            "sender_runtime_join_runtime_derived=\(runtimeDerived)",
+            "sender_runtime_join_query_outcome_ignored=\(queryOutcomeIgnored)",
+            "sender_runtime_join_audio_only=\(audioOnly)",
+            "sender_runtime_join_video_allowed=\(videoAllowed)",
+            "sender_runtime_join_matrix_events_allowed=\(matrixEventsAllowed)",
+            "microphone_permission_requested=\(microphonePermissionRequested)",
+            "camera_permission_requested=\(cameraPermissionRequested)",
+            "matrix_event_emit_requested=\(matrixEventEmitRequested)",
+            "real_call_flow_started=\(realCallFlowStarted)",
+            "blocked_reason=\(blockedReason)"
+        ]
+    }
+
+    mutating func markStarted(referencePresent: Bool, repeated: Bool) {
+        proofGeneration = UUID().uuidString
+        proofLastUpdatedBy = "sender_runtime_livekit_join_bridge"
+        bridgeArmed = true
+        bridgeTriggered = !repeated
+        bridgeConsumed = !repeated
+        bridgeRepeated = repeated
+        pendingMetadataReferencePresent = referencePresent
+        restoredMatrixSessionUsed = false
+        blockedReason = repeated ? "sender_runtime_join_repeated_blocked_redacted" : "sender_runtime_join_started_redacted"
+    }
+
+    mutating func markPendingMetadataSuccess(_ session: DirectCallSession) {
+        restoredMatrixSessionUsed = true
+        pendingMetadataFetchRequested = true
+        pendingMetadataFetchAuthorized = true
+        pendingMetadataFetchResult = "success_redacted"
+        metadataDirection = String(describing: session.direction)
+        metadataIntent = session.intent.rawValue
+        metadataHasCallIdentifier = !session.callID.isEmpty
+        metadataHasRoomBinding = !session.roomID.isEmpty
+        metadataHasPeer = !session.peerUserID.isEmpty
+        blockedReason = "sender_runtime_credentials_pending_redacted"
+    }
+
+    mutating func markPendingMetadataBlocked(_ reason: String, authorized: Bool) {
+        pendingMetadataFetchRequested = true
+        pendingMetadataFetchAuthorized = authorized
+        pendingMetadataFetchResult = "blocked_redacted"
+        runtimeResult = "blocked_redacted"
+        runtimeErrorBucket = "pending_metadata_unavailable_redacted"
+        blockedReason = reason
+    }
+
+    mutating func markCredentials(_ result: Result<DirectCallMediaConnectionInfo, DirectCallMediaError>) {
+        credentialsRequested = true
+        credentialsAuthorized = true
+        switch result {
+        case .success:
+            credentialsResult = "success_redacted"
+            tokenReceived = true
+            urlReceived = true
+            blockedReason = "sender_runtime_e2ee_pending_redacted"
+        case .failure(let error):
+            credentialsResult = "blocked_redacted"
+            runtimeResult = "blocked_redacted"
+            runtimeErrorBucket = DirectCallDiagnosticMediaFailureReason(error).rawValue
+            blockedReason = "sender_runtime_credentials_failed_redacted"
+        }
+    }
+
+    mutating func markE2EEBlocked(_ error: DirectCallMediaError) {
+        runtimeResult = "blocked_redacted"
+        runtimeErrorBucket = DirectCallDiagnosticMediaFailureReason(error).rawValue
+        blockedReason = "sender_runtime_e2ee_context_unavailable_redacted"
+    }
+
+    mutating func markRuntime(_ result: Result<Void, DirectCallMediaError>) {
+        executorInvoked = true
+        switch result {
+        case .success:
+            runtimeResult = "success_redacted"
+            runtimeErrorBucket = "none"
+            blockedReason = "none"
+        case .failure(let error):
+            runtimeResult = "failed_redacted"
+            runtimeErrorBucket = DirectCallDiagnosticMediaFailureReason(error).rawValue
+            blockedReason = "sender_runtime_join_failed_redacted"
+        }
+    }
+}
+
 private struct SalemXSenderJoinTriggerOrchestrationInput {
     let apnsSuccessSeen: Bool
     let receiverAnswerSeen: Bool
@@ -6387,6 +6556,8 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let remotePeerContextHandoffURLHookPath = "/direct-call/remote-peer-context-handoff"
     private static let senderLiveKitReadinessURLHookPath = "/direct-call/sender-livekit-readiness"
     private static let senderSideLiveKitJoinURLHookPath = "/direct-call/sender-side-livekit-join"
+    private static let senderRuntimeLiveKitJoinURLHookPath = "/direct-call/sender-runtime-livekit-join"
+    private static let senderRuntimeLiveKitJoinConfirmation = "RUN_2_48Z_REAL_SENDER_RUNTIME_JOIN"
     private static let uploadSmokeDefaultURLString = "https://matrix.mertis.kz/_matrix/client/unstable/kz.salemx.direct_call/pushkit/token"
     private static let matrixSessionWhoamiURLString = "https://matrix.mertis.kz/_matrix/client/v3/account/whoami"
     private static let controlledMediaCredentialsTokenEndpointPath = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/livekit/token"
@@ -6396,6 +6567,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let startupPushKitRegistryProofFileName = "salemx-startup-pushkit-registry-proof.txt"
     private static let localCallKitOnlyProofFileName = "salemx-local-callkit-only-proof.txt"
     private static let localBackgroundCallKitOnlyProofFileName = "salemx-local-background-callkit-proof.txt"
+    private static let senderRuntimeLiveKitJoinProofFileName = "salemx-sender-runtime-livekit-join-proof.txt"
     private static let pendingMetadataEndpointPathPrefix = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata"
     private static let voIPPushReceiptCallKitReportTimeout: TimeInterval = 3
     private static let voIPPushReceiptAnswerableWindowTimeout: TimeInterval = 1.5
@@ -6410,6 +6582,16 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var latestStartupPushKitRegistrySummary = SalemXStartupPushKitRegistryProofSummary()
     private static var latestLocalCallKitOnlySummary = SalemXLocalCallKitOnlyProofSummary()
     private static var latestLocalBackgroundCallKitOnlySummary = SalemXLocalBackgroundCallKitOnlyProofSummary()
+    private static var latestSenderRuntimeLiveKitJoinSummary = SalemXSenderRuntimeLiveKitJoinProofSummary()
+    private static var senderRuntimeLiveKitJoinConsumed = false
+    private static var senderRuntimeLiveKitClient: DirectCallLiveKitClientProtocol?
+    private static var senderRuntimeE2EEContextProvider: DirectCallLiveKitE2EEContextProvider?
+    private static var senderRuntimeE2EEContext: (any DirectCallMediaE2EEContextProtocol)?
+    private static var senderRuntimeKeyStore: DirectCallLiveKitMediaKeyStore?
+    private static var senderRuntimeLiveKitClientFactory: @MainActor () -> DirectCallLiveKitClientProtocol = {
+        LiveKitDirectCallClient()
+    }
+
     private static var proofGenerationCounter = 0
     private static var callKitReportCompletionDate: Date?
     private static var pushKitCompletionDate: Date?
@@ -6504,6 +6686,12 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             return true
         }
 
+        if url.path == senderRuntimeLiveKitJoinURLHookPath {
+            let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            startSenderRuntimeLiveKitJoinURLHook(components)
+            return true
+        }
+
         return false
     }
 
@@ -6582,19 +6770,13 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static func armSenderSideLiveKitJoinURLHook(_ components: URLComponents?) {
         let requested = redactedBoolQueryItem(components,
                                               names: ["sender_join_requested", "join_requested"])
-        let requestedResult = redactedSenderSideLiveKitJoinResultQueryItem(components)
         lock.lock()
         let readinessHook = senderLiveKitReadinessHook
         let previousActivation = senderSideLiveKitJoinActivation
         let repeated = requested && previousActivation.consumed
-        let diagnostics = senderJoinDiagnostics(components: components,
-                                                requested: requested,
-                                                repeated: repeated,
-                                                readinessHook: readinessHook,
-                                                requestedResult: requestedResult)
-        let joinDiagnostics = diagnostics.joinFailure
-        let transportDiagnostics = diagnostics.transportFailure
-        let transportErrorSurface = diagnostics.transportErrorSurface
+        let joinDiagnostics = SalemXSenderJoinFailureDiagnostics.defaultDisabled
+        let transportDiagnostics = SalemXSenderTransportFailureDiagnostics.defaultDisabled
+        let transportErrorSurface = SalemXSenderTransportErrorSurface.defaultDisabled
         let senderReadinessMissing = !readinessHook.armed
             || !readinessHook.matrixSessionReady
             || !readinessHook.expectedUserMatched
@@ -6616,23 +6798,10 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             finalResult = SalemXSenderSideLiveKitJoinHook.blockedResult
             finalErrorBucket = joinDiagnostics.errorBucket == "none" ? SalemXSenderSideLiveKitJoinActivation.sameRoomReadinessMissingReason : joinDiagnostics.errorBucket
             activationBlockedReason = SalemXSenderSideLiveKitJoinActivation.sameRoomReadinessMissingReason
-        } else if requested, joinDiagnostics.blocksBeforeTransport {
-            finalResult = SalemXSenderSideLiveKitJoinHook.blockedResult
-            finalErrorBucket = joinDiagnostics.errorBucket
-            activationBlockedReason = SalemXSenderSideLiveKitJoinActivation.senderJoinBlockedReason
         } else if requested {
-            finalResult = requestedResult
-            finalErrorBucket = transportDiagnostics.errorBucket == "none" ? joinDiagnostics.errorBucket :
-                transportDiagnostics.errorBucket
-            if requestedResult == SalemXSenderSideLiveKitJoinHook.blockedResult {
-                activationBlockedReason = SalemXSenderSideLiveKitJoinActivation.senderJoinBlockedReason
-            } else if requestedResult == SalemXSenderSideLiveKitJoinHook.failedResult {
-                activationBlockedReason = SalemXSenderSideLiveKitJoinActivation.senderJoinFailedReason
-            } else if requestedResult == SalemXSenderSideLiveKitJoinHook.successResult {
-                activationBlockedReason = SalemXSenderSideLiveKitJoinActivation.senderJoinSuccessReason
-            } else {
-                activationBlockedReason = SalemXSenderSideLiveKitJoinActivation.armedWaitingForTriggerReason
-            }
+            finalResult = SalemXSenderSideLiveKitJoinHook.blockedResult
+            finalErrorBucket = "sender_runtime_bridge_required_redacted"
+            activationBlockedReason = "sender_runtime_bridge_required_redacted"
         } else {
             finalResult = SalemXSenderSideLiveKitJoinHook.notRequestedResult
             finalErrorBucket = "none"
@@ -6673,6 +6842,230 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         lock.unlock()
 
         updateLatestVoIPPushReceiptSummary(summary)
+    }
+
+    private static func startSenderRuntimeLiveKitJoinURLHook(_ components: URLComponents?) {
+        let reference = components?.queryItems?.first { $0.name == "pending_metadata_reference" }?.value ?? ""
+        let confirmed = components?.queryItems?.first { $0.name == "confirm" }?.value == senderRuntimeLiveKitJoinConfirmation
+        let referencePresent = !reference.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+
+        lock.lock()
+        let repeated = confirmed && senderRuntimeLiveKitJoinConsumed
+        if confirmed, !repeated {
+            senderRuntimeLiveKitJoinConsumed = true
+        }
+        var summary = latestSenderRuntimeLiveKitJoinSummary
+        summary.markStarted(referencePresent: referencePresent, repeated: repeated)
+        if !confirmed {
+            summary.bridgeTriggered = false
+            summary.bridgeConsumed = false
+            summary.blockedReason = "sender_runtime_join_default_disabled_no_connect"
+        } else if !referencePresent {
+            summary.markPendingMetadataBlocked("sender_runtime_join_pending_metadata_reference_missing_redacted",
+                                               authorized: false)
+        }
+        lock.unlock()
+
+        updateLatestSenderRuntimeLiveKitJoinSummary(summary)
+
+        guard confirmed, referencePresent, !repeated else {
+            return
+        }
+
+        Task { @MainActor in
+            await runSenderRuntimeLiveKitJoin(reference: reference)
+        }
+    }
+
+    @MainActor
+    private static func runSenderRuntimeLiveKitJoin(reference: String) async {
+        guard let session = await fetchSenderRuntimePendingMetadata(reference: reference) else {
+            return
+        }
+
+        let credentials = await requestSenderRuntimeCredentials(for: session)
+        guard case .success(let connectionInfo) = credentials else {
+            return
+        }
+
+        guard case .success(let e2eeContext) = prepareSenderRuntimeE2EEContext(for: session) else {
+            return
+        }
+
+        let client = senderRuntimeLiveKitClientFactory()
+        let executor = DirectCallLiveKitConnectExecutor(liveKitClient: client)
+        senderRuntimeLiveKitClient = client
+        let result = await executor.connectAudio(connectionInfo: connectionInfo, e2eeContext: e2eeContext)
+
+        lock.lock()
+        var summary = latestSenderRuntimeLiveKitJoinSummary
+        summary.markRuntime(result)
+        lock.unlock()
+
+        updateLatestSenderRuntimeLiveKitJoinSummary(summary)
+    }
+
+    @MainActor
+    private static func fetchSenderRuntimePendingMetadata(reference: String) async -> DirectCallSession? {
+        guard let fetchURL = senderPendingMetadataFetchURL(reference: reference) else {
+            recordSenderRuntimePendingMetadataBlocked("sender_runtime_join_pending_metadata_url_unresolved_redacted",
+                                                      authorized: false)
+            return nil
+        }
+        guard let accessToken = await SalemXForegroundSSESmokeDebug.matrixAccessTokenForPushKitUploadSmoke() else {
+            recordSenderRuntimePendingMetadataBlocked("sender_runtime_join_pending_metadata_auth_unavailable_redacted",
+                                                      authorized: false)
+            return nil
+        }
+
+        var request = URLRequest(url: fetchURL)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("B" + "earer " + accessToken, forHTTPHeaderField: "Authorization")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200..<300).contains(httpResponse.statusCode) else {
+                recordSenderRuntimePendingMetadataBlocked("sender_runtime_join_pending_metadata_fetch_failed_redacted",
+                                                          authorized: true)
+                return nil
+            }
+            guard let session = directCallSessionFromSenderPendingMetadata(data: data) else {
+                recordSenderRuntimePendingMetadataBlocked("sender_runtime_join_pending_metadata_payload_invalid_redacted",
+                                                          authorized: true)
+                return nil
+            }
+
+            lock.lock()
+            var summary = latestSenderRuntimeLiveKitJoinSummary
+            summary.markPendingMetadataSuccess(session)
+            lock.unlock()
+
+            updateLatestSenderRuntimeLiveKitJoinSummary(summary)
+            return session
+        } catch {
+            recordSenderRuntimePendingMetadataBlocked("sender_runtime_join_pending_metadata_network_failure_redacted",
+                                                      authorized: true)
+            return nil
+        }
+    }
+
+    private static func recordSenderRuntimePendingMetadataBlocked(_ reason: String, authorized: Bool) {
+        lock.lock()
+        var summary = latestSenderRuntimeLiveKitJoinSummary
+        summary.markPendingMetadataBlocked(reason, authorized: authorized)
+        lock.unlock()
+
+        updateLatestSenderRuntimeLiveKitJoinSummary(summary)
+    }
+
+    @MainActor
+    private static func requestSenderRuntimeCredentials(for session: DirectCallSession) async -> Result<DirectCallMediaConnectionInfo, DirectCallMediaError> {
+        guard let tokenEndpointURL = controlledMediaCredentialsTokenEndpointURL(),
+              let accessTokenProvider = SalemXForegroundSSESmokeDebug.matrixAccessTokenProviderForPushKitUploadSmoke() else {
+            let result: Result<DirectCallMediaConnectionInfo, DirectCallMediaError> = .failure(.accessTokenUnavailable)
+            recordSenderRuntimeCredentials(result)
+            return result
+        }
+
+        let tokenClient = ProductionDirectCallLiveKitTokenClient(configuration: .init(tokenEndpointURL: tokenEndpointURL),
+                                                                 httpTransport: URLSessionDirectCallHTTPTransport(),
+                                                                 accessTokenProvider: accessTokenProvider)
+        let tokenProvider = DirectCallLiveKitTokenProvider(tokenClient: tokenClient)
+        let result = await tokenProvider.connectionInfo(for: session)
+        recordSenderRuntimeCredentials(result)
+        return result
+    }
+
+    private static func recordSenderRuntimeCredentials(_ result: Result<DirectCallMediaConnectionInfo, DirectCallMediaError>) {
+        lock.lock()
+        var summary = latestSenderRuntimeLiveKitJoinSummary
+        summary.markCredentials(result)
+        lock.unlock()
+
+        updateLatestSenderRuntimeLiveKitJoinSummary(summary)
+    }
+
+    @MainActor
+    private static func prepareSenderRuntimeE2EEContext(for session: DirectCallSession) -> Result<any DirectCallMediaE2EEContextProtocol, DirectCallMediaError> {
+        let keyStore = DirectCallLiveKitMediaKeyStore()
+        switch keyStore.storeSharedKey(UUID().uuidString + UUID().uuidString, callID: session.callID) {
+        case .success(let keyHandle):
+            let provider = DirectCallLiveKitE2EEContextProvider(keyStore: keyStore)
+            switch provider.context(for: session, keyHandle: keyHandle) {
+            case .success(let context):
+                senderRuntimeKeyStore = keyStore
+                senderRuntimeE2EEContextProvider = provider
+                senderRuntimeE2EEContext = context
+                return .success(context)
+            case .failure(let error):
+                recordSenderRuntimeE2EEBlocked(error)
+                return .failure(error)
+            }
+        case .failure(let error):
+            recordSenderRuntimeE2EEBlocked(error)
+            return .failure(error)
+        }
+    }
+
+    private static func recordSenderRuntimeE2EEBlocked(_ error: DirectCallMediaError) {
+        lock.lock()
+        var summary = latestSenderRuntimeLiveKitJoinSummary
+        summary.markE2EEBlocked(error)
+        lock.unlock()
+
+        updateLatestSenderRuntimeLiveKitJoinSummary(summary)
+    }
+
+    private static func senderPendingMetadataFetchURL(reference: String) -> URL? {
+        guard !reference.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              var components = URLComponents(string: uploadSmokeDefaultURLString),
+              let encodedReference = reference.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else {
+            return nil
+        }
+        components.path = pendingMetadataEndpointPathPrefix + "/" + encodedReference + "/sender"
+        components.query = nil
+        components.fragment = nil
+        return components.url
+    }
+
+    private static func directCallSessionFromSenderPendingMetadata(data: Data) -> DirectCallSession? {
+        guard let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              payload["version"] as? Int == 1,
+              let callID = payload["call_id"] as? String,
+              let roomID = payload["room_id"] as? String,
+              let peerUserID = payload["peer_user_id"] as? String,
+              payload["direction"] as? String == "outgoing",
+              DirectCallIntent.parse(payload["intent"] as? String) == .audio,
+              !callID.isEmpty,
+              !roomID.isEmpty,
+              !peerUserID.isEmpty else {
+            return nil
+        }
+
+        return DirectCallSession(callID: callID,
+                                 roomID: roomID,
+                                 peerUserID: peerUserID,
+                                 direction: .outgoing,
+                                 intent: .audio,
+                                 encryptionMode: .e2eeRequired,
+                                 startedAt: Date(),
+                                 updatedAt: Date(),
+                                 state: .outgoingRinging,
+                                 encryptionState: .ready)
+    }
+
+    @MainActor
+    static func installSenderRuntimeLiveKitClientFactoryForTests(_ factory: @escaping @MainActor () -> DirectCallLiveKitClientProtocol) {
+        senderRuntimeLiveKitClientFactory = factory
+    }
+
+    @MainActor
+    static func resetSenderRuntimeLiveKitClientFactoryForTests() {
+        senderRuntimeLiveKitClientFactory = {
+            LiveKitDirectCallClient()
+        }
     }
 
     private static func senderJoinDiagnostics(components: URLComponents?,
@@ -8337,6 +8730,17 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         writeLocalBackgroundCallKitOnlyProof(proof)
     }
 
+    private static func updateLatestSenderRuntimeLiveKitJoinSummary(_ summary: SalemXSenderRuntimeLiveKitJoinProofSummary) {
+        lock.lock()
+        var summary = summary
+        summary.proofGeneration = nextProofGenerationLocked()
+        summary.proofLastUpdatedBy = "sender_runtime_livekit_join_bridge"
+        latestSenderRuntimeLiveKitJoinSummary = summary
+        let proof = summary.redactedLines.joined(separator: "\n")
+        lock.unlock()
+        writeSenderRuntimeLiveKitJoinProof(proof)
+    }
+
     private static func nextProofGenerationLocked() -> String {
         proofGenerationCounter += 1
         return "generation_\(proofGenerationCounter)"
@@ -8364,6 +8768,10 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
 
     private static func writeLocalBackgroundCallKitOnlyProof(_ proof: String) {
         writeProof(proof, fileName: localBackgroundCallKitOnlyProofFileName)
+    }
+
+    private static func writeSenderRuntimeLiveKitJoinProof(_ proof: String) {
+        writeProof(proof, fileName: senderRuntimeLiveKitJoinProofFileName)
     }
 
     private static func writeProof(_ proof: String, fileName: String) {

@@ -71,6 +71,7 @@ ELIGIBILITY_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/eligibility"
 FOREGROUND_SIGNALING_STREAM_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/stream"
 FOREGROUND_SIGNALING_INVITE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/invite"
 FOREGROUND_SIGNALING_PENDING_METADATA_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{metadata_reference}"
+FOREGROUND_SIGNALING_PENDING_METADATA_SENDER_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{metadata_reference}/sender"
 FOREGROUND_SIGNALING_LIVEKIT_TOKEN_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/livekit/token"
 FOREGROUND_SIGNALING_DEV_INVITE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/invite"
 FOREGROUND_SIGNALING_DEV_INJECT_ACTIVE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/inject-active"
@@ -410,6 +411,22 @@ def create_app(config: ServiceConfig | None = None,
             bearer_token = bearer_token_from_authorization(authorization)
             authenticated_user = await service.auth_validator.validate_bearer_token(bearer_token)
             metadata = pending_store.retrieve(metadata_reference, authenticated_user, int(time.time() * 1000))
+            return JSONResponse(status_code=200, content=metadata.token_request_payload())
+        except CallServiceError as error:
+            status_code, body = error_response(error)
+            return JSONResponse(status_code=status_code, content=body)
+
+    @app.get(FOREGROUND_SIGNALING_PENDING_METADATA_SENDER_PATH)
+    async def foreground_signaling_pending_metadata_sender(metadata_reference: str,
+                                                          authorization: Optional[str] = Header(default=None)) -> JSONResponse:
+        try:
+            if service is None:
+                raise CallServiceError(status_code=503,
+                                       errcode="M_DIRECT_CALL_SERVICE_UNAVAILABLE",
+                                       error="Direct-call service is not ready.")
+            bearer_token = bearer_token_from_authorization(authorization)
+            authenticated_user = await service.auth_validator.validate_bearer_token(bearer_token)
+            metadata = pending_store.retrieve_sender_view(metadata_reference, authenticated_user, int(time.time() * 1000))
             return JSONResponse(status_code=200, content=metadata.token_request_payload())
         except CallServiceError as error:
             status_code, body = error_response(error)

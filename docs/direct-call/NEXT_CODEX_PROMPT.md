@@ -13,124 +13,119 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48Z-SenderConnectExecutorUnificationRepair` is complete.
+`2.48Z-RealSenderRuntimeJoinRepair` is complete as a code/test phase.
 
-The receiver controlled connect path now calls a shared `DirectCallLiveKitConnectExecutor`, and the sender join proof boundary is bound to the same executor model instead of only reporting parity.
+The previous sender-side LiveKit DEBUG URL was only proof-recorder driven and must not be used as runtime evidence. It now no longer accepts query-provided join result, transport result, error bucket, or timeline outcome as proof of SDK behavior.
 
-Required proof/source-guard fields are now available:
+New runtime path:
 
 ```text
+DEBUG-only
+default-disabled
+one-shot
+separate sender proof file:
+Documents/salemx-sender-runtime-livekit-join-proof.txt
+```
+
+The new sender runtime bridge:
+
+```text
+uses the sender app's restored Matrix session
+uses the opaque pending_metadata_reference
+fetches sender pending metadata from authenticated /sender projection
+requests real sender media credentials
+builds a redacted E2EE context
+invokes shared DirectCallLiveKitConnectExecutor
+records runtime-derived success/failure only
+```
+
+Safety preserved during this repair:
+
+```text
+APNs_sent=false
+dev_invite_used=false
+production_APNs_sent=false
+physical_media_connect_performed=false
+physical_livekit_join_performed=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+raw URL/token/room/call/user/device IDs logged=false
+```
+
+## Next Phase
+
+`2.48Z-Physical2-Retry13 — one-shot real sender runtime join proof`
+
+Goal:
+Run one physical two-device proof where the receiver path completes real invite/APNs/PushKit/CallKit Answer and the sender app uses the new runtime bridge to perform the actual sender-side LiveKit join through `DirectCallLiveKitConnectExecutor`.
+
+Required preflight:
+
+```text
+receiver_iphone_matrix_session_whoami_result=success_redacted
+receiver_iphone_pending_metadata_auth_ready=true
+second_physical_device_matrix_session_whoami_result=success_redacted
+second_physical_device_pending_metadata_auth_ready=true
+room_validation_preflight=pass
 sender_connect_executor_unification_present=true
-sender_connect_executor_unification_debug_only=true
-sender_connect_executor_unification_receiver_executor_shared=true
-sender_connect_executor_unification_sender_executor_shared=true
-sender_connect_executor_unification_same_connect_options_shape=true
-sender_connect_executor_unification_same_room_retention_model=true
-sender_connect_executor_unification_same_delegate_retention_model=true
-sender_connect_executor_unification_same_state_observer_model=true
-sender_connect_executor_unification_same_bounded_wait_model=true
-sender_connect_executor_unification_audio_only=true
-sender_connect_executor_unification_video_allowed=false
-sender_connect_executor_unification_matrix_events_allowed=false
-sender_connect_executor_unification_raw_url_logged=false
-sender_connect_executor_unification_raw_token_logged=false
-sender_connect_executor_unification_raw_room_logged=false
-sender_connect_executor_unification_raw_identity_logged=false
+sender_runtime_join_bridge_present=true
+sender_runtime_join_bridge_default_disabled=true
+sender_runtime_join_bridge_one_shot=true
+sender_runtime_join_query_outcome_ignored=true
+safe_to_send_apns=true
 ```
 
-The previous physical result remains:
-
-```text
-2.48Z-Physical2-Retry11 =
-safe sender connect parity timeout / remote participant not observed triage, not remote-audio success
-```
-
-Retry11 receiver path succeeded once:
+Receiver proof must still show:
 
 ```text
 physical_voip_push_received=true
-callkit_report_result=reported
 callkit_first_action_kind=answer
 pending_metadata_fetch_result=success_redacted
 media_credentials_result=success_redacted
 controlled_connect_first_attempt_result=success_redacted
-controlled_connect_first_attempt_repeated=false
 livekit_join_result=success_redacted
 ```
 
-Retry11 sender path still timed out before this repair:
+Sender proof must come from:
 
 ```text
-sender_side_livekit_join_activation_triggered=true
-sender_side_livekit_join_activation_consumed=true
-sender_side_livekit_join_activation_repeated=false
-sender_side_livekit_join_result=failed_redacted
-sender_livekit_sdk_timeline_final_classification=sdk_connect_timeout_connect_call_pending_redacted
-sender_livekit_sdk_timeout_diagnostics_final_classification=sdk_connect_timeout_connect_call_pending_redacted
-receiver_remote_participant_observer_result=not_observed_redacted
-livekit_audio_liveness_result=not_observed_redacted
+Documents/salemx-sender-runtime-livekit-join-proof.txt
 ```
 
-Safety remains:
+Expected sender proof fields:
 
 ```text
-sender join remains one-shot
-repeated sender join remains blocked/classified
-sender_livekit_sdk_timeout_diagnostics_final_classification=<redacted_bucket>
-sender_join_success_but_remote_missing_redacted remains separate
-default_runtime_no_connect=true
-default_runtime_no_join=true
-camera_permission_requested=false
-matrix_event_emit_requested=false
-real_call_flow_started=false
+proof_source=sender_runtime_livekit_join
+sender_runtime_join_bridge_triggered=true
+sender_runtime_join_bridge_consumed=true
+sender_runtime_join_bridge_repeated=false
+sender_runtime_join_uses_restored_matrix_session=true
+sender_runtime_join_pending_metadata_reference_present=true
+sender_runtime_join_pending_metadata_reference_redacted=true
+sender_runtime_join_pending_metadata_fetch_requested=true
+sender_runtime_join_pending_metadata_fetch_authorized=true
+sender_runtime_join_pending_metadata_fetch_result=success_redacted
+sender_runtime_join_metadata_direction=outgoing
+sender_runtime_join_metadata_intent=audio
+sender_runtime_join_credentials_requested=true
+sender_runtime_join_credentials_authorized=true
+sender_runtime_join_credentials_result=success_redacted
+sender_runtime_join_token_received=true
+sender_runtime_join_token_redacted=true
+sender_runtime_join_url_received=true
+sender_runtime_join_url_redacted=true
+sender_runtime_join_executor_shared=true
+sender_runtime_join_executor_invoked=true
+sender_runtime_join_runtime_derived=true
+sender_runtime_join_query_outcome_ignored=true
+sender_runtime_join_audio_only=true
+sender_runtime_join_video_allowed=false
+sender_runtime_join_matrix_events_allowed=false
 ```
 
-No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, or physical hook reset/re-arm was performed during the repair.
-
-## Next Phase
-
-`2.48Z-Physical2-Retry12 — one-shot two-physical-device shared sender connect executor proof`
-
-This is a physical one-shot proof with two physical iOS devices.
-
-Do not run this until both physical devices are available, both Debug apps are freshly installed/launched from the latest repair commit, and both Matrix sessions are valid.
-
-Required preflight/proof expectations:
-
-```text
-receiver and sender are distinct accounts
-both devices are in the same encrypted room
-receiver app session is valid
-sender app session is valid
-sender_connect_executor_unification_present=true
-sender_connect_executor_unification_receiver_executor_shared=true
-sender_connect_executor_unification_sender_executor_shared=true
-sender_connect_executor_unification_same_connect_options_shape=true
-sender_connect_executor_unification_same_room_retention_model=true
-sender_connect_executor_unification_same_delegate_retention_model=true
-sender_connect_executor_unification_same_state_observer_model=true
-sender_connect_executor_unification_same_bounded_wait_model=true
-sender_connect_executor_unification_audio_only=true
-sender_connect_executor_unification_video_allowed=false
-sender_connect_executor_unification_matrix_events_allowed=false
-sender_connect_executor_unification_raw_url_logged=false
-sender_connect_executor_unification_raw_token_logged=false
-sender_connect_executor_unification_raw_room_logged=false
-sender_connect_executor_unification_raw_identity_logged=false
-sender_side_livekit_join_repeated=false
-```
-
-If the sender connect still times out, classify with the existing timeout diagnostics:
-
-```text
-sender_livekit_sdk_timeline_connect_invoked=true
-sender_livekit_sdk_timeline_connect_returned=false
-sender_livekit_sdk_timeline_connect_threw=false
-sender_livekit_sdk_timeout_diagnostics_final_classification=<redacted_bucket>
-sender_join_trigger_orchestration_final_classification=sender_trigger_completed_sdk_timeline_terminal_redacted
-```
-
-Success still requires remote participant/audio/liveness observation:
+Success still requires receiver-side remote participant/audio/liveness observation:
 
 ```text
 receiver_remote_participant_observer_result=success_redacted
@@ -139,13 +134,13 @@ livekit_remote_audio_track_subscribed=true
 livekit_audio_liveness_result=success_redacted
 ```
 
-If remote participant/audio/liveness is not observed, classify and do not retry automatically.
+If runtime join fails, classify using only runtime-derived sender proof fields and do not retry automatically.
 
 ## Hard Limits
 
 Do not:
 
-* send APNs until the one-shot helper reaches explicit confirmation
+* send APNs until explicit one-shot confirmation
 * run production APNs
 * run repeated APNs
 * run `dev/invite`
@@ -158,30 +153,3 @@ Do not:
 * log raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer user ID/user ID/device ID/raw SDK error/localized SDK error
 * touch signing/project files
 * stage or commit `docs/direct-call/REPEAT_CALL_FASTPATH_DIAGNOSTICS.md`
-
-## Suggested Checks
-
-Before any future docs commit, run:
-
-```bash
-git status --short --branch
-git diff --check
-git diff --cached --check
-git diff --name-only | grep -E 'SalemX.xcodeproj/project.pbxproj|app.yml|\.entitlements|Info.plist' && exit 1 || true
-git diff --cached --name-only | grep -E 'SalemX.xcodeproj/project.pbxproj|app.yml|\.entitlements|Info.plist' && exit 1 || true
-```
-
-Run privacy scans over changed files/diff. Allowed hits are field names, redacted labels, negative statements, synthetic test values, and stable hashes only.
-
-## Expected Output
-
-Return:
-
-* Retry12 classification
-* whether executor-unification fields are present
-* whether sender and receiver share the same executor model in proof
-* sender connect result
-* receiver remote participant/audio/liveness result
-* whether safety fields stayed closed
-* proof generation and proof path
-* final `git status --short --branch`
