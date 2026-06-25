@@ -582,6 +582,8 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["pending_metadata_source_requested"], True)
         self.assertEqual(body["pending_metadata_source_created"], True)
         self.assertEqual(body["pending_metadata_reference_present"], True)
+        self.assertIsInstance(body["pending_metadata_reference"], str)
+        self.assertNotEqual(body["pending_metadata_reference"], "")
         self.assertEqual(body["pending_metadata_payload_redacted"], True)
         self.assertEqual(body["pending_metadata_has_call_identifier"], True)
         self.assertEqual(body["pending_metadata_has_room_binding"], True)
@@ -613,6 +615,7 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         metadata_reference = salemx_payload["pending_metadata_reference"]
         self.assertIsInstance(metadata_reference, str)
         self.assertNotEqual(metadata_reference, "")
+        self.assertEqual(body["pending_metadata_reference"], metadata_reference)
         self.assertEqual(salemx_payload["pending_metadata_reference_redacted"], True)
         self.assertEqual(salemx_payload["redacted"], True)
 

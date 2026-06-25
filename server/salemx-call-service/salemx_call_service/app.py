@@ -376,6 +376,8 @@ def create_app(config: ServiceConfig | None = None,
                 pending_metadata_diagnostics = pending_metadata.safe_diagnostics()
             result = signaling_service.publish_invite(invite_request)
             result_body = result.as_dict()
+            if pending_metadata_reference is not None:
+                result_body["pending_metadata_reference"] = pending_metadata_reference
             result_body.update(_foreground_signaling_invite_diagnostics(invite_request, signaling_service))
             result_body.update(pending_metadata_diagnostics)
             result_body.update(_background_invite_apns_diagnostics(
