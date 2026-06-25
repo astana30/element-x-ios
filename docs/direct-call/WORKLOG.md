@@ -201,6 +201,45 @@ real_call_flow_started=false
 
 No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, or physical hook reset/re-arm was performed.
 
+## 2026-06-25 — 2.48Z-RemoteParticipantObservationRuntimeActivationRepair
+
+Closed Retry14 as real sender runtime join success / receiver observation window not activated / remote participant not observed triage, then wired the bounded receiver observation timing repair into the actual receiver controlled-connect runtime path.
+
+Retry14 proof showed receiver and sender joins succeeded, but the receiver observation window never started:
+
+```text
+receiver_livekit_join_result=success_redacted
+sender_runtime_join_runtime_result=success_redacted
+sender_runtime_join_executor_invoked=true
+sender_runtime_join_query_outcome_ignored=true
+receiver_room_retained_for_sender_observation=false
+receiver_observer_attached_before_sender_join=false
+receiver_observer_active_during_sender_join=false
+receiver_cleanup_deferred_until_observation_terminal=false
+receiver_cleanup_started_before_sender_terminal=true
+remote_participant_observation_wait_started=false
+remote_participant_observation_final_classification=not_started
+```
+
+The repair now:
+
+```text
+starts receiver observation after controlled receiver LiveKit success
+marks receiver observer active before sender runtime terminal propagation
+keeps receiver cleanup deferred until observation terminal
+propagates real sender runtime terminal state into receiver correlation proof
+records sender_livekit_room_connected/disconnected and sender_cleanup_result
+keeps video/camera/Matrix/full-flow false
+```
+
+No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, microphone/camera permission, Matrix event emit, full call flow, raw identifier logging, or project/signing file edit was performed.
+
+Next phase:
+
+```text
+2.48Z-Physical2-Retry15 — one-shot real sender join with activated receiver observation window
+```
+
 Next phase:
 
 ```text

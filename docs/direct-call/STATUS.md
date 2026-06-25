@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-RemoteParticipantObservationTimingRepair — Retry13 proved the real sender runtime join can succeed, but the receiver did not observe a remote participant before cleanup/timing termination. The DEBUG receiver proof now retains the receiver observation window until remote participant seen, sender terminal failure, or bounded timeout, preserves opaque sender correlation until terminal classification, and records runtime participant callbacks without raw identifiers. No APNs, physical media connect, LiveKit join, microphone/camera permission, Matrix event emit, or full call flow was performed by the repair. The next phase is `2.48Z-Physical2-Retry14 — one-shot real sender join with retained receiver observation window`.
+After 2.48Z-RemoteParticipantObservationRuntimeActivationRepair — Retry14 proved receiver LiveKit join and real sender runtime join both succeeded, but the receiver observation window was not activated in the physical controlled-connect path. The DEBUG receiver runtime path now starts the bounded remote-participant observation window after receiver LiveKit success, propagates the real sender terminal result into receiver proof, and defers receiver cleanup until remote participant seen, sender terminal failure, or bounded timeout. No APNs, physical connect, LiveKit join, microphone/camera permission, Matrix event emit, or full call flow was performed by this repair. The next phase is `2.48Z-Physical2-Retry15 — one-shot real sender join with activated receiver observation window`.
 
 ## Latest App Code Checkpoint
 
@@ -38,6 +38,34 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Checksum: `654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e`
 
 ## Proven Checkpoints
+
+- 2.48Z-RemoteParticipantObservationRuntimeActivationRepair closes Retry14 as real sender runtime join success / receiver observation window not activated / remote participant not observed triage, then wires the already-built observation timing repair into the actual receiver controlled-connect runtime path without APNs/connect:
+  - Retry14 physical proof:
+    ```text
+    receiver_livekit_join_result=success_redacted
+    sender_runtime_join_runtime_result=success_redacted
+    sender_runtime_join_executor_invoked=true
+    sender_runtime_join_query_outcome_ignored=true
+    receiver_room_retained_for_sender_observation=false
+    receiver_observer_attached_before_sender_join=false
+    receiver_observer_active_during_sender_join=false
+    receiver_cleanup_deferred_until_observation_terminal=false
+    receiver_cleanup_started_before_sender_terminal=true
+    remote_participant_observation_final_classification=not_started
+    ```
+  - Repair behavior:
+    ```text
+    receiver observation starts after controlled receiver LiveKit success
+    receiver observer is marked active before sender terminal propagation
+    receiver cleanup remains deferred until observation terminal
+    sender runtime terminal state is propagated to receiver correlation proof
+    sender_livekit_room_connected=<runtime_bool>
+    sender_livekit_room_disconnected=<runtime_bool>
+    sender_cleanup_result=<redacted_result>
+    ```
+  - Missing audio track remains separate from participant presence.
+  - No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, microphone/camera permission, video, Matrix event emit, full call flow, raw identifier logging, or signing/project file edit was performed.
+  - Next phase: `2.48Z-Physical2-Retry15 — one-shot real sender join with activated receiver observation window`.
 
 - 2.48Z-RemoteParticipantObservationTimingRepair records Retry13 as real sender runtime join success with receiver remote participant not observed, then adds a bounded DEBUG-only receiver observation timing repair without APNs/connect:
   - Receiver observation proof now records:

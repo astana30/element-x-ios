@@ -1026,6 +1026,9 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
     var executorInvoked = false
     var runtimeResult = "not_requested"
     var runtimeErrorBucket = "none"
+    var senderLiveKitRoomConnected = false
+    var senderLiveKitRoomDisconnected = false
+    var senderCleanupResult = "not_requested"
     var runtimeDerived = true
     var queryOutcomeIgnored = true
     var audioOnly = true
@@ -1074,11 +1077,17 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             "sender_runtime_join_executor_invoked=\(executorInvoked)",
             "sender_runtime_join_runtime_result=\(runtimeResult)",
             "sender_runtime_join_runtime_error_bucket=\(runtimeErrorBucket)",
+            "sender_livekit_room_connected=\(senderLiveKitRoomConnected)",
+            "sender_livekit_room_disconnected=\(senderLiveKitRoomDisconnected)",
+            "sender_cleanup_result=\(senderCleanupResult)",
             "sender_runtime_join_runtime_derived=\(runtimeDerived)",
             "sender_runtime_join_query_outcome_ignored=\(queryOutcomeIgnored)",
             "sender_runtime_join_audio_only=\(audioOnly)",
             "sender_runtime_join_video_allowed=\(videoAllowed)",
             "sender_runtime_join_matrix_events_allowed=\(matrixEventsAllowed)",
+            "sender_camera_permission_requested=\(cameraPermissionRequested)",
+            "sender_matrix_event_emit_requested=\(matrixEventEmitRequested)",
+            "sender_real_call_flow_started=\(realCallFlowStarted)",
             "microphone_permission_requested=\(microphonePermissionRequested)",
             "camera_permission_requested=\(cameraPermissionRequested)",
             "matrix_event_emit_requested=\(matrixEventEmitRequested)",
@@ -1118,6 +1127,7 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         pendingMetadataFetchResult = "blocked_redacted"
         runtimeResult = "blocked_redacted"
         runtimeErrorBucket = "pending_metadata_unavailable_redacted"
+        senderCleanupResult = "not_required_redacted"
         blockedReason = reason
     }
 
@@ -1134,6 +1144,7 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             credentialsResult = "blocked_redacted"
             runtimeResult = "blocked_redacted"
             runtimeErrorBucket = DirectCallDiagnosticMediaFailureReason(error).rawValue
+            senderCleanupResult = "not_required_redacted"
             blockedReason = "sender_runtime_credentials_failed_redacted"
         }
     }
@@ -1141,6 +1152,7 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
     mutating func markE2EEBlocked(_ error: DirectCallMediaError) {
         runtimeResult = "blocked_redacted"
         runtimeErrorBucket = DirectCallDiagnosticMediaFailureReason(error).rawValue
+        senderCleanupResult = "not_required_redacted"
         blockedReason = "sender_runtime_e2ee_context_unavailable_redacted"
     }
 
@@ -1150,10 +1162,16 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         case .success:
             runtimeResult = "success_redacted"
             runtimeErrorBucket = "none"
+            senderLiveKitRoomConnected = true
+            senderLiveKitRoomDisconnected = false
+            senderCleanupResult = "deferred_for_receiver_observation_redacted"
             blockedReason = "none"
         case .failure(let error):
             runtimeResult = "failed_redacted"
             runtimeErrorBucket = DirectCallDiagnosticMediaFailureReason(error).rawValue
+            senderLiveKitRoomConnected = false
+            senderLiveKitRoomDisconnected = true
+            senderCleanupResult = "completed_redacted"
             blockedReason = "sender_runtime_join_failed_redacted"
         }
     }
@@ -4849,14 +4867,45 @@ private extension SalemXVoIPPushReceiptProofSummary {
             (senderTriggerStarted || senderRoomConnectedDuringReceiverWindow)
         receiverSenderConnectedWindowOverlapObserved = receiverRoomRetainedForSenderObservation &&
             senderRoomConnectedDuringReceiverWindow
-        receiverCleanupStartedBeforeSenderTerminal = liveKitRoomDisconnected && !senderJoinTerminalSeenByReceiver
-        receiverCleanupDeferredUntilObservationTerminal = receiverRoomRetainedForSenderObservation &&
+        receiverCleanupStartedBeforeSenderTerminal = liveKitRoomDisconnected &&
+            !senderJoinTerminalSeenByReceiver &&
+            !remoteParticipantObservationWaitCompleted
+        receiverCleanupDeferredUntilObservationTerminal = remoteParticipantObservationWaitStarted &&
             controlledCallKitCleanupRequested &&
             liveKitConnectAudioInvoked
 
         if liveKitRemoteParticipantSeen, !remoteParticipantObservationWaitCompleted {
             completeRemoteParticipantObservation(classification: "remote_participant_seen_redacted", timeoutBucket: "none")
         }
+    }
+
+    mutating func activateRemoteParticipantObservationRuntimeWindowIfNeeded() {
+        guard controlledConnectFirstAttemptResult == "success_redacted",
+              liveKitJoinRequested,
+              liveKitConnectAudioInvoked,
+              !remoteParticipantObservationWaitCompleted else {
+            refreshRemoteParticipantObservationTimingRepairDiagnostics()
+            return
+        }
+
+        liveKitJoinResult = "success_redacted"
+        liveKitJoinErrorBucket = "none"
+        liveKitRoomConnected = true
+        liveKitRoomDisconnected = false
+        liveKitLocalParticipantPresent = true
+        receiverRemoteParticipantObserverStarted = true
+        remoteParticipantObservationWaitStarted = true
+        if remoteParticipantObservationTimeoutBucket == "not_started" {
+            remoteParticipantObservationTimeoutBucket = "pending_redacted"
+        }
+        if remoteParticipantObservationFinalClassification == "not_started" {
+            remoteParticipantObservationFinalClassification = "pending_redacted"
+        }
+        liveKitCleanupRequested = false
+        liveKitCleanupCompleted = false
+        liveKitCleanupResult = "deferred_until_observation_terminal_redacted"
+        refreshReceiverRemoteParticipantObserverClassification()
+        refreshRemoteParticipantObservationTimingRepairDiagnostics()
     }
 
     mutating func refreshSenderJoinTriggerOrchestration() {
@@ -5994,8 +6043,9 @@ private extension SalemXVoIPPushReceiptProofSummary {
         matrixEventEmitRequested = firstAttempt.matrixEventEmitRequested
         realCallFlowStarted = firstAttempt.realCallFlowStarted
         mediaConnectEngineInvoked = firstAttempt.mediaConnectAttempted
-        refreshDisconnectCleanupDiagnostics()
         refreshRemoteAudioLivenessDiagnostics()
+        activateRemoteParticipantObservationRuntimeWindowIfNeeded()
+        refreshDisconnectCleanupDiagnostics()
         refreshSenderJoinTriggerOrchestration()
     }
 
@@ -8943,6 +8993,38 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         let proof = summary.redactedLines.joined(separator: "\n")
         lock.unlock()
         writeSenderRuntimeLiveKitJoinProof(proof)
+        propagateSenderRuntimeJoinTerminalToReceiverObservation(summary)
+    }
+
+    private static func propagateSenderRuntimeJoinTerminalToReceiverObservation(_ senderSummary: SalemXSenderRuntimeLiveKitJoinProofSummary) {
+        let runtimeResult = senderSummary.runtimeResult
+        guard senderSummary.bridgeTriggered,
+              runtimeResult == SalemXSenderSideLiveKitJoinHook.successResult ||
+              runtimeResult == SalemXSenderSideLiveKitJoinHook.failedResult ||
+              runtimeResult == SalemXSenderSideLiveKitJoinHook.blockedResult else {
+            return
+        }
+
+        let senderJoinResult: String
+        switch runtimeResult {
+        case SalemXSenderSideLiveKitJoinHook.successResult:
+            senderJoinResult = SalemXSenderSideLiveKitJoinHook.successResult
+        case SalemXSenderSideLiveKitJoinHook.failedResult:
+            senderJoinResult = SalemXSenderSideLiveKitJoinHook.failedResult
+        default:
+            senderJoinResult = SalemXSenderSideLiveKitJoinHook.blockedResult
+        }
+
+        lock.lock()
+        var summary = latestVoIPPushReceiptSummary
+        summary.recordSenderSideLiveKitJoinResult(requested: true,
+                                                  result: senderJoinResult,
+                                                  errorBucket: senderSummary.runtimeErrorBucket,
+                                                  repeated: senderSummary.bridgeRepeated)
+        summary.activateRemoteParticipantObservationRuntimeWindowIfNeeded()
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
     }
 
     private static func nextProofGenerationLocked() -> String {

@@ -13,77 +13,54 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48Z-RemoteParticipantObservationTimingRepair` is complete as a code/test phase.
+`2.48Z-RemoteParticipantObservationRuntimeActivationRepair` is complete as a code/test phase.
 
-Retry13 classified as:
+Retry14 is closed as:
 
 ```text
 real sender runtime join success
-receiver remote participant not observed
+receiver observation window not activated
+remote participant not observed triage
 ```
 
-Receiver proof generation `generation_27` showed PushKit, CallKit Answer, pending metadata, credentials, controlled receiver connect, and receiver LiveKit join succeeded, but:
+Physical proof showed:
 
 ```text
-livekit_remote_participant_seen=false
-receiver_remote_participant_observer_result=not_observed_redacted
-receiver_remote_participant_observer_error_bucket=sender_readiness_context_missing_redacted
-```
-
-Sender proof generation `generation_12` showed the real sender runtime bridge was triggered and consumed once, used the restored Matrix session, fetched sender pending metadata, requested sender credentials, invoked the shared `DirectCallLiveKitConnectExecutor`, and produced:
-
-```text
+receiver_livekit_join_result=success_redacted
 sender_runtime_join_runtime_result=success_redacted
-sender_runtime_join_runtime_error_bucket=none
-sender_runtime_join_runtime_derived=true
+sender_runtime_join_executor_invoked=true
 sender_runtime_join_query_outcome_ignored=true
+receiver_room_retained_for_sender_observation=false
+receiver_observer_attached_before_sender_join=false
+receiver_observer_active_during_sender_join=false
+receiver_cleanup_deferred_until_observation_terminal=false
+receiver_cleanup_started_before_sender_terminal=true
+sender_join_terminal_seen_by_receiver=false
+receiver_sender_connected_window_overlap_observed=false
+remote_participant_observation_wait_started=false
+remote_participant_observation_final_classification=not_started
 ```
 
-The repair adds DEBUG-only bounded receiver observation timing proof:
+The repair wires the existing bounded receiver observation timing logic into the actual receiver controlled-connect runtime path:
 
 ```text
-remote_participant_observation_timing_repair_present=true
-remote_participant_observation_timing_repair_debug_only=true
-remote_participant_observation_timing_repair_bounded_window=true
-remote_participant_observation_timing_repair_raw_identifiers_logged=false
-receiver_room_retained_for_sender_observation=<redacted_bool>
-receiver_observer_attached_before_sender_join=<redacted_bool>
-receiver_observer_active_during_sender_join=<redacted_bool>
-receiver_cleanup_deferred_until_observation_terminal=<redacted_bool>
-receiver_cleanup_started_before_sender_terminal=<redacted_bool>
-sender_join_terminal_seen_by_receiver=<redacted_bool>
-sender_room_connected_during_receiver_window=<redacted_bool>
-sender_cleanup_started_before_receiver_observation=<redacted_bool>
-receiver_sender_connected_window_overlap_observed=<redacted_bool>
-sender_readiness_context_present_during_observation=<redacted_bool>
-opaque_call_correlation_present=<redacted_bool>
-opaque_call_correlation_match=<redacted_bool>
-remote_participant_observation_wait_started=<redacted_bool>
-remote_participant_observation_wait_completed=<redacted_bool>
-remote_participant_observation_timeout_bucket=<redacted_bucket>
-remote_participant_observation_final_classification=<redacted_bucket>
+receiver observation starts after controlled receiver LiveKit success
+observer is active before sender runtime terminal propagation
+receiver room cleanup is deferred until observation terminal
+sender runtime terminal state updates receiver correlation proof
+bounded timeout remains the terminal fallback
 ```
 
-Runtime receiver LiveKit delegate callbacks can now close the window as:
+Sender runtime proof now also records:
 
 ```text
-remote_participant_observation_final_classification=remote_participant_seen_redacted
+sender_livekit_room_connected=<runtime_bool>
+sender_livekit_room_disconnected=<runtime_bool>
+sender_cleanup_result=<redacted_result>
+sender_camera_permission_requested=false
+sender_matrix_event_emit_requested=false
+sender_real_call_flow_started=false
 ```
-
-Otherwise the bounded timeout classifies one of:
-
-```text
-receiver_disconnected_before_sender_join_redacted
-receiver_observer_attached_late_redacted
-receiver_observer_not_active_during_sender_join_redacted
-sender_readiness_context_missing_redacted
-opaque_correlation_mismatch_redacted
-no_receiver_sender_connected_overlap_redacted
-sender_disconnected_before_observation_redacted
-remote_participant_event_timeout_redacted
-```
-
-Missing audio track is not sender-join failure; classify participant presence first.
 
 Safety preserved during the repair:
 
@@ -103,10 +80,10 @@ raw URL/token/room/call/user/device IDs logged=false
 
 ## Next Phase
 
-`2.48Z-Physical2-Retry14 — one-shot real sender join with retained receiver observation window`
+`2.48Z-Physical2-Retry15 — one-shot real sender join with activated receiver observation window`
 
 Goal:
-Run one physical two-device proof using the existing one-shot receiver APNs/Answer/connect path and the real sender runtime bridge, then verify whether the retained receiver observation window sees the sender as a LiveKit remote participant.
+Run one physical two-device proof using the existing one-shot receiver APNs/Answer/connect path and the real sender runtime bridge, then verify whether the activated receiver observation window sees the sender as a LiveKit remote participant.
 
 Do not run APNs until preflight is green and the operator explicitly confirms the one-shot send.
 
@@ -128,6 +105,19 @@ remote_participant_observation_timing_repair_bounded_window=true
 safe_to_send_apns=true
 ```
 
+Expected receiver proof after one APNs/Answer/connect and one sender runtime join:
+
+```text
+remote_participant_observation_wait_started=true
+receiver_room_retained_for_sender_observation=true
+receiver_observer_attached_before_sender_join=true
+receiver_observer_active_during_sender_join=true
+receiver_cleanup_deferred_until_observation_terminal=true
+sender_join_terminal_seen_by_receiver=true
+receiver_sender_connected_window_overlap_observed=true
+remote_participant_observation_wait_completed=true
+```
+
 If receiver remote participant is observed:
 
 ```text
@@ -135,9 +125,9 @@ livekit_remote_participant_seen=true
 remote_participant_observation_final_classification=remote_participant_seen_redacted
 ```
 
-Close Retry14 as real sender runtime join plus receiver remote participant observed. Next phase should inspect audio publish/subscription readiness without repeating connect.
+Close Retry15 as real sender runtime join plus receiver remote participant observed. Next phase should inspect audio publish/subscription readiness without repeating connect.
 
-If sender join succeeds but receiver still does not see a participant, do not retry. Classify using the new receiver observation timing fields and close as a narrowed timing blocker.
+If sender join succeeds but receiver still does not see a participant, do not retry. Classify using the receiver observation timing fields and close as a narrowed timing blocker.
 
 ## Hard Limits
 
@@ -148,11 +138,10 @@ Do not:
 * run repeated APNs
 * run `dev/invite`
 * repeat receiver connect
-* repeat sender LiveKit join
-* request camera permission
-* enable video
+* repeat sender runtime join
+* request camera or video
 * emit Matrix events
-* start full call flow
-* log raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room ID/call ID/peer user ID/user ID/device ID/raw SDK error/localized SDK error
-* touch signing/project files
-* stage or commit `docs/direct-call/REPEAT_CALL_FASTPATH_DIAGNOSTICS.md`
+* start full direct-call flow
+* log raw tokens, JWTs, auth headers, APNs payloads, invite bodies, LiveKit URLs, room IDs, call IDs, user IDs, device IDs, or call handles
+* touch `SalemX.xcodeproj/project.pbxproj`, `app.yml`, `.entitlements`, or `Info.plist`
+* stage `docs/direct-call/REPEAT_CALL_FASTPATH_DIAGNOSTICS.md`
