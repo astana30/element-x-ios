@@ -13,33 +13,79 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48Z-RealSenderRuntimeJoinRepair` is complete as a code/test phase.
+`2.48Z-RemoteParticipantObservationTimingRepair` is complete as a code/test phase.
 
-The previous sender-side LiveKit DEBUG URL was only proof-recorder driven and must not be used as runtime evidence. It now no longer accepts query-provided join result, transport result, error bucket, or timeline outcome as proof of SDK behavior.
-
-New runtime path:
+Retry13 classified as:
 
 ```text
-DEBUG-only
-default-disabled
-one-shot
-separate sender proof file:
-Documents/salemx-sender-runtime-livekit-join-proof.txt
+real sender runtime join success
+receiver remote participant not observed
 ```
 
-The new sender runtime bridge:
+Receiver proof generation `generation_27` showed PushKit, CallKit Answer, pending metadata, credentials, controlled receiver connect, and receiver LiveKit join succeeded, but:
 
 ```text
-uses the sender app's restored Matrix session
-uses the opaque pending_metadata_reference
-fetches sender pending metadata from authenticated /sender projection
-requests real sender media credentials
-builds a redacted E2EE context
-invokes shared DirectCallLiveKitConnectExecutor
-records runtime-derived success/failure only
+livekit_remote_participant_seen=false
+receiver_remote_participant_observer_result=not_observed_redacted
+receiver_remote_participant_observer_error_bucket=sender_readiness_context_missing_redacted
 ```
 
-Safety preserved during this repair:
+Sender proof generation `generation_12` showed the real sender runtime bridge was triggered and consumed once, used the restored Matrix session, fetched sender pending metadata, requested sender credentials, invoked the shared `DirectCallLiveKitConnectExecutor`, and produced:
+
+```text
+sender_runtime_join_runtime_result=success_redacted
+sender_runtime_join_runtime_error_bucket=none
+sender_runtime_join_runtime_derived=true
+sender_runtime_join_query_outcome_ignored=true
+```
+
+The repair adds DEBUG-only bounded receiver observation timing proof:
+
+```text
+remote_participant_observation_timing_repair_present=true
+remote_participant_observation_timing_repair_debug_only=true
+remote_participant_observation_timing_repair_bounded_window=true
+remote_participant_observation_timing_repair_raw_identifiers_logged=false
+receiver_room_retained_for_sender_observation=<redacted_bool>
+receiver_observer_attached_before_sender_join=<redacted_bool>
+receiver_observer_active_during_sender_join=<redacted_bool>
+receiver_cleanup_deferred_until_observation_terminal=<redacted_bool>
+receiver_cleanup_started_before_sender_terminal=<redacted_bool>
+sender_join_terminal_seen_by_receiver=<redacted_bool>
+sender_room_connected_during_receiver_window=<redacted_bool>
+sender_cleanup_started_before_receiver_observation=<redacted_bool>
+receiver_sender_connected_window_overlap_observed=<redacted_bool>
+sender_readiness_context_present_during_observation=<redacted_bool>
+opaque_call_correlation_present=<redacted_bool>
+opaque_call_correlation_match=<redacted_bool>
+remote_participant_observation_wait_started=<redacted_bool>
+remote_participant_observation_wait_completed=<redacted_bool>
+remote_participant_observation_timeout_bucket=<redacted_bucket>
+remote_participant_observation_final_classification=<redacted_bucket>
+```
+
+Runtime receiver LiveKit delegate callbacks can now close the window as:
+
+```text
+remote_participant_observation_final_classification=remote_participant_seen_redacted
+```
+
+Otherwise the bounded timeout classifies one of:
+
+```text
+receiver_disconnected_before_sender_join_redacted
+receiver_observer_attached_late_redacted
+receiver_observer_not_active_during_sender_join_redacted
+sender_readiness_context_missing_redacted
+opaque_correlation_mismatch_redacted
+no_receiver_sender_connected_overlap_redacted
+sender_disconnected_before_observation_redacted
+remote_participant_event_timeout_redacted
+```
+
+Missing audio track is not sender-join failure; classify participant presence first.
+
+Safety preserved during the repair:
 
 ```text
 APNs_sent=false
@@ -49,6 +95,7 @@ physical_media_connect_performed=false
 physical_livekit_join_performed=false
 microphone_permission_requested=false
 camera_permission_requested=false
+video_allowed=false
 matrix_event_emit_requested=false
 real_call_flow_started=false
 raw URL/token/room/call/user/device IDs logged=false
@@ -56,10 +103,12 @@ raw URL/token/room/call/user/device IDs logged=false
 
 ## Next Phase
 
-`2.48Z-Physical2-Retry13 — one-shot real sender runtime join proof`
+`2.48Z-Physical2-Retry14 — one-shot real sender join with retained receiver observation window`
 
 Goal:
-Run one physical two-device proof where the receiver path completes real invite/APNs/PushKit/CallKit Answer and the sender app uses the new runtime bridge to perform the actual sender-side LiveKit join through `DirectCallLiveKitConnectExecutor`.
+Run one physical two-device proof using the existing one-shot receiver APNs/Answer/connect path and the real sender runtime bridge, then verify whether the retained receiver observation window sees the sender as a LiveKit remote participant.
+
+Do not run APNs until preflight is green and the operator explicitly confirms the one-shot send.
 
 Required preflight:
 
@@ -74,73 +123,27 @@ sender_runtime_join_bridge_present=true
 sender_runtime_join_bridge_default_disabled=true
 sender_runtime_join_bridge_one_shot=true
 sender_runtime_join_query_outcome_ignored=true
+remote_participant_observation_timing_repair_present=true
+remote_participant_observation_timing_repair_bounded_window=true
 safe_to_send_apns=true
 ```
 
-Receiver proof must still show:
+If receiver remote participant is observed:
 
 ```text
-physical_voip_push_received=true
-callkit_first_action_kind=answer
-pending_metadata_fetch_result=success_redacted
-media_credentials_result=success_redacted
-controlled_connect_first_attempt_result=success_redacted
-livekit_join_result=success_redacted
-```
-
-Sender proof must come from:
-
-```text
-Documents/salemx-sender-runtime-livekit-join-proof.txt
-```
-
-Expected sender proof fields:
-
-```text
-proof_source=sender_runtime_livekit_join
-sender_runtime_join_bridge_triggered=true
-sender_runtime_join_bridge_consumed=true
-sender_runtime_join_bridge_repeated=false
-sender_runtime_join_uses_restored_matrix_session=true
-sender_runtime_join_pending_metadata_reference_present=true
-sender_runtime_join_pending_metadata_reference_redacted=true
-sender_runtime_join_pending_metadata_fetch_requested=true
-sender_runtime_join_pending_metadata_fetch_authorized=true
-sender_runtime_join_pending_metadata_fetch_result=success_redacted
-sender_runtime_join_metadata_direction=outgoing
-sender_runtime_join_metadata_intent=audio
-sender_runtime_join_credentials_requested=true
-sender_runtime_join_credentials_authorized=true
-sender_runtime_join_credentials_result=success_redacted
-sender_runtime_join_token_received=true
-sender_runtime_join_token_redacted=true
-sender_runtime_join_url_received=true
-sender_runtime_join_url_redacted=true
-sender_runtime_join_executor_shared=true
-sender_runtime_join_executor_invoked=true
-sender_runtime_join_runtime_derived=true
-sender_runtime_join_query_outcome_ignored=true
-sender_runtime_join_audio_only=true
-sender_runtime_join_video_allowed=false
-sender_runtime_join_matrix_events_allowed=false
-```
-
-Success still requires receiver-side remote participant/audio/liveness observation:
-
-```text
-receiver_remote_participant_observer_result=success_redacted
 livekit_remote_participant_seen=true
-livekit_remote_audio_track_subscribed=true
-livekit_audio_liveness_result=success_redacted
+remote_participant_observation_final_classification=remote_participant_seen_redacted
 ```
 
-If runtime join fails, classify using only runtime-derived sender proof fields and do not retry automatically.
+Close Retry14 as real sender runtime join plus receiver remote participant observed. Next phase should inspect audio publish/subscription readiness without repeating connect.
+
+If sender join succeeds but receiver still does not see a participant, do not retry. Classify using the new receiver observation timing fields and close as a narrowed timing blocker.
 
 ## Hard Limits
 
 Do not:
 
-* send APNs until explicit one-shot confirmation
+* send APNs before explicit one-shot confirmation
 * run production APNs
 * run repeated APNs
 * run `dev/invite`

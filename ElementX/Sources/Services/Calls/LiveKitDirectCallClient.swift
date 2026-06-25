@@ -446,12 +446,38 @@ final class LiveKitDirectCallClient: DirectCallLiveKitClientProtocol, @unchecked
             try? await remoteAudioSubscriptionUpdater(room, false)
         }
     }
+
+    private static func remoteParticipantCountBucket(for room: Room) -> String {
+        switch room.remoteParticipants.count {
+        case 0:
+            return "0"
+        case 1:
+            return "1"
+        default:
+            return "2+"
+        }
+    }
 }
 
 extension LiveKitDirectCallClient: RoomDelegate {
     nonisolated func room(_ room: Room, participant: RemoteParticipant, didPublishTrack publication: RemoteTrackPublication) {
         Task { @MainActor [weak self] in
+            #if DEBUG && canImport(PushKit) && os(iOS)
+            SalemXPushKitRegistrationSmokeDebugBridge.recordReceiverRemoteParticipantRuntimeObservation(participantCountBucket: Self.remoteParticipantCountBucket(for: room),
+                                                                                                        audioTrackSubscribed: false,
+                                                                                                        audioTrackUnmuted: false)
+            #endif
             await self?.subscribeToRemoteAudioIfNeeded(room: room, publication: publication)
+        }
+    }
+
+    nonisolated func room(_ room: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
+        Task { @MainActor in
+            #if DEBUG && canImport(PushKit) && os(iOS)
+            SalemXPushKitRegistrationSmokeDebugBridge.recordReceiverRemoteParticipantRuntimeObservation(participantCountBucket: Self.remoteParticipantCountBucket(for: room),
+                                                                                                        audioTrackSubscribed: publication.kind == .audio,
+                                                                                                        audioTrackUnmuted: false)
+            #endif
         }
     }
 }

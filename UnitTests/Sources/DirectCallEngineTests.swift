@@ -2843,6 +2843,69 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func remoteParticipantObservationTimingRepairRetainsReceiverUntilRuntimeTerminal() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+        let liveKitClientSource = try Self.sourceFile("ElementX/Sources/Services/Calls/LiveKitDirectCallClient.swift")
+        let runtimeSnapshotStart = try #require(adapterSource.range(of: "private static func applyRuntimeSnapshots(to baseSummary: inout SalemXVoIPPushReceiptProofSummary)")?.lowerBound)
+        let runtimeSnapshotEnd = try #require(adapterSource.range(of: "private static func recordVoIPPushReceipt(_ payload", range: runtimeSnapshotStart..<adapterSource.endIndex)?.lowerBound)
+        let runtimeSnapshotSource = String(adapterSource[runtimeSnapshotStart..<runtimeSnapshotEnd])
+
+        #expect(adapterSource.contains("remote_participant_observation_timing_repair_present=\\(remoteParticipantObservationTimingRepairPresent)"))
+        #expect(adapterSource.contains("remote_participant_observation_timing_repair_debug_only=\\(remoteParticipantObservationTimingRepairDebugOnly)"))
+        #expect(adapterSource.contains("remote_participant_observation_timing_repair_bounded_window=\\(remoteParticipantObservationTimingRepairBoundedWindow)"))
+        #expect(adapterSource.contains("remote_participant_observation_timing_repair_raw_identifiers_logged=\\(remoteParticipantObservationTimingRepairRawIdentifiersLogged)"))
+        #expect(adapterSource.contains("receiver_room_retained_for_sender_observation=\\(receiverRoomRetainedForSenderObservation)"))
+        #expect(adapterSource.contains("receiver_observer_attached_before_sender_join=\\(receiverObserverAttachedBeforeSenderJoin)"))
+        #expect(adapterSource.contains("receiver_observer_active_during_sender_join=\\(receiverObserverActiveDuringSenderJoin)"))
+        #expect(adapterSource.contains("receiver_cleanup_deferred_until_observation_terminal=\\(receiverCleanupDeferredUntilObservationTerminal)"))
+        #expect(adapterSource.contains("receiver_cleanup_started_before_sender_terminal=\\(receiverCleanupStartedBeforeSenderTerminal)"))
+        #expect(adapterSource.contains("sender_join_terminal_seen_by_receiver=\\(senderJoinTerminalSeenByReceiver)"))
+        #expect(adapterSource.contains("sender_room_connected_during_receiver_window=\\(senderRoomConnectedDuringReceiverWindow)"))
+        #expect(adapterSource.contains("sender_cleanup_started_before_receiver_observation=\\(senderCleanupStartedBeforeReceiverObservation)"))
+        #expect(adapterSource.contains("receiver_sender_connected_window_overlap_observed=\\(receiverSenderConnectedWindowOverlapObserved)"))
+        #expect(adapterSource.contains("sender_readiness_context_present_during_observation=\\(senderReadinessContextPresentDuringObservation)"))
+        #expect(adapterSource.contains("opaque_call_correlation_present=\\(opaqueCallCorrelationPresent)"))
+        #expect(adapterSource.contains("opaque_call_correlation_match=\\(opaqueCallCorrelationMatch)"))
+        #expect(adapterSource.contains("remote_participant_observation_wait_started=\\(remoteParticipantObservationWaitStarted)"))
+        #expect(adapterSource.contains("remote_participant_observation_wait_completed=\\(remoteParticipantObservationWaitCompleted)"))
+        #expect(adapterSource.contains("remote_participant_observation_timeout_bucket=\\(remoteParticipantObservationTimeoutBucket)"))
+        #expect(adapterSource.contains("remote_participant_observation_final_classification=\\(remoteParticipantObservationFinalClassification)"))
+
+        #expect(adapterSource.contains("private static let remoteParticipantObservationWindowTimeout: TimeInterval = 8"))
+        #expect(adapterSource.contains("private static var remoteParticipantObservationWindowID: UUID?"))
+        #expect(adapterSource.contains("private static var remoteParticipantObservationWindowStartedAt: Date?"))
+        #expect(adapterSource.contains("scheduleRemoteParticipantObservationTimeoutIfNeeded()"))
+        #expect(adapterSource.contains("finishRemoteParticipantObservationTimeoutIfCurrent"))
+        #expect(adapterSource.contains("remoteParticipantObservationWaitStarted = true"))
+        #expect(adapterSource.contains("remoteParticipantObservationFinalClassification = \"pending_redacted\""))
+        #expect(adapterSource.contains("completeRemoteParticipantObservation(classification: \"remote_participant_seen_redacted\", timeoutBucket: \"none\")"))
+        #expect(adapterSource.contains("completeRemoteParticipantObservationTimeout(timeoutBucket: timeoutBucket)"))
+
+        #expect(adapterSource.contains("remote_participant_seen_redacted"))
+        #expect(adapterSource.contains("receiver_disconnected_before_sender_join_redacted"))
+        #expect(adapterSource.contains("receiver_observer_attached_late_redacted"))
+        #expect(adapterSource.contains("receiver_observer_not_active_during_sender_join_redacted"))
+        #expect(adapterSource.contains("sender_readiness_context_missing_redacted"))
+        #expect(adapterSource.contains("opaque_correlation_mismatch_redacted"))
+        #expect(adapterSource.contains("no_receiver_sender_connected_overlap_redacted"))
+        #expect(adapterSource.contains("sender_disconnected_before_observation_redacted"))
+        #expect(adapterSource.contains("remote_participant_event_timeout_redacted"))
+
+        #expect(adapterSource.contains("liveKitRoomDisconnected = observationActive ? false : controlledCallKitCleanupResult == \"ended\" || remoteParticipantObservationWaitCompleted"))
+        #expect(adapterSource.contains("liveKitCleanupResult = \"deferred_until_observation_terminal_redacted\""))
+        #expect(adapterSource.contains("disconnectCleanupDiagnosticsLiveKitCleanupRequested = controlledCallKitCleanupRequested && liveKitConnectAudioInvoked && !observationActive"))
+        #expect(!runtimeSnapshotSource.contains("pendingRemotePeerContextHandoff = nil"))
+        #expect(!adapterSource.contains("remoteParticipantObservationTimingRepairRawIdentifiersLogged = true"))
+
+        #expect(liveKitClientSource.contains("recordReceiverRemoteParticipantRuntimeObservation(participantCountBucket:"))
+        #expect(liveKitClientSource.contains("nonisolated func room(_ room: Room, participant: RemoteParticipant, didPublishTrack publication: RemoteTrackPublication)"))
+        #expect(liveKitClientSource.contains("nonisolated func room(_ room: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication)"))
+        #expect(liveKitClientSource.contains("audioTrackSubscribed: publication.kind == .audio"))
+        #expect(!liveKitClientSource.contains("participant.identity"))
+        #expect(!liveKitClientSource.contains("room.name"))
+    }
+
+    @Test
     func senderLiveKitReadinessHookArmsRedactedReadinessWithoutStartingRuntime() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
 
@@ -3215,6 +3278,9 @@ final class NativeIncomingCallLifecycleContractTests {
     @Test
     func senderConnectParityUsesReceiverProvenBoundedAudioPathWithoutRuntime() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+        let parityStart = try #require(adapterSource.range(of: "private struct SalemXSenderConnectParity")?.lowerBound)
+        let unificationStart = try #require(adapterSource.range(of: "private struct SalemXSenderConnectExecutorUnification")?.lowerBound)
+        let paritySource = String(adapterSource[parityStart..<unificationStart])
 
         #expect(adapterSource.contains("private struct SalemXSenderConnectParity"))
         #expect(adapterSource.contains("static let defaultEnabled = SalemXSenderConnectParity()"))
@@ -3297,13 +3363,16 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(!adapterSource.contains("senderConnectParityRawIdentityLogged = true"))
         #expect(!adapterSource.contains("senderConnectParityVideoAllowed = true"))
         #expect(!adapterSource.contains("senderConnectParityMatrixEventsAllowed = true"))
-        #expect(!adapterSource.contains(".connectAudio("))
+        #expect(!paritySource.contains(".connectAudio("))
     }
 
     @Test
     func senderConnectExecutorUnificationUsesReceiverExecutorWithoutRuntime() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
         let mediaEngineSource = try Self.sourceFile("ElementX/Sources/Services/Calls/LiveKitDirectCallMediaEngine.swift")
+        let unificationStart = try #require(adapterSource.range(of: "private struct SalemXSenderConnectExecutorUnification")?.lowerBound)
+        let failureDiagnosticsStart = try #require(adapterSource.range(of: "private struct SalemXSenderJoinFailureDiagnostics")?.lowerBound)
+        let unificationSource = String(adapterSource[unificationStart..<failureDiagnosticsStart])
 
         #expect(mediaEngineSource.contains("struct DirectCallLiveKitConnectExecutorModel: Equatable"))
         #expect(mediaEngineSource.contains("struct DirectCallLiveKitConnectExecutor"))
@@ -3402,7 +3471,7 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(!adapterSource.contains("senderConnectExecutorUnificationRawTokenLogged = true"))
         #expect(!adapterSource.contains("senderConnectExecutorUnificationRawRoomLogged = true"))
         #expect(!adapterSource.contains("senderConnectExecutorUnificationRawIdentityLogged = true"))
-        #expect(!adapterSource.contains(".connectAudio("))
+        #expect(!unificationSource.contains(".connectAudio("))
     }
 
     @Test
@@ -3474,7 +3543,8 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("names: [\"sender_transport_attempted\", \"transport_attempted\"]"))
         #expect(adapterSource.contains("redactedSenderJoinTransportResultQueryItem(components)"))
         #expect(adapterSource.contains("redactedSenderJoinFailureClassificationQueryItem(components)"))
-        #expect(adapterSource.contains("joinDiagnostics.blocksBeforeTransport"))
+        #expect(adapterSource.contains("var blocksBeforeTransport: Bool"))
+        #expect(adapterSource.contains("senderJoinFailureDiagnosticsTransportAttempted = diagnostics.transportAttempted"))
         #expect(adapterSource.contains("summary.recordSenderJoinFailureDiagnostics(joinDiagnostics)"))
         #expect(adapterSource.contains("baseSummary.recordSenderJoinFailureDiagnostics(senderJoinFailureDiagnosticsSnapshot)"))
 
@@ -3622,8 +3692,10 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("senderTransportErrorSurfaceRawTokenLogged = errorSurface.rawTokenLogged"))
         #expect(adapterSource.contains("summary.recordSenderTransportErrorSurface(transportErrorSurface)"))
         #expect(adapterSource.contains("baseSummary.recordSenderTransportErrorSurface(senderTransportErrorSurfaceSnapshot)"))
-        #expect(adapterSource.contains("finalErrorBucket = transportDiagnostics.errorBucket == \"none\" ? joinDiagnostics.errorBucket"))
-        #expect(adapterSource.contains("transportDiagnostics.errorBucket"))
+        #expect(adapterSource.contains("let transportDiagnostics = SalemXSenderTransportFailureDiagnostics.classify(.init(requested: requested"))
+        #expect(adapterSource.contains("let errorSurface = SalemXSenderTransportErrorSurface.classify(requested: requested"))
+        #expect(adapterSource.contains("return .init(joinFailure: joinDiagnostics,"))
+        #expect(adapterSource.contains("transportFailure: transportDiagnostics,"))
         #expect(adapterSource.contains("senderTransportErrorSurfaceFinalClassification = errorSurface.finalClassification"))
         #expect(!adapterSource.contains("senderTransportErrorSurfaceRawErrorLogged = true"))
         #expect(!adapterSource.contains("senderTransportErrorSurfaceRawURLLogged = true"))
@@ -3721,7 +3793,9 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("recordSenderLiveKitSDKFailureSurface(errorSurface.sdkFailureSurface)"))
         #expect(adapterSource.contains("summary.recordSenderTransportErrorSurface(transportErrorSurface)"))
         #expect(adapterSource.contains("baseSummary.recordSenderTransportErrorSurface(senderTransportErrorSurfaceSnapshot)"))
-        #expect(adapterSource.contains("finalErrorBucket = transportDiagnostics.errorBucket == \"none\" ? joinDiagnostics.errorBucket"))
+        #expect(adapterSource.contains("let transportDiagnostics = SalemXSenderTransportFailureDiagnostics.classify(.init(requested: requested"))
+        #expect(adapterSource.contains("let errorSurface = SalemXSenderTransportErrorSurface.classify(requested: requested"))
+        #expect(adapterSource.contains("transportErrorSurface: errorSurface"))
         #expect(adapterSource.contains("sender_join_success_but_remote_missing_redacted"))
 
         #expect(adapterSource.contains("summary.mediaConnectRequested = false"))
@@ -4669,6 +4743,7 @@ final class NativeIncomingCallLifecycleContractTests {
         let switchStart = try #require(adapterSource.range(of: "#if DEBUG && canImport(PushKit) && os(iOS)\nprivate struct SalemXControlledMediaConnectSwitch")?.lowerBound)
         let activationConfigurationStart = try #require(adapterSource.range(of: "private struct SalemXControlledMediaConnectActivationConfiguration")?.lowerBound)
         let proofSummaryStart = try #require(adapterSource.range(of: "private struct SalemXVoIPPushReceiptProofSummary")?.lowerBound)
+        let switchSource = String(adapterSource[switchStart..<activationConfigurationStart])
 
         #expect(switchStart < proofSummaryStart)
         #expect(activationConfigurationStart < proofSummaryStart)
@@ -4695,7 +4770,7 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("real_call_flow_started=false"))
         #expect(adapterSource.contains("connectMediaIfReadyWhenControlledGatesOpen(callID: String) async -> Result<DirectCallSession, DirectCallEngineError>"))
         #expect(adapterSource.contains("await directCallEngine.acceptCall(callID: callID)"))
-        #expect(!adapterSource.contains(".connectAudio("))
+        #expect(!switchSource.contains(".connectAudio("))
         #expect(!adapterSource.contains("requestRecordPermission"))
         #expect(!adapterSource.contains("AVCaptureDevice.requestAccess"))
         #expect(!adapterSource.contains("emitSignal(type:"))
@@ -4760,7 +4835,7 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("real_call_flow_started=false"))
         #expect(adapterSource.contains("connectMediaIfReadyWhenControlledGatesOpen(callID: String) async -> Result<DirectCallSession, DirectCallEngineError>"))
         #expect(adapterSource.contains("await directCallEngine.acceptCall(callID: callID)"))
-        #expect(!adapterSource.contains(".connectAudio("))
+        #expect(!enablementConfigurationSource.contains(".connectAudio("))
         #expect(!adapterSource.contains("requestRecordPermission"))
         #expect(!adapterSource.contains("AVCaptureDevice.requestAccess"))
         #expect(!adapterSource.contains("emitSignal(type:"))
@@ -4849,7 +4924,7 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("real_call_flow_started=false"))
         #expect(adapterSource.contains("connectMediaIfReadyWhenControlledGatesOpen(callID: String) async -> Result<DirectCallSession, DirectCallEngineError>"))
         #expect(adapterSource.contains("await directCallEngine.acceptCall(callID: callID)"))
-        #expect(!adapterSource.contains(".connectAudio("))
+        #expect(!executionGateSource.contains(".connectAudio("))
         #expect(!adapterSource.contains("requestRecordPermission"))
         #expect(!adapterSource.contains("AVCaptureDevice.requestAccess"))
         #expect(!adapterSource.contains("emitSignal(type:"))
@@ -5060,7 +5135,7 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("attemptControlledAudioConnectRuntimeIfAllowed(activationConfiguration: activationConfiguration"))
         #expect(adapterSource.contains("blockedReason = controlledConnectFirstAttemptAllowed ? \"none\" : controlledConnectFirstAttemptBlockedReason"))
 
-        #expect(!adapterSource.contains(".connectAudio("))
+        #expect(!firstAttemptSource.contains(".connectAudio("))
         #expect(!adapterSource.contains("requestRecordPermission"))
         #expect(!adapterSource.contains("AVCaptureDevice.requestAccess"))
         #expect(!adapterSource.contains("emitSignal(type:"))
@@ -5474,7 +5549,7 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("real_call_flow_started=false"))
         #expect(adapterSource.contains("connectMediaIfReadyWhenControlledGatesOpen(callID: String) async -> Result<DirectCallSession, DirectCallEngineError>"))
         #expect(adapterSource.contains("await directCallEngine.acceptCall(callID: callID)"))
-        #expect(!adapterSource.contains(".connectAudio("))
+        #expect(!activationPathSource.contains(".connectAudio("))
         #expect(!adapterSource.contains("requestRecordPermission"))
         #expect(!adapterSource.contains("AVCaptureDevice.requestAccess"))
         #expect(!adapterSource.contains("emitSignal(type:"))
@@ -5486,6 +5561,7 @@ final class NativeIncomingCallLifecycleContractTests {
         let debugGuardStart = try #require(adapterSource.range(of: "#if DEBUG && canImport(PushKit) && os(iOS)")?.lowerBound)
         let activationConfigurationStart = try #require(adapterSource.range(of: "private struct SalemXControlledMediaConnectActivationConfiguration")?.lowerBound)
         let summaryStart = try #require(adapterSource.range(of: "private struct SalemXVoIPPushReceiptProofSummary")?.lowerBound)
+        let activationConfigurationSource = String(adapterSource[activationConfigurationStart..<summaryStart])
 
         #expect(debugGuardStart < activationConfigurationStart)
         #expect(activationConfigurationStart < summaryStart)
@@ -5522,7 +5598,7 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("real_call_flow_started=false"))
         #expect(adapterSource.contains("connectMediaIfReadyWhenControlledGatesOpen(callID: String) async -> Result<DirectCallSession, DirectCallEngineError>"))
         #expect(adapterSource.contains("await directCallEngine.acceptCall(callID: callID)"))
-        #expect(!adapterSource.contains(".connectAudio("))
+        #expect(!activationConfigurationSource.contains(".connectAudio("))
         #expect(!adapterSource.contains("requestRecordPermission"))
         #expect(!adapterSource.contains("AVCaptureDevice.requestAccess"))
         #expect(!adapterSource.contains("emitSignal(type:"))

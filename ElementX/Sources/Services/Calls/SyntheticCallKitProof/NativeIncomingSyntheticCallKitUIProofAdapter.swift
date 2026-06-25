@@ -3599,6 +3599,26 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var remoteParticipantPresenceRepairNoVideo = true
     var remoteParticipantPresenceRepairNoMatrixEvents = true
     var remoteParticipantPresenceRepairRawIdentifiersLogged = false
+    var remoteParticipantObservationTimingRepairPresent = true
+    var remoteParticipantObservationTimingRepairDebugOnly = true
+    var remoteParticipantObservationTimingRepairBoundedWindow = true
+    var remoteParticipantObservationTimingRepairRawIdentifiersLogged = false
+    var receiverRoomRetainedForSenderObservation = false
+    var receiverObserverAttachedBeforeSenderJoin = false
+    var receiverObserverActiveDuringSenderJoin = false
+    var receiverCleanupDeferredUntilObservationTerminal = false
+    var receiverCleanupStartedBeforeSenderTerminal = false
+    var senderJoinTerminalSeenByReceiver = false
+    var senderRoomConnectedDuringReceiverWindow = false
+    var senderCleanupStartedBeforeReceiverObservation = false
+    var receiverSenderConnectedWindowOverlapObserved = false
+    var senderReadinessContextPresentDuringObservation = false
+    var opaqueCallCorrelationPresent = false
+    var opaqueCallCorrelationMatch = false
+    var remoteParticipantObservationWaitStarted = false
+    var remoteParticipantObservationWaitCompleted = false
+    var remoteParticipantObservationTimeoutBucket = "not_started"
+    var remoteParticipantObservationFinalClassification = "not_started"
     var senderLiveKitReadinessHookPresent = SalemXSenderLiveKitReadinessHook.defaultDisabled.present
     var senderLiveKitReadinessHookDebugOnly = SalemXSenderLiveKitReadinessHook.defaultDisabled.debugOnly
     var senderLiveKitReadinessHookDefaultDisabled = SalemXSenderLiveKitReadinessHook.defaultDisabled.isDefaultDisabled
@@ -4273,6 +4293,26 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "remote_participant_presence_repair_no_video=\(remoteParticipantPresenceRepairNoVideo)",
             "remote_participant_presence_repair_no_matrix_events=\(remoteParticipantPresenceRepairNoMatrixEvents)",
             "remote_participant_presence_repair_raw_identifiers_logged=\(remoteParticipantPresenceRepairRawIdentifiersLogged)",
+            "remote_participant_observation_timing_repair_present=\(remoteParticipantObservationTimingRepairPresent)",
+            "remote_participant_observation_timing_repair_debug_only=\(remoteParticipantObservationTimingRepairDebugOnly)",
+            "remote_participant_observation_timing_repair_bounded_window=\(remoteParticipantObservationTimingRepairBoundedWindow)",
+            "remote_participant_observation_timing_repair_raw_identifiers_logged=\(remoteParticipantObservationTimingRepairRawIdentifiersLogged)",
+            "receiver_room_retained_for_sender_observation=\(receiverRoomRetainedForSenderObservation)",
+            "receiver_observer_attached_before_sender_join=\(receiverObserverAttachedBeforeSenderJoin)",
+            "receiver_observer_active_during_sender_join=\(receiverObserverActiveDuringSenderJoin)",
+            "receiver_cleanup_deferred_until_observation_terminal=\(receiverCleanupDeferredUntilObservationTerminal)",
+            "receiver_cleanup_started_before_sender_terminal=\(receiverCleanupStartedBeforeSenderTerminal)",
+            "sender_join_terminal_seen_by_receiver=\(senderJoinTerminalSeenByReceiver)",
+            "sender_room_connected_during_receiver_window=\(senderRoomConnectedDuringReceiverWindow)",
+            "sender_cleanup_started_before_receiver_observation=\(senderCleanupStartedBeforeReceiverObservation)",
+            "receiver_sender_connected_window_overlap_observed=\(receiverSenderConnectedWindowOverlapObserved)",
+            "sender_readiness_context_present_during_observation=\(senderReadinessContextPresentDuringObservation)",
+            "opaque_call_correlation_present=\(opaqueCallCorrelationPresent)",
+            "opaque_call_correlation_match=\(opaqueCallCorrelationMatch)",
+            "remote_participant_observation_wait_started=\(remoteParticipantObservationWaitStarted)",
+            "remote_participant_observation_wait_completed=\(remoteParticipantObservationWaitCompleted)",
+            "remote_participant_observation_timeout_bucket=\(remoteParticipantObservationTimeoutBucket)",
+            "remote_participant_observation_final_classification=\(remoteParticipantObservationFinalClassification)",
             "sender_livekit_readiness_hook_present=\(senderLiveKitReadinessHookPresent)",
             "sender_livekit_readiness_hook_debug_only=\(senderLiveKitReadinessHookDebugOnly)",
             "sender_livekit_readiness_hook_default_disabled=\(senderLiveKitReadinessHookDefaultDisabled)",
@@ -4591,7 +4631,8 @@ private extension SalemXVoIPPushReceiptProofSummary {
         disconnectCleanupDiagnosticsLocalCleanupCompleted = controlledCallKitCleanupResult == "ended"
         disconnectCleanupDiagnosticsProviderEndReported = disconnectCleanupDiagnosticsLocalCleanupCompleted && !disconnectCleanupDiagnosticsEndActionExpected
         disconnectCleanupDiagnosticsAudioSessionDeactivated = callKitProviderDidDeactivateAudioSession
-        disconnectCleanupDiagnosticsLiveKitCleanupRequested = controlledCallKitCleanupRequested && liveKitConnectAudioInvoked
+        let observationActive = remoteParticipantObservationWaitStarted && !remoteParticipantObservationWaitCompleted
+        disconnectCleanupDiagnosticsLiveKitCleanupRequested = controlledCallKitCleanupRequested && liveKitConnectAudioInvoked && !observationActive
         disconnectCleanupDiagnosticsLiveKitCleanupCompleted = disconnectCleanupDiagnosticsLiveKitCleanupRequested && disconnectCleanupDiagnosticsLocalCleanupCompleted
         disconnectCleanupDiagnosticsOneShotConsumed = physical6RuntimeEnablementURLHookConsumed
         disconnectCleanupDiagnosticsNoRepeatedConnect = !controlledConnectFirstAttemptRepeated
@@ -4686,14 +4727,21 @@ private extension SalemXVoIPPushReceiptProofSummary {
             liveKitAudioLivenessErrorBucket = "remote_participant_missing_redacted"
         }
 
-        liveKitRoomDisconnected = controlledCallKitCleanupResult == "ended"
+        let observationActive = remoteParticipantObservationWaitStarted && !remoteParticipantObservationWaitCompleted
+        liveKitRoomDisconnected = observationActive ? false : controlledCallKitCleanupResult == "ended" || remoteParticipantObservationWaitCompleted
         microphonePermissionResult = microphonePermissionRequested ? "requested_redacted" : "not_requested_or_not_required_redacted"
         microphonePermissionNotRequiredReason = microphonePermissionRequested ? "requested_redacted" : "receive_only_audio_session_redacted"
         audioRouteAvailable = callKitProviderDidActivateAudioSession
         audioRouteResult = audioRouteAvailable ? "available_redacted" : "not_observed_redacted"
-        liveKitCleanupRequested = disconnectCleanupDiagnosticsLiveKitCleanupRequested
-        liveKitCleanupCompleted = disconnectCleanupDiagnosticsLiveKitCleanupCompleted
-        liveKitCleanupResult = liveKitCleanupCompleted ? "completed_redacted" : (liveKitCleanupRequested ? "not_completed_redacted" : "not_requested")
+        if observationActive {
+            liveKitCleanupRequested = false
+            liveKitCleanupCompleted = false
+            liveKitCleanupResult = "deferred_until_observation_terminal_redacted"
+        } else {
+            liveKitCleanupRequested = disconnectCleanupDiagnosticsLiveKitCleanupRequested || (remoteParticipantObservationWaitCompleted && liveKitConnectAudioInvoked)
+            liveKitCleanupCompleted = disconnectCleanupDiagnosticsLiveKitCleanupCompleted || (remoteParticipantObservationWaitCompleted && liveKitConnectAudioInvoked)
+            liveKitCleanupResult = liveKitCleanupCompleted ? "completed_redacted" : (liveKitCleanupRequested ? "not_completed_redacted" : "not_requested")
+        }
     }
 
     mutating func refreshRemoteParticipantPresenceRepairDiagnostics() {
@@ -4747,7 +4795,68 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverRemoteParticipantObserverRawIdentifiersLogged = false
 
         refreshReceiverRemoteParticipantObserverClassification()
+        refreshRemoteParticipantObservationTimingRepairDiagnostics()
         refreshSenderJoinTriggerOrchestration()
+    }
+
+    mutating func completeRemoteParticipantObservation(classification: String, timeoutBucket: String) {
+        remoteParticipantObservationWaitCompleted = true
+        remoteParticipantObservationTimeoutBucket = timeoutBucket
+        remoteParticipantObservationFinalClassification = classification
+        receiverCleanupDeferredUntilObservationTerminal = false
+        if liveKitConnectAudioInvoked {
+            liveKitCleanupRequested = true
+            liveKitCleanupCompleted = true
+            liveKitCleanupResult = "completed_redacted"
+            liveKitRoomDisconnected = true
+        }
+        refreshReceiverRemoteParticipantObserverClassification()
+        refreshRemoteParticipantObservationTimingRepairDiagnostics()
+    }
+
+    mutating func refreshRemoteParticipantObservationTimingRepairDiagnostics() {
+        remoteParticipantObservationTimingRepairPresent = true
+        remoteParticipantObservationTimingRepairDebugOnly = true
+        remoteParticipantObservationTimingRepairBoundedWindow = true
+        remoteParticipantObservationTimingRepairRawIdentifiersLogged = false
+
+        let receiverJoinSucceeded = liveKitJoinResult == "success_redacted"
+        if receiverJoinSucceeded, !remoteParticipantObservationWaitStarted {
+            remoteParticipantObservationWaitStarted = true
+            remoteParticipantObservationTimeoutBucket = "pending_redacted"
+            remoteParticipantObservationFinalClassification = "pending_redacted"
+        }
+
+        senderReadinessContextPresentDuringObservation = !senderReadinessRuntimeHandoffMissingClassified &&
+            (senderReadinessRuntimeHandoffReceivedByRuntime || senderLiveKitReadinessHookArmed)
+        opaqueCallCorrelationPresent = senderReadinessContextPresentDuringObservation || remotePeerContextHandoffReceivedByRuntime || remotePeerContextHandoffArmedBeforeAPNs
+        opaqueCallCorrelationMatch = opaqueCallCorrelationPresent &&
+            (senderReadinessRuntimeHandoffSameRoomReady || senderLiveKitReadinessHookSameRoomReady || remotePeerContextHandoffReceivedByRuntime)
+        senderJoinTerminalSeenByReceiver = senderTriggerCompleted || senderSDKTimelineTerminalSeen
+        senderRoomConnectedDuringReceiverWindow = remoteParticipantObservationWaitStarted &&
+            (senderSideLiveKitJoinResult == SalemXSenderSideLiveKitJoinHook.successResult || senderLiveKitSDKTimelineConnectedStateSeen)
+        senderCleanupStartedBeforeReceiverObservation = senderLiveKitSDKTimelineDisconnectedStateSeen &&
+            !remoteParticipantObservationWaitCompleted &&
+            !liveKitRemoteParticipantSeen
+        receiverRoomRetainedForSenderObservation = remoteParticipantObservationWaitStarted &&
+            !remoteParticipantObservationWaitCompleted &&
+            receiverJoinSucceeded
+        receiverObserverAttachedBeforeSenderJoin = remoteParticipantObservationWaitStarted &&
+            (!senderTriggerStarted || receiverRemoteParticipantObserverStarted)
+        receiverObserverActiveDuringSenderJoin = receiverRemoteParticipantObserverStarted &&
+            remoteParticipantObservationWaitStarted &&
+            !remoteParticipantObservationWaitCompleted &&
+            (senderTriggerStarted || senderRoomConnectedDuringReceiverWindow)
+        receiverSenderConnectedWindowOverlapObserved = receiverRoomRetainedForSenderObservation &&
+            senderRoomConnectedDuringReceiverWindow
+        receiverCleanupStartedBeforeSenderTerminal = liveKitRoomDisconnected && !senderJoinTerminalSeenByReceiver
+        receiverCleanupDeferredUntilObservationTerminal = receiverRoomRetainedForSenderObservation &&
+            controlledCallKitCleanupRequested &&
+            liveKitConnectAudioInvoked
+
+        if liveKitRemoteParticipantSeen, !remoteParticipantObservationWaitCompleted {
+            completeRemoteParticipantObservation(classification: "remote_participant_seen_redacted", timeoutBucket: "none")
+        }
     }
 
     mutating func refreshSenderJoinTriggerOrchestration() {
@@ -5342,6 +5451,42 @@ private extension SalemXVoIPPushReceiptProofSummary {
         } else {
             liveKitAudioLivenessErrorBucket = errorBucket
         }
+        if participantSeen {
+            completeRemoteParticipantObservation(classification: "remote_participant_seen_redacted", timeoutBucket: "none")
+        }
+    }
+
+    mutating func completeRemoteParticipantObservationTimeout(timeoutBucket: String) {
+        completeRemoteParticipantObservation(classification: remoteParticipantObservationTimeoutClassification(),
+                                             timeoutBucket: timeoutBucket)
+    }
+
+    private func remoteParticipantObservationTimeoutClassification() -> String {
+        if liveKitRemoteParticipantSeen {
+            return "remote_participant_seen_redacted"
+        }
+        if liveKitRoomDisconnected, !senderTriggerStarted {
+            return "receiver_disconnected_before_sender_join_redacted"
+        }
+        if !receiverRemoteParticipantObserverStarted {
+            return "receiver_observer_attached_late_redacted"
+        }
+        if senderTriggerStarted, !receiverObserverActiveDuringSenderJoin {
+            return "receiver_observer_not_active_during_sender_join_redacted"
+        }
+        if !senderReadinessContextPresentDuringObservation {
+            return "sender_readiness_context_missing_redacted"
+        }
+        if !opaqueCallCorrelationMatch {
+            return "opaque_correlation_mismatch_redacted"
+        }
+        if senderRoomConnectedDuringReceiverWindow, !receiverSenderConnectedWindowOverlapObserved {
+            return "no_receiver_sender_connected_overlap_redacted"
+        }
+        if senderCleanupStartedBeforeReceiverObservation {
+            return "sender_disconnected_before_observation_redacted"
+        }
+        return "remote_participant_event_timeout_redacted"
     }
 
     mutating func recordMetadataCredentialsBoundaryRepairProof(allowsHookConsumptionAfterCredentials: Bool = false) {
@@ -6571,6 +6716,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let pendingMetadataEndpointPathPrefix = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata"
     private static let voIPPushReceiptCallKitReportTimeout: TimeInterval = 3
     private static let voIPPushReceiptAnswerableWindowTimeout: TimeInterval = 1.5
+    private static let remoteParticipantObservationWindowTimeout: TimeInterval = 8
     private static let localBackgroundCallKitOnlyReportDelay: TimeInterval = 5
     private static let lock = NSLock()
     private static var registrar: DirectCallPushKitRegistrar?
@@ -6597,6 +6743,8 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var pushKitCompletionDate: Date?
     private static var pushKitCompletionAnswerableWindowID: UUID?
     private static var pushKitCompletionAnswerableWindowFinish: ((String) -> Void)?
+    private static var remoteParticipantObservationWindowID: UUID?
+    private static var remoteParticipantObservationWindowStartedAt: Date?
     private static var pendingOperatorReadyToAnswer = false
     private static var pendingOperatorExpectedSurface = "unknown"
     private static let pendingForegroundCallMetadataMaxAge: TimeInterval = 120
@@ -7866,7 +8014,6 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         let senderJoinFailureDiagnosticsSnapshot = senderJoinFailureDiagnostics
         let senderTransportFailureDiagnosticsSnapshot = senderTransportFailureDiagnostics
         let senderTransportErrorSurfaceSnapshot = senderTransportErrorSurface
-        pendingRemotePeerContextHandoff = nil
         lock.unlock()
 
         baseSummary.operatorReadyToAnswer = operatorReadyToAnswer
@@ -8218,6 +8365,62 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         } else {
             return ">2000ms"
         }
+    }
+
+    private static func scheduleRemoteParticipantObservationTimeoutIfNeeded() {
+        lock.lock()
+        let summary = latestVoIPPushReceiptSummary
+        guard summary.remoteParticipantObservationWaitStarted,
+              !summary.remoteParticipantObservationWaitCompleted else {
+            if summary.remoteParticipantObservationWaitCompleted {
+                remoteParticipantObservationWindowID = nil
+                remoteParticipantObservationWindowStartedAt = nil
+                if summary.remoteParticipantObservationFinalClassification != "pending_redacted" {
+                    pendingRemotePeerContextHandoff = nil
+                }
+            }
+            lock.unlock()
+            return
+        }
+        guard remoteParticipantObservationWindowID == nil else {
+            lock.unlock()
+            return
+        }
+
+        let windowID = UUID()
+        remoteParticipantObservationWindowID = windowID
+        remoteParticipantObservationWindowStartedAt = Date()
+        lock.unlock()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + remoteParticipantObservationWindowTimeout) {
+            finishRemoteParticipantObservationTimeoutIfCurrent(windowID)
+        }
+    }
+
+    private static func finishRemoteParticipantObservationTimeoutIfCurrent(_ windowID: UUID) {
+        lock.lock()
+        guard remoteParticipantObservationWindowID == windowID else {
+            lock.unlock()
+            return
+        }
+
+        var summary = latestVoIPPushReceiptSummary
+        guard summary.remoteParticipantObservationWaitStarted,
+              !summary.remoteParticipantObservationWaitCompleted else {
+            remoteParticipantObservationWindowID = nil
+            remoteParticipantObservationWindowStartedAt = nil
+            lock.unlock()
+            return
+        }
+
+        let timeoutBucket = elapsedBucket(from: remoteParticipantObservationWindowStartedAt)
+        summary.completeRemoteParticipantObservationTimeout(timeoutBucket: timeoutBucket)
+        remoteParticipantObservationWindowID = nil
+        remoteParticipantObservationWindowStartedAt = nil
+        pendingRemotePeerContextHandoff = nil
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
     }
 
     private static func currentApplicationStateProof() -> String {
@@ -8695,6 +8898,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         let proof = summary.redactedLines.joined(separator: "\n")
         lock.unlock()
         writeVoIPPushReceiptProof(proof)
+        scheduleRemoteParticipantObservationTimeoutIfNeeded()
     }
 
     private static func updateLatestStartupPushKitRegistrySummary(_ summary: SalemXStartupPushKitRegistryProofSummary) {
@@ -9125,6 +9329,35 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
         lock.lock()
         var summary = latestVoIPPushReceiptSummary
         summary.recordForegroundPendingCallMetadataHandoff(session: session, source: source)
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+    }
+
+    static func recordReceiverRemoteParticipantRuntimeObservation(participantCountBucket: String,
+                                                                  audioTrackSubscribed: Bool,
+                                                                  audioTrackUnmuted: Bool) {
+        let safeParticipantCountBucket: String
+        switch participantCountBucket {
+        case "0", "1", "2+":
+            safeParticipantCountBucket = participantCountBucket
+        default:
+            safeParticipantCountBucket = "unknown"
+        }
+
+        lock.lock()
+        var summary = latestVoIPPushReceiptSummary
+        summary.recordRemoteAudioLivenessObservation(participantSeen: true,
+                                                     participantCountBucket: safeParticipantCountBucket,
+                                                     audioTrackSubscribed: audioTrackSubscribed,
+                                                     audioTrackUnmuted: audioTrackUnmuted,
+                                                     audioLevelObserved: false,
+                                                     livenessObserved: false)
+        if summary.remoteParticipantObservationWaitCompleted {
+            remoteParticipantObservationWindowID = nil
+            remoteParticipantObservationWindowStartedAt = nil
+            pendingRemotePeerContextHandoff = nil
+        }
         lock.unlock()
 
         updateLatestVoIPPushReceiptSummary(summary)
