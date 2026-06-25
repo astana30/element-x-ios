@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-RemoteParticipantObservationRuntimeActivationRepair — Retry14 proved receiver LiveKit join and real sender runtime join both succeeded, but the receiver observation window was not activated in the physical controlled-connect path. The DEBUG receiver runtime path now starts the bounded remote-participant observation window after receiver LiveKit success, propagates the real sender terminal result into receiver proof, and defers receiver cleanup until remote participant seen, sender terminal failure, or bounded timeout. No APNs, physical connect, LiveKit join, microphone/camera permission, Matrix event emit, or full call flow was performed by this repair. The next phase is `2.48Z-Physical2-Retry15 — one-shot real sender join with activated receiver observation window`.
+After 2.48Z-ReceiverConnectedWindowOverlapRepair — Retry15 proved the receiver and real sender runtime joins can both succeed, but the receiver connected room was not retained through sender observation, so no receiver-sender connected-window overlap was observed. The DEBUG receiver controlled-connect path now keeps a real connected-session lease around the LiveKit client, delegate/observer, E2EE context, key store, and cleanup task until remote participant seen, sender terminal failure, or bounded observation timeout. The physical helper now waits for the receiver lease and observation window before triggering sender runtime join. No APNs, physical connect, LiveKit join, microphone/camera permission, Matrix event emit, or full call flow was performed by this repair. The next phase is `2.48Z-Physical2-Retry16 — one-shot real sender join after receiver observation lease becomes active`.
 
 ## Latest App Code Checkpoint
 
@@ -38,6 +38,35 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Checksum: `654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e`
 
 ## Proven Checkpoints
+
+- 2.48Z-ReceiverConnectedWindowOverlapRepair records Retry15 as real sender runtime join success / receiver connected-window overlap not observed triage, then retains the real receiver connected session through the bounded observation window without APNs/connect:
+  - Retry15 physical proof:
+    ```text
+    receiver_livekit_join_result=success_redacted
+    sender_runtime_join_runtime_result=success_redacted
+    sender_runtime_join_executor_invoked=true
+    receiver_room_retained_for_sender_observation=false
+    receiver_observer_attached_before_sender_join=true
+    receiver_observer_active_during_sender_join=false
+    receiver_cleanup_deferred_until_observation_terminal=true
+    receiver_cleanup_started_before_sender_terminal=false
+    receiver_sender_connected_window_overlap_observed=false
+    remote_participant_observation_final_classification=remote_participant_event_timeout_redacted
+    ```
+  - Repair behavior:
+    ```text
+    receiver_connected_session_lease_acquired=<runtime_bool>
+    receiver_connected_session_lease_room_retained=<runtime_bool>
+    receiver_connected_session_lease_delegate_retained=<runtime_bool>
+    receiver_connected_session_lease_observer_retained=<runtime_bool>
+    receiver_connected_session_lease_task_retained=<runtime_bool>
+    receiver_connected_session_lease_released=<terminal_bool>
+    receiver_connected_session_lease_release_reason=<redacted_bucket>
+    ```
+  - The lease holds the actual receiver LiveKit client and E2EE resources; cleanup is deterministic only after participant seen, sender terminal failure, or bounded timeout.
+  - The next physical helper gates sender runtime join until the receiver lease and observation window are active.
+  - No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, microphone/camera permission, video, Matrix event emit, full call flow, raw identifier logging, or signing/project file edit was performed.
+  - Next phase: `2.48Z-Physical2-Retry16 — one-shot real sender join after receiver observation lease becomes active`.
 
 - 2.48Z-RemoteParticipantObservationRuntimeActivationRepair closes Retry14 as real sender runtime join success / receiver observation window not activated / remote participant not observed triage, then wires the already-built observation timing repair into the actual receiver controlled-connect runtime path without APNs/connect:
   - Retry14 physical proof:

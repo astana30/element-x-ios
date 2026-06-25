@@ -3621,6 +3621,16 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var remoteParticipantObservationTimingRepairDebugOnly = true
     var remoteParticipantObservationTimingRepairBoundedWindow = true
     var remoteParticipantObservationTimingRepairRawIdentifiersLogged = false
+    var receiverConnectedSessionLeasePresent = true
+    var receiverConnectedSessionLeaseDebugOnly = true
+    var receiverConnectedSessionLeaseAcquired = false
+    var receiverConnectedSessionLeaseRoomRetained = false
+    var receiverConnectedSessionLeaseDelegateRetained = false
+    var receiverConnectedSessionLeaseObserverRetained = false
+    var receiverConnectedSessionLeaseTaskRetained = false
+    var receiverConnectedSessionLeaseReleased = false
+    var receiverConnectedSessionLeaseReleaseReason = "not_requested"
+    var receiverConnectedSessionLeaseRepeatedRelease = false
     var receiverRoomRetainedForSenderObservation = false
     var receiverObserverAttachedBeforeSenderJoin = false
     var receiverObserverActiveDuringSenderJoin = false
@@ -4315,6 +4325,16 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "remote_participant_observation_timing_repair_debug_only=\(remoteParticipantObservationTimingRepairDebugOnly)",
             "remote_participant_observation_timing_repair_bounded_window=\(remoteParticipantObservationTimingRepairBoundedWindow)",
             "remote_participant_observation_timing_repair_raw_identifiers_logged=\(remoteParticipantObservationTimingRepairRawIdentifiersLogged)",
+            "receiver_connected_session_lease_present=\(receiverConnectedSessionLeasePresent)",
+            "receiver_connected_session_lease_debug_only=\(receiverConnectedSessionLeaseDebugOnly)",
+            "receiver_connected_session_lease_acquired=\(receiverConnectedSessionLeaseAcquired)",
+            "receiver_connected_session_lease_room_retained=\(receiverConnectedSessionLeaseRoomRetained)",
+            "receiver_connected_session_lease_delegate_retained=\(receiverConnectedSessionLeaseDelegateRetained)",
+            "receiver_connected_session_lease_observer_retained=\(receiverConnectedSessionLeaseObserverRetained)",
+            "receiver_connected_session_lease_task_retained=\(receiverConnectedSessionLeaseTaskRetained)",
+            "receiver_connected_session_lease_released=\(receiverConnectedSessionLeaseReleased)",
+            "receiver_connected_session_lease_release_reason=\(receiverConnectedSessionLeaseReleaseReason)",
+            "receiver_connected_session_lease_repeated_release=\(receiverConnectedSessionLeaseRepeatedRelease)",
             "receiver_room_retained_for_sender_observation=\(receiverRoomRetainedForSenderObservation)",
             "receiver_observer_attached_before_sender_join=\(receiverObserverAttachedBeforeSenderJoin)",
             "receiver_observer_active_during_sender_join=\(receiverObserverActiveDuringSenderJoin)",
@@ -4821,7 +4841,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         remoteParticipantObservationWaitCompleted = true
         remoteParticipantObservationTimeoutBucket = timeoutBucket
         remoteParticipantObservationFinalClassification = classification
-        receiverCleanupDeferredUntilObservationTerminal = false
+        receiverCleanupDeferredUntilObservationTerminal = receiverCleanupDeferredUntilObservationTerminal || liveKitConnectAudioInvoked
         if liveKitConnectAudioInvoked {
             liveKitCleanupRequested = true
             liveKitCleanupCompleted = true
@@ -4839,6 +4859,9 @@ private extension SalemXVoIPPushReceiptProofSummary {
         remoteParticipantObservationTimingRepairRawIdentifiersLogged = false
 
         let receiverJoinSucceeded = liveKitJoinResult == "success_redacted"
+        let receiverLeaseActive = receiverConnectedSessionLeaseAcquired &&
+            receiverConnectedSessionLeaseRoomRetained &&
+            !receiverConnectedSessionLeaseReleased
         if receiverJoinSucceeded, !remoteParticipantObservationWaitStarted {
             remoteParticipantObservationWaitStarted = true
             remoteParticipantObservationTimeoutBucket = "pending_redacted"
@@ -4856,23 +4879,33 @@ private extension SalemXVoIPPushReceiptProofSummary {
         senderCleanupStartedBeforeReceiverObservation = senderLiveKitSDKTimelineDisconnectedStateSeen &&
             !remoteParticipantObservationWaitCompleted &&
             !liveKitRemoteParticipantSeen
-        receiverRoomRetainedForSenderObservation = remoteParticipantObservationWaitStarted &&
-            !remoteParticipantObservationWaitCompleted &&
-            receiverJoinSucceeded
-        receiverObserverAttachedBeforeSenderJoin = remoteParticipantObservationWaitStarted &&
-            (!senderTriggerStarted || receiverRemoteParticipantObserverStarted)
-        receiverObserverActiveDuringSenderJoin = receiverRemoteParticipantObserverStarted &&
-            remoteParticipantObservationWaitStarted &&
-            !remoteParticipantObservationWaitCompleted &&
-            (senderTriggerStarted || senderRoomConnectedDuringReceiverWindow)
-        receiverSenderConnectedWindowOverlapObserved = receiverRoomRetainedForSenderObservation &&
-            senderRoomConnectedDuringReceiverWindow
+        receiverRoomRetainedForSenderObservation = receiverRoomRetainedForSenderObservation ||
+            (remoteParticipantObservationWaitStarted &&
+                receiverJoinSucceeded &&
+                (receiverLeaseActive || receiverConnectedSessionLeaseRoomRetained))
+        receiverObserverAttachedBeforeSenderJoin = receiverObserverAttachedBeforeSenderJoin ||
+            (remoteParticipantObservationWaitStarted &&
+                (!senderTriggerStarted || receiverRemoteParticipantObserverStarted) &&
+                receiverConnectedSessionLeaseObserverRetained)
+        receiverObserverActiveDuringSenderJoin = receiverObserverActiveDuringSenderJoin ||
+            (receiverRemoteParticipantObserverStarted &&
+                remoteParticipantObservationWaitStarted &&
+                !remoteParticipantObservationWaitCompleted &&
+                receiverLeaseActive &&
+                (senderTriggerStarted || senderRoomConnectedDuringReceiverWindow))
+        receiverSenderConnectedWindowOverlapObserved = receiverSenderConnectedWindowOverlapObserved ||
+            (receiverRoomRetainedForSenderObservation &&
+                senderRoomConnectedDuringReceiverWindow &&
+                !receiverConnectedSessionLeaseReleased)
         receiverCleanupStartedBeforeSenderTerminal = liveKitRoomDisconnected &&
             !senderJoinTerminalSeenByReceiver &&
-            !remoteParticipantObservationWaitCompleted
-        receiverCleanupDeferredUntilObservationTerminal = remoteParticipantObservationWaitStarted &&
-            controlledCallKitCleanupRequested &&
-            liveKitConnectAudioInvoked
+            !remoteParticipantObservationWaitCompleted &&
+            !receiverLeaseActive
+        receiverCleanupDeferredUntilObservationTerminal = receiverCleanupDeferredUntilObservationTerminal ||
+            (remoteParticipantObservationWaitStarted &&
+                controlledCallKitCleanupRequested &&
+                liveKitConnectAudioInvoked &&
+                receiverLeaseActive)
 
         if liveKitRemoteParticipantSeen, !remoteParticipantObservationWaitCompleted {
             completeRemoteParticipantObservation(classification: "remote_participant_seen_redacted", timeoutBucket: "none")
@@ -5514,20 +5547,28 @@ private extension SalemXVoIPPushReceiptProofSummary {
         if liveKitRemoteParticipantSeen {
             return "remote_participant_seen_redacted"
         }
+        if !receiverConnectedSessionLeaseAcquired {
+            return "receiver_lease_not_acquired_redacted"
+        }
+        if receiverConnectedSessionLeaseReleased, !senderTriggerStarted {
+            return "receiver_room_released_before_sender_join_redacted"
+        }
         if liveKitRoomDisconnected, !senderTriggerStarted {
             return "receiver_disconnected_before_sender_join_redacted"
         }
-        if !receiverRemoteParticipantObserverStarted {
-            return "receiver_observer_attached_late_redacted"
-        }
-        if senderTriggerStarted, !receiverObserverActiveDuringSenderJoin {
-            return "receiver_observer_not_active_during_sender_join_redacted"
+        let receiverObserverInactive = !receiverRemoteParticipantObserverStarted ||
+            (senderTriggerStarted && !receiverObserverActiveDuringSenderJoin)
+        if receiverObserverInactive {
+            return "receiver_observer_not_active_redacted"
         }
         if !senderReadinessContextPresentDuringObservation {
             return "sender_readiness_context_missing_redacted"
         }
         if !opaqueCallCorrelationMatch {
             return "opaque_correlation_mismatch_redacted"
+        }
+        if senderRoomConnectedDuringReceiverWindow, !receiverRoomRetainedForSenderObservation {
+            return "sender_connected_outside_receiver_window_redacted"
         }
         if senderRoomConnectedDuringReceiverWindow, !receiverSenderConnectedWindowOverlapObserved {
             return "no_receiver_sender_connected_overlap_redacted"
@@ -6047,6 +6088,82 @@ private extension SalemXVoIPPushReceiptProofSummary {
         activateRemoteParticipantObservationRuntimeWindowIfNeeded()
         refreshDisconnectCleanupDiagnostics()
         refreshSenderJoinTriggerOrchestration()
+    }
+
+    mutating func recordReceiverConnectedSessionLeaseAcquired(taskRetained: Bool) {
+        receiverConnectedSessionLeasePresent = true
+        receiverConnectedSessionLeaseDebugOnly = true
+        receiverConnectedSessionLeaseAcquired = true
+        receiverConnectedSessionLeaseRoomRetained = true
+        receiverConnectedSessionLeaseDelegateRetained = true
+        receiverConnectedSessionLeaseObserverRetained = true
+        receiverConnectedSessionLeaseTaskRetained = taskRetained
+        receiverConnectedSessionLeaseReleased = false
+        receiverConnectedSessionLeaseReleaseReason = "not_released"
+        receiverConnectedSessionLeaseRepeatedRelease = false
+        liveKitRoomConnected = true
+        liveKitRoomDisconnected = false
+        liveKitLocalParticipantPresent = true
+        receiverRemoteParticipantObserverStarted = true
+        remoteParticipantObservationWaitStarted = true
+        if remoteParticipantObservationTimeoutBucket == "not_started" {
+            remoteParticipantObservationTimeoutBucket = "pending_redacted"
+        }
+        if remoteParticipantObservationFinalClassification == "not_started" {
+            remoteParticipantObservationFinalClassification = "pending_redacted"
+        }
+        liveKitCleanupRequested = false
+        liveKitCleanupCompleted = false
+        liveKitCleanupResult = "deferred_until_observation_terminal_redacted"
+        receiverCleanupDeferredUntilObservationTerminal = true
+        refreshReceiverRemoteParticipantObserverClassification()
+        refreshRemoteParticipantObservationTimingRepairDiagnostics()
+    }
+
+    mutating func recordReceiverControlledRuntimeConnectResult(succeeded: Bool, errorBucket: String) {
+        controlledConnectFirstAttemptRequested = true
+        controlledConnectFirstAttemptAllowed = true
+        controlledConnectFirstAttemptStarted = true
+        controlledConnectFirstAttemptCompleted = true
+        controlledConnectFirstAttemptRepeated = false
+        controlledConnectFirstAttemptResult = succeeded ? "success_redacted" : "blocked_redacted"
+        controlledConnectFirstAttemptErrorBucket = succeeded ? "none" : errorBucket
+        controlledConnectFirstAttemptAudioOnly = true
+        controlledConnectFirstAttemptVideoAllowed = false
+        controlledConnectFirstAttemptMatrixEventsAllowed = false
+        controlledConnectFirstAttemptRawCredentialsLogged = false
+        controlledConnectFirstAttemptBlockedReason = succeeded ? "none" : "runtime_connect_failed_redacted"
+        mediaConnectRequested = true
+        mediaConnectAttempted = true
+        liveKitJoinRequested = true
+        liveKitConnectAudioInvoked = true
+        microphonePermissionRequested = false
+        cameraPermissionRequested = false
+        matrixEventEmitRequested = false
+        realCallFlowStarted = false
+        mediaConnectEngineInvoked = true
+        if succeeded {
+            activateRemoteParticipantObservationRuntimeWindowIfNeeded()
+        } else {
+            refreshRemoteAudioLivenessDiagnostics()
+            refreshDisconnectCleanupDiagnostics()
+            refreshSenderJoinTriggerOrchestration()
+        }
+    }
+
+    mutating func recordReceiverConnectedSessionLeaseReleased(reason: String, repeated: Bool) {
+        receiverConnectedSessionLeasePresent = true
+        receiverConnectedSessionLeaseDebugOnly = true
+        receiverConnectedSessionLeaseReleased = true
+        receiverConnectedSessionLeaseReleaseReason = reason
+        receiverConnectedSessionLeaseRepeatedRelease = repeated
+        receiverConnectedSessionLeaseTaskRetained = false
+        liveKitRoomDisconnected = true
+        liveKitCleanupRequested = true
+        liveKitCleanupCompleted = true
+        liveKitCleanupResult = "completed_redacted"
+        refreshReceiverRemoteParticipantObserverClassification()
+        refreshRemoteParticipantObservationTimingRepairDiagnostics()
     }
 
     mutating func attemptControlledAudioConnectRuntimeIfAllowed(activationConfiguration: SalemXControlledMediaConnectActivationConfiguration,
@@ -6741,6 +6858,32 @@ private struct SalemXRemotePeerContextHandoff {
     let armedBeforeAPNs: Bool
 }
 
+@MainActor
+private final class SalemXReceiverConnectedSessionLease {
+    let callID: String
+    let client: DirectCallLiveKitClientProtocol
+    let e2eeContextProvider: DirectCallLiveKitE2EEContextProvider
+    let e2eeContext: any DirectCallMediaE2EEContextProtocol
+    let keyStore: DirectCallLiveKitMediaKeyStore
+
+    init(callID: String,
+         client: DirectCallLiveKitClientProtocol,
+         e2eeContextProvider: DirectCallLiveKitE2EEContextProvider,
+         e2eeContext: any DirectCallMediaE2EEContextProtocol,
+         keyStore: DirectCallLiveKitMediaKeyStore) {
+        self.callID = callID
+        self.client = client
+        self.e2eeContextProvider = e2eeContextProvider
+        self.e2eeContext = e2eeContext
+        self.keyStore = keyStore
+    }
+
+    func cleanup() async {
+        await client.cleanup()
+        e2eeContextProvider.clearContext(callID: callID)
+    }
+}
+
 @objc(SalemXPushKitRegistrationSmokeDebugBridge)
 // swiftlint:disable:next type_body_length
 final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
@@ -6785,6 +6928,13 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var senderRuntimeE2EEContext: (any DirectCallMediaE2EEContextProtocol)?
     private static var senderRuntimeKeyStore: DirectCallLiveKitMediaKeyStore?
     private static var senderRuntimeLiveKitClientFactory: @MainActor () -> DirectCallLiveKitClientProtocol = {
+        LiveKitDirectCallClient()
+    }
+
+    private static var receiverConnectedSessionLease: SalemXReceiverConnectedSessionLease?
+    private static var receiverConnectedSessionLeaseTask: Task<Void, Never>?
+    private static var receiverConnectedSessionLeaseReleased = false
+    private static var receiverRuntimeLiveKitClientFactory: @MainActor () -> DirectCallLiveKitClientProtocol = {
         LiveKitDirectCallClient()
     }
 
@@ -8468,9 +8618,13 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         remoteParticipantObservationWindowID = nil
         remoteParticipantObservationWindowStartedAt = nil
         pendingRemotePeerContextHandoff = nil
+        let releaseReason = summary.remoteParticipantObservationFinalClassification
         lock.unlock()
 
         updateLatestVoIPPushReceiptSummary(summary)
+        Task { @MainActor in
+            releaseReceiverConnectedSessionLease(reason: releaseReason)
+        }
     }
 
     private static func currentApplicationStateProof() -> String {
@@ -9349,18 +9503,153 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
         let result = await tokenProvider.connectionInfo(for: session)
         let succeeded: Bool
         let expiresAtPresent: Bool
+        let receivedConnectionInfo: DirectCallMediaConnectionInfo?
         if case .success(let connectionInfo) = result {
             succeeded = true
             expiresAtPresent = connectionInfo.expiresAtPresent
+            receivedConnectionInfo = connectionInfo
         } else {
             succeeded = false
             expiresAtPresent = false
+            receivedConnectionInfo = nil
         }
         recordControlledMediaCredentialsRequest(succeeded: succeeded,
                                                 expiresAtPresent: expiresAtPresent,
                                                 session: session,
                                                 source: source,
                                                 diagnostics: tokenProvider.diagnosticSnapshot)
+        if let connectionInfo = receivedConnectionInfo {
+            startReceiverControlledRuntimeConnectLeaseIfAllowed(session: session, connectionInfo: connectionInfo)
+        }
+    }
+
+    @MainActor
+    private static func startReceiverControlledRuntimeConnectLeaseIfAllowed(session: DirectCallSession, connectionInfo: DirectCallMediaConnectionInfo) {
+        lock.lock()
+        let summary = latestVoIPPushReceiptSummary
+        let alreadyRunning = receiverConnectedSessionLeaseTask != nil || receiverConnectedSessionLease != nil
+        let allowed = summary.controlledConnectFirstAttemptAllowed &&
+            summary.mediaConnectPreflightCredentialsAvailable &&
+            summary.physical6RuntimeEnablementURLHookConsumed &&
+            !alreadyRunning
+        lock.unlock()
+
+        guard allowed else {
+            return
+        }
+
+        let task = Task { @MainActor in
+            await runReceiverControlledRuntimeConnectLease(session: session, connectionInfo: connectionInfo)
+        }
+        lock.lock()
+        receiverConnectedSessionLeaseTask = task
+        receiverConnectedSessionLeaseReleased = false
+        lock.unlock()
+    }
+
+    @MainActor
+    private static func runReceiverControlledRuntimeConnectLease(session: DirectCallSession, connectionInfo: DirectCallMediaConnectionInfo) async {
+        let keyStore = DirectCallLiveKitMediaKeyStore()
+        let keyMaterial = UUID().uuidString + UUID().uuidString
+        let e2eeContext: any DirectCallMediaE2EEContextProtocol
+        let e2eeContextProvider: DirectCallLiveKitE2EEContextProvider
+
+        switch keyStore.storeSharedKey(keyMaterial, callID: session.callID) {
+        case .success(let keyHandle):
+            let provider = DirectCallLiveKitE2EEContextProvider(keyStore: keyStore)
+            switch provider.context(for: session, keyHandle: keyHandle) {
+            case .success(let context):
+                e2eeContext = context
+                e2eeContextProvider = provider
+            case .failure(let error):
+                recordReceiverControlledRuntimeConnectResult(succeeded: false, errorBucket: redactedReceiverRuntimeErrorBucket(for: error))
+                return
+            }
+        case .failure(let error):
+            recordReceiverControlledRuntimeConnectResult(succeeded: false, errorBucket: redactedReceiverRuntimeErrorBucket(for: error))
+            return
+        }
+
+        let client = receiverRuntimeLiveKitClientFactory()
+        let executor = DirectCallLiveKitConnectExecutor(liveKitClient: client)
+        let result = await executor.connectAudio(connectionInfo: connectionInfo, e2eeContext: e2eeContext)
+
+        switch result {
+        case .success:
+            let lease = SalemXReceiverConnectedSessionLease(callID: session.callID,
+                                                            client: client,
+                                                            e2eeContextProvider: e2eeContextProvider,
+                                                            e2eeContext: e2eeContext,
+                                                            keyStore: keyStore)
+            lock.lock()
+            receiverConnectedSessionLease = lease
+            var summary = latestVoIPPushReceiptSummary
+            summary.recordReceiverControlledRuntimeConnectResult(succeeded: true, errorBucket: "none")
+            summary.recordReceiverConnectedSessionLeaseAcquired(taskRetained: receiverConnectedSessionLeaseTask != nil)
+            lock.unlock()
+
+            updateLatestVoIPPushReceiptSummary(summary)
+        case .failure(let error):
+            await client.cleanup()
+            recordReceiverControlledRuntimeConnectResult(succeeded: false, errorBucket: redactedReceiverRuntimeErrorBucket(for: error))
+        }
+    }
+
+    @MainActor
+    private static func recordReceiverControlledRuntimeConnectResult(succeeded: Bool, errorBucket: String) {
+        lock.lock()
+        var summary = latestVoIPPushReceiptSummary
+        summary.recordReceiverControlledRuntimeConnectResult(succeeded: succeeded, errorBucket: errorBucket)
+        if !succeeded {
+            receiverConnectedSessionLeaseTask = nil
+        }
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+    }
+
+    @MainActor
+    private static func releaseReceiverConnectedSessionLease(reason: String) {
+        lock.lock()
+        let lease = receiverConnectedSessionLease
+        let repeated = receiverConnectedSessionLeaseReleased
+        receiverConnectedSessionLease = nil
+        receiverConnectedSessionLeaseTask = nil
+        receiverConnectedSessionLeaseReleased = true
+        var summary = latestVoIPPushReceiptSummary
+        summary.recordReceiverConnectedSessionLeaseReleased(reason: reason, repeated: repeated)
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+
+        guard !repeated, let lease else {
+            return
+        }
+
+        Task { @MainActor in
+            await lease.cleanup()
+        }
+    }
+
+    private static func redactedReceiverRuntimeErrorBucket(for error: DirectCallMediaError) -> String {
+        switch error {
+        case .liveKitNetworkFailed, .liveKitURLUnreachable:
+            return "network_redacted"
+        case .liveKitURLInvalid:
+            return "url_invalid_redacted"
+        case .liveKitTokenRejected, .tokenUnavailable, .tokenEndpointUnavailable, .accessTokenUnavailable, .tokenHTTPUnavailable, .tokenBackendRejected, .tokenResponseInvalid:
+            return "credentials_redacted"
+        case .liveKitRoomJoinFailed:
+            return "room_join_failed_redacted"
+        case .liveKitE2EEConfigFailed, .e2eeContextUnavailable, .e2eeNotReady, .keyMismatch:
+            return "e2ee_redacted"
+        case .audioRouteFailed, .mediaSetupUnavailable:
+            return "audio_route_redacted"
+        case .unsupportedIntent, .invalidSession:
+            return "session_redacted"
+        default:
+            return "runtime_connect_failed_redacted"
+        }
     }
 
     private static func controlledMediaCredentialsTokenEndpointURL() -> URL? {
@@ -9435,7 +9724,9 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
                                                      audioTrackUnmuted: audioTrackUnmuted,
                                                      audioLevelObserved: false,
                                                      livenessObserved: false)
-        if summary.remoteParticipantObservationWaitCompleted {
+        let shouldReleaseLease = summary.remoteParticipantObservationWaitCompleted
+        let releaseReason = summary.remoteParticipantObservationFinalClassification
+        if shouldReleaseLease {
             remoteParticipantObservationWindowID = nil
             remoteParticipantObservationWindowStartedAt = nil
             pendingRemotePeerContextHandoff = nil
@@ -9443,6 +9734,11 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
         lock.unlock()
 
         updateLatestVoIPPushReceiptSummary(summary)
+        if shouldReleaseLease {
+            Task { @MainActor in
+                releaseReceiverConnectedSessionLease(reason: releaseReason)
+            }
+        }
     }
 
     static func recordControlledMediaCredentialsRequest(succeeded: Bool,
