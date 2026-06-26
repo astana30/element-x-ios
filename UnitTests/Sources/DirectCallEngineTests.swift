@@ -2842,6 +2842,7 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(!adapterSource.contains("receiverRemoteParticipantObserverRawIdentifiersLogged = true"))
     }
 
+    // swiftlint:disable function_body_length
     @Test
     func remoteParticipantObservationTimingRepairRetainsReceiverUntilRuntimeTerminal() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
@@ -2854,6 +2855,9 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("remote_participant_observation_timing_repair_debug_only=\\(remoteParticipantObservationTimingRepairDebugOnly)"))
         #expect(adapterSource.contains("remote_participant_observation_timing_repair_bounded_window=\\(remoteParticipantObservationTimingRepairBoundedWindow)"))
         #expect(adapterSource.contains("remote_participant_observation_timing_repair_raw_identifiers_logged=\\(remoteParticipantObservationTimingRepairRawIdentifiersLogged)"))
+        #expect(adapterSource.contains("receiver_sender_connected_overlap_repair_present=\\(receiverSenderConnectedOverlapRepairPresent)"))
+        #expect(adapterSource.contains("receiver_sender_connected_overlap_repair_debug_only=\\(receiverSenderConnectedOverlapRepairDebugOnly)"))
+        #expect(adapterSource.contains("receiver_sender_connected_overlap_repair_raw_identifiers_logged=\\(receiverSenderConnectedOverlapRepairRawIdentifiersLogged)"))
         #expect(adapterSource.contains("receiver_room_retained_for_sender_observation=\\(receiverRoomRetainedForSenderObservation)"))
         #expect(adapterSource.contains("receiver_observer_attached_before_sender_join=\\(receiverObserverAttachedBeforeSenderJoin)"))
         #expect(adapterSource.contains("receiver_observer_active_during_sender_join=\\(receiverObserverActiveDuringSenderJoin)"))
@@ -2863,6 +2867,20 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("sender_room_connected_during_receiver_window=\\(senderRoomConnectedDuringReceiverWindow)"))
         #expect(adapterSource.contains("sender_cleanup_started_before_receiver_observation=\\(senderCleanupStartedBeforeReceiverObservation)"))
         #expect(adapterSource.contains("receiver_sender_connected_window_overlap_observed=\\(receiverSenderConnectedWindowOverlapObserved)"))
+        #expect(adapterSource.contains("receiver_connected_window_opened=\\(receiverConnectedWindowOpened)"))
+        #expect(adapterSource.contains("receiver_connected_window_closed=\\(receiverConnectedWindowClosed)"))
+        #expect(adapterSource.contains("receiver_connected_window_close_reason=\\(receiverConnectedWindowCloseReason)"))
+        #expect(adapterSource.contains("receiver_connected_window_closed_before_sender_connected=\\(receiverConnectedWindowClosedBeforeSenderConnected)"))
+        #expect(adapterSource.contains("receiver_connected_window_retained_until_sender_terminal=\\(receiverConnectedWindowRetainedUntilSenderTerminal)"))
+        #expect(adapterSource.contains("sender_connected_signal_received_by_receiver=\\(senderConnectedSignalReceivedByReceiver)"))
+        #expect(adapterSource.contains("sender_connected_signal_source=\\(senderConnectedSignalSource)"))
+        #expect(adapterSource.contains("sender_connected_signal_before_receiver_disconnect=\\(senderConnectedSignalBeforeReceiverDisconnect)"))
+        #expect(adapterSource.contains("sender_connected_signal_after_receiver_disconnect=\\(senderConnectedSignalAfterReceiverDisconnect)"))
+        #expect(adapterSource.contains("sender_connected_signal_raw_identifiers_logged=\\(senderConnectedSignalRawIdentifiersLogged)"))
+        #expect(adapterSource.contains("receiver_sender_connected_window_overlap_wait_started=\\(receiverSenderConnectedWindowOverlapWaitStarted)"))
+        #expect(adapterSource.contains("receiver_sender_connected_window_overlap_wait_completed=\\(receiverSenderConnectedWindowOverlapWaitCompleted)"))
+        #expect(adapterSource.contains("receiver_sender_connected_window_overlap_wait_timeout=\\(receiverSenderConnectedWindowOverlapWaitTimeout)"))
+        #expect(adapterSource.contains("receiver_sender_connected_window_overlap_final_classification=\\(receiverSenderConnectedWindowOverlapFinalClassification)"))
         #expect(adapterSource.contains("sender_readiness_context_present_during_observation=\\(senderReadinessContextPresentDuringObservation)"))
         #expect(adapterSource.contains("opaque_call_correlation_present=\\(opaqueCallCorrelationPresent)"))
         #expect(adapterSource.contains("opaque_call_correlation_match=\\(opaqueCallCorrelationMatch)"))
@@ -2894,6 +2912,10 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("private static var receiverRuntimeLiveKitClientFactory: @MainActor () -> DirectCallLiveKitClientProtocol"))
         #expect(adapterSource.contains("startReceiverControlledRuntimeConnectLeaseIfAllowed(session: session, connectionInfo: connectionInfo)"))
         #expect(adapterSource.contains("private static func runReceiverControlledRuntimeConnectLease(session: DirectCallSession, connectionInfo: DirectCallMediaConnectionInfo) async"))
+        #expect(adapterSource.contains("mutating func recordReceiverConnectedWindowOpened()"))
+        #expect(adapterSource.contains("mutating func recordReceiverConnectedWindowClosed(reason: String)"))
+        #expect(adapterSource.contains("mutating func recordSenderConnectedSignalFromRuntime(senderConnected: Bool, source: String)"))
+        #expect(adapterSource.contains("mutating func completeReceiverSenderConnectedWindowOverlapTimeout()"))
         #expect(adapterSource.contains("DirectCallLiveKitConnectExecutor(liveKitClient: client)"))
         #expect(adapterSource.contains("executor.connectAudio(connectionInfo: connectionInfo, e2eeContext: e2eeContext)"))
         #expect(adapterSource.contains("receiverConnectedSessionLease = lease"))
@@ -2927,6 +2949,13 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("no_receiver_sender_connected_overlap_redacted"))
         #expect(adapterSource.contains("sender_disconnected_before_observation_redacted"))
         #expect(adapterSource.contains("remote_participant_event_timeout_redacted"))
+        #expect(adapterSource.contains("connected_window_overlap_observed_redacted"))
+        #expect(adapterSource.contains("receiver_disconnected_before_sender_connected_redacted"))
+        #expect(adapterSource.contains("sender_connected_after_receiver_disconnect_redacted"))
+        #expect(adapterSource.contains("sender_connected_signal_missing_redacted"))
+        #expect(adapterSource.contains("receiver_observer_bound_to_stale_room_redacted"))
+        #expect(adapterSource.contains("receiver_overlap_wait_timeout_redacted"))
+        #expect(adapterSource.contains("receiver_cleanup_released_lease_early_redacted"))
 
         #expect(adapterSource.contains("liveKitRoomDisconnected = observationActive ? false : controlledCallKitCleanupResult == \"ended\" || remoteParticipantObservationWaitCompleted"))
         #expect(adapterSource.contains("liveKitCleanupResult = \"deferred_until_observation_terminal_redacted\""))
@@ -2937,9 +2966,17 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("receiverRoomRetainedForSenderObservation = receiverRoomRetainedForSenderObservation ||"))
         #expect(adapterSource.contains("receiverObserverAttachedBeforeSenderJoin = receiverObserverAttachedBeforeSenderJoin ||"))
         #expect(adapterSource.contains("receiverObserverActiveDuringSenderJoin = receiverObserverActiveDuringSenderJoin ||"))
+        #expect(adapterSource.contains("senderConnectedSignalReceivedByReceiver = true"))
+        #expect(adapterSource.contains("senderConnectedSignalBeforeReceiverDisconnect = receiverWindowActive"))
+        #expect(adapterSource.contains("receiverSenderConnectedWindowOverlapObserved = true"))
+        #expect(adapterSource.contains("receiverConnectedWindowRetainedUntilSenderTerminal = true"))
+        #expect(adapterSource.contains("senderConnectedSignalAfterReceiverDisconnect = !receiverWindowActive"))
+        #expect(adapterSource.contains("summary.recordSenderConnectedSignalFromRuntime(senderConnected: senderSummary.senderLiveKitRoomConnected"))
         #expect(adapterSource.contains("receiverCleanupDeferredUntilObservationTerminal = receiverCleanupDeferredUntilObservationTerminal ||"))
         #expect(!runtimeSnapshotSource.contains("pendingRemotePeerContextHandoff = nil"))
         #expect(!adapterSource.contains("remoteParticipantObservationTimingRepairRawIdentifiersLogged = true"))
+        #expect(!adapterSource.contains("receiverSenderConnectedOverlapRepairRawIdentifiersLogged = true"))
+        #expect(!adapterSource.contains("senderConnectedSignalRawIdentifiersLogged = true"))
 
         #expect(liveKitClientSource.contains("recordReceiverRemoteParticipantRuntimeObservation(participantCountBucket:"))
         #expect(liveKitClientSource.contains("nonisolated func room(_ room: Room, participant: RemoteParticipant, didPublishTrack publication: RemoteTrackPublication)"))
@@ -2948,6 +2985,8 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(!liveKitClientSource.contains("participant.identity"))
         #expect(!liveKitClientSource.contains("room.name"))
     }
+
+    // swiftlint:enable function_body_length
 
     @Test
     func senderLiveKitReadinessHookArmsRedactedReadinessWithoutStartingRuntime() throws {

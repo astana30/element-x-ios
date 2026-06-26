@@ -6963,3 +6963,21 @@ Safety:
 - no APNs sent in this repair phase
 - no `dev/invite`, physical media connect, physical LiveKit join, microphone/camera permission, Matrix event emission, video, or full call flow
 - raw tokens, URLs, room IDs, call IDs, user IDs, device IDs, invite bodies, APNs payloads, pending metadata contents, and auth headers remain unlogged
+
+# 2.48Z Receiver/Sender Connected Window Overlap Repair
+
+Status: code/test repair completed for the Retry18 receiver observation timing blocker; no physical retry was run in this phase.
+
+Repair:
+- added DEBUG-only redacted receiver/sender connected-window overlap proof fields
+- receiver proof now opens a connected observation window after receiver LiveKit connect succeeds
+- sender runtime join success now propagates a redacted sender-connected signal into the receiver proof
+- receiver proof distinguishes overlap observed, receiver disconnected before sender connected, sender connected after receiver disconnect, missing sender signal, stale observer, early cleanup, and bounded timeout classifications
+- remote participant presence remains separate from audio-track liveness
+
+Safety:
+- no APNs, `dev/invite`, physical connect, physical LiveKit join, microphone/camera permission, Matrix event emission, video, or full flow
+- no raw token, URL, room ID, call ID, user ID, device ID, APNs payload, invite body, pending metadata body, or auth header logged
+
+Next:
+- `2.48Z-Physical2-Retry19` should run one sandbox APNs only after the corrected receiver/sender connected-window proof is installed on both devices.

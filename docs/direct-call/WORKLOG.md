@@ -9997,3 +9997,24 @@ Repair:
 Safety:
 - no APNs, `dev/invite`, physical connect, physical LiveKit join, microphone/camera permission, Matrix event emission, video, or full flow
 - no raw token, URL, room ID, call ID, user ID, device ID, APNs payload, invite body, pending metadata body, or auth header logged
+
+# 2026-06-26 — 2.48Z-ReceiverSenderConnectedWindowOverlapRepair
+
+Implemented the no-APNs DEBUG-only receiver/sender overlap repair for Retry18.
+
+Changes:
+- added redacted receiver/sender connected-window overlap proof fields
+- receiver controlled-connect proof now records when the receiver connected window opens and closes
+- sender runtime join success now propagates a runtime-derived sender-connected signal into the receiver proof
+- receiver proof classifies overlap observed, receiver-disconnected-before-sender, sender-connected-after-receiver-disconnect, missing sender signal, stale observer, early cleanup, and bounded timeout outcomes
+- targeted source guard coverage now protects the runtime propagation, one-shot/safety boundaries, and no-raw-identifier constraints
+
+Safety:
+- no APNs, production APNs, `dev/invite`, physical connect, physical LiveKit join, microphone/camera permission, Matrix event emission, video, or full direct-call flow
+- no raw token, URL, room ID, call ID, user ID, device ID, APNs payload, invite body, pending metadata, or auth header logged
+
+Next phase:
+
+```text
+2.48Z-Physical2-Retry19 — one-shot real sender join with receiver/sender connected-window overlap proof
+```
