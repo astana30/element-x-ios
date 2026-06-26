@@ -13,112 +13,115 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48Z-ReceiverSenderConnectedWindowOverlapRepair` is committed as a no-APNs code/test repair for the Retry18 receiver observation timing blocker.
-
-What changed:
+`2.48Z-Physical2-Retry19` is closed as:
 
 ```text
-receiver_sender_connected_overlap_repair_present=true
-receiver_sender_connected_overlap_repair_debug_only=true
-receiver_sender_connected_overlap_repair_raw_identifiers_logged=false
-receiver_connected_window_opened=<runtime_bool>
-receiver_connected_window_closed=<runtime_bool>
-receiver_connected_window_close_reason=<redacted_reason>
-receiver_connected_window_closed_before_sender_connected=<runtime_bool>
-receiver_connected_window_retained_until_sender_terminal=<runtime_bool>
-sender_connected_signal_received_by_receiver=<runtime_bool>
-sender_connected_signal_source=sender_runtime_livekit_join_redacted|unknown_redacted|none
-sender_connected_signal_before_receiver_disconnect=<runtime_bool>
-sender_connected_signal_after_receiver_disconnect=<runtime_bool>
-sender_connected_signal_raw_identifiers_logged=false
-receiver_sender_connected_window_overlap_wait_started=<runtime_bool>
-receiver_sender_connected_window_overlap_wait_completed=<runtime_bool>
-receiver_sender_connected_window_overlap_wait_timeout=<runtime_bool>
-receiver_sender_connected_window_overlap_final_classification=<redacted_bucket>
+real sender pending-metadata handoff + credentials + runtime join success /
+receiver connected window closed before sender-connected signal /
+remote participant not observed triage
 ```
 
-New receiver overlap classifications:
+This is not remote participant success.
+
+Key proof:
 
 ```text
-connected_window_overlap_observed_redacted
-receiver_disconnected_before_sender_connected_redacted
-sender_connected_after_receiver_disconnect_redacted
-sender_connected_signal_missing_redacted
-receiver_observer_bound_to_stale_room_redacted
-receiver_overlap_wait_timeout_redacted
-receiver_cleanup_released_lease_early_redacted
+APNs_sent=true
+APNs_repeated=false
+production_APNs_used=false
+dev_invite_used=false
+
+receiver_physical_voip_push_received=true
+receiver_callkit_first_action_kind=answer
+receiver_pending_metadata_fetch_result=success_redacted
+receiver_media_credentials_result=success_redacted
+receiver_controlled_connect_first_attempt_result=success_redacted
+receiver_controlled_connect_first_attempt_repeated=false
+receiver_livekit_join_result=success_redacted
+receiver_livekit_room_connected=true
+receiver_livekit_remote_participant_seen=false
+
+sender_pending_metadata_reference_handoff_received_by_sender_runtime=true
+sender_runtime_join_pending_metadata_fetch_result=success_redacted
+sender_runtime_join_credentials_result=success_redacted
+sender_runtime_join_executor_invoked=true
+sender_runtime_join_runtime_result=success_redacted
+sender_runtime_join_runtime_error_bucket=none
+sender_livekit_room_connected=true
+sender_runtime_join_query_outcome_ignored=true
+
+receiver_connected_window_closed_before_sender_connected=true
+sender_connected_signal_received_by_receiver=false
+receiver_sender_connected_window_overlap_observed=false
+receiver_sender_connected_window_overlap_final_classification=receiver_overlap_wait_timeout_redacted
 ```
 
 Safety preserved:
 
 ```text
-APNs_sent=false
-dev_invite_used=false
-production_APNs_used=false
-physical_connect_run=false
-physical_LiveKit_join_run=false
-camera_permission_requested=false
-matrix_event_emit_requested=false
-real_call_flow_started=false
-raw URL/token/room/call/user/device IDs/pending metadata logged=false
+no repeated APNs
+no production APNs
+no dev/invite
+no repeated receiver connect
+no repeated sender runtime join
+no video
+no camera permission
+no Matrix event emit
+no full direct-call flow
+no raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room/call/user/device/pending-metadata logging
 ```
 
 ## Next Phase
 
-`2.48Z-Physical2-Retry19 — one-shot real sender join with receiver/sender connected-window overlap proof`
+`2.48Z-ReceiverSenderConnectedSignalRepair`
 
 Goal:
-Run one physical two-device proof and determine whether the receiver connected window now overlaps the sender runtime connected state.
+Receiver must consume the sender-connected signal before closing the connected-window lease. The observation window must not terminate solely on remote participant event timeout while sender runtime join is still in progress or before the sender-connected signal has been processed.
 
-Roles:
-- receiver: `iPhone PRO`
-- sender: the currently authenticated second physical device for hash `7d434d7f252427fb`
-- do not use Simulator unless explicitly requested
-- do not use iPhone Жанелька unless explicitly requested
+Investigate:
+- why sender proof has `sender_livekit_room_connected=true` but receiver has `sender_connected_signal_received_by_receiver=false`
+- whether sender-connected signal is written only to sender proof and not propagated to receiver proof
+- whether the helper copies receiver proof before propagating sender terminal state
+- whether receiver connected-window timeout is too short relative to sender runtime join
+- whether receiver overlap wait should start after sender trigger, not before
+- whether receiver should wait for sender terminal signal first, then participant event timeout
+- whether receiver lease cleanup ignores pending sender terminal state
 
-Before APNs:
-- install/launch current Debug build on required devices as needed
-- verify both app Matrix sessions with redacted whoami proofs
-- verify both users are distinct and joined to the same encrypted Matrix room
-- arm receiver controlled audio connect, remote peer context, and sender readiness context
-- verify receiver connected-window overlap repair fields are present/debug-only/raw-identifiers-false
-- verify sender runtime bridge is present, debug-only, default disabled, one-shot, and query-selected outcomes are disabled
-- require `safe_to_send_apns=true`
+Implement:
+- sender-connected signal handoff from sender proof/helper/runtime into receiver observation proof using opaque correlation only
+- receiver observation lease waits for sender-connected signal or sender terminal failure before closing for participant timeout
+- once `sender_connected_signal_received_by_receiver=true`, keep receiver room alive for a bounded participant-event wait
+- classify separately:
+  ```text
+  sender_connected_signal_missing_redacted
+  sender_connected_signal_late_redacted
+  receiver_window_closed_before_sender_signal_redacted
+  participant_event_timeout_after_sender_signal_redacted
+  connected_window_overlap_observed_redacted
+  ```
+- do not require audio track for participant presence
+- deterministic cleanup after terminal result
+- no raw token/URL/room/user/device/call IDs
 
-Run:
-- exactly one sandbox APNs real non-dev invite after manual confirmation
-- receiver taps Answer once
-- trigger sender runtime join once
-- do not retry APNs, receiver connect, or sender join
-
-Expected success classification:
-
-```text
-receiver_connected_window_opened=true
-sender_connected_signal_received_by_receiver=true
-sender_connected_signal_source=sender_runtime_livekit_join_redacted
-sender_connected_signal_before_receiver_disconnect=true
-sender_connected_signal_after_receiver_disconnect=false
-receiver_connected_window_retained_until_sender_terminal=true
-sender_room_connected_during_receiver_window=true
-receiver_sender_connected_window_overlap_observed=true
-receiver_sender_connected_window_overlap_final_classification=connected_window_overlap_observed_redacted
-```
-
-Remote participant presence remains separate:
-- if `livekit_remote_participant_seen=true`, close Retry19 as real sender join plus receiver remote participant success
-- if overlap is true but participant remains false, close as connected-window success / remote participant observation not seen and move to participant propagation repair
-- missing audio track alone is not sender-join failure
+Tests:
+- sender connected signal reaches receiver proof
+- receiver cannot close window before sender signal when sender trigger is pending
+- sender signal after receiver close is classified
+- overlap observed when receiver alive + sender connected
+- participant timeout after sender signal is separate from no-overlap
+- cleanup deterministic
+- one-shot APNs/connect/sender join semantics preserved
+- video/camera/Matrix/full-flow false
+- default no-connect/no-join
 
 Hard limits:
-- no `dev/invite`
-- no production APNs
-- no repeated APNs
-- no repeated receiver connect
-- no repeated sender runtime join
-- no video
-- no camera permission
-- no Matrix event emit
-- no full direct-call flow
-- no raw tokens, URLs, room IDs, call IDs, user IDs, device IDs, APNs payloads, invite bodies, pending metadata, or auth headers in logs/docs/commits
+- no APNs
+- no physical connect
+- no LiveKit join
+- no microphone/camera permissions
+- no Matrix events
+- no full call flow
 - do not touch `SalemX.xcodeproj/project.pbxproj`, `app.yml`, `.entitlements`, or `Info.plist`
+
+After repair:
+`2.48Z-Physical2-Retry20 — one-shot real sender join with sender-connected signal handoff`

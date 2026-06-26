@@ -2,6 +2,61 @@
 
 This file records durable phase-level progress for future Codex and strategy sessions.
 
+## 2026-06-26 — 2.48Z-Physical2-Retry19
+
+Closed Retry19 as real sender pending-metadata handoff + credentials + runtime join success / receiver connected window closed before sender-connected signal / remote participant not observed triage. This is not remote participant success.
+
+Result:
+
+```text
+background_apns_push_result=sandbox_success
+APNs_sent=true
+APNs_repeated=false
+production_APNs_used=false
+dev_invite_used=false
+
+receiver_proof_generation=generation_17
+physical_voip_push_received=true
+callkit_first_action_kind=answer
+pending_metadata_fetch_result=success_redacted
+media_credentials_result=success_redacted
+controlled_connect_first_attempt_result=success_redacted
+controlled_connect_first_attempt_repeated=false
+livekit_join_result=success_redacted
+livekit_room_connected=true
+livekit_room_disconnected=true
+livekit_remote_participant_seen=false
+
+sender_proof_generation=generation_7
+sender_pending_metadata_reference_handoff_received_by_sender_runtime=true
+sender_runtime_join_pending_metadata_fetch_result=success_redacted
+sender_runtime_join_credentials_result=success_redacted
+sender_runtime_join_executor_invoked=true
+sender_runtime_join_runtime_result=success_redacted
+sender_runtime_join_runtime_error_bucket=none
+sender_livekit_room_connected=true
+sender_livekit_room_disconnected=false
+sender_runtime_join_query_outcome_ignored=true
+
+receiver_connected_window_closed_before_sender_connected=true
+receiver_connected_window_retained_until_sender_terminal=false
+sender_connected_signal_received_by_receiver=false
+sender_connected_signal_source=none
+sender_connected_signal_before_receiver_disconnect=false
+sender_connected_signal_after_receiver_disconnect=false
+receiver_sender_connected_window_overlap_observed=false
+receiver_sender_connected_window_overlap_final_classification=receiver_overlap_wait_timeout_redacted
+```
+
+The receiver reached one controlled connect and LiveKit join, and the sender runtime path consumed the pending metadata reference, fetched sender-view metadata, requested credentials, invoked the shared executor, and joined LiveKit. The remaining failure is signal/lease timing: the receiver proof never consumed a sender-connected signal before the connected window closed, so remote participant observation stayed false.
+
+Safety:
+- exactly one sandbox APNs was sent for Retry19
+- no repeated APNs, production APNs, `dev/invite`, repeated receiver connect, repeated sender runtime join, video, camera permission, Matrix event emission, or full call flow
+- no raw tokens, JWTs, authorization headers, APNs payloads, invite bodies, LiveKit URLs, room IDs, call IDs, user IDs, device IDs, call handles, private logs, or pending metadata contents were recorded
+
+Next phase: `2.48Z-ReceiverSenderConnectedSignalRepair — deliver sender-connected signal before receiver lease closes`.
+
 ## 2026-06-26 — 2.48Z-Physical2-Retry18
 
 Closed Retry18 as sender pending-metadata handoff + real sender runtime join success / receiver connected-window overlap not observed triage. This is not remote participant success.
