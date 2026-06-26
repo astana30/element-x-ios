@@ -1031,6 +1031,14 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
     var bridgeTriggered = false
     var bridgeConsumed = false
     var bridgeRepeated = false
+    var bridgeStateRepairPresent = true
+    var bridgeStateRepairDebugOnly = true
+    var bridgeStateRepairRawIdentifiersLogged = false
+    var bridgeArmGenerationChanged = false
+    var bridgeTriggerGenerationMatchesArm = false
+    var bridgeStaleGenerationDetected = false
+    var bridgeRepeatedOnlyAfterConsumed = true
+    var bridgeStateClassification = "sender_runtime_join_bridge_not_triggered_redacted"
     var restoredMatrixSessionUsed = false
     var pendingMetadataReferenceHandoffPresent = false
     var pendingMetadataReferenceHandoffDebugOnly = true
@@ -1112,6 +1120,14 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             "sender_runtime_join_bridge_triggered=\(bridgeTriggered)",
             "sender_runtime_join_bridge_consumed=\(bridgeConsumed)",
             "sender_runtime_join_bridge_repeated=\(bridgeRepeated)",
+            "sender_runtime_join_bridge_state_repair_present=\(bridgeStateRepairPresent)",
+            "sender_runtime_join_bridge_state_repair_debug_only=\(bridgeStateRepairDebugOnly)",
+            "sender_runtime_join_bridge_state_repair_raw_identifiers_logged=\(bridgeStateRepairRawIdentifiersLogged)",
+            "sender_runtime_join_bridge_arm_generation_changed=\(bridgeArmGenerationChanged)",
+            "sender_runtime_join_bridge_trigger_generation_matches_arm=\(bridgeTriggerGenerationMatchesArm)",
+            "sender_runtime_join_bridge_stale_generation_detected=\(bridgeStaleGenerationDetected)",
+            "sender_runtime_join_bridge_repeated_only_after_consumed=\(bridgeRepeatedOnlyAfterConsumed)",
+            "sender_runtime_join_bridge_state_classification=\(bridgeStateClassification)",
             "sender_runtime_join_uses_restored_matrix_session=\(restoredMatrixSessionUsed)",
             "sender_pending_metadata_reference_handoff_present=\(pendingMetadataReferenceHandoffPresent)",
             "sender_pending_metadata_reference_handoff_debug_only=\(pendingMetadataReferenceHandoffDebugOnly)",
@@ -1185,7 +1201,7 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         ]
     }
 
-    mutating func markReferenceHandoff(_ handoff: SalemXSenderPendingMetadataReferenceHandoff) {
+    mutating func markReferenceHandoff(_ handoff: SalemXSenderPendingMetadataReferenceHandoff, armGenerationChanged: Bool = false) {
         pendingMetadataReferenceHandoffPresent = handoff.referencePresent
         pendingMetadataReferenceHandoffDebugOnly = handoff.debugOnly
         pendingMetadataReferenceHandoffArmedBeforeSenderTrigger = handoff.armed && handoff.referencePresent
@@ -1197,18 +1213,37 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         pendingMetadataReferenceHandoffRawCallLogged = handoff.rawCallLogged
         pendingMetadataReferenceHandoffRawUserLogged = handoff.rawUserLogged
         pendingMetadataReferenceHandoffRawDeviceLogged = handoff.rawDeviceLogged
+        bridgeArmGenerationChanged = armGenerationChanged
+        bridgeTriggerGenerationMatchesArm = false
+        bridgeStaleGenerationDetected = false
+        bridgeRepeatedOnlyAfterConsumed = true
+        if armGenerationChanged {
+            bridgeArmed = true
+            bridgeTriggered = false
+            bridgeConsumed = false
+            bridgeRepeated = false
+            bridgeStateClassification = "sender_runtime_join_bridge_armed_current_generation_redacted"
+        }
     }
 
     mutating func markStarted(referencePresent: Bool,
                               repeated: Bool,
-                              handoff: SalemXSenderPendingMetadataReferenceHandoff) {
+                              handoff: SalemXSenderPendingMetadataReferenceHandoff,
+                              armGenerationChanged: Bool,
+                              triggerGenerationMatchesArm: Bool,
+                              staleGenerationDetected: Bool,
+                              repeatedOnlyAfterConsumed: Bool) {
         proofGeneration = UUID().uuidString
         proofLastUpdatedBy = "sender_runtime_livekit_join_bridge"
         bridgeArmed = true
         bridgeTriggered = !repeated
         bridgeConsumed = !repeated
         bridgeRepeated = repeated
-        markReferenceHandoff(handoff)
+        markReferenceHandoff(handoff, armGenerationChanged: armGenerationChanged)
+        bridgeArmGenerationChanged = armGenerationChanged
+        bridgeTriggerGenerationMatchesArm = triggerGenerationMatchesArm
+        bridgeStaleGenerationDetected = staleGenerationDetected
+        bridgeRepeatedOnlyAfterConsumed = repeatedOnlyAfterConsumed
         pendingMetadataReferencePresent = referencePresent
         pendingMetadataReferenceMatchesInviteSenderMemory = referencePresent && handoff.armed
         pendingMetadataReferenceMatchesSenderViewRoute = false
@@ -1242,6 +1277,17 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         senderConnectedSignalEmittedAfterRuntimeJoinSuccess = false
         senderConnectedSignalOpaqueCorrelationPresent = false
         restoredMatrixSessionUsed = false
+        if repeated, repeatedOnlyAfterConsumed {
+            bridgeStateClassification = "sender_runtime_join_bridge_repeated_after_consumed_redacted"
+        } else if repeated {
+            bridgeStateClassification = "sender_runtime_join_bridge_repeated_before_consumed_redacted"
+        } else if staleGenerationDetected {
+            bridgeStateClassification = "sender_runtime_join_bridge_stale_generation_redacted"
+        } else if triggerGenerationMatchesArm {
+            bridgeStateClassification = "sender_runtime_join_bridge_triggered_current_generation_redacted"
+        } else {
+            bridgeStateClassification = "sender_runtime_join_executor_not_invoked_redacted"
+        }
         blockedReason = repeated ? "sender_runtime_join_repeated_blocked_redacted" : "sender_runtime_join_started_redacted"
     }
 
@@ -1273,6 +1319,7 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         runtimeResult = "blocked_redacted"
         runtimeErrorBucket = "pending_metadata_unavailable_redacted"
         senderCleanupResult = "not_required_redacted"
+        bridgeStateClassification = "sender_runtime_join_executor_not_invoked_redacted"
         blockedReason = reason
     }
 
@@ -1290,6 +1337,7 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             runtimeResult = "blocked_redacted"
             runtimeErrorBucket = DirectCallDiagnosticMediaFailureReason(error).rawValue
             senderCleanupResult = "not_required_redacted"
+            bridgeStateClassification = "sender_runtime_join_not_connected_redacted"
             blockedReason = "sender_runtime_credentials_failed_redacted"
         }
     }
@@ -1298,6 +1346,7 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         runtimeResult = "blocked_redacted"
         runtimeErrorBucket = DirectCallDiagnosticMediaFailureReason(error).rawValue
         senderCleanupResult = "not_required_redacted"
+        bridgeStateClassification = "sender_runtime_join_not_connected_redacted"
         blockedReason = "sender_runtime_e2ee_context_unavailable_redacted"
     }
 
@@ -1314,6 +1363,7 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             senderConnectedSignalEmitSource = "sender_runtime_livekit_join_redacted"
             senderConnectedSignalEmittedAfterRuntimeJoinSuccess = true
             senderConnectedSignalOpaqueCorrelationPresent = pendingMetadataReferenceMatchesInviteSenderMemory || pendingMetadataReferenceMatchesSenderViewRoute
+            bridgeStateClassification = "sender_runtime_join_connected_redacted"
             blockedReason = "none"
         case .failure(let error):
             runtimeResult = "failed_redacted"
@@ -1324,6 +1374,7 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             senderConnectedSignalEmitted = false
             senderConnectedSignalEmitSource = "none"
             senderConnectedSignalEmittedAfterRuntimeJoinSuccess = false
+            bridgeStateClassification = "sender_runtime_join_not_connected_redacted"
             blockedReason = "sender_runtime_join_failed_redacted"
         }
     }
@@ -7327,6 +7378,8 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var latestLocalBackgroundCallKitOnlySummary = SalemXLocalBackgroundCallKitOnlyProofSummary()
     private static var latestSenderRuntimeLiveKitJoinSummary = SalemXSenderRuntimeLiveKitJoinProofSummary()
     private static var senderRuntimeLiveKitJoinConsumed = false
+    private static var senderRuntimeLiveKitJoinArmGeneration = 0
+    private static var senderRuntimeLiveKitJoinConsumedGeneration: Int?
     private static var senderRuntimeLiveKitClient: DirectCallLiveKitClientProtocol?
     private static var senderRuntimeE2EEContextProvider: DirectCallLiveKitE2EEContextProvider?
     private static var senderRuntimeE2EEContext: (any DirectCallMediaE2EEContextProtocol)?
@@ -7537,9 +7590,16 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                                                                   armed: reference?.isEmpty == false,
                                                                   receivedByRuntime: false)
         lock.lock()
+        let previousArmGeneration = senderRuntimeLiveKitJoinArmGeneration
+        if handoff.referencePresent {
+            senderRuntimeLiveKitJoinArmGeneration += 1
+            senderRuntimeLiveKitJoinConsumed = false
+            senderRuntimeLiveKitJoinConsumedGeneration = nil
+        }
+        let armGenerationChanged = senderRuntimeLiveKitJoinArmGeneration != previousArmGeneration
         senderPendingMetadataReferenceHandoff = handoff
         var summary = latestSenderRuntimeLiveKitJoinSummary
-        summary.markReferenceHandoff(handoff)
+        summary.markReferenceHandoff(handoff, armGenerationChanged: armGenerationChanged)
         if !handoff.referencePresent {
             summary.blockedReason = "sender_pending_metadata_reference_missing_redacted"
         }
@@ -7656,12 +7716,25 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         }
         let reference = handoff.reference ?? ""
         let referencePresent = handoff.referencePresent
-        let repeated = confirmed && senderRuntimeLiveKitJoinConsumed
-        if confirmed, !repeated {
+        let currentArmGeneration = senderRuntimeLiveKitJoinArmGeneration
+        let consumedGeneration = senderRuntimeLiveKitJoinConsumedGeneration
+        let triggerGenerationMatchesArm = confirmed && referencePresent && handoff.armed && currentArmGeneration > 0
+        let staleGenerationDetected = confirmed && senderRuntimeLiveKitJoinConsumed && consumedGeneration != currentArmGeneration
+        let consumedCurrentGeneration = confirmed && senderRuntimeLiveKitJoinConsumed && consumedGeneration == currentArmGeneration
+        let repeated = consumedCurrentGeneration
+        let repeatedOnlyAfterConsumed = !repeated || consumedCurrentGeneration
+        if confirmed, referencePresent, !repeated {
             senderRuntimeLiveKitJoinConsumed = true
+            senderRuntimeLiveKitJoinConsumedGeneration = currentArmGeneration
         }
         var summary = latestSenderRuntimeLiveKitJoinSummary
-        summary.markStarted(referencePresent: referencePresent, repeated: repeated, handoff: handoff)
+        summary.markStarted(referencePresent: referencePresent,
+                            repeated: repeated,
+                            handoff: handoff,
+                            armGenerationChanged: false,
+                            triggerGenerationMatchesArm: triggerGenerationMatchesArm,
+                            staleGenerationDetected: staleGenerationDetected,
+                            repeatedOnlyAfterConsumed: repeatedOnlyAfterConsumed)
         if !confirmed {
             summary.bridgeTriggered = false
             summary.bridgeConsumed = false

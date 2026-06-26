@@ -2,6 +2,56 @@
 
 This file records durable phase-level progress for future Codex and strategy sessions.
 
+## 2026-06-26 — 2.48Z-SenderRuntimeJoinBridgeStateRepair
+
+Closed Retry20 as real receiver controlled connect success / sender runtime bridge stale one-shot state triage. This is not remote participant success.
+
+Retry20 result:
+
+```text
+room_validation_preflight=pass
+background_apns_push_result=sandbox_success
+APNs_sent=true
+receiver_path=pushkit_callkit_answer_metadata_credentials_controlled_connect_livekit_success_redacted
+sender_runtime_join_trigger_requested=true
+sender_runtime_join_bridge_triggered=false
+sender_runtime_join_bridge_consumed=false
+sender_runtime_join_bridge_repeated=true
+sender_pending_metadata_reference_handoff_received_by_sender_runtime=true
+sender_runtime_join_pending_metadata_fetch_result=not_requested
+sender_runtime_join_credentials_result=not_requested
+sender_runtime_join_executor_invoked=false
+sender_runtime_join_runtime_result=not_requested
+sender_livekit_room_connected=false
+```
+
+Root cause:
+- the DEBUG sender runtime bridge used a single process-wide consumed latch
+- a new pending-metadata reference did not reset that latch
+- Retry20 therefore classified the current trigger as repeated before the current generation was consumed/executed
+
+Repair:
+
+```text
+sender_runtime_join_bridge_state_repair_present=true
+sender_runtime_join_bridge_state_repair_debug_only=true
+sender_runtime_join_bridge_state_repair_raw_identifiers_logged=false
+sender_runtime_join_bridge_arm_generation_changed=<redacted_bool>
+sender_runtime_join_bridge_trigger_generation_matches_arm=<redacted_bool>
+sender_runtime_join_bridge_stale_generation_detected=<redacted_bool>
+sender_runtime_join_bridge_repeated_only_after_consumed=<redacted_bool>
+sender_runtime_join_bridge_state_classification=<redacted_bucket>
+```
+
+The bridge now increments an arm generation when a fresh pending metadata reference is handed off, clears stale consumption for that generation, and treats a trigger as repeated only when the consumed generation matches the active arm generation.
+
+Safety:
+- exactly one sandbox APNs was sent in Retry20 before this repair; no APNs were sent during the repair
+- no repeated APNs, production APNs, `dev/invite`, physical media connect, physical LiveKit join, microphone/camera permission, video, Matrix event emission, or full call flow
+- no raw tokens, JWTs, authorization headers, APNs payloads, invite bodies, LiveKit URLs, room IDs, call IDs, user IDs, device IDs, call handles, private logs, or pending metadata contents recorded
+
+Next phase: `2.48Z-Physical2-Retry21 — one-shot sender runtime join bridge state repair validation, no reinstall unless required`.
+
 ## 2026-06-26 — 2.48Z-ReceiverSenderConnectedSignalRepair
 
 Implemented the no-APNs/no-connect repair for the Retry19 blocker where the sender proof reached `sender_livekit_room_connected=true` but the receiver never consumed a sender-connected signal before closing its connected window.

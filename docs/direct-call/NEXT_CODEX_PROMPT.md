@@ -13,61 +13,58 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48Z-ReceiverSenderConnectedSignalRepair` is committed.
+`2.48Z-SenderRuntimeJoinBridgeStateRepair` is committed.
 
-It was a no-APNs/no-connect code and test repair for the Retry19 blocker:
+Retry20 is closed as receiver controlled connect success / sender runtime bridge stale one-shot state triage, not remote participant success.
 
-```text
-sender_livekit_room_connected=true
-sender_connected_signal_received_by_receiver=false
-receiver_sender_connected_window_overlap_observed=false
-livekit_remote_participant_seen=false
-```
-
-New repair surface:
+Retry20 physical result:
 
 ```text
-sender_connected_signal_handoff_present=true
-sender_connected_signal_handoff_debug_only=true
-sender_connected_signal_emitted=<runtime_bool>
-sender_connected_signal_emitted_after_runtime_join_success=<runtime_bool>
-sender_connected_signal_opaque_correlation_present=<redacted_bool>
-sender_connected_signal_handoff_raw_identifiers_logged=false
-sender_connected_signal_raw_room_logged=false
-sender_connected_signal_raw_call_logged=false
-sender_connected_signal_raw_user_logged=false
-sender_connected_signal_raw_device_logged=false
-
-receiver_sender_connected_signal_wait_started=<redacted_bool>
-receiver_sender_connected_signal_wait_completed=<redacted_bool>
-receiver_sender_connected_signal_received=<redacted_bool>
-receiver_sender_connected_signal_correlation_match=<redacted_bool>
-receiver_sender_connected_signal_received_before_receiver_disconnect=<redacted_bool>
-receiver_sender_connected_signal_received_after_receiver_disconnect=<redacted_bool>
-receiver_sender_connected_signal_timeout=<redacted_bool>
-receiver_sender_connected_signal_final_classification=<redacted_bucket>
+room_validation_preflight=pass
+background_apns_push_result=sandbox_success
+APNs_sent=true
+receiver_path=pushkit_callkit_answer_metadata_credentials_controlled_connect_livekit_success_redacted
+sender_runtime_join_trigger_requested=true
+sender_runtime_join_bridge_triggered=false
+sender_runtime_join_bridge_consumed=false
+sender_runtime_join_bridge_repeated=true
+sender_pending_metadata_reference_handoff_received_by_sender_runtime=true
+sender_runtime_join_pending_metadata_fetch_result=not_requested
+sender_runtime_join_credentials_result=not_requested
+sender_runtime_join_executor_invoked=false
+sender_runtime_join_runtime_result=not_requested
+sender_livekit_room_connected=false
 ```
 
-The receiver can consume a sender-connected signal through the DEBUG-only `/direct-call/sender-connected-signal-handoff` hook using opaque correlation only. Classifications now distinguish:
+Root cause:
 
 ```text
-sender_connected_signal_received_redacted
-sender_connected_signal_missing_redacted
-sender_connected_signal_after_receiver_disconnect_redacted
-sender_connected_signal_correlation_mismatch_redacted
-receiver_window_closed_before_sender_signal_redacted
-connected_window_overlap_observed_redacted
-participant_event_timeout_after_sender_signal_redacted
+sender runtime bridge stale consumed latch blocked current-generation trigger
 ```
+
+Repair:
+
+```text
+sender_runtime_join_bridge_state_repair_present=true
+sender_runtime_join_bridge_state_repair_debug_only=true
+sender_runtime_join_bridge_state_repair_raw_identifiers_logged=false
+sender_runtime_join_bridge_arm_generation_changed=<redacted_bool>
+sender_runtime_join_bridge_trigger_generation_matches_arm=<redacted_bool>
+sender_runtime_join_bridge_stale_generation_detected=<redacted_bool>
+sender_runtime_join_bridge_repeated_only_after_consumed=<redacted_bool>
+sender_runtime_join_bridge_state_classification=<redacted_bucket>
+```
+
+The DEBUG bridge now increments an arm generation for a fresh pending metadata reference, clears stale consumed state for that generation, and treats a trigger as repeated only when the consumed generation matches the active arm generation.
 
 Safety preserved:
 
 ```text
-no APNs
+no APNs during repair
 no production APNs
 no dev/invite
-no physical media connect
-no physical LiveKit join
+no physical media connect during repair
+no physical LiveKit join during repair
 no microphone/camera permission
 no video
 no Matrix event emit
@@ -77,12 +74,50 @@ no raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room/call/user
 
 ## Next Phase
 
-`2.48Z-Physical2-Retry20 — one-shot real sender join with sender-connected signal handoff`
+`2.48Z-Physical2-Retry21 — one-shot sender runtime join bridge state repair validation, no reinstall unless required`
 
 Goal:
-Run one physical two-device proof that the sender runtime join success signal is propagated into the receiver proof before the receiver connected window closes.
+Run one physical two-device proof that a fresh sender pending-metadata reference arms a new bridge generation and the sender runtime join executes instead of being skipped as repeated.
 
-Required proof focus:
+Required preflight:
+
+```text
+receiver_device_connected=true
+second_physical_device_connected=true
+receiver_app_matrix_session_whoami_result=success_redacted
+sender_app_matrix_session_whoami_result=success_redacted
+room_validation_preflight=pass
+receiver_controlled_audio_connect_armed=true
+receiver_remote_peer_context_armed=true
+receiver_sender_readiness_context_armed=true
+sender_connected_signal_handoff_present=true
+sender_runtime_join_bridge_state_repair_present=true
+sender_runtime_join_bridge_state_repair_debug_only=true
+sender_runtime_join_bridge_state_repair_raw_identifiers_logged=false
+safe_to_send_apns=true
+APNs_sent=false
+```
+
+After one explicit manual confirmation, send at most one sandbox APNs.
+
+Required sender proof focus:
+
+```text
+sender_runtime_join_bridge_arm_generation_changed=true
+sender_runtime_join_bridge_trigger_generation_matches_arm=true
+sender_runtime_join_bridge_repeated_only_after_consumed=true
+sender_runtime_join_bridge_triggered=true
+sender_runtime_join_bridge_consumed=true
+sender_runtime_join_bridge_repeated=false
+sender_runtime_join_pending_metadata_fetch_result=success_redacted
+sender_runtime_join_credentials_result=success_redacted
+sender_runtime_join_executor_invoked=true
+sender_runtime_join_runtime_result=success_redacted
+sender_livekit_room_connected=true
+sender_runtime_join_bridge_state_classification=sender_runtime_join_connected_redacted
+```
+
+Required receiver proof focus:
 
 ```text
 receiver_pushkit_received=true
@@ -91,38 +126,23 @@ receiver_pending_metadata_fetch_result=success_redacted
 receiver_media_credentials_result=success_redacted
 receiver_controlled_connect_first_attempt_result=success_redacted
 receiver_livekit_join_result=success_redacted
-
-sender_runtime_join_pending_metadata_fetch_result=success_redacted
-sender_runtime_join_credentials_result=success_redacted
-sender_runtime_join_executor_invoked=true
-sender_runtime_join_runtime_result=success_redacted
-sender_livekit_room_connected=true
-sender_connected_signal_emitted=true
-
-receiver_sender_connected_signal_received=true
-receiver_sender_connected_signal_correlation_match=true
-receiver_sender_connected_signal_received_before_receiver_disconnect=true
-receiver_sender_connected_window_overlap_observed=true
+receiver_sender_connected_signal_received=<redacted_bool>
+receiver_sender_connected_window_overlap_observed=<redacted_bool>
+livekit_remote_participant_seen=<redacted_bool>
 ```
 
-If remote participant is seen:
+If the sender bridge still does not execute:
 
 ```text
-livekit_remote_participant_seen=true
-receiver_remote_participant_observer_result=success_redacted
-```
-
-If participant event still times out after signal:
-
-```text
-receiver_sender_connected_window_overlap_observed=true
-livekit_remote_participant_seen=false
-receiver_remote_participant_observer_result=not_observed_redacted
-remote_participant_observation_final_classification=participant_event_timeout_after_sender_signal_redacted
+sender_runtime_join_bridge_triggered=false
+sender_runtime_join_bridge_consumed=false
+sender_runtime_join_bridge_repeated=<redacted_bool>
+sender_runtime_join_bridge_stale_generation_detected=<redacted_bool>
+sender_runtime_join_bridge_state_classification=<redacted_bucket>
+blocked_reason=sender_runtime_join_bridge_state_repair_failed_redacted
 ```
 
 Hard limits:
-- send at most one sandbox APNs after all preflight gates pass and explicit manual confirmation
 - do not use production APNs or `dev/invite`
 - do not repeat APNs, receiver connect, or sender join
 - no video, camera permission, Matrix event emission, or full direct-call flow

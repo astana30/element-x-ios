@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-ReceiverSenderConnectedSignalRepair — no APNs or physical connect were run. The DEBUG sender runtime proof now emits redacted sender-connected signal fields from real sender runtime join success, and the receiver proof can consume the signal through a DEBUG-only handoff using opaque correlation. Receiver classifications now separate missing signal, late signal, correlation mismatch, receiver window closed before signal, connected-window overlap, and participant-event timeout after sender signal. Default runtime remains no-connect/no-join. The next physical phase is `2.48Z-Physical2-Retry20 — one-shot real sender join with sender-connected signal handoff`.
+After 2.48Z-SenderRuntimeJoinBridgeStateRepair — no APNs or physical connect were run. Retry20 closed as receiver controlled connect/LiveKit success with one sandbox APNs, but the sender runtime join did not execute because the DEBUG one-shot bridge classified the current trigger as repeated before the current generation was consumed. The sender runtime bridge now tracks an arm generation and consumed generation so a stale consumed latch cannot block a fresh pending-metadata reference. The next physical phase is `2.48Z-Physical2-Retry21 — one-shot sender runtime join bridge state repair validation, no reinstall unless required`.
 
 ## Latest App Code Checkpoint
 
@@ -38,6 +38,35 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Checksum: `654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e`
 
 ## Proven Checkpoints
+
+- 2.48Z-SenderRuntimeJoinBridgeStateRepair closes Retry20 as real receiver controlled connect success / sender runtime bridge stale one-shot state triage, then repairs the sender bridge state without APNs/connect:
+  - Retry20 physical classification:
+    ```text
+    room_validation_preflight=pass
+    background_apns_push_result=sandbox_success
+    APNs_sent=true
+    receiver_path=pushkit_callkit_answer_metadata_credentials_controlled_connect_livekit_success_redacted
+    sender_runtime_join_trigger_requested=true
+    sender_runtime_join_bridge_triggered=false
+    sender_runtime_join_bridge_consumed=false
+    sender_runtime_join_bridge_repeated=true
+    sender_runtime_join_executor_invoked=false
+    sender_livekit_room_connected=false
+    ```
+  - Repair proof fields added:
+    ```text
+    sender_runtime_join_bridge_state_repair_present=true
+    sender_runtime_join_bridge_state_repair_debug_only=true
+    sender_runtime_join_bridge_state_repair_raw_identifiers_logged=false
+    sender_runtime_join_bridge_arm_generation_changed=<redacted_bool>
+    sender_runtime_join_bridge_trigger_generation_matches_arm=<redacted_bool>
+    sender_runtime_join_bridge_stale_generation_detected=<redacted_bool>
+    sender_runtime_join_bridge_repeated_only_after_consumed=<redacted_bool>
+    sender_runtime_join_bridge_state_classification=<redacted_bucket>
+    ```
+  - Classifications include current-generation trigger, stale generation, repeated after consumed, repeated before consumed, executor not invoked, connected, and not connected buckets.
+  - Safety preserved: no APNs in the repair, no production APNs, no `dev/invite`, no physical connect/LiveKit join, no microphone/camera permission, no video, no Matrix event emission, no full call flow, and no raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room/call/user/device/pending-metadata logging.
+  - Next phase: `2.48Z-Physical2-Retry21 — one-shot sender runtime join bridge state repair validation, no reinstall unless required`.
 
 - 2.48Z-ReceiverSenderConnectedSignalRepair adds the no-APNs/no-connect repair for the Retry19 blocker:
   - Sender runtime success emits redacted sender-connected signal proof:
