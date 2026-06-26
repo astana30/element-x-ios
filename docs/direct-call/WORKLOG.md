@@ -2,6 +2,39 @@
 
 This file records durable phase-level progress for future Codex and strategy sessions.
 
+## 2026-06-26 — 2.48Z-ReceiverSenderConnectedSignalRepair
+
+Implemented the no-APNs/no-connect repair for the Retry19 blocker where the sender proof reached `sender_livekit_room_connected=true` but the receiver never consumed a sender-connected signal before closing its connected window.
+
+Repair:
+
+```text
+sender_connected_signal_handoff_present=true
+sender_connected_signal_handoff_debug_only=true
+sender_connected_signal_emitted=<runtime_bool>
+sender_connected_signal_emitted_after_runtime_join_success=<runtime_bool>
+sender_connected_signal_opaque_correlation_present=<redacted_bool>
+sender_connected_signal_handoff_raw_identifiers_logged=false
+sender_connected_signal_raw_room_logged=false
+sender_connected_signal_raw_call_logged=false
+sender_connected_signal_raw_user_logged=false
+sender_connected_signal_raw_device_logged=false
+
+receiver_sender_connected_signal_wait_started=<redacted_bool>
+receiver_sender_connected_signal_wait_completed=<redacted_bool>
+receiver_sender_connected_signal_received=<redacted_bool>
+receiver_sender_connected_signal_correlation_match=<redacted_bool>
+receiver_sender_connected_signal_final_classification=<redacted_bucket>
+```
+
+The receiver can now consume the signal via the DEBUG-only `/direct-call/sender-connected-signal-handoff` URL using opaque correlation only. Signal received, missing, late/after-disconnect, correlation mismatch, window-closed-before-signal, connected-window overlap, and participant-event-timeout-after-signal are classified separately. Missing audio remains separate from participant presence, and cleanup remains terminal/deterministic.
+
+Safety:
+- no APNs, production APNs, `dev/invite`, physical media connect, physical LiveKit join, microphone/camera permission, video, Matrix event emission, or full call flow
+- no raw tokens, JWTs, authorization headers, APNs payloads, invite bodies, LiveKit URLs, room IDs, call IDs, user IDs, device IDs, call handles, private logs, or pending metadata contents recorded
+
+Next phase: `2.48Z-Physical2-Retry20 — one-shot real sender join with sender-connected signal handoff`.
+
 ## 2026-06-26 — 2.48Z-Physical2-Retry19
 
 Closed Retry19 as real sender pending-metadata handoff + credentials + runtime join success / receiver connected window closed before sender-connected signal / remote participant not observed triage. This is not remote participant success.

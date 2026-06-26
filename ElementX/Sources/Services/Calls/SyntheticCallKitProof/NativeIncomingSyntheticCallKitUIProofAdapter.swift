@@ -1077,6 +1077,17 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
     var senderLiveKitRoomConnected = false
     var senderLiveKitRoomDisconnected = false
     var senderCleanupResult = "not_requested"
+    var senderConnectedSignalHandoffPresent = true
+    var senderConnectedSignalHandoffDebugOnly = true
+    var senderConnectedSignalHandoffRawIdentifiersLogged = false
+    var senderConnectedSignalEmitted = false
+    var senderConnectedSignalEmitSource = "none"
+    var senderConnectedSignalEmittedAfterRuntimeJoinSuccess = false
+    var senderConnectedSignalOpaqueCorrelationPresent = false
+    var senderConnectedSignalRawRoomLogged = false
+    var senderConnectedSignalRawCallLogged = false
+    var senderConnectedSignalRawUserLogged = false
+    var senderConnectedSignalRawDeviceLogged = false
     var runtimeDerived = true
     var queryOutcomeIgnored = true
     var audioOnly = true
@@ -1147,6 +1158,17 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             "sender_livekit_room_connected=\(senderLiveKitRoomConnected)",
             "sender_livekit_room_disconnected=\(senderLiveKitRoomDisconnected)",
             "sender_cleanup_result=\(senderCleanupResult)",
+            "sender_connected_signal_handoff_present=\(senderConnectedSignalHandoffPresent)",
+            "sender_connected_signal_handoff_debug_only=\(senderConnectedSignalHandoffDebugOnly)",
+            "sender_connected_signal_handoff_raw_identifiers_logged=\(senderConnectedSignalHandoffRawIdentifiersLogged)",
+            "sender_connected_signal_emitted=\(senderConnectedSignalEmitted)",
+            "sender_connected_signal_emit_source=\(senderConnectedSignalEmitSource)",
+            "sender_connected_signal_emitted_after_runtime_join_success=\(senderConnectedSignalEmittedAfterRuntimeJoinSuccess)",
+            "sender_connected_signal_opaque_correlation_present=\(senderConnectedSignalOpaqueCorrelationPresent)",
+            "sender_connected_signal_raw_room_logged=\(senderConnectedSignalRawRoomLogged)",
+            "sender_connected_signal_raw_call_logged=\(senderConnectedSignalRawCallLogged)",
+            "sender_connected_signal_raw_user_logged=\(senderConnectedSignalRawUserLogged)",
+            "sender_connected_signal_raw_device_logged=\(senderConnectedSignalRawDeviceLogged)",
             "sender_runtime_join_runtime_derived=\(runtimeDerived)",
             "sender_runtime_join_query_outcome_ignored=\(queryOutcomeIgnored)",
             "sender_runtime_join_audio_only=\(audioOnly)",
@@ -1215,6 +1237,10 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         senderLiveKitRoomConnected = false
         senderLiveKitRoomDisconnected = false
         senderCleanupResult = "not_requested"
+        senderConnectedSignalEmitted = false
+        senderConnectedSignalEmitSource = "none"
+        senderConnectedSignalEmittedAfterRuntimeJoinSuccess = false
+        senderConnectedSignalOpaqueCorrelationPresent = false
         restoredMatrixSessionUsed = false
         blockedReason = repeated ? "sender_runtime_join_repeated_blocked_redacted" : "sender_runtime_join_started_redacted"
     }
@@ -1284,6 +1310,10 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             senderLiveKitRoomConnected = true
             senderLiveKitRoomDisconnected = false
             senderCleanupResult = "deferred_for_receiver_observation_redacted"
+            senderConnectedSignalEmitted = true
+            senderConnectedSignalEmitSource = "sender_runtime_livekit_join_redacted"
+            senderConnectedSignalEmittedAfterRuntimeJoinSuccess = true
+            senderConnectedSignalOpaqueCorrelationPresent = pendingMetadataReferenceMatchesInviteSenderMemory || pendingMetadataReferenceMatchesSenderViewRoute
             blockedReason = "none"
         case .failure(let error):
             runtimeResult = "failed_redacted"
@@ -1291,6 +1321,9 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             senderLiveKitRoomConnected = false
             senderLiveKitRoomDisconnected = true
             senderCleanupResult = "completed_redacted"
+            senderConnectedSignalEmitted = false
+            senderConnectedSignalEmitSource = "none"
+            senderConnectedSignalEmittedAfterRuntimeJoinSuccess = false
             blockedReason = "sender_runtime_join_failed_redacted"
         }
     }
@@ -3767,11 +3800,30 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var receiverConnectedWindowCloseReason = "not_started"
     var receiverConnectedWindowClosedBeforeSenderConnected = false
     var receiverConnectedWindowRetainedUntilSenderTerminal = false
+    var senderConnectedSignalHandoffPresent = true
+    var senderConnectedSignalHandoffDebugOnly = true
+    var senderConnectedSignalHandoffRawIdentifiersLogged = false
+    var senderConnectedSignalEmitted = false
+    var senderConnectedSignalEmitSource = "none"
+    var senderConnectedSignalEmittedAfterRuntimeJoinSuccess = false
+    var senderConnectedSignalOpaqueCorrelationPresent = false
+    var senderConnectedSignalRawRoomLogged = false
+    var senderConnectedSignalRawCallLogged = false
+    var senderConnectedSignalRawUserLogged = false
+    var senderConnectedSignalRawDeviceLogged = false
     var senderConnectedSignalReceivedByReceiver = false
     var senderConnectedSignalSource = "none"
     var senderConnectedSignalBeforeReceiverDisconnect = false
     var senderConnectedSignalAfterReceiverDisconnect = false
     var senderConnectedSignalRawIdentifiersLogged = false
+    var receiverSenderConnectedSignalWaitStarted = false
+    var receiverSenderConnectedSignalWaitCompleted = false
+    var receiverSenderConnectedSignalReceived = false
+    var receiverSenderConnectedSignalCorrelationMatch = false
+    var receiverSenderConnectedSignalReceivedBeforeReceiverDisconnect = false
+    var receiverSenderConnectedSignalReceivedAfterReceiverDisconnect = false
+    var receiverSenderConnectedSignalTimeout = false
+    var receiverSenderConnectedSignalFinalClassification = "not_started"
     var receiverSenderConnectedWindowOverlapWaitStarted = false
     var receiverSenderConnectedWindowOverlapWaitCompleted = false
     var receiverSenderConnectedWindowOverlapWaitTimeout = false
@@ -4488,11 +4540,30 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "receiver_connected_window_close_reason=\(receiverConnectedWindowCloseReason)",
             "receiver_connected_window_closed_before_sender_connected=\(receiverConnectedWindowClosedBeforeSenderConnected)",
             "receiver_connected_window_retained_until_sender_terminal=\(receiverConnectedWindowRetainedUntilSenderTerminal)",
+            "sender_connected_signal_handoff_present=\(senderConnectedSignalHandoffPresent)",
+            "sender_connected_signal_handoff_debug_only=\(senderConnectedSignalHandoffDebugOnly)",
+            "sender_connected_signal_handoff_raw_identifiers_logged=\(senderConnectedSignalHandoffRawIdentifiersLogged)",
+            "sender_connected_signal_emitted=\(senderConnectedSignalEmitted)",
+            "sender_connected_signal_emit_source=\(senderConnectedSignalEmitSource)",
+            "sender_connected_signal_emitted_after_runtime_join_success=\(senderConnectedSignalEmittedAfterRuntimeJoinSuccess)",
+            "sender_connected_signal_opaque_correlation_present=\(senderConnectedSignalOpaqueCorrelationPresent)",
+            "sender_connected_signal_raw_room_logged=\(senderConnectedSignalRawRoomLogged)",
+            "sender_connected_signal_raw_call_logged=\(senderConnectedSignalRawCallLogged)",
+            "sender_connected_signal_raw_user_logged=\(senderConnectedSignalRawUserLogged)",
+            "sender_connected_signal_raw_device_logged=\(senderConnectedSignalRawDeviceLogged)",
             "sender_connected_signal_received_by_receiver=\(senderConnectedSignalReceivedByReceiver)",
             "sender_connected_signal_source=\(senderConnectedSignalSource)",
             "sender_connected_signal_before_receiver_disconnect=\(senderConnectedSignalBeforeReceiverDisconnect)",
             "sender_connected_signal_after_receiver_disconnect=\(senderConnectedSignalAfterReceiverDisconnect)",
             "sender_connected_signal_raw_identifiers_logged=\(senderConnectedSignalRawIdentifiersLogged)",
+            "receiver_sender_connected_signal_wait_started=\(receiverSenderConnectedSignalWaitStarted)",
+            "receiver_sender_connected_signal_wait_completed=\(receiverSenderConnectedSignalWaitCompleted)",
+            "receiver_sender_connected_signal_received=\(receiverSenderConnectedSignalReceived)",
+            "receiver_sender_connected_signal_correlation_match=\(receiverSenderConnectedSignalCorrelationMatch)",
+            "receiver_sender_connected_signal_received_before_receiver_disconnect=\(receiverSenderConnectedSignalReceivedBeforeReceiverDisconnect)",
+            "receiver_sender_connected_signal_received_after_receiver_disconnect=\(receiverSenderConnectedSignalReceivedAfterReceiverDisconnect)",
+            "receiver_sender_connected_signal_timeout=\(receiverSenderConnectedSignalTimeout)",
+            "receiver_sender_connected_signal_final_classification=\(receiverSenderConnectedSignalFinalClassification)",
             "receiver_sender_connected_window_overlap_wait_started=\(receiverSenderConnectedWindowOverlapWaitStarted)",
             "receiver_sender_connected_window_overlap_wait_completed=\(receiverSenderConnectedWindowOverlapWaitCompleted)",
             "receiver_sender_connected_window_overlap_wait_timeout=\(receiverSenderConnectedWindowOverlapWaitTimeout)",
@@ -5014,9 +5085,13 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverConnectedWindowCloseReason = "not_closed"
         receiverConnectedWindowClosedBeforeSenderConnected = false
         receiverSenderConnectedWindowOverlapWaitStarted = true
+        receiverSenderConnectedSignalWaitStarted = true
         receiverSenderConnectedWindowOverlapWaitTimeout = false
         if receiverSenderConnectedWindowOverlapFinalClassification == "not_started" {
             receiverSenderConnectedWindowOverlapFinalClassification = "pending_redacted"
+        }
+        if receiverSenderConnectedSignalFinalClassification == "not_started" {
+            receiverSenderConnectedSignalFinalClassification = "pending_redacted"
         }
     }
 
@@ -5027,24 +5102,45 @@ private extension SalemXVoIPPushReceiptProofSummary {
             receiverConnectedWindowClosedBeforeSenderConnected = true
             if receiverSenderConnectedWindowOverlapFinalClassification == "pending_redacted" ||
                 receiverSenderConnectedWindowOverlapFinalClassification == "not_started" {
-                receiverSenderConnectedWindowOverlapFinalClassification = "receiver_disconnected_before_sender_connected_redacted"
+                receiverSenderConnectedWindowOverlapFinalClassification = "receiver_window_closed_before_sender_signal_redacted"
+            }
+            if receiverSenderConnectedSignalFinalClassification == "pending_redacted" ||
+                receiverSenderConnectedSignalFinalClassification == "not_started" {
+                receiverSenderConnectedSignalFinalClassification = "receiver_window_closed_before_sender_signal_redacted"
             }
         }
     }
 
-    mutating func recordSenderConnectedSignalFromRuntime(senderConnected: Bool, source: String) {
+    mutating func recordSenderConnectedSignalFromRuntime(senderConnected: Bool, source: String, correlationMatched: Bool = true) {
         senderJoinTerminalSeenByReceiver = true
+        senderConnectedSignalHandoffPresent = true
+        senderConnectedSignalHandoffDebugOnly = true
+        senderConnectedSignalHandoffRawIdentifiersLogged = false
         senderConnectedSignalRawIdentifiersLogged = false
+        senderConnectedSignalRawRoomLogged = false
+        senderConnectedSignalRawCallLogged = false
+        senderConnectedSignalRawUserLogged = false
+        senderConnectedSignalRawDeviceLogged = false
         let safeSource = source == "sender_runtime_livekit_join" ? "sender_runtime_livekit_join_redacted" : "unknown_redacted"
+        senderConnectedSignalEmitted = senderConnected
+        senderConnectedSignalEmitSource = senderConnected ? safeSource : "none"
+        senderConnectedSignalEmittedAfterRuntimeJoinSuccess = senderConnected
+        senderConnectedSignalOpaqueCorrelationPresent = correlationMatched
+        receiverSenderConnectedSignalWaitStarted = true
+        receiverSenderConnectedSignalWaitCompleted = true
+        receiverSenderConnectedSignalTimeout = false
 
         guard senderConnected else {
             if !senderConnectedSignalReceivedByReceiver {
                 receiverSenderConnectedWindowOverlapWaitCompleted = true
+                receiverSenderConnectedSignalFinalClassification = "sender_connected_signal_missing_redacted"
                 receiverSenderConnectedWindowOverlapFinalClassification = "sender_connected_signal_missing_redacted"
             }
             return
         }
 
+        receiverSenderConnectedSignalReceived = true
+        receiverSenderConnectedSignalCorrelationMatch = correlationMatched
         senderConnectedSignalReceivedByReceiver = true
         senderConnectedSignalSource = safeSource
         receiverSenderConnectedWindowOverlapWaitStarted = true
@@ -5057,15 +5153,22 @@ private extension SalemXVoIPPushReceiptProofSummary {
             !liveKitRoomDisconnected
         senderConnectedSignalBeforeReceiverDisconnect = receiverWindowActive
         senderConnectedSignalAfterReceiverDisconnect = !receiverWindowActive
+        receiverSenderConnectedSignalReceivedBeforeReceiverDisconnect = receiverWindowActive
+        receiverSenderConnectedSignalReceivedAfterReceiverDisconnect = !receiverWindowActive
 
-        if receiverWindowActive {
+        if !correlationMatched {
+            receiverSenderConnectedSignalFinalClassification = "sender_connected_signal_correlation_mismatch_redacted"
+            receiverSenderConnectedWindowOverlapFinalClassification = "sender_connected_signal_correlation_mismatch_redacted"
+        } else if receiverWindowActive {
             senderRoomConnectedDuringReceiverWindow = true
             receiverSenderConnectedWindowOverlapObserved = true
             receiverConnectedWindowRetainedUntilSenderTerminal = true
             receiverObserverActiveDuringSenderJoin = receiverObserverActiveDuringSenderJoin || receiverRemoteParticipantObserverStarted
+            receiverSenderConnectedSignalFinalClassification = "sender_connected_signal_received_redacted"
             receiverSenderConnectedWindowOverlapFinalClassification = "connected_window_overlap_observed_redacted"
         } else {
-            receiverSenderConnectedWindowOverlapFinalClassification = "sender_connected_after_receiver_disconnect_redacted"
+            receiverSenderConnectedSignalFinalClassification = "sender_connected_signal_after_receiver_disconnect_redacted"
+            receiverSenderConnectedWindowOverlapFinalClassification = "sender_connected_signal_after_receiver_disconnect_redacted"
         }
     }
 
@@ -5077,17 +5180,23 @@ private extension SalemXVoIPPushReceiptProofSummary {
 
         receiverSenderConnectedWindowOverlapWaitCompleted = true
         receiverSenderConnectedWindowOverlapWaitTimeout = true
+        receiverSenderConnectedSignalWaitCompleted = true
+        receiverSenderConnectedSignalTimeout = !senderConnectedSignalReceivedByReceiver
         if senderConnectedSignalReceivedByReceiver, senderConnectedSignalAfterReceiverDisconnect {
-            receiverSenderConnectedWindowOverlapFinalClassification = "sender_connected_after_receiver_disconnect_redacted"
+            receiverSenderConnectedSignalFinalClassification = "sender_connected_signal_after_receiver_disconnect_redacted"
+            receiverSenderConnectedWindowOverlapFinalClassification = "sender_connected_signal_after_receiver_disconnect_redacted"
         } else if senderConnectedSignalReceivedByReceiver, !receiverSenderConnectedWindowOverlapObserved {
-            receiverSenderConnectedWindowOverlapFinalClassification = "receiver_observer_bound_to_stale_room_redacted"
+            receiverSenderConnectedWindowOverlapFinalClassification = receiverSenderConnectedSignalCorrelationMatch ? "receiver_observer_bound_to_stale_room_redacted" : "sender_connected_signal_correlation_mismatch_redacted"
         } else if senderRoomConnectedDuringReceiverWindow || senderSideLiveKitJoinResult == SalemXSenderSideLiveKitJoinHook.successResult {
+            receiverSenderConnectedSignalFinalClassification = "sender_connected_signal_missing_redacted"
             receiverSenderConnectedWindowOverlapFinalClassification = "sender_connected_signal_missing_redacted"
         } else if receiverConnectedWindowClosedBeforeSenderConnected {
-            receiverSenderConnectedWindowOverlapFinalClassification = "receiver_disconnected_before_sender_connected_redacted"
+            receiverSenderConnectedSignalFinalClassification = "receiver_window_closed_before_sender_signal_redacted"
+            receiverSenderConnectedWindowOverlapFinalClassification = "receiver_window_closed_before_sender_signal_redacted"
         } else if receiverConnectedSessionLeaseReleased, !remoteParticipantObservationWaitCompleted {
             receiverSenderConnectedWindowOverlapFinalClassification = "receiver_cleanup_released_lease_early_redacted"
         } else {
+            receiverSenderConnectedSignalFinalClassification = "sender_connected_signal_missing_redacted"
             receiverSenderConnectedWindowOverlapFinalClassification = "receiver_overlap_wait_timeout_redacted"
         }
     }
@@ -5148,6 +5257,9 @@ private extension SalemXVoIPPushReceiptProofSummary {
             (receiverRoomRetainedForSenderObservation &&
                 senderRoomConnectedDuringReceiverWindow &&
                 (!receiverConnectedSessionLeaseReleased || senderConnectedSignalBeforeReceiverDisconnect))
+        receiverSenderConnectedSignalReceived = receiverSenderConnectedSignalReceived || senderConnectedSignalReceivedByReceiver
+        receiverSenderConnectedSignalReceivedBeforeReceiverDisconnect = receiverSenderConnectedSignalReceivedBeforeReceiverDisconnect || senderConnectedSignalBeforeReceiverDisconnect
+        receiverSenderConnectedSignalReceivedAfterReceiverDisconnect = receiverSenderConnectedSignalReceivedAfterReceiverDisconnect || senderConnectedSignalAfterReceiverDisconnect
         receiverCleanupStartedBeforeSenderTerminal = liveKitRoomDisconnected &&
             !senderJoinTerminalSeenByReceiver &&
             !remoteParticipantObservationWaitCompleted &&
@@ -5796,6 +5908,19 @@ private extension SalemXVoIPPushReceiptProofSummary {
     }
 
     private func remoteParticipantObservationTimeoutClassification() -> String {
+        if let classification = remoteParticipantObservationPreconditionTimeoutClassification() {
+            return classification
+        }
+        if let classification = senderConnectedSignalTimeoutClassification() {
+            return classification
+        }
+        if let classification = receiverSenderConnectedOverlapTimeoutClassification() {
+            return classification
+        }
+        return "remote_participant_event_timeout_redacted"
+    }
+
+    private func remoteParticipantObservationPreconditionTimeoutClassification() -> String? {
         if liveKitRemoteParticipantSeen {
             return "remote_participant_seen_redacted"
         }
@@ -5819,16 +5944,39 @@ private extension SalemXVoIPPushReceiptProofSummary {
         if !opaqueCallCorrelationMatch {
             return "opaque_correlation_mismatch_redacted"
         }
+        return nil
+    }
+
+    private func senderConnectedSignalTimeoutClassification() -> String? {
+        if !senderConnectedSignalReceivedByReceiver {
+            if receiverConnectedWindowClosedBeforeSenderConnected {
+                return "receiver_window_closed_before_sender_signal_redacted"
+            }
+            return "sender_connected_signal_missing_redacted"
+        }
+        if senderConnectedSignalAfterReceiverDisconnect {
+            return "sender_connected_signal_late_redacted"
+        }
+        if senderConnectedSignalReceivedByReceiver, !receiverSenderConnectedSignalCorrelationMatch {
+            return "sender_connected_signal_correlation_mismatch_redacted"
+        }
+        return nil
+    }
+
+    private func receiverSenderConnectedOverlapTimeoutClassification() -> String? {
         if senderRoomConnectedDuringReceiverWindow, !receiverRoomRetainedForSenderObservation {
             return "sender_connected_outside_receiver_window_redacted"
         }
         if senderRoomConnectedDuringReceiverWindow, !receiverSenderConnectedWindowOverlapObserved {
             return "no_receiver_sender_connected_overlap_redacted"
         }
+        if receiverSenderConnectedWindowOverlapObserved {
+            return "participant_event_timeout_after_sender_signal_redacted"
+        }
         if senderCleanupStartedBeforeReceiverObservation {
             return "sender_disconnected_before_observation_redacted"
         }
-        return "remote_participant_event_timeout_redacted"
+        return nil
     }
 
     mutating func recordMetadataCredentialsBoundaryRepairProof(allowsHookConsumptionAfterCredentials: Bool = false) {
@@ -7150,6 +7298,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let senderSideLiveKitJoinURLHookPath = "/direct-call/sender-side-livekit-join"
     private static let senderPendingMetadataReferenceHandoffURLHookPath = "/direct-call/sender-pending-metadata-reference-handoff"
     private static let senderRuntimeLiveKitJoinURLHookPath = "/direct-call/sender-runtime-livekit-join"
+    private static let senderConnectedSignalHandoffURLHookPath = "/direct-call/sender-connected-signal-handoff"
     private static let senderRuntimeLiveKitJoinConfirmation = "RUN_2_48Z_REAL_SENDER_RUNTIME_JOIN"
     private static let uploadSmokeDefaultURLString = "https://matrix.mertis.kz/_matrix/client/unstable/kz.salemx.direct_call/pushkit/token"
     private static let matrixSessionWhoamiURLString = "https://matrix.mertis.kz/_matrix/client/v3/account/whoami"
@@ -7278,30 +7427,31 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             return true
         }
 
+        if handleSenderRuntimeURLHook(url) {
+            return true
+        }
+
+        return false
+    }
+
+    private static func handleSenderRuntimeURLHook(_ url: URL) -> Bool {
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         if url.path == senderLiveKitReadinessURLHookPath {
-            let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
             armSenderLiveKitReadinessURLHook(components)
             return true
-        }
-
-        if url.path == senderSideLiveKitJoinURLHookPath {
-            let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        } else if url.path == senderSideLiveKitJoinURLHookPath {
             armSenderSideLiveKitJoinURLHook(components)
             return true
-        }
-
-        if url.path == senderPendingMetadataReferenceHandoffURLHookPath {
-            let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        } else if url.path == senderPendingMetadataReferenceHandoffURLHookPath {
             armSenderPendingMetadataReferenceHandoffURLHook(components)
             return true
-        }
-
-        if url.path == senderRuntimeLiveKitJoinURLHookPath {
-            let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        } else if url.path == senderRuntimeLiveKitJoinURLHookPath {
             startSenderRuntimeLiveKitJoinURLHook(components)
             return true
+        } else if url.path == senderConnectedSignalHandoffURLHookPath {
+            armSenderConnectedSignalHandoffURLHook(components)
+            return true
         }
-
         return false
     }
 
@@ -7396,6 +7546,26 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         lock.unlock()
 
         updateLatestSenderRuntimeLiveKitJoinSummary(summary)
+    }
+
+    private static func armSenderConnectedSignalHandoffURLHook(_ components: URLComponents?) {
+        let senderConnected = redactedBoolQueryItem(components,
+                                                    names: ["sender_connected", "sender_livekit_room_connected", "connected"])
+        let correlationMatched = redactedOptionalBoolQueryItem(components,
+                                                               names: ["opaque_correlation_match", "correlation_match"]) ?? true
+        let sourceValue = components?.queryItems?.first { $0.name == "source" }?.value ?? ""
+        let source = sourceValue == "sender_runtime_livekit_join" || sourceValue == "sender_runtime_livekit_join_redacted" ? "sender_runtime_livekit_join" : "unknown"
+
+        lock.lock()
+        var summary = latestVoIPPushReceiptSummary
+        summary.recordSenderConnectedSignalFromRuntime(senderConnected: senderConnected,
+                                                       source: source,
+                                                       correlationMatched: correlationMatched)
+        summary.activateRemoteParticipantObservationRuntimeWindowIfNeeded()
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+        scheduleRemoteParticipantObservationTimeoutIfNeeded()
     }
 
     private static func armSenderSideLiveKitJoinURLHook(_ components: URLComponents?) {
