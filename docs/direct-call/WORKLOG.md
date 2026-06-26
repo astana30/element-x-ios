@@ -2,6 +2,41 @@
 
 This file records durable phase-level progress for future Codex and strategy sessions.
 
+## 2026-06-26 — 2.48Z-Physical2-Retry17
+
+Closed Retry17 as safe sender pending-metadata triage, not remote participant success.
+
+Result:
+
+```text
+background_apns_push_result=sandbox_success
+APNs_sent=true
+receiver_connected_session_lease_acquired=true
+receiver_pre_sender_gate_excludes_sender_runtime_fields=true
+sender_runtime_join_bridge_triggered=true
+sender_runtime_join_bridge_consumed=true
+sender_runtime_join_bridge_repeated=false
+sender_runtime_join_uses_restored_matrix_session=false
+sender_runtime_join_pending_metadata_fetch_result=blocked_redacted
+sender_runtime_join_executor_invoked=false
+sender_runtime_join_runtime_result=blocked_redacted
+sender_runtime_join_runtime_error_bucket=pending_metadata_unavailable_redacted
+receiver_sender_connected_window_overlap_observed=false
+livekit_remote_participant_seen=false
+remote_participant_observation_final_classification=opaque_correlation_mismatch_redacted
+blocked_reason=sender_runtime_join_pending_metadata_reference_missing_redacted
+```
+
+The receiver path reached PushKit, CallKit Answer, authenticated pending metadata, media credentials, one controlled receiver connect, and the corrected pre-sender gate. The sender runtime bridge was triggered exactly once on Carpediem, but blocked before credentials/connect because the sender runtime did not have the pending metadata reference and did not use the restored Matrix session.
+
+Safety:
+- exactly one sandbox APNs was sent for Retry17
+- no repeated APNs, production APNs, `dev/invite`, repeated receiver connect, repeated sender join, video, camera permission, Matrix event emission, or full call flow
+- sender did not request credentials, did not invoke the shared executor, and did not join LiveKit
+- no raw tokens, JWTs, authorization headers, APNs payloads, invite bodies, LiveKit URLs, room IDs, call IDs, user IDs, device IDs, call handles, private logs, or secret-bearing URLs were recorded
+
+Next phase: `2.48Z-SenderRuntimePendingMetadataReferenceRepair — make the real sender runtime bridge receive the APNs pending metadata reference without APNs/connect`.
+
 ## 2026-06-26 — 2.48Z-Physical2-Retry16
 
 Closed Retry16 as safe pre-sender-gate triage, not remote participant success.

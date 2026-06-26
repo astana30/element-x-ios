@@ -13,9 +13,9 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48Z-Physical2-Retry16` is closed as safe pre-sender-gate triage, not remote participant success.
+`2.48Z-Physical2-Retry17` is closed as safe sender pending-metadata triage, not remote participant success.
 
-Retry16 result:
+Retry17 result:
 
 ```text
 preflight_passed=true
@@ -26,22 +26,29 @@ receiver_pushkit_callkit_answer_passed=true
 receiver_pending_metadata_success=true
 receiver_media_credentials_success=true
 receiver_controlled_connect_reached=true
-sender_runtime_join_triggered=false
-remote_participant_observed=false
-blocked_reason=receiver_observation_lease_not_active_before_sender_join
+receiver_pre_sender_gate_excludes_sender_runtime_fields=true
+receiver_observation_lease_active_before_sender_join=true
+sender_runtime_join_bridge_triggered=true
+sender_runtime_join_bridge_consumed=true
+sender_runtime_join_bridge_repeated=false
+sender_runtime_join_uses_restored_matrix_session=false
+sender_runtime_join_pending_metadata_fetch_result=blocked_redacted
+sender_runtime_join_executor_invoked=false
+sender_runtime_join_runtime_result=blocked_redacted
+sender_runtime_join_runtime_error_bucket=pending_metadata_unavailable_redacted
+receiver_sender_connected_window_overlap_observed=false
+livekit_remote_participant_seen=false
+remote_participant_observation_final_classification=opaque_correlation_mismatch_redacted
+blocked_reason=sender_runtime_join_pending_metadata_reference_missing_redacted
 ```
 
-The sender was not triggered because the helper incorrectly required:
+Receiver proof:
 
 ```text
-receiver_observer_active_during_sender_join=true
-```
-
-before sender join was launched. That field is sender-runtime-derived and cannot be true before sender join starts. The receiver observation window timed out first.
-
-Retry16 proof still showed the receiver path reached connect:
-
-```text
+proof_generation=generation_41
+controlled_connect_first_attempt_result=success_redacted
+controlled_connect_first_attempt_repeated=false
+livekit_join_result=success_redacted
 receiver_connected_session_lease_acquired=true
 receiver_connected_session_lease_room_retained=true
 receiver_connected_session_lease_delegate_retained=true
@@ -49,10 +56,34 @@ receiver_connected_session_lease_observer_retained=true
 receiver_room_retained_for_sender_observation=true
 receiver_observer_attached_before_sender_join=true
 remote_participant_observation_wait_started=true
-receiver_cleanup_deferred_until_observation_terminal=true
-receiver_cleanup_started_before_sender_terminal=false
-receiver_connected_session_lease_release_reason=remote_participant_event_timeout_redacted
+remote_participant_observation_wait_completed=true
+receiver_sender_connected_window_overlap_observed=false
+remote_participant_observation_final_classification=opaque_correlation_mismatch_redacted
+livekit_remote_participant_seen=false
 ```
+
+Sender proof:
+
+```text
+proof_generation=generation_9
+sender_runtime_join_bridge_triggered=true
+sender_runtime_join_bridge_consumed=true
+sender_runtime_join_bridge_repeated=false
+sender_runtime_join_uses_restored_matrix_session=false
+sender_runtime_join_pending_metadata_fetch_result=blocked_redacted
+sender_runtime_join_credentials_result=not_requested
+sender_runtime_join_executor_invoked=false
+sender_runtime_join_runtime_result=blocked_redacted
+sender_runtime_join_runtime_error_bucket=pending_metadata_unavailable_redacted
+sender_runtime_join_query_outcome_ignored=true
+blocked_reason=sender_runtime_join_pending_metadata_reference_missing_redacted
+```
+
+Interpretation:
+- the corrected pre-sender gate worked
+- the sender bridge was triggered exactly once
+- sender did not reach credentials or connect because the sender runtime did not receive a pending metadata reference
+- receiver classified the result as opaque correlation mismatch because sender-side pending metadata/correlation never materialized
 
 Safety preserved:
 
@@ -60,9 +91,11 @@ Safety preserved:
 repeated_APNs=false
 production_APNs=false
 dev_invite_used=false
-late_sender_trigger_after_timeout=false
 repeated_receiver_connect=false
-repeated_livekit_join=false
+repeated_sender_join=false
+sender_credentials_requested=false
+sender_executor_invoked=false
+sender_livekit_join=false
 video_allowed=false
 camera_permission_requested=false
 matrix_event_emit_requested=false
@@ -70,121 +103,96 @@ real_call_flow_started=false
 raw URL/token/room/call/user/device IDs logged=false
 ```
 
-## Helper Fix To Preserve
-
-The fixed helper behavior for the next physical attempt:
-
-```text
-receiver_pre_sender_gate_excludes_sender_runtime_fields=true
-```
-
-The pre-sender gate must require only fields that can be true before sender launch:
-
-```text
-receiver_connected_session_lease_acquired=true
-receiver_connected_session_lease_room_retained=true
-receiver_connected_session_lease_delegate_retained=true
-receiver_connected_session_lease_observer_retained=true
-receiver_connected_session_lease_task_retained=true
-receiver_room_retained_for_sender_observation=true
-receiver_observer_attached_before_sender_join=true
-receiver_cleanup_deferred_until_observation_terminal=true
-receiver_cleanup_started_before_sender_terminal=false
-remote_participant_observation_wait_started=true
-remote_participant_observation_wait_completed=false
-```
-
-Do not require these until after sender trigger/runtime observation:
-
-```text
-receiver_observer_active_during_sender_join
-receiver_sender_connected_window_overlap_observed
-sender_join_terminal_seen_by_receiver
-```
-
-The helper must also keep `APNs_sent=true` after the sandbox APNs send succeeds, even if later receiver/sender checks block.
-
 ## Next Phase
 
-`2.48Z-Physical2-Retry17 — one-shot real sender join with corrected pre-sender gate`
+`2.48Z-SenderRuntimePendingMetadataReferenceRepair — make the real sender runtime bridge receive the APNs pending metadata reference`
 
 Goal:
-Run one physical two-device proof using the existing one-shot receiver APNs/Answer/connect path and the real sender runtime bridge, triggering the sender only after the corrected receiver pre-sender lease gate is active.
+Repair the sender runtime bridge so the real sender device can fetch sender-view pending metadata for the same call after receiver APNs/Answer/connect, without query-selected outcomes and without any APNs/connect physical retry in this code phase.
 
-Use physical devices only. Do not use Simulator, Alpamys, or iPhone Жанелька unless the operator explicitly reassigns roles.
+Do not run APNs in this phase. Do not trigger sender runtime join physically.
 
-Required preflight before manual send:
+Investigate:
 
-```text
-receiver_iphone_matrix_session_whoami_result=success_redacted
-receiver_iphone_pending_metadata_auth_ready=true
-second_physical_device_matrix_session_whoami_result=success_redacted
-second_physical_device_pending_metadata_auth_ready=true
-matrix_accounts_distinct=true
-room_validation_preflight=pass
-receiver_controlled_audio_connect_armed=true
-receiver_remote_peer_context_armed=true
-receiver_sender_readiness_context_armed=true
-sender_connect_executor_unification_present=true
-sender_runtime_join_bridge_present=true
-sender_runtime_join_bridge_default_disabled=true
-sender_runtime_join_bridge_one_shot=true
-sender_runtime_join_query_outcome_ignored=true
-remote_participant_observation_timing_repair_present=true
-remote_participant_observation_timing_repair_bounded_window=true
-safe_to_send_apns=true
-APNs_sent=false
-```
+1. How the receiver proof obtains `pending_metadata_reference` from the real non-dev invite/APNs payload.
+2. How the pre-APNs sender readiness/correlation hook is supposed to carry or derive the same opaque reference for the sender runtime bridge.
+3. Why Retry17 sender proof recorded:
 
-After one APNs/Answer/connect, require the corrected pre-sender gate:
+   ```text
+   sender_runtime_join_uses_restored_matrix_session=false
+   sender_runtime_join_pending_metadata_fetch_result=blocked_redacted
+   blocked_reason=sender_runtime_join_pending_metadata_reference_missing_redacted
+   ```
+
+4. Whether the sender runtime bridge currently requires a URL query parameter for pending metadata reference, uses stale proof state, or misses the receiver-provided sender readiness handoff.
+5. Whether the server sender pending metadata endpoint is still correct and authenticated.
+
+Required repair:
 
 ```text
-receiver_connected_session_lease_acquired=true
-receiver_connected_session_lease_room_retained=true
-receiver_connected_session_lease_delegate_retained=true
-receiver_connected_session_lease_observer_retained=true
-receiver_connected_session_lease_task_retained=true
-receiver_room_retained_for_sender_observation=true
-receiver_observer_attached_before_sender_join=true
-receiver_cleanup_deferred_until_observation_terminal=true
-receiver_cleanup_started_before_sender_terminal=false
-remote_participant_observation_wait_started=true
-remote_participant_observation_wait_completed=false
-receiver_pre_sender_gate_excludes_sender_runtime_fields=true
+sender_runtime_join_pending_metadata_reference_present=true
+sender_runtime_join_pending_metadata_reference_redacted=true
+sender_runtime_join_uses_restored_matrix_session=true
+sender_runtime_join_pending_metadata_fetch_requested=true
+sender_runtime_join_pending_metadata_fetch_authorized=true
+sender_runtime_join_pending_metadata_fetch_result=success_redacted
+sender_runtime_join_metadata_direction=outgoing
+sender_runtime_join_metadata_intent=audio
+sender_runtime_join_metadata_has_call_identifier=true
+sender_runtime_join_metadata_has_room_binding=true
+sender_runtime_join_metadata_has_peer=true
 ```
 
-Then trigger the real sender runtime join exactly once.
-
-Expected receiver proof after sender runtime join:
+The sender runtime bridge must still be:
 
 ```text
-receiver_observer_active_during_sender_join=true
-sender_join_terminal_seen_by_receiver=true
-sender_room_connected_during_receiver_window=true
-receiver_sender_connected_window_overlap_observed=true
-remote_participant_observation_wait_completed=true
+debug_only=true
+default_disabled=true
+one_shot=true
+query_selected_join_outcomes_allowed=false
+runtime_derived=true
 ```
 
-If receiver remote participant is observed:
+Keep default no-connect/no-join. Do not request sender credentials or invoke the shared executor in this repair unless a targeted unit test uses fake/test doubles.
+
+## Tests
+
+Add/update targeted tests only:
 
 ```text
-livekit_remote_participant_seen=true
-remote_participant_observation_final_classification=remote_participant_seen_redacted
+sender runtime bridge receives pending metadata reference from runtime handoff, not query-selected proof
+sender runtime bridge uses restored Matrix session when reference is present
+sender pending metadata fetch succeeds with fake/test authenticated boundary
+missing reference remains blocked_redacted
+query parameters cannot set pending metadata/result/timeline fields
+one-shot semantics remain enforced
+default runtime remains no-connect/no-join
+no video/camera/Matrix/full-flow
+no raw identifiers in proof
+existing receiver path remains unchanged
 ```
 
-Close Retry17 as real sender runtime join plus receiver remote participant observed. Next phase should inspect audio publish/subscription readiness without repeating connect.
+Run only targeted checks:
 
-If sender join succeeds but receiver still does not see a participant, do not retry. Classify using the receiver lease, connected-window overlap, sender terminal, and remote participant observation fields.
+```bash
+swiftformat <changed Swift files>
+swiftlint lint <changed Swift files>
+DIRECT_CALL_ONLY_TESTING='UnitTests/DirectCallEngineTests' Tools/Scripts/verify_direct_call_unit.sh
+git diff --check
+git diff --cached --check
+forbidden project/signing file scan
+privacy scan
+```
 
 ## Hard Limits
 
 Do not:
 
-* send APNs before explicit one-shot confirmation
+* send APNs
 * run production APNs
 * run repeated APNs
 * run `dev/invite`
-* trigger sender after the receiver observation window has timed out
+* physically trigger sender runtime join
 * repeat receiver connect
 * repeat sender runtime join
 * request camera or video

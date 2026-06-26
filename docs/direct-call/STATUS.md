@@ -6675,6 +6675,61 @@ Safety:
 - no production APNs, no repeated APNs, no real media credentials request, no media connect, no LiveKit join, no Matrix event emission, and no full direct-call flow
 - no raw tokens, JWTs, authorization headers, APNs payloads, invite bodies, IDs, call handles, LiveKit URLs, private logs, or secret-bearing URLs were recorded
 
+## 2.48Z-Physical2-Retry17 status
+
+Retry17 is closed as safe sender pending-metadata triage, not as remote participant success.
+
+What happened:
+- preflight passed for iPhone PRO as receiver and Carpediem as sender, including restored app sessions, typed Matrix token proof, encrypted room validation, receiver hook arming, sender runtime bridge presence, and query-selected sender outcomes disabled
+- the operator entered the one-shot confirmation, and exactly one sandbox APNs was sent through the real non-dev invite path
+- the receiver received PushKit, CallKit Answer, authenticated pending metadata, media credentials, and completed one controlled receiver connect
+- the corrected pre-sender gate passed and explicitly excluded sender-runtime-only fields
+- the helper triggered Carpediem's real sender runtime bridge exactly once
+- sender runtime blocked before credentials/connect because the sender bridge had no pending metadata reference and did not use the restored Matrix session
+
+Classification:
+
+```text
+2.48Z-Physical2-Retry17 =
+one APNs sent / receiver path reached connect / corrected pre-sender gate passed / sender bridge triggered once / sender pending metadata reference missing / remote participant not observed
+```
+
+Receiver proof:
+- `proof_generation=generation_41`
+- `controlled_connect_first_attempt_result=success_redacted`
+- `controlled_connect_first_attempt_repeated=false`
+- `livekit_join_result=success_redacted`
+- `receiver_connected_session_lease_acquired=true`
+- `receiver_room_retained_for_sender_observation=true`
+- `receiver_observer_attached_before_sender_join=true`
+- `remote_participant_observation_wait_started=true`
+- `remote_participant_observation_wait_completed=true`
+- `receiver_sender_connected_window_overlap_observed=false`
+- `livekit_remote_participant_seen=false`
+- `remote_participant_observation_final_classification=opaque_correlation_mismatch_redacted`
+
+Sender proof:
+- `proof_generation=generation_9`
+- `sender_runtime_join_bridge_triggered=true`
+- `sender_runtime_join_bridge_consumed=true`
+- `sender_runtime_join_bridge_repeated=false`
+- `sender_runtime_join_uses_restored_matrix_session=false`
+- `sender_runtime_join_pending_metadata_fetch_result=blocked_redacted`
+- `sender_runtime_join_credentials_result=not_requested`
+- `sender_runtime_join_executor_invoked=false`
+- `sender_runtime_join_runtime_result=blocked_redacted`
+- `sender_runtime_join_runtime_error_bucket=pending_metadata_unavailable_redacted`
+- `blocked_reason=sender_runtime_join_pending_metadata_reference_missing_redacted`
+
+Safety:
+- no repeated APNs, no production APNs, and no `dev/invite`
+- no repeated receiver connect and no repeated sender join
+- sender did not request credentials, did not invoke the shared executor, and did not join LiveKit
+- no video, camera permission, Matrix event emission, or full call flow
+- no raw tokens, JWTs, authorization headers, APNs payloads, invite bodies, LiveKit URLs, room IDs, call IDs, user IDs, device IDs, call handles, private logs, or secret-bearing URLs were recorded
+
+Next phase: `2.48Z-SenderRuntimePendingMetadataReferenceRepair — make the real sender runtime bridge receive the APNs pending metadata reference without APNs/connect`.
+
 ## 2.48Z-Physical2-Retry16 status
 
 Retry16 is closed as safe pre-sender-gate triage, not as remote participant success.
