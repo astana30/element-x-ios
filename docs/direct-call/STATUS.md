@@ -6675,6 +6675,52 @@ Safety:
 - no production APNs, no repeated APNs, no real media credentials request, no media connect, no LiveKit join, no Matrix event emission, and no full direct-call flow
 - no raw tokens, JWTs, authorization headers, APNs payloads, invite bodies, IDs, call handles, LiveKit URLs, private logs, or secret-bearing URLs were recorded
 
+## 2.48Z-Physical2-Retry16 status
+
+Retry16 is closed as safe pre-sender-gate triage, not as remote participant success.
+
+What happened:
+- preflight passed for the receiver and replacement sender physical devices, including app session proof, typed Matrix token proof, encrypted room validation, receiver hook arming, sender runtime bridge presence, and query-selected sender outcomes disabled
+- the operator entered the one-shot confirmation, and exactly one sandbox APNs was sent through the real non-dev invite path
+- the receiver received PushKit, CallKit Answer, pending metadata, media credentials, and controlled receiver connect
+- the helper did not trigger the sender runtime join because it incorrectly required `receiver_observer_active_during_sender_join=true` before launching sender join
+- that field is sender-runtime-derived and cannot be true before sender join starts, so the receiver observation window timed out first
+
+Classification:
+
+```text
+2.48Z-Physical2-Retry16 =
+one APNs sent / receiver path reached connect / sender trigger blocked by incorrect pre-sender gate / remote participant not observed
+```
+
+Recorded proof:
+- `background_apns_push_result=sandbox_success`
+- `APNs_sent=true`
+- `receiver_connected_session_lease_acquired=true`
+- `receiver_connected_session_lease_room_retained=true`
+- `receiver_connected_session_lease_delegate_retained=true`
+- `receiver_connected_session_lease_observer_retained=true`
+- `receiver_room_retained_for_sender_observation=true`
+- `receiver_observer_attached_before_sender_join=true`
+- `remote_participant_observation_wait_started=true`
+- `receiver_observer_active_during_sender_join=false`
+- `receiver_connected_session_lease_release_reason=remote_participant_event_timeout_redacted`
+- `blocked_reason=receiver_observation_lease_not_active_before_sender_join`
+
+Safety:
+- no repeated APNs, no production APNs, and no `dev/invite`
+- no sender runtime join was triggered after the timed-out receiver window
+- no repeated receiver connect, no repeated LiveKit join, no video, no camera permission, no Matrix event emission, and no full call flow
+- no raw tokens, JWTs, authorization headers, APNs payloads, invite bodies, LiveKit URLs, room IDs, call IDs, user IDs, device IDs, call handles, private logs, or secret-bearing URLs were recorded
+
+Helper correction for the next run:
+- the fixed Retry16 helper behavior excludes sender-runtime-only fields from the pre-sender gate
+- the pre-sender gate still requires receiver lease acquisition, room/delegate/observer retention, cleanup deferral, no cleanup before sender terminal, and observation wait started
+- it emits `receiver_pre_sender_gate_excludes_sender_runtime_fields=true`
+- it tracks `APNs_sent` correctly after APNs has been sent, including blocker/error paths
+
+Next phase: `2.48Z-Physical2-Retry17 — one-shot real sender join with corrected pre-sender gate`.
+
 ## 2.47A17 status
 
 APNs accepted the real-invite VoIP push but the SalemX debug receipt proof did not update.

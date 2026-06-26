@@ -2,6 +2,41 @@
 
 This file records durable phase-level progress for future Codex and strategy sessions.
 
+## 2026-06-26 — 2.48Z-Physical2-Retry16
+
+Closed Retry16 as safe pre-sender-gate triage, not remote participant success.
+
+Result:
+
+```text
+background_apns_push_result=sandbox_success
+APNs_sent=true
+receiver_connected_session_lease_acquired=true
+receiver_room_retained_for_sender_observation=true
+receiver_observer_attached_before_sender_join=true
+remote_participant_observation_wait_started=true
+sender_runtime_join_triggered=false
+receiver_observer_active_during_sender_join=false
+blocked_reason=receiver_observation_lease_not_active_before_sender_join
+```
+
+The receiver path reached PushKit, CallKit Answer, pending metadata, media credentials, and controlled receiver connect. The sender runtime join was not launched because the helper incorrectly required `receiver_observer_active_during_sender_join=true` before sender launch. That field can only become true after sender join starts, so the receiver observation window timed out before sender trigger.
+
+The fixed helper behavior for the next run:
+
+```text
+receiver_pre_sender_gate_excludes_sender_runtime_fields=true
+```
+
+The corrected pre-sender gate still requires receiver lease acquisition, room/delegate/observer retention, cleanup deferral, no cleanup before sender terminal, and observation wait started. It no longer waits for sender-runtime-only fields before triggering the sender. APNs state is now tracked correctly after the one-shot send.
+
+Safety:
+- exactly one sandbox APNs was sent for Retry16
+- no repeated APNs, production APNs, `dev/invite`, late sender trigger, repeated receiver connect, repeated LiveKit join, video, camera permission, Matrix event emission, or full call flow
+- no raw tokens, JWTs, authorization headers, APNs payloads, invite bodies, LiveKit URLs, room IDs, call IDs, user IDs, device IDs, call handles, private logs, or secret-bearing URLs were recorded
+
+Next phase: `2.48Z-Physical2-Retry17 — one-shot real sender join with corrected pre-sender gate`.
+
 ## Milestones
 
 - Added 2.48Z-ReceiverConnectedWindowOverlapRepair after Retry15: the physical run proved real receiver join and real sender runtime join success, but the receiver connected room was not retained through the sender observation window, so receiver/sender connected-window overlap was false and no remote participant was observed. The repair adds a DEBUG-only receiver connected-session lease that retains the actual receiver LiveKit client, delegate/observer, E2EE context, key store, and cleanup task until remote participant seen, sender terminal failure, or bounded timeout. The Retry16 helper now waits for the receiver lease and observation window before triggering the sender runtime join. No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, raw identifier logging, or signing/project file edit was performed.
