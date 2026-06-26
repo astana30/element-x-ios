@@ -2,6 +2,55 @@
 
 This file records durable phase-level progress for future Codex and strategy sessions.
 
+## 2026-06-26 — 2.48Z-Physical2-Retry18
+
+Closed Retry18 as sender pending-metadata handoff + real sender runtime join success / receiver connected-window overlap not observed triage. This is not remote participant success.
+
+Result:
+
+```text
+background_apns_push_result=sandbox_success
+APNs_sent=true
+APNs_repeated=false
+receiver_proof_generation=generation_17
+sender_proof_generation=generation_7
+
+physical_voip_push_received=true
+callkit_first_action_kind=answer
+pending_metadata_fetch_result=success_redacted
+media_credentials_result=success_redacted
+controlled_connect_first_attempt_result=success_redacted
+controlled_connect_first_attempt_repeated=false
+livekit_join_result=success_redacted
+
+sender_pending_metadata_reference_handoff_received_by_sender_runtime=true
+sender_runtime_join_pending_metadata_reference_matches_invite_sender_memory=true
+sender_runtime_join_pending_metadata_fetch_result=success_redacted
+sender_runtime_join_credentials_result=success_redacted
+sender_runtime_join_executor_invoked=true
+sender_runtime_join_runtime_result=success_redacted
+sender_runtime_join_runtime_error_bucket=none
+sender_livekit_room_connected=true
+sender_livekit_room_disconnected=false
+
+receiver_connected_session_lease_task_retained=false
+receiver_observer_active_during_sender_join=false
+sender_join_terminal_seen_by_receiver=false
+sender_room_connected_during_receiver_window=false
+receiver_sender_connected_window_overlap_observed=false
+livekit_remote_participant_seen=false
+remote_participant_observation_final_classification=remote_participant_event_timeout_redacted
+```
+
+The helper used the real non-dev invite route and captured the invite-created opaque pending metadata reference in memory only. The sender handoff succeeded, the sender runtime trigger consumed exactly once, query-selected outcomes remained ignored, sender metadata fetch and credentials succeeded, and the shared sender executor produced a runtime-derived successful join. The receiver joined LiveKit, but its room disconnected and the connected-session lease task was no longer retained before sender overlap, so the receiver never observed the sender participant.
+
+Safety:
+- exactly one sandbox APNs was sent for Retry18
+- no repeated APNs, production APNs, `dev/invite`, repeated receiver connect, repeated sender runtime join, video, camera permission, Matrix event emission, or full call flow
+- no raw tokens, JWTs, authorization headers, APNs payloads, invite bodies, LiveKit URLs, room IDs, call IDs, user IDs, device IDs, call handles, private logs, or pending metadata contents were recorded
+
+Next phase: `2.48Z-ReceiverSenderConnectedWindowOverlapRepair — preserve receiver observation lease through sender connected window`.
+
 ## 2026-06-26 — 2.48Z-Physical2-Retry17
 
 Closed Retry17 as safe sender pending-metadata triage, not remote participant success.

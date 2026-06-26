@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-ReceiverConnectedWindowOverlapRepair — Retry15 proved the receiver and real sender runtime joins can both succeed, but the receiver connected room was not retained through sender observation, so no receiver-sender connected-window overlap was observed. The DEBUG receiver controlled-connect path now keeps a real connected-session lease around the LiveKit client, delegate/observer, E2EE context, key store, and cleanup task until remote participant seen, sender terminal failure, or bounded observation timeout. The physical helper now waits for the receiver lease and observation window before triggering sender runtime join. No APNs, physical connect, LiveKit join, microphone/camera permission, Matrix event emit, or full call flow was performed by this repair. The next phase is `2.48Z-Physical2-Retry16 — one-shot real sender join after receiver observation lease becomes active`.
+After 2.48Z-Physical2-Retry18 — one sandbox APNs was sent after explicit confirmation. Receiver PushKit, CallKit Answer, pending metadata, media credentials, controlled receiver connect, and receiver LiveKit join succeeded. The real sender runtime bridge consumed the invite-created pending metadata reference, fetched sender-view metadata, requested credentials, invoked the shared executor, and joined LiveKit successfully. Receiver remote participant was still not observed: the receiver room disconnected and lease task was no longer retained before sender overlap, so `receiver_sender_connected_window_overlap_observed=false` and `remote_participant_observation_final_classification=remote_participant_event_timeout_redacted`. This is sender metadata handoff + sender runtime join success, not remote participant success. The next phase is `2.48Z-ReceiverSenderConnectedWindowOverlapRepair — preserve receiver observation lease through sender connected window`.
 
 ## Latest App Code Checkpoint
 
@@ -38,6 +38,63 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Checksum: `654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e`
 
 ## Proven Checkpoints
+
+- 2.48Z-Physical2-Retry18 closes as sender pending-metadata handoff + real sender runtime join success / receiver connected-window overlap not observed triage, not remote participant success:
+  - One sandbox APNs was sent after explicit `SEND_2_48Z_PHYSICAL2_RETRY18` confirmation:
+    ```text
+    background_apns_push_result=sandbox_success
+    APNs_sent=true
+    APNs_repeated=false
+    production_APNs_used=false
+    dev_invite_used=false
+    ```
+  - Receiver proof:
+    ```text
+    proof_generation=generation_17
+    physical_voip_push_received=true
+    callkit_report_result=reported
+    callkit_first_action_kind=answer
+    callkit_answer_action_received=true
+    callkit_answer_action_fulfilled=true
+    pending_metadata_fetch_result=success_redacted
+    media_credentials_result=success_redacted
+    controlled_connect_first_attempt_result=success_redacted
+    controlled_connect_first_attempt_repeated=false
+    livekit_join_result=success_redacted
+    livekit_room_connected=true
+    livekit_room_disconnected=true
+    livekit_remote_participant_seen=false
+    ```
+  - Sender proof:
+    ```text
+    proof_generation=generation_7
+    sender_runtime_join_bridge_triggered=true
+    sender_runtime_join_bridge_consumed=true
+    sender_runtime_join_bridge_repeated=false
+    sender_runtime_join_uses_restored_matrix_session=true
+    sender_pending_metadata_reference_handoff_received_by_sender_runtime=true
+    sender_runtime_join_pending_metadata_reference_matches_invite_sender_memory=true
+    sender_runtime_join_pending_metadata_fetch_result=success_redacted
+    sender_runtime_join_credentials_result=success_redacted
+    sender_runtime_join_executor_invoked=true
+    sender_runtime_join_runtime_result=success_redacted
+    sender_runtime_join_runtime_error_bucket=none
+    sender_livekit_room_connected=true
+    sender_livekit_room_disconnected=false
+    sender_cleanup_result=deferred_for_receiver_observation_redacted
+    ```
+  - Remaining blocker:
+    ```text
+    receiver_connected_session_lease_task_retained=false
+    receiver_observer_active_during_sender_join=false
+    sender_join_terminal_seen_by_receiver=false
+    sender_room_connected_during_receiver_window=false
+    receiver_sender_connected_window_overlap_observed=false
+    remote_participant_observation_wait_completed=true
+    remote_participant_observation_final_classification=remote_participant_event_timeout_redacted
+    ```
+  - Safety preserved: no repeated APNs, production APNs, `dev/invite`, repeated receiver connect, repeated sender runtime join, video, camera permission, Matrix event emission, full call flow, or raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room/call/user/device/pending-metadata logging.
+  - Next phase: `2.48Z-ReceiverSenderConnectedWindowOverlapRepair — preserve receiver observation lease through sender connected window`.
 
 - 2.48Z-ReceiverConnectedWindowOverlapRepair records Retry15 as real sender runtime join success / receiver connected-window overlap not observed triage, then retains the real receiver connected session through the bounded observation window without APNs/connect:
   - Retry15 physical proof:
