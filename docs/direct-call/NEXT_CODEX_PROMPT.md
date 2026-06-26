@@ -13,91 +13,55 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48Z-Physical2-Retry17` is closed as safe sender pending-metadata triage, not remote participant success.
+`2.48Z-SenderPendingMetadataReferenceHandoffRepair` is closed as a no-APNs code/test repair.
 
-Retry17 result:
-
-```text
-preflight_passed=true
-manual_send_confirmation_entered=true
-background_apns_push_result=sandbox_success
-APNs_sent=true
-receiver_pushkit_callkit_answer_passed=true
-receiver_pending_metadata_success=true
-receiver_media_credentials_success=true
-receiver_controlled_connect_reached=true
-receiver_pre_sender_gate_excludes_sender_runtime_fields=true
-receiver_observation_lease_active_before_sender_join=true
-sender_runtime_join_bridge_triggered=true
-sender_runtime_join_bridge_consumed=true
-sender_runtime_join_bridge_repeated=false
-sender_runtime_join_uses_restored_matrix_session=false
-sender_runtime_join_pending_metadata_fetch_result=blocked_redacted
-sender_runtime_join_executor_invoked=false
-sender_runtime_join_runtime_result=blocked_redacted
-sender_runtime_join_runtime_error_bucket=pending_metadata_unavailable_redacted
-receiver_sender_connected_window_overlap_observed=false
-livekit_remote_participant_seen=false
-remote_participant_observation_final_classification=opaque_correlation_mismatch_redacted
-blocked_reason=sender_runtime_join_pending_metadata_reference_missing_redacted
-```
-
-Receiver proof:
+The Retry17 blocker was:
 
 ```text
-proof_generation=generation_41
-controlled_connect_first_attempt_result=success_redacted
-controlled_connect_first_attempt_repeated=false
-livekit_join_result=success_redacted
-receiver_connected_session_lease_acquired=true
-receiver_connected_session_lease_room_retained=true
-receiver_connected_session_lease_delegate_retained=true
-receiver_connected_session_lease_observer_retained=true
-receiver_room_retained_for_sender_observation=true
-receiver_observer_attached_before_sender_join=true
-remote_participant_observation_wait_started=true
-remote_participant_observation_wait_completed=true
-receiver_sender_connected_window_overlap_observed=false
-remote_participant_observation_final_classification=opaque_correlation_mismatch_redacted
-livekit_remote_participant_seen=false
-```
-
-Sender proof:
-
-```text
-proof_generation=generation_9
-sender_runtime_join_bridge_triggered=true
-sender_runtime_join_bridge_consumed=true
-sender_runtime_join_bridge_repeated=false
-sender_runtime_join_uses_restored_matrix_session=false
 sender_runtime_join_pending_metadata_fetch_result=blocked_redacted
 sender_runtime_join_credentials_result=not_requested
 sender_runtime_join_executor_invoked=false
-sender_runtime_join_runtime_result=blocked_redacted
-sender_runtime_join_runtime_error_bucket=pending_metadata_unavailable_redacted
-sender_runtime_join_query_outcome_ignored=true
 blocked_reason=sender_runtime_join_pending_metadata_reference_missing_redacted
 ```
 
-Interpretation:
-- the corrected pre-sender gate worked
-- the sender bridge was triggered exactly once
-- sender did not reach credentials or connect because the sender runtime did not receive a pending metadata reference
-- receiver classified the result as opaque correlation mismatch because sender-side pending metadata/correlation never materialized
+Repair now in place:
+
+```text
+sender_pending_metadata_reference_handoff_present=<redacted_bool>
+sender_pending_metadata_reference_handoff_debug_only=true
+sender_pending_metadata_reference_handoff_armed_before_sender_trigger=<redacted_bool>
+sender_pending_metadata_reference_handoff_received_by_sender_runtime=<redacted_bool>
+sender_pending_metadata_reference_handoff_source=invite_response_redacted
+sender_pending_metadata_reference_handoff_raw_reference_logged=false
+sender_pending_metadata_reference_handoff_raw_metadata_logged=false
+sender_pending_metadata_reference_handoff_raw_room_logged=false
+sender_pending_metadata_reference_handoff_raw_call_logged=false
+sender_pending_metadata_reference_handoff_raw_user_logged=false
+sender_pending_metadata_reference_handoff_raw_device_logged=false
+```
+
+Runtime trigger behavior:
+- the sender runtime join trigger consumes the opaque pending metadata reference from the DEBUG-only in-memory handoff
+- the sender runtime trigger does not read `pending_metadata_reference` from its own query parameters
+- missing handoff blocks before sender credentials and before shared executor invocation
+- sender-view metadata fetch success must happen before sender credentials
+- query-selected sender outcomes remain disabled
+
+Server safety:
+- real invite creates and returns an opaque pending metadata reference when `pending_metadata` is supplied
+- sender-view pending metadata route is authenticated
+- wrong sender and unauthenticated sender access are rejected
 
 Safety preserved:
 
 ```text
-repeated_APNs=false
-production_APNs=false
+APNs_sent=false
 dev_invite_used=false
-repeated_receiver_connect=false
-repeated_sender_join=false
-sender_credentials_requested=false
-sender_executor_invoked=false
-sender_livekit_join=false
-video_allowed=false
+physical_media_connect=false
+physical_livekit_join=false
+microphone_permission_requested=false
 camera_permission_requested=false
+video_allowed=false
 matrix_event_emit_requested=false
 real_call_flow_started=false
 raw URL/token/room/call/user/device IDs logged=false
@@ -105,99 +69,86 @@ raw URL/token/room/call/user/device IDs logged=false
 
 ## Next Phase
 
-`2.48Z-SenderRuntimePendingMetadataReferenceRepair — make the real sender runtime bridge receive the APNs pending metadata reference`
+`2.48Z-Physical2-Retry18 — one-shot real sender join with pending metadata reference handoff`
 
 Goal:
-Repair the sender runtime bridge so the real sender device can fetch sender-view pending metadata for the same call after receiver APNs/Answer/connect, without query-selected outcomes and without any APNs/connect physical retry in this code phase.
+Run one physical two-device proof where the helper captures the real non-dev invite response's opaque `pending_metadata_reference`, arms the sender app with it, then triggers the real sender runtime join once after the receiver connect pre-sender gate passes.
 
-Do not run APNs in this phase. Do not trigger sender runtime join physically.
+Required flow:
 
-Investigate:
-
-1. How the receiver proof obtains `pending_metadata_reference` from the real non-dev invite/APNs payload.
-2. How the pre-APNs sender readiness/correlation hook is supposed to carry or derive the same opaque reference for the sender runtime bridge.
-3. Why Retry17 sender proof recorded:
+1. Build/install/launch Debug app before hook arming.
+2. Restore and prove receiver and sender Matrix sessions.
+3. Arm receiver controlled audio connect, remote-peer context, and sender readiness/correlation hooks.
+4. Validate room membership/encryption and distinct accounts.
+5. Send at most one sandbox APNs via the real non-dev invite route.
+6. Capture the invite-created `pending_metadata_reference` in memory only; never print it.
+7. Arm sender with:
 
    ```text
-   sender_runtime_join_uses_restored_matrix_session=false
-   sender_runtime_join_pending_metadata_fetch_result=blocked_redacted
-   blocked_reason=sender_runtime_join_pending_metadata_reference_missing_redacted
+   kz.salemx.msg://debug/direct-call/sender-pending-metadata-reference-handoff?source=invite_response&pending_metadata_reference=<opaque_in_memory_only>
    ```
 
-4. Whether the sender runtime bridge currently requires a URL query parameter for pending metadata reference, uses stale proof state, or misses the receiver-provided sender readiness handoff.
-5. Whether the server sender pending metadata endpoint is still correct and authenticated.
+8. Do not relaunch/reinstall sender after arming the sender reference handoff.
+9. After receiver Answer and controlled connect terminal proof, trigger:
 
-Required repair:
+   ```text
+   kz.salemx.msg://debug/direct-call/sender-runtime-livekit-join?confirm=RUN_2_48Z_REAL_SENDER_RUNTIME_JOIN
+   ```
+
+10. Do not include `pending_metadata_reference` on the runtime trigger URL.
+11. Poll separate receiver and sender proof files.
+
+Expected sender success proof:
 
 ```text
+sender_pending_metadata_reference_handoff_present=true
+sender_pending_metadata_reference_handoff_debug_only=true
+sender_pending_metadata_reference_handoff_armed_before_sender_trigger=true
+sender_pending_metadata_reference_handoff_received_by_sender_runtime=true
+sender_pending_metadata_reference_handoff_source=invite_response_redacted
+sender_pending_metadata_reference_handoff_raw_reference_logged=false
+sender_pending_metadata_reference_handoff_raw_metadata_logged=false
+sender_pending_metadata_reference_handoff_raw_room_logged=false
+sender_pending_metadata_reference_handoff_raw_call_logged=false
+sender_pending_metadata_reference_handoff_raw_user_logged=false
+sender_pending_metadata_reference_handoff_raw_device_logged=false
+
 sender_runtime_join_pending_metadata_reference_present=true
 sender_runtime_join_pending_metadata_reference_redacted=true
-sender_runtime_join_uses_restored_matrix_session=true
+sender_runtime_join_pending_metadata_reference_matches_invite_sender_memory=true
+sender_runtime_join_pending_metadata_reference_matches_sender_view_route=true
 sender_runtime_join_pending_metadata_fetch_requested=true
 sender_runtime_join_pending_metadata_fetch_authorized=true
 sender_runtime_join_pending_metadata_fetch_result=success_redacted
-sender_runtime_join_metadata_direction=outgoing
-sender_runtime_join_metadata_intent=audio
-sender_runtime_join_metadata_has_call_identifier=true
-sender_runtime_join_metadata_has_room_binding=true
-sender_runtime_join_metadata_has_peer=true
+sender_runtime_join_pending_metadata_fetch_error_bucket=none
+sender_runtime_join_pending_metadata_call_binding_present=true
+sender_runtime_join_pending_metadata_room_binding_present=true
+sender_runtime_join_pending_metadata_peer_binding_present=true
+sender_runtime_join_pending_metadata_direction_valid=true
+sender_runtime_join_pending_metadata_intent_audio=true
+sender_runtime_join_credentials_requested=true
+sender_runtime_join_credentials_result=success_redacted
+sender_runtime_join_executor_invoked=true
+sender_runtime_join_query_outcome_ignored=true
 ```
 
-The sender runtime bridge must still be:
+If missing handoff:
 
 ```text
-debug_only=true
-default_disabled=true
-one_shot=true
-query_selected_join_outcomes_allowed=false
-runtime_derived=true
+sender_runtime_join_pending_metadata_fetch_result=blocked_redacted
+sender_runtime_join_credentials_requested=false
+sender_runtime_join_executor_invoked=false
+blocked_reason=sender_pending_metadata_reference_sender_memory_missing_redacted
 ```
 
-Keep default no-connect/no-join. Do not request sender credentials or invoke the shared executor in this repair unless a targeted unit test uses fake/test doubles.
-
-## Tests
-
-Add/update targeted tests only:
-
-```text
-sender runtime bridge receives pending metadata reference from runtime handoff, not query-selected proof
-sender runtime bridge uses restored Matrix session when reference is present
-sender pending metadata fetch succeeds with fake/test authenticated boundary
-missing reference remains blocked_redacted
-query parameters cannot set pending metadata/result/timeline fields
-one-shot semantics remain enforced
-default runtime remains no-connect/no-join
-no video/camera/Matrix/full-flow
-no raw identifiers in proof
-existing receiver path remains unchanged
-```
-
-Run only targeted checks:
-
-```bash
-swiftformat <changed Swift files>
-swiftlint lint <changed Swift files>
-DIRECT_CALL_ONLY_TESTING='UnitTests/DirectCallEngineTests' Tools/Scripts/verify_direct_call_unit.sh
-git diff --check
-git diff --cached --check
-forbidden project/signing file scan
-privacy scan
-```
-
-## Hard Limits
-
-Do not:
-
-* send APNs
-* run production APNs
-* run repeated APNs
-* run `dev/invite`
-* physically trigger sender runtime join
-* repeat receiver connect
-* repeat sender runtime join
-* request camera or video
-* emit Matrix events
-* start full direct-call flow
-* log raw tokens, JWTs, auth headers, APNs payloads, invite bodies, LiveKit URLs, room IDs, call IDs, user IDs, device IDs, or call handles
-* touch `SalemX.xcodeproj/project.pbxproj`, `app.yml`, `.entitlements`, or `Info.plist`
-* stage `docs/direct-call/REPEAT_CALL_FASTPATH_DIAGNOSTICS.md`
+Hard limits:
+- do not use `dev/invite`
+- do not send production APNs
+- do not repeat APNs
+- do not repeat receiver connect or sender runtime join
+- do not enable video
+- do not request camera
+- do not emit Matrix events
+- do not start full direct-call flow
+- do not log raw tokens, JWTs, auth headers, APNs payloads, invite bodies, LiveKit URLs, room IDs, call IDs, user IDs, device IDs, call handles, or pending metadata contents
+- do not touch `SalemX.xcodeproj/project.pbxproj`, `app.yml`, `.entitlements`, or `Info.plist`

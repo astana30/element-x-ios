@@ -9933,3 +9933,18 @@ Next phase:
 ```
 
 No APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, physical LiveKit join, video, microphone/camera permission, Matrix event emit, full call flow, or physical hook reset/re-arm was performed.
+# 2026-06-26 — 2.48Z-SenderPendingMetadataReferenceHandoffRepair
+
+Implemented the DEBUG-only repair for Retry17's sender blocker, where the real sender runtime bridge was triggered without an invite-created pending metadata reference.
+
+Repair:
+- added a separate sender pending-metadata reference handoff URL hook
+- the handoff stores only the opaque reference in memory and writes redacted proof fields
+- the runtime join trigger no longer reads `pending_metadata_reference` from its own query string
+- missing in-memory handoff blocks before sender credentials and before shared executor invocation
+- sender metadata fetch success records outgoing/audio metadata binding booleans before credentials
+- sender-view route auth is locked by an added targeted server test assertion
+
+Safety:
+- no APNs, `dev/invite`, physical connect, physical LiveKit join, microphone/camera permission, Matrix event emission, video, or full flow
+- no raw token, URL, room ID, call ID, user ID, device ID, APNs payload, invite body, pending metadata body, or auth header logged

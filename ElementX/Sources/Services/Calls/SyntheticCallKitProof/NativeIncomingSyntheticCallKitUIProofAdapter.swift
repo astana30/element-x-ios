@@ -930,6 +930,35 @@ private struct SalemXSenderSideLiveKitJoinActivation {
     }
 }
 
+private struct SalemXSenderPendingMetadataReferenceHandoff {
+    static let defaultDisabled = SalemXSenderPendingMetadataReferenceHandoff(reference: nil,
+                                                                             source: "none",
+                                                                             armed: false,
+                                                                             receivedByRuntime: false)
+
+    let reference: String?
+    let source: String
+    let armed: Bool
+    let receivedByRuntime: Bool
+
+    let present = true
+    let debugOnly = true
+    let rawReferenceLogged = false
+    let rawMetadataLogged = false
+    let rawRoomLogged = false
+    let rawCallLogged = false
+    let rawUserLogged = false
+    let rawDeviceLogged = false
+
+    var referencePresent: Bool {
+        reference?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
+
+    func receivedByRuntimeCopy() -> SalemXSenderPendingMetadataReferenceHandoff {
+        .init(reference: reference, source: source, armed: armed, receivedByRuntime: true)
+    }
+}
+
 private struct SalemXSenderConnectParity {
     static let defaultEnabled = SalemXSenderConnectParity()
 
@@ -1003,12 +1032,31 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
     var bridgeConsumed = false
     var bridgeRepeated = false
     var restoredMatrixSessionUsed = false
+    var pendingMetadataReferenceHandoffPresent = false
+    var pendingMetadataReferenceHandoffDebugOnly = true
+    var pendingMetadataReferenceHandoffArmedBeforeSenderTrigger = false
+    var pendingMetadataReferenceHandoffReceivedBySenderRuntime = false
+    var pendingMetadataReferenceHandoffSource = "none"
+    var pendingMetadataReferenceHandoffRawReferenceLogged = false
+    var pendingMetadataReferenceHandoffRawMetadataLogged = false
+    var pendingMetadataReferenceHandoffRawRoomLogged = false
+    var pendingMetadataReferenceHandoffRawCallLogged = false
+    var pendingMetadataReferenceHandoffRawUserLogged = false
+    var pendingMetadataReferenceHandoffRawDeviceLogged = false
     var pendingMetadataReferencePresent = false
     var pendingMetadataReferenceRedacted = true
+    var pendingMetadataReferenceMatchesInviteSenderMemory = false
+    var pendingMetadataReferenceMatchesSenderViewRoute = false
     var pendingMetadataFetchRequested = false
     var pendingMetadataFetchAuthorized = false
     var pendingMetadataFetchResult = "not_requested"
+    var pendingMetadataFetchErrorBucket = "none"
     var pendingMetadataPayloadRedacted = true
+    var pendingMetadataCallBindingPresent = false
+    var pendingMetadataRoomBindingPresent = false
+    var pendingMetadataPeerBindingPresent = false
+    var pendingMetadataDirectionValid = false
+    var pendingMetadataIntentAudio = false
     var metadataDirection = "none"
     var metadataIntent = "none"
     var metadataHasCallIdentifier = false
@@ -1054,12 +1102,31 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             "sender_runtime_join_bridge_consumed=\(bridgeConsumed)",
             "sender_runtime_join_bridge_repeated=\(bridgeRepeated)",
             "sender_runtime_join_uses_restored_matrix_session=\(restoredMatrixSessionUsed)",
+            "sender_pending_metadata_reference_handoff_present=\(pendingMetadataReferenceHandoffPresent)",
+            "sender_pending_metadata_reference_handoff_debug_only=\(pendingMetadataReferenceHandoffDebugOnly)",
+            "sender_pending_metadata_reference_handoff_armed_before_sender_trigger=\(pendingMetadataReferenceHandoffArmedBeforeSenderTrigger)",
+            "sender_pending_metadata_reference_handoff_received_by_sender_runtime=\(pendingMetadataReferenceHandoffReceivedBySenderRuntime)",
+            "sender_pending_metadata_reference_handoff_source=\(pendingMetadataReferenceHandoffSource)",
+            "sender_pending_metadata_reference_handoff_raw_reference_logged=\(pendingMetadataReferenceHandoffRawReferenceLogged)",
+            "sender_pending_metadata_reference_handoff_raw_metadata_logged=\(pendingMetadataReferenceHandoffRawMetadataLogged)",
+            "sender_pending_metadata_reference_handoff_raw_room_logged=\(pendingMetadataReferenceHandoffRawRoomLogged)",
+            "sender_pending_metadata_reference_handoff_raw_call_logged=\(pendingMetadataReferenceHandoffRawCallLogged)",
+            "sender_pending_metadata_reference_handoff_raw_user_logged=\(pendingMetadataReferenceHandoffRawUserLogged)",
+            "sender_pending_metadata_reference_handoff_raw_device_logged=\(pendingMetadataReferenceHandoffRawDeviceLogged)",
             "sender_runtime_join_pending_metadata_reference_present=\(pendingMetadataReferencePresent)",
             "sender_runtime_join_pending_metadata_reference_redacted=\(pendingMetadataReferenceRedacted)",
+            "sender_runtime_join_pending_metadata_reference_matches_invite_sender_memory=\(pendingMetadataReferenceMatchesInviteSenderMemory)",
+            "sender_runtime_join_pending_metadata_reference_matches_sender_view_route=\(pendingMetadataReferenceMatchesSenderViewRoute)",
             "sender_runtime_join_pending_metadata_fetch_requested=\(pendingMetadataFetchRequested)",
             "sender_runtime_join_pending_metadata_fetch_authorized=\(pendingMetadataFetchAuthorized)",
             "sender_runtime_join_pending_metadata_fetch_result=\(pendingMetadataFetchResult)",
+            "sender_runtime_join_pending_metadata_fetch_error_bucket=\(pendingMetadataFetchErrorBucket)",
             "sender_runtime_join_pending_metadata_payload_redacted=\(pendingMetadataPayloadRedacted)",
+            "sender_runtime_join_pending_metadata_call_binding_present=\(pendingMetadataCallBindingPresent)",
+            "sender_runtime_join_pending_metadata_room_binding_present=\(pendingMetadataRoomBindingPresent)",
+            "sender_runtime_join_pending_metadata_peer_binding_present=\(pendingMetadataPeerBindingPresent)",
+            "sender_runtime_join_pending_metadata_direction_valid=\(pendingMetadataDirectionValid)",
+            "sender_runtime_join_pending_metadata_intent_audio=\(pendingMetadataIntentAudio)",
             "sender_runtime_join_metadata_direction=\(metadataDirection)",
             "sender_runtime_join_metadata_intent=\(metadataIntent)",
             "sender_runtime_join_metadata_has_call_identifier=\(metadataHasCallIdentifier)",
@@ -1096,28 +1163,79 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         ]
     }
 
-    mutating func markStarted(referencePresent: Bool, repeated: Bool) {
+    mutating func markReferenceHandoff(_ handoff: SalemXSenderPendingMetadataReferenceHandoff) {
+        pendingMetadataReferenceHandoffPresent = handoff.referencePresent
+        pendingMetadataReferenceHandoffDebugOnly = handoff.debugOnly
+        pendingMetadataReferenceHandoffArmedBeforeSenderTrigger = handoff.armed && handoff.referencePresent
+        pendingMetadataReferenceHandoffReceivedBySenderRuntime = handoff.receivedByRuntime
+        pendingMetadataReferenceHandoffSource = handoff.source
+        pendingMetadataReferenceHandoffRawReferenceLogged = handoff.rawReferenceLogged
+        pendingMetadataReferenceHandoffRawMetadataLogged = handoff.rawMetadataLogged
+        pendingMetadataReferenceHandoffRawRoomLogged = handoff.rawRoomLogged
+        pendingMetadataReferenceHandoffRawCallLogged = handoff.rawCallLogged
+        pendingMetadataReferenceHandoffRawUserLogged = handoff.rawUserLogged
+        pendingMetadataReferenceHandoffRawDeviceLogged = handoff.rawDeviceLogged
+    }
+
+    mutating func markStarted(referencePresent: Bool,
+                              repeated: Bool,
+                              handoff: SalemXSenderPendingMetadataReferenceHandoff) {
         proofGeneration = UUID().uuidString
         proofLastUpdatedBy = "sender_runtime_livekit_join_bridge"
         bridgeArmed = true
         bridgeTriggered = !repeated
         bridgeConsumed = !repeated
         bridgeRepeated = repeated
+        markReferenceHandoff(handoff)
         pendingMetadataReferencePresent = referencePresent
+        pendingMetadataReferenceMatchesInviteSenderMemory = referencePresent && handoff.armed
+        pendingMetadataReferenceMatchesSenderViewRoute = false
+        pendingMetadataFetchRequested = false
+        pendingMetadataFetchAuthorized = false
+        pendingMetadataFetchResult = "not_requested"
+        pendingMetadataFetchErrorBucket = "none"
+        pendingMetadataCallBindingPresent = false
+        pendingMetadataRoomBindingPresent = false
+        pendingMetadataPeerBindingPresent = false
+        pendingMetadataDirectionValid = false
+        pendingMetadataIntentAudio = false
+        metadataDirection = "none"
+        metadataIntent = "none"
+        metadataHasCallIdentifier = false
+        metadataHasRoomBinding = false
+        metadataHasPeer = false
+        credentialsRequested = false
+        credentialsAuthorized = false
+        credentialsResult = "not_requested"
+        tokenReceived = false
+        urlReceived = false
+        executorInvoked = false
+        runtimeResult = "not_requested"
+        runtimeErrorBucket = "none"
+        senderLiveKitRoomConnected = false
+        senderLiveKitRoomDisconnected = false
+        senderCleanupResult = "not_requested"
         restoredMatrixSessionUsed = false
         blockedReason = repeated ? "sender_runtime_join_repeated_blocked_redacted" : "sender_runtime_join_started_redacted"
     }
 
     mutating func markPendingMetadataSuccess(_ session: DirectCallSession) {
         restoredMatrixSessionUsed = true
+        pendingMetadataReferenceMatchesSenderViewRoute = true
         pendingMetadataFetchRequested = true
         pendingMetadataFetchAuthorized = true
         pendingMetadataFetchResult = "success_redacted"
+        pendingMetadataFetchErrorBucket = "none"
         metadataDirection = String(describing: session.direction)
         metadataIntent = session.intent.rawValue
         metadataHasCallIdentifier = !session.callID.isEmpty
         metadataHasRoomBinding = !session.roomID.isEmpty
         metadataHasPeer = !session.peerUserID.isEmpty
+        pendingMetadataCallBindingPresent = metadataHasCallIdentifier
+        pendingMetadataRoomBindingPresent = metadataHasRoomBinding
+        pendingMetadataPeerBindingPresent = metadataHasPeer
+        pendingMetadataDirectionValid = session.direction == .outgoing
+        pendingMetadataIntentAudio = session.intent == .audio
         blockedReason = "sender_runtime_credentials_pending_redacted"
     }
 
@@ -1125,6 +1243,7 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         pendingMetadataFetchRequested = true
         pendingMetadataFetchAuthorized = authorized
         pendingMetadataFetchResult = "blocked_redacted"
+        pendingMetadataFetchErrorBucket = reason
         runtimeResult = "blocked_redacted"
         runtimeErrorBucket = "pending_metadata_unavailable_redacted"
         senderCleanupResult = "not_required_redacted"
@@ -6894,6 +7013,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let remotePeerContextHandoffURLHookPath = "/direct-call/remote-peer-context-handoff"
     private static let senderLiveKitReadinessURLHookPath = "/direct-call/sender-livekit-readiness"
     private static let senderSideLiveKitJoinURLHookPath = "/direct-call/sender-side-livekit-join"
+    private static let senderPendingMetadataReferenceHandoffURLHookPath = "/direct-call/sender-pending-metadata-reference-handoff"
     private static let senderRuntimeLiveKitJoinURLHookPath = "/direct-call/sender-runtime-livekit-join"
     private static let senderRuntimeLiveKitJoinConfirmation = "RUN_2_48Z_REAL_SENDER_RUNTIME_JOIN"
     private static let uploadSmokeDefaultURLString = "https://matrix.mertis.kz/_matrix/client/unstable/kz.salemx.direct_call/pushkit/token"
@@ -6957,6 +7077,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var senderLiveKitReadinessHook = SalemXSenderLiveKitReadinessHook.defaultDisabled
     private static var senderSideLiveKitJoinHook = SalemXSenderSideLiveKitJoinHook.defaultDisabled
     private static var senderSideLiveKitJoinActivation = SalemXSenderSideLiveKitJoinActivation.defaultDisabled
+    private static var senderPendingMetadataReferenceHandoff = SalemXSenderPendingMetadataReferenceHandoff.defaultDisabled
     private static var senderConnectParity = SalemXSenderConnectParity.defaultEnabled
     private static var senderConnectExecutorUnification = SalemXSenderConnectExecutorUnification.shared
     private static var senderJoinFailureDiagnostics = SalemXSenderJoinFailureDiagnostics.defaultDisabled
@@ -7031,6 +7152,12 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         if url.path == senderSideLiveKitJoinURLHookPath {
             let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
             armSenderSideLiveKitJoinURLHook(components)
+            return true
+        }
+
+        if url.path == senderPendingMetadataReferenceHandoffURLHookPath {
+            let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            armSenderPendingMetadataReferenceHandoffURLHook(components)
             return true
         }
 
@@ -7115,6 +7242,27 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         updateLatestVoIPPushReceiptSummary(summary)
     }
 
+    private static func armSenderPendingMetadataReferenceHandoffURLHook(_ components: URLComponents?) {
+        let reference = components?.queryItems?.first { $0.name == "pending_metadata_reference" }?.value?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let sourceValue = components?.queryItems?.first { $0.name == "source" }?.value ?? ""
+        let source = sourceValue == "invite_response" || sourceValue == "invite_response_redacted" ? "invite_response_redacted" : "debug_handoff_redacted"
+        let handoff = SalemXSenderPendingMetadataReferenceHandoff(reference: reference?.isEmpty == false ? reference : nil,
+                                                                  source: source,
+                                                                  armed: reference?.isEmpty == false,
+                                                                  receivedByRuntime: false)
+        lock.lock()
+        senderPendingMetadataReferenceHandoff = handoff
+        var summary = latestSenderRuntimeLiveKitJoinSummary
+        summary.markReferenceHandoff(handoff)
+        if !handoff.referencePresent {
+            summary.blockedReason = "sender_pending_metadata_reference_missing_redacted"
+        }
+        lock.unlock()
+
+        updateLatestSenderRuntimeLiveKitJoinSummary(summary)
+    }
+
     private static func armSenderSideLiveKitJoinURLHook(_ components: URLComponents?) {
         let requested = redactedBoolQueryItem(components,
                                               names: ["sender_join_requested", "join_requested"])
@@ -7193,23 +7341,29 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     }
 
     private static func startSenderRuntimeLiveKitJoinURLHook(_ components: URLComponents?) {
-        let reference = components?.queryItems?.first { $0.name == "pending_metadata_reference" }?.value ?? ""
         let confirmed = components?.queryItems?.first { $0.name == "confirm" }?.value == senderRuntimeLiveKitJoinConfirmation
-        let referencePresent = !reference.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 
         lock.lock()
+        var handoff = senderPendingMetadataReferenceHandoff
+        if confirmed, handoff.referencePresent {
+            handoff = handoff.receivedByRuntimeCopy()
+            senderPendingMetadataReferenceHandoff = handoff
+        }
+        let reference = handoff.reference ?? ""
+        let referencePresent = handoff.referencePresent
         let repeated = confirmed && senderRuntimeLiveKitJoinConsumed
         if confirmed, !repeated {
             senderRuntimeLiveKitJoinConsumed = true
         }
         var summary = latestSenderRuntimeLiveKitJoinSummary
-        summary.markStarted(referencePresent: referencePresent, repeated: repeated)
+        summary.markStarted(referencePresent: referencePresent, repeated: repeated, handoff: handoff)
         if !confirmed {
             summary.bridgeTriggered = false
             summary.bridgeConsumed = false
             summary.blockedReason = "sender_runtime_join_default_disabled_no_connect"
         } else if !referencePresent {
-            summary.markPendingMetadataBlocked("sender_runtime_join_pending_metadata_reference_missing_redacted",
+            let reason = handoff.armed ? "sender_pending_metadata_reference_missing_redacted" : "sender_pending_metadata_reference_sender_memory_missing_redacted"
+            summary.markPendingMetadataBlocked(reason,
                                                authorized: false)
         }
         lock.unlock()
@@ -7256,12 +7410,12 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     @MainActor
     private static func fetchSenderRuntimePendingMetadata(reference: String) async -> DirectCallSession? {
         guard let fetchURL = senderPendingMetadataFetchURL(reference: reference) else {
-            recordSenderRuntimePendingMetadataBlocked("sender_runtime_join_pending_metadata_url_unresolved_redacted",
+            recordSenderRuntimePendingMetadataBlocked("sender_pending_metadata_reference_sender_view_missing_redacted",
                                                       authorized: false)
             return nil
         }
         guard let accessToken = await SalemXForegroundSSESmokeDebug.matrixAccessTokenForPushKitUploadSmoke() else {
-            recordSenderRuntimePendingMetadataBlocked("sender_runtime_join_pending_metadata_auth_unavailable_redacted",
+            recordSenderRuntimePendingMetadataBlocked("sender_pending_metadata_fetch_unauthorized_redacted",
                                                       authorized: false)
             return nil
         }
@@ -7275,12 +7429,13 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse,
                   (200..<300).contains(httpResponse.statusCode) else {
-                recordSenderRuntimePendingMetadataBlocked("sender_runtime_join_pending_metadata_fetch_failed_redacted",
+                let diagnostics = pendingMetadataFetchFailureDiagnostics(response: response, data: data)
+                recordSenderRuntimePendingMetadataBlocked(senderRuntimePendingMetadataBlockedReason(diagnostics),
                                                           authorized: true)
                 return nil
             }
             guard let session = directCallSessionFromSenderPendingMetadata(data: data) else {
-                recordSenderRuntimePendingMetadataBlocked("sender_runtime_join_pending_metadata_payload_invalid_redacted",
+                recordSenderRuntimePendingMetadataBlocked(senderPendingMetadataPayloadBlockedReason(data: data),
                                                           authorized: true)
                 return nil
             }
@@ -7402,6 +7557,43 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                                  updatedAt: Date(),
                                  state: .outgoingRinging,
                                  encryptionState: .ready)
+    }
+
+    private static func senderRuntimePendingMetadataBlockedReason(_ diagnostics: PendingMetadataFetchFailureDiagnostics) -> String {
+        switch diagnostics.failureReason {
+        case "auth_rejected":
+            return "sender_pending_metadata_fetch_unauthorized_redacted"
+        case "forbidden":
+            return "sender_pending_metadata_reference_mismatch_redacted"
+        case "not_found":
+            return "sender_pending_metadata_fetch_not_found_redacted"
+        case "server_error":
+            return "sender_runtime_join_pending_metadata_fetch_server_error_redacted"
+        default:
+            return "sender_runtime_join_pending_metadata_fetch_failed_redacted"
+        }
+    }
+
+    private static func senderPendingMetadataPayloadBlockedReason(data: Data) -> String {
+        guard let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return "sender_runtime_join_pending_metadata_payload_invalid_redacted"
+        }
+        guard (payload["call_id"] as? String)?.isEmpty == false else {
+            return "sender_pending_metadata_call_binding_missing_redacted"
+        }
+        guard (payload["room_id"] as? String)?.isEmpty == false else {
+            return "sender_pending_metadata_room_binding_missing_redacted"
+        }
+        guard (payload["peer_user_id"] as? String)?.isEmpty == false else {
+            return "sender_pending_metadata_peer_binding_missing_redacted"
+        }
+        guard payload["direction"] as? String == "outgoing" else {
+            return "sender_pending_metadata_direction_invalid_redacted"
+        }
+        guard DirectCallIntent.parse(payload["intent"] as? String) == .audio else {
+            return "sender_pending_metadata_intent_invalid_redacted"
+        }
+        return "sender_runtime_join_pending_metadata_payload_invalid_redacted"
     }
 
     @MainActor

@@ -644,6 +644,11 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
             f"/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{metadata_reference}/sender",
             {"authorization": self.authorization("auth-b")},
         )
+        sender_unauthenticated_status, sender_unauthenticated_body = await _asgi_get_json(
+            app,
+            f"/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{metadata_reference}/sender",
+            {},
+        )
 
         self.assertEqual(metadata_status, 200)
         self.assertEqual(metadata_body["version"], 1)
@@ -665,6 +670,8 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sender_body["intent"], "audio")
         self.assertEqual(sender_wrong_user_status, 403)
         self.assertEqual(sender_wrong_user_body["errcode"], "M_FORBIDDEN")
+        self.assertEqual(sender_unauthenticated_status, 401)
+        self.assertEqual(sender_unauthenticated_body["errcode"], "M_UNKNOWN_TOKEN")
 
         for raw_value in ["call-a", "!room:example.test", "caller", "callee", "device-b", "device-c", "opaque-local-safe-handle"]:
             self.assertNotIn(raw_value, output)

@@ -6891,3 +6891,18 @@ Safety:
 - no production APNs push
 - no repeated APNs push
 - no raw token, APNs key, JWT, authorization header, Matrix access token, raw APNs payload, raw invite body, user ID, device ID, room ID, call handle, private log, or secret-bearing URL recorded
+# 2.48Z Sender Pending Metadata Reference Handoff Repair
+
+Status: code/test repair in progress for the Retry17 sender blocker.
+
+What changed:
+- added a DEBUG-only sender pending-metadata reference handoff hook
+- sender runtime join now consumes the opaque invite-created reference from in-memory handoff state, not from the runtime trigger query
+- sender proof records redacted handoff/source/match/binding fields
+- missing sender-memory reference now blocks before credentials and executor invocation
+- sender-view pending metadata route remains authenticated and covered by targeted server tests
+
+Safety:
+- no APNs sent in this repair phase
+- no `dev/invite`, physical media connect, physical LiveKit join, microphone/camera permission, Matrix event emission, video, or full call flow
+- raw tokens, URLs, room IDs, call IDs, user IDs, device IDs, invite bodies, APNs payloads, pending metadata contents, and auth headers remain unlogged
