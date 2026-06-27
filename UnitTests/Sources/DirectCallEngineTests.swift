@@ -2993,7 +2993,8 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("receiverRemoteParticipantObserverStarted = true"))
         #expect(adapterSource.contains("liveKitRoomConnected = true"))
         #expect(adapterSource.contains("liveKitRoomDisconnected = false"))
-        #expect(adapterSource.contains("let classification = receiverSenderConnectedWindowOverlapObserved ?"))
+        #expect(adapterSource.contains("private func remoteParticipantSeenClassification() -> String"))
+        #expect(adapterSource.contains("completeRemoteParticipantObservation(classification: remoteParticipantSeenClassification(), timeoutBucket: \"none\")"))
         #expect(adapterSource.contains("completeRemoteParticipantObservation(classification: classification, timeoutBucket: \"none\")"))
         #expect(adapterSource.contains("completeRemoteParticipantObservationTimeout(timeoutBucket: timeoutBucket)"))
 
