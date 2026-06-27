@@ -13,8 +13,27 @@ protocol DirectCallLiveKitClientProtocol {
     func connect(connectionInfo: DirectCallMediaConnectionInfo, e2eeContext: any DirectCallMediaE2EEContextProtocol) async -> Result<Void, DirectCallMediaError>
     func setMicrophoneEnabled(_ isEnabled: Bool) async -> Result<Void, DirectCallMediaError>
     func setRemoteAudioPlaybackEnabled(_ isEnabled: Bool) async -> Result<Void, DirectCallMediaError>
+    func remoteParticipantSnapshot() async -> DirectCallRemoteParticipantSnapshot
     func disconnect() async
     func cleanup() async
+}
+
+struct DirectCallRemoteParticipantSnapshot: Equatable {
+    static let empty = DirectCallRemoteParticipantSnapshot(participantSeen: false,
+                                                           countBucket: "0",
+                                                           identityFilterApplied: false,
+                                                           identityFilterResult: "not_applied_redacted")
+
+    let participantSeen: Bool
+    let countBucket: String
+    let identityFilterApplied: Bool
+    let identityFilterResult: String
+}
+
+extension DirectCallLiveKitClientProtocol {
+    func remoteParticipantSnapshot() async -> DirectCallRemoteParticipantSnapshot {
+        .empty
+    }
 }
 
 @MainActor

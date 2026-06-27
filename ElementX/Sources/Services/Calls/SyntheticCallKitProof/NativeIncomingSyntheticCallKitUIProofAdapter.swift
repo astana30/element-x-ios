@@ -3824,6 +3824,9 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var remoteParticipantObservationTimingRepairDebugOnly = true
     var remoteParticipantObservationTimingRepairBoundedWindow = true
     var remoteParticipantObservationTimingRepairRawIdentifiersLogged = false
+    var participantObserverPropagationRepairPresent = true
+    var participantObserverPropagationRepairDebugOnly = true
+    var participantObserverPropagationRawIdentifiersLogged = false
     var receiverSenderConnectedOverlapRepairPresent = true
     var receiverSenderConnectedOverlapRepairDebugOnly = true
     var receiverSenderConnectedOverlapRepairRawIdentifiersLogged = false
@@ -3895,6 +3898,17 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var remoteParticipantObservationWaitCompleted = false
     var remoteParticipantObservationTimeoutBucket = "not_started"
     var remoteParticipantObservationFinalClassification = "not_started"
+    var receiverParticipantObservationFinalClassification = "not_started"
+    var receiverParticipantObserverBoundToRetainedRoom = false
+    var receiverParticipantObserverBoundToConnectedRoom = false
+    var receiverParticipantObserverAttachedBeforeSenderSignal = false
+    var receiverParticipantObserverActiveAfterSenderSignal = false
+    var receiverParticipantEventCallbackSeen = false
+    var receiverParticipantSnapshotRequested = false
+    var receiverParticipantSnapshotCountBucket = "not_requested"
+    var receiverParticipantSnapshotSeen = false
+    var receiverParticipantIdentityFilterApplied = false
+    var receiverParticipantIdentityFilterResult = "not_applied_redacted"
     var receiverParticipantObservationAfterOverlapStarted = false
     var receiverParticipantObservationAfterOverlapCompleted = false
     var receiverParticipantObservationAfterOverlapTimeout = false
@@ -4576,6 +4590,9 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "remote_participant_observation_timing_repair_debug_only=\(remoteParticipantObservationTimingRepairDebugOnly)",
             "remote_participant_observation_timing_repair_bounded_window=\(remoteParticipantObservationTimingRepairBoundedWindow)",
             "remote_participant_observation_timing_repair_raw_identifiers_logged=\(remoteParticipantObservationTimingRepairRawIdentifiersLogged)",
+            "participant_observer_propagation_repair_present=\(participantObserverPropagationRepairPresent)",
+            "participant_observer_propagation_repair_debug_only=\(participantObserverPropagationRepairDebugOnly)",
+            "participant_observer_propagation_raw_identifiers_logged=\(participantObserverPropagationRawIdentifiersLogged)",
             "receiver_sender_connected_overlap_repair_present=\(receiverSenderConnectedOverlapRepairPresent)",
             "receiver_sender_connected_overlap_repair_debug_only=\(receiverSenderConnectedOverlapRepairDebugOnly)",
             "receiver_sender_connected_overlap_repair_raw_identifiers_logged=\(receiverSenderConnectedOverlapRepairRawIdentifiersLogged)",
@@ -4647,6 +4664,17 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "remote_participant_observation_wait_completed=\(remoteParticipantObservationWaitCompleted)",
             "remote_participant_observation_timeout_bucket=\(remoteParticipantObservationTimeoutBucket)",
             "remote_participant_observation_final_classification=\(remoteParticipantObservationFinalClassification)",
+            "receiver_participant_observation_final_classification=\(receiverParticipantObservationFinalClassification)",
+            "receiver_participant_observer_bound_to_retained_room=\(receiverParticipantObserverBoundToRetainedRoom)",
+            "receiver_participant_observer_bound_to_connected_room=\(receiverParticipantObserverBoundToConnectedRoom)",
+            "receiver_participant_observer_attached_before_sender_signal=\(receiverParticipantObserverAttachedBeforeSenderSignal)",
+            "receiver_participant_observer_active_after_sender_signal=\(receiverParticipantObserverActiveAfterSenderSignal)",
+            "receiver_participant_event_callback_seen=\(receiverParticipantEventCallbackSeen)",
+            "receiver_participant_snapshot_requested=\(receiverParticipantSnapshotRequested)",
+            "receiver_participant_snapshot_count_bucket=\(receiverParticipantSnapshotCountBucket)",
+            "receiver_participant_snapshot_seen=\(receiverParticipantSnapshotSeen)",
+            "receiver_participant_identity_filter_applied=\(receiverParticipantIdentityFilterApplied)",
+            "receiver_participant_identity_filter_result=\(receiverParticipantIdentityFilterResult)",
             "receiver_participant_observation_after_overlap_started=\(receiverParticipantObservationAfterOverlapStarted)",
             "receiver_participant_observation_after_overlap_completed=\(receiverParticipantObservationAfterOverlapCompleted)",
             "receiver_participant_observation_after_overlap_timeout=\(receiverParticipantObservationAfterOverlapTimeout)",
@@ -5140,9 +5168,14 @@ private extension SalemXVoIPPushReceiptProofSummary {
         remoteParticipantObservationWaitCompleted = true
         remoteParticipantObservationTimeoutBucket = timeoutBucket
         remoteParticipantObservationFinalClassification = classification
+        receiverParticipantObservationFinalClassification = classification
         receiverParticipantObservationAfterOverlapCompleted = receiverParticipantObservationAfterOverlapStarted
         receiverParticipantObservationAfterOverlapTimeout = receiverParticipantObservationAfterOverlapStarted &&
-            classification == "participant_observation_timeout_after_overlap_redacted"
+            [
+                "participant_observation_timeout_after_overlap_redacted",
+                "participant_snapshot_empty_redacted",
+                "participant_event_callback_missing_redacted"
+            ].contains(classification)
         receiverCleanupDeferredUntilObservationTerminal = receiverCleanupDeferredUntilObservationTerminal || liveKitConnectAudioInvoked
         if liveKitConnectAudioInvoked {
             liveKitCleanupRequested = true
@@ -5161,6 +5194,9 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverConnectedWindowRetentionRepairPresent = true
         receiverConnectedWindowRetentionRepairDebugOnly = true
         receiverConnectedWindowRetentionRepairRawIdentifiersLogged = false
+        participantObserverPropagationRepairPresent = true
+        participantObserverPropagationRepairDebugOnly = true
+        participantObserverPropagationRawIdentifiersLogged = false
         receiverConnectedWindowOpened = true
         receiverConnectedWindowClosed = false
         receiverConnectedWindowCloseReason = "not_closed"
@@ -5245,6 +5281,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverSenderConnectedSignalReceivedAfterReceiverDisconnect = !receiverWindowActive
         receiverConnectedSessionLeaseActiveAtSenderSignal = receiverWindowActive
         receiverConnectedSessionLeaseActiveAfterSenderTrigger = receiverConnectedSessionLeaseActiveAfterSenderTrigger || receiverWindowActive
+        receiverParticipantObserverActiveAfterSenderSignal = receiverRemoteParticipantObserverStarted && receiverWindowActive
 
         if !correlationMatched {
             receiverSenderConnectedSignalFinalClassification = "sender_connected_signal_correlation_mismatch_redacted"
@@ -5337,6 +5374,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         remoteParticipantObservationTimingRepairDebugOnly = true
         remoteParticipantObservationTimingRepairBoundedWindow = true
         remoteParticipantObservationTimingRepairRawIdentifiersLogged = false
+        refreshParticipantObserverPropagationRepairDiagnostics()
         receiverSenderConnectedOverlapRepairPresent = true
         receiverSenderConnectedOverlapRepairDebugOnly = true
         receiverSenderConnectedOverlapRepairRawIdentifiersLogged = false
@@ -5410,11 +5448,31 @@ private extension SalemXVoIPPushReceiptProofSummary {
                 receiverLeaseActive)
 
         if liveKitRemoteParticipantSeen, !remoteParticipantObservationWaitCompleted {
-            let classification = receiverSenderConnectedWindowOverlapObserved ?
-                "remote_participant_seen_via_retained_window_redacted" :
-                "remote_participant_seen_redacted"
-            completeRemoteParticipantObservation(classification: classification, timeoutBucket: "none")
+            completeRemoteParticipantObservation(classification: remoteParticipantSeenClassification(), timeoutBucket: "none")
         }
+    }
+
+    private mutating func refreshParticipantObserverPropagationRepairDiagnostics() {
+        participantObserverPropagationRepairPresent = true
+        participantObserverPropagationRepairDebugOnly = true
+        participantObserverPropagationRawIdentifiersLogged = false
+
+        let receiverLeaseActive = receiverConnectedSessionLeaseAcquired &&
+            receiverConnectedSessionLeaseRoomRetained &&
+            !receiverConnectedSessionLeaseReleased
+        receiverParticipantObserverBoundToRetainedRoom = receiverParticipantObserverBoundToRetainedRoom ||
+            (receiverRemoteParticipantObserverStarted && receiverConnectedSessionLeaseRoomRetained)
+        receiverParticipantObserverBoundToConnectedRoom = receiverParticipantObserverBoundToConnectedRoom ||
+            (receiverParticipantObserverBoundToRetainedRoom && liveKitRoomConnected && !liveKitRoomDisconnected)
+        receiverParticipantObserverAttachedBeforeSenderSignal = receiverParticipantObserverAttachedBeforeSenderSignal ||
+            (receiverRemoteParticipantObserverStarted &&
+                receiverConnectedSessionLeaseObserverRetained &&
+                !senderConnectedSignalReceivedByReceiver)
+        receiverParticipantObserverActiveAfterSenderSignal = receiverParticipantObserverActiveAfterSenderSignal ||
+            (senderConnectedSignalReceivedByReceiver &&
+                receiverRemoteParticipantObserverStarted &&
+                receiverLeaseActive)
+        receiverParticipantObservationFinalClassification = remoteParticipantObservationFinalClassification
     }
 
     mutating func activateRemoteParticipantObservationRuntimeWindowIfNeeded() {
@@ -5515,24 +5573,30 @@ private extension SalemXVoIPPushReceiptProofSummary {
             return .init(result: "success_redacted", errorBucket: "none", timeoutBucket: "none", livenessErrorBucket: nil)
         }
         if liveKitRemoteParticipantSeen, !liveKitRemoteAudioTrackSubscribed {
-            let result = receiverSenderConnectedWindowOverlapObserved ?
-                "remote_participant_seen_via_retained_window_redacted" :
-                "remote_participant_seen_redacted"
-            return .init(result: result,
+            return .init(result: remoteParticipantSeenClassification(),
                          errorBucket: "remote_audio_track_missing_redacted",
                          timeoutBucket: "not_observed_redacted",
                          livenessErrorBucket: nil)
         }
         if liveKitRemoteParticipantSeen {
-            let result = receiverSenderConnectedWindowOverlapObserved ?
-                "remote_participant_seen_via_retained_window_redacted" :
-                "remote_participant_seen_redacted"
-            return .init(result: result,
+            return .init(result: remoteParticipantSeenClassification(),
                          errorBucket: "remote_liveness_not_observed_redacted",
                          timeoutBucket: "not_observed_redacted",
                          livenessErrorBucket: nil)
         }
         return nil
+    }
+
+    private func remoteParticipantSeenClassification() -> String {
+        if receiverParticipantEventCallbackSeen {
+            return "remote_participant_seen_via_callback_redacted"
+        }
+        if receiverParticipantSnapshotSeen {
+            return "remote_participant_seen_via_snapshot_redacted"
+        }
+        return receiverSenderConnectedWindowOverlapObserved ?
+            "remote_participant_seen_via_retained_window_redacted" :
+            "remote_participant_seen_redacted"
     }
 
     private func senderJoinObserverClassification() -> SalemXRemoteParticipantObserverClassification? {
@@ -6045,10 +6109,75 @@ private extension SalemXVoIPPushReceiptProofSummary {
             liveKitAudioLivenessErrorBucket = errorBucket
         }
         if participantSeen {
-            let classification = receiverSenderConnectedWindowOverlapObserved ?
-                "remote_participant_seen_via_retained_window_redacted" :
-                "remote_participant_seen_redacted"
-            completeRemoteParticipantObservation(classification: classification, timeoutBucket: "none")
+            completeRemoteParticipantObservation(classification: remoteParticipantSeenClassification(), timeoutBucket: "none")
+        }
+    }
+
+    mutating func recordReceiverParticipantEventCallbackObservation(participantCountBucket: String) {
+        let safeParticipantCountBucket = Self.safeParticipantCountBucket(participantCountBucket)
+        receiverParticipantEventCallbackSeen = true
+        receiverParticipantObserverActiveAfterSenderSignal = receiverParticipantObserverActiveAfterSenderSignal ||
+            senderConnectedSignalReceivedByReceiver
+        recordRemoteParticipantPresenceObservation(participantCountBucket: safeParticipantCountBucket,
+                                                   classification: "remote_participant_seen_via_callback_redacted")
+    }
+
+    mutating func recordReceiverParticipantSnapshotRequested(boundToRetainedRoom: Bool, boundToConnectedRoom: Bool) {
+        participantObserverPropagationRepairPresent = true
+        participantObserverPropagationRepairDebugOnly = true
+        participantObserverPropagationRawIdentifiersLogged = false
+        receiverParticipantSnapshotRequested = true
+        receiverParticipantObserverBoundToRetainedRoom = receiverParticipantObserverBoundToRetainedRoom || boundToRetainedRoom
+        receiverParticipantObserverBoundToConnectedRoom = receiverParticipantObserverBoundToConnectedRoom || boundToConnectedRoom
+        receiverParticipantObserverActiveAfterSenderSignal = receiverParticipantObserverActiveAfterSenderSignal ||
+            (senderConnectedSignalReceivedByReceiver && boundToConnectedRoom)
+        refreshReceiverRemoteParticipantObserverClassification()
+        refreshRemoteParticipantObservationTimingRepairDiagnostics()
+    }
+
+    mutating func recordReceiverParticipantSnapshotObservation(_ snapshot: DirectCallRemoteParticipantSnapshot) {
+        participantObserverPropagationRepairPresent = true
+        participantObserverPropagationRepairDebugOnly = true
+        participantObserverPropagationRawIdentifiersLogged = false
+        receiverParticipantSnapshotRequested = true
+        receiverParticipantSnapshotCountBucket = Self.safeParticipantCountBucket(snapshot.countBucket)
+        receiverParticipantSnapshotSeen = snapshot.participantSeen
+        receiverParticipantIdentityFilterApplied = snapshot.identityFilterApplied
+        receiverParticipantIdentityFilterResult = Self.safeParticipantIdentityFilterResult(snapshot.identityFilterResult)
+        if snapshot.participantSeen, snapshot.identityFilterResult != "filtered_out_redacted" {
+            recordRemoteParticipantPresenceObservation(participantCountBucket: receiverParticipantSnapshotCountBucket,
+                                                       classification: "remote_participant_seen_via_snapshot_redacted")
+        } else {
+            refreshReceiverRemoteParticipantObserverClassification()
+            refreshRemoteParticipantObservationTimingRepairDiagnostics()
+        }
+    }
+
+    private mutating func recordRemoteParticipantPresenceObservation(participantCountBucket: String, classification: String) {
+        liveKitRemoteParticipantSeen = true
+        liveKitRemoteParticipantCountBucket = Self.safeParticipantCountBucket(participantCountBucket)
+        receiverRemoteParticipantObserverRemoteSeen = true
+        liveKitAudioLivenessObserved = false
+        liveKitAudioLivenessResult = "not_observed_redacted"
+        liveKitAudioLivenessErrorBucket = "remote_audio_track_missing_redacted"
+        completeRemoteParticipantObservation(classification: classification, timeoutBucket: "none")
+    }
+
+    private static func safeParticipantCountBucket(_ bucket: String) -> String {
+        switch bucket {
+        case "0", "1", "2+":
+            return bucket
+        default:
+            return "unknown"
+        }
+    }
+
+    private static func safeParticipantIdentityFilterResult(_ result: String) -> String {
+        switch result {
+        case "not_applied_redacted", "passed_redacted", "filtered_out_redacted":
+            return result
+        default:
+            return "unknown_redacted"
         }
     }
 
@@ -6073,9 +6202,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
 
     private func remoteParticipantObservationPreconditionTimeoutClassification() -> String? {
         if liveKitRemoteParticipantSeen {
-            return receiverSenderConnectedWindowOverlapObserved ?
-                "remote_participant_seen_via_retained_window_redacted" :
-                "remote_participant_seen_redacted"
+            return remoteParticipantSeenClassification()
         }
         if !receiverConnectedSessionLeaseAcquired {
             return "receiver_lease_not_acquired_redacted"
@@ -6097,11 +6224,30 @@ private extension SalemXVoIPPushReceiptProofSummary {
         if receiverObserverInactive {
             return "receiver_observer_not_active_redacted"
         }
+        if let classification = participantObserverPropagationTimeoutClassification() {
+            return classification
+        }
         if !senderReadinessContextPresentDuringObservation {
             return "sender_readiness_context_missing_redacted"
         }
         if !opaqueCallCorrelationMatch {
             return "opaque_correlation_mismatch_redacted"
+        }
+        return nil
+    }
+
+    private func participantObserverPropagationTimeoutClassification() -> String? {
+        guard senderConnectedSignalReceivedByReceiver else {
+            return nil
+        }
+        if !receiverParticipantObserverBoundToRetainedRoom {
+            return "participant_observer_not_bound_to_retained_room_redacted"
+        }
+        if !receiverParticipantObserverBoundToConnectedRoom {
+            return "participant_observer_not_bound_to_connected_room_redacted"
+        }
+        if !receiverParticipantObserverAttachedBeforeSenderSignal {
+            return "participant_observer_attached_late_redacted"
         }
         return nil
     }
@@ -6132,6 +6278,15 @@ private extension SalemXVoIPPushReceiptProofSummary {
             return "no_receiver_sender_connected_overlap_redacted"
         }
         if receiverSenderConnectedWindowOverlapObserved {
+            if receiverParticipantIdentityFilterResult == "filtered_out_redacted" {
+                return "participant_identity_filtered_out_redacted"
+            }
+            if receiverParticipantSnapshotRequested, !receiverParticipantSnapshotSeen {
+                return "participant_snapshot_empty_redacted"
+            }
+            if !receiverParticipantEventCallbackSeen {
+                return "participant_event_callback_missing_redacted"
+            }
             return "participant_observation_timeout_after_overlap_redacted"
         }
         if senderCleanupStartedBeforeReceiverObservation {
@@ -7519,6 +7674,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var pushKitCompletionAnswerableWindowFinish: ((String) -> Void)?
     private static var remoteParticipantObservationWindowID: UUID?
     private static var remoteParticipantObservationWindowStartedAt: Date?
+    private static var receiverParticipantSnapshotSweepID: UUID?
     private static var pendingOperatorReadyToAnswer = false
     private static var pendingOperatorExpectedSurface = "unknown"
     private static let pendingForegroundCallMetadataMaxAge: TimeInterval = 120
@@ -7747,6 +7903,9 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
 
         updateLatestVoIPPushReceiptSummary(summary)
         scheduleRemoteParticipantObservationTimeoutIfNeeded()
+        if senderConnected {
+            scheduleReceiverParticipantSnapshotSweepIfNeeded()
+        }
     }
 
     private static func armSenderSideLiveKitJoinURLHook(_ components: URLComponents?) {
@@ -9266,6 +9425,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             if summary.remoteParticipantObservationWaitCompleted {
                 remoteParticipantObservationWindowID = nil
                 remoteParticipantObservationWindowStartedAt = nil
+                receiverParticipantSnapshotSweepID = nil
                 if summary.remoteParticipantObservationFinalClassification != "pending_redacted" {
                     pendingRemotePeerContextHandoff = nil
                 }
@@ -9300,6 +9460,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
               !summary.remoteParticipantObservationWaitCompleted else {
             remoteParticipantObservationWindowID = nil
             remoteParticipantObservationWindowStartedAt = nil
+            receiverParticipantSnapshotSweepID = nil
             lock.unlock()
             return
         }
@@ -9320,12 +9481,109 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         summary.completeRemoteParticipantObservationTimeout(timeoutBucket: timeoutBucket)
         remoteParticipantObservationWindowID = nil
         remoteParticipantObservationWindowStartedAt = nil
+        receiverParticipantSnapshotSweepID = nil
         pendingRemotePeerContextHandoff = nil
         let releaseReason = summary.remoteParticipantObservationFinalClassification
         lock.unlock()
 
         updateLatestVoIPPushReceiptSummary(summary)
         Task { @MainActor in
+            releaseReceiverConnectedSessionLease(reason: releaseReason)
+        }
+    }
+
+    private static func scheduleReceiverParticipantSnapshotSweepIfNeeded() {
+        lock.lock()
+        let summary = latestVoIPPushReceiptSummary
+        guard summary.senderConnectedSignalReceivedByReceiver,
+              summary.receiverSenderConnectedWindowOverlapObserved,
+              summary.remoteParticipantObservationWaitStarted,
+              !summary.remoteParticipantObservationWaitCompleted,
+              receiverParticipantSnapshotSweepID == nil else {
+            lock.unlock()
+            return
+        }
+
+        let sweepID = UUID()
+        receiverParticipantSnapshotSweepID = sweepID
+        lock.unlock()
+
+        requestReceiverParticipantSnapshotIfCurrent(sweepID)
+        [1.0, 2.5, 5.0].forEach { delay in
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                requestReceiverParticipantSnapshotIfCurrent(sweepID)
+            }
+        }
+    }
+
+    private static func requestReceiverParticipantSnapshotIfCurrent(_ sweepID: UUID) {
+        Task { @MainActor in
+            await requestReceiverParticipantSnapshotIfCurrentOnMain(sweepID)
+        }
+    }
+
+    @MainActor
+    private static func requestReceiverParticipantSnapshotIfCurrentOnMain(_ sweepID: UUID) async {
+        lock.lock()
+        guard receiverParticipantSnapshotSweepID == sweepID else {
+            lock.unlock()
+            return
+        }
+
+        var summary = latestVoIPPushReceiptSummary
+        guard summary.remoteParticipantObservationWaitStarted,
+              !summary.remoteParticipantObservationWaitCompleted else {
+            receiverParticipantSnapshotSweepID = nil
+            lock.unlock()
+            return
+        }
+
+        let lease = receiverConnectedSessionLease
+        let boundToRetainedRoom = lease != nil &&
+            summary.receiverConnectedSessionLeaseRoomRetained &&
+            !summary.receiverConnectedSessionLeaseReleased
+        let boundToConnectedRoom = boundToRetainedRoom &&
+            summary.liveKitRoomConnected &&
+            !summary.liveKitRoomDisconnected
+        summary.recordReceiverParticipantSnapshotRequested(boundToRetainedRoom: boundToRetainedRoom,
+                                                           boundToConnectedRoom: boundToConnectedRoom)
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+
+        guard let lease else {
+            return
+        }
+
+        let snapshot = await lease.client.remoteParticipantSnapshot()
+
+        lock.lock()
+        guard receiverParticipantSnapshotSweepID == sweepID else {
+            lock.unlock()
+            return
+        }
+
+        summary = latestVoIPPushReceiptSummary
+        guard summary.remoteParticipantObservationWaitStarted,
+              !summary.remoteParticipantObservationWaitCompleted else {
+            receiverParticipantSnapshotSweepID = nil
+            lock.unlock()
+            return
+        }
+
+        summary.recordReceiverParticipantSnapshotObservation(snapshot)
+        let shouldReleaseLease = summary.remoteParticipantObservationWaitCompleted
+        let releaseReason = summary.remoteParticipantObservationFinalClassification
+        if shouldReleaseLease {
+            receiverParticipantSnapshotSweepID = nil
+            remoteParticipantObservationWindowID = nil
+            remoteParticipantObservationWindowStartedAt = nil
+            pendingRemotePeerContextHandoff = nil
+        }
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+        if shouldReleaseLease {
             releaseReceiverConnectedSessionLease(reason: releaseReason)
         }
     }
@@ -9884,6 +10142,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         lock.unlock()
 
         updateLatestVoIPPushReceiptSummary(summary)
+        scheduleReceiverParticipantSnapshotSweepIfNeeded()
     }
 
     private static func nextProofGenerationLocked() -> String {
@@ -10323,6 +10582,7 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
         receiverConnectedSessionLeaseTask = nil
         receiverConnectedSessionLeaseReleased = true
         receiverConnectedWindowRetentionExtensionUsed = false
+        receiverParticipantSnapshotSweepID = nil
         var summary = latestVoIPPushReceiptSummary
         summary.recordReceiverConnectedSessionLeaseReleased(reason: reason, repeated: repeated)
         lock.unlock()
@@ -10436,6 +10696,37 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
         if shouldReleaseLease {
             remoteParticipantObservationWindowID = nil
             remoteParticipantObservationWindowStartedAt = nil
+            receiverParticipantSnapshotSweepID = nil
+            pendingRemotePeerContextHandoff = nil
+        }
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+        if shouldReleaseLease {
+            Task { @MainActor in
+                releaseReceiverConnectedSessionLease(reason: releaseReason)
+            }
+        }
+    }
+
+    static func recordReceiverRemoteParticipantEventCallback(participantCountBucket: String) {
+        let safeParticipantCountBucket: String
+        switch participantCountBucket {
+        case "0", "1", "2+":
+            safeParticipantCountBucket = participantCountBucket
+        default:
+            safeParticipantCountBucket = "unknown"
+        }
+
+        lock.lock()
+        var summary = latestVoIPPushReceiptSummary
+        summary.recordReceiverParticipantEventCallbackObservation(participantCountBucket: safeParticipantCountBucket)
+        let shouldReleaseLease = summary.remoteParticipantObservationWaitCompleted
+        let releaseReason = summary.remoteParticipantObservationFinalClassification
+        if shouldReleaseLease {
+            remoteParticipantObservationWindowID = nil
+            remoteParticipantObservationWindowStartedAt = nil
+            receiverParticipantSnapshotSweepID = nil
             pendingRemotePeerContextHandoff = nil
         }
         lock.unlock()

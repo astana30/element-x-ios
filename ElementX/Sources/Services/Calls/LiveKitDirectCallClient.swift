@@ -246,6 +246,18 @@ final class LiveKitDirectCallClient: DirectCallLiveKitClientProtocol, @unchecked
         }
     }
 
+    func remoteParticipantSnapshot() async -> DirectCallRemoteParticipantSnapshot {
+        guard isConnected, let room else {
+            return .empty
+        }
+
+        let countBucket = Self.remoteParticipantCountBucket(for: room)
+        return DirectCallRemoteParticipantSnapshot(participantSeen: countBucket != "0",
+                                                   countBucket: countBucket,
+                                                   identityFilterApplied: false,
+                                                   identityFilterResult: "not_applied_redacted")
+    }
+
     func setMicrophoneEnabled(_ isEnabled: Bool) async -> Result<Void, DirectCallMediaError> {
         guard isEnabled else {
             guard isConnected else {
@@ -460,6 +472,14 @@ final class LiveKitDirectCallClient: DirectCallLiveKitClientProtocol, @unchecked
 }
 
 extension LiveKitDirectCallClient: RoomDelegate {
+    nonisolated func room(_ room: Room, participantDidConnect _: RemoteParticipant) {
+        Task { @MainActor in
+            #if DEBUG && canImport(PushKit) && os(iOS)
+            SalemXPushKitRegistrationSmokeDebugBridge.recordReceiverRemoteParticipantEventCallback(participantCountBucket: Self.remoteParticipantCountBucket(for: room))
+            #endif
+        }
+    }
+
     nonisolated func room(_ room: Room, participant: RemoteParticipant, didPublishTrack publication: RemoteTrackPublication) {
         Task { @MainActor [weak self] in
             #if DEBUG && canImport(PushKit) && os(iOS)

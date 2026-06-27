@@ -2,6 +2,64 @@
 
 This file records durable phase-level progress for future Codex and strategy sessions.
 
+## 2026-06-27 — 2.48Z-ParticipantObserverPropagationRepair
+
+Closed Retry22 as sender runtime join + receiver connected-window overlap success / participant observer propagation timeout triage. This is not remote participant success.
+
+Retry22 result:
+
+```text
+APNs_sent=true
+background_apns_push_result=sandbox_success
+physical_voip_push_received=true
+callkit_answer_action_received=true
+controlled_connect_first_attempt_result=success_redacted
+livekit_join_result=success_redacted
+sender_runtime_join_executor_invoked=true
+sender_runtime_join_runtime_result=success_redacted
+sender_livekit_room_connected=true
+sender_connected_signal_received_by_receiver=true
+receiver_sender_connected_signal_received=true
+receiver_connected_session_lease_acquired=true
+receiver_connected_session_lease_room_retained=true
+receiver_connected_session_lease_delegate_retained=true
+receiver_connected_session_lease_observer_retained=true
+receiver_connected_session_lease_task_retained=true
+receiver_connected_session_lease_active_before_sender_trigger=true
+receiver_connected_session_lease_active_after_sender_trigger=true
+receiver_connected_session_lease_active_at_sender_signal=true
+receiver_cleanup_deferred_until_observation_terminal=true
+receiver_cleanup_started_before_sender_terminal=false
+receiver_disconnect_observed_before_sender_signal=false
+receiver_disconnect_observed_after_sender_signal=false
+receiver_sender_connected_window_overlap_observed=true
+receiver_sender_connected_window_overlap_final_classification=receiver_connected_window_overlap_observed_redacted
+receiver_participant_observation_after_overlap_started=true
+receiver_participant_observation_after_overlap_completed=true
+receiver_participant_observation_after_overlap_timeout=true
+livekit_remote_participant_seen=false
+livekit_remote_participant_count_bucket=0
+receiver_remote_participant_observer_result=not_observed_redacted
+remote_participant_observation_final_classification=participant_observation_timeout_after_overlap_redacted
+```
+
+Root cause:
+- Retry22 proved the receiver room lease now survives until the sender-connected signal and overlaps the sender connected window
+- the remaining blocker is narrower: receiver LiveKit participant observer propagation did not report a remote participant during the post-overlap window
+
+Repair:
+- added DEBUG-only participant observer propagation proof fields
+- receiver LiveKit client now records a redacted participant-connected callback when the room delegate reports a remote participant
+- receiver proof starts a bounded snapshot sweep against the retained connected room after sender-connected overlap, so Retry23 can distinguish callback missing, snapshot empty, identity filtered, and participant seen
+- participant presence remains separate from remote audio-track subscription/liveness
+
+Safety:
+- exactly one sandbox APNs was sent in Retry22 before this repair; no APNs were sent during the repair
+- no repeated APNs, production APNs, `dev/invite`, physical media connect, physical LiveKit join, microphone/camera permission, video, Matrix event emission, or full call flow
+- no raw tokens, JWTs, authorization headers, APNs payloads, invite bodies, LiveKit URLs, room IDs, call IDs, user IDs, device IDs, call handles, private logs, or pending metadata contents recorded
+
+Next phase: `2.48Z-Physical2-Retry23 — one-shot participant observer propagation validation, sender Жанелька, receiver iPhone PRO`.
+
 ## 2026-06-27 — 2.48Z-ReceiverConnectedWindowRetentionRepair
 
 Closed Retry21 as sender runtime join bridge state repair success / receiver connected window closed before sender signal triage. This is not remote participant success.
