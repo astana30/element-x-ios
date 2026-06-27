@@ -2,6 +2,68 @@
 
 This file records durable phase-level progress for future Codex and strategy sessions.
 
+## 2026-06-27 — 2.48Z-ReceiverConnectedWindowRetentionRepair
+
+Closed Retry21 as sender runtime join bridge state repair success / receiver connected window closed before sender signal triage. This is not remote participant success.
+
+Retry21 result:
+
+```text
+APNs_sent=true
+background_apns_push_result=sandbox_success
+physical_voip_push_received=true
+callkit_answer_action_received=true
+controlled_connect_first_attempt_result=success_redacted
+livekit_join_result=success_redacted
+sender_runtime_join_bridge_trigger_generation_matches_arm=true
+sender_runtime_join_bridge_stale_generation_detected=false
+sender_runtime_join_bridge_repeated_only_after_consumed=true
+sender_runtime_join_bridge_triggered=true
+sender_runtime_join_bridge_consumed=true
+sender_runtime_join_executor_invoked=true
+sender_runtime_join_pending_metadata_fetch_result=success_redacted
+sender_runtime_join_credentials_result=success_redacted
+sender_runtime_join_runtime_result=success_redacted
+sender_livekit_room_connected=true
+sender_connected_signal_received_by_receiver=true
+receiver_sender_connected_signal_received=true
+receiver_sender_connected_window_overlap_observed=false
+receiver_sender_connected_window_overlap_final_classification=sender_connected_signal_after_receiver_disconnect_redacted
+livekit_remote_participant_seen=false
+receiver_remote_participant_observer_result=not_observed_redacted
+```
+
+Root cause:
+- the sender bridge repair worked and the sender joined LiveKit
+- the receiver connected lease/observation window was already closed by the time the sender-connected signal was handed to the receiver
+- participant observation could not be classified until receiver/sender connected-window overlap is retained
+
+Repair:
+
+```text
+receiver_connected_window_retention_repair_present=true
+receiver_connected_window_retention_repair_debug_only=true
+receiver_connected_window_retention_repair_raw_identifiers_logged=false
+receiver_connected_session_lease_active_before_sender_trigger=<redacted_bool>
+receiver_connected_session_lease_active_after_sender_trigger=<redacted_bool>
+receiver_connected_session_lease_active_at_sender_signal=<redacted_bool>
+receiver_connected_session_lease_released_after_terminal=<redacted_bool>
+receiver_disconnect_observed_before_sender_signal=<redacted_bool>
+receiver_disconnect_observed_after_sender_signal=<redacted_bool>
+receiver_participant_observation_after_overlap_started=<redacted_bool>
+receiver_participant_observation_after_overlap_completed=<redacted_bool>
+receiver_participant_observation_after_overlap_timeout=<redacted_bool>
+```
+
+The receiver now extends the connected lease through one bounded sender-signal wait before releasing, then resets the observation window after a sender-connected signal so participant presence has its own bounded post-overlap observation window. Cleanup remains deterministic after terminal classification. Audio track liveness is still not required for participant presence.
+
+Safety:
+- exactly one sandbox APNs was sent in Retry21 before this repair; no APNs were sent during the repair
+- no repeated APNs, production APNs, `dev/invite`, physical media connect, physical LiveKit join, microphone/camera permission, video, Matrix event emission, or full call flow
+- no raw tokens, JWTs, authorization headers, APNs payloads, invite bodies, LiveKit URLs, room IDs, call IDs, user IDs, device IDs, call handles, private logs, or pending metadata contents recorded
+
+Next phase: `2.48Z-Physical2-Retry22 — one-shot receiver connected window retention validation, sender Жанелька, receiver iPhone PRO`.
+
 ## 2026-06-26 — 2.48Z-SenderRuntimeJoinBridgeStateRepair
 
 Closed Retry20 as real receiver controlled connect success / sender runtime bridge stale one-shot state triage. This is not remote participant success.

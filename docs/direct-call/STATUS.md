@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-SenderRuntimeJoinBridgeStateRepair — no APNs or physical connect were run. Retry20 closed as receiver controlled connect/LiveKit success with one sandbox APNs, but the sender runtime join did not execute because the DEBUG one-shot bridge classified the current trigger as repeated before the current generation was consumed. The sender runtime bridge now tracks an arm generation and consumed generation so a stale consumed latch cannot block a fresh pending-metadata reference. The next physical phase is `2.48Z-Physical2-Retry21 — one-shot sender runtime join bridge state repair validation, no reinstall unless required`.
+After 2.48Z-ReceiverConnectedWindowRetentionRepair — Retry21 physically validated the sender runtime join bridge state repair with one sandbox APNs, receiver PushKit/CallKit Answer, receiver controlled connect/LiveKit success, sender pending metadata/credentials success, shared sender executor invocation, and `sender_livekit_room_connected=true`. Retry21 is not remote participant success: the sender-connected signal reached the receiver only after the receiver connected window had already closed, so `receiver_sender_connected_window_overlap_observed=false` and `livekit_remote_participant_seen=false`. The repair keeps the receiver connected lease alive through a bounded sender-signal window and then through a bounded post-overlap participant-observation window. The next physical phase is `2.48Z-Physical2-Retry22 — one-shot receiver connected window retention validation, sender Жанелька, receiver iPhone PRO`.
 
 ## Latest App Code Checkpoint
 
@@ -38,6 +38,38 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Checksum: `654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e`
 
 ## Proven Checkpoints
+
+- 2.48Z-ReceiverConnectedWindowRetentionRepair closes Retry21 as sender runtime join bridge success / receiver connected window closed before sender signal triage, then repairs receiver lease retention without APNs/connect:
+  - Retry21 physical classification:
+    ```text
+    APNs_sent=true
+    background_apns_push_result=sandbox_success
+    physical_voip_push_received=true
+    callkit_answer_action_received=true
+    controlled_connect_first_attempt_result=success_redacted
+    livekit_join_result=success_redacted
+    sender_runtime_join_bridge_trigger_generation_matches_arm=true
+    sender_runtime_join_bridge_stale_generation_detected=false
+    sender_runtime_join_bridge_repeated_only_after_consumed=true
+    sender_runtime_join_bridge_triggered=true
+    sender_runtime_join_bridge_consumed=true
+    sender_runtime_join_executor_invoked=true
+    sender_runtime_join_pending_metadata_fetch_result=success_redacted
+    sender_runtime_join_credentials_result=success_redacted
+    sender_runtime_join_runtime_result=success_redacted
+    sender_livekit_room_connected=true
+    sender_connected_signal_received_by_receiver=true
+    receiver_sender_connected_window_overlap_observed=false
+    receiver_sender_connected_window_overlap_final_classification=sender_connected_signal_after_receiver_disconnect_redacted
+    livekit_remote_participant_seen=false
+    ```
+  - New blocker:
+    ```text
+    receiver connected window did not overlap the sender connected signal
+    ```
+  - Repair proof fields include `receiver_connected_window_retention_repair_*`, lease-active-before/after/at-signal booleans, before/after sender-signal disconnect booleans, post-overlap participant observation booleans, and retained-window classification buckets.
+  - Safety preserved: no APNs in this repair, no production APNs, no `dev/invite`, no physical connect/LiveKit join, no microphone/camera permission, no video, no Matrix event emission, no full call flow, and no raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room/call/user/device/pending-metadata logging.
+  - Next phase: `2.48Z-Physical2-Retry22 — one-shot receiver connected window retention validation, sender Жанелька, receiver iPhone PRO`.
 
 - 2.48Z-SenderRuntimeJoinBridgeStateRepair closes Retry20 as real receiver controlled connect success / sender runtime bridge stale one-shot state triage, then repairs the sender bridge state without APNs/connect:
   - Retry20 physical classification:
@@ -89,7 +121,7 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
     receiver_sender_connected_signal_final_classification=<redacted_bucket>
     receiver_sender_connected_window_overlap_final_classification=<redacted_bucket>
     ```
-  - New redacted buckets include `sender_connected_signal_received_redacted`, `sender_connected_signal_missing_redacted`, `sender_connected_signal_after_receiver_disconnect_redacted`, `sender_connected_signal_correlation_mismatch_redacted`, `receiver_window_closed_before_sender_signal_redacted`, `connected_window_overlap_observed_redacted`, and `participant_event_timeout_after_sender_signal_redacted`.
+  - Redacted buckets now distinguish `receiver_connected_window_retained_until_sender_signal_redacted`, `sender_connected_signal_missing_redacted`, `sender_connected_signal_after_receiver_disconnect_redacted`, `sender_connected_signal_correlation_mismatch_redacted`, `receiver_window_closed_before_sender_signal_redacted`, `receiver_connected_window_overlap_observed_redacted`, and `participant_observation_timeout_after_overlap_redacted`.
   - Safety preserved: no APNs, production APNs, `dev/invite`, physical media connect, physical LiveKit join, microphone/camera permission, video, Matrix event emission, full call flow, or raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room/call/user/device/pending-metadata logging.
   - Next phase: `2.48Z-Physical2-Retry20 — one-shot real sender join with sender-connected signal handoff`.
 
