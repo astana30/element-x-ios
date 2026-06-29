@@ -2901,12 +2901,13 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("receiverPushKitTokenReadinessWaitTimeout: TimeInterval = 8"))
         #expect(adapterSource.contains("recordReceiverPushKitTokenReadinessProof(waitStarted: true,"))
         #expect(adapterSource.contains("receiverPushKitTokenReadinessTerminal(uploadProof: latestUploadSummary)"))
-        #expect(adapterSource.contains("""
-        summary.refreshReceiverPushKitTokenReadiness(uploadProof: uploadProof,
-                                                     appStateBeforeAPNs: "unknown",
-                                                     waitStarted: true,
-                                                     waitCompleted: true,
-                                                     waitTimeout: false)
+        let normalizedAdapterSourceForPushKitReadiness = adapterSource
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "\n", with: "")
+            .replacingOccurrences(of: "\t", with: "")
+
+        #expect(normalizedAdapterSourceForPushKitReadiness.contains("""
+        summary.refreshReceiverPushKitTokenReadiness(uploadProof:uploadProof,appStateBeforeAPNs:"unknown",waitStarted:true,waitCompleted:true,waitTimeout:false)
         """))
         #expect(adapterSource.contains("proofLastUpdatedBy = \"receiver_pushkit_token_readiness\""))
         #expect(adapterSource.contains("refreshReceiverPushKitTokenReadiness(uploadProof: latestUploadSummary"))
