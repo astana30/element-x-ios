@@ -2,6 +2,95 @@
 
 This file records durable phase-level progress for future Codex and strategy sessions.
 
+## 2026-06-29 — 2.49A-TwoSimulatorPublicationObservationAudit
+
+Closed Retry31 as a final one-shot physical proof and implemented the pre-physical publication observation audit/repair. Do not rerun Retry31 or send another APNs for it.
+
+Retry31 proved:
+
+```text
+APNs_sent=true
+background_apns_push_result=sandbox_success
+physical_voip_push_received=true
+callkit_answer_action_received=true
+receiver_post_answer_pending_metadata_fetch_result=success_redacted
+receiver_post_answer_media_credentials_result=success_redacted
+receiver_post_answer_controlled_connect_result=success_redacted
+receiver_post_answer_livekit_join_result=success_redacted
+sender_runtime_join_executor_invoked=true
+sender_runtime_join_pending_metadata_fetch_result=success_redacted
+sender_runtime_join_credentials_result=success_redacted
+sender_runtime_join_runtime_result=success_redacted
+sender_livekit_room_connected=true
+sender_local_audio_publish_requested=true
+sender_local_audio_publish_allowed=true
+sender_local_audio_publish_result=success_redacted
+sender_audio_session_activation_observed=true
+sender_microphone_permission_result_bucket=success_redacted
+livekit_remote_participant_seen=true
+receiver_connected_session_lease_acquired=true
+receiver_audio_observer_uses_retained_session_lease=true
+receiver_audio_observer_lease_present_at_attach=true
+receiver_audio_observer_lease_present_after_participant_seen=true
+receiver_audio_observer_lease_present_during_subscription_wait=true
+receiver_audio_observer_lease_released_before_audio_terminal=false
+receiver_audio_observer_bound_to_same_client_as_receiver_join=true
+receiver_audio_observer_bound_to_same_client_as_participant_callback=true
+receiver_audio_observer_bound_to_retained_room=true
+receiver_audio_observer_bound_to_connected_room=true
+```
+
+Retry31 blocker:
+
+```text
+receiver_remote_audio_observer_attached_after_participant_seen=false
+receiver_remote_audio_publication_seen=false
+receiver_remote_audio_publication_subscribed_state_bucket=publication_missing_redacted
+receiver_remote_audio_explicit_subscribe_requested=true
+receiver_remote_audio_explicit_subscribe_request_result=success_redacted
+receiver_remote_audio_explicit_subscribe_confirmed=false
+receiver_remote_audio_subscription_callback_seen=false
+receiver_remote_audio_track_subscribed=false
+receiver_remote_audio_track_unmuted=false
+receiver_remote_audio_subscription_final_classification=remote_audio_subscription_timeout_redacted
+receiver_remote_audio_liveness_final_classification=remote_audio_publication_missing_redacted
+first_failed_phase=remote_audio_publication_seen
+retry31_success=false
+```
+
+Root cause / narrowed diagnosis:
+- receiver and sender connected successfully, the sender published local audio successfully, and the receiver retained the connected room/client
+- the receiver proof depended on callback-driven audio publication observation; if LiveKit publication existed before or outside the callback window, the proof could remain stuck at `receiver_remote_audio_publication_seen=false`
+- explicit subscribe request success remains request-level only and must not be counted as subscription confirmation
+
+What changed:
+- added DEBUG-only `receiver_remote_audio_publication_observation_*` proof fields
+- after participant presence, a bounded retained-room snapshot/replay sweep runs when publication is still missing
+- snapshots record publication request/completion counts and can classify publication as seen via snapshot/replay without raw participant or track identifiers
+- missing publication now classifies separately as after participant seen or after sender audio publish, instead of collapsing into generic subscription timeout
+- receiver lease/replay tasks are cleared deterministically with observation terminal cleanup
+
+Simulator/audit regression table:
+
+| scenario | simulator/audit result | proof fields observed | bug/blocker found | repair |
+| --- | --- | --- | --- | --- |
+| publication callback before observer attach | guarded | callback source distinct from snapshot/replay | callback-only proof can miss state | retained-room replay |
+| observer attaches before publication callback | guarded | callback marks publication | none | unchanged |
+| participant seen before sender audio publish | guarded | snapshot wait starts after participant | late publication could be missed | bounded replay |
+| sender audio publish before participant terminal | guarded | sender publish success gives precise missing-after-publish bucket | generic timeout too broad | new classification |
+| publication exists before publication wait starts | guarded | snapshot/replay can find existing publication | missed callback | replay success bucket |
+| explicit subscribe request vs confirmation | guarded | request result and confirmed subscription stay separate | request was previously ambiguous | no confirmation without callback/state |
+| lease retention until audio terminal | guarded | replay ID clears with terminal cleanup | stale sweep risk | deterministic cleanup |
+
+This simulator/audit layer is pre-physical only. It does not replace physical APNs/PushKit/CallKit/audio-route proof; `physical_proof_required=true` remains for iPhone PRO + Carpediem.
+
+Safety:
+- exactly one sandbox APNs was sent in Retry31; do not repeat it
+- no APNs, production APNs, `dev/invite`, physical connect, physical LiveKit join, camera/video, Matrix event emission, or full flow was performed during this repair
+- no raw token, JWT, authorization header, APNs payload, invite body, LiveKit URL, room ID, call ID, user ID, device ID, participant identity, track SID, pending metadata, or private log exposure
+
+Next phase: `2.49A-Physical2-Retry32 — one-shot remote audio publication snapshot/replay + subscription/liveness validation`.
+
 ## 2026-06-29 — 2.49A-ReceiverAudioObserverLeaseBindingRepair
 
 Closed Retry30 as a final one-shot physical proof and implemented the no-APNs receiver audio observer lease-binding repair for the next run.

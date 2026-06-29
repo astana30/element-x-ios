@@ -4294,7 +4294,18 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var receiverRemoteAudioSubscriptionRepairDebugOnly = true
     var receiverRemoteAudioSubscriptionRawIdentifiersLogged = false
     var receiverRemoteAudioAutoSubscribeEnabled = false
+    var receiverRemoteAudioPublicationObservationRepairPresent = true
+    var receiverRemoteAudioPublicationObservationRepairDebugOnly = true
+    var receiverRemoteAudioPublicationObservationRawIdentifiersLogged = false
+    var receiverRemoteAudioPublicationSnapshotRequested = false
+    var receiverRemoteAudioPublicationSnapshotCompleted = false
+    var receiverRemoteAudioPublicationSnapshotCountBucket = "0"
+    var receiverRemoteAudioPublicationSnapshotAudioCountBucket = "0"
+    var receiverRemoteAudioPublicationSeenViaSnapshot = false
+    var receiverRemoteAudioPublicationSeenViaCallback = false
+    var receiverRemoteAudioPublicationSeenViaReplay = false
     var receiverRemoteAudioPublicationSeen = false
+    var receiverRemoteAudioPublicationObservationFinalClassification = "not_started"
     var receiverRemoteAudioPublicationSubscribedStateBucket = "unknown_redacted"
     var receiverRemoteAudioExplicitSubscribeRequested = false
     var receiverRemoteAudioExplicitSubscribeRequestResult = "not_requested"
@@ -5350,7 +5361,18 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "receiver_remote_audio_subscription_repair_debug_only=\(receiverRemoteAudioSubscriptionRepairDebugOnly)",
             "receiver_remote_audio_subscription_raw_identifiers_logged=\(receiverRemoteAudioSubscriptionRawIdentifiersLogged)",
             "receiver_remote_audio_auto_subscribe_enabled=\(receiverRemoteAudioAutoSubscribeEnabled)",
+            "receiver_remote_audio_publication_observation_repair_present=\(receiverRemoteAudioPublicationObservationRepairPresent)",
+            "receiver_remote_audio_publication_observation_repair_debug_only=\(receiverRemoteAudioPublicationObservationRepairDebugOnly)",
+            "receiver_remote_audio_publication_observation_raw_identifiers_logged=\(receiverRemoteAudioPublicationObservationRawIdentifiersLogged)",
+            "receiver_remote_audio_publication_snapshot_requested=\(receiverRemoteAudioPublicationSnapshotRequested)",
+            "receiver_remote_audio_publication_snapshot_completed=\(receiverRemoteAudioPublicationSnapshotCompleted)",
+            "receiver_remote_audio_publication_snapshot_count_bucket=\(receiverRemoteAudioPublicationSnapshotCountBucket)",
+            "receiver_remote_audio_publication_snapshot_audio_count_bucket=\(receiverRemoteAudioPublicationSnapshotAudioCountBucket)",
+            "receiver_remote_audio_publication_seen_via_snapshot=\(receiverRemoteAudioPublicationSeenViaSnapshot)",
+            "receiver_remote_audio_publication_seen_via_callback=\(receiverRemoteAudioPublicationSeenViaCallback)",
+            "receiver_remote_audio_publication_seen_via_replay=\(receiverRemoteAudioPublicationSeenViaReplay)",
             "receiver_remote_audio_publication_seen=\(receiverRemoteAudioPublicationSeen)",
+            "receiver_remote_audio_publication_observation_final_classification=\(receiverRemoteAudioPublicationObservationFinalClassification)",
             "receiver_remote_audio_publication_subscribed_state_bucket=\(receiverRemoteAudioPublicationSubscribedStateBucket)",
             "receiver_remote_audio_explicit_subscribe_requested=\(receiverRemoteAudioExplicitSubscribeRequested)",
             "receiver_remote_audio_explicit_subscribe_request_result=\(receiverRemoteAudioExplicitSubscribeRequestResult)",
@@ -5849,6 +5871,10 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverRemoteAudioSubscriptionRepairDebugOnly = true
         receiverRemoteAudioSubscriptionRawIdentifiersLogged = false
         receiverRemoteAudioAutoSubscribeEnabled = false
+        receiverRemoteAudioPublicationObservationRepairPresent = true
+        receiverRemoteAudioPublicationObservationRepairDebugOnly = true
+        receiverRemoteAudioPublicationObservationRawIdentifiersLogged = false
+        refreshReceiverRemoteAudioPublicationObservationClassification()
         refreshRemoteParticipantPresenceRepairDiagnostics()
         remotePeerContextHandoffPresent = true
         remotePeerContextHandoffDebugOnly = true
@@ -5978,6 +6004,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverRemoteAudioSubscriptionRepairDebugOnly = true
         receiverRemoteAudioSubscriptionRawIdentifiersLogged = false
         refreshReceiverAudioObserverLeaseBindingDiagnostics()
+        refreshReceiverRemoteAudioPublicationObservationClassification()
         receiverRemoteAudioSubscriptionWaitStarted = receiverRemoteAudioSubscriptionWaitStarted ||
             receiverRemoteAudioExplicitSubscribeRequested ||
             receiverRemoteAudioPublicationSeen
@@ -5999,9 +6026,12 @@ private extension SalemXVoIPPushReceiptProofSummary {
             receiverRemoteAudioPublicationSubscribedStateBucket = receiverRemoteAudioPublicationSeen ?
                 "publication_seen_unsubscribed_redacted" :
                 "publication_missing_redacted"
+            let publicationMissingClassification = receiverRemoteAudioPublicationObservationFinalClassification == "pending_redacted" ?
+                "remote_audio_subscription_timeout_redacted" :
+                receiverRemoteAudioPublicationObservationFinalClassification
             receiverRemoteAudioSubscriptionFinalClassification = receiverRemoteAudioPublicationSeen ?
                 "remote_audio_publication_seen_but_subscription_missing_redacted" :
-                "remote_audio_subscription_timeout_redacted"
+                publicationMissingClassification
         } else if receiverRemoteAudioPublicationSeen {
             receiverRemoteAudioPublicationSubscribedStateBucket = "publication_seen_unsubscribed_redacted"
             receiverRemoteAudioSubscriptionFinalClassification = receiverRemoteAudioExplicitSubscribeRequested &&
@@ -6020,6 +6050,42 @@ private extension SalemXVoIPPushReceiptProofSummary {
         } else {
             receiverRemoteAudioPublicationSubscribedStateBucket = "unknown_redacted"
             receiverRemoteAudioSubscriptionFinalClassification = "not_started"
+        }
+    }
+
+    mutating func refreshReceiverRemoteAudioPublicationObservationClassification() {
+        receiverRemoteAudioPublicationObservationRepairPresent = true
+        receiverRemoteAudioPublicationObservationRepairDebugOnly = true
+        receiverRemoteAudioPublicationObservationRawIdentifiersLogged = false
+        receiverRemoteAudioPublicationSeen = receiverRemoteAudioPublicationSeen ||
+            receiverRemoteAudioPublicationSeenViaCallback ||
+            receiverRemoteAudioPublicationSeenViaSnapshot ||
+            receiverRemoteAudioPublicationSeenViaReplay ||
+            liveKitRemoteAudioTrackSubscribed ||
+            liveKitRemoteAudioTrackUnmuted ||
+            receiverRemoteAudioTrackSubscribed ||
+            receiverRemoteAudioTrackUnmuted
+
+        if receiverRemoteAudioPublicationSeenViaCallback {
+            receiverRemoteAudioPublicationObservationFinalClassification = "remote_audio_publication_seen_via_callback_redacted"
+        } else if receiverRemoteAudioPublicationSeenViaReplay {
+            receiverRemoteAudioPublicationObservationFinalClassification = "remote_audio_publication_seen_via_replay_redacted"
+        } else if receiverRemoteAudioPublicationSeenViaSnapshot {
+            receiverRemoteAudioPublicationObservationFinalClassification = "remote_audio_publication_seen_via_snapshot_redacted"
+        } else if receiverRemoteAudioPublicationSeen {
+            receiverRemoteAudioPublicationObservationFinalClassification = "remote_audio_publication_seen_via_callback_redacted"
+        } else if senderLocalAudioPublishResult == "success_redacted",
+                  liveKitRemoteParticipantSeen {
+            receiverRemoteAudioPublicationObservationFinalClassification = "remote_audio_publication_missing_after_sender_audio_publish_redacted"
+        } else if liveKitRemoteParticipantSeen {
+            receiverRemoteAudioPublicationObservationFinalClassification = "remote_audio_publication_missing_after_participant_seen_redacted"
+        } else if receiverRemoteAudioPublicationSnapshotRequested,
+                  receiverRemoteAudioPublicationSnapshotCompleted {
+            receiverRemoteAudioPublicationObservationFinalClassification = "remote_audio_publication_filter_mismatch_redacted"
+        } else if receiverRemoteAudioPublicationSnapshotRequested {
+            receiverRemoteAudioPublicationObservationFinalClassification = "pending_redacted"
+        } else {
+            receiverRemoteAudioPublicationObservationFinalClassification = "not_started"
         }
     }
 
@@ -6058,8 +6124,10 @@ private extension SalemXVoIPPushReceiptProofSummary {
         }
 
         if !receiverRemoteAudioPublicationSeen {
-            receiverRemoteAudioLivenessFinalClassification = "remote_audio_publication_missing_redacted"
-            liveKitAudioLivenessErrorBucket = "remote_audio_publication_missing_redacted"
+            receiverRemoteAudioLivenessFinalClassification = receiverRemoteAudioPublicationObservationFinalClassification == "not_started" ?
+                "remote_audio_publication_missing_after_participant_seen_redacted" :
+                receiverRemoteAudioPublicationObservationFinalClassification
+            liveKitAudioLivenessErrorBucket = receiverRemoteAudioLivenessFinalClassification
         } else if !receiverRemoteAudioTrackSubscribed {
             receiverRemoteAudioLivenessFinalClassification =
                 receiverRemoteAudioSubscriptionFinalClassification == "pending_redacted" ?
@@ -7121,10 +7189,14 @@ private extension SalemXVoIPPushReceiptProofSummary {
                                                        audioTrackUnmuted: Bool,
                                                        audioLevelObserved: Bool,
                                                        livenessObserved: Bool,
+                                                       audioPublicationSource: String = "callback_redacted",
                                                        errorBucket: String = "none") {
         liveKitRemoteParticipantSeen = participantSeen
         liveKitRemoteParticipantCountBucket = participantCountBucket
-        receiverRemoteAudioPublicationSeen = receiverRemoteAudioPublicationSeen || audioPublicationSeen || audioTrackSubscribed || audioTrackUnmuted
+        recordReceiverRemoteAudioPublicationObservation(audioPublicationSeen: audioPublicationSeen,
+                                                        audioTrackSubscribed: audioTrackSubscribed,
+                                                        audioTrackUnmuted: audioTrackUnmuted,
+                                                        source: audioPublicationSource)
         liveKitRemoteAudioTrackSubscribed = liveKitRemoteAudioTrackSubscribed || audioTrackSubscribed
         liveKitRemoteAudioTrackUnmuted = liveKitRemoteAudioTrackUnmuted || audioTrackUnmuted
         liveKitRemoteAudioLevelObserved = liveKitRemoteAudioLevelObserved || audioLevelObserved || livenessObserved
@@ -7169,6 +7241,33 @@ private extension SalemXVoIPPushReceiptProofSummary {
         refreshRemoteAudioTrackLivenessClassification()
     }
 
+    mutating func recordReceiverRemoteAudioPublicationObservation(audioPublicationSeen: Bool,
+                                                                  audioTrackSubscribed: Bool,
+                                                                  audioTrackUnmuted: Bool,
+                                                                  source: String) {
+        receiverRemoteAudioPublicationObservationRepairPresent = true
+        receiverRemoteAudioPublicationObservationRepairDebugOnly = true
+        receiverRemoteAudioPublicationObservationRawIdentifiersLogged = false
+        let publicationSeen = audioPublicationSeen || audioTrackSubscribed || audioTrackUnmuted
+        guard publicationSeen else {
+            refreshReceiverRemoteAudioPublicationObservationClassification()
+            return
+        }
+
+        let wasAlreadySeen = receiverRemoteAudioPublicationSeen
+        switch source {
+        case "snapshot_redacted":
+            receiverRemoteAudioPublicationSeenViaSnapshot = true
+            receiverRemoteAudioPublicationSeenViaReplay = receiverRemoteAudioPublicationSeenViaReplay || !wasAlreadySeen
+        case "replay_redacted":
+            receiverRemoteAudioPublicationSeenViaReplay = true
+        default:
+            receiverRemoteAudioPublicationSeenViaCallback = true
+        }
+        receiverRemoteAudioPublicationSeen = true
+        refreshReceiverRemoteAudioPublicationObservationClassification()
+    }
+
     private var shouldCompleteRemoteParticipantObservationAfterRemoteAudioUpdate: Bool {
         if receiverRemoteAudioLivenessObserved || liveKitAudioLivenessObserved {
             return true
@@ -7192,6 +7291,10 @@ private extension SalemXVoIPPushReceiptProofSummary {
         participantObserverPropagationRepairPresent = true
         participantObserverPropagationRepairDebugOnly = true
         participantObserverPropagationRawIdentifiersLogged = false
+        receiverRemoteAudioPublicationObservationRepairPresent = true
+        receiverRemoteAudioPublicationObservationRepairDebugOnly = true
+        receiverRemoteAudioPublicationObservationRawIdentifiersLogged = false
+        receiverRemoteAudioPublicationSnapshotRequested = true
         receiverParticipantSnapshotRequested = true
         receiverParticipantObserverBoundToRetainedRoom = receiverParticipantObserverBoundToRetainedRoom || boundToRetainedRoom
         receiverParticipantObserverBoundToConnectedRoom = receiverParticipantObserverBoundToConnectedRoom || boundToConnectedRoom
@@ -7205,6 +7308,13 @@ private extension SalemXVoIPPushReceiptProofSummary {
         participantObserverPropagationRepairPresent = true
         participantObserverPropagationRepairDebugOnly = true
         participantObserverPropagationRawIdentifiersLogged = false
+        receiverRemoteAudioPublicationObservationRepairPresent = true
+        receiverRemoteAudioPublicationObservationRepairDebugOnly = true
+        receiverRemoteAudioPublicationObservationRawIdentifiersLogged = false
+        receiverRemoteAudioPublicationSnapshotRequested = true
+        receiverRemoteAudioPublicationSnapshotCompleted = true
+        receiverRemoteAudioPublicationSnapshotCountBucket = Self.safeParticipantCountBucket(snapshot.countBucket)
+        receiverRemoteAudioPublicationSnapshotAudioCountBucket = snapshot.audioPublicationSeen ? "1" : "0"
         receiverParticipantSnapshotRequested = true
         receiverParticipantSnapshotCountBucket = Self.safeParticipantCountBucket(snapshot.countBucket)
         receiverParticipantSnapshotSeen = snapshot.participantSeen
@@ -7217,10 +7327,12 @@ private extension SalemXVoIPPushReceiptProofSummary {
                                                  audioTrackSubscribed: snapshot.audioTrackSubscribed,
                                                  audioTrackUnmuted: snapshot.audioTrackUnmuted,
                                                  audioLevelObserved: snapshot.audioLevelObserved,
-                                                 livenessObserved: snapshot.audioLivenessObserved)
+                                                 livenessObserved: snapshot.audioLivenessObserved,
+                                                 audioPublicationSource: "snapshot_redacted")
             recordRemoteParticipantPresenceObservation(participantCountBucket: receiverParticipantSnapshotCountBucket,
                                                        classification: "remote_participant_seen_via_snapshot_redacted")
         } else {
+            refreshReceiverRemoteAudioPublicationObservationClassification()
             refreshReceiverRemoteParticipantObserverClassification()
             refreshRemoteParticipantObservationTimingRepairDiagnostics()
         }
@@ -7349,9 +7461,12 @@ private extension SalemXVoIPPushReceiptProofSummary {
                 nil
         }
         if receiverRemoteAudioSubscriptionWaitTimeout {
+            let publicationMissingClassification = receiverRemoteAudioPublicationObservationFinalClassification == "pending_redacted" ?
+                "remote_audio_subscription_timeout_redacted" :
+                receiverRemoteAudioPublicationObservationFinalClassification
             return receiverRemoteAudioPublicationSeen ?
                 "remote_audio_publication_seen_but_subscription_missing_redacted" :
-                "remote_audio_subscription_timeout_redacted"
+                publicationMissingClassification
         }
         return receiverRemoteAudioSubscriptionWaitStarted ? "remote_audio_liveness_timeout_redacted" : nil
     }
@@ -8806,6 +8921,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var remoteParticipantObservationWindowID: UUID?
     private static var remoteParticipantObservationWindowStartedAt: Date?
     private static var receiverParticipantSnapshotSweepID: UUID?
+    private static var receiverRemoteAudioPublicationSnapshotReplayID: UUID?
     private static var pendingOperatorReadyToAnswer = false
     private static var pendingOperatorExpectedSurface = "unknown"
     private static let pendingForegroundCallMetadataMaxAge: TimeInterval = 120
@@ -10700,6 +10816,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                 remoteParticipantObservationWindowID = nil
                 remoteParticipantObservationWindowStartedAt = nil
                 receiverParticipantSnapshotSweepID = nil
+                receiverRemoteAudioPublicationSnapshotReplayID = nil
                 if summary.remoteParticipantObservationFinalClassification != "pending_redacted" {
                     pendingRemotePeerContextHandoff = nil
                 }
@@ -10735,6 +10852,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             remoteParticipantObservationWindowID = nil
             remoteParticipantObservationWindowStartedAt = nil
             receiverParticipantSnapshotSweepID = nil
+            receiverRemoteAudioPublicationSnapshotReplayID = nil
             lock.unlock()
             return
         }
@@ -10756,6 +10874,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         remoteParticipantObservationWindowID = nil
         remoteParticipantObservationWindowStartedAt = nil
         receiverParticipantSnapshotSweepID = nil
+        receiverRemoteAudioPublicationSnapshotReplayID = nil
         pendingRemotePeerContextHandoff = nil
         let releaseReason = summary.remoteParticipantObservationFinalClassification
         lock.unlock()
@@ -10796,6 +10915,113 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         }
     }
 
+    private static func scheduleReceiverRemoteAudioPublicationSnapshotReplayIfNeeded() {
+        lock.lock()
+        let summary = latestVoIPPushReceiptSummary
+        guard summary.remoteParticipantObservationWaitStarted,
+              !summary.remoteParticipantObservationWaitCompleted,
+              summary.liveKitRemoteParticipantSeen,
+              summary.receiverRemoteAudioSubscriptionWaitStarted,
+              !summary.receiverRemoteAudioPublicationSeen,
+              receiverConnectedSessionLease != nil,
+              receiverRemoteAudioPublicationSnapshotReplayID == nil else {
+            lock.unlock()
+            return
+        }
+
+        let replayID = UUID()
+        receiverRemoteAudioPublicationSnapshotReplayID = replayID
+        lock.unlock()
+
+        requestReceiverRemoteAudioPublicationSnapshotReplayIfCurrent(replayID)
+        [0.75, 1.5, 3.0].forEach { delay in
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                requestReceiverRemoteAudioPublicationSnapshotReplayIfCurrent(replayID)
+            }
+        }
+    }
+
+    private static func requestReceiverRemoteAudioPublicationSnapshotReplayIfCurrent(_ replayID: UUID) {
+        Task { @MainActor in
+            await requestReceiverRemoteAudioPublicationSnapshotReplayIfCurrentOnMain(replayID)
+        }
+    }
+
+    @MainActor
+    private static func requestReceiverRemoteAudioPublicationSnapshotReplayIfCurrentOnMain(_ replayID: UUID) async {
+        lock.lock()
+        guard receiverRemoteAudioPublicationSnapshotReplayID == replayID else {
+            lock.unlock()
+            return
+        }
+
+        var summary = latestVoIPPushReceiptSummary
+        guard summary.remoteParticipantObservationWaitStarted,
+              !summary.remoteParticipantObservationWaitCompleted,
+              summary.liveKitRemoteParticipantSeen,
+              !summary.receiverRemoteAudioPublicationSeen else {
+            receiverRemoteAudioPublicationSnapshotReplayID = nil
+            lock.unlock()
+            return
+        }
+
+        let lease = receiverConnectedSessionLease
+        let boundToRetainedRoom = lease != nil &&
+            summary.receiverConnectedSessionLeaseRoomRetained &&
+            !summary.receiverConnectedSessionLeaseReleased
+        let boundToConnectedRoom = boundToRetainedRoom &&
+            summary.liveKitRoomConnected &&
+            !summary.liveKitRoomDisconnected
+        summary.recordReceiverParticipantSnapshotRequested(boundToRetainedRoom: boundToRetainedRoom,
+                                                           boundToConnectedRoom: boundToConnectedRoom)
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+
+        guard let lease else {
+            return
+        }
+
+        let snapshot = await lease.client.remoteParticipantSnapshot()
+
+        lock.lock()
+        guard receiverRemoteAudioPublicationSnapshotReplayID == replayID else {
+            lock.unlock()
+            return
+        }
+
+        summary = latestVoIPPushReceiptSummary
+        guard summary.remoteParticipantObservationWaitStarted,
+              !summary.remoteParticipantObservationWaitCompleted,
+              summary.liveKitRemoteParticipantSeen else {
+            receiverRemoteAudioPublicationSnapshotReplayID = nil
+            lock.unlock()
+            return
+        }
+
+        summary.recordReceiverParticipantSnapshotObservation(snapshot)
+        let terminal = summary.remoteParticipantObservationWaitCompleted ||
+            summary.receiverRemoteAudioPublicationSeen
+        if terminal {
+            receiverRemoteAudioPublicationSnapshotReplayID = nil
+        }
+        let shouldReleaseLease = summary.remoteParticipantObservationWaitCompleted
+        let releaseReason = summary.remoteParticipantObservationFinalClassification
+        if shouldReleaseLease {
+            receiverParticipantSnapshotSweepID = nil
+            remoteParticipantObservationWindowID = nil
+            remoteParticipantObservationWindowStartedAt = nil
+            receiverRemoteAudioPublicationSnapshotReplayID = nil
+            pendingRemotePeerContextHandoff = nil
+        }
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+        if shouldReleaseLease {
+            releaseReceiverConnectedSessionLease(reason: releaseReason)
+        }
+    }
+
     @MainActor
     private static func requestReceiverParticipantSnapshotIfCurrentOnMain(_ sweepID: UUID) async {
         lock.lock()
@@ -10808,6 +11034,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         guard summary.remoteParticipantObservationWaitStarted,
               !summary.remoteParticipantObservationWaitCompleted else {
             receiverParticipantSnapshotSweepID = nil
+            receiverRemoteAudioPublicationSnapshotReplayID = nil
             lock.unlock()
             return
         }
@@ -10841,6 +11068,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         guard summary.remoteParticipantObservationWaitStarted,
               !summary.remoteParticipantObservationWaitCompleted else {
             receiverParticipantSnapshotSweepID = nil
+            receiverRemoteAudioPublicationSnapshotReplayID = nil
             lock.unlock()
             return
         }
@@ -10852,6 +11080,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             receiverParticipantSnapshotSweepID = nil
             remoteParticipantObservationWindowID = nil
             remoteParticipantObservationWindowStartedAt = nil
+            receiverRemoteAudioPublicationSnapshotReplayID = nil
             pendingRemotePeerContextHandoff = nil
         }
         lock.unlock()
@@ -11340,6 +11569,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         lock.unlock()
         writeVoIPPushReceiptProof(proof)
         scheduleRemoteParticipantObservationTimeoutIfNeeded()
+        scheduleReceiverRemoteAudioPublicationSnapshotReplayIfNeeded()
     }
 
     private static func updateLatestStartupPushKitRegistrySummary(_ summary: SalemXStartupPushKitRegistryProofSummary) {
@@ -11885,6 +12115,7 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
         receiverConnectedSessionLeaseReleased = true
         receiverConnectedWindowRetentionExtensionUsed = false
         receiverParticipantSnapshotSweepID = nil
+        receiverRemoteAudioPublicationSnapshotReplayID = nil
         summary.recordReceiverConnectedSessionLeaseReleased(reason: reason, repeated: repeated)
         lock.unlock()
 
@@ -12021,6 +12252,7 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
             remoteParticipantObservationWindowID = nil
             remoteParticipantObservationWindowStartedAt = nil
             receiverParticipantSnapshotSweepID = nil
+            receiverRemoteAudioPublicationSnapshotReplayID = nil
             pendingRemotePeerContextHandoff = nil
         }
         lock.unlock()
@@ -12055,6 +12287,7 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
             remoteParticipantObservationWindowID = nil
             remoteParticipantObservationWindowStartedAt = nil
             receiverParticipantSnapshotSweepID = nil
+            receiverRemoteAudioPublicationSnapshotReplayID = nil
             pendingRemotePeerContextHandoff = nil
         }
         lock.unlock()
@@ -12090,6 +12323,7 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
             remoteParticipantObservationWindowID = nil
             remoteParticipantObservationWindowStartedAt = nil
             receiverParticipantSnapshotSweepID = nil
+            receiverRemoteAudioPublicationSnapshotReplayID = nil
             pendingRemotePeerContextHandoff = nil
         }
         lock.unlock()

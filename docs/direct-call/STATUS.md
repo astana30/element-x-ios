@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.49A-ReceiverAudioObserverLeaseBindingRepair — Retry30 remains final and must not be rerun. Retry30 proved the receiver/sender LiveKit path through remote participant presence and sender audio publish/microphone, then narrowed the blocker to receiver-side audio observer lease binding/subscription confirmation. The next phase is `2.49A-Physical2-Retry31 — one-shot receiver audio observer lease binding/subscription validation`.
+After 2.49A-TwoSimulatorPublicationObservationAudit — Retry31 remains final and must not be rerun. Retry31 proved receiver/sender LiveKit join, sender audio publish, receiver participant callback, and retained receiver audio observer lease binding, then narrowed the blocker to receiver-side remote audio publication observation. The next phase is `2.49A-Physical2-Retry32 — one-shot remote audio publication snapshot/replay + subscription/liveness validation`.
 
 ## Latest App Code Checkpoint
 
@@ -38,6 +38,79 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Checksum: `654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e`
 
 ## Proven Checkpoints
+
+- 2.49A-TwoSimulatorPublicationObservationAudit closes Retry31 as a final one-shot physical proof and implements the pre-physical simulator-safe publication observation repair:
+  ```text
+  APNs_sent=true
+  background_apns_push_result=sandbox_success
+  physical_voip_push_received=true
+  callkit_answer_action_received=true
+  receiver_post_answer_pending_metadata_fetch_result=success_redacted
+  receiver_post_answer_media_credentials_result=success_redacted
+  receiver_post_answer_controlled_connect_result=success_redacted
+  receiver_post_answer_livekit_join_result=success_redacted
+  sender_runtime_join_executor_invoked=true
+  sender_runtime_join_pending_metadata_fetch_result=success_redacted
+  sender_runtime_join_credentials_result=success_redacted
+  sender_runtime_join_runtime_result=success_redacted
+  sender_livekit_room_connected=true
+  sender_local_audio_publish_requested=true
+  sender_local_audio_publish_allowed=true
+  sender_local_audio_publish_result=success_redacted
+  sender_audio_session_activation_observed=true
+  sender_microphone_permission_result_bucket=success_redacted
+  livekit_remote_participant_seen=true
+  receiver_connected_session_lease_acquired=true
+  receiver_audio_observer_uses_retained_session_lease=true
+  receiver_audio_observer_lease_present_at_attach=true
+  receiver_audio_observer_lease_present_after_participant_seen=true
+  receiver_audio_observer_lease_present_during_subscription_wait=true
+  receiver_audio_observer_lease_released_before_audio_terminal=false
+  receiver_audio_observer_bound_to_same_client_as_receiver_join=true
+  receiver_audio_observer_bound_to_same_client_as_participant_callback=true
+  receiver_audio_observer_bound_to_retained_room=true
+  receiver_audio_observer_bound_to_connected_room=true
+  receiver_remote_audio_publication_seen=false
+  receiver_remote_audio_explicit_subscribe_requested=true
+  receiver_remote_audio_explicit_subscribe_request_result=success_redacted
+  receiver_remote_audio_explicit_subscribe_confirmed=false
+  receiver_remote_audio_subscription_callback_seen=false
+  receiver_remote_audio_track_subscribed=false
+  receiver_remote_audio_liveness_final_classification=remote_audio_publication_missing_redacted
+  first_failed_phase=remote_audio_publication_seen
+  retry31_success=false
+  ```
+  - Exactly one sandbox APNs was sent in Retry31; do not repeat it.
+  - Retry31 was not an APNs, PushKit, CallKit, metadata, credentials, receiver LiveKit join, sender LiveKit join, sender audio-publish, microphone permission, audio-session, or receiver lease-binding failure.
+  - The narrowed blocker is receiver-side remote audio publication observation: the receiver saw the remote participant and retained the connected room, but did not observe the sender audio publication via callback before the bounded audio wait timed out.
+  - The repair adds DEBUG-only publication snapshot/replay proof fields and starts a bounded retained-room snapshot sweep after participant presence when publication is still missing:
+    ```text
+    receiver_remote_audio_publication_observation_repair_present=true
+    receiver_remote_audio_publication_observation_repair_debug_only=true
+    receiver_remote_audio_publication_observation_raw_identifiers_logged=false
+    receiver_remote_audio_publication_snapshot_requested=<runtime>
+    receiver_remote_audio_publication_snapshot_completed=<runtime>
+    receiver_remote_audio_publication_snapshot_count_bucket=<0|1|2+|unknown>
+    receiver_remote_audio_publication_snapshot_audio_count_bucket=<0|1>
+    receiver_remote_audio_publication_seen_via_snapshot=<runtime>
+    receiver_remote_audio_publication_seen_via_callback=<runtime>
+    receiver_remote_audio_publication_seen_via_replay=<runtime>
+    receiver_remote_audio_publication_seen=<runtime>
+    receiver_remote_audio_publication_observation_final_classification=<redacted_bucket>
+    ```
+  - Simulator/audit regression coverage is source/test driven and pre-physical only:
+    | scenario | simulator/audit result | proof fields observed | blocker found | repair |
+    | --- | --- | --- | --- | --- |
+    | publication callback before observer attach | guarded | callback source remains distinct | callback-only accounting can miss state | retained-room replay |
+    | observer before publication callback | guarded | callback source records publication | none | unchanged |
+    | participant seen before sender audio publish | guarded | snapshot requested after participant | publication may arrive late | bounded replay |
+    | sender audio publish before participant terminal | guarded | sender publish success drives missing-after-publish classification | prior generic timeout was too broad | precise classification |
+    | publication exists before wait starts | guarded | snapshot/replay can mark publication seen | missed callback | replay classification |
+    | explicit subscribe request only | guarded | request result remains separate from confirmed subscription | request was previously easy to overread | confirmation remains false until callback/state |
+    | lease retained until audio terminal | guarded | replay IDs clear with observation/lease terminal | stale sweep risk | deterministic cleanup |
+  - Simulator success remains non-physical: `simulator_regression_passed=true` can only mean pre-physical regression passed; `physical_proof_required=true` remains required for iPhone PRO + Carpediem.
+  - Safety preserved during the repair: no APNs, production APNs, `dev/invite`, physical connect, physical LiveKit join, camera/video, Matrix event emission, full flow, or raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room/call/user/device/participant/track identifier logging.
+  - Next phase: `2.49A-Physical2-Retry32 — one-shot remote audio publication snapshot/replay + subscription/liveness validation`.
 
 - 2.49A-ReceiverAudioObserverLeaseBindingRepair closes Retry30 as remote participant + sender audio publish success with receiver audio observer lease-binding blocker, then repairs the DEBUG-only retained-room binding path without APNs/connect:
   ```text
