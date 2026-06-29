@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.49A-ReceiverRemoteAudioSubscriptionRepair — Retry29 remains final and must not be rerun. Retry29 proved the receiver/sender LiveKit path through remote participant presence, sender audio publish, receiver remote audio publication, and unmuted remote audio publication metadata, then narrowed the blocker to receiver-side remote audio subscription/liveness. The next phase is `2.49A-Physical2-Retry30 — one-shot receiver remote audio subscription/liveness validation`.
+After 2.49A-ReceiverAudioObserverLeaseBindingRepair — Retry30 remains final and must not be rerun. Retry30 proved the receiver/sender LiveKit path through remote participant presence and sender audio publish/microphone, then narrowed the blocker to receiver-side audio observer lease binding/subscription confirmation. The next phase is `2.49A-Physical2-Retry31 — one-shot receiver audio observer lease binding/subscription validation`.
 
 ## Latest App Code Checkpoint
 
@@ -38,6 +38,47 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Checksum: `654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e`
 
 ## Proven Checkpoints
+
+- 2.49A-ReceiverAudioObserverLeaseBindingRepair closes Retry30 as remote participant + sender audio publish success with receiver audio observer lease-binding blocker, then repairs the DEBUG-only retained-room binding path without APNs/connect:
+  ```text
+  APNs_sent=true
+  background_apns_push_result=sandbox_success
+  physical_voip_push_received=true
+  callkit_answer_action_received=true
+  receiver_post_answer_pending_metadata_fetch_result=success_redacted
+  receiver_post_answer_media_credentials_result=success_redacted
+  receiver_post_answer_controlled_connect_result=success_redacted
+  receiver_post_answer_livekit_join_result=success_redacted
+  controlled_connect_first_attempt_result=success_redacted
+  livekit_join_result=success_redacted
+  sender_runtime_join_executor_invoked=true
+  sender_runtime_join_pending_metadata_fetch_result=success_redacted
+  sender_runtime_join_credentials_result=success_redacted
+  sender_runtime_join_runtime_result=success_redacted
+  sender_livekit_room_connected=true
+  sender_local_audio_publish_result=success_redacted
+  sender_local_audio_muted_state_bucket=unmuted_redacted
+  sender_audio_session_activation_observed=true
+  sender_microphone_permission_result_bucket=success_redacted
+  livekit_remote_participant_seen=true
+  receiver_connected_session_lease_acquired=false
+  receiver_remote_audio_observer_bound_to_retained_room=false
+  receiver_remote_audio_observer_bound_to_connected_room=false
+  receiver_remote_audio_publication_seen=false
+  receiver_remote_audio_explicit_subscribe_requested=true
+  receiver_remote_audio_explicit_subscribe_result=success_redacted
+  receiver_remote_audio_subscription_callback_seen=false
+  receiver_remote_audio_track_subscribed=false
+  receiver_remote_audio_subscription_final_classification=remote_audio_subscription_timeout_redacted
+  receiver_remote_audio_liveness_final_classification=remote_audio_observer_not_bound_to_connected_room_redacted
+  retry30_success=false
+  ```
+  - Exactly one sandbox APNs was sent in Retry30; do not repeat it.
+  - Retry30 was not an APNs, PushKit, CallKit, metadata, credentials, receiver LiveKit join, sender LiveKit join, sender audio publish, microphone permission, or audio-session failure.
+  - The narrowed blocker is receiver-side audio observer/subscription binding to the retained connected receiver room/client. `receiver_remote_audio_explicit_subscribe_result=success_redacted` is now treated as request accepted, not subscription confirmed.
+  - The repair records `receiver_audio_observer_lease_binding_*` proof fields, acquires and records the retained receiver lease before requesting remote audio playback, distinguishes subscribe request result from subscription confirmation, and defers receiver lease cleanup until remote audio subscription/liveness reaches success or bounded timeout.
+  - Safety preserved during the repair: no APNs, production APNs, `dev/invite`, physical connect, physical LiveKit join, camera/video, Matrix event emission, full flow, or raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room/call/user/device/participant/track identifier logging.
+  - Next phase: `2.49A-Physical2-Retry31 — one-shot receiver audio observer lease binding/subscription validation`.
 
 - 2.49A-ReceiverRemoteAudioSubscriptionRepair closes Retry29 as remote audio publication/unmuted proof success with receiver subscription/liveness blocker, then repairs the DEBUG-only receiver subscription path without APNs/connect:
   ```text

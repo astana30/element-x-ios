@@ -2,6 +2,74 @@
 
 This file records durable phase-level progress for future Codex and strategy sessions.
 
+## 2026-06-29 — 2.49A-ReceiverAudioObserverLeaseBindingRepair
+
+Closed Retry30 as a final one-shot physical proof and implemented the no-APNs receiver audio observer lease-binding repair for the next run.
+
+Retry30 proved:
+
+```text
+APNs_sent=true
+background_apns_push_result=sandbox_success
+physical_voip_push_received=true
+callkit_answer_action_received=true
+receiver_post_answer_pending_metadata_fetch_result=success_redacted
+receiver_post_answer_media_credentials_result=success_redacted
+receiver_post_answer_controlled_connect_result=success_redacted
+receiver_post_answer_livekit_join_result=success_redacted
+controlled_connect_first_attempt_result=success_redacted
+livekit_join_result=success_redacted
+sender_runtime_join_executor_invoked=true
+sender_runtime_join_pending_metadata_fetch_result=success_redacted
+sender_runtime_join_credentials_result=success_redacted
+sender_runtime_join_runtime_result=success_redacted
+sender_livekit_room_connected=true
+sender_local_audio_publish_requested=true
+sender_local_audio_publish_allowed=true
+sender_local_audio_publish_result=success_redacted
+sender_local_audio_muted_state_bucket=unmuted_redacted
+sender_audio_session_activation_observed=true
+sender_microphone_permission_requested=true
+sender_microphone_permission_result_bucket=success_redacted
+livekit_remote_participant_seen=true
+```
+
+Retry30 blocker:
+
+```text
+receiver_connected_session_lease_acquired=false
+receiver_remote_audio_observer_bound_to_retained_room=false
+receiver_remote_audio_observer_bound_to_connected_room=false
+receiver_remote_audio_publication_seen=false
+receiver_remote_audio_explicit_subscribe_requested=true
+receiver_remote_audio_explicit_subscribe_result=success_redacted
+receiver_remote_audio_subscription_callback_seen=false
+receiver_remote_audio_track_subscribed=false
+receiver_remote_audio_subscription_wait_timeout=true
+receiver_remote_audio_subscription_final_classification=remote_audio_subscription_timeout_redacted
+receiver_remote_audio_liveness_final_classification=remote_audio_observer_not_bound_to_connected_room_redacted
+retry30_success=false
+```
+
+Root cause / narrowed diagnosis:
+- the receiver controlled connect requested remote audio playback before the retained receiver lease was installed in runtime/proof state
+- participant observation could release the receiver room before remote audio subscription/liveness reached a terminal proof
+- explicit subscribe `success_redacted` meant request accepted, not subscription confirmed
+
+What changed:
+- receiver controlled runtime connect now records the retained receiver lease before requesting remote audio playback
+- the subscribe wait is marked before awaiting LiveKit subscription work
+- receiver proof records `receiver_audio_observer_lease_binding_*` booleans for retained lease, connected room, callback client, and early release
+- explicit subscribe now has separate request-result and confirmed fields
+- receiver lease cleanup is deferred until remote audio subscription/liveness succeeds or times out
+
+Safety:
+- exactly one sandbox APNs was sent in Retry30; do not repeat it
+- no APNs, production APNs, `dev/invite`, physical connect, physical LiveKit join, camera/video, Matrix event emission, or full flow was performed during this repair
+- no raw token, JWT, authorization header, APNs payload, invite body, LiveKit URL, room ID, call ID, user ID, device ID, participant identity, track SID, pending metadata, or private log exposure
+
+Next phase: `2.49A-Physical2-Retry31 — one-shot receiver audio observer lease binding/subscription validation`.
+
 ## 2026-06-29 — 2.49A-ReceiverRemoteAudioSubscriptionRepair
 
 Closed Retry29 as a final one-shot physical proof and implemented the no-APNs receiver subscription repair for the next run.

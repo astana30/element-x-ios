@@ -3898,6 +3898,19 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var remoteAudioTrackLivenessProofPresent = true
     var remoteAudioTrackLivenessProofDebugOnly = true
     var remoteAudioTrackLivenessRawIdentifiersLogged = false
+    var receiverAudioObserverLeaseBindingRepairPresent = true
+    var receiverAudioObserverLeaseBindingRepairDebugOnly = true
+    var receiverAudioObserverLeaseBindingRawIdentifiersLogged = false
+    var receiverAudioObserverUsesRetainedSessionLease = false
+    var receiverAudioObserverLeasePresentAtAttach = false
+    var receiverAudioObserverLeasePresentAfterParticipantSeen = false
+    var receiverAudioObserverLeasePresentDuringSubscriptionWait = false
+    var receiverAudioObserverLeaseReleasedBeforeAudioTerminal = false
+    var receiverAudioObserverBoundToSameClientAsReceiverJoin = false
+    var receiverAudioObserverBoundToSameClientAsParticipantCallback = false
+    var receiverAudioObserverBoundToRetainedRoom = false
+    var receiverAudioObserverBoundToConnectedRoom = false
+    var receiverAudioObserverLeaseBindingFinalClassification = "not_started"
     var remoteParticipantPresenceRepairPresent = true
     var remoteParticipantPresenceRepairDebugOnly = true
     var remoteParticipantPresenceRepairRequiresTwoPhysicalDevices = true
@@ -4284,7 +4297,9 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var receiverRemoteAudioPublicationSeen = false
     var receiverRemoteAudioPublicationSubscribedStateBucket = "unknown_redacted"
     var receiverRemoteAudioExplicitSubscribeRequested = false
+    var receiverRemoteAudioExplicitSubscribeRequestResult = "not_requested"
     var receiverRemoteAudioExplicitSubscribeResult = "not_requested"
+    var receiverRemoteAudioExplicitSubscribeConfirmed = false
     var receiverRemoteAudioSubscriptionCallbackSeen = false
     var receiverRemoteAudioTrackSubscribed = false
     var receiverRemoteAudioTrackUnmuted = false
@@ -4937,6 +4952,19 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "remote_audio_track_liveness_proof_present=\(remoteAudioTrackLivenessProofPresent)",
             "remote_audio_track_liveness_proof_debug_only=\(remoteAudioTrackLivenessProofDebugOnly)",
             "remote_audio_track_liveness_raw_identifiers_logged=\(remoteAudioTrackLivenessRawIdentifiersLogged)",
+            "receiver_audio_observer_lease_binding_repair_present=\(receiverAudioObserverLeaseBindingRepairPresent)",
+            "receiver_audio_observer_lease_binding_repair_debug_only=\(receiverAudioObserverLeaseBindingRepairDebugOnly)",
+            "receiver_audio_observer_lease_binding_raw_identifiers_logged=\(receiverAudioObserverLeaseBindingRawIdentifiersLogged)",
+            "receiver_audio_observer_uses_retained_session_lease=\(receiverAudioObserverUsesRetainedSessionLease)",
+            "receiver_audio_observer_lease_present_at_attach=\(receiverAudioObserverLeasePresentAtAttach)",
+            "receiver_audio_observer_lease_present_after_participant_seen=\(receiverAudioObserverLeasePresentAfterParticipantSeen)",
+            "receiver_audio_observer_lease_present_during_subscription_wait=\(receiverAudioObserverLeasePresentDuringSubscriptionWait)",
+            "receiver_audio_observer_lease_released_before_audio_terminal=\(receiverAudioObserverLeaseReleasedBeforeAudioTerminal)",
+            "receiver_audio_observer_bound_to_same_client_as_receiver_join=\(receiverAudioObserverBoundToSameClientAsReceiverJoin)",
+            "receiver_audio_observer_bound_to_same_client_as_participant_callback=\(receiverAudioObserverBoundToSameClientAsParticipantCallback)",
+            "receiver_audio_observer_bound_to_retained_room=\(receiverAudioObserverBoundToRetainedRoom)",
+            "receiver_audio_observer_bound_to_connected_room=\(receiverAudioObserverBoundToConnectedRoom)",
+            "receiver_audio_observer_lease_binding_final_classification=\(receiverAudioObserverLeaseBindingFinalClassification)",
             "remote_participant_presence_repair_present=\(remoteParticipantPresenceRepairPresent)",
             "remote_participant_presence_repair_debug_only=\(remoteParticipantPresenceRepairDebugOnly)",
             "remote_participant_presence_repair_requires_two_physical_devices=\(remoteParticipantPresenceRepairRequiresTwoPhysicalDevices)",
@@ -5325,7 +5353,9 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "receiver_remote_audio_publication_seen=\(receiverRemoteAudioPublicationSeen)",
             "receiver_remote_audio_publication_subscribed_state_bucket=\(receiverRemoteAudioPublicationSubscribedStateBucket)",
             "receiver_remote_audio_explicit_subscribe_requested=\(receiverRemoteAudioExplicitSubscribeRequested)",
+            "receiver_remote_audio_explicit_subscribe_request_result=\(receiverRemoteAudioExplicitSubscribeRequestResult)",
             "receiver_remote_audio_explicit_subscribe_result=\(receiverRemoteAudioExplicitSubscribeResult)",
+            "receiver_remote_audio_explicit_subscribe_confirmed=\(receiverRemoteAudioExplicitSubscribeConfirmed)",
             "receiver_remote_audio_subscription_callback_seen=\(receiverRemoteAudioSubscriptionCallbackSeen)",
             "receiver_remote_audio_track_subscribed=\(receiverRemoteAudioTrackSubscribed)",
             "receiver_remote_audio_track_unmuted=\(receiverRemoteAudioTrackUnmuted)",
@@ -5761,6 +5791,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
             (receiverConnectedSessionLeaseRoomRetained && receiverRemoteParticipantObserverStarted)
         receiverRemoteAudioObserverBoundToConnectedRoom = receiverRemoteAudioObserverBoundToConnectedRoom ||
             (receiverRemoteAudioObserverBoundToRetainedRoom && liveKitRoomConnected && !liveKitRoomDisconnected)
+        refreshReceiverAudioObserverLeaseBindingDiagnostics()
         receiverRemoteAudioObserverAttachedAfterParticipantSeen = receiverRemoteAudioObserverAttachedAfterParticipantSeen ||
             (liveKitRemoteParticipantSeen && receiverRemoteParticipantObserverStarted)
         receiverRemoteAudioPublicationSeen = receiverRemoteAudioPublicationSeen || liveKitRemoteAudioTrackSubscribed || liveKitRemoteAudioTrackUnmuted
@@ -5811,6 +5842,9 @@ private extension SalemXVoIPPushReceiptProofSummary {
         remoteAudioTrackLivenessProofPresent = true
         remoteAudioTrackLivenessProofDebugOnly = true
         remoteAudioTrackLivenessRawIdentifiersLogged = false
+        receiverAudioObserverLeaseBindingRepairPresent = true
+        receiverAudioObserverLeaseBindingRepairDebugOnly = true
+        receiverAudioObserverLeaseBindingRawIdentifiersLogged = false
         receiverRemoteAudioSubscriptionRepairPresent = true
         receiverRemoteAudioSubscriptionRepairDebugOnly = true
         receiverRemoteAudioSubscriptionRawIdentifiersLogged = false
@@ -5824,10 +5858,126 @@ private extension SalemXVoIPPushReceiptProofSummary {
         remotePeerContextHandoffClassifiesSimulatorLimitation = true
     }
 
+    private var receiverAudioObservationTerminal: Bool {
+        receiverRemoteAudioSubscriptionWaitCompleted ||
+            receiverRemoteAudioSubscriptionWaitTimeout ||
+            receiverRemoteAudioLivenessWaitCompleted ||
+            receiverRemoteAudioLivenessWaitTimeout ||
+            receiverRemoteAudioLivenessObserved ||
+            liveKitAudioLivenessObserved
+    }
+
+    var shouldDeferReceiverConnectedSessionLeaseReleaseForAudioTerminal: Bool {
+        receiverConnectedSessionLeaseAcquired &&
+            receiverConnectedSessionLeaseRoomRetained &&
+            !receiverConnectedSessionLeaseReleased &&
+            (receiverRemoteAudioSubscriptionWaitStarted ||
+                receiverRemoteAudioLivenessWaitStarted ||
+                liveKitRemoteParticipantSeen) &&
+            !receiverAudioObservationTerminal
+    }
+
+    mutating func recordReceiverConnectedSessionLeaseReleaseDeferredForAudioTerminal(reason _: String) {
+        receiverAudioObserverLeaseBindingRepairPresent = true
+        receiverAudioObserverLeaseBindingRepairDebugOnly = true
+        receiverAudioObserverLeaseBindingRawIdentifiersLogged = false
+        receiverAudioObserverLeaseReleasedBeforeAudioTerminal = false
+        receiverConnectedSessionLeaseReleaseReason = "deferred_until_audio_terminal_redacted"
+        liveKitCleanupRequested = false
+        liveKitCleanupCompleted = false
+        liveKitCleanupResult = "deferred_until_audio_terminal_redacted"
+        receiverCleanupDeferredUntilObservationTerminal = true
+        refreshReceiverAudioObserverLeaseBindingDiagnostics()
+    }
+
+    mutating func recordReceiverAudioObserverLeaseBinding(leasePresent: Bool,
+                                                          boundToConnectedRoom: Bool,
+                                                          atAttach: Bool = false,
+                                                          afterParticipantSeen: Bool = false,
+                                                          duringSubscriptionWait: Bool = false,
+                                                          sameClientAsParticipantCallback: Bool = false) {
+        receiverAudioObserverLeaseBindingRepairPresent = true
+        receiverAudioObserverLeaseBindingRepairDebugOnly = true
+        receiverAudioObserverLeaseBindingRawIdentifiersLogged = false
+        receiverAudioObserverUsesRetainedSessionLease = receiverAudioObserverUsesRetainedSessionLease || leasePresent
+        receiverAudioObserverLeasePresentAtAttach = receiverAudioObserverLeasePresentAtAttach || (atAttach && leasePresent)
+        receiverAudioObserverLeasePresentAfterParticipantSeen = receiverAudioObserverLeasePresentAfterParticipantSeen ||
+            (afterParticipantSeen && leasePresent)
+        receiverAudioObserverLeasePresentDuringSubscriptionWait = receiverAudioObserverLeasePresentDuringSubscriptionWait ||
+            (duringSubscriptionWait && leasePresent)
+        receiverAudioObserverBoundToSameClientAsReceiverJoin = receiverAudioObserverBoundToSameClientAsReceiverJoin ||
+            leasePresent
+        receiverAudioObserverBoundToSameClientAsParticipantCallback = receiverAudioObserverBoundToSameClientAsParticipantCallback ||
+            (sameClientAsParticipantCallback && leasePresent)
+        receiverAudioObserverBoundToRetainedRoom = receiverAudioObserverBoundToRetainedRoom || leasePresent
+        receiverAudioObserverBoundToConnectedRoom = receiverAudioObserverBoundToConnectedRoom ||
+            (leasePresent && boundToConnectedRoom)
+        receiverRemoteAudioObserverBoundToRetainedRoom = receiverRemoteAudioObserverBoundToRetainedRoom || leasePresent
+        receiverRemoteAudioObserverBoundToConnectedRoom = receiverRemoteAudioObserverBoundToConnectedRoom ||
+            (leasePresent && boundToConnectedRoom)
+        refreshReceiverAudioObserverLeaseBindingDiagnostics()
+    }
+
+    mutating func refreshReceiverAudioObserverLeaseBindingDiagnostics() {
+        receiverAudioObserverLeaseBindingRepairPresent = true
+        receiverAudioObserverLeaseBindingRepairDebugOnly = true
+        receiverAudioObserverLeaseBindingRawIdentifiersLogged = false
+
+        let leaseActive = receiverConnectedSessionLeaseAcquired &&
+            receiverConnectedSessionLeaseRoomRetained &&
+            !receiverConnectedSessionLeaseReleased
+        receiverAudioObserverUsesRetainedSessionLease = receiverAudioObserverUsesRetainedSessionLease ||
+            receiverRemoteAudioObserverBoundToRetainedRoom ||
+            receiverAudioObserverBoundToRetainedRoom
+        receiverAudioObserverLeasePresentAtAttach = receiverAudioObserverLeasePresentAtAttach ||
+            (receiverRemoteParticipantObserverStarted && leaseActive)
+        receiverAudioObserverLeasePresentAfterParticipantSeen = receiverAudioObserverLeasePresentAfterParticipantSeen ||
+            (liveKitRemoteParticipantSeen && leaseActive)
+        receiverAudioObserverLeasePresentDuringSubscriptionWait = receiverAudioObserverLeasePresentDuringSubscriptionWait ||
+            (receiverRemoteAudioSubscriptionWaitStarted && leaseActive)
+        receiverAudioObserverLeaseReleasedBeforeAudioTerminal = receiverAudioObserverLeaseReleasedBeforeAudioTerminal ||
+            (receiverConnectedSessionLeaseReleased &&
+                (receiverRemoteAudioSubscriptionWaitStarted || receiverRemoteAudioLivenessWaitStarted) &&
+                !receiverAudioObservationTerminal)
+        receiverAudioObserverBoundToSameClientAsReceiverJoin = receiverAudioObserverBoundToSameClientAsReceiverJoin ||
+            receiverAudioObserverLeasePresentAtAttach ||
+            leaseActive
+        receiverAudioObserverBoundToSameClientAsParticipantCallback = receiverAudioObserverBoundToSameClientAsParticipantCallback ||
+            (receiverParticipantEventCallbackSeen && leaseActive)
+        receiverAudioObserverBoundToRetainedRoom = receiverAudioObserverBoundToRetainedRoom ||
+            receiverRemoteAudioObserverBoundToRetainedRoom ||
+            leaseActive
+        receiverAudioObserverBoundToConnectedRoom = receiverAudioObserverBoundToConnectedRoom ||
+            receiverRemoteAudioObserverBoundToConnectedRoom ||
+            (receiverAudioObserverBoundToRetainedRoom && liveKitRoomConnected && !liveKitRoomDisconnected)
+        receiverRemoteAudioObserverBoundToRetainedRoom = receiverRemoteAudioObserverBoundToRetainedRoom ||
+            receiverAudioObserverBoundToRetainedRoom
+        receiverRemoteAudioObserverBoundToConnectedRoom = receiverRemoteAudioObserverBoundToConnectedRoom ||
+            receiverAudioObserverBoundToConnectedRoom
+
+        if receiverAudioObserverLeaseReleasedBeforeAudioTerminal {
+            receiverAudioObserverLeaseBindingFinalClassification = "receiver_audio_observer_lease_released_before_audio_terminal_redacted"
+        } else if receiverRemoteAudioSubscriptionWaitStarted, !receiverAudioObserverLeasePresentAtAttach {
+            receiverAudioObserverLeaseBindingFinalClassification = "receiver_audio_observer_lease_missing_at_attach_redacted"
+        } else if receiverAudioObserverBoundToRetainedRoom,
+                  receiverAudioObserverBoundToConnectedRoom,
+                  receiverAudioObserverBoundToSameClientAsReceiverJoin {
+            receiverAudioObserverLeaseBindingFinalClassification = "receiver_audio_observer_bound_to_retained_connected_room_redacted"
+        } else if receiverAudioObserverUsesRetainedSessionLease,
+                  !receiverAudioObserverBoundToSameClientAsReceiverJoin {
+            receiverAudioObserverLeaseBindingFinalClassification = "receiver_audio_observer_stale_client_redacted"
+        } else if receiverRemoteAudioSubscriptionWaitStarted {
+            receiverAudioObserverLeaseBindingFinalClassification = "pending_redacted"
+        } else {
+            receiverAudioObserverLeaseBindingFinalClassification = "not_started"
+        }
+    }
+
     mutating func refreshReceiverRemoteAudioSubscriptionClassification() {
         receiverRemoteAudioSubscriptionRepairPresent = true
         receiverRemoteAudioSubscriptionRepairDebugOnly = true
         receiverRemoteAudioSubscriptionRawIdentifiersLogged = false
+        refreshReceiverAudioObserverLeaseBindingDiagnostics()
         receiverRemoteAudioSubscriptionWaitStarted = receiverRemoteAudioSubscriptionWaitStarted ||
             receiverRemoteAudioExplicitSubscribeRequested ||
             receiverRemoteAudioPublicationSeen
@@ -5841,9 +5991,10 @@ private extension SalemXVoIPPushReceiptProofSummary {
             receiverRemoteAudioPublicationSubscribedStateBucket = "subscribed_redacted"
             receiverRemoteAudioSubscriptionWaitCompleted = true
             receiverRemoteAudioSubscriptionWaitTimeout = false
+            receiverRemoteAudioExplicitSubscribeConfirmed = true
             receiverRemoteAudioSubscriptionFinalClassification = receiverRemoteAudioSubscriptionCallbackSeen ?
                 "remote_audio_subscription_observed_redacted" :
-                "remote_audio_explicit_subscription_success_redacted"
+                "remote_audio_explicit_subscription_confirmed_redacted"
         } else if receiverRemoteAudioSubscriptionWaitTimeout {
             receiverRemoteAudioPublicationSubscribedStateBucket = receiverRemoteAudioPublicationSeen ?
                 "publication_seen_unsubscribed_redacted" :
@@ -5859,7 +6010,13 @@ private extension SalemXVoIPPushReceiptProofSummary {
                 "pending_redacted"
         } else if receiverRemoteAudioExplicitSubscribeRequested, !receiverRemoteAudioAutoSubscribeEnabled {
             receiverRemoteAudioPublicationSubscribedStateBucket = "publication_missing_redacted"
-            receiverRemoteAudioSubscriptionFinalClassification = "remote_audio_auto_subscribe_disabled_redacted"
+            if receiverRemoteAudioExplicitSubscribeRequestResult == "success_redacted" {
+                receiverRemoteAudioSubscriptionFinalClassification = "remote_audio_subscription_request_only_redacted"
+            } else if receiverRemoteAudioExplicitSubscribeRequestResult == "failed_redacted" {
+                receiverRemoteAudioSubscriptionFinalClassification = "remote_audio_auto_subscribe_disabled_redacted"
+            } else {
+                receiverRemoteAudioSubscriptionFinalClassification = "pending_redacted"
+            }
         } else {
             receiverRemoteAudioPublicationSubscribedStateBucket = "unknown_redacted"
             receiverRemoteAudioSubscriptionFinalClassification = "not_started"
@@ -5893,7 +6050,9 @@ private extension SalemXVoIPPushReceiptProofSummary {
 
         if liveKitJoinResult == "success_redacted",
            !receiverRemoteAudioObserverBoundToConnectedRoom {
-            receiverRemoteAudioLivenessFinalClassification = "remote_audio_observer_not_bound_to_connected_room_redacted"
+            receiverRemoteAudioLivenessFinalClassification = receiverAudioObserverLeaseBindingFinalClassification == "not_started" ?
+                "remote_audio_observer_not_bound_to_connected_room_redacted" :
+                receiverAudioObserverLeaseBindingFinalClassification
             liveKitAudioLivenessErrorBucket = receiverRemoteAudioLivenessFinalClassification
             return
         }
@@ -6814,6 +6973,21 @@ private extension SalemXVoIPPushReceiptProofSummary {
         liveKitLocalParticipantPresent = succeeded
     }
 
+    mutating func recordReceiverRemoteAudioExplicitSubscribeStarted() {
+        receiverRemoteAudioSubscriptionRepairPresent = true
+        receiverRemoteAudioSubscriptionRepairDebugOnly = true
+        receiverRemoteAudioSubscriptionRawIdentifiersLogged = false
+        receiverRemoteAudioAutoSubscribeEnabled = false
+        receiverRemoteAudioExplicitSubscribeRequested = true
+        receiverRemoteAudioExplicitSubscribeRequestResult = "pending_redacted"
+        receiverRemoteAudioExplicitSubscribeResult = "pending_redacted"
+        receiverRemoteAudioSubscriptionWaitStarted = true
+        receiverRemoteAudioSubscriptionWaitCompleted = false
+        receiverRemoteAudioSubscriptionWaitTimeout = false
+        refreshReceiverRemoteAudioSubscriptionClassification()
+        refreshRemoteAudioTrackLivenessClassification()
+    }
+
     mutating func recordReceiverRemoteAudioExplicitSubscribeResult(_ result: Result<Void, DirectCallMediaError>) {
         receiverRemoteAudioSubscriptionRepairPresent = true
         receiverRemoteAudioSubscriptionRepairDebugOnly = true
@@ -6823,8 +6997,10 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverRemoteAudioSubscriptionWaitStarted = true
         switch result {
         case .success:
+            receiverRemoteAudioExplicitSubscribeRequestResult = "success_redacted"
             receiverRemoteAudioExplicitSubscribeResult = "success_redacted"
         case .failure:
+            receiverRemoteAudioExplicitSubscribeRequestResult = "failed_redacted"
             receiverRemoteAudioExplicitSubscribeResult = "failed_redacted"
         }
         refreshReceiverRemoteAudioSubscriptionClassification()
@@ -6839,6 +7015,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverRemoteAudioSubscriptionWaitStarted = true
         receiverRemoteAudioSubscriptionWaitCompleted = true
         receiverRemoteAudioSubscriptionWaitTimeout = false
+        receiverRemoteAudioExplicitSubscribeConfirmed = true
         refreshReceiverRemoteAudioSubscriptionClassification()
         refreshRemoteAudioTrackLivenessClassification()
     }
@@ -6962,6 +7139,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverRemoteAudioObserverBoundToConnectedRoom = receiverRemoteAudioObserverBoundToConnectedRoom ||
             receiverParticipantObserverBoundToConnectedRoom ||
             (receiverRemoteAudioObserverBoundToRetainedRoom && liveKitRoomConnected && !liveKitRoomDisconnected)
+        refreshReceiverAudioObserverLeaseBindingDiagnostics()
         receiverRemoteAudioObserverAttachedAfterParticipantSeen = receiverRemoteAudioObserverAttachedAfterParticipantSeen ||
             (participantSeen && receiverRemoteParticipantObserverStarted)
         receiverRemoteAudioLivenessWaitStarted = receiverRemoteAudioLivenessWaitStarted || participantSeen
@@ -7153,6 +7331,17 @@ private extension SalemXVoIPPushReceiptProofSummary {
     private func remoteAudioObservationTimeoutClassification() -> String? {
         if receiverRemoteAudioLivenessObserved || liveKitAudioLivenessObserved {
             return "remote_audio_liveness_observed_redacted"
+        }
+        if receiverAudioObserverLeaseReleasedBeforeAudioTerminal {
+            return "receiver_audio_observer_lease_released_before_audio_terminal_redacted"
+        }
+        if receiverRemoteAudioSubscriptionWaitStarted,
+           !receiverAudioObserverLeasePresentAtAttach {
+            return "receiver_audio_observer_lease_missing_at_attach_redacted"
+        }
+        if receiverAudioObserverUsesRetainedSessionLease,
+           !receiverAudioObserverBoundToSameClientAsReceiverJoin {
+            return "receiver_audio_observer_stale_client_redacted"
         }
         if receiverRemoteAudioTrackSubscribed {
             return receiverRemoteAudioLivenessWaitTimeout ?
@@ -7756,6 +7945,9 @@ private extension SalemXVoIPPushReceiptProofSummary {
         liveKitRoomDisconnected = false
         liveKitLocalParticipantPresent = true
         receiverRemoteParticipantObserverStarted = true
+        recordReceiverAudioObserverLeaseBinding(leasePresent: true,
+                                                boundToConnectedRoom: true,
+                                                atAttach: true)
         remoteParticipantObservationWaitStarted = true
         if remoteParticipantObservationTimeoutBucket == "not_started" {
             remoteParticipantObservationTimeoutBucket = "pending_redacted"
@@ -7817,6 +8009,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         liveKitCleanupCompleted = true
         liveKitCleanupResult = "completed_redacted"
         recordReceiverConnectedWindowClosed(reason: reason)
+        refreshReceiverAudioObserverLeaseBindingDiagnostics()
         refreshReceiverRemoteParticipantObserverClassification()
         refreshRemoteParticipantObservationTimingRepairDiagnostics()
     }
@@ -11625,7 +11818,6 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
 
         switch result {
         case .success:
-            let remoteAudioSubscriptionResult = await client.setRemoteAudioPlaybackEnabled(true)
             let lease = SalemXReceiverConnectedSessionLease(callID: session.callID,
                                                             client: client,
                                                             e2eeContextProvider: e2eeContextProvider,
@@ -11636,6 +11828,21 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
             var summary = latestVoIPPushReceiptSummary
             summary.recordReceiverControlledRuntimeConnectResult(succeeded: true, errorBucket: "none")
             summary.recordReceiverConnectedSessionLeaseAcquired(taskRetained: receiverConnectedSessionLeaseTask != nil)
+            summary.recordReceiverAudioObserverLeaseBinding(leasePresent: true,
+                                                            boundToConnectedRoom: true,
+                                                            duringSubscriptionWait: true)
+            summary.recordReceiverRemoteAudioExplicitSubscribeStarted()
+            lock.unlock()
+
+            updateLatestVoIPPushReceiptSummary(summary)
+
+            let remoteAudioSubscriptionResult = await client.setRemoteAudioPlaybackEnabled(true)
+            lock.lock()
+            let leasePresent = receiverConnectedSessionLease != nil && !receiverConnectedSessionLeaseReleased
+            summary = latestVoIPPushReceiptSummary
+            summary.recordReceiverAudioObserverLeaseBinding(leasePresent: leasePresent,
+                                                            boundToConnectedRoom: leasePresent,
+                                                            duringSubscriptionWait: true)
             summary.recordReceiverRemoteAudioExplicitSubscribeResult(remoteAudioSubscriptionResult)
             lock.unlock()
 
@@ -11662,6 +11869,15 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
     @MainActor
     private static func releaseReceiverConnectedSessionLease(reason: String) {
         lock.lock()
+        var summary = latestVoIPPushReceiptSummary
+        if summary.shouldDeferReceiverConnectedSessionLeaseReleaseForAudioTerminal {
+            summary.recordReceiverConnectedSessionLeaseReleaseDeferredForAudioTerminal(reason: reason)
+            lock.unlock()
+
+            updateLatestVoIPPushReceiptSummary(summary)
+            return
+        }
+
         let lease = receiverConnectedSessionLease
         let repeated = receiverConnectedSessionLeaseReleased
         receiverConnectedSessionLease = nil
@@ -11669,7 +11885,6 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
         receiverConnectedSessionLeaseReleased = true
         receiverConnectedWindowRetentionExtensionUsed = false
         receiverParticipantSnapshotSweepID = nil
-        var summary = latestVoIPPushReceiptSummary
         summary.recordReceiverConnectedSessionLeaseReleased(reason: reason, repeated: repeated)
         lock.unlock()
 
@@ -11760,7 +11975,11 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
 
     static func recordReceiverRemoteAudioSubscriptionCallback() {
         lock.lock()
+        let leasePresent = receiverConnectedSessionLease != nil && !receiverConnectedSessionLeaseReleased
         var summary = latestVoIPPushReceiptSummary
+        summary.recordReceiverAudioObserverLeaseBinding(leasePresent: leasePresent,
+                                                        boundToConnectedRoom: leasePresent,
+                                                        duringSubscriptionWait: true)
         summary.recordReceiverRemoteAudioSubscriptionCallback()
         lock.unlock()
 
@@ -11782,7 +12001,13 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
         }
 
         lock.lock()
+        let leasePresent = receiverConnectedSessionLease != nil && !receiverConnectedSessionLeaseReleased
         var summary = latestVoIPPushReceiptSummary
+        summary.recordReceiverAudioObserverLeaseBinding(leasePresent: leasePresent,
+                                                        boundToConnectedRoom: leasePresent,
+                                                        afterParticipantSeen: true,
+                                                        duringSubscriptionWait: true,
+                                                        sameClientAsParticipantCallback: true)
         summary.recordRemoteAudioLivenessObservation(participantSeen: true,
                                                      participantCountBucket: safeParticipantCountBucket,
                                                      audioPublicationSeen: audioPublicationSeen,
@@ -11810,7 +12035,13 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
 
     static func recordReceiverRemoteAudioLivenessFrame() {
         lock.lock()
+        let leasePresent = receiverConnectedSessionLease != nil && !receiverConnectedSessionLeaseReleased
         var summary = latestVoIPPushReceiptSummary
+        summary.recordReceiverAudioObserverLeaseBinding(leasePresent: leasePresent,
+                                                        boundToConnectedRoom: leasePresent,
+                                                        afterParticipantSeen: true,
+                                                        duringSubscriptionWait: true,
+                                                        sameClientAsParticipantCallback: true)
         summary.recordRemoteAudioLivenessObservation(participantSeen: true,
                                                      participantCountBucket: summary.liveKitRemoteParticipantCountBucket == "0" ? "1" : summary.liveKitRemoteParticipantCountBucket,
                                                      audioPublicationSeen: true,
@@ -11846,7 +12077,12 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
         }
 
         lock.lock()
+        let leasePresent = receiverConnectedSessionLease != nil && !receiverConnectedSessionLeaseReleased
         var summary = latestVoIPPushReceiptSummary
+        summary.recordReceiverAudioObserverLeaseBinding(leasePresent: leasePresent,
+                                                        boundToConnectedRoom: leasePresent,
+                                                        afterParticipantSeen: true,
+                                                        sameClientAsParticipantCallback: true)
         summary.recordReceiverParticipantEventCallbackObservation(participantCountBucket: safeParticipantCountBucket)
         let shouldReleaseLease = summary.remoteParticipantObservationWaitCompleted
         let releaseReason = summary.remoteParticipantObservationFinalClassification

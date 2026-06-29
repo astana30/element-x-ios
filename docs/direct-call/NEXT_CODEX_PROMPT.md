@@ -13,9 +13,9 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-Retry29 is final. Do not rerun it and do not send another APNs for Retry29.
+Retry30 is final. Do not rerun it and do not send another APNs for Retry30.
 
-Retry29 achieved the two-device path through receiver/sender LiveKit connection, participant presence, sender audio publish, and receiver remote audio publication:
+Retry30 sent exactly one sandbox APNs and proved the path through receiver/sender LiveKit and sender audio publish:
 
 ```text
 APNs_sent=true
@@ -28,7 +28,6 @@ receiver_post_answer_controlled_connect_result=success_redacted
 receiver_post_answer_livekit_join_result=success_redacted
 controlled_connect_first_attempt_result=success_redacted
 livekit_join_result=success_redacted
-receiver_connected_session_lease_acquired=true
 sender_runtime_join_executor_invoked=true
 sender_runtime_join_pending_metadata_fetch_result=success_redacted
 sender_runtime_join_credentials_result=success_redacted
@@ -41,131 +40,105 @@ sender_local_audio_muted_state_bucket=unmuted_redacted
 sender_audio_session_activation_observed=true
 sender_microphone_permission_requested=true
 sender_microphone_permission_result_bucket=success_redacted
-receiver_participant_event_callback_seen=true
 livekit_remote_participant_seen=true
-livekit_remote_participant_count_bucket=1
-receiver_remote_audio_observer_bound_to_retained_room=true
-receiver_remote_audio_observer_bound_to_connected_room=true
-receiver_remote_audio_observer_attached_after_participant_seen=true
-receiver_remote_audio_publication_seen=true
-receiver_remote_audio_track_unmuted=true
 ```
 
-Retry29 narrowed the remaining blocker to receiver remote audio subscription/liveness:
+Retry30 narrowed the remaining blocker to receiver-side audio observer lease binding/subscription confirmation:
 
 ```text
+receiver_connected_session_lease_acquired=false
+receiver_remote_audio_observer_bound_to_retained_room=false
+receiver_remote_audio_observer_bound_to_connected_room=false
+receiver_remote_audio_observer_attached_after_participant_seen=false
+receiver_remote_audio_publication_seen=false
+receiver_remote_audio_publication_subscribed_state_bucket=publication_missing_redacted
+receiver_remote_audio_explicit_subscribe_requested=true
+receiver_remote_audio_explicit_subscribe_result=success_redacted
+receiver_remote_audio_subscription_callback_seen=false
 receiver_remote_audio_track_subscribed=false
-receiver_remote_audio_level_observed=false
-receiver_remote_audio_liveness_observed=false
-receiver_remote_audio_liveness_wait_started=true
-receiver_remote_audio_liveness_wait_completed=false
-receiver_remote_audio_liveness_wait_timeout=false
-receiver_remote_audio_liveness_final_classification=remote_audio_subscription_missing_redacted
-livekit_audio_liveness_observed=false
-remote_audio_liveness_result=not_observed_redacted
-retry29_success=false
+receiver_remote_audio_track_unmuted=false
+receiver_remote_audio_subscription_wait_started=true
+receiver_remote_audio_subscription_wait_completed=false
+receiver_remote_audio_subscription_wait_timeout=true
+receiver_remote_audio_subscription_final_classification=remote_audio_subscription_timeout_redacted
+receiver_remote_audio_liveness_final_classification=remote_audio_observer_not_bound_to_connected_room_redacted
+retry30_success=false
 ```
 
-Safety remained preserved:
+Interpretation:
+- APNs, PushKit, CallKit, metadata, credentials, receiver LiveKit join, sender LiveKit join, sender audio publish, microphone permission, and sender audio session all passed.
+- The blocker is receiver audio observer/subscription binding to the retained connected receiver room/client.
+- `receiver_remote_audio_explicit_subscribe_result=success_redacted` means request accepted, not subscription confirmed.
+
+## Latest Repair
+
+`2.49A-ReceiverAudioObserverLeaseBindingRepair` is committed and has not had a physical proof yet.
+
+The repair:
+- records the retained receiver lease before requesting remote audio playback
+- starts the remote audio subscription wait before awaiting LiveKit subscription work
+- adds `receiver_audio_observer_lease_binding_*` proof fields
+- separates explicit subscribe request result from subscription confirmation
+- defers receiver lease cleanup until audio subscription/liveness reaches success or bounded timeout
+
+New/updated proof fields:
 
 ```text
-no repeated APNs
-no production APNs
-no dev/invite
-no repeated receiver connect
-no repeated sender join
-video=false
-camera_permission_requested=false
-matrix_event_emit_requested=false
-real_call_flow_started=false
+receiver_audio_observer_lease_binding_repair_present=true
+receiver_audio_observer_lease_binding_repair_debug_only=true
+receiver_audio_observer_lease_binding_raw_identifiers_logged=false
+receiver_audio_observer_uses_retained_session_lease=<runtime>
+receiver_audio_observer_lease_present_at_attach=<runtime>
+receiver_audio_observer_lease_present_after_participant_seen=<runtime>
+receiver_audio_observer_lease_present_during_subscription_wait=<runtime>
+receiver_audio_observer_lease_released_before_audio_terminal=<runtime>
+receiver_audio_observer_bound_to_same_client_as_receiver_join=<runtime>
+receiver_audio_observer_bound_to_same_client_as_participant_callback=<runtime>
+receiver_audio_observer_bound_to_retained_room=<runtime>
+receiver_audio_observer_bound_to_connected_room=<runtime>
+receiver_audio_observer_lease_binding_final_classification=<redacted_bucket>
+receiver_remote_audio_explicit_subscribe_request_result=<redacted_bucket>
+receiver_remote_audio_explicit_subscribe_confirmed=<runtime>
 ```
-
-Retry29 also exposed a helper accounting bug:
-
-```text
-phase_pushkit_ready=false
-first_failed_phase=pushkit_ready
-```
-
-Those fields were stale/wrong because pre-APNs PushKit readiness passed. Future helpers must preserve the pre-APNs readiness result and classify the terminal blocker as receiver remote audio subscription/liveness when subscription remains missing.
-
-## Receiver Subscription Repair Completed
-
-The latest code repair is DEBUG-only and no physical proof has been rerun yet.
-
-New proof fields:
-
-```text
-receiver_remote_audio_subscription_repair_present=true
-receiver_remote_audio_subscription_repair_debug_only=true
-receiver_remote_audio_subscription_raw_identifiers_logged=false
-receiver_remote_audio_auto_subscribe_enabled=false
-receiver_remote_audio_publication_subscribed_state_bucket=<redacted_bucket>
-receiver_remote_audio_explicit_subscribe_requested=<runtime>
-receiver_remote_audio_explicit_subscribe_result=<redacted_bucket>
-receiver_remote_audio_subscription_callback_seen=<runtime>
-receiver_remote_audio_subscription_wait_started=<runtime>
-receiver_remote_audio_subscription_wait_completed=<runtime>
-receiver_remote_audio_subscription_wait_timeout=<runtime>
-receiver_remote_audio_subscription_final_classification=<redacted_bucket>
-```
-
-Runtime behavior:
-- receiver controlled connect explicitly enables remote audio playback/subscription after LiveKit join success
-- LiveKit subscription callbacks update receiver proof from runtime state
-- participant callback/snapshot success no longer releases the retained receiver room before subscription/liveness success or bounded timeout
-- no raw token, URL, room ID, call ID, user ID, device ID, participant identity, track SID, APNs payload, invite body, auth header, pending metadata, or private logs are recorded
 
 ## New Phase
 
 Start:
 
 ```text
-2.49A-Physical2-Retry30 — one-shot receiver remote audio subscription/liveness validation
+2.49A-Physical2-Retry31 — one-shot receiver audio observer lease binding/subscription validation
 ```
 
 Goal:
 
-Validate the receiver subscription repair after the already-proven Retry29 path:
+Validate the receiver audio observer lease-binding repair after the already-proven Retry30 path:
 
 ```text
 receiver LiveKit connected
 sender LiveKit connected
 receiver remote participant seen
 sender audio publish success
-receiver remote audio publication seen
+receiver observer bound to retained connected room
+remote audio subscription confirmed
 remote audio track subscribed/unmuted/liveness observed
 ```
 
-Primary proof targets:
+Primary success proof:
 
 ```text
-remote_audio_track_liveness_proof_present=true
-remote_audio_track_liveness_proof_debug_only=true
-remote_audio_track_liveness_raw_identifiers_logged=false
-receiver_remote_audio_subscription_repair_present=true
-receiver_remote_audio_subscription_repair_debug_only=true
-receiver_remote_audio_subscription_raw_identifiers_logged=false
-livekit_remote_participant_seen=true
-receiver_remote_audio_observer_bound_to_retained_room=true
-receiver_remote_audio_observer_bound_to_connected_room=true
-receiver_remote_audio_observer_attached_after_participant_seen=true
-receiver_remote_audio_publication_seen=true
-receiver_remote_audio_explicit_subscribe_requested=true
-receiver_remote_audio_explicit_subscribe_result=success_redacted
-receiver_remote_audio_subscription_callback_seen=true
-receiver_remote_audio_track_subscribed=true
-receiver_remote_audio_track_unmuted=true
-receiver_remote_audio_subscription_wait_started=true
-receiver_remote_audio_subscription_wait_completed=true
-receiver_remote_audio_subscription_wait_timeout=false
-receiver_remote_audio_subscription_final_classification=remote_audio_subscription_observed_redacted OR remote_audio_explicit_subscription_success_redacted
-receiver_remote_audio_level_observed=true
-receiver_remote_audio_liveness_observed=true
-receiver_remote_audio_liveness_wait_started=true
-receiver_remote_audio_liveness_wait_completed=true
-receiver_remote_audio_liveness_wait_timeout=false
-receiver_remote_audio_liveness_final_classification=remote_audio_liveness_observed_redacted
+room_validation_preflight=pass
+APNs_sent=true
+physical_voip_push_received=true
+callkit_answer_action_received=true
+receiver_post_answer_pending_metadata_fetch_result=success_redacted
+receiver_post_answer_media_credentials_result=success_redacted
+receiver_post_answer_controlled_connect_result=success_redacted
+receiver_post_answer_livekit_join_result=success_redacted
+controlled_connect_first_attempt_result=success_redacted
+livekit_join_result=success_redacted
+sender_runtime_join_executor_invoked=true
+sender_runtime_join_runtime_result=success_redacted
+sender_livekit_room_connected=true
 sender_local_audio_publish_requested=true
 sender_local_audio_publish_allowed=true
 sender_local_audio_publish_result=success_redacted
@@ -173,20 +146,72 @@ sender_local_audio_muted_state_bucket=unmuted_redacted
 sender_audio_session_activation_observed=true
 sender_microphone_permission_requested=true
 sender_microphone_permission_result_bucket=success_redacted
+livekit_remote_participant_seen=true
+receiver_audio_observer_lease_binding_repair_present=true
+receiver_audio_observer_uses_retained_session_lease=true
+receiver_audio_observer_lease_present_at_attach=true
+receiver_audio_observer_lease_present_after_participant_seen=true
+receiver_audio_observer_lease_present_during_subscription_wait=true
+receiver_audio_observer_lease_released_before_audio_terminal=false
+receiver_audio_observer_bound_to_same_client_as_receiver_join=true
+receiver_audio_observer_bound_to_same_client_as_participant_callback=true
+receiver_audio_observer_bound_to_retained_room=true
+receiver_audio_observer_bound_to_connected_room=true
+receiver_audio_observer_lease_binding_final_classification=receiver_audio_observer_bound_to_retained_connected_room_redacted
+receiver_remote_audio_publication_seen=true
+receiver_remote_audio_explicit_subscribe_requested=true
+receiver_remote_audio_explicit_subscribe_request_result=success_redacted
+receiver_remote_audio_explicit_subscribe_confirmed=true
+receiver_remote_audio_subscription_callback_seen=true
+receiver_remote_audio_track_subscribed=true
+receiver_remote_audio_track_unmuted=true
+receiver_remote_audio_subscription_wait_started=true
+receiver_remote_audio_subscription_wait_completed=true
+receiver_remote_audio_subscription_wait_timeout=false
+receiver_remote_audio_subscription_final_classification=remote_audio_subscription_observed_redacted OR remote_audio_explicit_subscription_confirmed_redacted
+receiver_remote_audio_level_observed=true
+receiver_remote_audio_liveness_observed=true
+receiver_remote_audio_liveness_wait_completed=true
+receiver_remote_audio_liveness_wait_timeout=false
+receiver_remote_audio_liveness_final_classification=remote_audio_liveness_observed_redacted
 livekit_audio_liveness_observed=true
 livekit_audio_liveness_result=success_redacted
 remote_audio_liveness_result=success_redacted
 video_enabled=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+If audio still fails, classify with one of:
+
+```text
+receiver_audio_observer_lease_missing_at_attach_redacted
+receiver_audio_observer_lease_released_before_audio_terminal_redacted
+receiver_audio_observer_stale_client_redacted
+remote_audio_publication_seen_but_subscription_missing_redacted
+remote_audio_subscription_request_only_redacted
+remote_audio_subscription_timeout_redacted
+remote_audio_track_subscribed_but_silent_redacted
+remote_audio_publication_missing_redacted
+remote_audio_subscription_missing_redacted
+remote_audio_track_muted_redacted
+remote_audio_liveness_timeout_redacted
+sender_microphone_permission_blocked_redacted
+sender_audio_session_not_active_redacted
 ```
 
 Guardrails:
 
 ```text
+no repeated APNs
+no production APNs
+no dev/invite
 no video
 no camera permission request
 no Matrix event emit
 no full production flow
-no raw token, URL, room ID, call ID, user ID, device ID, APNs payload, invite body, auth header, pending metadata contents, or private log exposure
+no raw token, URL, room ID, call ID, user ID, device ID, APNs payload, invite body, auth header, pending metadata contents, participant identity, track SID, or private log exposure
 ```
 
 Before any APNs:
@@ -196,31 +221,12 @@ build/install current Debug app on receiver and sender
 receiver=iPhone PRO unless explicitly changed
 sender=Carpediem unless explicitly changed
 verify app sessions and encrypted room preflight
-verify all 2.49A proof-surface fields are present before APNs
+verify all 2.49A receiver audio observer lease-binding proof-surface fields are present before APNs
 arm the existing receiver controlled audio connect, remote peer context, sender readiness/correlation, operator-ready, and foreground in-app answer hooks as required by the latest helper
 fail closed before APNs if any freshness/proof-surface/readiness field is missing
 ```
 
-Run at most one sandbox APNs after exact manual confirmation. Do not repeat APNs. Do not use production APNs or `dev/invite`.
-
-If participant is seen but audio liveness is missing, classify with one of:
-
-```text
-remote_audio_subscription_observed_redacted
-remote_audio_explicit_subscription_success_redacted
-remote_audio_publication_seen_but_subscription_missing_redacted
-remote_audio_auto_subscribe_disabled_redacted
-remote_audio_subscription_timeout_redacted
-remote_audio_track_subscribed_but_silent_redacted
-remote_audio_publication_missing_redacted
-remote_audio_subscription_missing_redacted
-remote_audio_track_muted_redacted
-remote_audio_liveness_timeout_redacted
-sender_audio_publish_not_requested_redacted
-sender_microphone_permission_blocked_redacted
-sender_audio_session_not_active_redacted
-remote_audio_observer_not_bound_to_connected_room_redacted
-```
+Run at most one sandbox APNs after exact manual confirmation. Do not repeat APNs.
 
 ## Checks
 
