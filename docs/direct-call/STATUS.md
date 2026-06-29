@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-ReceiverCallKitSurfaceOperatorReadinessRepair — Retry26 proved one sandbox APNs delivery through VoIP PushKit and CallKit report submission/completion with provider, delegate, and UUID retained, but stopped before Answer because the receiver had no operator-ready marker recorded before report and no observed answerable CallKit UI/action. The post-answer media continuation was not reached. The repair adds a DEBUG-only operator-readiness URL hook plus redacted surface/app-state classification fields so Retry27 can arm the marker before APNs and distinguish marker-missing, foreground/in-app-surface, report-failed, answer-window-timeout, and UI-missing outcomes. The next physical phase is `2.48Z-Physical2-Retry27 — one-shot CallKit surface/operator readiness validation, receiver iPhone PRO, sender Carpediem`.
+After 2.48Z-ReceiverForegroundInAppAnswerContinuationRepair — Retry27 proved one sandbox APNs delivery through VoIP PushKit and CallKit report submission/completion with provider, delegate, active UUID, and the operator-ready marker retained before report. It still stopped before Answer because the receiver stayed foreground, no answerable CallKit UI/action was observed, and the final CallKit surface classification was `receiver_callkit_foreground_state_requires_in_app_answer_redacted`. The repair adds a DEBUG-only foreground in-app answer URL hook that is default-disabled, requires the real controlled PushKit/CallKit report plus pending metadata reference, and then reuses the existing safe post-answer pending metadata, credentials, controlled connect, sender join, and participant observation pipeline. The next physical phase is `2.48Z-Physical2-Retry28 — one-shot foreground in-app answer continuation validation, receiver iPhone PRO, sender Carpediem`.
 
 ## Latest App Code Checkpoint
 
@@ -38,6 +38,36 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Checksum: `654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e`
 
 ## Proven Checkpoints
+
+- Retry27 closed as APNs/PushKit/CallKit-report/operator-ready success with foreground in-app-answer requirement; this is not post-answer media continuation success:
+  ```text
+  APNs_sent=true
+  background_apns_push_result=sandbox_success
+  physical_voip_push_received=true
+  receiver_voip_push_callback_seen_after_apns=true
+  receiver_callkit_report_requested_after_apns=true
+  receiver_callkit_report_submitted_after_apns=true
+  receiver_callkit_report_result_bucket=reported
+  receiver_callkit_report_completion_observed=true
+  receiver_callkit_provider_retained_for_answer=true
+  receiver_callkit_delegate_retained_for_answer=true
+  receiver_callkit_active_call_uuid_retained=true
+  receiver_callkit_operator_ready_marker_requested_before_apns=true
+  receiver_callkit_operator_ready_marker_recorded_before_report=true
+  receiver_callkit_receiver_app_state_before_apns_bucket=foreground
+  receiver_callkit_receiver_app_state_at_report_bucket=foreground
+  receiver_callkit_ui_surface_observed_by_operator=false
+  receiver_callkit_answer_action_received_after_apns=false
+  receiver_callkit_answer_window_timeout=true
+  receiver_callkit_surface_operator_readiness_final_classification=receiver_callkit_foreground_state_requires_in_app_answer_redacted
+  receiver_post_answer_continuation_started=false
+  receiver_post_answer_media_credentials_requested=false
+  receiver_post_answer_controlled_connect_requested=false
+  receiver_post_answer_livekit_join_requested=false
+  ```
+  - Exactly one sandbox APNs was sent in Retry27; do not repeat it.
+  - No production APNs, `dev/invite`, post-answer media credentials request, physical media connect, physical LiveKit join, microphone/camera permission, video, Matrix event emission, or full flow occurred.
+  - Current narrowed blocker: foreground receiver state can suppress an answerable CallKit UI/action, so Retry28 must use the new explicit DEBUG-only foreground in-app answer continuation hook after APNs/report proof.
 
 - Retry26 closed as APNs/PushKit/CallKit-report success with CallKit Answer UI/action missing; this is not post-answer media continuation success:
   ```text

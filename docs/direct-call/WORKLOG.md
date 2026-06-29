@@ -2,6 +2,63 @@
 
 This file records durable phase-level progress for future Codex and strategy sessions.
 
+## 2026-06-29 — 2.48Z-ReceiverForegroundInAppAnswerContinuationRepair
+
+Closed Retry27 as APNs/PushKit/CallKit-report/operator-ready success with foreground in-app-answer requirement. This is not post-answer media continuation success.
+
+Retry27 result:
+
+```text
+APNs_sent=true
+background_apns_push_result=sandbox_success
+physical_voip_push_received=true
+receiver_voip_push_callback_seen_after_apns=true
+receiver_callkit_report_requested_after_apns=true
+receiver_callkit_report_submitted_after_apns=true
+receiver_callkit_report_result_bucket=reported
+receiver_callkit_report_completion_observed=true
+receiver_callkit_provider_retained_for_answer=true
+receiver_callkit_delegate_retained_for_answer=true
+receiver_callkit_active_call_uuid_retained=true
+receiver_callkit_operator_ready_marker_requested_before_apns=true
+receiver_callkit_operator_ready_marker_recorded_before_report=true
+receiver_callkit_receiver_app_state_before_apns_bucket=foreground
+receiver_callkit_receiver_app_state_at_report_bucket=foreground
+receiver_callkit_ui_surface_observed_by_operator=false
+receiver_callkit_answer_available_after_apns=false
+receiver_callkit_answer_action_received_after_apns=false
+receiver_callkit_answer_window_started=true
+receiver_callkit_answer_window_extended_for_ui_surface=true
+receiver_callkit_answer_window_completed=true
+receiver_callkit_answer_window_timeout=true
+receiver_callkit_surface_operator_readiness_final_classification=receiver_callkit_foreground_state_requires_in_app_answer_redacted
+receiver_post_answer_continuation_started=false
+receiver_post_answer_pending_metadata_fetch_requested=false
+receiver_post_answer_media_credentials_requested=false
+receiver_post_answer_controlled_connect_requested=false
+receiver_post_answer_livekit_join_requested=false
+blocked_reason=callkit_first_action_not_observed_before_completion_window
+```
+
+Root cause narrowed:
+- CallKit report, provider/delegate/UUID retention, and the operator-ready marker were all green before report.
+- The receiver app stayed foreground before APNs and at report, so no answerable system CallKit UI/action was observed.
+- The remaining path needs an explicit DEBUG-only foreground in-app answer continuation after real APNs/PushKit/CallKit report proof.
+- The Retry27 helper phase summary also misclassified `phase_pushkit_ready=false` from terminal proof despite green pre-APNs readiness; Retry28 should aggregate PushKit readiness from the pre-APNs proof snapshot.
+
+Repair:
+- added `kz.salemx.msg://debug/direct-call/receiver-foreground-in-app-answer`
+- the hook is default-disabled and only acts when explicitly invoked after a real controlled VoIP push/report proof exists
+- it requires pending metadata reference preservation and either retained CallKit report proof or the foreground-state in-app-answer classification
+- when allowed, it records redacted foreground in-app answer proof and reuses the existing post-answer pending metadata, credentials, controlled connect, sender runtime join, and participant observation pipeline
+
+Safety:
+- exactly one sandbox APNs was sent in Retry27 before this repair; no APNs were sent during the repair
+- no repeated APNs, production APNs, `dev/invite`, physical media connect, physical LiveKit join, microphone/camera permission, video, Matrix event emission, or full flow
+- no raw tokens, JWTs, authorization headers, APNs payloads, invite bodies, LiveKit URLs, room IDs, call IDs, user IDs, device IDs, call handles, private logs, or pending metadata contents recorded
+
+Next phase: `2.48Z-Physical2-Retry28 — one-shot foreground in-app answer continuation validation, receiver iPhone PRO, sender Carpediem`.
+
 ## 2026-06-29 — 2.48Z-ReceiverCallKitSurfaceOperatorReadinessRepair
 
 Closed Retry26 as APNs/PushKit/CallKit-report success with CallKit Answer UI/action missing. This is not post-answer media continuation success.

@@ -13,13 +13,11 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-Retry26 sent exactly one sandbox APNs and proved the receiver reached VoIP PushKit and CallKit report submission/completion, but it did not reach CallKit Answer or any post-answer media continuation.
+Retry27 sent exactly one sandbox APNs and proved receiver APNs/PushKit/CallKit report/operator-ready marker success, but it did not reach Answer or any post-answer media continuation.
 
 ```text
-receiver_pushkit_token_readiness_final_classification=receiver_pushkit_token_ready_before_apns_redacted
-room_validation_preflight=pass
-background_apns_push_result=sandbox_success
 APNs_sent=true
+background_apns_push_result=sandbox_success
 physical_voip_push_received=true
 receiver_voip_push_callback_seen_after_apns=true
 receiver_callkit_report_requested_after_apns=true
@@ -29,106 +27,147 @@ receiver_callkit_report_completion_observed=true
 receiver_callkit_provider_retained_for_answer=true
 receiver_callkit_delegate_retained_for_answer=true
 receiver_callkit_active_call_uuid_retained=true
-receiver_callkit_operator_ready_to_answer_before_report=false
+receiver_callkit_operator_ready_marker_requested_before_apns=true
+receiver_callkit_operator_ready_marker_recorded_before_report=true
+receiver_callkit_receiver_app_state_before_apns_bucket=foreground
+receiver_callkit_receiver_app_state_at_report_bucket=foreground
 receiver_callkit_ui_surface_observed_by_operator=false
 receiver_callkit_answer_available_after_apns=false
 receiver_callkit_answer_action_received_after_apns=false
 receiver_callkit_answer_window_started=true
-receiver_callkit_answer_window_completed=false
-receiver_callkit_answer_window_timeout=false
-receiver_callkit_answer_availability_final_classification=receiver_callkit_report_submitted_but_ui_missing_redacted
+receiver_callkit_answer_window_extended_for_ui_surface=true
+receiver_callkit_answer_window_completed=true
+receiver_callkit_answer_window_timeout=true
+receiver_callkit_surface_operator_readiness_final_classification=receiver_callkit_foreground_state_requires_in_app_answer_redacted
 receiver_post_answer_continuation_started=false
+receiver_post_answer_pending_metadata_fetch_requested=false
 receiver_post_answer_media_credentials_requested=false
 receiver_post_answer_controlled_connect_requested=false
 receiver_post_answer_livekit_join_requested=false
-sender_runtime_join_triggered=false
+blocked_reason=callkit_first_action_not_observed_before_completion_window
 ```
 
-This narrows the blocker to receiver CallKit surface/operator readiness before Answer. It is not a media credentials, receiver connect, sender runtime join, or participant observation result.
+This narrows the blocker to foreground receiver answer handling: CallKit report/retention and the operator-ready marker were correct, but foreground state did not produce an answerable system CallKit UI/action.
+
+Also fix Retry28 helper phase aggregation:
+
+```text
+preflight receiver_pushkit_token_readiness_final_classification=receiver_pushkit_token_ready_before_apns_redacted
+```
+
+must keep:
+
+```text
+phase_pushkit_ready=true
+```
+
+even if terminal post-APNs proof has transient readiness fields. `first_failed_phase` should be `callkit_answered` or `foreground_in_app_answer` when PushKit/APNs/report succeeded but no answer path succeeded.
 
 ## New Repair In HEAD
 
-`2.48Z-ReceiverCallKitSurfaceOperatorReadinessRepair`
+`2.48Z-ReceiverForegroundInAppAnswerContinuationRepair`
 
-New DEBUG-only surface:
+New DEBUG-only URL hook:
 
 ```text
-kz.salemx.msg://debug/direct-call/receiver-callkit-operator-ready?expected_surface=<foreground|banner|fullscreen|lockscreen>
+kz.salemx.msg://debug/direct-call/receiver-foreground-in-app-answer
+```
+
+The hook is default-disabled and must only be invoked by the physical helper after APNs/PushKit/CallKit report proof shows:
+
+```text
+physical_voip_push_received=true
+receiver_voip_push_callback_seen_after_apns=true
+receiver_callkit_report_submitted_after_apns=true
+receiver_callkit_report_completion_observed=true
+receiver_callkit_provider_retained_for_answer=true
+receiver_callkit_delegate_retained_for_answer=true
+receiver_callkit_active_call_uuid_retained=true
+pending_metadata_reference_present=true
+receiver_callkit_surface_operator_readiness_final_classification=receiver_callkit_foreground_state_requires_in_app_answer_redacted
 ```
 
 New redacted proof fields:
 
 ```text
-receiver_callkit_surface_operator_readiness_repair_present=true
-receiver_callkit_surface_operator_readiness_repair_debug_only=true
-receiver_callkit_surface_operator_readiness_repair_raw_identifiers_logged=false
-receiver_callkit_operator_ready_marker_requested_before_apns=<bool>
-receiver_callkit_operator_ready_marker_recorded_before_report=<bool>
-receiver_callkit_expected_surface_bucket=<foreground|banner|fullscreen|lockscreen|unknown>
-receiver_callkit_receiver_app_state_before_apns_bucket=<foreground|background|inactive|unknown>
-receiver_callkit_receiver_app_state_at_report_bucket=<foreground|background|inactive|unknown>
-receiver_callkit_report_submitted_after_apns=<bool>
-receiver_callkit_report_completion_observed=<bool>
-receiver_callkit_answer_window_started=<bool>
-receiver_callkit_answer_window_extended_for_ui_surface=<bool>
-receiver_callkit_answer_window_timeout=<bool>
-receiver_callkit_ui_surface_observed_by_operator=<bool>
-receiver_callkit_answer_action_received_after_apns=<bool>
-receiver_callkit_surface_operator_readiness_final_classification=<redacted_bucket>
+receiver_foreground_in_app_answer_continuation_repair_present=true
+receiver_foreground_in_app_answer_continuation_repair_debug_only=true
+receiver_foreground_in_app_answer_continuation_repair_raw_identifiers_logged=false
+receiver_foreground_in_app_answer_hook_present=true
+receiver_foreground_in_app_answer_hook_default_disabled=true
+receiver_foreground_in_app_answer_hook_requested=<bool>
+receiver_foreground_in_app_answer_hook_allowed=<bool>
+receiver_foreground_in_app_answer_hook_blocked_reason=<redacted_bucket>
+receiver_foreground_in_app_answer_recorded=<bool>
+receiver_foreground_in_app_answer_preserved_pending_metadata=<bool>
+receiver_foreground_in_app_answer_triggered_post_answer_continuation=<bool>
+receiver_foreground_in_app_answer_final_classification=<redacted_bucket>
 ```
 
 Known classifications:
 
 ```text
-receiver_callkit_surface_ready_for_answer_redacted
-receiver_callkit_operator_marker_missing_redacted
-receiver_callkit_report_submitted_but_ui_missing_redacted
-receiver_callkit_foreground_state_requires_in_app_answer_redacted
-receiver_callkit_answer_window_timeout_redacted
-receiver_callkit_action_received_without_ui_marker_redacted
-receiver_callkit_report_failed_before_answer_redacted
+receiver_foreground_in_app_answer_recorded_redacted
+receiver_foreground_in_app_answer_not_foreground_redacted
+receiver_foreground_in_app_answer_missing_report_redacted
+receiver_foreground_in_app_answer_missing_pending_metadata_redacted
+receiver_foreground_in_app_answer_blocked_by_gate_redacted
+receiver_foreground_in_app_answer_post_answer_continuation_started_redacted
 ```
 
 ## Next Phase
 
-`2.48Z-Physical2-Retry27 — one-shot CallKit surface/operator readiness validation, receiver iPhone PRO, sender Carpediem`
+`2.48Z-Physical2-Retry28 — one-shot foreground in-app answer continuation validation, receiver iPhone PRO, sender Carpediem`
 
-Goal:
-Validate that the receiver helper arms the CallKit operator-ready marker before APNs, CallKit report completion produces an answerable surface/action, and only then allows post-answer media continuation. Do not send APNs until all preflight fields are green and explicit manual confirmation is entered.
-
-Before APNs, require:
+Before APNs, require the existing Retry27 preflight plus:
 
 ```text
-current_head_matches_expected=true
-receiver_device_connected=true
-sender_device_connected=true
-receiver_app_matrix_session_whoami_result=success_redacted
-sender_app_matrix_session_whoami_result=success_redacted
-room_validation_preflight=pass
-receiver_pushkit_token_readiness_final_classification=receiver_pushkit_token_ready_before_apns_redacted
-receiver_callkit_surface_operator_readiness_repair_present=true
-receiver_callkit_surface_operator_readiness_repair_debug_only=true
-receiver_callkit_surface_operator_readiness_repair_raw_identifiers_logged=false
-receiver_callkit_operator_ready_marker_requested_before_apns=true
-receiver_callkit_expected_surface_bucket=foreground
+receiver_foreground_in_app_answer_continuation_repair_present=true
+receiver_foreground_in_app_answer_continuation_repair_debug_only=true
+receiver_foreground_in_app_answer_continuation_repair_raw_identifiers_logged=false
 APNs_sent=false
 ```
 
-After the single APNs/Answer attempt, require:
+Run at most one sandbox APNs. If normal CallKit Answer arrives, continue with the existing post-answer continuation. If the receiver proof reaches:
 
 ```text
-physical_voip_push_received=true
-receiver_callkit_report_submitted_after_apns=true
-receiver_callkit_report_completion_observed=true
-receiver_callkit_operator_ready_marker_recorded_before_report=true
-receiver_callkit_answer_window_started=true
-receiver_callkit_answer_window_extended_for_ui_surface=true
-receiver_callkit_answer_action_received_after_apns=true
-callkit_answer_action_received=true
-receiver_callkit_surface_operator_readiness_final_classification=receiver_callkit_surface_ready_for_answer_redacted
+receiver_callkit_surface_operator_readiness_final_classification=receiver_callkit_foreground_state_requires_in_app_answer_redacted
+receiver_callkit_answer_action_received_after_apns=false
 ```
 
-If Answer succeeds, continue to the existing post-answer continuation proof. If the UI/action is still missing, stop after the one attempt and report the redacted `receiver_callkit_surface_operator_readiness_final_classification`.
+then invoke exactly once:
+
+```text
+kz.salemx.msg://debug/direct-call/receiver-foreground-in-app-answer
+```
+
+Only invoke it after real APNs/PushKit/CallKit report proof; never before APNs.
+
+Expected foreground in-app continuation proof:
+
+```text
+receiver_foreground_in_app_answer_hook_requested=true
+receiver_foreground_in_app_answer_hook_allowed=true
+receiver_foreground_in_app_answer_hook_blocked_reason=none
+receiver_foreground_in_app_answer_recorded=true
+receiver_foreground_in_app_answer_preserved_pending_metadata=true
+receiver_foreground_in_app_answer_triggered_post_answer_continuation=true
+receiver_foreground_in_app_answer_final_classification=receiver_foreground_in_app_answer_post_answer_continuation_started_redacted
+callkit_answer_action_received=true
+callkit_answer_action_fulfilled=true
+receiver_post_answer_continuation_started=true
+receiver_post_answer_pending_metadata_reference_present=true
+receiver_post_answer_pending_metadata_fetch_requested=true
+receiver_post_answer_pending_metadata_fetch_result=success_redacted
+receiver_post_answer_media_credentials_requested=true
+receiver_post_answer_media_credentials_result=success_redacted
+receiver_post_answer_controlled_connect_requested=true
+receiver_post_answer_controlled_connect_result=success_redacted
+receiver_post_answer_livekit_join_requested=true
+receiver_post_answer_livekit_join_result=success_redacted
+```
+
+Then continue to sender runtime join and participant observation as before. Audio track is not required for participant presence.
 
 Hard limits:
 

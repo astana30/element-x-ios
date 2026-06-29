@@ -5207,6 +5207,60 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func receiverForegroundInAppAnswerContinuationRepairIsDebugOnlyAndReusesPostAnswerPipeline() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+        let hookStart = try #require(adapterSource.range(of: "private static func startReceiverForegroundInAppAnswerURLHook()")?.lowerBound)
+        let hookEnd = try #require(adapterSource.range(of: "private static func armSimulatorRemotePeerContextHandoffURLHook()", range: hookStart..<adapterSource.endIndex)?.lowerBound)
+        let hookSource = String(adapterSource[hookStart..<hookEnd])
+        let evaluationStart = try #require(adapterSource.range(of: "mutating func recordReceiverForegroundInAppAnswerHookRequest")?.lowerBound)
+        let evaluationEnd = try #require(adapterSource.range(of: "private static func redactedProofFields", range: evaluationStart..<adapterSource.endIndex)?.lowerBound)
+        let evaluationSource = String(adapterSource[evaluationStart..<evaluationEnd])
+
+        #expect(adapterSource.contains("receiverForegroundInAppAnswerURLHookPath = \"/direct-call/receiver-foreground-in-app-answer\""))
+        #expect(adapterSource.contains("startReceiverForegroundInAppAnswerURLHook()"))
+        #expect(adapterSource.contains("receiver_foreground_in_app_answer_continuation_repair_present=\\(receiverForegroundInAppAnswerContinuationRepairPresent)"))
+        #expect(adapterSource.contains("receiver_foreground_in_app_answer_continuation_repair_debug_only=\\(receiverForegroundInAppAnswerContinuationRepairDebugOnly)"))
+        #expect(adapterSource.contains("receiver_foreground_in_app_answer_continuation_repair_raw_identifiers_logged=\\(receiverForegroundInAppAnswerContinuationRepairRawIdentifiersLogged)"))
+        #expect(adapterSource.contains("receiver_foreground_in_app_answer_hook_present=\\(receiverForegroundInAppAnswerHookPresent)"))
+        #expect(adapterSource.contains("receiver_foreground_in_app_answer_hook_default_disabled=\\(receiverForegroundInAppAnswerHookDefaultDisabled)"))
+        #expect(adapterSource.contains("receiver_foreground_in_app_answer_hook_requested=\\(receiverForegroundInAppAnswerHookRequested)"))
+        #expect(adapterSource.contains("receiver_foreground_in_app_answer_hook_allowed=\\(receiverForegroundInAppAnswerHookAllowed)"))
+        #expect(adapterSource.contains("receiver_foreground_in_app_answer_hook_blocked_reason=\\(receiverForegroundInAppAnswerHookBlockedReason)"))
+        #expect(adapterSource.contains("receiver_foreground_in_app_answer_recorded=\\(receiverForegroundInAppAnswerRecorded)"))
+        #expect(adapterSource.contains("receiver_foreground_in_app_answer_preserved_pending_metadata=\\(receiverForegroundInAppAnswerPreservedPendingMetadata)"))
+        #expect(adapterSource.contains("receiver_foreground_in_app_answer_triggered_post_answer_continuation=\\(receiverForegroundInAppAnswerTriggeredPostAnswerContinuation)"))
+        #expect(adapterSource.contains("receiver_foreground_in_app_answer_final_classification=\\(receiverForegroundInAppAnswerFinalClassification)"))
+
+        #expect(hookSource.contains("pendingAuthenticatedMetadataReference?.isEmpty == false"))
+        #expect(hookSource.contains("guard shouldStartPostAnswerContinuation else"))
+        #expect(hookSource.contains("recordCallKitAnswerActionProof(screenSource: \"foreground_in_app_answer_real_invite_controlled\")"))
+        #expect(hookSource.contains("updateLatestVoIPPushReceiptSummary(summaryToWrite)"))
+        #expect(!hookSource.contains("connectAudio("))
+        #expect(!hookSource.contains("emit"))
+
+        #expect(evaluationSource.contains("physicalVoIPPushReceived"))
+        #expect(evaluationSource.contains("callbackInvoked"))
+        #expect(evaluationSource.contains("realInvitePayloadMappingObserved"))
+        #expect(evaluationSource.contains("callKitReportCompletionObserved"))
+        #expect(evaluationSource.contains("callKitProviderRetainedForAnswer"))
+        #expect(evaluationSource.contains("callKitDelegateRetainedForAnswer"))
+        #expect(evaluationSource.contains("callKitActiveCallUUIDRetained"))
+        #expect(evaluationSource.contains("receiver_callkit_foreground_state_requires_in_app_answer_redacted"))
+        #expect(evaluationSource.contains("pendingMetadataReferencePresent"))
+        #expect(evaluationSource.contains("callKitAnswerActionReceived"))
+        #expect(evaluationSource.contains("receiver_foreground_in_app_answer_recorded_redacted"))
+        #expect(evaluationSource.contains("receiver_foreground_in_app_answer_not_foreground_redacted"))
+        #expect(evaluationSource.contains("receiver_foreground_in_app_answer_missing_report_redacted"))
+        #expect(evaluationSource.contains("receiver_foreground_in_app_answer_missing_pending_metadata_redacted"))
+        #expect(evaluationSource.contains("receiver_foreground_in_app_answer_blocked_by_gate_redacted"))
+        #expect(evaluationSource.contains("receiver_foreground_in_app_answer_post_answer_continuation_started_redacted"))
+        #expect(!evaluationSource.contains("room_id=\\("))
+        #expect(!evaluationSource.contains("call_id=\\("))
+        #expect(!evaluationSource.contains("peer_user_id=\\("))
+        #expect(!evaluationSource.contains("device_id=\\("))
+    }
+
+    @Test
     func controlledConnectSwitchDefaultsDisabledAndBlocksBeforeSideEffects() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
         let switchStart = try #require(adapterSource.range(of: "#if DEBUG && canImport(PushKit) && os(iOS)\nprivate struct SalemXControlledMediaConnectSwitch")?.lowerBound)

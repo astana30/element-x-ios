@@ -3470,6 +3470,18 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var receiverCallKitSurfaceOperatorReadinessRepairRawIdentifiersLogged = false
     var receiverCallKitOperatorReadyMarkerRequestedBeforeAPNs = false
     var receiverCallKitAnswerWindowExtendedForUISurface = false
+    var receiverForegroundInAppAnswerContinuationRepairPresent = true
+    var receiverForegroundInAppAnswerContinuationRepairDebugOnly = true
+    var receiverForegroundInAppAnswerContinuationRepairRawIdentifiersLogged = false
+    var receiverForegroundInAppAnswerHookPresent = true
+    var receiverForegroundInAppAnswerHookDefaultDisabled = true
+    var receiverForegroundInAppAnswerHookRequested = false
+    var receiverForegroundInAppAnswerHookAllowed = false
+    var receiverForegroundInAppAnswerHookBlockedReason = "not_requested"
+    var receiverForegroundInAppAnswerRecorded = false
+    var receiverForegroundInAppAnswerPreservedPendingMetadata = false
+    var receiverForegroundInAppAnswerTriggeredPostAnswerContinuation = false
+    var receiverForegroundInAppAnswerFinalClassification = "not_requested"
     var apnsProviderAcceptanceResultBucket = "unknown"
     var apnsDeliveryCallbackMissingAfterAcceptance = false
     var receiverVoIPPushDeliveryFinalClassification = "receiver_pushkit_token_device_binding_unknown_redacted"
@@ -4465,6 +4477,18 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "receiver_callkit_answer_window_timeout=\(pushKitCompletionAnswerableWindowResult == "timeout_elapsed")",
             "receiver_callkit_answer_availability_final_classification=\(receiverCallKitAnswerAvailabilityFinalClassification)",
             "receiver_callkit_surface_operator_readiness_final_classification=\(receiverCallKitSurfaceOperatorReadinessFinalClassification)",
+            "receiver_foreground_in_app_answer_continuation_repair_present=\(receiverForegroundInAppAnswerContinuationRepairPresent)",
+            "receiver_foreground_in_app_answer_continuation_repair_debug_only=\(receiverForegroundInAppAnswerContinuationRepairDebugOnly)",
+            "receiver_foreground_in_app_answer_continuation_repair_raw_identifiers_logged=\(receiverForegroundInAppAnswerContinuationRepairRawIdentifiersLogged)",
+            "receiver_foreground_in_app_answer_hook_present=\(receiverForegroundInAppAnswerHookPresent)",
+            "receiver_foreground_in_app_answer_hook_default_disabled=\(receiverForegroundInAppAnswerHookDefaultDisabled)",
+            "receiver_foreground_in_app_answer_hook_requested=\(receiverForegroundInAppAnswerHookRequested)",
+            "receiver_foreground_in_app_answer_hook_allowed=\(receiverForegroundInAppAnswerHookAllowed)",
+            "receiver_foreground_in_app_answer_hook_blocked_reason=\(receiverForegroundInAppAnswerHookBlockedReason)",
+            "receiver_foreground_in_app_answer_recorded=\(receiverForegroundInAppAnswerRecorded)",
+            "receiver_foreground_in_app_answer_preserved_pending_metadata=\(receiverForegroundInAppAnswerPreservedPendingMetadata)",
+            "receiver_foreground_in_app_answer_triggered_post_answer_continuation=\(receiverForegroundInAppAnswerTriggeredPostAnswerContinuation)",
+            "receiver_foreground_in_app_answer_final_classification=\(receiverForegroundInAppAnswerFinalClassification)",
             "apns_provider_acceptance_result_bucket=\(apnsProviderAcceptanceResultBucket)",
             "apns_delivery_callback_missing_after_acceptance=\(apnsDeliveryCallbackMissingAfterAcceptance)",
             "receiver_voip_push_delivery_final_classification=\(receiverVoIPPushDeliveryFinalClassification)",
@@ -5305,6 +5329,56 @@ private extension SalemXVoIPPushReceiptProofSummary {
                                                      waitTimeout: false)
         return summary.receiverPushKitTokenReadinessFinalClassification == "receiver_pushkit_token_ready_before_apns_redacted" ||
             summary.receiverPushKitTokenReadinessFinalClassification == "receiver_pushkit_token_upload_failed_before_apns_redacted"
+    }
+
+    mutating func recordReceiverForegroundInAppAnswerHookRequest(currentAppState: String,
+                                                                 pendingMetadataReferenceAvailable: Bool) -> Bool {
+        receiverForegroundInAppAnswerContinuationRepairPresent = true
+        receiverForegroundInAppAnswerContinuationRepairDebugOnly = true
+        receiverForegroundInAppAnswerContinuationRepairRawIdentifiersLogged = false
+        receiverForegroundInAppAnswerHookPresent = true
+        receiverForegroundInAppAnswerHookDefaultDisabled = true
+        receiverForegroundInAppAnswerHookRequested = true
+        receiverForegroundInAppAnswerPreservedPendingMetadata = pendingMetadataReferenceAvailable && pendingMetadataReferencePresent
+
+        let reportSubmitted = callKitReportRequested &&
+            (callKitReportResult == "reported" || callKitReportResult == "fake_reported") &&
+            callKitReportCompletionObserved
+        let reportRetained = callKitProviderRetainedForAnswer &&
+            callKitDelegateRetainedForAnswer &&
+            callKitActiveCallUUIDRetained
+        let foregroundState = Self.safeAppStateBucket(currentAppState) == "foreground" ||
+            Self.safeAppStateBucket(appStateAtReportCompletion) == "foreground" ||
+            receiverCallKitSurfaceOperatorReadinessFinalClassification == "receiver_callkit_foreground_state_requires_in_app_answer_redacted"
+        let reportGateReady = (reportSubmitted && reportRetained) ||
+            receiverCallKitSurfaceOperatorReadinessFinalClassification == "receiver_callkit_foreground_state_requires_in_app_answer_redacted"
+
+        let blockedReason: String
+        if !physicalVoIPPushReceived || !callbackInvoked || !realInvitePayloadMappingObserved || !reportGateReady {
+            blockedReason = "receiver_foreground_in_app_answer_missing_report_redacted"
+        } else if !foregroundState {
+            blockedReason = "receiver_foreground_in_app_answer_not_foreground_redacted"
+        } else if !receiverForegroundInAppAnswerPreservedPendingMetadata {
+            blockedReason = "receiver_foreground_in_app_answer_missing_pending_metadata_redacted"
+        } else if callKitAnswerActionReceived {
+            blockedReason = "receiver_foreground_in_app_answer_blocked_by_gate_redacted"
+        } else {
+            blockedReason = "none"
+        }
+
+        let allowed = blockedReason == "none"
+        receiverForegroundInAppAnswerHookAllowed = allowed
+        receiverForegroundInAppAnswerHookBlockedReason = blockedReason
+        receiverForegroundInAppAnswerRecorded = allowed
+        receiverForegroundInAppAnswerTriggeredPostAnswerContinuation = allowed
+        if allowed {
+            receiverForegroundInAppAnswerFinalClassification = receiverForegroundInAppAnswerTriggeredPostAnswerContinuation ?
+                "receiver_foreground_in_app_answer_post_answer_continuation_started_redacted" :
+                "receiver_foreground_in_app_answer_recorded_redacted"
+        } else {
+            receiverForegroundInAppAnswerFinalClassification = blockedReason
+        }
+        return allowed
     }
 
     private static func redactedProofFields(from proof: String) -> [String: String] {
@@ -8122,6 +8196,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let receiverPushKitTokenReadinessURLHookPath = "/direct-call/receiver-pushkit-token-readiness"
     private static let receiverVoIPPushDeliveryTriageURLHookPath = "/direct-call/receiver-voip-push-delivery-triage"
     private static let receiverCallKitOperatorReadyURLHookPath = "/direct-call/receiver-callkit-operator-ready"
+    private static let receiverForegroundInAppAnswerURLHookPath = "/direct-call/receiver-foreground-in-app-answer"
     private static let senderRuntimeLiveKitJoinConfirmation = "RUN_2_48Z_REAL_SENDER_RUNTIME_JOIN"
     private static let uploadSmokeDefaultURLString = "https://matrix.mertis.kz/_matrix/client/unstable/kz.salemx.direct_call/pushkit/token"
     private static let matrixSessionWhoamiURLString = "https://matrix.mertis.kz/_matrix/client/v3/account/whoami"
@@ -8272,6 +8347,11 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             return true
         }
 
+        if url.path == receiverForegroundInAppAnswerURLHookPath {
+            startReceiverForegroundInAppAnswerURLHook()
+            return true
+        }
+
         if handleSenderRuntimeURLHook(url) {
             return true
         }
@@ -8404,6 +8484,26 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static func armReceiverCallKitOperatorReadyURLHook(_ components: URLComponents?) {
         let expectedSurface = components?.queryItems?.first { $0.name == "expected_surface" || $0.name == "surface" }?.value ?? "unknown"
         _ = recordCallKitOperatorReadyToAnswer(expectedSurface)
+    }
+
+    private static func startReceiverForegroundInAppAnswerURLHook() {
+        let shouldStartPostAnswerContinuation: Bool
+        let summaryToWrite: SalemXVoIPPushReceiptProofSummary
+        lock.lock()
+        var summary = latestVoIPPushReceiptSummary
+        let pendingMetadataReferenceAvailable = pendingAuthenticatedMetadataReference?.isEmpty == false
+        shouldStartPostAnswerContinuation = summary.recordReceiverForegroundInAppAnswerHookRequest(currentAppState: currentApplicationStateProof(),
+                                                                                                   pendingMetadataReferenceAvailable: pendingMetadataReferenceAvailable)
+        summaryToWrite = summary
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summaryToWrite)
+
+        guard shouldStartPostAnswerContinuation else {
+            return
+        }
+
+        recordCallKitAnswerActionProof(screenSource: "foreground_in_app_answer_real_invite_controlled")
     }
 
     private static func armSimulatorRemotePeerContextHandoffURLHook() {
@@ -10463,12 +10563,12 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         updateLatestLocalBackgroundCallKitOnlySummary(summary)
     }
 
-    static func recordCallKitAnswerActionProof() {
+    static func recordCallKitAnswerActionProof(screenSource overrideScreenSource: String? = nil) {
         var pendingMetadataReferenceToFetch: String?
         lock.lock()
         var summary = latestVoIPPushReceiptSummary
         let physical6RuntimeEnablementURLHookSnapshot = physical6RuntimeEnablementURLHook
-        let screenSource = summary.realInvitePayloadMappingObserved ? "callkit_answer_real_invite_controlled" : "callkit_answer_sandbox_voip_smoke"
+        let screenSource = overrideScreenSource ?? (summary.realInvitePayloadMappingObserved ? "callkit_answer_real_invite_controlled" : "callkit_answer_sandbox_voip_smoke")
         summary.callKitAnswerActionDelivered = true
         summary.answerActionUUIDMatched = true
         summary.answerActionGenerationMatched = true
