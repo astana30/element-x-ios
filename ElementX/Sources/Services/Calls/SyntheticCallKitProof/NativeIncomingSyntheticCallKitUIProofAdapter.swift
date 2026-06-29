@@ -3456,6 +3456,9 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var receiverPushKitTokenReadinessWaitCompleted = false
     var receiverPushKitTokenReadinessWaitTimeout = false
     var receiverPushKitTokenReadinessFinalClassification = "receiver_pushkit_registration_not_requested_before_apns_redacted"
+    var receiverPostAnswerMediaCredentialsContinuationRepairPresent = true
+    var receiverPostAnswerMediaCredentialsContinuationRepairDebugOnly = true
+    var receiverPostAnswerMediaCredentialsContinuationRepairRawIdentifiersLogged = false
     var receiverAppLifecycleStateBeforeAPNsBucket = "unknown"
     var receiverAppProofGenerationBeforeAPNs = "unknown"
     var receiverAppProofGenerationAfterAPNsChanged = false
@@ -4213,6 +4216,88 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var liveKitCleanupResult = "not_requested"
     var blockedReason = "voip_push_not_received"
 
+    var receiverPostAnswerContinuationStarted: Bool {
+        callKitAnswerActionReceived && foregroundCallState == "real_invite_pending_media"
+    }
+
+    var receiverPostAnswerPendingMetadataReferencePresent: Bool {
+        pendingMetadataReferencePresent
+    }
+
+    var receiverPostAnswerPendingMetadataFetchRequested: Bool {
+        pendingMetadataFetchRequested
+    }
+
+    var receiverPostAnswerPendingMetadataFetchResult: String {
+        pendingMetadataFetchResult
+    }
+
+    var receiverPostAnswerPendingMetadataAuthorized: Bool {
+        pendingMetadataFetchAuthorized
+    }
+
+    var receiverPostAnswerMediaCredentialsRequested: Bool {
+        mediaCredentialsRequested
+    }
+
+    var receiverPostAnswerMediaCredentialsResult: String {
+        mediaCredentialsResult
+    }
+
+    var receiverPostAnswerMediaCredentialsExpiresPresent: Bool {
+        mediaCredentialsExpiresAtPresent
+    }
+
+    var receiverPostAnswerControlledConnectRequested: Bool {
+        controlledConnectFirstAttemptRequested
+    }
+
+    var receiverPostAnswerControlledConnectResult: String {
+        controlledConnectFirstAttemptResult
+    }
+
+    var receiverPostAnswerLiveKitJoinRequested: Bool {
+        liveKitJoinRequested
+    }
+
+    var receiverPostAnswerLiveKitJoinResult: String {
+        liveKitJoinResult
+    }
+
+    var receiverPostAnswerFinalClassification: String {
+        guard receiverPostAnswerContinuationStarted else {
+            return "receiver_post_answer_livekit_join_not_requested_redacted"
+        }
+        guard receiverPostAnswerPendingMetadataReferencePresent else {
+            return "receiver_post_answer_pending_metadata_reference_missing_redacted"
+        }
+        guard receiverPostAnswerPendingMetadataFetchRequested else {
+            return "receiver_post_answer_continuation_started_redacted"
+        }
+        guard receiverPostAnswerPendingMetadataFetchResult == "success_redacted" else {
+            return receiverPostAnswerPendingMetadataFetchResult == "requested" ? "receiver_post_answer_continuation_started_redacted" : "receiver_post_answer_pending_metadata_fetch_failed_redacted"
+        }
+        guard receiverPostAnswerMediaCredentialsRequested else {
+            return "receiver_post_answer_media_credentials_deferred_redacted"
+        }
+        guard receiverPostAnswerMediaCredentialsResult == "success_redacted" else {
+            return "receiver_post_answer_media_credentials_failed_redacted"
+        }
+        guard receiverPostAnswerControlledConnectRequested else {
+            return "receiver_post_answer_controlled_connect_not_requested_redacted"
+        }
+        guard receiverPostAnswerControlledConnectResult == "success_redacted" else {
+            return "receiver_post_answer_controlled_connect_failed_redacted"
+        }
+        if receiverPostAnswerLiveKitJoinResult == "success_redacted" {
+            return "receiver_post_answer_livekit_join_success_redacted"
+        }
+        if !receiverPostAnswerLiveKitJoinRequested || receiverPostAnswerLiveKitJoinResult == "not_requested" {
+            return "receiver_post_answer_livekit_join_not_requested_redacted"
+        }
+        return "receiver_post_answer_controlled_connect_failed_redacted"
+    }
+
     var receiverCallKitAnswerAvailabilityFinalClassification: String {
         if receiverCallKitAnswerAvailableAfterAPNs || callKitAnswerActionReceived {
             return "receiver_callkit_answer_available_redacted"
@@ -4289,6 +4374,22 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "receiver_pushkit_token_readiness_wait_completed=\(receiverPushKitTokenReadinessWaitCompleted)",
             "receiver_pushkit_token_readiness_wait_timeout=\(receiverPushKitTokenReadinessWaitTimeout)",
             "receiver_pushkit_token_readiness_final_classification=\(receiverPushKitTokenReadinessFinalClassification)",
+            "receiver_post_answer_media_credentials_continuation_repair_present=\(receiverPostAnswerMediaCredentialsContinuationRepairPresent)",
+            "receiver_post_answer_media_credentials_continuation_repair_debug_only=\(receiverPostAnswerMediaCredentialsContinuationRepairDebugOnly)",
+            "receiver_post_answer_media_credentials_continuation_repair_raw_identifiers_logged=\(receiverPostAnswerMediaCredentialsContinuationRepairRawIdentifiersLogged)",
+            "receiver_post_answer_continuation_started=\(receiverPostAnswerContinuationStarted)",
+            "receiver_post_answer_pending_metadata_reference_present=\(receiverPostAnswerPendingMetadataReferencePresent)",
+            "receiver_post_answer_pending_metadata_fetch_requested=\(receiverPostAnswerPendingMetadataFetchRequested)",
+            "receiver_post_answer_pending_metadata_fetch_result=\(receiverPostAnswerPendingMetadataFetchResult)",
+            "receiver_post_answer_pending_metadata_authorized=\(receiverPostAnswerPendingMetadataAuthorized)",
+            "receiver_post_answer_media_credentials_requested=\(receiverPostAnswerMediaCredentialsRequested)",
+            "receiver_post_answer_media_credentials_result=\(receiverPostAnswerMediaCredentialsResult)",
+            "receiver_post_answer_media_credentials_expires_present=\(receiverPostAnswerMediaCredentialsExpiresPresent)",
+            "receiver_post_answer_controlled_connect_requested=\(receiverPostAnswerControlledConnectRequested)",
+            "receiver_post_answer_controlled_connect_result=\(receiverPostAnswerControlledConnectResult)",
+            "receiver_post_answer_livekit_join_requested=\(receiverPostAnswerLiveKitJoinRequested)",
+            "receiver_post_answer_livekit_join_result=\(receiverPostAnswerLiveKitJoinResult)",
+            "receiver_post_answer_final_classification=\(receiverPostAnswerFinalClassification)",
             "receiver_app_lifecycle_state_before_apns_bucket=\(receiverAppLifecycleStateBeforeAPNsBucket)",
             "receiver_app_proof_generation_before_apns=\(receiverAppProofGenerationBeforeAPNs)",
             "receiver_app_proof_generation_after_apns_changed=\(receiverAppProofGenerationAfterAPNsChanged)",
@@ -6820,7 +6921,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         mediaCredentialsURLReceived = false
         mediaCredentialsCleanupRequested = false
         mediaCredentialsCleanupResult = "not_requested"
-        blockedReason = "media_credentials_request_deferred_until_next_phase"
+        blockedReason = receiverPostAnswerFinalClassification
     }
 
     mutating func recordAuthenticatedPendingMetadataFetchBlocked(_ reason: String,

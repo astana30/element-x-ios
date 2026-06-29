@@ -2,6 +2,50 @@
 
 This file records durable phase-level progress for future Codex and strategy sessions.
 
+## 2026-06-29 — 2.48Z-ReceiverPostAnswerMediaCredentialsContinuationRepair
+
+Closed Retry25 as receiver PushKit/APNs/CallKit Answer availability success and post-answer media continuation blocker. This is not controlled media connect success and not remote participant success.
+
+Retry25 result:
+
+```text
+receiver_pushkit_token_readiness_final_classification=receiver_pushkit_token_ready_before_apns_redacted
+background_apns_push_result=sandbox_success
+APNs_sent=true
+physical_voip_push_received=true
+receiver_callkit_report_requested_after_apns=true
+receiver_callkit_report_submitted_after_apns=true
+receiver_callkit_report_result_bucket=reported
+receiver_callkit_answer_available_after_apns=true
+receiver_callkit_answer_action_received_after_apns=true
+callkit_answer_action_received=true
+receiver_callkit_answer_availability_final_classification=receiver_callkit_answer_available_redacted
+controlled_connect_first_attempt_result=not_requested
+livekit_join_result=not_requested
+media_connect_requested=false
+livekit_join_requested=false
+sender_connected_signal_received_by_receiver=false
+sender_runtime_join_triggered=false
+blocked_reason=media_credentials_request_deferred_until_next_phase
+```
+
+Root cause narrowed:
+- Retry25 successfully restored the receiver PushKit token readiness gate and validated one sandbox APNs through CallKit Answer
+- after Answer, the receiver proof still looked terminal at the old credentials-deferred marker, so the helper stopped before controlled media connect or sender runtime join
+- the existing code already schedules authenticated pending metadata and credentials from the Answer path, but the proof did not expose a single post-answer ladder that distinguishes pending metadata, credentials, controlled connect, and LiveKit join gates
+
+Repair:
+- added DEBUG-only `receiver_post_answer_media_credentials_continuation_repair_*` proof fields
+- added redacted aliases for post-answer pending metadata reference/fetch, media credentials, controlled connect, LiveKit join, and a final post-answer classification
+- replaced the stale `media_credentials_request_deferred_until_next_phase` blocked reason after authenticated pending metadata success with `receiverPostAnswerFinalClassification`
+
+Safety:
+- exactly one sandbox APNs was sent in Retry25 before this repair; no APNs were sent during the repair
+- no repeated APNs, production APNs, `dev/invite`, physical media connect, physical LiveKit join, microphone/camera permission, video, Matrix event emission, or full flow
+- no raw tokens, JWTs, authorization headers, APNs payloads, invite bodies, LiveKit URLs, room IDs, call IDs, user IDs, device IDs, call handles, private logs, or pending metadata contents recorded
+
+Next phase: `2.48Z-Physical2-Retry26 — one-shot post-answer media credentials continuation validation, receiver iPhone PRO, sender Carpediem`.
+
 ## 2026-06-29 — 2.48Z-ReceiverPushKitTokenReadinessRepair
 
 Retry24 preflight stopped safely before APNs because the receiver PushKit token readiness gate was not green. This is not APNs delivery validation and not participant observer propagation validation.

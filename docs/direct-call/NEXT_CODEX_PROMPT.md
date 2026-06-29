@@ -13,37 +13,36 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-Retry24 preflight stopped before APNs because receiver PushKit token readiness was not green.
+Retry25 proved receiver PushKit token readiness, one sandbox APNs delivery, VoIP PushKit callback, CallKit report, and CallKit Answer availability. It did not reach controlled media connect or sender runtime join.
 
 ```text
-receiver_app_session_restored=true
-sender_app_session_restored=true
-receiver_controlled_audio_connect_armed=true
-receiver_remote_peer_context_armed=true
-receiver_sender_readiness_context_armed=true
-participant_observer_propagation_repair_present=true
-receiver_connected_window_retention_repair_present=true
-sender_runtime_join_bridge_state_repair_present=true
-receiver_voip_push_delivery_triage_present=true
-receiver_app_lifecycle_state_before_apns_bucket=foreground
-receiver_pushkit_token_present_before_apns=false
-receiver_pushkit_token_upload_attempted_before_apns=false
-receiver_pushkit_token_upload_result_bucket=not_requested
-receiver_pushkit_token_server_store_result_bucket=not_requested
-receiver_pushkit_token_environment_bucket=development
-receiver_pushkit_token_device_binding_expected_bucket=not_requested
-APNs_sent=false
+receiver_pushkit_token_readiness_final_classification=receiver_pushkit_token_ready_before_apns_redacted
+background_apns_push_result=sandbox_success
+APNs_sent=true
+physical_voip_push_received=true
+receiver_callkit_report_requested_after_apns=true
+receiver_callkit_report_submitted_after_apns=true
+receiver_callkit_report_result_bucket=reported
+receiver_callkit_answer_available_after_apns=true
+receiver_callkit_answer_action_received_after_apns=true
+callkit_answer_action_received=true
+receiver_callkit_answer_availability_final_classification=receiver_callkit_answer_available_redacted
+controlled_connect_first_attempt_result=not_requested
+livekit_join_result=not_requested
+media_connect_requested=false
+livekit_join_requested=false
 sender_runtime_join_triggered=false
+blocked_reason=media_credentials_request_deferred_until_next_phase
 ```
 
-This proves the blocker is before APNs delivery: the receiver app had not completed the redacted PushKit token registration/upload/store readiness proof.
+This proves Retry25 restored APNs/PushKit/CallKit Answer, and the remaining blocker is the post-answer controlled media continuation.
 
 ## Next Phase
 
-`2.48Z-Physical2-Retry24B — one-shot receiver PushKit token readiness validation before APNs, receiver iPhone PRO, sender Carpediem`
+`2.48Z-Physical2-Retry26 — one-shot post-answer media credentials continuation validation, receiver iPhone PRO, sender Carpediem`
 
 Goal:
-Validate the receiver PushKit token readiness repair before any APNs send. Do not send APNs unless the readiness proof is green.
+Validate that after real VoIP push and CallKit Answer the DEBUG-only controlled receiver path continues through authenticated pending metadata, media credentials, controlled receiver LiveKit connect, retained receiver connected session lease, sender runtime join trigger, and overlap/participant observation. Do not require remote audio track liveness yet.
 
 Required devices:
 
@@ -78,10 +77,35 @@ receiver_pushkit_token_readiness_wait_started=true
 receiver_pushkit_token_readiness_wait_completed=true
 receiver_pushkit_token_readiness_wait_timeout=false
 receiver_pushkit_token_readiness_final_classification=receiver_pushkit_token_ready_before_apns_redacted
+receiver_post_answer_media_credentials_continuation_repair_present=true
+receiver_post_answer_media_credentials_continuation_repair_debug_only=true
+receiver_post_answer_media_credentials_continuation_repair_raw_identifiers_logged=false
 APNs_sent=false
 ```
 
-If token readiness is not green, stop before APNs and report the redacted blocker.
+After Answer, require:
+
+```text
+receiver_post_answer_continuation_started=true
+receiver_post_answer_pending_metadata_reference_present=true
+receiver_post_answer_pending_metadata_fetch_requested=true
+receiver_post_answer_pending_metadata_fetch_result=success_redacted
+receiver_post_answer_pending_metadata_authorized=true
+receiver_post_answer_media_credentials_requested=true
+receiver_post_answer_media_credentials_result=success_redacted
+receiver_post_answer_media_credentials_expires_present=true
+receiver_post_answer_controlled_connect_requested=true
+receiver_post_answer_controlled_connect_result=success_redacted
+receiver_post_answer_livekit_join_requested=true
+receiver_post_answer_livekit_join_result=success_redacted
+receiver_post_answer_final_classification=receiver_post_answer_livekit_join_success_redacted
+controlled_connect_first_attempt_result=success_redacted
+livekit_join_result=success_redacted
+receiver_connected_session_lease_acquired=true
+sender_runtime_join_triggered=true
+```
+
+If any post-answer step fails, stop after the single attempt and report the redacted `receiver_post_answer_final_classification`.
 
 Only after a green readiness proof and explicit manual confirmation may a future helper send exactly one sandbox APNs.
 

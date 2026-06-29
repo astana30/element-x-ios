@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-ReceiverPushKitTokenReadinessRepair — Retry24 preflight had green app/session/hook/repair surfaces, but the receiver PushKit token readiness gate stopped safely before APNs (`receiver_pushkit_token_present_before_apns=false`, `receiver_pushkit_token_upload_attempted_before_apns=false`, `receiver_pushkit_token_upload_result_bucket=not_requested`, `receiver_pushkit_token_server_store_result_bucket=not_requested`, `APNs_sent=false`). The repair adds a DEBUG-only bounded readiness hook that reuses the existing PushKit upload smoke with the restored app session, mirrors redacted registration/token/upload/store/environment/device-binding buckets into the receiver proof, and classifies readiness before any APNs send. The next physical phase is `2.48Z-Physical2-Retry24B — one-shot receiver PushKit token readiness validation before APNs, receiver iPhone PRO, sender Carpediem`.
+After 2.48Z-ReceiverPostAnswerMediaCredentialsContinuationRepair — Retry25 proved receiver PushKit token readiness, one sandbox APNs delivery, VoIP PushKit callback, CallKit report, and CallKit Answer availability (`receiver_callkit_answer_availability_final_classification=receiver_callkit_answer_available_redacted`). It then stopped before media because the proof still looked terminal at `blocked_reason=media_credentials_request_deferred_until_next_phase`, with `controlled_connect_first_attempt_result=not_requested`, `livekit_join_result=not_requested`, and `sender_runtime_join_triggered=false`. The repair adds a DEBUG-only post-answer continuation proof ladder and replaces the stale deferred blocked reason after authenticated pending metadata with a redacted classification that identifies whether the stop is pending metadata, media credentials, controlled connect, or LiveKit join. The next physical phase is `2.48Z-Physical2-Retry26 — one-shot post-answer media credentials continuation validation, receiver iPhone PRO, sender Carpediem`.
 
 ## Latest App Code Checkpoint
 
@@ -38,6 +38,31 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Checksum: `654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e`
 
 ## Proven Checkpoints
+
+- Retry25 closed as PushKit/APNs/CallKit Answer availability success, not media success:
+  ```text
+  receiver_pushkit_token_readiness_final_classification=receiver_pushkit_token_ready_before_apns_redacted
+  background_apns_push_result=sandbox_success
+  APNs_sent=true
+  physical_voip_push_received=true
+  receiver_callkit_report_requested_after_apns=true
+  receiver_callkit_report_submitted_after_apns=true
+  receiver_callkit_report_result_bucket=reported
+  receiver_callkit_answer_available_after_apns=true
+  receiver_callkit_answer_action_received_after_apns=true
+  callkit_answer_action_received=true
+  receiver_callkit_answer_availability_final_classification=receiver_callkit_answer_available_redacted
+  controlled_connect_first_attempt_result=not_requested
+  livekit_join_result=not_requested
+  media_connect_requested=false
+  livekit_join_requested=false
+  sender_connected_signal_received_by_receiver=false
+  sender_runtime_join_triggered=false
+  blocked_reason=media_credentials_request_deferred_until_next_phase
+  ```
+  - Exactly one sandbox APNs was sent in Retry25; do not repeat it.
+  - No production APNs, `dev/invite`, physical media connect, physical LiveKit join, microphone/camera permission, video, Matrix event emission, or full flow occurred.
+  - New DEBUG-only fields include `receiver_post_answer_media_credentials_continuation_repair_*`, pending metadata fetch aliases, media credentials aliases, controlled connect aliases, LiveKit join aliases, and `receiver_post_answer_final_classification`.
 
 - Retry24 preflight stopped before APNs because receiver PushKit token readiness was not green:
   ```text
