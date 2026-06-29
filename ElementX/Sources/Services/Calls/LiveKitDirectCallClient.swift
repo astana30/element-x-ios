@@ -7,6 +7,9 @@
 
 import Foundation
 import LiveKit
+#if DEBUG && canImport(PushKit) && os(iOS)
+import AVFAudio
+#endif
 
 @MainActor
 protocol DirectCallLiveKitE2EEContextProtocol: DirectCallMediaE2EEContextProtocol {
@@ -139,6 +142,9 @@ final class LiveKitDirectCallClient: DirectCallLiveKitClientProtocol, @unchecked
     private var isConnected = false
     private var microphoneEnabled = false
     private var remoteAudioPlaybackEnabled = false
+    #if DEBUG && canImport(PushKit) && os(iOS)
+    private var remoteAudioLivenessRenderer: DirectCallRemoteAudioLivenessRenderer?
+    #endif
 
     init() {
         roomFactory = { connectOptions, roomOptions in
@@ -252,10 +258,19 @@ final class LiveKitDirectCallClient: DirectCallLiveKitClientProtocol, @unchecked
         }
 
         let countBucket = Self.remoteParticipantCountBucket(for: room)
+        let audioPublicationSeen = Self.remoteAudioPublicationSeen(in: room)
+        let audioTrackSubscribed = Self.remoteAudioTrackSubscribed(in: room)
+        let audioTrackUnmuted = Self.remoteAudioTrackUnmuted(in: room)
+        let audioLevelObserved = Self.remoteAudioLevelObserved(in: room)
         return DirectCallRemoteParticipantSnapshot(participantSeen: countBucket != "0",
                                                    countBucket: countBucket,
                                                    identityFilterApplied: false,
-                                                   identityFilterResult: "not_applied_redacted")
+                                                   identityFilterResult: "not_applied_redacted",
+                                                   audioPublicationSeen: audioPublicationSeen,
+                                                   audioTrackSubscribed: audioTrackSubscribed,
+                                                   audioTrackUnmuted: audioTrackUnmuted,
+                                                   audioLevelObserved: audioLevelObserved,
+                                                   audioLivenessObserved: false)
     }
 
     func setMicrophoneEnabled(_ isEnabled: Bool) async -> Result<Void, DirectCallMediaError> {
@@ -313,6 +328,9 @@ final class LiveKitDirectCallClient: DirectCallLiveKitClientProtocol, @unchecked
         e2eeContext?.cleanup()
         e2eeContext = nil
         room = nil
+        #if DEBUG && canImport(PushKit) && os(iOS)
+        remoteAudioLivenessRenderer = nil
+        #endif
     }
 
     private static func updateRemoteAudioSubscriptions(room: Room, isEnabled: Bool) async throws {
@@ -469,6 +487,50 @@ final class LiveKitDirectCallClient: DirectCallLiveKitClientProtocol, @unchecked
             return "2+"
         }
     }
+
+    private static func remoteAudioPublicationSeen(in room: Room) -> Bool {
+        room.remoteParticipants.values.contains { !$0.audioTracks.isEmpty }
+    }
+
+    private static func remoteAudioTrackSubscribed(in room: Room) -> Bool {
+        room.remoteParticipants.values.contains { participant in
+            participant.audioTracks.contains { publication in
+                guard let remotePublication = publication as? RemoteTrackPublication else {
+                    return false
+                }
+
+                return remotePublication.isSubscribed
+            }
+        }
+    }
+
+    private static func remoteAudioTrackUnmuted(in room: Room) -> Bool {
+        room.remoteParticipants.values.contains { participant in
+            participant.audioTracks.contains { publication in
+                !publication.isMuted
+            }
+        }
+    }
+
+    private static func remoteAudioLevelObserved(in room: Room) -> Bool {
+        room.remoteParticipants.values.contains { $0.audioLevel > 0 }
+    }
+
+    #if DEBUG && canImport(PushKit) && os(iOS)
+    private func attachRemoteAudioLivenessRendererIfNeeded(room: Room, publication: RemoteTrackPublication) {
+        guard self.room === room,
+              isConnected,
+              publication.kind == .audio,
+              remoteAudioLivenessRenderer == nil,
+              let remoteAudioTrack = publication.track as? RemoteAudioTrack else {
+            return
+        }
+
+        let renderer = DirectCallRemoteAudioLivenessRenderer()
+        remoteAudioTrack.add(audioRenderer: renderer)
+        remoteAudioLivenessRenderer = renderer
+    }
+    #endif
 }
 
 extension LiveKitDirectCallClient: RoomDelegate {
@@ -484,20 +546,82 @@ extension LiveKitDirectCallClient: RoomDelegate {
         Task { @MainActor [weak self] in
             #if DEBUG && canImport(PushKit) && os(iOS)
             SalemXPushKitRegistrationSmokeDebugBridge.recordReceiverRemoteParticipantRuntimeObservation(participantCountBucket: Self.remoteParticipantCountBucket(for: room),
+                                                                                                        audioPublicationSeen: publication.kind == .audio,
                                                                                                         audioTrackSubscribed: false,
-                                                                                                        audioTrackUnmuted: false)
+                                                                                                        audioTrackUnmuted: publication.kind == .audio && !publication.isMuted,
+                                                                                                        audioLevelObserved: participant.audioLevel > 0,
+                                                                                                        livenessObserved: false)
             #endif
             await self?.subscribeToRemoteAudioIfNeeded(room: room, publication: publication)
         }
     }
 
     nonisolated func room(_ room: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
+        Task { @MainActor [weak self] in
+            #if DEBUG && canImport(PushKit) && os(iOS)
+            self?.attachRemoteAudioLivenessRendererIfNeeded(room: room, publication: publication)
+            #endif
+            #if DEBUG && canImport(PushKit) && os(iOS)
+            SalemXPushKitRegistrationSmokeDebugBridge.recordReceiverRemoteParticipantRuntimeObservation(participantCountBucket: Self.remoteParticipantCountBucket(for: room),
+                                                                                                        audioPublicationSeen: publication.kind == .audio,
+                                                                                                        audioTrackSubscribed: publication.kind == .audio,
+                                                                                                        audioTrackUnmuted: publication.kind == .audio && !publication.isMuted,
+                                                                                                        audioLevelObserved: participant.audioLevel > 0,
+                                                                                                        livenessObserved: false)
+            #endif
+        }
+    }
+
+    nonisolated func room(_ room: Room, participant: Participant, trackPublication publication: TrackPublication, didUpdateIsMuted isMuted: Bool) {
         Task { @MainActor in
             #if DEBUG && canImport(PushKit) && os(iOS)
             SalemXPushKitRegistrationSmokeDebugBridge.recordReceiverRemoteParticipantRuntimeObservation(participantCountBucket: Self.remoteParticipantCountBucket(for: room),
-                                                                                                        audioTrackSubscribed: publication.kind == .audio,
-                                                                                                        audioTrackUnmuted: false)
+                                                                                                        audioPublicationSeen: publication.kind == .audio,
+                                                                                                        audioTrackSubscribed: publication.kind == .audio && publication.isSubscribed,
+                                                                                                        audioTrackUnmuted: publication.kind == .audio && !isMuted,
+                                                                                                        audioLevelObserved: participant.audioLevel > 0,
+                                                                                                        livenessObserved: false)
+            #endif
+        }
+    }
+
+    nonisolated func room(_ room: Room, didUpdateSpeakingParticipants participants: [Participant]) {
+        Task { @MainActor in
+            #if DEBUG && canImport(PushKit) && os(iOS)
+            let audioLevelObserved = participants.contains { $0.audioLevel > 0 }
+            guard audioLevelObserved else {
+                return
+            }
+
+            SalemXPushKitRegistrationSmokeDebugBridge.recordReceiverRemoteParticipantRuntimeObservation(participantCountBucket: Self.remoteParticipantCountBucket(for: room),
+                                                                                                        audioPublicationSeen: Self.remoteAudioPublicationSeen(in: room),
+                                                                                                        audioTrackSubscribed: Self.remoteAudioTrackSubscribed(in: room),
+                                                                                                        audioTrackUnmuted: Self.remoteAudioTrackUnmuted(in: room),
+                                                                                                        audioLevelObserved: true,
+                                                                                                        livenessObserved: false)
             #endif
         }
     }
 }
+
+#if DEBUG && canImport(PushKit) && os(iOS)
+private final class DirectCallRemoteAudioLivenessRenderer: AudioRenderer, @unchecked Sendable {
+    private let lock = NSLock()
+    private var frameRecorded = false
+
+    func render(pcmBuffer _: AVAudioPCMBuffer) {
+        lock.lock()
+        let shouldRecordFrame = !frameRecorded
+        frameRecorded = true
+        lock.unlock()
+
+        guard shouldRecordFrame else {
+            return
+        }
+
+        Task { @MainActor in
+            SalemXPushKitRegistrationSmokeDebugBridge.recordReceiverRemoteAudioLivenessFrame()
+        }
+    }
+}
+#endif

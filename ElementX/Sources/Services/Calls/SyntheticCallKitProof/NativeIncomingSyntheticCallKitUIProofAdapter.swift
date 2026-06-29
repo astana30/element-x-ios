@@ -1096,6 +1096,12 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
     var senderConnectedSignalRawCallLogged = false
     var senderConnectedSignalRawUserLogged = false
     var senderConnectedSignalRawDeviceLogged = false
+    var senderLocalAudioPublishRequested = false
+    var senderLocalAudioPublishAllowed = false
+    var senderLocalAudioPublishResult = "not_requested"
+    var senderLocalAudioMutedStateBucket = "unknown"
+    var senderAudioSessionActivationObserved = false
+    var senderMicrophonePermissionResultBucket = "not_requested_or_not_required_redacted"
     var runtimeDerived = true
     var queryOutcomeIgnored = true
     var audioOnly = true
@@ -1185,6 +1191,13 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             "sender_connected_signal_raw_call_logged=\(senderConnectedSignalRawCallLogged)",
             "sender_connected_signal_raw_user_logged=\(senderConnectedSignalRawUserLogged)",
             "sender_connected_signal_raw_device_logged=\(senderConnectedSignalRawDeviceLogged)",
+            "sender_local_audio_publish_requested=\(senderLocalAudioPublishRequested)",
+            "sender_local_audio_publish_allowed=\(senderLocalAudioPublishAllowed)",
+            "sender_local_audio_publish_result=\(senderLocalAudioPublishResult)",
+            "sender_local_audio_muted_state_bucket=\(senderLocalAudioMutedStateBucket)",
+            "sender_audio_session_activation_observed=\(senderAudioSessionActivationObserved)",
+            "sender_microphone_permission_requested=\(microphonePermissionRequested)",
+            "sender_microphone_permission_result_bucket=\(senderMicrophonePermissionResultBucket)",
             "sender_runtime_join_runtime_derived=\(runtimeDerived)",
             "sender_runtime_join_query_outcome_ignored=\(queryOutcomeIgnored)",
             "sender_runtime_join_audio_only=\(audioOnly)",
@@ -1276,6 +1289,13 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         senderConnectedSignalEmitSource = "none"
         senderConnectedSignalEmittedAfterRuntimeJoinSuccess = false
         senderConnectedSignalOpaqueCorrelationPresent = false
+        senderLocalAudioPublishRequested = false
+        senderLocalAudioPublishAllowed = false
+        senderLocalAudioPublishResult = "not_requested"
+        senderLocalAudioMutedStateBucket = "unknown"
+        senderAudioSessionActivationObserved = false
+        senderMicrophonePermissionResultBucket = "not_requested_or_not_required_redacted"
+        microphonePermissionRequested = false
         restoredMatrixSessionUsed = false
         if repeated, repeatedOnlyAfterConsumed {
             bridgeStateClassification = "sender_runtime_join_bridge_repeated_after_consumed_redacted"
@@ -1376,6 +1396,29 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             senderConnectedSignalEmittedAfterRuntimeJoinSuccess = false
             bridgeStateClassification = "sender_runtime_join_not_connected_redacted"
             blockedReason = "sender_runtime_join_failed_redacted"
+        }
+    }
+
+    mutating func markLocalAudioPublish(_ result: Result<Void, DirectCallMediaError>) {
+        senderLocalAudioPublishRequested = true
+        senderLocalAudioPublishAllowed = runtimeResult == "success_redacted" && audioOnly && !videoAllowed && !matrixEventsAllowed
+        microphonePermissionRequested = true
+        switch result {
+        case .success:
+            senderLocalAudioPublishResult = "success_redacted"
+            senderLocalAudioMutedStateBucket = "unmuted_redacted"
+            senderAudioSessionActivationObserved = true
+            senderMicrophonePermissionResultBucket = "success_redacted"
+            senderLiveKitRoomConnected = true
+            senderLiveKitRoomDisconnected = false
+            senderCleanupResult = "deferred_for_receiver_observation_redacted"
+            blockedReason = "none"
+        case .failure(let error):
+            senderLocalAudioPublishResult = "failed_redacted"
+            senderLocalAudioMutedStateBucket = "unknown"
+            senderAudioSessionActivationObserved = false
+            senderMicrophonePermissionResultBucket = DirectCallDiagnosticMediaFailureReason(error).rawValue
+            blockedReason = "sender_local_audio_publish_failed_redacted"
         }
     }
 }
@@ -3852,6 +3895,9 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var remoteAudioPublishLivenessRepairNoVideo = true
     var remoteAudioPublishLivenessRepairNoMatrixEvents = true
     var remoteAudioPublishLivenessRepairRawIdentifiersLogged = false
+    var remoteAudioTrackLivenessProofPresent = true
+    var remoteAudioTrackLivenessProofDebugOnly = true
+    var remoteAudioTrackLivenessRawIdentifiersLogged = false
     var remoteParticipantPresenceRepairPresent = true
     var remoteParticipantPresenceRepairDebugOnly = true
     var remoteParticipantPresenceRepairRequiresTwoPhysicalDevices = true
@@ -4228,6 +4274,26 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var liveKitAudioLivenessObserved = false
     var liveKitAudioLivenessResult = "not_observed_redacted"
     var liveKitAudioLivenessErrorBucket = "none"
+    var receiverRemoteAudioObserverBoundToRetainedRoom = false
+    var receiverRemoteAudioObserverBoundToConnectedRoom = false
+    var receiverRemoteAudioObserverAttachedAfterParticipantSeen = false
+    var receiverRemoteAudioPublicationSeen = false
+    var receiverRemoteAudioTrackSubscribed = false
+    var receiverRemoteAudioTrackUnmuted = false
+    var receiverRemoteAudioLevelObserved = false
+    var receiverRemoteAudioLivenessObserved = false
+    var receiverRemoteAudioLivenessWaitStarted = false
+    var receiverRemoteAudioLivenessWaitCompleted = false
+    var receiverRemoteAudioLivenessWaitTimeout = false
+    var receiverRemoteAudioLivenessFinalClassification = "not_started"
+    var senderLocalAudioPublishRequested = false
+    var senderLocalAudioPublishAllowed = false
+    var senderLocalAudioPublishResult = "not_requested"
+    var senderLocalAudioMutedStateBucket = "unknown"
+    var senderAudioSessionActivationObserved = false
+    var senderMicrophonePermissionRequested = false
+    var senderMicrophonePermissionResultBucket = "not_requested_or_not_required_redacted"
+    var videoEnabled = false
     var liveKitCleanupRequested = false
     var liveKitCleanupCompleted = false
     var liveKitCleanupResult = "not_requested"
@@ -4856,6 +4922,9 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "remote_audio_publish_liveness_repair_no_video=\(remoteAudioPublishLivenessRepairNoVideo)",
             "remote_audio_publish_liveness_repair_no_matrix_events=\(remoteAudioPublishLivenessRepairNoMatrixEvents)",
             "remote_audio_publish_liveness_repair_raw_identifiers_logged=\(remoteAudioPublishLivenessRepairRawIdentifiersLogged)",
+            "remote_audio_track_liveness_proof_present=\(remoteAudioTrackLivenessProofPresent)",
+            "remote_audio_track_liveness_proof_debug_only=\(remoteAudioTrackLivenessProofDebugOnly)",
+            "remote_audio_track_liveness_raw_identifiers_logged=\(remoteAudioTrackLivenessRawIdentifiersLogged)",
             "remote_participant_presence_repair_present=\(remoteParticipantPresenceRepairPresent)",
             "remote_participant_presence_repair_debug_only=\(remoteParticipantPresenceRepairDebugOnly)",
             "remote_participant_presence_repair_requires_two_physical_devices=\(remoteParticipantPresenceRepairRequiresTwoPhysicalDevices)",
@@ -5234,6 +5303,26 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "livekit_audio_liveness_error_bucket=\(liveKitAudioLivenessErrorBucket)",
             "remote_audio_liveness_result=\(liveKitAudioLivenessResult)",
             "remote_audio_liveness_error_bucket=\(liveKitAudioLivenessErrorBucket)",
+            "receiver_remote_audio_observer_bound_to_retained_room=\(receiverRemoteAudioObserverBoundToRetainedRoom)",
+            "receiver_remote_audio_observer_bound_to_connected_room=\(receiverRemoteAudioObserverBoundToConnectedRoom)",
+            "receiver_remote_audio_observer_attached_after_participant_seen=\(receiverRemoteAudioObserverAttachedAfterParticipantSeen)",
+            "receiver_remote_audio_publication_seen=\(receiverRemoteAudioPublicationSeen)",
+            "receiver_remote_audio_track_subscribed=\(receiverRemoteAudioTrackSubscribed)",
+            "receiver_remote_audio_track_unmuted=\(receiverRemoteAudioTrackUnmuted)",
+            "receiver_remote_audio_level_observed=\(receiverRemoteAudioLevelObserved)",
+            "receiver_remote_audio_liveness_observed=\(receiverRemoteAudioLivenessObserved)",
+            "receiver_remote_audio_liveness_wait_started=\(receiverRemoteAudioLivenessWaitStarted)",
+            "receiver_remote_audio_liveness_wait_completed=\(receiverRemoteAudioLivenessWaitCompleted)",
+            "receiver_remote_audio_liveness_wait_timeout=\(receiverRemoteAudioLivenessWaitTimeout)",
+            "receiver_remote_audio_liveness_final_classification=\(receiverRemoteAudioLivenessFinalClassification)",
+            "sender_local_audio_publish_requested=\(senderLocalAudioPublishRequested)",
+            "sender_local_audio_publish_allowed=\(senderLocalAudioPublishAllowed)",
+            "sender_local_audio_publish_result=\(senderLocalAudioPublishResult)",
+            "sender_local_audio_muted_state_bucket=\(senderLocalAudioMutedStateBucket)",
+            "sender_audio_session_activation_observed=\(senderAudioSessionActivationObserved)",
+            "sender_microphone_permission_requested=\(senderMicrophonePermissionRequested)",
+            "sender_microphone_permission_result_bucket=\(senderMicrophonePermissionResultBucket)",
+            "video_enabled=\(videoEnabled)",
             "livekit_cleanup_requested=\(liveKitCleanupRequested)",
             "livekit_cleanup_completed=\(liveKitCleanupCompleted)",
             "livekit_cleanup_result=\(liveKitCleanupResult)",
@@ -5615,6 +5704,9 @@ private extension SalemXVoIPPushReceiptProofSummary {
         remoteAudioPublishLivenessRepairNoVideo = !controlledConnectFirstAttemptVideoAllowed && !cameraPermissionRequested
         remoteAudioPublishLivenessRepairNoMatrixEvents = !controlledConnectFirstAttemptMatrixEventsAllowed && !matrixEventEmitRequested
         remoteAudioPublishLivenessRepairRawIdentifiersLogged = false
+        remoteAudioTrackLivenessProofPresent = true
+        remoteAudioTrackLivenessProofDebugOnly = true
+        remoteAudioTrackLivenessRawIdentifiersLogged = false
         refreshRemoteParticipantPresenceRepairDiagnostics()
         remotePeerContextHandoffPresent = true
         remotePeerContextHandoffDebugOnly = true
@@ -5668,6 +5760,25 @@ private extension SalemXVoIPPushReceiptProofSummary {
         microphonePermissionNotRequiredReason = microphonePermissionRequested ? "requested_redacted" : "receive_only_audio_session_redacted"
         audioRouteAvailable = callKitProviderDidActivateAudioSession
         audioRouteResult = audioRouteAvailable ? "available_redacted" : "not_observed_redacted"
+        receiverRemoteAudioObserverBoundToRetainedRoom = receiverRemoteAudioObserverBoundToRetainedRoom ||
+            (receiverConnectedSessionLeaseRoomRetained && receiverRemoteParticipantObserverStarted)
+        receiverRemoteAudioObserverBoundToConnectedRoom = receiverRemoteAudioObserverBoundToConnectedRoom ||
+            (receiverRemoteAudioObserverBoundToRetainedRoom && liveKitRoomConnected && !liveKitRoomDisconnected)
+        receiverRemoteAudioObserverAttachedAfterParticipantSeen = receiverRemoteAudioObserverAttachedAfterParticipantSeen ||
+            (liveKitRemoteParticipantSeen && receiverRemoteParticipantObserverStarted)
+        receiverRemoteAudioPublicationSeen = receiverRemoteAudioPublicationSeen || liveKitRemoteAudioTrackSubscribed || liveKitRemoteAudioTrackUnmuted
+        receiverRemoteAudioTrackSubscribed = receiverRemoteAudioTrackSubscribed || liveKitRemoteAudioTrackSubscribed
+        receiverRemoteAudioTrackUnmuted = receiverRemoteAudioTrackUnmuted || liveKitRemoteAudioTrackUnmuted
+        receiverRemoteAudioLevelObserved = receiverRemoteAudioLevelObserved || liveKitRemoteAudioLevelObserved
+        receiverRemoteAudioLivenessObserved = receiverRemoteAudioLivenessObserved || liveKitAudioLivenessObserved
+        receiverRemoteAudioLivenessWaitStarted = receiverRemoteAudioLivenessWaitStarted ||
+            (liveKitJoinResult == "success_redacted" && liveKitRemoteParticipantSeen)
+        receiverRemoteAudioLivenessWaitCompleted = receiverRemoteAudioLivenessWaitCompleted || receiverRemoteAudioLivenessObserved
+        receiverRemoteAudioLivenessWaitTimeout = receiverRemoteAudioLivenessWaitStarted &&
+            !receiverRemoteAudioLivenessObserved &&
+            (remoteParticipantObservationWaitCompleted || receiverParticipantObservationAfterOverlapTimeout)
+        videoEnabled = controlledConnectFirstAttemptVideoAllowed || senderSideLiveKitJoinHookVideoAllowed
+        refreshRemoteAudioTrackLivenessClassification()
         if observationActive {
             liveKitCleanupRequested = false
             liveKitCleanupCompleted = false
@@ -5676,6 +5787,57 @@ private extension SalemXVoIPPushReceiptProofSummary {
             liveKitCleanupRequested = disconnectCleanupDiagnosticsLiveKitCleanupRequested || (remoteParticipantObservationWaitCompleted && liveKitConnectAudioInvoked)
             liveKitCleanupCompleted = disconnectCleanupDiagnosticsLiveKitCleanupCompleted || (remoteParticipantObservationWaitCompleted && liveKitConnectAudioInvoked)
             liveKitCleanupResult = liveKitCleanupCompleted ? "completed_redacted" : (liveKitCleanupRequested ? "not_completed_redacted" : "not_requested")
+        }
+    }
+
+    mutating func refreshRemoteAudioTrackLivenessClassification() {
+        if receiverRemoteAudioLivenessObserved || liveKitAudioLivenessObserved {
+            receiverRemoteAudioLivenessFinalClassification = "remote_audio_liveness_observed_redacted"
+            receiverRemoteAudioLivenessWaitCompleted = true
+            receiverRemoteAudioLivenessWaitTimeout = false
+            liveKitAudioLivenessResult = "success_redacted"
+            liveKitAudioLivenessErrorBucket = "none"
+            return
+        }
+
+        if senderLocalAudioPublishRequested, senderLocalAudioPublishResult != "success_redacted" {
+            receiverRemoteAudioLivenessFinalClassification = senderMicrophonePermissionRequested && senderMicrophonePermissionResultBucket != "success_redacted" ?
+                "sender_microphone_permission_blocked_redacted" : "sender_audio_publish_not_requested_redacted"
+            liveKitAudioLivenessErrorBucket = receiverRemoteAudioLivenessFinalClassification
+            return
+        }
+
+        if senderLocalAudioPublishResult == "success_redacted",
+           !senderAudioSessionActivationObserved {
+            receiverRemoteAudioLivenessFinalClassification = "sender_audio_session_not_active_redacted"
+            liveKitAudioLivenessErrorBucket = receiverRemoteAudioLivenessFinalClassification
+            return
+        }
+
+        if liveKitJoinResult == "success_redacted",
+           !receiverRemoteAudioObserverBoundToConnectedRoom {
+            receiverRemoteAudioLivenessFinalClassification = "remote_audio_observer_not_bound_to_connected_room_redacted"
+            liveKitAudioLivenessErrorBucket = receiverRemoteAudioLivenessFinalClassification
+            return
+        }
+
+        if !receiverRemoteAudioPublicationSeen {
+            receiverRemoteAudioLivenessFinalClassification = "remote_audio_publication_missing_redacted"
+            liveKitAudioLivenessErrorBucket = "remote_audio_publication_missing_redacted"
+        } else if !receiverRemoteAudioTrackSubscribed {
+            receiverRemoteAudioLivenessFinalClassification = "remote_audio_subscription_missing_redacted"
+            liveKitAudioLivenessErrorBucket = "remote_audio_subscription_missing_redacted"
+        } else if !receiverRemoteAudioTrackUnmuted {
+            receiverRemoteAudioLivenessFinalClassification = "remote_audio_track_muted_redacted"
+            liveKitAudioLivenessErrorBucket = "remote_audio_track_muted_redacted"
+        } else if receiverRemoteAudioLivenessWaitTimeout {
+            receiverRemoteAudioLivenessFinalClassification = "remote_audio_track_subscribed_but_silent_redacted"
+            liveKitAudioLivenessErrorBucket = "remote_audio_track_subscribed_but_silent_redacted"
+        } else if receiverRemoteAudioLivenessWaitStarted {
+            receiverRemoteAudioLivenessFinalClassification = "remote_audio_liveness_timeout_redacted"
+            liveKitAudioLivenessErrorBucket = "remote_audio_liveness_timeout_redacted"
+        } else {
+            receiverRemoteAudioLivenessFinalClassification = "not_started"
         }
     }
 
@@ -6553,6 +6715,17 @@ private extension SalemXVoIPPushReceiptProofSummary {
                                                     blockedReason: senderSideLiveKitJoinActivationBlockedReason(for: hook)))
     }
 
+    mutating func recordSenderRuntimeLocalAudioPublish(_ senderSummary: SalemXSenderRuntimeLiveKitJoinProofSummary) {
+        senderLocalAudioPublishRequested = senderSummary.senderLocalAudioPublishRequested
+        senderLocalAudioPublishAllowed = senderSummary.senderLocalAudioPublishAllowed
+        senderLocalAudioPublishResult = senderSummary.senderLocalAudioPublishResult
+        senderLocalAudioMutedStateBucket = senderSummary.senderLocalAudioMutedStateBucket
+        senderAudioSessionActivationObserved = senderSummary.senderAudioSessionActivationObserved
+        senderMicrophonePermissionRequested = senderSummary.microphonePermissionRequested
+        senderMicrophonePermissionResultBucket = senderSummary.senderMicrophonePermissionResultBucket
+        refreshRemoteAudioTrackLivenessClassification()
+    }
+
     mutating func recordRemoteAudioLivenessJoinResult(succeeded: Bool, errorBucket: String = "none") {
         liveKitJoinRequested = true
         liveKitJoinResult = succeeded ? "success_redacted" : "failed_redacted"
@@ -6657,6 +6830,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
 
     mutating func recordRemoteAudioLivenessObservation(participantSeen: Bool,
                                                        participantCountBucket: String,
+                                                       audioPublicationSeen: Bool,
                                                        audioTrackSubscribed: Bool,
                                                        audioTrackUnmuted: Bool,
                                                        audioLevelObserved: Bool,
@@ -6664,12 +6838,27 @@ private extension SalemXVoIPPushReceiptProofSummary {
                                                        errorBucket: String = "none") {
         liveKitRemoteParticipantSeen = participantSeen
         liveKitRemoteParticipantCountBucket = participantCountBucket
-        liveKitRemoteAudioTrackSubscribed = audioTrackSubscribed
-        liveKitRemoteAudioTrackUnmuted = audioTrackUnmuted
-        liveKitRemoteAudioLevelObserved = audioLevelObserved
-        liveKitAudioLivenessObserved = livenessObserved
-        liveKitAudioLivenessResult = livenessObserved ? "success_redacted" : "not_observed_redacted"
-        if livenessObserved {
+        receiverRemoteAudioPublicationSeen = receiverRemoteAudioPublicationSeen || audioPublicationSeen || audioTrackSubscribed || audioTrackUnmuted
+        liveKitRemoteAudioTrackSubscribed = liveKitRemoteAudioTrackSubscribed || audioTrackSubscribed
+        liveKitRemoteAudioTrackUnmuted = liveKitRemoteAudioTrackUnmuted || audioTrackUnmuted
+        liveKitRemoteAudioLevelObserved = liveKitRemoteAudioLevelObserved || audioLevelObserved || livenessObserved
+        liveKitAudioLivenessObserved = liveKitAudioLivenessObserved || livenessObserved
+        receiverRemoteAudioTrackSubscribed = receiverRemoteAudioTrackSubscribed || liveKitRemoteAudioTrackSubscribed
+        receiverRemoteAudioTrackUnmuted = receiverRemoteAudioTrackUnmuted || liveKitRemoteAudioTrackUnmuted
+        receiverRemoteAudioLevelObserved = receiverRemoteAudioLevelObserved || liveKitRemoteAudioLevelObserved
+        receiverRemoteAudioLivenessObserved = receiverRemoteAudioLivenessObserved || liveKitAudioLivenessObserved
+        receiverRemoteAudioObserverBoundToRetainedRoom = receiverRemoteAudioObserverBoundToRetainedRoom ||
+            receiverParticipantObserverBoundToRetainedRoom ||
+            receiverConnectedSessionLeaseRoomRetained
+        receiverRemoteAudioObserverBoundToConnectedRoom = receiverRemoteAudioObserverBoundToConnectedRoom ||
+            receiverParticipantObserverBoundToConnectedRoom ||
+            (receiverRemoteAudioObserverBoundToRetainedRoom && liveKitRoomConnected && !liveKitRoomDisconnected)
+        receiverRemoteAudioObserverAttachedAfterParticipantSeen = receiverRemoteAudioObserverAttachedAfterParticipantSeen ||
+            (participantSeen && receiverRemoteParticipantObserverStarted)
+        receiverRemoteAudioLivenessWaitStarted = receiverRemoteAudioLivenessWaitStarted || participantSeen
+        receiverRemoteAudioLivenessWaitCompleted = receiverRemoteAudioLivenessWaitCompleted || livenessObserved
+        liveKitAudioLivenessResult = liveKitAudioLivenessObserved ? "success_redacted" : "not_observed_redacted"
+        if liveKitAudioLivenessObserved {
             liveKitAudioLivenessErrorBucket = "none"
         } else if !participantSeen {
             liveKitAudioLivenessErrorBucket = "remote_participant_missing_redacted"
@@ -6681,6 +6870,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         if participantSeen {
             completeRemoteParticipantObservation(classification: remoteParticipantSeenClassification(), timeoutBucket: "none")
         }
+        refreshRemoteAudioTrackLivenessClassification()
     }
 
     mutating func recordReceiverParticipantEventCallbackObservation(participantCountBucket: String) {
@@ -6715,6 +6905,13 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverParticipantIdentityFilterApplied = snapshot.identityFilterApplied
         receiverParticipantIdentityFilterResult = Self.safeParticipantIdentityFilterResult(snapshot.identityFilterResult)
         if snapshot.participantSeen, snapshot.identityFilterResult != "filtered_out_redacted" {
+            recordRemoteAudioLivenessObservation(participantSeen: true,
+                                                 participantCountBucket: receiverParticipantSnapshotCountBucket,
+                                                 audioPublicationSeen: snapshot.audioPublicationSeen,
+                                                 audioTrackSubscribed: snapshot.audioTrackSubscribed,
+                                                 audioTrackUnmuted: snapshot.audioTrackUnmuted,
+                                                 audioLevelObserved: snapshot.audioLevelObserved,
+                                                 livenessObserved: snapshot.audioLivenessObserved)
             recordRemoteParticipantPresenceObservation(participantCountBucket: receiverParticipantSnapshotCountBucket,
                                                        classification: "remote_participant_seen_via_snapshot_redacted")
         } else {
@@ -6727,9 +6924,10 @@ private extension SalemXVoIPPushReceiptProofSummary {
         liveKitRemoteParticipantSeen = true
         liveKitRemoteParticipantCountBucket = Self.safeParticipantCountBucket(participantCountBucket)
         receiverRemoteParticipantObserverRemoteSeen = true
-        liveKitAudioLivenessObserved = false
-        liveKitAudioLivenessResult = "not_observed_redacted"
-        liveKitAudioLivenessErrorBucket = "remote_audio_track_missing_redacted"
+        if !liveKitAudioLivenessObserved {
+            liveKitAudioLivenessResult = "not_observed_redacted"
+            liveKitAudioLivenessErrorBucket = "remote_audio_track_missing_redacted"
+        }
         completeRemoteParticipantObservation(classification: classification, timeoutBucket: "none")
     }
 
@@ -8760,10 +8958,19 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         let executor = DirectCallLiveKitConnectExecutor(liveKitClient: client)
         senderRuntimeLiveKitClient = client
         let result = await executor.connectAudio(connectionInfo: connectionInfo, e2eeContext: e2eeContext)
+        let localAudioPublishResult: Result<Void, DirectCallMediaError>?
+        if case .success = result {
+            localAudioPublishResult = await client.setMicrophoneEnabled(true)
+        } else {
+            localAudioPublishResult = nil
+        }
 
         lock.lock()
         var summary = latestSenderRuntimeLiveKitJoinSummary
         summary.markRuntime(result)
+        if let localAudioPublishResult {
+            summary.markLocalAudioPublish(localAudioPublishResult)
+        }
         lock.unlock()
 
         updateLatestSenderRuntimeLiveKitJoinSummary(summary)
@@ -10849,6 +11056,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                                                   result: senderJoinResult,
                                                   errorBucket: senderSummary.runtimeErrorBucket,
                                                   repeated: senderSummary.bridgeRepeated)
+        summary.recordSenderRuntimeLocalAudioPublish(senderSummary)
         summary.recordSenderConnectedSignalFromRuntime(senderConnected: senderSummary.senderLiveKitRoomConnected,
                                                        source: "sender_runtime_livekit_join")
         summary.activateRemoteParticipantObservationRuntimeWindowIfNeeded()
@@ -11386,8 +11594,11 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
     }
 
     static func recordReceiverRemoteParticipantRuntimeObservation(participantCountBucket: String,
+                                                                  audioPublicationSeen: Bool,
                                                                   audioTrackSubscribed: Bool,
-                                                                  audioTrackUnmuted: Bool) {
+                                                                  audioTrackUnmuted: Bool,
+                                                                  audioLevelObserved: Bool,
+                                                                  livenessObserved: Bool) {
         let safeParticipantCountBucket: String
         switch participantCountBucket {
         case "0", "1", "2+":
@@ -11400,10 +11611,39 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
         var summary = latestVoIPPushReceiptSummary
         summary.recordRemoteAudioLivenessObservation(participantSeen: true,
                                                      participantCountBucket: safeParticipantCountBucket,
+                                                     audioPublicationSeen: audioPublicationSeen,
                                                      audioTrackSubscribed: audioTrackSubscribed,
                                                      audioTrackUnmuted: audioTrackUnmuted,
-                                                     audioLevelObserved: false,
-                                                     livenessObserved: false)
+                                                     audioLevelObserved: audioLevelObserved,
+                                                     livenessObserved: livenessObserved)
+        let shouldReleaseLease = summary.remoteParticipantObservationWaitCompleted
+        let releaseReason = summary.remoteParticipantObservationFinalClassification
+        if shouldReleaseLease {
+            remoteParticipantObservationWindowID = nil
+            remoteParticipantObservationWindowStartedAt = nil
+            receiverParticipantSnapshotSweepID = nil
+            pendingRemotePeerContextHandoff = nil
+        }
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+        if shouldReleaseLease {
+            Task { @MainActor in
+                releaseReceiverConnectedSessionLease(reason: releaseReason)
+            }
+        }
+    }
+
+    static func recordReceiverRemoteAudioLivenessFrame() {
+        lock.lock()
+        var summary = latestVoIPPushReceiptSummary
+        summary.recordRemoteAudioLivenessObservation(participantSeen: true,
+                                                     participantCountBucket: summary.liveKitRemoteParticipantCountBucket == "0" ? "1" : summary.liveKitRemoteParticipantCountBucket,
+                                                     audioPublicationSeen: true,
+                                                     audioTrackSubscribed: true,
+                                                     audioTrackUnmuted: true,
+                                                     audioLevelObserved: true,
+                                                     livenessObserved: true)
         let shouldReleaseLease = summary.remoteParticipantObservationWaitCompleted
         let releaseReason = summary.remoteParticipantObservationFinalClassification
         if shouldReleaseLease {

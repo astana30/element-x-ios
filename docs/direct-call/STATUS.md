@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-Retry28ParticipantSeenAccountingRepair — Retry28 remains closed as an end-to-end two-device LiveKit participant proof success. The accounting repair is docs/helper-guidance only because the stale `first_failed_phase=overlap_observed` logic lived in the `/tmp` Retry28 helper, not in repo-owned source. Future helpers must treat `livekit_remote_participant_seen=true`, `receiver_participant_event_callback_seen=true`, or `receiver_participant_snapshot_seen=true` as terminal success that supersedes stale overlap fields. The next phase is `2.49A RemoteAudioTrackLivenessProof`.
+After 2.49A RemoteAudioTrackLivenessProof implementation — Retry28 remains closed as an end-to-end two-device LiveKit participant proof success, and the app now has DEBUG-only remote audio track/liveness proof plumbing for the next physical run. No APNs or physical LiveKit run was performed for this implementation. The next phase is `2.49A-Physical-Retry29 — one-shot remote audio track liveness validation`.
 
 ## Latest App Code Checkpoint
 
@@ -38,6 +38,34 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Checksum: `654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e`
 
 ## Proven Checkpoints
+
+- 2.49A RemoteAudioTrackLivenessProof implementation added DEBUG-only audio-track/liveness proof plumbing without a physical run:
+  ```text
+  remote_audio_track_liveness_proof_present=true
+  remote_audio_track_liveness_proof_debug_only=true
+  remote_audio_track_liveness_raw_identifiers_logged=false
+  receiver_remote_audio_observer_bound_to_retained_room=<runtime>
+  receiver_remote_audio_observer_bound_to_connected_room=<runtime>
+  receiver_remote_audio_observer_attached_after_participant_seen=<runtime>
+  receiver_remote_audio_publication_seen=<runtime>
+  receiver_remote_audio_track_subscribed=<runtime>
+  receiver_remote_audio_track_unmuted=<runtime>
+  receiver_remote_audio_level_observed=<runtime>
+  receiver_remote_audio_liveness_observed=<runtime>
+  sender_local_audio_publish_requested=<runtime>
+  sender_local_audio_publish_allowed=<runtime>
+  sender_local_audio_publish_result=<runtime>
+  sender_microphone_permission_requested=<runtime>
+  camera_permission_requested=false
+  matrix_event_emit_requested=false
+  real_call_flow_started=false
+  video_enabled=false
+  ```
+  - Receiver proof now records remote audio publication, subscription, unmuted state, participant/speaking audio level, and a rendered-frame liveness marker from the retained LiveKit room.
+  - Sender runtime join now attempts audio-only local microphone publish only after successful sender LiveKit join and records redacted runtime-derived publish/permission/audio-session buckets.
+  - Required classifications include `remote_audio_liveness_observed_redacted`, `remote_audio_track_subscribed_but_silent_redacted`, `remote_audio_publication_missing_redacted`, `remote_audio_subscription_missing_redacted`, `remote_audio_track_muted_redacted`, `remote_audio_liveness_timeout_redacted`, `sender_audio_publish_not_requested_redacted`, `sender_microphone_permission_blocked_redacted`, `sender_audio_session_not_active_redacted`, and `remote_audio_observer_not_bound_to_connected_room_redacted`.
+  - Safety preserved: no APNs, production APNs, `dev/invite`, physical connect, physical LiveKit join, camera/video, Matrix event emission, full flow, or raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room/call/user/device/participant/track identifier logging.
+  - Next phase: `2.49A-Physical-Retry29 — one-shot remote audio track liveness validation`.
 
 - Retry28 closed as end-to-end two-device LiveKit participant proof success with overlap-accounting caveat:
   ```text

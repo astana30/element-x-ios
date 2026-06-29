@@ -22,12 +22,22 @@ struct DirectCallRemoteParticipantSnapshot: Equatable {
     static let empty = DirectCallRemoteParticipantSnapshot(participantSeen: false,
                                                            countBucket: "0",
                                                            identityFilterApplied: false,
-                                                           identityFilterResult: "not_applied_redacted")
+                                                           identityFilterResult: "not_applied_redacted",
+                                                           audioPublicationSeen: false,
+                                                           audioTrackSubscribed: false,
+                                                           audioTrackUnmuted: false,
+                                                           audioLevelObserved: false,
+                                                           audioLivenessObserved: false)
 
     let participantSeen: Bool
     let countBucket: String
     let identityFilterApplied: Bool
     let identityFilterResult: String
+    let audioPublicationSeen: Bool
+    let audioTrackSubscribed: Bool
+    let audioTrackUnmuted: Bool
+    let audioLevelObserved: Bool
+    let audioLivenessObserved: Bool
 }
 
 extension DirectCallLiveKitClientProtocol {

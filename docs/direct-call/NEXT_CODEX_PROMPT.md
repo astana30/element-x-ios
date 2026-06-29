@@ -88,12 +88,12 @@ Preserve stale overlap fields as caveat diagnostics, not terminal failure, once 
 Start:
 
 ```text
-2.49A RemoteAudioTrackLivenessProof
+2.49A-Physical-Retry29 — one-shot remote audio track liveness validation
 ```
 
 Goal:
 
-Validate remote audio track/liveness after the already-proven participant path:
+Validate the newly implemented DEBUG-only remote audio track/liveness proof after the already-proven participant path:
 
 ```text
 receiver LiveKit connected
@@ -105,13 +105,33 @@ remote audio track subscribed/unmuted/liveness observed
 Primary proof targets:
 
 ```text
+remote_audio_track_liveness_proof_present=true
+remote_audio_track_liveness_proof_debug_only=true
+remote_audio_track_liveness_raw_identifiers_logged=false
 livekit_remote_participant_seen=true
-livekit_remote_audio_track_subscribed=true
-livekit_remote_audio_track_unmuted=true
-livekit_remote_audio_level_observed=true
+receiver_remote_audio_observer_bound_to_retained_room=true
+receiver_remote_audio_observer_bound_to_connected_room=true
+receiver_remote_audio_observer_attached_after_participant_seen=true
+receiver_remote_audio_publication_seen=true
+receiver_remote_audio_track_subscribed=true
+receiver_remote_audio_track_unmuted=true
+receiver_remote_audio_level_observed=true
+receiver_remote_audio_liveness_observed=true
+receiver_remote_audio_liveness_wait_started=true
+receiver_remote_audio_liveness_wait_completed=true
+receiver_remote_audio_liveness_wait_timeout=false
+receiver_remote_audio_liveness_final_classification=remote_audio_liveness_observed_redacted
+sender_local_audio_publish_requested=true
+sender_local_audio_publish_allowed=true
+sender_local_audio_publish_result=success_redacted
+sender_local_audio_muted_state_bucket=unmuted_redacted
+sender_audio_session_activation_observed=true
+sender_microphone_permission_requested=true
+sender_microphone_permission_result_bucket=success_redacted
 livekit_audio_liveness_observed=true
 livekit_audio_liveness_result=success_redacted
 remote_audio_liveness_result=success_redacted
+video_enabled=false
 ```
 
 Guardrails:
@@ -124,20 +144,33 @@ no full production flow
 no raw token, URL, room ID, call ID, user ID, device ID, APNs payload, invite body, auth header, pending metadata contents, or private log exposure
 ```
 
-Do not run APNs or physical LiveKit proof until after inspection and a fresh validation plan.
+Before any APNs:
 
-## Suggested Investigation
-
-Inspect existing remote-audio proof fields and LiveKit observer callbacks:
-
-```bash
-rg -n "remote_audio|audio_liveness|livekit_remote_audio|RemoteParticipant|TrackPublication|audio_track|subscribed|unmuted|participant_seen|receiver_remote_participant_observer" \
-  ElementX/Sources/Services/Calls \
-  UnitTests/Sources/DirectCallEngineTests.swift \
-  UnitTests/Sources/NativeIncomingCallLifecycleContractTests.swift
+```text
+build/install current Debug app on receiver and sender
+receiver=iPhone PRO unless explicitly changed
+sender=Carpediem unless explicitly changed
+verify app sessions and encrypted room preflight
+verify all 2.49A proof-surface fields are present before APNs
+arm the existing receiver controlled audio connect, remote peer context, sender readiness/correlation, operator-ready, and foreground in-app answer hooks as required by the latest helper
+fail closed before APNs if any freshness/proof-surface/readiness field is missing
 ```
 
-Prefer the smallest DEBUG-only proof extension that observes remote audio track state after `livekit_remote_participant_seen=true`.
+Run at most one sandbox APNs after exact manual confirmation. Do not repeat APNs. Do not use production APNs or `dev/invite`.
+
+If participant is seen but audio liveness is missing, classify with one of:
+
+```text
+remote_audio_track_subscribed_but_silent_redacted
+remote_audio_publication_missing_redacted
+remote_audio_subscription_missing_redacted
+remote_audio_track_muted_redacted
+remote_audio_liveness_timeout_redacted
+sender_audio_publish_not_requested_redacted
+sender_microphone_permission_blocked_redacted
+sender_audio_session_not_active_redacted
+remote_audio_observer_not_bound_to_connected_room_redacted
+```
 
 ## Checks
 

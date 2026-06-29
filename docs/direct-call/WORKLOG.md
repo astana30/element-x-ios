@@ -2,6 +2,28 @@
 
 This file records durable phase-level progress for future Codex and strategy sessions.
 
+## 2026-06-29 — 2.49A RemoteAudioTrackLivenessProof
+
+Implemented the DEBUG-only remote audio track/liveness proof layer after the proven Retry28 participant path. No physical proof was run in this phase.
+
+What changed:
+- receiver proof now tracks remote audio observer binding, audio publication, subscription, unmuted state, audio level, rendered-frame liveness, wait status, and final classification
+- retained-room participant snapshots now carry redacted audio publication/subscription/unmuted/level/liveness booleans
+- LiveKit runtime callbacks now feed receiver proof from remote audio publish, subscribe, mute, speaking-participant, snapshot, and audio-renderer frame events
+- sender runtime join now attempts audio-only local microphone publish after successful sender LiveKit join and records redacted runtime-derived publish, permission, muted-state, and audio-session buckets
+- classifications distinguish liveness success, silent subscribed track, missing publication, missing subscription, muted track, timeout, sender publish/microphone/audio-session blockers, and observer binding failures
+
+Safety:
+- no APNs, production APNs, `dev/invite`, physical media connect, physical LiveKit join, camera/video, Matrix event emission, or full flow
+- no raw token, JWT, authorization header, APNs payload, invite body, LiveKit URL, room ID, call ID, user ID, device ID, participant identity, track SID, pending metadata, or private log exposure
+
+Checks:
+- `swiftformat` on changed Swift files
+- `swiftlint lint` on changed Swift files; existing large proof-adapter warnings remain non-serious
+- `DIRECT_CALL_ONLY_TESTING='UnitTests/DirectCallEngineTests UnitTests/NativeIncomingCallLifecycleContractTests' Tools/Scripts/verify_direct_call_unit.sh`
+
+Next phase: `2.49A-Physical-Retry29 — one-shot remote audio track liveness validation`.
+
 ## 2026-06-29 — 2.48Z-Retry28ParticipantSeenAccountingRepair
 
 Closed the Retry28 accounting repair without rerunning physical proof.
