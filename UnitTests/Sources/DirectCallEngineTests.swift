@@ -5169,6 +5169,44 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func receiverCallKitSurfaceOperatorReadinessRepairRecordsMarkerAndClassifiesSurfaceState() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+        let classificationStart = try #require(adapterSource.range(of: "var receiverCallKitSurfaceOperatorReadinessFinalClassification: String")?.lowerBound)
+        let classificationEnd = try #require(adapterSource.range(of: "var redactedLines: [String]", range: classificationStart..<adapterSource.endIndex)?.lowerBound)
+        let classificationSource = String(adapterSource[classificationStart..<classificationEnd])
+
+        #expect(adapterSource.contains("receiverCallKitOperatorReadyURLHookPath = \"/direct-call/receiver-callkit-operator-ready\""))
+        #expect(adapterSource.contains("armReceiverCallKitOperatorReadyURLHook(components)"))
+        #expect(adapterSource.contains("recordCallKitOperatorReadyToAnswer(expectedSurface)"))
+        #expect(adapterSource.contains("summary.receiverCallKitOperatorReadyMarkerRequestedBeforeAPNs = true"))
+        #expect(adapterSource.contains("baseSummary.receiverCallKitOperatorReadyMarkerRequestedBeforeAPNs = baseSummary.operatorReadyToAnswer"))
+        #expect(adapterSource.contains("receiver_callkit_surface_operator_readiness_repair_present=\\(receiverCallKitSurfaceOperatorReadinessRepairPresent)"))
+        #expect(adapterSource.contains("receiver_callkit_surface_operator_readiness_repair_debug_only=\\(receiverCallKitSurfaceOperatorReadinessRepairDebugOnly)"))
+        #expect(adapterSource.contains("receiver_callkit_surface_operator_readiness_repair_raw_identifiers_logged=\\(receiverCallKitSurfaceOperatorReadinessRepairRawIdentifiersLogged)"))
+        #expect(adapterSource.contains("receiver_callkit_operator_ready_marker_requested_before_apns=\\(receiverCallKitOperatorReadyMarkerRequestedBeforeAPNs)"))
+        #expect(adapterSource.contains("receiver_callkit_operator_ready_marker_recorded_before_report=\\(voIPOperatorMarkerSetBeforeReport)"))
+        #expect(adapterSource.contains("receiver_callkit_expected_surface_bucket=\\(operatorExpectedSurface)"))
+        #expect(adapterSource.contains("receiver_callkit_receiver_app_state_before_apns_bucket=\\(receiverAppLifecycleStateBeforeAPNsBucket)"))
+        #expect(adapterSource.contains("receiver_callkit_receiver_app_state_at_report_bucket=\\(Self.safeAppStateBucket(appStateAtReportCompletion))"))
+        #expect(adapterSource.contains("receiver_callkit_answer_window_extended_for_ui_surface=\\(receiverCallKitAnswerWindowExtendedForUISurface)"))
+        #expect(adapterSource.contains("receiver_callkit_surface_operator_readiness_final_classification=\\(receiverCallKitSurfaceOperatorReadinessFinalClassification)"))
+        #expect(adapterSource.contains("completedSummary.receiverCallKitAnswerWindowExtendedForUISurface = answerableWindowRequested"))
+        #expect(adapterSource.contains("summary.receiverCallKitAnswerWindowExtendedForUISurface = true"))
+
+        #expect(classificationSource.contains("receiver_callkit_surface_ready_for_answer_redacted"))
+        #expect(classificationSource.contains("receiver_callkit_operator_marker_missing_redacted"))
+        #expect(classificationSource.contains("receiver_callkit_report_submitted_but_ui_missing_redacted"))
+        #expect(classificationSource.contains("receiver_callkit_foreground_state_requires_in_app_answer_redacted"))
+        #expect(classificationSource.contains("receiver_callkit_answer_window_timeout_redacted"))
+        #expect(classificationSource.contains("receiver_callkit_action_received_without_ui_marker_redacted"))
+        #expect(classificationSource.contains("receiver_callkit_report_failed_before_answer_redacted"))
+        #expect(!classificationSource.contains("room_id=\\("))
+        #expect(!classificationSource.contains("call_id=\\("))
+        #expect(!classificationSource.contains("peer_user_id=\\("))
+        #expect(!classificationSource.contains("device_id=\\("))
+    }
+
+    @Test
     func controlledConnectSwitchDefaultsDisabledAndBlocksBeforeSideEffects() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
         let switchStart = try #require(adapterSource.range(of: "#if DEBUG && canImport(PushKit) && os(iOS)\nprivate struct SalemXControlledMediaConnectSwitch")?.lowerBound)

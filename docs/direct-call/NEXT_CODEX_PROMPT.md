@@ -13,45 +13,88 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-Retry25 proved receiver PushKit token readiness, one sandbox APNs delivery, VoIP PushKit callback, CallKit report, and CallKit Answer availability. It did not reach controlled media connect or sender runtime join.
+Retry26 sent exactly one sandbox APNs and proved the receiver reached VoIP PushKit and CallKit report submission/completion, but it did not reach CallKit Answer or any post-answer media continuation.
 
 ```text
 receiver_pushkit_token_readiness_final_classification=receiver_pushkit_token_ready_before_apns_redacted
+room_validation_preflight=pass
 background_apns_push_result=sandbox_success
 APNs_sent=true
 physical_voip_push_received=true
+receiver_voip_push_callback_seen_after_apns=true
 receiver_callkit_report_requested_after_apns=true
 receiver_callkit_report_submitted_after_apns=true
 receiver_callkit_report_result_bucket=reported
-receiver_callkit_answer_available_after_apns=true
-receiver_callkit_answer_action_received_after_apns=true
-callkit_answer_action_received=true
-receiver_callkit_answer_availability_final_classification=receiver_callkit_answer_available_redacted
-controlled_connect_first_attempt_result=not_requested
-livekit_join_result=not_requested
-media_connect_requested=false
-livekit_join_requested=false
+receiver_callkit_report_completion_observed=true
+receiver_callkit_provider_retained_for_answer=true
+receiver_callkit_delegate_retained_for_answer=true
+receiver_callkit_active_call_uuid_retained=true
+receiver_callkit_operator_ready_to_answer_before_report=false
+receiver_callkit_ui_surface_observed_by_operator=false
+receiver_callkit_answer_available_after_apns=false
+receiver_callkit_answer_action_received_after_apns=false
+receiver_callkit_answer_window_started=true
+receiver_callkit_answer_window_completed=false
+receiver_callkit_answer_window_timeout=false
+receiver_callkit_answer_availability_final_classification=receiver_callkit_report_submitted_but_ui_missing_redacted
+receiver_post_answer_continuation_started=false
+receiver_post_answer_media_credentials_requested=false
+receiver_post_answer_controlled_connect_requested=false
+receiver_post_answer_livekit_join_requested=false
 sender_runtime_join_triggered=false
-blocked_reason=media_credentials_request_deferred_until_next_phase
 ```
 
-This proves Retry25 restored APNs/PushKit/CallKit Answer, and the remaining blocker is the post-answer controlled media continuation.
+This narrows the blocker to receiver CallKit surface/operator readiness before Answer. It is not a media credentials, receiver connect, sender runtime join, or participant observation result.
+
+## New Repair In HEAD
+
+`2.48Z-ReceiverCallKitSurfaceOperatorReadinessRepair`
+
+New DEBUG-only surface:
+
+```text
+kz.salemx.msg://debug/direct-call/receiver-callkit-operator-ready?expected_surface=<foreground|banner|fullscreen|lockscreen>
+```
+
+New redacted proof fields:
+
+```text
+receiver_callkit_surface_operator_readiness_repair_present=true
+receiver_callkit_surface_operator_readiness_repair_debug_only=true
+receiver_callkit_surface_operator_readiness_repair_raw_identifiers_logged=false
+receiver_callkit_operator_ready_marker_requested_before_apns=<bool>
+receiver_callkit_operator_ready_marker_recorded_before_report=<bool>
+receiver_callkit_expected_surface_bucket=<foreground|banner|fullscreen|lockscreen|unknown>
+receiver_callkit_receiver_app_state_before_apns_bucket=<foreground|background|inactive|unknown>
+receiver_callkit_receiver_app_state_at_report_bucket=<foreground|background|inactive|unknown>
+receiver_callkit_report_submitted_after_apns=<bool>
+receiver_callkit_report_completion_observed=<bool>
+receiver_callkit_answer_window_started=<bool>
+receiver_callkit_answer_window_extended_for_ui_surface=<bool>
+receiver_callkit_answer_window_timeout=<bool>
+receiver_callkit_ui_surface_observed_by_operator=<bool>
+receiver_callkit_answer_action_received_after_apns=<bool>
+receiver_callkit_surface_operator_readiness_final_classification=<redacted_bucket>
+```
+
+Known classifications:
+
+```text
+receiver_callkit_surface_ready_for_answer_redacted
+receiver_callkit_operator_marker_missing_redacted
+receiver_callkit_report_submitted_but_ui_missing_redacted
+receiver_callkit_foreground_state_requires_in_app_answer_redacted
+receiver_callkit_answer_window_timeout_redacted
+receiver_callkit_action_received_without_ui_marker_redacted
+receiver_callkit_report_failed_before_answer_redacted
+```
 
 ## Next Phase
 
-`2.48Z-Physical2-Retry26 — one-shot post-answer media credentials continuation validation, receiver iPhone PRO, sender Carpediem`
+`2.48Z-Physical2-Retry27 — one-shot CallKit surface/operator readiness validation, receiver iPhone PRO, sender Carpediem`
 
 Goal:
-Validate that after real VoIP push and CallKit Answer the DEBUG-only controlled receiver path continues through authenticated pending metadata, media credentials, controlled receiver LiveKit connect, retained receiver connected session lease, sender runtime join trigger, and overlap/participant observation. Do not require remote audio track liveness yet.
-
-Required devices:
-
-```text
-receiver=iPhone PRO
-sender=Carpediem
-do not use iPhone Жанелька unless roles are explicitly changed
-do not use Simulator
-```
+Validate that the receiver helper arms the CallKit operator-ready marker before APNs, CallKit report completion produces an answerable surface/action, and only then allows post-answer media continuation. Do not send APNs until all preflight fields are green and explicit manual confirmation is entered.
 
 Before APNs, require:
 
@@ -62,52 +105,30 @@ sender_device_connected=true
 receiver_app_matrix_session_whoami_result=success_redacted
 sender_app_matrix_session_whoami_result=success_redacted
 room_validation_preflight=pass
-receiver_pushkit_token_readiness_repair_present=true
-receiver_pushkit_token_readiness_repair_debug_only=true
-receiver_pushkit_token_readiness_repair_raw_identifiers_logged=false
-receiver_pushkit_registration_requested_before_apns=true
-receiver_pushkit_token_callback_seen_before_apns=true
-receiver_pushkit_token_present_before_apns=true
-receiver_pushkit_token_upload_attempted_before_apns=true
-receiver_pushkit_token_upload_result_bucket=success_redacted
-receiver_pushkit_token_server_store_result_bucket=persisted_redacted
-receiver_pushkit_token_environment_bucket=development
-receiver_pushkit_token_device_binding_expected_bucket=expected_redacted
-receiver_pushkit_token_readiness_wait_started=true
-receiver_pushkit_token_readiness_wait_completed=true
-receiver_pushkit_token_readiness_wait_timeout=false
 receiver_pushkit_token_readiness_final_classification=receiver_pushkit_token_ready_before_apns_redacted
-receiver_post_answer_media_credentials_continuation_repair_present=true
-receiver_post_answer_media_credentials_continuation_repair_debug_only=true
-receiver_post_answer_media_credentials_continuation_repair_raw_identifiers_logged=false
+receiver_callkit_surface_operator_readiness_repair_present=true
+receiver_callkit_surface_operator_readiness_repair_debug_only=true
+receiver_callkit_surface_operator_readiness_repair_raw_identifiers_logged=false
+receiver_callkit_operator_ready_marker_requested_before_apns=true
+receiver_callkit_expected_surface_bucket=foreground
 APNs_sent=false
 ```
 
-After Answer, require:
+After the single APNs/Answer attempt, require:
 
 ```text
-receiver_post_answer_continuation_started=true
-receiver_post_answer_pending_metadata_reference_present=true
-receiver_post_answer_pending_metadata_fetch_requested=true
-receiver_post_answer_pending_metadata_fetch_result=success_redacted
-receiver_post_answer_pending_metadata_authorized=true
-receiver_post_answer_media_credentials_requested=true
-receiver_post_answer_media_credentials_result=success_redacted
-receiver_post_answer_media_credentials_expires_present=true
-receiver_post_answer_controlled_connect_requested=true
-receiver_post_answer_controlled_connect_result=success_redacted
-receiver_post_answer_livekit_join_requested=true
-receiver_post_answer_livekit_join_result=success_redacted
-receiver_post_answer_final_classification=receiver_post_answer_livekit_join_success_redacted
-controlled_connect_first_attempt_result=success_redacted
-livekit_join_result=success_redacted
-receiver_connected_session_lease_acquired=true
-sender_runtime_join_triggered=true
+physical_voip_push_received=true
+receiver_callkit_report_submitted_after_apns=true
+receiver_callkit_report_completion_observed=true
+receiver_callkit_operator_ready_marker_recorded_before_report=true
+receiver_callkit_answer_window_started=true
+receiver_callkit_answer_window_extended_for_ui_surface=true
+receiver_callkit_answer_action_received_after_apns=true
+callkit_answer_action_received=true
+receiver_callkit_surface_operator_readiness_final_classification=receiver_callkit_surface_ready_for_answer_redacted
 ```
 
-If any post-answer step fails, stop after the single attempt and report the redacted `receiver_post_answer_final_classification`.
-
-Only after a green readiness proof and explicit manual confirmation may a future helper send exactly one sandbox APNs.
+If Answer succeeds, continue to the existing post-answer continuation proof. If the UI/action is still missing, stop after the one attempt and report the redacted `receiver_callkit_surface_operator_readiness_final_classification`.
 
 Hard limits:
 
@@ -124,5 +145,3 @@ do not start full flow
 do not touch project/signing files
 do not log raw token, URL, room ID, call ID, user ID, device ID, APNs payload, invite body, auth header, pending metadata contents
 ```
-
-Commit only if Retry24B narrows token readiness further or restores the green receiver PushKit token readiness proof.

@@ -3465,6 +3465,11 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var receiverVoIPPushCallbackSeenAfterAPNs = false
     var receiverCallKitReportRequestedAfterAPNs = false
     var receiverCallKitAnswerAvailableAfterAPNs = false
+    var receiverCallKitSurfaceOperatorReadinessRepairPresent = true
+    var receiverCallKitSurfaceOperatorReadinessRepairDebugOnly = true
+    var receiverCallKitSurfaceOperatorReadinessRepairRawIdentifiersLogged = false
+    var receiverCallKitOperatorReadyMarkerRequestedBeforeAPNs = false
+    var receiverCallKitAnswerWindowExtendedForUISurface = false
     var apnsProviderAcceptanceResultBucket = "unknown"
     var apnsDeliveryCallbackMissingAfterAcceptance = false
     var receiverVoIPPushDeliveryFinalClassification = "receiver_pushkit_token_device_binding_unknown_redacted"
@@ -4335,6 +4340,43 @@ private struct SalemXVoIPPushReceiptProofSummary {
         return "receiver_callkit_answer_window_timeout_redacted"
     }
 
+    var receiverCallKitSurfaceOperatorReadinessFinalClassification: String {
+        if callKitAnswerActionReceived,
+           receiverCallKitOperatorReadyMarkerRequestedBeforeAPNs || callKitUISurfaceObservedByOperator {
+            return "receiver_callkit_surface_ready_for_answer_redacted"
+        }
+        if callKitAnswerActionReceived {
+            return "receiver_callkit_action_received_without_ui_marker_redacted"
+        }
+        if receiverCallKitAnswerAvailableAfterAPNs {
+            return "receiver_callkit_surface_ready_for_answer_redacted"
+        }
+        if callKitReportRequested,
+           callKitReportResult != "reported",
+           callKitReportResult != "fake_reported",
+           callKitReportResult != "pending" {
+            return "receiver_callkit_report_failed_before_answer_redacted"
+        }
+        if !receiverCallKitOperatorReadyMarkerRequestedBeforeAPNs || !voIPOperatorMarkerSetBeforeReport {
+            return "receiver_callkit_operator_marker_missing_redacted"
+        }
+        if Self.safeAppStateBucket(appStateAtReportCompletion) == "foreground",
+           !callKitUISurfaceObservedByOperator,
+           !callKitAnswerActionReceived {
+            return "receiver_callkit_foreground_state_requires_in_app_answer_redacted"
+        }
+        if callKitReportRequested,
+           callKitReportResult == "reported" || callKitReportResult == "fake_reported",
+           !callKitUISurfaceObservedByOperator,
+           !callKitAnswerActionReceived {
+            return "receiver_callkit_report_submitted_but_ui_missing_redacted"
+        }
+        if pushKitCompletionAnswerableWindowResult == "timeout_elapsed" {
+            return "receiver_callkit_answer_window_timeout_redacted"
+        }
+        return "receiver_callkit_report_submitted_but_ui_missing_redacted"
+    }
+
     var redactedLines: [String] {
         [
             "proof_source=\(proofSource)",
@@ -4399,6 +4441,14 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "receiver_callkit_answer_availability_repair_present=true",
             "receiver_callkit_answer_availability_repair_debug_only=true",
             "receiver_callkit_answer_availability_repair_raw_identifiers_logged=false",
+            "receiver_callkit_surface_operator_readiness_repair_present=\(receiverCallKitSurfaceOperatorReadinessRepairPresent)",
+            "receiver_callkit_surface_operator_readiness_repair_debug_only=\(receiverCallKitSurfaceOperatorReadinessRepairDebugOnly)",
+            "receiver_callkit_surface_operator_readiness_repair_raw_identifiers_logged=\(receiverCallKitSurfaceOperatorReadinessRepairRawIdentifiersLogged)",
+            "receiver_callkit_operator_ready_marker_requested_before_apns=\(receiverCallKitOperatorReadyMarkerRequestedBeforeAPNs)",
+            "receiver_callkit_operator_ready_marker_recorded_before_report=\(voIPOperatorMarkerSetBeforeReport)",
+            "receiver_callkit_expected_surface_bucket=\(operatorExpectedSurface)",
+            "receiver_callkit_receiver_app_state_before_apns_bucket=\(receiverAppLifecycleStateBeforeAPNsBucket)",
+            "receiver_callkit_receiver_app_state_at_report_bucket=\(Self.safeAppStateBucket(appStateAtReportCompletion))",
             "receiver_callkit_report_submitted_after_apns=\(callKitReportResult == "reported" || callKitReportResult == "fake_reported")",
             "receiver_callkit_report_result_bucket=\(callKitReportResult)",
             "receiver_callkit_report_completion_observed=\(callKitReportCompletionObserved)",
@@ -4410,9 +4460,11 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "receiver_callkit_answer_action_received_after_apns=\(callKitAnswerActionReceived)",
             "receiver_callkit_end_or_reset_before_answer=\(callKitEndActionDelivered || callKitProviderDidResetObserved)",
             "receiver_callkit_answer_window_started=\(pushKitCompletionAnswerableWindowRequested)",
+            "receiver_callkit_answer_window_extended_for_ui_surface=\(receiverCallKitAnswerWindowExtendedForUISurface)",
             "receiver_callkit_answer_window_completed=\(pushKitCompletionAnswerableWindowResult != "pending" && pushKitCompletionAnswerableWindowResult != "not_requested")",
             "receiver_callkit_answer_window_timeout=\(pushKitCompletionAnswerableWindowResult == "timeout_elapsed")",
             "receiver_callkit_answer_availability_final_classification=\(receiverCallKitAnswerAvailabilityFinalClassification)",
+            "receiver_callkit_surface_operator_readiness_final_classification=\(receiverCallKitSurfaceOperatorReadinessFinalClassification)",
             "apns_provider_acceptance_result_bucket=\(apnsProviderAcceptanceResultBucket)",
             "apns_delivery_callback_missing_after_acceptance=\(apnsDeliveryCallbackMissingAfterAcceptance)",
             "receiver_voip_push_delivery_final_classification=\(receiverVoIPPushDeliveryFinalClassification)",
@@ -8069,6 +8121,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let senderConnectedSignalHandoffURLHookPath = "/direct-call/sender-connected-signal-handoff"
     private static let receiverPushKitTokenReadinessURLHookPath = "/direct-call/receiver-pushkit-token-readiness"
     private static let receiverVoIPPushDeliveryTriageURLHookPath = "/direct-call/receiver-voip-push-delivery-triage"
+    private static let receiverCallKitOperatorReadyURLHookPath = "/direct-call/receiver-callkit-operator-ready"
     private static let senderRuntimeLiveKitJoinConfirmation = "RUN_2_48Z_REAL_SENDER_RUNTIME_JOIN"
     private static let uploadSmokeDefaultURLString = "https://matrix.mertis.kz/_matrix/client/unstable/kz.salemx.direct_call/pushkit/token"
     private static let matrixSessionWhoamiURLString = "https://matrix.mertis.kz/_matrix/client/v3/account/whoami"
@@ -8213,6 +8266,12 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             return true
         }
 
+        if url.path == receiverCallKitOperatorReadyURLHookPath {
+            let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            armReceiverCallKitOperatorReadyURLHook(components)
+            return true
+        }
+
         if handleSenderRuntimeURLHook(url) {
             return true
         }
@@ -8340,6 +8399,11 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         let proof = summary.redactedLines.joined(separator: "\n")
         lock.unlock()
         writeVoIPPushReceiptProof(proof)
+    }
+
+    private static func armReceiverCallKitOperatorReadyURLHook(_ components: URLComponents?) {
+        let expectedSurface = components?.queryItems?.first { $0.name == "expected_surface" || $0.name == "surface" }?.value ?? "unknown"
+        _ = recordCallKitOperatorReadyToAnswer(expectedSurface)
     }
 
     private static func armSimulatorRemotePeerContextHandoffURLHook() {
@@ -9429,13 +9493,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     }
 
     @objc static func recordCallKitOperatorReadyToAnswer(_ expectedSurface: String) -> String {
-        let safeExpectedSurface: String
-        switch expectedSurface {
-        case "lockscreen", "fullscreen", "banner", "foreground":
-            safeExpectedSurface = expectedSurface
-        default:
-            safeExpectedSurface = "unknown"
-        }
+        let safeExpectedSurface = safeExpectedSurfaceBucket(expectedSurface)
 
         lock.lock()
         pendingOperatorReadyToAnswer = true
@@ -9443,10 +9501,20 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         var summary = latestVoIPPushReceiptSummary
         summary.operatorReadyToAnswer = true
         summary.operatorExpectedSurface = safeExpectedSurface
+        summary.receiverCallKitOperatorReadyMarkerRequestedBeforeAPNs = true
         lock.unlock()
 
         updateLatestVoIPPushReceiptSummary(summary)
         return redactedVoIPPushReceiptSummary()
+    }
+
+    private static func safeExpectedSurfaceBucket(_ expectedSurface: String) -> String {
+        switch expectedSurface {
+        case "lockscreen", "fullscreen", "banner", "foreground":
+            return expectedSurface
+        default:
+            return "unknown"
+        }
     }
 
     @objc static func redactedVoIPPushReceiptSummary() -> String {
@@ -9664,6 +9732,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             baseSummary.voIPReportQueueMatchesLocal = true
             baseSummary.voIPProviderReuseMatchesLocal = true
             baseSummary.voIPOperatorMarkerSetBeforeReport = baseSummary.operatorReadyToAnswer
+            baseSummary.receiverCallKitOperatorReadyMarkerRequestedBeforeAPNs = baseSummary.operatorReadyToAnswer
         }
         lock.lock()
         callKitReportCompletionDate = nil
@@ -9753,6 +9822,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         completedSummary.callKitReportCompletionAtMsRedacted = reportResult != "timeout_or_pending_redacted"
         completedSummary.callKitSurfaceRepairReportCompletionTimeoutClassified = reportResult == "timeout_or_pending_redacted"
         completedSummary.pushKitCompletionAnswerableWindowRequested = answerableWindowRequested
+        completedSummary.receiverCallKitAnswerWindowExtendedForUISurface = answerableWindowRequested
         completedSummary.pushKitCompletionAnswerableWindowResult = answerableWindowResult
         completedSummary.pushKitCompletionAnswerableWindowDurationBucket = answerableWindowStartedAt.map { elapsedBucket(from: $0, to: completionCallDate) } ?? "not_requested"
         completedSummary.pushKitCompletionAfterReportMsBucket = reportCompletionDate.map { elapsedBucket(from: $0, to: completionCallDate) } ?? "unknown"
@@ -9803,6 +9873,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         summary.callKitReportCompletionObserved = true
         summary.callKitReportCompletionAtMsRedacted = true
         summary.pushKitCompletionAnswerableWindowRequested = true
+        summary.receiverCallKitAnswerWindowExtendedForUISurface = true
         summary.pushKitCompletionAnswerableWindowResult = "pending"
         summary.pushKitCompletionAnswerableWindowDurationBucket = "not_finished"
         summary.appStateAtReportCompletion = currentApplicationStateProof()

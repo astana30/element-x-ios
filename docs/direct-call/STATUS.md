@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-ReceiverPostAnswerMediaCredentialsContinuationRepair — Retry25 proved receiver PushKit token readiness, one sandbox APNs delivery, VoIP PushKit callback, CallKit report, and CallKit Answer availability (`receiver_callkit_answer_availability_final_classification=receiver_callkit_answer_available_redacted`). It then stopped before media because the proof still looked terminal at `blocked_reason=media_credentials_request_deferred_until_next_phase`, with `controlled_connect_first_attempt_result=not_requested`, `livekit_join_result=not_requested`, and `sender_runtime_join_triggered=false`. The repair adds a DEBUG-only post-answer continuation proof ladder and replaces the stale deferred blocked reason after authenticated pending metadata with a redacted classification that identifies whether the stop is pending metadata, media credentials, controlled connect, or LiveKit join. The next physical phase is `2.48Z-Physical2-Retry26 — one-shot post-answer media credentials continuation validation, receiver iPhone PRO, sender Carpediem`.
+After 2.48Z-ReceiverCallKitSurfaceOperatorReadinessRepair — Retry26 proved one sandbox APNs delivery through VoIP PushKit and CallKit report submission/completion with provider, delegate, and UUID retained, but stopped before Answer because the receiver had no operator-ready marker recorded before report and no observed answerable CallKit UI/action. The post-answer media continuation was not reached. The repair adds a DEBUG-only operator-readiness URL hook plus redacted surface/app-state classification fields so Retry27 can arm the marker before APNs and distinguish marker-missing, foreground/in-app-surface, report-failed, answer-window-timeout, and UI-missing outcomes. The next physical phase is `2.48Z-Physical2-Retry27 — one-shot CallKit surface/operator readiness validation, receiver iPhone PRO, sender Carpediem`.
 
 ## Latest App Code Checkpoint
 
@@ -38,6 +38,39 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Checksum: `654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e`
 
 ## Proven Checkpoints
+
+- Retry26 closed as APNs/PushKit/CallKit-report success with CallKit Answer UI/action missing; this is not post-answer media continuation success:
+  ```text
+  receiver_pushkit_token_readiness_final_classification=receiver_pushkit_token_ready_before_apns_redacted
+  room_validation_preflight=pass
+  background_apns_push_result=sandbox_success
+  APNs_sent=true
+  physical_voip_push_received=true
+  receiver_voip_push_callback_seen_after_apns=true
+  receiver_callkit_report_requested_after_apns=true
+  receiver_callkit_report_submitted_after_apns=true
+  receiver_callkit_report_result_bucket=reported
+  receiver_callkit_report_completion_observed=true
+  receiver_callkit_provider_retained_for_answer=true
+  receiver_callkit_delegate_retained_for_answer=true
+  receiver_callkit_active_call_uuid_retained=true
+  receiver_callkit_operator_ready_to_answer_before_report=false
+  receiver_callkit_ui_surface_observed_by_operator=false
+  receiver_callkit_answer_available_after_apns=false
+  receiver_callkit_answer_action_received_after_apns=false
+  receiver_callkit_answer_window_started=true
+  receiver_callkit_answer_window_completed=false
+  receiver_callkit_answer_window_timeout=false
+  receiver_callkit_answer_availability_final_classification=receiver_callkit_report_submitted_but_ui_missing_redacted
+  receiver_post_answer_continuation_started=false
+  receiver_post_answer_media_credentials_requested=false
+  receiver_post_answer_controlled_connect_requested=false
+  receiver_post_answer_livekit_join_requested=false
+  sender_runtime_join_triggered=false
+  ```
+  - Exactly one sandbox APNs was sent in Retry26; do not repeat it.
+  - No production APNs, `dev/invite`, repeated receiver connect, repeated LiveKit join, microphone/camera permission, video, Matrix event emission, or full flow occurred.
+  - Current narrowed blocker: CallKit report completed but the answerable UI/action was missing because receiver operator/surface readiness was not established before report.
 
 - Retry25 closed as PushKit/APNs/CallKit Answer availability success, not media success:
   ```text

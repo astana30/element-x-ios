@@ -2,6 +2,59 @@
 
 This file records durable phase-level progress for future Codex and strategy sessions.
 
+## 2026-06-29 — 2.48Z-ReceiverCallKitSurfaceOperatorReadinessRepair
+
+Closed Retry26 as APNs/PushKit/CallKit-report success with CallKit Answer UI/action missing. This is not post-answer media continuation success.
+
+Retry26 result:
+
+```text
+receiver_pushkit_token_readiness_final_classification=receiver_pushkit_token_ready_before_apns_redacted
+room_validation_preflight=pass
+background_apns_push_result=sandbox_success
+APNs_sent=true
+physical_voip_push_received=true
+receiver_voip_push_callback_seen_after_apns=true
+receiver_callkit_report_requested_after_apns=true
+receiver_callkit_report_submitted_after_apns=true
+receiver_callkit_report_result_bucket=reported
+receiver_callkit_report_completion_observed=true
+receiver_callkit_provider_retained_for_answer=true
+receiver_callkit_delegate_retained_for_answer=true
+receiver_callkit_active_call_uuid_retained=true
+receiver_callkit_operator_ready_to_answer_before_report=false
+receiver_callkit_ui_surface_observed_by_operator=false
+receiver_callkit_answer_available_after_apns=false
+receiver_callkit_answer_action_received_after_apns=false
+receiver_callkit_answer_window_started=true
+receiver_callkit_answer_window_completed=false
+receiver_callkit_answer_window_timeout=false
+receiver_callkit_answer_availability_final_classification=receiver_callkit_report_submitted_but_ui_missing_redacted
+receiver_post_answer_continuation_started=false
+receiver_post_answer_media_credentials_requested=false
+receiver_post_answer_controlled_connect_requested=false
+receiver_post_answer_livekit_join_requested=false
+sender_runtime_join_triggered=false
+```
+
+Root cause narrowed:
+- the one sandbox APNs reached the receiver, PushKit callback fired, and CallKit report submission/completion succeeded
+- CallKit provider/delegate/active UUID retention stayed green
+- no Answer action was observed and no operator-visible CallKit UI surface was recorded
+- the operator-ready marker was not recorded before CallKit report, so the run stopped before pending metadata, media credentials, controlled connect, sender join, or participant observation
+
+Repair:
+- added a DEBUG-only URL hook for the receiver CallKit operator-ready marker so helpers can arm the existing marker before APNs without using Developer Options UI
+- added redacted `receiver_callkit_surface_operator_readiness_*` proof fields for marker request/recording, expected surface, app state before APNs and at report, answer-window extension, and final surface-readiness classification
+- preserved the existing answer-availability proof while adding separate classifications for marker missing, foreground/in-app-answer surface, report submitted but UI missing, report failure, answer-window timeout, and action-without-UI-marker
+
+Safety:
+- exactly one sandbox APNs was sent in Retry26 before this repair; no APNs were sent during the repair
+- no repeated APNs, production APNs, `dev/invite`, physical media connect, physical LiveKit join, microphone/camera permission, video, Matrix event emission, or full flow
+- no raw tokens, JWTs, authorization headers, APNs payloads, invite bodies, LiveKit URLs, room IDs, call IDs, user IDs, device IDs, call handles, private logs, or pending metadata contents recorded
+
+Next phase: `2.48Z-Physical2-Retry27 — one-shot CallKit surface/operator readiness validation, receiver iPhone PRO, sender Carpediem`.
+
 ## 2026-06-29 — 2.48Z-ReceiverPostAnswerMediaCredentialsContinuationRepair
 
 Closed Retry25 as receiver PushKit/APNs/CallKit Answer availability success and post-answer media continuation blocker. This is not controlled media connect success and not remote participant success.
