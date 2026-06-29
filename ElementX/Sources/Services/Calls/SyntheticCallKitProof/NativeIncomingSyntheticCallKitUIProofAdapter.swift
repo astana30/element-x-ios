@@ -5125,14 +5125,25 @@ private extension SalemXVoIPPushReceiptProofSummary {
 
     private static func safeServerStoreResultBucket(_ value: String?) -> String {
         switch value {
-        case "persisted", "success_redacted", "redacted_match":
+        case "persisted", "persisted_redacted", "success_redacted", "redacted_match":
             return "persisted_redacted"
+        case "known_redacted":
+            return "known_redacted"
         case "not_requested":
             return "not_requested"
         case .some(let value) where value.contains("fail") || value.contains("error"):
             return "failed_redacted"
         default:
             return "unknown"
+        }
+    }
+
+    private static func receiverPushKitServerStoreResultKnownSuccess(_ bucket: String) -> Bool {
+        switch bucket {
+        case "persisted_redacted", "success_redacted", "known_redacted":
+            return true
+        default:
+            return false
         }
     }
 
@@ -5209,14 +5220,16 @@ private extension SalemXVoIPPushReceiptProofSummary {
     }
 
     private static func receiverPushKitTokenReadinessClassification(summary: SalemXVoIPPushReceiptProofSummary) -> String {
-        let ready = summary.receiverPushKitRegistrationRequestedBeforeAPNs &&
+        let serverStoreReady = Self.receiverPushKitServerStoreResultKnownSuccess(summary.receiverPushKitTokenServerStoreResultBucket)
+        let ready = summary.receiverPushKitTokenReadinessWaitCompleted &&
+            !summary.receiverPushKitTokenReadinessWaitTimeout &&
+            summary.receiverPushKitRegistrationRequestedBeforeAPNs &&
             summary.receiverPushKitTokenCallbackSeenBeforeAPNs &&
             summary.receiverPushKitTokenPresentBeforeAPNs &&
             summary.receiverPushKitTokenUploadAttemptedBeforeAPNs &&
             summary.receiverPushKitTokenUploadResultBucket == "success_redacted" &&
-            summary.receiverPushKitTokenServerStoreResultBucket == "persisted_redacted" &&
-            summary.receiverPushKitTokenEnvironmentBucket == "development" &&
-            summary.receiverPushKitTokenDeviceBindingExpectedBucket == "expected_redacted"
+            serverStoreReady &&
+            summary.receiverPushKitTokenEnvironmentBucket == "development"
         if ready {
             return "receiver_pushkit_token_ready_before_apns_redacted"
         }
@@ -5229,8 +5242,14 @@ private extension SalemXVoIPPushReceiptProofSummary {
         if !summary.receiverPushKitTokenCallbackSeenBeforeAPNs {
             return "receiver_pushkit_token_callback_missing_before_apns_redacted"
         }
+        if !summary.receiverPushKitTokenPresentBeforeAPNs {
+            return "receiver_pushkit_token_missing_before_apns_redacted"
+        }
         if summary.receiverPushKitTokenUploadResultBucket == "failed_redacted" {
             return "receiver_pushkit_token_upload_failed_before_apns_redacted"
+        }
+        if !serverStoreReady {
+            return "receiver_pushkit_token_server_store_unknown_before_apns_redacted"
         }
         return "receiver_pushkit_token_server_store_unknown_before_apns_redacted"
     }
