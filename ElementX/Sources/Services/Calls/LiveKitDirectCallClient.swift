@@ -560,6 +560,9 @@ extension LiveKitDirectCallClient: RoomDelegate {
         Task { @MainActor [weak self] in
             #if DEBUG && canImport(PushKit) && os(iOS)
             self?.attachRemoteAudioLivenessRendererIfNeeded(room: room, publication: publication)
+            if publication.kind == .audio {
+                SalemXPushKitRegistrationSmokeDebugBridge.recordReceiverRemoteAudioSubscriptionCallback()
+            }
             #endif
             #if DEBUG && canImport(PushKit) && os(iOS)
             SalemXPushKitRegistrationSmokeDebugBridge.recordReceiverRemoteParticipantRuntimeObservation(participantCountBucket: Self.remoteParticipantCountBucket(for: room),

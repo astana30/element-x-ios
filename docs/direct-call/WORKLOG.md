@@ -2,6 +2,73 @@
 
 This file records durable phase-level progress for future Codex and strategy sessions.
 
+## 2026-06-29 — 2.49A-ReceiverRemoteAudioSubscriptionRepair
+
+Closed Retry29 as a final one-shot physical proof and implemented the no-APNs receiver subscription repair for the next run.
+
+Retry29 proved:
+
+```text
+APNs_sent=true
+background_apns_push_result=sandbox_success
+physical_voip_push_received=true
+callkit_answer_action_received=true
+receiver_post_answer_pending_metadata_fetch_result=success_redacted
+receiver_post_answer_media_credentials_result=success_redacted
+receiver_post_answer_controlled_connect_result=success_redacted
+receiver_post_answer_livekit_join_result=success_redacted
+sender_runtime_join_executor_invoked=true
+sender_runtime_join_pending_metadata_fetch_result=success_redacted
+sender_runtime_join_credentials_result=success_redacted
+sender_runtime_join_runtime_result=success_redacted
+sender_livekit_room_connected=true
+sender_local_audio_publish_result=success_redacted
+sender_local_audio_muted_state_bucket=unmuted_redacted
+sender_audio_session_activation_observed=true
+sender_microphone_permission_requested=true
+sender_microphone_permission_result_bucket=success_redacted
+livekit_remote_participant_seen=true
+receiver_remote_audio_publication_seen=true
+receiver_remote_audio_track_unmuted=true
+```
+
+Retry29 blocker:
+
+```text
+receiver_remote_audio_track_subscribed=false
+receiver_remote_audio_level_observed=false
+receiver_remote_audio_liveness_observed=false
+receiver_remote_audio_liveness_final_classification=remote_audio_subscription_missing_redacted
+retry29_success=false
+```
+
+Root cause / narrowed diagnosis:
+- receiver connect uses an explicit no-auto-subscribe configuration for the controlled receive-only path
+- the receiver saw the remote audio publication and unmuted state, but did not enable remote playback/subscription against the retained connected room in time for liveness
+- participant callback success could also complete the observation window before the audio subscription/liveness terminal state
+
+What changed:
+- the controlled receiver runtime connect now explicitly requests receiver remote audio playback/subscription after receiver LiveKit join success
+- receiver proof records explicit subscription request/result, publication subscribed-state bucket, subscription callback, subscription wait completion/timeout, and terminal subscription classification
+- receiver participant callback/snapshot success no longer releases the retained receiver room before remote audio subscription/liveness reaches success or bounded timeout
+- LiveKit subscription callbacks feed the redacted receiver proof without raw participant or track identifiers
+
+Helper accounting caveat:
+
+```text
+phase_pushkit_ready=false
+first_failed_phase=pushkit_ready
+```
+
+Those Retry29 helper fields were stale because pre-APNs readiness passed. Future helpers must preserve the passed PushKit readiness state and classify the terminal blocker as receiver remote audio subscription/liveness when subscription remains missing.
+
+Safety:
+- exactly one sandbox APNs was sent in Retry29; do not repeat it
+- no APNs, production APNs, `dev/invite`, physical connect, physical LiveKit join, camera/video, Matrix event emission, or full flow was performed during this repair
+- no raw token, JWT, authorization header, APNs payload, invite body, LiveKit URL, room ID, call ID, user ID, device ID, participant identity, track SID, pending metadata, or private log exposure
+
+Next phase: `2.49A-Physical2-Retry30 — one-shot receiver remote audio subscription/liveness validation`.
+
 ## 2026-06-29 — 2.49A RemoteAudioTrackLivenessProof
 
 Implemented the DEBUG-only remote audio track/liveness proof layer after the proven Retry28 participant path. No physical proof was run in this phase.

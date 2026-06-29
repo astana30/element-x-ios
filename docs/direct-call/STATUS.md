@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.49A RemoteAudioTrackLivenessProof implementation — Retry28 remains closed as an end-to-end two-device LiveKit participant proof success, and the app now has DEBUG-only remote audio track/liveness proof plumbing for the next physical run. No APNs or physical LiveKit run was performed for this implementation. The next phase is `2.49A-Physical-Retry29 — one-shot remote audio track liveness validation`.
+After 2.49A-ReceiverRemoteAudioSubscriptionRepair — Retry29 remains final and must not be rerun. Retry29 proved the receiver/sender LiveKit path through remote participant presence, sender audio publish, receiver remote audio publication, and unmuted remote audio publication metadata, then narrowed the blocker to receiver-side remote audio subscription/liveness. The next phase is `2.49A-Physical2-Retry30 — one-shot receiver remote audio subscription/liveness validation`.
 
 ## Latest App Code Checkpoint
 
@@ -38,6 +38,55 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Checksum: `654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e`
 
 ## Proven Checkpoints
+
+- 2.49A-ReceiverRemoteAudioSubscriptionRepair closes Retry29 as remote audio publication/unmuted proof success with receiver subscription/liveness blocker, then repairs the DEBUG-only receiver subscription path without APNs/connect:
+  ```text
+  APNs_sent=true
+  background_apns_push_result=sandbox_success
+  physical_voip_push_received=true
+  callkit_answer_action_received=true
+  receiver_post_answer_pending_metadata_fetch_result=success_redacted
+  receiver_post_answer_media_credentials_result=success_redacted
+  receiver_post_answer_controlled_connect_result=success_redacted
+  receiver_post_answer_livekit_join_result=success_redacted
+  sender_runtime_join_executor_invoked=true
+  sender_runtime_join_pending_metadata_fetch_result=success_redacted
+  sender_runtime_join_credentials_result=success_redacted
+  sender_runtime_join_runtime_result=success_redacted
+  sender_livekit_room_connected=true
+  sender_local_audio_publish_result=success_redacted
+  sender_microphone_permission_result_bucket=success_redacted
+  livekit_remote_participant_seen=true
+  receiver_remote_audio_publication_seen=true
+  receiver_remote_audio_track_unmuted=true
+  receiver_remote_audio_track_subscribed=false
+  receiver_remote_audio_liveness_observed=false
+  receiver_remote_audio_liveness_final_classification=remote_audio_subscription_missing_redacted
+  retry29_success=false
+  ```
+  - Exactly one sandbox APNs was sent in Retry29; do not repeat it.
+  - Retry29 was not an APNs, PushKit, CallKit, metadata, credentials, receiver LiveKit join, sender LiveKit join, or sender audio-publish failure.
+  - The runtime blocker is receiver-side remote audio subscription: auto-subscribe is disabled for controlled receiver connect, remote audio publication is visible, and the receiver must explicitly enable remote audio playback/subscription against the retained connected room.
+  - The repair enables receiver remote audio playback immediately after the controlled receiver connect succeeds, records explicit subscription request/result, records subscription callbacks, and keeps the retained receiver room alive until subscription/liveness terminal success or bounded timeout.
+  - New proof fields include:
+    ```text
+    receiver_remote_audio_subscription_repair_present=true
+    receiver_remote_audio_subscription_repair_debug_only=true
+    receiver_remote_audio_subscription_raw_identifiers_logged=false
+    receiver_remote_audio_auto_subscribe_enabled=false
+    receiver_remote_audio_publication_subscribed_state_bucket=<redacted_bucket>
+    receiver_remote_audio_explicit_subscribe_requested=<runtime>
+    receiver_remote_audio_explicit_subscribe_result=<redacted_bucket>
+    receiver_remote_audio_subscription_callback_seen=<runtime>
+    receiver_remote_audio_subscription_wait_started=<runtime>
+    receiver_remote_audio_subscription_wait_completed=<runtime>
+    receiver_remote_audio_subscription_wait_timeout=<runtime>
+    receiver_remote_audio_subscription_final_classification=<redacted_bucket>
+    ```
+  - Classification now distinguishes `remote_audio_subscription_observed_redacted`, `remote_audio_explicit_subscription_success_redacted`, `remote_audio_subscription_missing_redacted`, `remote_audio_subscription_timeout_redacted`, `remote_audio_publication_seen_but_subscription_missing_redacted`, `remote_audio_auto_subscribe_disabled_redacted`, `remote_audio_track_subscribed_but_silent_redacted`, `remote_audio_liveness_observed_redacted`, and `remote_audio_liveness_timeout_redacted`.
+  - Helper accounting caveat: Retry29 printed `phase_pushkit_ready=false` / `first_failed_phase=pushkit_ready`, but pre-APNs readiness had passed. Future helpers must preserve the passed pre-APNs readiness state and classify the terminal blocker as receiver remote audio subscription/liveness.
+  - Safety preserved during the repair: no APNs, production APNs, `dev/invite`, physical connect, physical LiveKit join, camera/video, Matrix event emission, full flow, or raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room/call/user/device/participant/track identifier logging.
+  - Next phase: `2.49A-Physical2-Retry30 — one-shot receiver remote audio subscription/liveness validation`.
 
 - 2.49A RemoteAudioTrackLivenessProof implementation added DEBUG-only audio-track/liveness proof plumbing without a physical run:
   ```text

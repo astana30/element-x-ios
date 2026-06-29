@@ -13,12 +13,13 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-Retry28 is final. Do not rerun it and do not send another APNs for Retry28.
+Retry29 is final. Do not rerun it and do not send another APNs for Retry29.
 
-Retry28 achieved end-to-end two-device LiveKit participant proof:
+Retry29 achieved the two-device path through receiver/sender LiveKit connection, participant presence, sender audio publish, and receiver remote audio publication:
 
 ```text
 APNs_sent=true
+background_apns_push_result=sandbox_success
 physical_voip_push_received=true
 callkit_answer_action_received=true
 receiver_post_answer_pending_metadata_fetch_result=success_redacted
@@ -33,12 +34,36 @@ sender_runtime_join_pending_metadata_fetch_result=success_redacted
 sender_runtime_join_credentials_result=success_redacted
 sender_runtime_join_runtime_result=success_redacted
 sender_livekit_room_connected=true
+sender_local_audio_publish_requested=true
+sender_local_audio_publish_allowed=true
+sender_local_audio_publish_result=success_redacted
+sender_local_audio_muted_state_bucket=unmuted_redacted
+sender_audio_session_activation_observed=true
+sender_microphone_permission_requested=true
+sender_microphone_permission_result_bucket=success_redacted
 receiver_participant_event_callback_seen=true
 livekit_remote_participant_seen=true
 livekit_remote_participant_count_bucket=1
-receiver_remote_participant_observer_result=remote_participant_seen_via_callback_redacted
-remote_participant_observation_final_classification=remote_participant_seen_via_callback_redacted
-retry28_success=true
+receiver_remote_audio_observer_bound_to_retained_room=true
+receiver_remote_audio_observer_bound_to_connected_room=true
+receiver_remote_audio_observer_attached_after_participant_seen=true
+receiver_remote_audio_publication_seen=true
+receiver_remote_audio_track_unmuted=true
+```
+
+Retry29 narrowed the remaining blocker to receiver remote audio subscription/liveness:
+
+```text
+receiver_remote_audio_track_subscribed=false
+receiver_remote_audio_level_observed=false
+receiver_remote_audio_liveness_observed=false
+receiver_remote_audio_liveness_wait_started=true
+receiver_remote_audio_liveness_wait_completed=false
+receiver_remote_audio_liveness_wait_timeout=false
+receiver_remote_audio_liveness_final_classification=remote_audio_subscription_missing_redacted
+livekit_audio_liveness_observed=false
+remote_audio_liveness_result=not_observed_redacted
+retry29_success=false
 ```
 
 Safety remained preserved:
@@ -50,55 +75,65 @@ no dev/invite
 no repeated receiver connect
 no repeated sender join
 video=false
-microphone_permission_requested=false
 camera_permission_requested=false
 matrix_event_emit_requested=false
 real_call_flow_started=false
 ```
 
-## Accounting Repair Completed
-
-Retry28 had stale overlap accounting:
+Retry29 also exposed a helper accounting bug:
 
 ```text
-sender_connected_signal_received_by_receiver=true
-receiver_connected_session_lease_active_at_sender_signal=false
-receiver_sender_connected_window_overlap_observed=false
-phase_participant_seen=true
-first_failed_phase=overlap_observed
+phase_pushkit_ready=false
+first_failed_phase=pushkit_ready
 ```
 
-Repo inspection found no committed Retry28 helper/phase-summary implementation to patch; the stale logic lived in the one-off `/tmp` helper. Future helpers must apply this terminal accounting rule:
+Those fields were stale/wrong because pre-APNs PushKit readiness passed. Future helpers must preserve the pre-APNs readiness result and classify the terminal blocker as receiver remote audio subscription/liveness when subscription remains missing.
+
+## Receiver Subscription Repair Completed
+
+The latest code repair is DEBUG-only and no physical proof has been rerun yet.
+
+New proof fields:
 
 ```text
-if livekit_remote_participant_seen=true
-or receiver_participant_event_callback_seen=true
-or receiver_participant_snapshot_seen=true:
-  phase_participant_seen=true
-  phase_overlap_accounting_superseded_by_participant_seen=true
-  first_failed_phase=none
-  retry_success=true
-  receiver_overlap_accounting_caveat=participant_seen_supersedes_stale_overlap_redacted
+receiver_remote_audio_subscription_repair_present=true
+receiver_remote_audio_subscription_repair_debug_only=true
+receiver_remote_audio_subscription_raw_identifiers_logged=false
+receiver_remote_audio_auto_subscribe_enabled=false
+receiver_remote_audio_publication_subscribed_state_bucket=<redacted_bucket>
+receiver_remote_audio_explicit_subscribe_requested=<runtime>
+receiver_remote_audio_explicit_subscribe_result=<redacted_bucket>
+receiver_remote_audio_subscription_callback_seen=<runtime>
+receiver_remote_audio_subscription_wait_started=<runtime>
+receiver_remote_audio_subscription_wait_completed=<runtime>
+receiver_remote_audio_subscription_wait_timeout=<runtime>
+receiver_remote_audio_subscription_final_classification=<redacted_bucket>
 ```
 
-Preserve stale overlap fields as caveat diagnostics, not terminal failure, once participant presence is proven.
+Runtime behavior:
+- receiver controlled connect explicitly enables remote audio playback/subscription after LiveKit join success
+- LiveKit subscription callbacks update receiver proof from runtime state
+- participant callback/snapshot success no longer releases the retained receiver room before subscription/liveness success or bounded timeout
+- no raw token, URL, room ID, call ID, user ID, device ID, participant identity, track SID, APNs payload, invite body, auth header, pending metadata, or private logs are recorded
 
 ## New Phase
 
 Start:
 
 ```text
-2.49A-Physical-Retry29 — one-shot remote audio track liveness validation
+2.49A-Physical2-Retry30 — one-shot receiver remote audio subscription/liveness validation
 ```
 
 Goal:
 
-Validate the newly implemented DEBUG-only remote audio track/liveness proof after the already-proven participant path:
+Validate the receiver subscription repair after the already-proven Retry29 path:
 
 ```text
 receiver LiveKit connected
 sender LiveKit connected
 receiver remote participant seen
+sender audio publish success
+receiver remote audio publication seen
 remote audio track subscribed/unmuted/liveness observed
 ```
 
@@ -108,13 +143,23 @@ Primary proof targets:
 remote_audio_track_liveness_proof_present=true
 remote_audio_track_liveness_proof_debug_only=true
 remote_audio_track_liveness_raw_identifiers_logged=false
+receiver_remote_audio_subscription_repair_present=true
+receiver_remote_audio_subscription_repair_debug_only=true
+receiver_remote_audio_subscription_raw_identifiers_logged=false
 livekit_remote_participant_seen=true
 receiver_remote_audio_observer_bound_to_retained_room=true
 receiver_remote_audio_observer_bound_to_connected_room=true
 receiver_remote_audio_observer_attached_after_participant_seen=true
 receiver_remote_audio_publication_seen=true
+receiver_remote_audio_explicit_subscribe_requested=true
+receiver_remote_audio_explicit_subscribe_result=success_redacted
+receiver_remote_audio_subscription_callback_seen=true
 receiver_remote_audio_track_subscribed=true
 receiver_remote_audio_track_unmuted=true
+receiver_remote_audio_subscription_wait_started=true
+receiver_remote_audio_subscription_wait_completed=true
+receiver_remote_audio_subscription_wait_timeout=false
+receiver_remote_audio_subscription_final_classification=remote_audio_subscription_observed_redacted OR remote_audio_explicit_subscription_success_redacted
 receiver_remote_audio_level_observed=true
 receiver_remote_audio_liveness_observed=true
 receiver_remote_audio_liveness_wait_started=true
@@ -161,6 +206,11 @@ Run at most one sandbox APNs after exact manual confirmation. Do not repeat APNs
 If participant is seen but audio liveness is missing, classify with one of:
 
 ```text
+remote_audio_subscription_observed_redacted
+remote_audio_explicit_subscription_success_redacted
+remote_audio_publication_seen_but_subscription_missing_redacted
+remote_audio_auto_subscribe_disabled_redacted
+remote_audio_subscription_timeout_redacted
 remote_audio_track_subscribed_but_silent_redacted
 remote_audio_publication_missing_redacted
 remote_audio_subscription_missing_redacted
