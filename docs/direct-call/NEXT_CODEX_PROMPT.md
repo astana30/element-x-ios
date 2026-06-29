@@ -13,78 +13,74 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-`2.48Z-ParticipantObserverPropagationRepair` is committed.
+`2.48Z-ReceiverVoIPPushDeliveryRegressionTriage` is committed.
 
-Retry22 is closed as real sender runtime join + receiver connected-window overlap success / participant observer propagation timeout triage. It is not remote participant success.
+Retry23 is closed as APNs accepted / receiver VoIP PushKit callback missing triage. It is not participant observer propagation validation and not remote participant success.
 
-Retry22 physical result:
+Retry23 physical result:
 
 ```text
-APNs_sent=true
+room_validation_preflight=pass
+invite_http_status_bucket=2xx
+background_apns_push_requested=true
 background_apns_push_result=sandbox_success
-physical_voip_push_received=true
-callkit_answer_action_received=true
-controlled_connect_first_attempt_result=success_redacted
-livekit_join_result=success_redacted
-sender_runtime_join_executor_invoked=true
-sender_runtime_join_runtime_result=success_redacted
-sender_livekit_room_connected=true
-sender_connected_signal_received_by_receiver=true
-receiver_sender_connected_signal_received=true
-receiver_connected_session_lease_acquired=true
-receiver_connected_session_lease_room_retained=true
-receiver_connected_session_lease_delegate_retained=true
-receiver_connected_session_lease_observer_retained=true
-receiver_connected_session_lease_task_retained=true
-receiver_connected_session_lease_active_before_sender_trigger=true
-receiver_connected_session_lease_active_after_sender_trigger=true
-receiver_connected_session_lease_active_at_sender_signal=true
-receiver_cleanup_deferred_until_observation_terminal=true
-receiver_cleanup_started_before_sender_terminal=false
-receiver_disconnect_observed_before_sender_signal=false
-receiver_disconnect_observed_after_sender_signal=false
-receiver_sender_connected_window_overlap_observed=true
-receiver_sender_connected_window_overlap_final_classification=receiver_connected_window_overlap_observed_redacted
-receiver_participant_observation_after_overlap_started=true
-receiver_participant_observation_after_overlap_completed=true
-receiver_participant_observation_after_overlap_timeout=true
-livekit_remote_participant_seen=false
-livekit_remote_participant_count_bucket=0
-receiver_remote_participant_observer_result=not_observed_redacted
-remote_participant_observation_final_classification=participant_observation_timeout_after_overlap_redacted
+APNs_sent=true
+pending_metadata_reference_present=true
+physical_voip_push_received=false
+callkit_answer_action_received=false
+controlled_connect_first_attempt_result=not_requested
+livekit_join_result=not_requested
+sender_connected_signal_received_by_receiver=false
+sender_runtime_join_triggered=false
+blocked_reason=voip_push_not_received
 ```
 
-Root cause:
+Root cause narrowed:
 
 ```text
-receiver connected-window overlap is proven, but the retained receiver LiveKit participant observer did not observe the sender participant during the bounded post-overlap window.
+sandbox APNs was accepted, but receiver proof did not observe PushKit callback or CallKit report.
 ```
 
-Repair:
+New DEBUG-only delivery triage proof surface:
 
 ```text
-participant_observer_propagation_repair_present=true
-participant_observer_propagation_repair_debug_only=true
-participant_observer_propagation_raw_identifiers_logged=false
-receiver_participant_observer_bound_to_retained_room=<redacted_bool>
-receiver_participant_observer_bound_to_connected_room=<redacted_bool>
-receiver_participant_observer_attached_before_sender_signal=<redacted_bool>
-receiver_participant_observer_active_after_sender_signal=<redacted_bool>
-receiver_participant_event_callback_seen=<redacted_bool>
-receiver_participant_snapshot_requested=<redacted_bool>
-receiver_participant_snapshot_count_bucket=0|1|2+|unknown
-receiver_participant_snapshot_seen=<redacted_bool>
-receiver_participant_identity_filter_applied=<redacted_bool>
-receiver_participant_identity_filter_result=not_applied_redacted|passed_redacted|filtered_out_redacted|unknown_redacted
-receiver_participant_observation_final_classification=<redacted_classification>
+receiver_voip_push_delivery_triage_present=true
+receiver_voip_push_delivery_triage_debug_only=true
+receiver_voip_push_delivery_triage_raw_identifiers_logged=false
+receiver_pushkit_token_present_before_apns=<redacted_bool>
+receiver_pushkit_token_upload_attempted_before_apns=<redacted_bool>
+receiver_pushkit_token_upload_result_bucket=success_redacted|failed_redacted|not_requested|unknown
+receiver_pushkit_token_server_store_result_bucket=persisted_redacted|failed_redacted|not_requested|unknown
+receiver_pushkit_token_environment_bucket=development|production|mismatch_possible_redacted|unknown
+receiver_pushkit_token_device_binding_expected_bucket=expected_redacted|mismatch_possible_redacted|not_requested|unknown
+receiver_app_lifecycle_state_before_apns_bucket=foreground|background|inactive|unknown
+receiver_app_proof_generation_before_apns=<redacted_generation_or_unknown>
+receiver_app_proof_generation_after_apns_changed=<redacted_bool>
+receiver_voip_push_callback_seen_after_apns=<redacted_bool>
+receiver_callkit_report_requested_after_apns=<redacted_bool>
+receiver_callkit_answer_available_after_apns=<redacted_bool>
+apns_provider_acceptance_result_bucket=2xx|non_2xx|not_requested|unknown
+apns_delivery_callback_missing_after_acceptance=<redacted_bool>
+receiver_voip_push_delivery_final_classification=<redacted_classification>
 ```
 
-The receiver LiveKit client now records a redacted participant-connected delegate callback and the receiver proof runs a bounded snapshot sweep against the retained connected room after sender-connected overlap. Participant presence is still classified separately from audio-track subscription and audio liveness.
+Classifications:
+
+```text
+receiver_pushkit_token_missing_before_apns_redacted
+receiver_pushkit_token_upload_failed_before_apns_redacted
+receiver_pushkit_token_environment_mismatch_possible_redacted
+receiver_pushkit_token_device_binding_unknown_redacted
+apns_accepted_but_receiver_callback_missing_redacted
+receiver_callkit_not_reported_after_apns_redacted
+receiver_voip_push_received_redacted
+```
 
 Safety preserved:
 
 ```text
 no APNs during repair
+no repeated APNs
 no production APNs
 no dev/invite
 no physical media connect during repair
@@ -98,105 +94,83 @@ no raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room/call/user
 
 ## Next Phase
 
-`2.48Z-Physical2-Retry23 — one-shot participant observer propagation validation, sender Жанелька, receiver iPhone PRO`
+`2.48Z-Physical2-Retry24 — one-shot receiver VoIP push delivery triage, receiver iPhone PRO, sender Carpediem`
 
 Goal:
-Run one physical two-device proof that the receiver participant observer propagation repair can classify remote participant presence after sender-connected overlap.
+Run one physical proof to classify why APNs acceptance did not produce a receiver PushKit callback in Retry23. Do not move back to participant observer validation until receiver PushKit/CallKit delivery is proven again.
 
 Required devices:
 
 ```text
 receiver=iPhone PRO
-sender=iPhone Жанелька
-do not use Carpediem
+sender=Carpediem
+do not use iPhone Жанелька unless roles are explicitly changed
 do not use Simulator
 ```
 
-Required preflight:
+Before APNs:
 
 ```text
 current_head_matches_expected=true
 receiver_device_connected=true
-second_physical_device_connected=true
+sender_device_connected=true
 receiver_app_matrix_session_whoami_result=success_redacted
 sender_app_matrix_session_whoami_result=success_redacted
 room_validation_preflight=pass
-receiver_controlled_audio_connect_armed=true
-receiver_remote_peer_context_armed=true
-receiver_sender_readiness_context_armed=true
-sender_runtime_join_bridge_state_repair_present=true
-sender_connected_signal_handoff_present=true
-receiver_connected_window_retention_repair_present=true
-participant_observer_propagation_repair_present=true
-participant_observer_propagation_repair_debug_only=true
-participant_observer_propagation_raw_identifiers_logged=false
-safe_to_send_apns=true
+receiver_voip_push_delivery_triage_present=true
+receiver_voip_push_delivery_triage_debug_only=true
+receiver_voip_push_delivery_triage_raw_identifiers_logged=false
+receiver_pushkit_token_present_before_apns=true
+receiver_pushkit_token_upload_attempted_before_apns=true
+receiver_pushkit_token_upload_result_bucket=success_redacted
+receiver_pushkit_token_server_store_result_bucket=persisted_redacted
+receiver_pushkit_token_environment_bucket=development
+receiver_app_lifecycle_state_before_apns_bucket=foreground|background|inactive
 APNs_sent=false
 ```
 
-After one explicit manual confirmation, send at most one sandbox APNs.
+If token/upload preflight is not green, stop before APNs and report the redacted blocker.
 
-Required sender proof focus:
+After exactly one explicit manual confirmation, send at most one sandbox APNs.
 
-```text
-sender_runtime_join_bridge_trigger_generation_matches_arm=true
-sender_runtime_join_bridge_stale_generation_detected=false
-sender_runtime_join_bridge_repeated_only_after_consumed=true
-sender_runtime_join_bridge_triggered=true
-sender_runtime_join_bridge_consumed=true
-sender_runtime_join_executor_invoked=true
-sender_runtime_join_pending_metadata_fetch_result=success_redacted
-sender_runtime_join_credentials_result=success_redacted
-sender_runtime_join_runtime_result=success_redacted
-sender_livekit_room_connected=true
-```
-
-Required receiver overlap proof:
+Expected success path:
 
 ```text
+background_apns_push_result=sandbox_success
+APNs_sent=true
+receiver_app_proof_generation_after_apns_changed=true
+receiver_voip_push_callback_seen_after_apns=true
 physical_voip_push_received=true
+receiver_callkit_report_requested_after_apns=true
 callkit_answer_action_received=true
-controlled_connect_first_attempt_result=success_redacted
-livekit_join_result=success_redacted
-sender_connected_signal_received_by_receiver=true
-receiver_sender_connected_signal_received=true
-receiver_connected_session_lease_active_at_sender_signal=true
-receiver_cleanup_started_before_sender_terminal=false
-receiver_disconnect_observed_before_sender_signal=false
-receiver_sender_connected_window_overlap_observed=true
-receiver_sender_connected_window_overlap_final_classification=receiver_connected_window_overlap_observed_redacted
-receiver_participant_observation_after_overlap_started=true
-receiver_participant_observer_bound_to_retained_room=true
-receiver_participant_observer_bound_to_connected_room=true
-receiver_participant_observer_attached_before_sender_signal=true
-receiver_participant_observer_active_after_sender_signal=true
-receiver_participant_snapshot_requested=true
+receiver_voip_push_delivery_final_classification=receiver_voip_push_received_redacted
 ```
 
-Success if participant presence is observed:
+If APNs is accepted but no receiver callback is observed:
 
 ```text
-livekit_remote_participant_seen=true
-livekit_remote_participant_count_bucket=1|2+
-receiver_remote_participant_observer_result=remote_participant_seen_via_callback_redacted|remote_participant_seen_via_snapshot_redacted|remote_participant_seen_via_retained_window_redacted
-remote_participant_observation_final_classification=remote_participant_seen_via_callback_redacted|remote_participant_seen_via_snapshot_redacted|remote_participant_seen_via_retained_window_redacted
-```
-
-Acceptable narrowed blockers if participant is still not observed:
-
-```text
-receiver_sender_connected_window_overlap_observed=true
-receiver_participant_observation_after_overlap_started=true
-receiver_participant_snapshot_requested=true
-receiver_participant_snapshot_count_bucket=0
-receiver_participant_snapshot_seen=false
-receiver_participant_event_callback_seen=false
-remote_participant_observation_final_classification=participant_event_callback_missing_redacted|participant_snapshot_empty_redacted|participant_observer_not_bound_to_retained_room_redacted|participant_observer_not_bound_to_connected_room_redacted|participant_observer_attached_late_redacted|participant_identity_filtered_out_redacted
+apns_provider_acceptance_result_bucket=2xx
+apns_delivery_callback_missing_after_acceptance=true
+receiver_app_proof_generation_after_apns_changed=false
+receiver_voip_push_callback_seen_after_apns=false
+receiver_callkit_report_requested_after_apns=false
+receiver_voip_push_delivery_final_classification=apns_accepted_but_receiver_callback_missing_redacted
 ```
 
 Hard limits:
-- do not use production APNs or `dev/invite`
-- do not repeat APNs, receiver connect, or sender join
-- no video, camera permission, Matrix event emission, or full direct-call flow
-- do not touch `SalemX.xcodeproj/project.pbxproj`, `app.yml`, `.entitlements`, or `Info.plist`
-- do not expose raw tokens, URLs, room IDs, call IDs, user IDs, device IDs, call handles, APNs payloads, invite bodies, auth headers, or pending metadata contents
+
+```text
+do not send production APNs
+do not send repeated APNs
+do not use dev/invite
+do not perform repeated receiver connect
+do not perform repeated LiveKit join
+do not request microphone/camera permission
+do not enable video
+do not emit Matrix events
+do not start full flow
+do not touch project/signing files
+do not log raw token, URL, room ID, call ID, user ID, device ID, APNs payload, invite body, auth header, pending metadata contents
+```
+
+Commit only if Retry24 narrows the blocker further or restores receiver PushKit/CallKit delivery with useful redacted proof.

@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-ParticipantObserverPropagationRepair — Retry22 physically validated receiver connected-window retention with one sandbox APNs, receiver PushKit/CallKit Answer, receiver controlled connect/LiveKit success, sender runtime join success, `sender_connected_signal_received_by_receiver=true`, and `receiver_sender_connected_window_overlap_observed=true`. Retry22 is not remote participant success: participant observation started after overlap but timed out with `livekit_remote_participant_seen=false` and `livekit_remote_participant_count_bucket=0`. The repair adds DEBUG-only LiveKit participant callback proof plus a bounded snapshot sweep of the retained receiver room. The next physical phase is `2.48Z-Physical2-Retry23 — one-shot participant observer propagation validation, sender Жанелька, receiver iPhone PRO`.
+After 2.48Z-ReceiverVoIPPushDeliveryRegressionTriage — Retry23 physically validated preflight, sent exactly one sandbox APNs, and the provider accepted it with `background_apns_push_result=sandbox_success`, but the receiver proof did not observe PushKit/CallKit (`physical_voip_push_received=false`, `callkit_answer_action_received=false`, `blocked_reason=voip_push_not_received`). Retry23 did not reach participant observer validation. The repair adds DEBUG-only receiver VoIP delivery triage proof fields so Retry24 can distinguish missing/stale receiver PushKit token state, upload/store failure, environment/device-binding uncertainty, APNs accepted without callback, and callback-without-CallKit-report. The next physical phase is `2.48Z-Physical2-Retry24 — one-shot receiver VoIP push delivery triage, receiver iPhone PRO, sender Carpediem`.
 
 ## Latest App Code Checkpoint
 
@@ -38,6 +38,31 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Checksum: `654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e`
 
 ## Proven Checkpoints
+
+- 2.48Z-ReceiverVoIPPushDeliveryRegressionTriage closes Retry23 as APNs accepted / receiver PushKit callback missing triage, then adds redacted delivery-triage proof without APNs/connect:
+  - Retry23 physical classification:
+    ```text
+    room_validation_preflight=pass
+    invite_http_status_bucket=2xx
+    background_apns_push_requested=true
+    background_apns_push_result=sandbox_success
+    APNs_sent=true
+    pending_metadata_reference_present=true
+    physical_voip_push_received=false
+    callkit_answer_action_received=false
+    controlled_connect_first_attempt_result=not_requested
+    livekit_join_result=not_requested
+    sender_connected_signal_received_by_receiver=false
+    sender_runtime_join_triggered=false
+    blocked_reason=voip_push_not_received
+    ```
+  - New blocker:
+    ```text
+    sandbox APNs was accepted, but the receiver app did not observe the VoIP PushKit callback or CallKit report
+    ```
+  - Repair proof fields include `receiver_voip_push_delivery_triage_*`, receiver PushKit token/upload/store/environment/device-binding buckets, app lifecycle and proof-generation buckets, APNs provider acceptance bucket, callback/report/answer booleans, and a redacted final delivery classification.
+  - Safety preserved: exactly one sandbox APNs was sent in Retry23; no APNs were sent in this repair, no repeated APNs, no production APNs, no `dev/invite`, no physical connect/LiveKit join, no microphone/camera permission, no video, no Matrix event emission, no full flow, and no raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room/call/user/device/pending-metadata logging.
+  - Next phase: `2.48Z-Physical2-Retry24 — one-shot receiver VoIP push delivery triage, receiver iPhone PRO, sender Carpediem`.
 
 - 2.48Z-ParticipantObserverPropagationRepair closes Retry22 as sender runtime join + receiver connected-window overlap success / participant observer propagation timeout triage, then repairs receiver participant observation without APNs/connect:
   - Retry22 physical classification:

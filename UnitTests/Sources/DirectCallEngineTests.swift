@@ -2842,6 +2842,43 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(!adapterSource.contains("receiverRemoteParticipantObserverRawIdentifiersLogged = true"))
     }
 
+    @Test
+    func receiverVoIPPushDeliveryTriageProofClassifiesAcceptedAPNsWithoutCallback() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+
+        #expect(adapterSource.contains("receiverVoIPPushDeliveryTriageURLHookPath = \"/direct-call/receiver-voip-push-delivery-triage\""))
+        #expect(adapterSource.contains("recordReceiverVoIPPushDeliveryTriageURLHook(components)"))
+        #expect(adapterSource.contains("receiver_voip_push_delivery_triage_present=\\(receiverVoIPPushDeliveryTriagePresent)"))
+        #expect(adapterSource.contains("receiver_voip_push_delivery_triage_debug_only=\\(receiverVoIPPushDeliveryTriageDebugOnly)"))
+        #expect(adapterSource.contains("receiver_voip_push_delivery_triage_raw_identifiers_logged=\\(receiverVoIPPushDeliveryTriageRawIdentifiersLogged)"))
+        #expect(adapterSource.contains("receiver_pushkit_token_present_before_apns=\\(receiverPushKitTokenPresentBeforeAPNs)"))
+        #expect(adapterSource.contains("receiver_pushkit_token_upload_attempted_before_apns=\\(receiverPushKitTokenUploadAttemptedBeforeAPNs)"))
+        #expect(adapterSource.contains("receiver_pushkit_token_upload_result_bucket=\\(receiverPushKitTokenUploadResultBucket)"))
+        #expect(adapterSource.contains("receiver_pushkit_token_server_store_result_bucket=\\(receiverPushKitTokenServerStoreResultBucket)"))
+        #expect(adapterSource.contains("receiver_pushkit_token_environment_bucket=\\(receiverPushKitTokenEnvironmentBucket)"))
+        #expect(adapterSource.contains("receiver_pushkit_token_device_binding_expected_bucket=\\(receiverPushKitTokenDeviceBindingExpectedBucket)"))
+        #expect(adapterSource.contains("receiver_app_lifecycle_state_before_apns_bucket=\\(receiverAppLifecycleStateBeforeAPNsBucket)"))
+        #expect(adapterSource.contains("receiver_app_proof_generation_before_apns=\\(receiverAppProofGenerationBeforeAPNs)"))
+        #expect(adapterSource.contains("receiver_app_proof_generation_after_apns_changed=\\(receiverAppProofGenerationAfterAPNsChanged)"))
+        #expect(adapterSource.contains("receiver_voip_push_callback_seen_after_apns=\\(receiverVoIPPushCallbackSeenAfterAPNs)"))
+        #expect(adapterSource.contains("receiver_callkit_report_requested_after_apns=\\(receiverCallKitReportRequestedAfterAPNs)"))
+        #expect(adapterSource.contains("receiver_callkit_answer_available_after_apns=\\(receiverCallKitAnswerAvailableAfterAPNs)"))
+        #expect(adapterSource.contains("apns_provider_acceptance_result_bucket=\\(apnsProviderAcceptanceResultBucket)"))
+        #expect(adapterSource.contains("apns_delivery_callback_missing_after_acceptance=\\(apnsDeliveryCallbackMissingAfterAcceptance)"))
+        #expect(adapterSource.contains("receiver_voip_push_delivery_final_classification=\\(receiverVoIPPushDeliveryFinalClassification)"))
+        #expect(adapterSource.contains("summary.refreshReceiverVoIPPushDeliveryTriage(uploadProof: latestUploadSummary"))
+        #expect(adapterSource.contains("pushkit_token_environment_bucket=\\(tokenEnvironmentBucket)"))
+        #expect(adapterSource.contains("receiver_pushkit_token_missing_before_apns_redacted"))
+        #expect(adapterSource.contains("receiver_pushkit_token_upload_failed_before_apns_redacted"))
+        #expect(adapterSource.contains("receiver_pushkit_token_environment_mismatch_possible_redacted"))
+        #expect(adapterSource.contains("receiver_pushkit_token_device_binding_unknown_redacted"))
+        #expect(adapterSource.contains("apns_accepted_but_receiver_callback_missing_redacted"))
+        #expect(adapterSource.contains("receiver_callkit_not_reported_after_apns_redacted"))
+        #expect(adapterSource.contains("receiver_voip_push_received_redacted"))
+        #expect(!adapterSource.contains("receiverPushKitTokenRaw"))
+        #expect(!adapterSource.contains("apnsPayload.description"))
+    }
+
     // swiftlint:disable function_body_length
     @Test
     func remoteParticipantObservationTimingRepairRetainsReceiverUntilRuntimeTerminal() throws {

@@ -2,6 +2,47 @@
 
 This file records durable phase-level progress for future Codex and strategy sessions.
 
+## 2026-06-29 — 2.48Z-ReceiverVoIPPushDeliveryRegressionTriage
+
+Closed Retry23 as APNs accepted / receiver PushKit callback missing triage. This is not participant observer propagation validation and not remote participant success.
+
+Retry23 result:
+
+```text
+room_validation_preflight=pass
+invite_http_status_bucket=2xx
+background_apns_push_requested=true
+background_apns_push_result=sandbox_success
+APNs_sent=true
+pending_metadata_reference_present=true
+physical_voip_push_received=false
+callkit_answer_action_received=false
+controlled_connect_first_attempt_result=not_requested
+livekit_join_result=not_requested
+sender_connected_signal_received_by_receiver=false
+sender_runtime_join_triggered=false
+blocked_reason=voip_push_not_received
+```
+
+Root cause narrowed:
+- Retry23 preflight and one sandbox APNs send succeeded
+- the receiver proof did not observe a VoIP PushKit callback, so CallKit Answer, controlled connect, sender trigger, and participant observation were not reached
+- the next blocker is before CallKit/media: APNs accepted by provider but receiver callback missing
+
+Repair:
+- added DEBUG-only receiver VoIP push delivery triage proof fields
+- receiver proof now imports the latest redacted PushKit upload-smoke state into token present/upload/store/environment/device-binding buckets
+- added a redacted URL marker for Retry24 to record APNs provider acceptance and proof-generation-change state without raw payloads or identifiers
+- added final redacted classifications for missing token, upload failure, environment mismatch possibility, unknown binding, APNs accepted without callback, callback without CallKit report, and callback observed
+
+Safety:
+- exactly one sandbox APNs was sent in Retry23 before this repair
+- no APNs were sent during this repair
+- no repeated APNs, production APNs, `dev/invite`, physical media connect, physical LiveKit join, microphone/camera permission, video, Matrix event emission, or full flow
+- no raw tokens, JWTs, authorization headers, APNs payloads, invite bodies, LiveKit URLs, room IDs, call IDs, user IDs, device IDs, call handles, private logs, or pending metadata contents recorded
+
+Next phase: `2.48Z-Physical2-Retry24 — one-shot receiver VoIP push delivery triage, receiver iPhone PRO, sender Carpediem`.
+
 ## 2026-06-27 — 2.48Z-ParticipantObserverPropagationRepair
 
 Closed Retry22 as sender runtime join + receiver connected-window overlap success / participant observer propagation timeout triage. This is not remote participant success.
