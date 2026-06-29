@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-ReceiverVoIPPushDeliveryRegressionTriage — Retry23 physically validated preflight, sent exactly one sandbox APNs, and the provider accepted it with `background_apns_push_result=sandbox_success`, but the receiver proof did not observe PushKit/CallKit (`physical_voip_push_received=false`, `callkit_answer_action_received=false`, `blocked_reason=voip_push_not_received`). Retry23 did not reach participant observer validation. The repair adds DEBUG-only receiver VoIP delivery triage proof fields so Retry24 can distinguish missing/stale receiver PushKit token state, upload/store failure, environment/device-binding uncertainty, APNs accepted without callback, and callback-without-CallKit-report. The next physical phase is `2.48Z-Physical2-Retry24 — one-shot receiver VoIP push delivery triage, receiver iPhone PRO, sender Carpediem`.
+After 2.48Z-ReceiverPushKitTokenReadinessRepair — Retry24 preflight had green app/session/hook/repair surfaces, but the receiver PushKit token readiness gate stopped safely before APNs (`receiver_pushkit_token_present_before_apns=false`, `receiver_pushkit_token_upload_attempted_before_apns=false`, `receiver_pushkit_token_upload_result_bucket=not_requested`, `receiver_pushkit_token_server_store_result_bucket=not_requested`, `APNs_sent=false`). The repair adds a DEBUG-only bounded readiness hook that reuses the existing PushKit upload smoke with the restored app session, mirrors redacted registration/token/upload/store/environment/device-binding buckets into the receiver proof, and classifies readiness before any APNs send. The next physical phase is `2.48Z-Physical2-Retry24B — one-shot receiver PushKit token readiness validation before APNs, receiver iPhone PRO, sender Carpediem`.
 
 ## Latest App Code Checkpoint
 
@@ -38,6 +38,33 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Checksum: `654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e`
 
 ## Proven Checkpoints
+
+- Retry24 preflight stopped before APNs because receiver PushKit token readiness was not green:
+  ```text
+  receiver_app_session_restored=true
+  sender_app_session_restored=true
+  receiver_controlled_audio_connect_armed=true
+  receiver_remote_peer_context_armed=true
+  receiver_sender_readiness_context_armed=true
+  participant_observer_propagation_repair_present=true
+  receiver_connected_window_retention_repair_present=true
+  sender_runtime_join_bridge_state_repair_present=true
+  receiver_voip_push_delivery_triage_present=true
+  receiver_app_lifecycle_state_before_apns_bucket=foreground
+  receiver_app_proof_generation_before_apns=generation_11
+  receiver_pushkit_token_present_before_apns=false
+  receiver_pushkit_token_upload_attempted_before_apns=false
+  receiver_pushkit_token_upload_result_bucket=not_requested
+  receiver_pushkit_token_server_store_result_bucket=not_requested
+  receiver_pushkit_token_environment_bucket=development
+  receiver_pushkit_token_device_binding_expected_bucket=not_requested
+  APNs_sent=false
+  sender_runtime_join_triggered=false
+  blocked_reason=receiver_pushkit_token_missing_before_apns_redacted
+  ```
+  - No APNs were sent in Retry24; this is before APNs delivery, PushKit callback, CallKit, connect, LiveKit, Matrix events, or full flow.
+  - Retry24B must fail closed before APNs unless receiver PushKit token registration/upload/store readiness is true and redacted.
+  - New DEBUG-only fields include `receiver_pushkit_token_readiness_repair_*`, registration requested, token callback seen, bounded wait started/completed/timeout, and `receiver_pushkit_token_readiness_final_classification`.
 
 - 2.48Z-ReceiverVoIPPushDeliveryRegressionTriage closes Retry23 as APNs accepted / receiver PushKit callback missing triage, then adds redacted delivery-triage proof without APNs/connect:
   - Retry23 physical classification:

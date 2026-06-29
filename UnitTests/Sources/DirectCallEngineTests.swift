@@ -2851,12 +2851,21 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("receiver_voip_push_delivery_triage_present=\\(receiverVoIPPushDeliveryTriagePresent)"))
         #expect(adapterSource.contains("receiver_voip_push_delivery_triage_debug_only=\\(receiverVoIPPushDeliveryTriageDebugOnly)"))
         #expect(adapterSource.contains("receiver_voip_push_delivery_triage_raw_identifiers_logged=\\(receiverVoIPPushDeliveryTriageRawIdentifiersLogged)"))
+        #expect(adapterSource.contains("receiver_pushkit_token_readiness_repair_present=\\(receiverPushKitTokenReadinessRepairPresent)"))
+        #expect(adapterSource.contains("receiver_pushkit_token_readiness_repair_debug_only=\\(receiverPushKitTokenReadinessRepairDebugOnly)"))
+        #expect(adapterSource.contains("receiver_pushkit_token_readiness_repair_raw_identifiers_logged=\\(receiverPushKitTokenReadinessRepairRawIdentifiersLogged)"))
+        #expect(adapterSource.contains("receiver_pushkit_registration_requested_before_apns=\\(receiverPushKitRegistrationRequestedBeforeAPNs)"))
+        #expect(adapterSource.contains("receiver_pushkit_token_callback_seen_before_apns=\\(receiverPushKitTokenCallbackSeenBeforeAPNs)"))
         #expect(adapterSource.contains("receiver_pushkit_token_present_before_apns=\\(receiverPushKitTokenPresentBeforeAPNs)"))
         #expect(adapterSource.contains("receiver_pushkit_token_upload_attempted_before_apns=\\(receiverPushKitTokenUploadAttemptedBeforeAPNs)"))
         #expect(adapterSource.contains("receiver_pushkit_token_upload_result_bucket=\\(receiverPushKitTokenUploadResultBucket)"))
         #expect(adapterSource.contains("receiver_pushkit_token_server_store_result_bucket=\\(receiverPushKitTokenServerStoreResultBucket)"))
         #expect(adapterSource.contains("receiver_pushkit_token_environment_bucket=\\(receiverPushKitTokenEnvironmentBucket)"))
         #expect(adapterSource.contains("receiver_pushkit_token_device_binding_expected_bucket=\\(receiverPushKitTokenDeviceBindingExpectedBucket)"))
+        #expect(adapterSource.contains("receiver_pushkit_token_readiness_wait_started=\\(receiverPushKitTokenReadinessWaitStarted)"))
+        #expect(adapterSource.contains("receiver_pushkit_token_readiness_wait_completed=\\(receiverPushKitTokenReadinessWaitCompleted)"))
+        #expect(adapterSource.contains("receiver_pushkit_token_readiness_wait_timeout=\\(receiverPushKitTokenReadinessWaitTimeout)"))
+        #expect(adapterSource.contains("receiver_pushkit_token_readiness_final_classification=\\(receiverPushKitTokenReadinessFinalClassification)"))
         #expect(adapterSource.contains("receiver_app_lifecycle_state_before_apns_bucket=\\(receiverAppLifecycleStateBeforeAPNsBucket)"))
         #expect(adapterSource.contains("receiver_app_proof_generation_before_apns=\\(receiverAppProofGenerationBeforeAPNs)"))
         #expect(adapterSource.contains("receiver_app_proof_generation_after_apns_changed=\\(receiverAppProofGenerationAfterAPNsChanged)"))
@@ -2877,6 +2886,30 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("receiver_voip_push_received_redacted"))
         #expect(!adapterSource.contains("receiverPushKitTokenRaw"))
         #expect(!adapterSource.contains("apnsPayload.description"))
+    }
+
+    @Test
+    func receiverPushKitTokenReadinessRepairRunsBoundedUploadSmokeBeforeAPNs() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+
+        #expect(adapterSource.contains("receiverPushKitTokenReadinessURLHookPath = \"/direct-call/receiver-pushkit-token-readiness\""))
+        #expect(adapterSource.contains("startReceiverPushKitTokenReadinessURLHook()"))
+        #expect(adapterSource.contains("startRegistrationUploadSmokeWithCurrentSessionURLString(uploadSmokeDefaultURLString)"))
+        #expect(adapterSource.contains("receiverPushKitTokenReadinessWaitTimeout: TimeInterval = 8"))
+        #expect(adapterSource.contains("recordReceiverPushKitTokenReadinessProof(waitStarted: true,"))
+        #expect(adapterSource.contains("receiverPushKitTokenReadinessTerminal(uploadProof: latestUploadSummary)"))
+        #expect(adapterSource.contains("proofLastUpdatedBy = \"receiver_pushkit_token_readiness\""))
+        #expect(adapterSource.contains("refreshReceiverPushKitTokenReadiness(uploadProof: latestUploadSummary"))
+        #expect(adapterSource.contains("receiver_pushkit_token_ready_before_apns_redacted"))
+        #expect(adapterSource.contains("receiver_pushkit_registration_not_requested_before_apns_redacted"))
+        #expect(adapterSource.contains("receiver_pushkit_token_callback_missing_before_apns_redacted"))
+        #expect(adapterSource.contains("receiver_pushkit_token_upload_failed_before_apns_redacted"))
+        #expect(adapterSource.contains("receiver_pushkit_token_server_store_unknown_before_apns_redacted"))
+        #expect(adapterSource.contains("receiver_pushkit_token_readiness_timeout_before_apns_redacted"))
+        #expect(adapterSource.contains("voip_push_send_requested=false"))
+        #expect(adapterSource.contains("apns_provider_requested=false"))
+        #expect(!adapterSource.contains("receiverPushKitTokenReadinessRaw"))
+        #expect(!adapterSource.contains("APNs_sent=true"))
     }
 
     // swiftlint:disable function_body_length

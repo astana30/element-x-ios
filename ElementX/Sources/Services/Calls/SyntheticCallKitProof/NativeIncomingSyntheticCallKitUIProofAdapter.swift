@@ -3441,12 +3441,21 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var receiverVoIPPushDeliveryTriagePresent = true
     var receiverVoIPPushDeliveryTriageDebugOnly = true
     var receiverVoIPPushDeliveryTriageRawIdentifiersLogged = false
+    var receiverPushKitTokenReadinessRepairPresent = true
+    var receiverPushKitTokenReadinessRepairDebugOnly = true
+    var receiverPushKitTokenReadinessRepairRawIdentifiersLogged = false
+    var receiverPushKitRegistrationRequestedBeforeAPNs = false
+    var receiverPushKitTokenCallbackSeenBeforeAPNs = false
     var receiverPushKitTokenPresentBeforeAPNs = false
     var receiverPushKitTokenUploadAttemptedBeforeAPNs = false
     var receiverPushKitTokenUploadResultBucket = "unknown"
     var receiverPushKitTokenServerStoreResultBucket = "unknown"
     var receiverPushKitTokenEnvironmentBucket = "unknown"
     var receiverPushKitTokenDeviceBindingExpectedBucket = "unknown"
+    var receiverPushKitTokenReadinessWaitStarted = false
+    var receiverPushKitTokenReadinessWaitCompleted = false
+    var receiverPushKitTokenReadinessWaitTimeout = false
+    var receiverPushKitTokenReadinessFinalClassification = "receiver_pushkit_registration_not_requested_before_apns_redacted"
     var receiverAppLifecycleStateBeforeAPNsBucket = "unknown"
     var receiverAppProofGenerationBeforeAPNs = "unknown"
     var receiverAppProofGenerationAfterAPNsChanged = false
@@ -4228,12 +4237,21 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "receiver_voip_push_delivery_triage_present=\(receiverVoIPPushDeliveryTriagePresent)",
             "receiver_voip_push_delivery_triage_debug_only=\(receiverVoIPPushDeliveryTriageDebugOnly)",
             "receiver_voip_push_delivery_triage_raw_identifiers_logged=\(receiverVoIPPushDeliveryTriageRawIdentifiersLogged)",
+            "receiver_pushkit_token_readiness_repair_present=\(receiverPushKitTokenReadinessRepairPresent)",
+            "receiver_pushkit_token_readiness_repair_debug_only=\(receiverPushKitTokenReadinessRepairDebugOnly)",
+            "receiver_pushkit_token_readiness_repair_raw_identifiers_logged=\(receiverPushKitTokenReadinessRepairRawIdentifiersLogged)",
+            "receiver_pushkit_registration_requested_before_apns=\(receiverPushKitRegistrationRequestedBeforeAPNs)",
+            "receiver_pushkit_token_callback_seen_before_apns=\(receiverPushKitTokenCallbackSeenBeforeAPNs)",
             "receiver_pushkit_token_present_before_apns=\(receiverPushKitTokenPresentBeforeAPNs)",
             "receiver_pushkit_token_upload_attempted_before_apns=\(receiverPushKitTokenUploadAttemptedBeforeAPNs)",
             "receiver_pushkit_token_upload_result_bucket=\(receiverPushKitTokenUploadResultBucket)",
             "receiver_pushkit_token_server_store_result_bucket=\(receiverPushKitTokenServerStoreResultBucket)",
             "receiver_pushkit_token_environment_bucket=\(receiverPushKitTokenEnvironmentBucket)",
             "receiver_pushkit_token_device_binding_expected_bucket=\(receiverPushKitTokenDeviceBindingExpectedBucket)",
+            "receiver_pushkit_token_readiness_wait_started=\(receiverPushKitTokenReadinessWaitStarted)",
+            "receiver_pushkit_token_readiness_wait_completed=\(receiverPushKitTokenReadinessWaitCompleted)",
+            "receiver_pushkit_token_readiness_wait_timeout=\(receiverPushKitTokenReadinessWaitTimeout)",
+            "receiver_pushkit_token_readiness_final_classification=\(receiverPushKitTokenReadinessFinalClassification)",
             "receiver_app_lifecycle_state_before_apns_bucket=\(receiverAppLifecycleStateBeforeAPNsBucket)",
             "receiver_app_proof_generation_before_apns=\(receiverAppProofGenerationBeforeAPNs)",
             "receiver_app_proof_generation_after_apns_changed=\(receiverAppProofGenerationAfterAPNsChanged)",
@@ -5024,7 +5042,41 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverVoIPPushDeliveryTriagePresent = true
         receiverVoIPPushDeliveryTriageDebugOnly = true
         receiverVoIPPushDeliveryTriageRawIdentifiersLogged = false
-        receiverPushKitTokenPresentBeforeAPNs = uploadFields["pushkit_token_received"] == "true"
+        refreshReceiverPushKitTokenPreflightBuckets(uploadFields: uploadFields,
+                                                    appStateBeforeAPNs: appStateBeforeAPNs)
+        receiverAppLifecycleStateBeforeAPNsBucket = Self.safeAppStateBucket(appStateBeforeAPNs)
+        receiverAppProofGenerationBeforeAPNs = proofGeneration
+        receiverVoIPPushCallbackSeenAfterAPNs = physicalVoIPPushReceived
+        receiverCallKitReportRequestedAfterAPNs = callKitReportRequested
+        receiverCallKitAnswerAvailableAfterAPNs = callKitAnswerActionReceived || callKitAnswerActionDelivered
+        apnsProviderAcceptanceResultBucket = Self.safeAPNsAcceptanceBucket(apnsProviderAcceptanceResultBucket)
+        apnsDeliveryCallbackMissingAfterAcceptance = apnsProviderAcceptanceResultBucket == "2xx" && !physicalVoIPPushReceived
+        receiverVoIPPushDeliveryFinalClassification = Self.receiverVoIPPushDeliveryClassification(summary: self)
+    }
+
+    mutating func refreshReceiverPushKitTokenReadiness(uploadProof: String,
+                                                       appStateBeforeAPNs: String,
+                                                       waitStarted: Bool,
+                                                       waitCompleted: Bool,
+                                                       waitTimeout: Bool) {
+        let uploadFields = Self.redactedProofFields(from: uploadProof)
+        receiverPushKitTokenReadinessRepairPresent = true
+        receiverPushKitTokenReadinessRepairDebugOnly = true
+        receiverPushKitTokenReadinessRepairRawIdentifiersLogged = false
+        refreshReceiverPushKitTokenPreflightBuckets(uploadFields: uploadFields,
+                                                    appStateBeforeAPNs: appStateBeforeAPNs)
+        receiverPushKitTokenReadinessWaitStarted = waitStarted
+        receiverPushKitTokenReadinessWaitCompleted = waitCompleted
+        receiverPushKitTokenReadinessWaitTimeout = waitTimeout
+        receiverPushKitTokenReadinessFinalClassification = Self.receiverPushKitTokenReadinessClassification(summary: self)
+        receiverVoIPPushDeliveryFinalClassification = Self.receiverVoIPPushDeliveryClassification(summary: self)
+    }
+
+    mutating func refreshReceiverPushKitTokenPreflightBuckets(uploadFields: [String: String],
+                                                              appStateBeforeAPNs: String) {
+        receiverPushKitRegistrationRequestedBeforeAPNs = uploadFields["pushkit_registration_manual_invoked"] == "true"
+        receiverPushKitTokenCallbackSeenBeforeAPNs = uploadFields["pushkit_token_received"] == "true"
+        receiverPushKitTokenPresentBeforeAPNs = receiverPushKitTokenCallbackSeenBeforeAPNs
         receiverPushKitTokenUploadAttemptedBeforeAPNs = uploadFields["pushkit_token_upload_requested"] == "true"
         receiverPushKitTokenUploadResultBucket = Self.safeUploadResultBucket(uploadFields["pushkit_token_upload_result"])
         receiverPushKitTokenServerStoreResultBucket = Self.safeServerStoreResultBucket(uploadFields["pushkit_token_server_store_result"])
@@ -5035,13 +5087,17 @@ private extension SalemXVoIPPushReceiptProofSummary {
             receiverPushKitTokenDeviceBindingExpectedBucket = Self.safeDeviceBindingBucket(uploadFields["pushkit_token_retrieval_internal_check"])
         }
         receiverAppLifecycleStateBeforeAPNsBucket = Self.safeAppStateBucket(appStateBeforeAPNs)
-        receiverAppProofGenerationBeforeAPNs = proofGeneration
-        receiverVoIPPushCallbackSeenAfterAPNs = physicalVoIPPushReceived
-        receiverCallKitReportRequestedAfterAPNs = callKitReportRequested
-        receiverCallKitAnswerAvailableAfterAPNs = callKitAnswerActionReceived || callKitAnswerActionDelivered
-        apnsProviderAcceptanceResultBucket = Self.safeAPNsAcceptanceBucket(apnsProviderAcceptanceResultBucket)
-        apnsDeliveryCallbackMissingAfterAcceptance = apnsProviderAcceptanceResultBucket == "2xx" && !physicalVoIPPushReceived
-        receiverVoIPPushDeliveryFinalClassification = Self.receiverVoIPPushDeliveryClassification(summary: self)
+    }
+
+    static func receiverPushKitTokenReadinessTerminal(uploadProof: String) -> Bool {
+        var summary = SalemXVoIPPushReceiptProofSummary()
+        summary.refreshReceiverPushKitTokenReadiness(uploadProof: uploadProof,
+                                                     appStateBeforeAPNs: "unknown",
+                                                     waitStarted: true,
+                                                     waitCompleted: false,
+                                                     waitTimeout: false)
+        return summary.receiverPushKitTokenReadinessFinalClassification == "receiver_pushkit_token_ready_before_apns_redacted" ||
+            summary.receiverPushKitTokenReadinessFinalClassification == "receiver_pushkit_token_upload_failed_before_apns_redacted"
     }
 
     private static func redactedProofFields(from proof: String) -> [String: String] {
@@ -5150,6 +5206,33 @@ private extension SalemXVoIPPushReceiptProofSummary {
             return "receiver_callkit_not_reported_after_apns_redacted"
         }
         return "receiver_pushkit_token_device_binding_unknown_redacted"
+    }
+
+    private static func receiverPushKitTokenReadinessClassification(summary: SalemXVoIPPushReceiptProofSummary) -> String {
+        let ready = summary.receiverPushKitRegistrationRequestedBeforeAPNs &&
+            summary.receiverPushKitTokenCallbackSeenBeforeAPNs &&
+            summary.receiverPushKitTokenPresentBeforeAPNs &&
+            summary.receiverPushKitTokenUploadAttemptedBeforeAPNs &&
+            summary.receiverPushKitTokenUploadResultBucket == "success_redacted" &&
+            summary.receiverPushKitTokenServerStoreResultBucket == "persisted_redacted" &&
+            summary.receiverPushKitTokenEnvironmentBucket == "development" &&
+            summary.receiverPushKitTokenDeviceBindingExpectedBucket == "expected_redacted"
+        if ready {
+            return "receiver_pushkit_token_ready_before_apns_redacted"
+        }
+        if summary.receiverPushKitTokenReadinessWaitTimeout {
+            return "receiver_pushkit_token_readiness_timeout_before_apns_redacted"
+        }
+        if !summary.receiverPushKitRegistrationRequestedBeforeAPNs {
+            return "receiver_pushkit_registration_not_requested_before_apns_redacted"
+        }
+        if !summary.receiverPushKitTokenCallbackSeenBeforeAPNs {
+            return "receiver_pushkit_token_callback_missing_before_apns_redacted"
+        }
+        if summary.receiverPushKitTokenUploadResultBucket == "failed_redacted" {
+            return "receiver_pushkit_token_upload_failed_before_apns_redacted"
+        }
+        return "receiver_pushkit_token_server_store_unknown_before_apns_redacted"
     }
 
     mutating func recordPendingMetadataReferenceRepairProof(referencePresent: Bool,
@@ -7810,6 +7893,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let senderPendingMetadataReferenceHandoffURLHookPath = "/direct-call/sender-pending-metadata-reference-handoff"
     private static let senderRuntimeLiveKitJoinURLHookPath = "/direct-call/sender-runtime-livekit-join"
     private static let senderConnectedSignalHandoffURLHookPath = "/direct-call/sender-connected-signal-handoff"
+    private static let receiverPushKitTokenReadinessURLHookPath = "/direct-call/receiver-pushkit-token-readiness"
     private static let receiverVoIPPushDeliveryTriageURLHookPath = "/direct-call/receiver-voip-push-delivery-triage"
     private static let senderRuntimeLiveKitJoinConfirmation = "RUN_2_48Z_REAL_SENDER_RUNTIME_JOIN"
     private static let uploadSmokeDefaultURLString = "https://matrix.mertis.kz/_matrix/client/unstable/kz.salemx.direct_call/pushkit/token"
@@ -7826,6 +7910,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let voIPPushReceiptCallKitReportTimeout: TimeInterval = 3
     private static let voIPPushReceiptAnswerableWindowTimeout: TimeInterval = 1.5
     private static let remoteParticipantObservationWindowTimeout: TimeInterval = 8
+    private static let receiverPushKitTokenReadinessWaitTimeout: TimeInterval = 8
     private static let localBackgroundCallKitOnlyReportDelay: TimeInterval = 5
     private static let lock = NSLock()
     private static var registrar: DirectCallPushKitRegistrar?
@@ -7943,6 +8028,11 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             return true
         }
 
+        if url.path == receiverPushKitTokenReadinessURLHookPath {
+            startReceiverPushKitTokenReadinessURLHook()
+            return true
+        }
+
         if url.path == receiverVoIPPushDeliveryTriageURLHookPath {
             let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
             recordReceiverVoIPPushDeliveryTriageURLHook(components)
@@ -7996,6 +8086,54 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         lock.unlock()
 
         updateLatestVoIPPushReceiptSummary(summary)
+    }
+
+    private static func startReceiverPushKitTokenReadinessURLHook() {
+        _ = startRegistrationUploadSmokeWithCurrentSessionURLString(uploadSmokeDefaultURLString)
+        recordReceiverPushKitTokenReadinessProof(waitStarted: true,
+                                                 waitCompleted: false,
+                                                 waitTimeout: false)
+
+        Task { @MainActor in
+            let deadline = Date().addingTimeInterval(receiverPushKitTokenReadinessWaitTimeout)
+            var terminal = false
+            while Date() < deadline {
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                terminal = receiverPushKitTokenReadinessTerminal()
+                if terminal {
+                    break
+                }
+            }
+
+            recordReceiverPushKitTokenReadinessProof(waitStarted: true,
+                                                     waitCompleted: true,
+                                                     waitTimeout: !terminal)
+        }
+    }
+
+    private static func receiverPushKitTokenReadinessTerminal() -> Bool {
+        lock.lock()
+        let terminal = SalemXVoIPPushReceiptProofSummary.receiverPushKitTokenReadinessTerminal(uploadProof: latestUploadSummary)
+        lock.unlock()
+        return terminal
+    }
+
+    private static func recordReceiverPushKitTokenReadinessProof(waitStarted: Bool,
+                                                                 waitCompleted: Bool,
+                                                                 waitTimeout: Bool) {
+        lock.lock()
+        var summary = latestVoIPPushReceiptSummary
+        summary.proofGeneration = nextProofGenerationLocked()
+        summary.proofLastUpdatedBy = "receiver_pushkit_token_readiness"
+        summary.refreshReceiverPushKitTokenReadiness(uploadProof: latestUploadSummary,
+                                                     appStateBeforeAPNs: currentApplicationStateProof(),
+                                                     waitStarted: waitStarted,
+                                                     waitCompleted: waitCompleted,
+                                                     waitTimeout: waitTimeout)
+        latestVoIPPushReceiptSummary = summary
+        let proof = summary.redactedLines.joined(separator: "\n")
+        lock.unlock()
+        writeVoIPPushReceiptProof(proof)
     }
 
     private static func recordReceiverVoIPPushDeliveryTriageURLHook(_ components: URLComponents?) {

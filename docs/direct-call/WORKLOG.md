@@ -2,6 +2,52 @@
 
 This file records durable phase-level progress for future Codex and strategy sessions.
 
+## 2026-06-29 — 2.48Z-ReceiverPushKitTokenReadinessRepair
+
+Retry24 preflight stopped safely before APNs because the receiver PushKit token readiness gate was not green. This is not APNs delivery validation and not participant observer propagation validation.
+
+Retry24 preflight result:
+
+```text
+receiver_app_session_restored=true
+sender_app_session_restored=true
+receiver_controlled_audio_connect_armed=true
+receiver_remote_peer_context_armed=true
+receiver_sender_readiness_context_armed=true
+participant_observer_propagation_repair_present=true
+receiver_connected_window_retention_repair_present=true
+sender_runtime_join_bridge_state_repair_present=true
+receiver_voip_push_delivery_triage_present=true
+receiver_app_lifecycle_state_before_apns_bucket=foreground
+receiver_app_proof_generation_before_apns=generation_11
+receiver_pushkit_token_present_before_apns=false
+receiver_pushkit_token_upload_attempted_before_apns=false
+receiver_pushkit_token_upload_result_bucket=not_requested
+receiver_pushkit_token_server_store_result_bucket=not_requested
+receiver_pushkit_token_environment_bucket=development
+receiver_pushkit_token_device_binding_expected_bucket=not_requested
+APNs_sent=false
+sender_runtime_join_triggered=false
+```
+
+Root cause narrowed:
+- the fresh receiver app/session/hook surfaces were ready
+- the receiver had not yet produced a redacted PushKit token upload-smoke success proof
+- APNs must remain blocked until receiver PushKit registration, token callback, upload, server store, environment, and device-binding buckets are green
+
+Repair:
+- added a DEBUG-only bounded receiver PushKit token readiness URL hook before APNs
+- reused the existing PushKit upload smoke and restored Matrix session auth boundary instead of adding a new token path
+- receiver proof now records readiness repair/debug/privacy booleans, registration requested, token callback seen, upload/store/environment/device-binding buckets, bounded wait started/completed/timeout, and a final redacted readiness classification
+- classifications distinguish ready, registration not requested, token callback missing, upload failed, server/store unknown, and readiness timeout before APNs
+
+Safety:
+- no APNs were sent in Retry24
+- no repeated APNs, production APNs, `dev/invite`, physical media connect, physical LiveKit join, microphone/camera permission, video, Matrix event emission, or full flow
+- no raw tokens, JWTs, authorization headers, APNs payloads, invite bodies, LiveKit URLs, room IDs, call IDs, user IDs, device IDs, call handles, private logs, or pending metadata contents recorded
+
+Next phase: `2.48Z-Physical2-Retry24B — one-shot receiver PushKit token readiness validation before APNs, receiver iPhone PRO, sender Carpediem`.
+
 ## 2026-06-29 — 2.48Z-ReceiverVoIPPushDeliveryRegressionTriage
 
 Closed Retry23 as APNs accepted / receiver PushKit callback missing triage. This is not participant observer propagation validation and not remote participant success.
