@@ -4213,6 +4213,43 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var liveKitCleanupResult = "not_requested"
     var blockedReason = "voip_push_not_received"
 
+    var receiverCallKitAnswerAvailabilityFinalClassification: String {
+        if receiverCallKitAnswerAvailableAfterAPNs || callKitAnswerActionReceived {
+            return "receiver_callkit_answer_available_redacted"
+        }
+        if callKitReportRequested,
+           callKitReportResult != "reported",
+           callKitReportResult != "fake_reported",
+           callKitReportResult != "pending" {
+            return "receiver_callkit_report_failed_before_answer_redacted"
+        }
+        if callKitReportRequested,
+           callKitReportResult == "reported" || callKitReportResult == "fake_reported",
+           !callKitUISurfaceObservedByOperator,
+           !callKitAnswerActionReceived {
+            return "receiver_callkit_report_submitted_but_ui_missing_redacted"
+        }
+        if !callKitProviderRetainedForAnswer {
+            return "receiver_callkit_provider_not_retained_redacted"
+        }
+        if !callKitDelegateRetainedForAnswer {
+            return "receiver_callkit_delegate_not_retained_redacted"
+        }
+        if !callKitActiveCallUUIDRetained {
+            return "receiver_callkit_uuid_not_retained_redacted"
+        }
+        if callKitEndActionDelivered || callKitProviderDidResetObserved {
+            return "receiver_callkit_ended_or_reset_before_answer_redacted"
+        }
+        if pushKitCompletionAnswerableWindowResult == "timeout_elapsed" {
+            return "receiver_callkit_answer_window_timeout_redacted"
+        }
+        if !voIPOperatorMarkerSetBeforeReport {
+            return "receiver_callkit_operator_marker_missing_redacted"
+        }
+        return "receiver_callkit_answer_window_timeout_redacted"
+    }
+
     var redactedLines: [String] {
         [
             "proof_source=\(proofSource)",
@@ -4258,6 +4295,23 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "receiver_voip_push_callback_seen_after_apns=\(receiverVoIPPushCallbackSeenAfterAPNs)",
             "receiver_callkit_report_requested_after_apns=\(receiverCallKitReportRequestedAfterAPNs)",
             "receiver_callkit_answer_available_after_apns=\(receiverCallKitAnswerAvailableAfterAPNs)",
+            "receiver_callkit_answer_availability_repair_present=true",
+            "receiver_callkit_answer_availability_repair_debug_only=true",
+            "receiver_callkit_answer_availability_repair_raw_identifiers_logged=false",
+            "receiver_callkit_report_submitted_after_apns=\(callKitReportResult == "reported" || callKitReportResult == "fake_reported")",
+            "receiver_callkit_report_result_bucket=\(callKitReportResult)",
+            "receiver_callkit_report_completion_observed=\(callKitReportCompletionObserved)",
+            "receiver_callkit_provider_retained_for_answer=\(callKitProviderRetainedForAnswer)",
+            "receiver_callkit_delegate_retained_for_answer=\(callKitDelegateRetainedForAnswer)",
+            "receiver_callkit_active_call_uuid_retained=\(callKitActiveCallUUIDRetained)",
+            "receiver_callkit_operator_ready_to_answer_before_report=\(voIPOperatorMarkerSetBeforeReport)",
+            "receiver_callkit_ui_surface_observed_by_operator=\(callKitUISurfaceObservedByOperator)",
+            "receiver_callkit_answer_action_received_after_apns=\(callKitAnswerActionReceived)",
+            "receiver_callkit_end_or_reset_before_answer=\(callKitEndActionDelivered || callKitProviderDidResetObserved)",
+            "receiver_callkit_answer_window_started=\(pushKitCompletionAnswerableWindowRequested)",
+            "receiver_callkit_answer_window_completed=\(pushKitCompletionAnswerableWindowResult != "pending" && pushKitCompletionAnswerableWindowResult != "not_requested")",
+            "receiver_callkit_answer_window_timeout=\(pushKitCompletionAnswerableWindowResult == "timeout_elapsed")",
+            "receiver_callkit_answer_availability_final_classification=\(receiverCallKitAnswerAvailabilityFinalClassification)",
             "apns_provider_acceptance_result_bucket=\(apnsProviderAcceptanceResultBucket)",
             "apns_delivery_callback_missing_after_acceptance=\(apnsDeliveryCallbackMissingAfterAcceptance)",
             "receiver_voip_push_delivery_final_classification=\(receiverVoIPPushDeliveryFinalClassification)",
