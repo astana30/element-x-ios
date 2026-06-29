@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-Physical2-Retry28 — the two-device foreground in-app answer continuation path is physically proven through real non-dev invite, one sandbox APNs, receiver PushKit/CallKit report, foreground in-app answer continuation, receiver credentials/connect/LiveKit join, sender runtime credentials/connect/LiveKit join, and receiver remote-participant callback observation. Retry28 is closed as success with a narrow overlap-accounting caveat: `livekit_remote_participant_seen=true` and `retry28_success=true`, but stale overlap summary fields still reported `receiver_sender_connected_window_overlap_observed=false`, `receiver_connected_session_lease_active_at_sender_signal=false`, and `first_failed_phase=overlap_observed`. The next phase is a small no-APNs helper/proof accounting repair so participant presence supersedes stale overlap failure, then `2.49A RemoteAudioTrackLivenessProof`.
+After 2.48Z-Retry28ParticipantSeenAccountingRepair — Retry28 remains closed as an end-to-end two-device LiveKit participant proof success. The accounting repair is docs/helper-guidance only because the stale `first_failed_phase=overlap_observed` logic lived in the `/tmp` Retry28 helper, not in repo-owned source. Future helpers must treat `livekit_remote_participant_seen=true`, `receiver_participant_event_callback_seen=true`, or `receiver_participant_snapshot_seen=true` as terminal success that supersedes stale overlap fields. The next phase is `2.49A RemoteAudioTrackLivenessProof`.
 
 ## Latest App Code Checkpoint
 
@@ -64,7 +64,15 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
     receiver_connected_session_lease_active_at_sender_signal=false
     first_failed_phase=overlap_observed
     ```
-    These stale overlap fields conflict with the stronger runtime fact that the receiver observed the remote participant via callback. The next repair should make `livekit_remote_participant_seen=true` / participant callback success supersede stale overlap phase failure in helper/proof accounting.
+    These stale overlap fields conflict with the stronger runtime fact that the receiver observed the remote participant via callback. The durable accounting rule is now:
+    ```text
+    phase_participant_seen=true
+    phase_overlap_accounting_superseded_by_participant_seen=true
+    first_failed_phase=none
+    retry_success=true
+    receiver_overlap_accounting_caveat=participant_seen_supersedes_stale_overlap_redacted
+    ```
+    Repo inspection found no committed Retry28 helper/phase-summary implementation to patch; the stale logic was `/tmp` helper-only. Future one-shot helpers must apply this rule and preserve the overlap caveat as diagnostic context, not terminal failure.
 
 - Retry27 closed as APNs/PushKit/CallKit-report/operator-ready success with foreground in-app-answer requirement; this is not post-answer media continuation success:
   ```text

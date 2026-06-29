@@ -2,6 +2,46 @@
 
 This file records durable phase-level progress for future Codex and strategy sessions.
 
+## 2026-06-29 — 2.48Z-Retry28ParticipantSeenAccountingRepair
+
+Closed the Retry28 accounting repair without rerunning physical proof.
+
+Root cause:
+- Retry28 achieved the real two-device participant proof, but the `/tmp` helper phase summary still reported `first_failed_phase=overlap_observed`
+- repo inspection found no committed helper or phase-summary implementation that owns that stale field
+- the stale fields were helper accounting, not a runtime failure, because receiver participant callback success and `livekit_remote_participant_seen=true` were already present
+
+Durable accounting rule for future helpers:
+
+```text
+if livekit_remote_participant_seen=true
+or receiver_participant_event_callback_seen=true
+or receiver_participant_snapshot_seen=true:
+  phase_participant_seen=true
+  phase_overlap_accounting_superseded_by_participant_seen=true
+  first_failed_phase=none
+  retry_success=true
+  receiver_overlap_accounting_caveat=participant_seen_supersedes_stale_overlap_redacted
+```
+
+The original overlap caveat remains recorded:
+
+```text
+receiver_sender_connected_window_overlap_observed=false
+receiver_connected_session_lease_active_at_sender_signal=false
+first_failed_phase=overlap_observed
+```
+
+Interpretation:
+- participant callback success supersedes stale overlap failure for Retry28 terminal result
+- the overlap fields remain useful diagnostic context, not the final phase classification
+
+Safety:
+- no APNs, production APNs, `dev/invite`, physical media connect, physical LiveKit join, repeated receiver connect, repeated sender join, microphone/camera permission request, video, Matrix event emission, or full flow
+- no raw tokens, JWTs, authorization headers, APNs payloads, invite bodies, LiveKit URLs, room IDs, call IDs, user IDs, device IDs, call handles, private logs, or pending metadata contents recorded
+
+Next phase: `2.49A RemoteAudioTrackLivenessProof`.
+
 ## 2026-06-29 — 2.48Z-Physical2-Retry28
 
 Closed Retry28 as end-to-end two-device LiveKit participant proof success, with one accounting caveat to repair before moving to audio-track liveness.

@@ -13,24 +13,31 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-Retry28 is final. Do not rerun it.
+Retry28 is final. Do not rerun it and do not send another APNs for Retry28.
 
-Retry28 sent exactly one sandbox APNs and achieved end-to-end two-device LiveKit participant proof:
+Retry28 achieved end-to-end two-device LiveKit participant proof:
 
 ```text
 APNs_sent=true
-background_apns_push_result=sandbox_success
+physical_voip_push_received=true
+callkit_answer_action_received=true
 receiver_post_answer_pending_metadata_fetch_result=success_redacted
 receiver_post_answer_media_credentials_result=success_redacted
 receiver_post_answer_controlled_connect_result=success_redacted
+receiver_post_answer_livekit_join_result=success_redacted
+controlled_connect_first_attempt_result=success_redacted
 livekit_join_result=success_redacted
+receiver_connected_session_lease_acquired=true
+sender_runtime_join_executor_invoked=true
 sender_runtime_join_pending_metadata_fetch_result=success_redacted
 sender_runtime_join_credentials_result=success_redacted
-sender_runtime_join_executor_invoked=true
 sender_runtime_join_runtime_result=success_redacted
 sender_livekit_room_connected=true
 receiver_participant_event_callback_seen=true
 livekit_remote_participant_seen=true
+livekit_remote_participant_count_bucket=1
+receiver_remote_participant_observer_result=remote_participant_seen_via_callback_redacted
+remote_participant_observation_final_classification=remote_participant_seen_via_callback_redacted
 retry28_success=true
 ```
 
@@ -49,83 +56,88 @@ matrix_event_emit_requested=false
 real_call_flow_started=false
 ```
 
-## Known Accounting Caveat
+## Accounting Repair Completed
 
-The Retry28 terminal helper/proof summary still reported stale overlap failure fields even though receiver participant presence was observed:
+Retry28 had stale overlap accounting:
 
 ```text
-receiver_sender_connected_window_overlap_observed=false
+sender_connected_signal_received_by_receiver=true
 receiver_connected_session_lease_active_at_sender_signal=false
+receiver_sender_connected_window_overlap_observed=false
+phase_participant_seen=true
 first_failed_phase=overlap_observed
-livekit_remote_participant_seen=true
-retry28_success=true
 ```
 
-The stronger runtime evidence is participant callback success / `livekit_remote_participant_seen=true`. The stale overlap accounting must not make the final phase summary look failed once participant presence is proven.
+Repo inspection found no committed Retry28 helper/phase-summary implementation to patch; the stale logic lived in the one-off `/tmp` helper. Future helpers must apply this terminal accounting rule:
+
+```text
+if livekit_remote_participant_seen=true
+or receiver_participant_event_callback_seen=true
+or receiver_participant_snapshot_seen=true:
+  phase_participant_seen=true
+  phase_overlap_accounting_superseded_by_participant_seen=true
+  first_failed_phase=none
+  retry_success=true
+  receiver_overlap_accounting_caveat=participant_seen_supersedes_stale_overlap_redacted
+```
+
+Preserve stale overlap fields as caveat diagnostics, not terminal failure, once participant presence is proven.
 
 ## New Phase
 
 Start:
 
 ```text
-2.48Z-Retry28ParticipantSeenAccountingRepair
+2.49A RemoteAudioTrackLivenessProof
 ```
 
 Goal:
 
-Repair helper/proof phase accounting so receiver participant presence supersedes stale overlap failure:
+Validate remote audio track/liveness after the already-proven participant path:
 
 ```text
-participant_seen=true
-or livekit_remote_participant_seen=true
-or receiver_participant_event_callback_seen=true
+receiver LiveKit connected
+sender LiveKit connected
+receiver remote participant seen
+remote audio track subscribed/unmuted/liveness observed
 ```
 
-must make the participant/terminal success path win over stale:
+Primary proof targets:
 
 ```text
-receiver_sender_connected_window_overlap_observed=false
-receiver_connected_session_lease_active_at_sender_signal=false
-first_failed_phase=overlap_observed
+livekit_remote_participant_seen=true
+livekit_remote_audio_track_subscribed=true
+livekit_remote_audio_track_unmuted=true
+livekit_remote_audio_level_observed=true
+livekit_audio_liveness_observed=true
+livekit_audio_liveness_result=success_redacted
+remote_audio_liveness_result=success_redacted
 ```
 
-Expected accounting behavior after repair:
+Guardrails:
 
 ```text
-retry28_success=true
-phase_remote_participant_seen=true
-phase_overlap_accounting_superseded_by_participant_seen=true
-first_failed_phase=none
-overlap_accounting_caveat_recorded=true
+no video
+no camera permission request
+no Matrix event emit
+no full production flow
+no raw token, URL, room ID, call ID, user ID, device ID, APNs payload, invite body, auth header, pending metadata contents, or private log exposure
 ```
 
-Use a redacted caveat field rather than deleting the diagnostic:
+Do not run APNs or physical LiveKit proof until after inspection and a fresh validation plan.
 
-```text
-receiver_overlap_accounting_caveat=participant_seen_supersedes_stale_overlap_redacted
+## Suggested Investigation
+
+Inspect existing remote-audio proof fields and LiveKit observer callbacks:
+
+```bash
+rg -n "remote_audio|audio_liveness|livekit_remote_audio|RemoteParticipant|TrackPublication|audio_track|subscribed|unmuted|participant_seen|receiver_remote_participant_observer" \
+  ElementX/Sources/Services/Calls \
+  UnitTests/Sources/DirectCallEngineTests.swift \
+  UnitTests/Sources/NativeIncomingCallLifecycleContractTests.swift
 ```
 
-## Scope
-
-Allowed:
-- small helper/proof accounting repair
-- targeted tests/source guards
-- compact docs update
-
-Not allowed:
-- APNs
-- production APNs
-- `dev/invite`
-- physical media connect
-- physical LiveKit join
-- repeated receiver connect
-- repeated sender join
-- microphone/camera permission request
-- video
-- Matrix event emission
-- full direct-call flow
-- project/signing/entitlements/Info.plist/app.yml changes
-- raw token, URL, room ID, call ID, user ID, device ID, APNs payload, invite body, auth header, pending metadata contents, or private log exposure
+Prefer the smallest DEBUG-only proof extension that observes remote audio track state after `livekit_remote_participant_seen=true`.
 
 ## Checks
 
@@ -139,10 +151,4 @@ git diff --check
 git diff --cached --check
 git diff --name-only | grep -E 'SalemX.xcodeproj/project.pbxproj|app.yml|.entitlements|Info.plist' && exit 1 || true
 git diff --cached --name-only | grep -E 'SalemX.xcodeproj/project.pbxproj|app.yml|.entitlements|Info.plist' && exit 1 || true
-```
-
-After this accounting repair is committed, move to:
-
-```text
-2.49A RemoteAudioTrackLivenessProof
 ```
