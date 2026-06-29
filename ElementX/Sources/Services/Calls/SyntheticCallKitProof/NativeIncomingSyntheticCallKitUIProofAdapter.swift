@@ -5094,7 +5094,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         summary.refreshReceiverPushKitTokenReadiness(uploadProof: uploadProof,
                                                      appStateBeforeAPNs: "unknown",
                                                      waitStarted: true,
-                                                     waitCompleted: false,
+                                                     waitCompleted: true,
                                                      waitTimeout: false)
         return summary.receiverPushKitTokenReadinessFinalClassification == "receiver_pushkit_token_ready_before_apns_redacted" ||
             summary.receiverPushKitTokenReadinessFinalClassification == "receiver_pushkit_token_upload_failed_before_apns_redacted"
