@@ -13,174 +13,136 @@ Do not stage or commit that diagnostics file.
 
 ## Latest Completed State
 
-Retry27 sent exactly one sandbox APNs and proved receiver APNs/PushKit/CallKit report/operator-ready marker success, but it did not reach Answer or any post-answer media continuation.
+Retry28 is final. Do not rerun it.
+
+Retry28 sent exactly one sandbox APNs and achieved end-to-end two-device LiveKit participant proof:
 
 ```text
 APNs_sent=true
 background_apns_push_result=sandbox_success
-physical_voip_push_received=true
-receiver_voip_push_callback_seen_after_apns=true
-receiver_callkit_report_requested_after_apns=true
-receiver_callkit_report_submitted_after_apns=true
-receiver_callkit_report_result_bucket=reported
-receiver_callkit_report_completion_observed=true
-receiver_callkit_provider_retained_for_answer=true
-receiver_callkit_delegate_retained_for_answer=true
-receiver_callkit_active_call_uuid_retained=true
-receiver_callkit_operator_ready_marker_requested_before_apns=true
-receiver_callkit_operator_ready_marker_recorded_before_report=true
-receiver_callkit_receiver_app_state_before_apns_bucket=foreground
-receiver_callkit_receiver_app_state_at_report_bucket=foreground
-receiver_callkit_ui_surface_observed_by_operator=false
-receiver_callkit_answer_available_after_apns=false
-receiver_callkit_answer_action_received_after_apns=false
-receiver_callkit_answer_window_started=true
-receiver_callkit_answer_window_extended_for_ui_surface=true
-receiver_callkit_answer_window_completed=true
-receiver_callkit_answer_window_timeout=true
-receiver_callkit_surface_operator_readiness_final_classification=receiver_callkit_foreground_state_requires_in_app_answer_redacted
-receiver_post_answer_continuation_started=false
-receiver_post_answer_pending_metadata_fetch_requested=false
-receiver_post_answer_media_credentials_requested=false
-receiver_post_answer_controlled_connect_requested=false
-receiver_post_answer_livekit_join_requested=false
-blocked_reason=callkit_first_action_not_observed_before_completion_window
-```
-
-This narrows the blocker to foreground receiver answer handling: CallKit report/retention and the operator-ready marker were correct, but foreground state did not produce an answerable system CallKit UI/action.
-
-Also fix Retry28 helper phase aggregation:
-
-```text
-preflight receiver_pushkit_token_readiness_final_classification=receiver_pushkit_token_ready_before_apns_redacted
-```
-
-must keep:
-
-```text
-phase_pushkit_ready=true
-```
-
-even if terminal post-APNs proof has transient readiness fields. `first_failed_phase` should be `callkit_answered` or `foreground_in_app_answer` when PushKit/APNs/report succeeded but no answer path succeeded.
-
-## New Repair In HEAD
-
-`2.48Z-ReceiverForegroundInAppAnswerContinuationRepair`
-
-New DEBUG-only URL hook:
-
-```text
-kz.salemx.msg://debug/direct-call/receiver-foreground-in-app-answer
-```
-
-The hook is default-disabled and must only be invoked by the physical helper after APNs/PushKit/CallKit report proof shows:
-
-```text
-physical_voip_push_received=true
-receiver_voip_push_callback_seen_after_apns=true
-receiver_callkit_report_submitted_after_apns=true
-receiver_callkit_report_completion_observed=true
-receiver_callkit_provider_retained_for_answer=true
-receiver_callkit_delegate_retained_for_answer=true
-receiver_callkit_active_call_uuid_retained=true
-pending_metadata_reference_present=true
-receiver_callkit_surface_operator_readiness_final_classification=receiver_callkit_foreground_state_requires_in_app_answer_redacted
-```
-
-New redacted proof fields:
-
-```text
-receiver_foreground_in_app_answer_continuation_repair_present=true
-receiver_foreground_in_app_answer_continuation_repair_debug_only=true
-receiver_foreground_in_app_answer_continuation_repair_raw_identifiers_logged=false
-receiver_foreground_in_app_answer_hook_present=true
-receiver_foreground_in_app_answer_hook_default_disabled=true
-receiver_foreground_in_app_answer_hook_requested=<bool>
-receiver_foreground_in_app_answer_hook_allowed=<bool>
-receiver_foreground_in_app_answer_hook_blocked_reason=<redacted_bucket>
-receiver_foreground_in_app_answer_recorded=<bool>
-receiver_foreground_in_app_answer_preserved_pending_metadata=<bool>
-receiver_foreground_in_app_answer_triggered_post_answer_continuation=<bool>
-receiver_foreground_in_app_answer_final_classification=<redacted_bucket>
-```
-
-Known classifications:
-
-```text
-receiver_foreground_in_app_answer_recorded_redacted
-receiver_foreground_in_app_answer_not_foreground_redacted
-receiver_foreground_in_app_answer_missing_report_redacted
-receiver_foreground_in_app_answer_missing_pending_metadata_redacted
-receiver_foreground_in_app_answer_blocked_by_gate_redacted
-receiver_foreground_in_app_answer_post_answer_continuation_started_redacted
-```
-
-## Next Phase
-
-`2.48Z-Physical2-Retry28 — one-shot foreground in-app answer continuation validation, receiver iPhone PRO, sender Carpediem`
-
-Before APNs, require the existing Retry27 preflight plus:
-
-```text
-receiver_foreground_in_app_answer_continuation_repair_present=true
-receiver_foreground_in_app_answer_continuation_repair_debug_only=true
-receiver_foreground_in_app_answer_continuation_repair_raw_identifiers_logged=false
-APNs_sent=false
-```
-
-Run at most one sandbox APNs. If normal CallKit Answer arrives, continue with the existing post-answer continuation. If the receiver proof reaches:
-
-```text
-receiver_callkit_surface_operator_readiness_final_classification=receiver_callkit_foreground_state_requires_in_app_answer_redacted
-receiver_callkit_answer_action_received_after_apns=false
-```
-
-then invoke exactly once:
-
-```text
-kz.salemx.msg://debug/direct-call/receiver-foreground-in-app-answer
-```
-
-Only invoke it after real APNs/PushKit/CallKit report proof; never before APNs.
-
-Expected foreground in-app continuation proof:
-
-```text
-receiver_foreground_in_app_answer_hook_requested=true
-receiver_foreground_in_app_answer_hook_allowed=true
-receiver_foreground_in_app_answer_hook_blocked_reason=none
-receiver_foreground_in_app_answer_recorded=true
-receiver_foreground_in_app_answer_preserved_pending_metadata=true
-receiver_foreground_in_app_answer_triggered_post_answer_continuation=true
-receiver_foreground_in_app_answer_final_classification=receiver_foreground_in_app_answer_post_answer_continuation_started_redacted
-callkit_answer_action_received=true
-callkit_answer_action_fulfilled=true
-receiver_post_answer_continuation_started=true
-receiver_post_answer_pending_metadata_reference_present=true
-receiver_post_answer_pending_metadata_fetch_requested=true
 receiver_post_answer_pending_metadata_fetch_result=success_redacted
-receiver_post_answer_media_credentials_requested=true
 receiver_post_answer_media_credentials_result=success_redacted
-receiver_post_answer_controlled_connect_requested=true
 receiver_post_answer_controlled_connect_result=success_redacted
-receiver_post_answer_livekit_join_requested=true
-receiver_post_answer_livekit_join_result=success_redacted
+livekit_join_result=success_redacted
+sender_runtime_join_pending_metadata_fetch_result=success_redacted
+sender_runtime_join_credentials_result=success_redacted
+sender_runtime_join_executor_invoked=true
+sender_runtime_join_runtime_result=success_redacted
+sender_livekit_room_connected=true
+receiver_participant_event_callback_seen=true
+livekit_remote_participant_seen=true
+retry28_success=true
 ```
 
-Then continue to sender runtime join and participant observation as before. Audio track is not required for participant presence.
-
-Hard limits:
+Safety remained preserved:
 
 ```text
-do not send production APNs
-do not send repeated APNs
-do not use dev/invite
-do not perform repeated receiver connect
-do not perform repeated LiveKit join
-do not request microphone/camera permission
-do not enable video
-do not emit Matrix events
-do not start full flow
-do not touch project/signing files
-do not log raw token, URL, room ID, call ID, user ID, device ID, APNs payload, invite body, auth header, pending metadata contents
+no repeated APNs
+no production APNs
+no dev/invite
+no repeated receiver connect
+no repeated sender join
+video=false
+microphone_permission_requested=false
+camera_permission_requested=false
+matrix_event_emit_requested=false
+real_call_flow_started=false
+```
+
+## Known Accounting Caveat
+
+The Retry28 terminal helper/proof summary still reported stale overlap failure fields even though receiver participant presence was observed:
+
+```text
+receiver_sender_connected_window_overlap_observed=false
+receiver_connected_session_lease_active_at_sender_signal=false
+first_failed_phase=overlap_observed
+livekit_remote_participant_seen=true
+retry28_success=true
+```
+
+The stronger runtime evidence is participant callback success / `livekit_remote_participant_seen=true`. The stale overlap accounting must not make the final phase summary look failed once participant presence is proven.
+
+## New Phase
+
+Start:
+
+```text
+2.48Z-Retry28ParticipantSeenAccountingRepair
+```
+
+Goal:
+
+Repair helper/proof phase accounting so receiver participant presence supersedes stale overlap failure:
+
+```text
+participant_seen=true
+or livekit_remote_participant_seen=true
+or receiver_participant_event_callback_seen=true
+```
+
+must make the participant/terminal success path win over stale:
+
+```text
+receiver_sender_connected_window_overlap_observed=false
+receiver_connected_session_lease_active_at_sender_signal=false
+first_failed_phase=overlap_observed
+```
+
+Expected accounting behavior after repair:
+
+```text
+retry28_success=true
+phase_remote_participant_seen=true
+phase_overlap_accounting_superseded_by_participant_seen=true
+first_failed_phase=none
+overlap_accounting_caveat_recorded=true
+```
+
+Use a redacted caveat field rather than deleting the diagnostic:
+
+```text
+receiver_overlap_accounting_caveat=participant_seen_supersedes_stale_overlap_redacted
+```
+
+## Scope
+
+Allowed:
+- small helper/proof accounting repair
+- targeted tests/source guards
+- compact docs update
+
+Not allowed:
+- APNs
+- production APNs
+- `dev/invite`
+- physical media connect
+- physical LiveKit join
+- repeated receiver connect
+- repeated sender join
+- microphone/camera permission request
+- video
+- Matrix event emission
+- full direct-call flow
+- project/signing/entitlements/Info.plist/app.yml changes
+- raw token, URL, room ID, call ID, user ID, device ID, APNs payload, invite body, auth header, pending metadata contents, or private log exposure
+
+## Checks
+
+Run targeted checks only:
+
+```bash
+swiftformat <changed Swift files>
+swiftlint lint <changed Swift files>
+DIRECT_CALL_ONLY_TESTING='UnitTests/DirectCallEngineTests UnitTests/NativeIncomingCallLifecycleContractTests' Tools/Scripts/verify_direct_call_unit.sh
+git diff --check
+git diff --cached --check
+git diff --name-only | grep -E 'SalemX.xcodeproj/project.pbxproj|app.yml|.entitlements|Info.plist' && exit 1 || true
+git diff --cached --name-only | grep -E 'SalemX.xcodeproj/project.pbxproj|app.yml|.entitlements|Info.plist' && exit 1 || true
+```
+
+After this accounting repair is committed, move to:
+
+```text
+2.49A RemoteAudioTrackLivenessProof
 ```

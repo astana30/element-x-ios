@@ -2,6 +2,51 @@
 
 This file records durable phase-level progress for future Codex and strategy sessions.
 
+## 2026-06-29 — 2.48Z-Physical2-Retry28
+
+Closed Retry28 as end-to-end two-device LiveKit participant proof success, with one accounting caveat to repair before moving to audio-track liveness.
+
+Retry28 result:
+
+```text
+APNs_sent=true
+background_apns_push_result=sandbox_success
+receiver_post_answer_pending_metadata_fetch_result=success_redacted
+receiver_post_answer_media_credentials_result=success_redacted
+receiver_post_answer_controlled_connect_result=success_redacted
+livekit_join_result=success_redacted
+sender_runtime_join_pending_metadata_fetch_result=success_redacted
+sender_runtime_join_credentials_result=success_redacted
+sender_runtime_join_executor_invoked=true
+sender_runtime_join_runtime_result=success_redacted
+sender_livekit_room_connected=true
+receiver_participant_event_callback_seen=true
+livekit_remote_participant_seen=true
+retry28_success=true
+```
+
+Interpretation:
+- the receiver completed post-answer metadata fetch, credentials request, controlled connect, and LiveKit join
+- the sender completed pending metadata fetch, credentials request, shared executor runtime join, and LiveKit room connection
+- the receiver observed the remote participant via runtime callback, so participant presence is physically proven
+
+Accounting caveat:
+
+```text
+receiver_sender_connected_window_overlap_observed=false
+receiver_connected_session_lease_active_at_sender_signal=false
+first_failed_phase=overlap_observed
+```
+
+Those stale overlap summary fields conflict with the stronger runtime participant observation. The next no-APNs repair should update helper/proof accounting so `livekit_remote_participant_seen=true` or participant callback success supersedes stale overlap failure in phase summaries.
+
+Safety:
+- exactly one sandbox APNs was sent in Retry28; do not repeat it
+- no production APNs, `dev/invite`, repeated APNs, repeated receiver connect, repeated sender join, video, microphone/camera permission request, Matrix event emission, or full flow should be performed for Retry28
+- no raw tokens, JWTs, authorization headers, APNs payloads, invite bodies, LiveKit URLs, room IDs, call IDs, user IDs, device IDs, call handles, private logs, or pending metadata contents recorded
+
+Next phase: `2.48Z-Retry28ParticipantSeenAccountingRepair`, then `2.49A RemoteAudioTrackLivenessProof`.
+
 ## 2026-06-29 — 2.48Z-ReceiverForegroundInAppAnswerContinuationRepair
 
 Closed Retry27 as APNs/PushKit/CallKit-report/operator-ready success with foreground in-app-answer requirement. This is not post-answer media continuation success.

@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.48Z-ReceiverForegroundInAppAnswerContinuationRepair — Retry27 proved one sandbox APNs delivery through VoIP PushKit and CallKit report submission/completion with provider, delegate, active UUID, and the operator-ready marker retained before report. It still stopped before Answer because the receiver stayed foreground, no answerable CallKit UI/action was observed, and the final CallKit surface classification was `receiver_callkit_foreground_state_requires_in_app_answer_redacted`. The repair adds a DEBUG-only foreground in-app answer URL hook that is default-disabled, requires the real controlled PushKit/CallKit report plus pending metadata reference, and then reuses the existing safe post-answer pending metadata, credentials, controlled connect, sender join, and participant observation pipeline. The next physical phase is `2.48Z-Physical2-Retry28 — one-shot foreground in-app answer continuation validation, receiver iPhone PRO, sender Carpediem`.
+After 2.48Z-Physical2-Retry28 — the two-device foreground in-app answer continuation path is physically proven through real non-dev invite, one sandbox APNs, receiver PushKit/CallKit report, foreground in-app answer continuation, receiver credentials/connect/LiveKit join, sender runtime credentials/connect/LiveKit join, and receiver remote-participant callback observation. Retry28 is closed as success with a narrow overlap-accounting caveat: `livekit_remote_participant_seen=true` and `retry28_success=true`, but stale overlap summary fields still reported `receiver_sender_connected_window_overlap_observed=false`, `receiver_connected_session_lease_active_at_sender_signal=false`, and `first_failed_phase=overlap_observed`. The next phase is a small no-APNs helper/proof accounting repair so participant presence supersedes stale overlap failure, then `2.49A RemoteAudioTrackLivenessProof`.
 
 ## Latest App Code Checkpoint
 
@@ -38,6 +38,33 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Checksum: `654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e`
 
 ## Proven Checkpoints
+
+- Retry28 closed as end-to-end two-device LiveKit participant proof success with overlap-accounting caveat:
+  ```text
+  APNs_sent=true
+  background_apns_push_result=sandbox_success
+  receiver_post_answer_pending_metadata_fetch_result=success_redacted
+  receiver_post_answer_media_credentials_result=success_redacted
+  receiver_post_answer_controlled_connect_result=success_redacted
+  livekit_join_result=success_redacted
+  sender_runtime_join_pending_metadata_fetch_result=success_redacted
+  sender_runtime_join_credentials_result=success_redacted
+  sender_runtime_join_executor_invoked=true
+  sender_runtime_join_runtime_result=success_redacted
+  sender_livekit_room_connected=true
+  receiver_participant_event_callback_seen=true
+  livekit_remote_participant_seen=true
+  retry28_success=true
+  ```
+  - Exactly one sandbox APNs was sent in Retry28; do not repeat it.
+  - No production APNs, `dev/invite`, repeated APNs, repeated receiver connect, repeated sender join, video, microphone/camera permission request, Matrix event emission, or full call flow should be performed for Retry28.
+  - Accounting caveat:
+    ```text
+    receiver_sender_connected_window_overlap_observed=false
+    receiver_connected_session_lease_active_at_sender_signal=false
+    first_failed_phase=overlap_observed
+    ```
+    These stale overlap fields conflict with the stronger runtime fact that the receiver observed the remote participant via callback. The next repair should make `livekit_remote_participant_seen=true` / participant callback success supersede stale overlap phase failure in helper/proof accounting.
 
 - Retry27 closed as APNs/PushKit/CallKit-report/operator-ready success with foreground in-app-answer requirement; this is not post-answer media continuation success:
   ```text
