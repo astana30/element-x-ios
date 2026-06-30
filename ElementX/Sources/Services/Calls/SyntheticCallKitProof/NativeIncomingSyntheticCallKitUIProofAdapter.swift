@@ -1049,6 +1049,13 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
     var noMediaRuntimeTriggerResultBucket = "not_requested"
     var noMediaRuntimeTriggerHandlerRegisteredBucket = "registered_redacted"
     var noMediaRuntimeTriggerRawIdentifiersLogged = false
+    var senderDebugBuildMarkerPresent = false
+    var senderDebugBuildExpectedHeadBucket = "unknown"
+    var senderDebugURLDispatchSeen = false
+    var senderDebugURLDispatchShapeBucket = "none"
+    var senderDebugDirectCallRouteSeen = false
+    var senderDebugNoMediaRouteSeen = false
+    var senderDebugNoMediaHandlerEntrySeen = false
     var senderCallStateAfterAnswerBucket = "sender_runtime_not_triggered_redacted"
     var senderMediaCredentialsGateState = "not_requested"
     var senderMediaCredentialsHTTPStatusBucket = "not_requested"
@@ -1194,6 +1201,13 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             "sender_no_media_runtime_trigger_handler_registered_bucket=\(noMediaRuntimeTriggerHandlerRegisteredBucket)",
             "sender_no_media_runtime_trigger_terminal_observed=\(senderNoMediaRuntimeTriggerTerminalObserved)",
             "sender_no_media_runtime_trigger_raw_identifiers_logged=\(noMediaRuntimeTriggerRawIdentifiersLogged)",
+            "sender_debug_build_marker_present=\(senderDebugBuildMarkerPresent)",
+            "sender_debug_build_expected_head_bucket=\(senderDebugBuildExpectedHeadBucket)",
+            "sender_debug_url_dispatch_seen=\(senderDebugURLDispatchSeen)",
+            "sender_debug_url_dispatch_shape_bucket=\(senderDebugURLDispatchShapeBucket)",
+            "sender_debug_direct_call_route_seen=\(senderDebugDirectCallRouteSeen)",
+            "sender_debug_no_media_route_seen=\(senderDebugNoMediaRouteSeen)",
+            "sender_debug_no_media_handler_entry_seen=\(senderDebugNoMediaHandlerEntrySeen)",
             "sender_call_state_after_answer_bucket=\(senderCallStateAfterAnswerBucket)",
             "sender_media_credentials_gate_state=\(senderMediaCredentialsGateState)",
             "sender_media_credentials_requested=\(credentialsRequested)",
@@ -1284,6 +1298,30 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             "real_call_flow_started=\(realCallFlowStarted)",
             "blocked_reason=\(blockedReason)"
         ]
+    }
+
+    mutating func markDebugBuildLaunchMarker() {
+        senderDebugBuildMarkerPresent = true
+        senderDebugBuildExpectedHeadBucket = "debug_build_marker_redacted"
+        noMediaRuntimeTriggerHandlerRegisteredBucket = "registered_redacted"
+    }
+
+    mutating func markDebugURLDispatch(shapeBucket: String) {
+        senderDebugURLDispatchSeen = true
+        senderDebugURLDispatchShapeBucket = shapeBucket
+    }
+
+    mutating func markDebugDirectCallRoute() {
+        senderDebugDirectCallRouteSeen = true
+    }
+
+    mutating func markDebugNoMediaRoute() {
+        senderDebugNoMediaRouteSeen = true
+    }
+
+    mutating func markDebugNoMediaHandlerEntry() {
+        senderDebugNoMediaHandlerEntrySeen = true
+        noMediaRuntimeTriggerHandlerRegisteredBucket = "registered_redacted"
     }
 
     mutating func markReferenceHandoff(_ handoff: SalemXSenderPendingMetadataReferenceHandoff, armGenerationChanged: Bool = false) {
@@ -9181,9 +9219,39 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         return nil
     }
 
+    private static func redactedDebugURLShapeBucket(_ url: URL) -> String {
+        guard url.scheme == "kz.salemx.msg" else {
+            return "unsupported_scheme_redacted"
+        }
+
+        if url.host == uploadSmokeURLHost, url.path.hasPrefix("/direct-call/") {
+            return "debug_direct_call_redacted"
+        }
+
+        if url.host == uploadSmokeURLHost {
+            return "debug_non_direct_call_redacted"
+        }
+
+        if url.host == "direct-call" {
+            return "direct_call_host_redacted"
+        }
+
+        if url.host == nil, url.path.hasPrefix("/direct-call/") {
+            return "path_only_direct_call_redacted"
+        }
+
+        return "unsupported_route_redacted"
+    }
+
     static func handleUploadSmokeURL(_ url: URL) -> Bool {
+        recordSenderDebugURLDispatch(shapeBucket: redactedDebugURLShapeBucket(url))
+
         guard let normalizedPath = normalizedDebugURLPath(url) else {
             return false
+        }
+
+        if normalizedPath.hasPrefix("/direct-call/") {
+            recordSenderDebugDirectCallRouteSeen()
         }
 
         if handleReceiverDebugURLHook(url, normalizedPath: normalizedPath) {
@@ -9266,6 +9334,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             startSenderRuntimeLiveKitJoinURLHook(components)
             return true
         } else if normalizedPath == senderNoMediaRuntimeTriggerURLHookPath {
+            recordSenderDebugNoMediaRouteSeen()
             startSenderNoMediaRuntimeTriggerURLHook(components)
             return true
         } else if normalizedPath == senderConnectedSignalHandoffURLHookPath {
@@ -9639,6 +9708,8 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     }
 
     private static func startSenderNoMediaRuntimeTriggerURLHook(_ components: URLComponents?) {
+        recordSenderDebugNoMediaHandlerEntrySeen()
+
         let confirmed = components?.queryItems?.first { $0.name == "confirm" }?.value == senderNoMediaRuntimeTriggerConfirmation
 
         lock.lock()
@@ -11892,6 +11963,51 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         let proof = summary.redactedLines.joined(separator: "\n")
         lock.unlock()
         writeLocalBackgroundCallKitOnlyProof(proof)
+    }
+
+    @objc static func recordSenderDebugBuildLaunchMarker() {
+        lock.lock()
+        var summary = latestSenderRuntimeLiveKitJoinSummary
+        summary.markDebugBuildLaunchMarker()
+        lock.unlock()
+
+        updateLatestSenderRuntimeLiveKitJoinSummary(summary)
+    }
+
+    private static func recordSenderDebugURLDispatch(shapeBucket: String) {
+        lock.lock()
+        var summary = latestSenderRuntimeLiveKitJoinSummary
+        summary.markDebugURLDispatch(shapeBucket: shapeBucket)
+        lock.unlock()
+
+        updateLatestSenderRuntimeLiveKitJoinSummary(summary)
+    }
+
+    private static func recordSenderDebugDirectCallRouteSeen() {
+        lock.lock()
+        var summary = latestSenderRuntimeLiveKitJoinSummary
+        summary.markDebugDirectCallRoute()
+        lock.unlock()
+
+        updateLatestSenderRuntimeLiveKitJoinSummary(summary)
+    }
+
+    private static func recordSenderDebugNoMediaRouteSeen() {
+        lock.lock()
+        var summary = latestSenderRuntimeLiveKitJoinSummary
+        summary.markDebugNoMediaRoute()
+        lock.unlock()
+
+        updateLatestSenderRuntimeLiveKitJoinSummary(summary)
+    }
+
+    private static func recordSenderDebugNoMediaHandlerEntrySeen() {
+        lock.lock()
+        var summary = latestSenderRuntimeLiveKitJoinSummary
+        summary.markDebugNoMediaHandlerEntry()
+        lock.unlock()
+
+        updateLatestSenderRuntimeLiveKitJoinSummary(summary)
     }
 
     private static func updateLatestSenderRuntimeLiveKitJoinSummary(_ summary: SalemXSenderRuntimeLiveKitJoinProofSummary) {

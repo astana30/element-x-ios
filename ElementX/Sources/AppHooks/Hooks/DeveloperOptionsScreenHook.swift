@@ -21,6 +21,9 @@ struct DefaultDeveloperOptionsScreenHook: DeveloperOptionsScreenHookProtocol {
 extension AppHooks {
     func setUp() {
         registerDeveloperOptionsScreenHook(SalemXDeveloperOptionsScreenHook())
+        #if canImport(PushKit)
+        SalemXPushKitRegistrationSmokeDebugBridge.recordSenderDebugBuildLaunchMarker()
+        #endif
     }
 }
 
