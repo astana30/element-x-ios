@@ -3925,6 +3925,7 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("recordSenderDebugNoMediaHandlerEntrySeen()"))
         Self.assertSenderNoMediaFileTriggerSourceGuards(in: adapterSource)
         Self.assertSenderPendingMetadataFileHandoffSourceGuards(in: adapterSource)
+        Self.assertSenderAtomicPendingMetadataHandoffTriggerSourceGuards(in: adapterSource)
         #expect(adapterSource.contains("redactedDebugURLShapeBucket(_ url: URL)"))
         #expect(adapterSource.contains("\"debug_direct_call_redacted\""))
         #expect(adapterSource.contains("\"direct_call_host_redacted\""))
@@ -4055,6 +4056,63 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(!handoffConsumerSource.contains("matrixEventEmitRequested = true"))
         #expect(!handoffConsumerSource.contains("cameraPermissionRequested = true"))
         #expect(!handoffConsumerSource.contains("microphonePermissionRequested = true"))
+    }
+
+    private static func assertSenderAtomicPendingMetadataHandoffTriggerSourceGuards(in adapterSource: String) {
+        let atomicConsumerSource: String
+        if let atomicConsumerStart = adapterSource.range(of: "private static func startSenderAtomicPendingMetadataHandoffTriggerFilePolling")?.lowerBound,
+           let handoffFilePollingStart = adapterSource.range(of: "private static func startSenderPendingMetadataReferenceHandoffFilePolling")?.lowerBound {
+            atomicConsumerSource = String(adapterSource[atomicConsumerStart..<handoffFilePollingStart])
+        } else {
+            atomicConsumerSource = ""
+        }
+
+        #expect(adapterSource.contains("sender_debug_atomic_handoff_trigger_file_seen=\\(senderDebugAtomicHandoffTriggerFileSeen)"))
+        #expect(adapterSource.contains("sender_debug_atomic_handoff_trigger_shape_bucket=\\(senderDebugAtomicHandoffTriggerShapeBucket)"))
+        #expect(adapterSource.contains("sender_debug_atomic_handoff_trigger_consumed=\\(senderDebugAtomicHandoffTriggerConsumed)"))
+        #expect(adapterSource.contains("sender_debug_atomic_handoff_trigger_consume_result_bucket=\\(senderDebugAtomicHandoffTriggerConsumeResultBucket)"))
+        #expect(adapterSource.contains("sender_pending_metadata_memory_reference_present_before_trigger=\\(senderPendingMetadataMemoryReferencePresentBeforeTrigger)"))
+        #expect(adapterSource.contains("sender_pending_metadata_memory_reference_present_at_trigger=\\(senderPendingMetadataMemoryReferencePresentAtTrigger)"))
+        #expect(adapterSource.contains("private static let senderAtomicPendingMetadataHandoffTriggerFileName = \"salemx-debug-sender-pending-metadata-and-no-media-trigger.json\""))
+        #expect(adapterSource.contains("private static var senderAtomicPendingMetadataHandoffTriggerFilePollTask: Task<Void, Never>?"))
+        #expect(adapterSource.contains("startSenderAtomicPendingMetadataHandoffTriggerFilePolling()"))
+        #expect(adapterSource.contains("consumeSenderAtomicPendingMetadataHandoffTriggerFileIfNeeded()"))
+        #expect(adapterSource.contains("senderAtomicPendingMetadataHandoffTriggerFileDiagnostics"))
+        #expect(adapterSource.contains("triggerKind == \"sender_pending_metadata_and_no_media_trigger\""))
+        #expect(adapterSource.contains("markerVersion == \"2.49X\""))
+        #expect(adapterSource.contains("command == \"run_no_media_trigger\""))
+        #expect(adapterSource.contains("json[\"pending_metadata_reference\"] as? String"))
+        #expect(adapterSource.contains("mutating func markDebugAtomicHandoffTriggerReadyForTrigger(referencePresent: Bool)"))
+        #expect(adapterSource.contains("if senderDebugAtomicHandoffTriggerFileSeen"))
+        #expect(!atomicConsumerSource.isEmpty)
+        #expect(atomicConsumerSource.contains("FileManager.default.fileExists(atPath: triggerURL.path)"))
+        #expect(atomicConsumerSource.contains("try FileManager.default.removeItem(at: triggerURL)"))
+        #expect(atomicConsumerSource.contains("recordSenderDebugAtomicHandoffTriggerSeen(shapeBucket: diagnostics.shapeBucket)"))
+        #expect(atomicConsumerSource.contains("recordSenderDebugAtomicHandoffTriggerReadyForTrigger(referencePresent: true)"))
+        #expect(atomicConsumerSource.contains("recordSenderDebugAtomicHandoffTriggerConsumed(resultBucket: \"deleted_redacted\")"))
+        #expect(atomicConsumerSource.contains("recordSenderDebugAtomicHandoffTriggerConsumed(resultBucket: \"invalid_shape_redacted\")"))
+        #expect(atomicConsumerSource.contains("recordSenderDebugAtomicHandoffTriggerConsumed(resultBucket: \"delete_failed_redacted\")"))
+        #expect(atomicConsumerSource.contains("armSenderPendingMetadataReferenceHandoff(reference: reference"))
+        #expect(atomicConsumerSource.contains("source: \"atomic_file_handoff_redacted\""))
+        #expect(atomicConsumerSource.contains("startSenderNoMediaRuntimeTrigger(confirmed: true)"))
+        let armIndex = atomicConsumerSource.range(of: "armSenderPendingMetadataReferenceHandoff(reference: reference")?.lowerBound
+        let triggerIndex = atomicConsumerSource.range(of: "startSenderNoMediaRuntimeTrigger(confirmed: true)")?.lowerBound
+        #expect(armIndex != nil)
+        #expect(triggerIndex != nil)
+        if let armIndex, let triggerIndex {
+            #expect(armIndex < triggerIndex)
+        }
+        #expect(atomicConsumerSource.contains("\"valid_sender_atomic_handoff_trigger_redacted\""))
+        #expect(!atomicConsumerSource.contains("handleUploadSmokeURL"))
+        #expect(!atomicConsumerSource.contains("sendRealInvite"))
+        #expect(!atomicConsumerSource.contains("postRealInvite"))
+        #expect(!atomicConsumerSource.contains("background_apns_push_requested=true"))
+        #expect(!atomicConsumerSource.contains("DirectCallLiveKitConnectExecutor"))
+        #expect(!atomicConsumerSource.contains("executor.connectAudio"))
+        #expect(!atomicConsumerSource.contains("setMicrophoneEnabled(true)"))
+        #expect(!atomicConsumerSource.contains("matrixEventEmitRequested = true"))
+        #expect(!atomicConsumerSource.contains("cameraPermissionRequested = true"))
+        #expect(!atomicConsumerSource.contains("microphonePermissionRequested = true"))
     }
 
     @Test

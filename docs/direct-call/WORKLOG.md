@@ -2,6 +2,54 @@
 
 This file records durable phase-level progress for future Codex and strategy sessions.
 
+## 2026-06-30 — 2.49X-ZhanielkaAtomicHandoffTriggerBoundary
+
+Closed the 2.49W sender-side blocker as a split-lifecycle memory-reference loss, then implemented the DEBUG-only atomic sender handoff-and-trigger repair.
+
+2.49W runtime result:
+- fresh real non-dev invite/APNs to iPhone PRO succeeded
+- receiver VoIP receipt, pending metadata fetch, CallKit Answer, and receiver media credentials succeeded
+- sender pending metadata file handoff reached iPhone Жанелька and was consumed
+- the later separate no-media trigger launch lost the in-memory sender pending metadata reference and stopped at `pending_metadata_blocked_redacted`
+
+What changed:
+- added DEBUG-only atomic proof fields for a combined sender pending metadata handoff plus no-media trigger file
+- added an app-container Documents file consumer for `salemx-debug-sender-pending-metadata-and-no-media-trigger.json`
+- the atomic file validates a static 2.49X marker and command, deletes the file on success, arms the existing sender pending metadata memory reference, records that memory is present before trigger, and immediately invokes the existing no-media trigger in the same lifecycle
+- the existing no-media trigger still stops before media connect/LiveKit and only requests/classifies sender credentials
+- added source-guard regression coverage proving the atomic consumer is file-backed, ordered before the trigger, terminal-proof oriented, redacted, and free of APNs/dev invite/media connect/LiveKit/mic/camera/Matrix/full-flow side effects
+- created the next helper path: `/tmp/salemx_2_49x_zhanielka_atomic_handoff_trigger_boundary.command`
+
+Expected runtime fields:
+
+```text
+sender_debug_atomic_handoff_trigger_file_seen=<runtime>
+sender_debug_atomic_handoff_trigger_shape_bucket=<runtime_redacted_bucket>
+sender_debug_atomic_handoff_trigger_consumed=<runtime>
+sender_debug_atomic_handoff_trigger_consume_result_bucket=<runtime_redacted_bucket>
+sender_pending_metadata_memory_reference_present_before_trigger=<runtime>
+sender_pending_metadata_memory_reference_present_at_trigger=<runtime>
+sender_pending_metadata_raw_identifiers_logged=false
+sender_no_media_runtime_trigger_attempted=<runtime>
+sender_no_media_runtime_trigger_terminal_observed=<runtime>
+sender_no_media_runtime_trigger_result_bucket=<runtime_redacted_bucket>
+sender_media_credentials_requested=<runtime>
+sender_media_credentials_request_seen=<runtime>
+sender_media_credentials_http_status_bucket=<runtime_redacted_bucket>
+sender_media_credentials_result_bucket=<runtime_redacted_bucket>
+sender_media_credentials_failure_reason_bucket=<runtime_redacted_bucket>
+sender_media_connect_requested=false
+sender_livekit_join_triggered=false
+sender_permissions_requested=false
+sender_runtime_boundary_blocked_reason=<runtime_redacted_bucket>
+```
+
+Safety:
+- no APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, LiveKit join, microphone/camera permission, microphone enablement, video, Matrix call/media event emission, full flow, uninstall/container reset, signing/project changes, or raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room/call/user/device/pending-metadata logging was performed during implementation
+- the next helper must stop before APNs until exact `SEND_2_49X_ZHANIELKA_ATOMIC_HANDOFF_TRIGGER_BOUNDARY`
+
+Next phase: `2.49X-ZhanielkaAtomicHandoffTriggerBoundary — one-shot fresh invite plus atomic sender handoff/trigger, stop before media connect/LiveKit`.
+
 ## 2026-06-30 — 2.49W-ZhanielkaFreshInviteFileBackedSenderHandoff
 
 Implemented the controlled sender-device swap for the next SalemX direct-call proof: receiver stays iPhone PRO, sender is now iPhone Жанелька, and Alpamys/Carpediem are no longer required for this phase.

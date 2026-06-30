@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.49W-ZhanielkaFreshInviteFileBackedSenderHandoff — the sender role is swapped to iPhone Жанелька and Alpamys/Carpediem are no longer required for this proof. The next physical helper must send at most one explicit SEND-confirmed real non-dev invite to iPhone PRO, then use a DEBUG-only app-container file handoff on iPhone Жанелька for the sender pending metadata reference before running the existing file-backed no-media sender trigger. The next phase is `2.49W-ZhanielkaFreshInviteFileBackedSenderHandoff — one-shot fresh invite plus file-backed sender metadata handoff, stop before media connect/LiveKit`.
+After 2.49X-ZhanielkaAtomicHandoffTriggerBoundary — 2.49W proved fresh invite/APNs/receiver readiness and proved the sender pending metadata file handoff reaches iPhone Жанелька, but the later separate no-media trigger launch lost the in-memory sender pending metadata reference. The next physical helper must send at most one explicit SEND-confirmed real non-dev invite to iPhone PRO, then write one DEBUG-only atomic app-container file on iPhone Жанелька that both arms the sender pending metadata reference and immediately runs the no-media sender trigger in the same lifecycle. The next phase is `2.49X-ZhanielkaAtomicHandoffTriggerBoundary — one-shot fresh invite plus atomic sender handoff/trigger, stop before media connect/LiveKit`.
 
 ## Latest App Code Checkpoint
 
@@ -67,6 +67,33 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - The helper path for the next physical proof is `/tmp/salemx_2_49w_zhanielka_fresh_invite_file_backed_sender_handoff.command`.
   - Safety preserved during this repair: no APNs, production APNs, `dev/invite`, physical media connect, LiveKit join, microphone/camera permission, microphone enablement, video, Matrix call/media event emission, full flow, uninstall/container reset, or raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room/call/user/device/pending-metadata logging was performed.
   - Next phase: `2.49W-ZhanielkaFreshInviteFileBackedSenderHandoff — one-shot fresh invite plus file-backed sender metadata handoff, stop before media connect/LiveKit`.
+
+- 2.49X-ZhanielkaAtomicHandoffTriggerBoundary repairs the 2.49W split-lifecycle sender blocker with a DEBUG-only atomic handoff-and-trigger file:
+  ```text
+  receiver_device=iPhone PRO
+  sender_device=iPhone Жанелька
+  sender_debug_atomic_handoff_trigger_file_seen=<runtime>
+  sender_debug_atomic_handoff_trigger_shape_bucket=<runtime_redacted_bucket>
+  sender_debug_atomic_handoff_trigger_consumed=<runtime>
+  sender_debug_atomic_handoff_trigger_consume_result_bucket=<runtime_redacted_bucket>
+  sender_pending_metadata_memory_reference_present_before_trigger=<runtime>
+  sender_pending_metadata_memory_reference_present_at_trigger=<runtime>
+  sender_pending_metadata_raw_identifiers_logged=false
+  sender_no_media_runtime_trigger_attempted=<runtime>
+  sender_no_media_runtime_trigger_terminal_observed=<runtime>
+  sender_media_credentials_requested=<runtime>
+  sender_media_credentials_request_seen=<runtime>
+  sender_media_connect_requested=false
+  sender_livekit_join_triggered=false
+  sender_permissions_requested=false
+  matrix_call_media_event_emitted=false
+  full_flow_started=false
+  ```
+  - The atomic file is `salemx-debug-sender-pending-metadata-and-no-media-trigger.json`, shape-validated with marker `2.49X`, deleted on success, translated into the existing sender pending metadata memory reference, and immediately followed by the existing no-media sender trigger in the same app lifecycle.
+  - The atomic file path does not use URL dispatch and does not start APNs, invite sending, media connect, LiveKit, microphone/camera permission, Matrix events, or full flow by itself.
+  - The helper path for the next physical proof is `/tmp/salemx_2_49x_zhanielka_atomic_handoff_trigger_boundary.command`.
+  - Safety preserved during this repair: no APNs, production APNs, `dev/invite`, physical media connect, LiveKit join, microphone/camera permission, microphone enablement, video, Matrix call/media event emission, full flow, uninstall/container reset, or raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room/call/user/device/pending-metadata logging was performed.
+  - Next phase: `2.49X-ZhanielkaAtomicHandoffTriggerBoundary — one-shot fresh invite plus atomic sender handoff/trigger, stop before media connect/LiveKit`.
 
 - 2.49A-TwoSimulatorPublicationObservationAudit closes Retry31 as a final one-shot physical proof and implements the pre-physical simulator-safe publication observation repair:
   ```text
