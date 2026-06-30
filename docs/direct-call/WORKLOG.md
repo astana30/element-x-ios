@@ -2,6 +2,51 @@
 
 This file records durable phase-level progress for future Codex and strategy sessions.
 
+## 2026-06-30 — 2.49Y-SenderPendingMetadataAuthDiagnostics
+
+Closed the 2.49X runtime result as a sender pending metadata authorization/scope blocker, not as an atomic handoff failure.
+
+2.49X runtime result:
+- fresh real non-dev invite/APNs to iPhone PRO succeeded
+- receiver VoIP receipt, pending metadata fetch, CallKit Answer, and receiver media credentials succeeded
+- iPhone Жанелька consumed the atomic sender handoff-and-trigger file
+- sender pending metadata memory reference was present before and at trigger time
+- sender no-media trigger reached terminal proof, but sender pending metadata fetch was unauthorized and credentials were not requested
+- all media connect, LiveKit, microphone/camera, microphone enablement, video, Matrix event, and full-flow safety gates stayed closed
+
+What changed:
+- added DEBUG-only redacted sender pending metadata authorization diagnostics to the sender runtime proof
+- records the pending metadata reference role/scope buckets, sender fetch auth/status/failure buckets, sender invite/room/peer classification buckets, local/source availability, credentials-block reason, and `recommended_next_fix_bucket`
+- kept the existing boundary intact: sender credentials are not requested when sender metadata fetch is unauthorized
+- did not broaden receiver metadata access or fake sender metadata success
+- added source-guard regression coverage proving the diagnostics use the sender-scoped pending metadata endpoint, keep credentials behind metadata success, and avoid APNs/dev invite/media connect/LiveKit/mic/camera/Matrix/full-flow side effects
+- created the next helper path: `/tmp/salemx_2_49y_sender_pending_metadata_auth_diagnostics.command`
+
+Expected diagnostic fields:
+
+```text
+pending_metadata_reference_role_bucket=<runtime_redacted_bucket>
+pending_metadata_reference_scope_bucket=<runtime_redacted_bucket>
+receiver_pending_metadata_fetch_auth_bucket=<runtime_or_helper_redacted_bucket>
+sender_pending_metadata_fetch_auth_bucket=<runtime_redacted_bucket>
+sender_pending_metadata_fetch_http_status_bucket=<runtime_redacted_bucket>
+sender_pending_metadata_fetch_failure_reason_bucket=<runtime_redacted_bucket>
+sender_is_invite_creator_bucket=<runtime_redacted_bucket>
+sender_is_room_member_bucket=<runtime_redacted_bucket>
+sender_is_peer_of_metadata_bucket=<runtime_redacted_bucket>
+sender_authorized_metadata_source_available=<runtime>
+sender_local_invite_state_available=<runtime>
+sender_can_request_credentials_without_receiver_pending_fetch=<runtime>
+sender_credentials_request_blocked_reason=<runtime_redacted_bucket>
+recommended_next_fix_bucket=<runtime_redacted_bucket>
+```
+
+Safety:
+- no APNs, production APNs, repeated APNs, `dev/invite`, new invite/pending metadata creation, physical media connect, LiveKit join, microphone/camera permission, microphone enablement, video, Matrix call/media event emission, full flow, uninstall/container reset, signing/project changes, or raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room/call/user/device/pending-metadata logging was performed during implementation
+- the helper is diagnostic-only: it copies receiver/sender proof surfaces and prints redacted classifications
+
+Next phase: `2.49Y-SenderPendingMetadataAuthDiagnostics — inspect sender metadata authorization and choose sender-safe source, no APNs`.
+
 ## 2026-06-30 — 2.49X-ZhanielkaAtomicHandoffTriggerBoundary
 
 Closed the 2.49W sender-side blocker as a split-lifecycle memory-reference loss, then implemented the DEBUG-only atomic sender handoff-and-trigger repair.

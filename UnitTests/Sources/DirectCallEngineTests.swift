@@ -3926,6 +3926,7 @@ final class NativeIncomingCallLifecycleContractTests {
         Self.assertSenderNoMediaFileTriggerSourceGuards(in: adapterSource)
         Self.assertSenderPendingMetadataFileHandoffSourceGuards(in: adapterSource)
         Self.assertSenderAtomicPendingMetadataHandoffTriggerSourceGuards(in: adapterSource)
+        Self.assertSenderPendingMetadataAuthorizationDiagnosticsSourceGuards(in: adapterSource)
         #expect(adapterSource.contains("redactedDebugURLShapeBucket(_ url: URL)"))
         #expect(adapterSource.contains("\"debug_direct_call_redacted\""))
         #expect(adapterSource.contains("\"direct_call_host_redacted\""))
@@ -4113,6 +4114,53 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(!atomicConsumerSource.contains("matrixEventEmitRequested = true"))
         #expect(!atomicConsumerSource.contains("cameraPermissionRequested = true"))
         #expect(!atomicConsumerSource.contains("microphonePermissionRequested = true"))
+    }
+
+    private static func assertSenderPendingMetadataAuthorizationDiagnosticsSourceGuards(in adapterSource: String) {
+        let senderFetchSource: String
+        if let fetchStart = adapterSource.range(of: "private static func fetchSenderRuntimePendingMetadata")?.lowerBound,
+           let blockedRecordStart = adapterSource.range(of: "private static func recordSenderRuntimePendingMetadataBlocked")?.lowerBound {
+            senderFetchSource = String(adapterSource[fetchStart..<blockedRecordStart])
+        } else {
+            senderFetchSource = ""
+        }
+
+        #expect(adapterSource.contains("pending_metadata_reference_role_bucket=\\(pendingMetadataReferenceRoleBucket)"))
+        #expect(adapterSource.contains("pending_metadata_reference_scope_bucket=\\(pendingMetadataReferenceScopeBucket)"))
+        #expect(adapterSource.contains("receiver_pending_metadata_fetch_auth_bucket=\\(receiverPendingMetadataFetchAuthBucket)"))
+        #expect(adapterSource.contains("sender_pending_metadata_fetch_auth_bucket=\\(senderPendingMetadataFetchAuthBucket)"))
+        #expect(adapterSource.contains("sender_pending_metadata_fetch_http_status_bucket=\\(senderPendingMetadataFetchHTTPStatusBucket)"))
+        #expect(adapterSource.contains("sender_pending_metadata_fetch_failure_reason_bucket=\\(senderPendingMetadataFetchFailureReasonBucket)"))
+        #expect(adapterSource.contains("sender_is_invite_creator_bucket=\\(senderIsInviteCreatorBucket)"))
+        #expect(adapterSource.contains("sender_is_room_member_bucket=\\(senderIsRoomMemberBucket)"))
+        #expect(adapterSource.contains("sender_is_peer_of_metadata_bucket=\\(senderIsPeerOfMetadataBucket)"))
+        #expect(adapterSource.contains("sender_authorized_metadata_source_available=\\(senderAuthorizedMetadataSourceAvailable)"))
+        #expect(adapterSource.contains("sender_local_invite_state_available=\\(senderLocalInviteStateAvailable)"))
+        #expect(adapterSource.contains("sender_can_request_credentials_without_receiver_pending_fetch=\\(senderCanRequestCredentialsWithoutReceiverPendingFetch)"))
+        #expect(adapterSource.contains("sender_credentials_request_blocked_reason=\\(senderCredentialsRequestBlockedReason)"))
+        #expect(adapterSource.contains("recommended_next_fix_bucket=\\(recommendedNextFixBucket)"))
+        #expect(adapterSource.contains("markSenderPendingMetadataAuthorizationStarted(referencePresent: referencePresent"))
+        #expect(adapterSource.contains("receiver_invite_pending_metadata_reference_redacted"))
+        #expect(adapterSource.contains("senderLocalInviteStateAvailable = false"))
+        #expect(adapterSource.contains("senderCanRequestCredentialsWithoutReceiverPendingFetch = false"))
+        #expect(adapterSource.contains("senderCanRequestCredentialsWithoutReceiverPendingFetch = true"))
+        #expect(adapterSource.contains("senderCredentialsRequestBlockedReason = reason"))
+        #expect(adapterSource.contains("recommendedNextFixBucket = recommendedSenderMetadataNextFixBucket"))
+        #expect(adapterSource.contains("provide_sender_authorized_metadata_source_redacted"))
+        #expect(adapterSource.contains("components.path = pendingMetadataEndpointPathPrefix + \"/\" + encodedReference + \"/sender\""))
+        #expect(!senderFetchSource.isEmpty)
+        #expect(senderFetchSource.contains("senderPendingMetadataFetchURL(reference: reference)"))
+        #expect(senderFetchSource.contains("recordSenderRuntimePendingMetadataBlocked(reason,"))
+        #expect(senderFetchSource.contains("diagnostics: diagnostics"))
+        #expect(!senderFetchSource.contains("requestSenderRuntimeCredentials"))
+        #expect(!senderFetchSource.contains("DirectCallLiveKitConnectExecutor"))
+        #expect(!senderFetchSource.contains("executor.connectAudio"))
+        #expect(!senderFetchSource.contains("setMicrophoneEnabled(true)"))
+        #expect(!senderFetchSource.contains("sendRealInvite"))
+        #expect(!senderFetchSource.contains("postRealInvite"))
+        #expect(!senderFetchSource.contains("matrixEventEmitRequested = true"))
+        #expect(!senderFetchSource.contains("cameraPermissionRequested = true"))
+        #expect(!senderFetchSource.contains("microphonePermissionRequested = true"))
     }
 
     @Test

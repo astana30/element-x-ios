@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.49X-ZhanielkaAtomicHandoffTriggerBoundary — 2.49W proved fresh invite/APNs/receiver readiness and proved the sender pending metadata file handoff reaches iPhone Жанелька, but the later separate no-media trigger launch lost the in-memory sender pending metadata reference. The next physical helper must send at most one explicit SEND-confirmed real non-dev invite to iPhone PRO, then write one DEBUG-only atomic app-container file on iPhone Жанелька that both arms the sender pending metadata reference and immediately runs the no-media sender trigger in the same lifecycle. The next phase is `2.49X-ZhanielkaAtomicHandoffTriggerBoundary — one-shot fresh invite plus atomic sender handoff/trigger, stop before media connect/LiveKit`.
+After 2.49Y-SenderPendingMetadataAuthDiagnostics — 2.49X proved fresh invite/APNs/receiver readiness and proved the atomic sender handoff-and-trigger path keeps the pending metadata memory reference through trigger time on iPhone Жанелька. The remaining blocker is sender-side authorization/scope for fetching the receiver-created pending metadata reference: sender trigger reaches terminal `pending_metadata_blocked_redacted`, credentials are not requested, and all media/LiveKit/permission/event/full-flow guards stay closed. The next phase is `2.49Y-SenderPendingMetadataAuthDiagnostics — inspect sender metadata authorization and choose sender-safe source, no APNs`.
 
 ## Latest App Code Checkpoint
 
@@ -94,6 +94,29 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
   - The helper path for the next physical proof is `/tmp/salemx_2_49x_zhanielka_atomic_handoff_trigger_boundary.command`.
   - Safety preserved during this repair: no APNs, production APNs, `dev/invite`, physical media connect, LiveKit join, microphone/camera permission, microphone enablement, video, Matrix call/media event emission, full flow, uninstall/container reset, or raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room/call/user/device/pending-metadata logging was performed.
   - Next phase: `2.49X-ZhanielkaAtomicHandoffTriggerBoundary — one-shot fresh invite plus atomic sender handoff/trigger, stop before media connect/LiveKit`.
+
+- 2.49Y-SenderPendingMetadataAuthDiagnostics adds redacted sender metadata authorization/scope diagnostics without changing production behavior or bypassing the metadata boundary:
+  ```text
+  pending_metadata_reference_role_bucket=<runtime_redacted_bucket>
+  pending_metadata_reference_scope_bucket=<runtime_redacted_bucket>
+  receiver_pending_metadata_fetch_auth_bucket=<runtime_or_helper_redacted_bucket>
+  sender_pending_metadata_fetch_auth_bucket=<runtime_redacted_bucket>
+  sender_pending_metadata_fetch_http_status_bucket=<runtime_redacted_bucket>
+  sender_pending_metadata_fetch_failure_reason_bucket=<runtime_redacted_bucket>
+  sender_is_invite_creator_bucket=<runtime_redacted_bucket>
+  sender_is_room_member_bucket=<runtime_redacted_bucket>
+  sender_is_peer_of_metadata_bucket=<runtime_redacted_bucket>
+  sender_authorized_metadata_source_available=<runtime>
+  sender_local_invite_state_available=<runtime>
+  sender_can_request_credentials_without_receiver_pending_fetch=<runtime>
+  sender_credentials_request_blocked_reason=<runtime_redacted_bucket>
+  recommended_next_fix_bucket=<runtime_redacted_bucket>
+  ```
+  - The sender no-media path still fetches sender-scoped pending metadata before credentials; credentials remain blocked when the sender fetch is unauthorized.
+  - The diagnostic conclusion is expected to choose a sender-authorized metadata source, sender local invite state, or a server-side sender/creator endpoint rather than broadening receiver metadata access.
+  - The helper path is `/tmp/salemx_2_49y_sender_pending_metadata_auth_diagnostics.command`.
+  - Safety preserved during this repair: no APNs, production APNs, repeated APNs, `dev/invite`, new invite/pending metadata creation, physical media connect, LiveKit join, microphone/camera permission, microphone enablement, video, Matrix call/media event emission, full flow, uninstall/container reset, signing/project changes, or raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room/call/user/device/pending-metadata logging was performed.
+  - Next phase: `2.49Y-SenderPendingMetadataAuthDiagnostics — inspect sender metadata authorization and choose sender-safe source, no APNs`.
 
 - 2.49A-TwoSimulatorPublicationObservationAudit closes Retry31 as a final one-shot physical proof and implements the pre-physical simulator-safe publication observation repair:
   ```text

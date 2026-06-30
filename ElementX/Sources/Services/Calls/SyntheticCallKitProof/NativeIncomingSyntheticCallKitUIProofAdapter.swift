@@ -1073,6 +1073,20 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
     var senderDebugAtomicHandoffTriggerConsumeResultBucket = "not_requested"
     var senderPendingMetadataMemoryReferencePresentBeforeTrigger = false
     var senderPendingMetadataMemoryReferencePresentAtTrigger = false
+    var pendingMetadataReferenceRoleBucket = "not_requested"
+    var pendingMetadataReferenceScopeBucket = "not_requested"
+    var receiverPendingMetadataFetchAuthBucket = "not_observed_by_sender_runtime_redacted"
+    var senderPendingMetadataFetchAuthBucket = "not_requested"
+    var senderPendingMetadataFetchHTTPStatusBucket = "not_requested"
+    var senderPendingMetadataFetchFailureReasonBucket = "none"
+    var senderIsInviteCreatorBucket = "not_evaluated"
+    var senderIsRoomMemberBucket = "not_evaluated"
+    var senderIsPeerOfMetadataBucket = "not_evaluated"
+    var senderAuthorizedMetadataSourceAvailable = false
+    var senderLocalInviteStateAvailable = false
+    var senderCanRequestCredentialsWithoutReceiverPendingFetch = false
+    var senderCredentialsRequestBlockedReason = "not_requested"
+    var recommendedNextFixBucket = "not_requested"
     var senderCallStateAfterAnswerBucket = "sender_runtime_not_triggered_redacted"
     var senderMediaCredentialsGateState = "not_requested"
     var senderMediaCredentialsHTTPStatusBucket = "not_requested"
@@ -1190,6 +1204,108 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         pendingMetadataReferenceHandoffPresent && pendingMetadataReferenceHandoffArmedBeforeSenderTrigger
     }
 
+    private func senderPendingMetadataReferenceRoleBucket(for source: String, referencePresent: Bool) -> String {
+        guard referencePresent else {
+            return "missing_redacted"
+        }
+
+        switch source {
+        case "atomic_file_handoff_redacted", "file_handoff_redacted", "invite_response_redacted":
+            return "receiver_invite_pending_metadata_reference_redacted"
+        default:
+            return "debug_handoff_pending_metadata_reference_redacted"
+        }
+    }
+
+    private func senderPendingMetadataReferenceScopeBucket(reason: String, failureReasonBucket: String) -> String {
+        switch failureReasonBucket {
+        case "auth_rejected", "forbidden":
+            return "not_sender_authorized_redacted"
+        case "not_found":
+            return "reference_unavailable_to_sender_redacted"
+        default:
+            break
+        }
+
+        switch reason {
+        case "sender_pending_metadata_fetch_unauthorized_redacted", "sender_pending_metadata_reference_mismatch_redacted":
+            return "not_sender_authorized_redacted"
+        case "sender_pending_metadata_fetch_not_found_redacted":
+            return "reference_unavailable_to_sender_redacted"
+        case "sender_pending_metadata_reference_sender_view_missing_redacted", "sender_pending_metadata_reference_missing_redacted", "sender_pending_metadata_reference_sender_memory_missing_redacted":
+            return "missing_redacted"
+        default:
+            return "unknown_redacted"
+        }
+    }
+
+    private func senderPendingMetadataFetchAuthBucket(reason: String, failureReasonBucket: String, authorized: Bool) -> String {
+        switch failureReasonBucket {
+        case "auth_rejected":
+            return "auth_rejected_redacted"
+        case "forbidden":
+            return "forbidden_redacted"
+        case "not_found":
+            return "not_found_redacted"
+        case "server_error":
+            return "server_error_redacted"
+        default:
+            break
+        }
+
+        switch reason {
+        case "sender_pending_metadata_fetch_unauthorized_redacted":
+            return "auth_rejected_redacted"
+        case "sender_pending_metadata_reference_mismatch_redacted":
+            return "forbidden_redacted"
+        case "sender_pending_metadata_fetch_not_found_redacted":
+            return "not_found_redacted"
+        default:
+            return authorized ? "request_sent_redacted" : "not_authorized_redacted"
+        }
+    }
+
+    private func recommendedSenderMetadataNextFixBucket(reason: String, failureReasonBucket: String) -> String {
+        switch failureReasonBucket {
+        case "auth_rejected", "forbidden":
+            return "provide_sender_authorized_metadata_source_redacted"
+        case "not_found":
+            return "verify_reference_lifetime_or_sender_endpoint_redacted"
+        default:
+            break
+        }
+
+        switch reason {
+        case "sender_pending_metadata_fetch_unauthorized_redacted", "sender_pending_metadata_reference_mismatch_redacted":
+            return "provide_sender_authorized_metadata_source_redacted"
+        case "sender_pending_metadata_fetch_not_found_redacted":
+            return "verify_reference_lifetime_or_sender_endpoint_redacted"
+        case "sender_pending_metadata_reference_sender_view_missing_redacted", "sender_pending_metadata_reference_missing_redacted", "sender_pending_metadata_reference_sender_memory_missing_redacted":
+            return "provide_sender_pending_metadata_reference_redacted"
+        default:
+            return "inspect_sender_metadata_authorization_redacted"
+        }
+    }
+
+    mutating func markSenderPendingMetadataAuthorizationStarted(referencePresent: Bool,
+                                                                handoff: SalemXSenderPendingMetadataReferenceHandoff) {
+        pendingMetadataReferenceRoleBucket = senderPendingMetadataReferenceRoleBucket(for: handoff.source,
+                                                                                      referencePresent: referencePresent)
+        pendingMetadataReferenceScopeBucket = referencePresent ? "opaque_reference_scope_unknown_redacted" : "missing_redacted"
+        receiverPendingMetadataFetchAuthBucket = "not_observed_by_sender_runtime_redacted"
+        senderPendingMetadataFetchAuthBucket = "not_requested"
+        senderPendingMetadataFetchHTTPStatusBucket = "not_requested"
+        senderPendingMetadataFetchFailureReasonBucket = "none"
+        senderIsInviteCreatorBucket = handoff.source == "atomic_file_handoff_redacted" ? "invite_response_handoff_source_redacted" : "not_evaluated"
+        senderIsRoomMemberBucket = "external_room_preflight_required_redacted"
+        senderIsPeerOfMetadataBucket = referencePresent ? "requires_sender_metadata_fetch_redacted" : "missing_reference_redacted"
+        senderAuthorizedMetadataSourceAvailable = false
+        senderLocalInviteStateAvailable = false
+        senderCanRequestCredentialsWithoutReceiverPendingFetch = false
+        senderCredentialsRequestBlockedReason = referencePresent ? "pending_metadata_fetch_required_redacted" : "pending_metadata_reference_missing_redacted"
+        recommendedNextFixBucket = referencePresent ? "diagnose_sender_metadata_authorization_redacted" : "provide_sender_pending_metadata_reference_redacted"
+    }
+
     var redactedLines: [String] {
         [
             "proof_generation=\(proofGeneration)",
@@ -1247,6 +1363,20 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             "sender_debug_atomic_handoff_trigger_consume_result_bucket=\(senderDebugAtomicHandoffTriggerConsumeResultBucket)",
             "sender_pending_metadata_memory_reference_present_before_trigger=\(senderPendingMetadataMemoryReferencePresentBeforeTrigger)",
             "sender_pending_metadata_memory_reference_present_at_trigger=\(senderPendingMetadataMemoryReferencePresentAtTrigger)",
+            "pending_metadata_reference_role_bucket=\(pendingMetadataReferenceRoleBucket)",
+            "pending_metadata_reference_scope_bucket=\(pendingMetadataReferenceScopeBucket)",
+            "receiver_pending_metadata_fetch_auth_bucket=\(receiverPendingMetadataFetchAuthBucket)",
+            "sender_pending_metadata_fetch_auth_bucket=\(senderPendingMetadataFetchAuthBucket)",
+            "sender_pending_metadata_fetch_http_status_bucket=\(senderPendingMetadataFetchHTTPStatusBucket)",
+            "sender_pending_metadata_fetch_failure_reason_bucket=\(senderPendingMetadataFetchFailureReasonBucket)",
+            "sender_is_invite_creator_bucket=\(senderIsInviteCreatorBucket)",
+            "sender_is_room_member_bucket=\(senderIsRoomMemberBucket)",
+            "sender_is_peer_of_metadata_bucket=\(senderIsPeerOfMetadataBucket)",
+            "sender_authorized_metadata_source_available=\(senderAuthorizedMetadataSourceAvailable)",
+            "sender_local_invite_state_available=\(senderLocalInviteStateAvailable)",
+            "sender_can_request_credentials_without_receiver_pending_fetch=\(senderCanRequestCredentialsWithoutReceiverPendingFetch)",
+            "sender_credentials_request_blocked_reason=\(senderCredentialsRequestBlockedReason)",
+            "recommended_next_fix_bucket=\(recommendedNextFixBucket)",
             "sender_call_state_after_answer_bucket=\(senderCallStateAfterAnswerBucket)",
             "sender_media_credentials_gate_state=\(senderMediaCredentialsGateState)",
             "sender_media_credentials_requested=\(credentialsRequested)",
@@ -1456,6 +1586,8 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         pendingMetadataReferencePresent = referencePresent
         pendingMetadataReferenceMatchesInviteSenderMemory = referencePresent && handoff.armed
         pendingMetadataReferenceMatchesSenderViewRoute = false
+        markSenderPendingMetadataAuthorizationStarted(referencePresent: referencePresent,
+                                                      handoff: handoff)
         pendingMetadataFetchRequested = false
         pendingMetadataFetchAuthorized = false
         pendingMetadataFetchResult = "not_requested"
@@ -1526,6 +1658,8 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         pendingMetadataReferencePresent = referencePresent
         pendingMetadataReferenceMatchesInviteSenderMemory = referencePresent && handoff.armed
         pendingMetadataReferenceMatchesSenderViewRoute = false
+        markSenderPendingMetadataAuthorizationStarted(referencePresent: referencePresent,
+                                                      handoff: handoff)
         if senderDebugAtomicHandoffTriggerFileSeen {
             senderPendingMetadataMemoryReferencePresentAtTrigger = referencePresent && handoff.armed
         }
@@ -1602,6 +1736,17 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         pendingMetadataFetchAuthorized = true
         pendingMetadataFetchResult = "success_redacted"
         pendingMetadataFetchErrorBucket = "none"
+        pendingMetadataReferenceScopeBucket = "sender_authorized_metadata_scope_redacted"
+        senderPendingMetadataFetchAuthBucket = "success_redacted"
+        senderPendingMetadataFetchHTTPStatusBucket = "2xx"
+        senderPendingMetadataFetchFailureReasonBucket = "none"
+        senderIsInviteCreatorBucket = "accepted_by_sender_endpoint_redacted"
+        senderIsRoomMemberBucket = "server_authorized_room_binding_redacted"
+        senderIsPeerOfMetadataBucket = "peer_binding_present_redacted"
+        senderAuthorizedMetadataSourceAvailable = true
+        senderCanRequestCredentialsWithoutReceiverPendingFetch = true
+        senderCredentialsRequestBlockedReason = "none"
+        recommendedNextFixBucket = "none"
         metadataDirection = String(describing: session.direction)
         metadataIntent = session.intent.rawValue
         metadataHasCallIdentifier = !session.callID.isEmpty
@@ -1624,11 +1769,31 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         }
     }
 
-    mutating func markPendingMetadataBlocked(_ reason: String, authorized: Bool) {
+    mutating func markPendingMetadataBlocked(_ reason: String,
+                                             authorized: Bool,
+                                             httpStatusBucket: String = "not_requested",
+                                             failureReasonBucket: String? = nil) {
+        let resolvedFailureReasonBucket = failureReasonBucket ?? reason
         pendingMetadataFetchRequested = true
         pendingMetadataFetchAuthorized = authorized
         pendingMetadataFetchResult = "blocked_redacted"
         pendingMetadataFetchErrorBucket = reason
+        pendingMetadataReferenceScopeBucket = senderPendingMetadataReferenceScopeBucket(reason: reason,
+                                                                                        failureReasonBucket: resolvedFailureReasonBucket)
+        senderPendingMetadataFetchAuthBucket = senderPendingMetadataFetchAuthBucket(reason: reason,
+                                                                                    failureReasonBucket: resolvedFailureReasonBucket,
+                                                                                    authorized: authorized)
+        senderPendingMetadataFetchHTTPStatusBucket = httpStatusBucket
+        senderPendingMetadataFetchFailureReasonBucket = resolvedFailureReasonBucket
+        senderIsInviteCreatorBucket = "not_accepted_by_sender_endpoint_redacted"
+        senderIsRoomMemberBucket = "external_room_preflight_required_redacted"
+        senderIsPeerOfMetadataBucket = "unknown_due_to_fetch_blocked_redacted"
+        senderAuthorizedMetadataSourceAvailable = false
+        senderLocalInviteStateAvailable = false
+        senderCanRequestCredentialsWithoutReceiverPendingFetch = false
+        senderCredentialsRequestBlockedReason = reason
+        recommendedNextFixBucket = recommendedSenderMetadataNextFixBucket(reason: reason,
+                                                                          failureReasonBucket: resolvedFailureReasonBucket)
         runtimeResult = "blocked_redacted"
         runtimeErrorBucket = "pending_metadata_unavailable_redacted"
         senderCleanupResult = "not_required_redacted"
@@ -9935,8 +10100,10 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             guard let httpResponse = response as? HTTPURLResponse,
                   (200..<300).contains(httpResponse.statusCode) else {
                 let diagnostics = pendingMetadataFetchFailureDiagnostics(response: response, data: data)
-                recordSenderRuntimePendingMetadataBlocked(senderRuntimePendingMetadataBlockedReason(diagnostics),
-                                                          authorized: true)
+                let reason = senderRuntimePendingMetadataBlockedReason(diagnostics)
+                recordSenderRuntimePendingMetadataBlocked(reason,
+                                                          authorized: true,
+                                                          diagnostics: diagnostics)
                 return nil
             }
             guard let session = directCallSessionFromSenderPendingMetadata(data: data) else {
@@ -9959,10 +10126,15 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         }
     }
 
-    private static func recordSenderRuntimePendingMetadataBlocked(_ reason: String, authorized: Bool) {
+    private static func recordSenderRuntimePendingMetadataBlocked(_ reason: String,
+                                                                  authorized: Bool,
+                                                                  diagnostics: PendingMetadataFetchFailureDiagnostics? = nil) {
         lock.lock()
         var summary = latestSenderRuntimeLiveKitJoinSummary
-        summary.markPendingMetadataBlocked(reason, authorized: authorized)
+        summary.markPendingMetadataBlocked(reason,
+                                           authorized: authorized,
+                                           httpStatusBucket: diagnostics?.httpStatusBucket ?? "not_requested",
+                                           failureReasonBucket: diagnostics?.failureReason)
         lock.unlock()
 
         updateLatestSenderRuntimeLiveKitJoinSummary(summary)
