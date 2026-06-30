@@ -3924,6 +3924,7 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("recordSenderDebugNoMediaRouteSeen()"))
         #expect(adapterSource.contains("recordSenderDebugNoMediaHandlerEntrySeen()"))
         Self.assertSenderNoMediaFileTriggerSourceGuards(in: adapterSource)
+        Self.assertSenderPendingMetadataFileHandoffSourceGuards(in: adapterSource)
         #expect(adapterSource.contains("redactedDebugURLShapeBucket(_ url: URL)"))
         #expect(adapterSource.contains("\"debug_direct_call_redacted\""))
         #expect(adapterSource.contains("\"direct_call_host_redacted\""))
@@ -3999,6 +4000,61 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("startSenderNoMediaRuntimeTrigger(confirmed: true)"))
         #expect(adapterSource.contains("\"valid_sender_no_media_trigger_redacted\""))
         #expect(adapterSource.contains("\"invalid_shape_redacted\""))
+    }
+
+    private static func assertSenderPendingMetadataFileHandoffSourceGuards(in adapterSource: String) {
+        let handoffConsumerSource: String
+        if let handoffConsumerStart = adapterSource.range(of: "private static func startSenderPendingMetadataReferenceHandoffFilePolling")?.lowerBound,
+           let noMediaFilePollingStart = adapterSource.range(of: "private static func startSenderNoMediaRuntimeTriggerFilePolling")?.lowerBound {
+            handoffConsumerSource = String(adapterSource[handoffConsumerStart..<noMediaFilePollingStart])
+        } else {
+            handoffConsumerSource = ""
+        }
+
+        #expect(adapterSource.contains("sender_debug_pending_metadata_file_handoff_seen=\\(senderDebugPendingMetadataFileHandoffSeen)"))
+        #expect(adapterSource.contains("sender_debug_pending_metadata_file_handoff_shape_bucket=\\(senderDebugPendingMetadataFileHandoffShapeBucket)"))
+        #expect(adapterSource.contains("sender_debug_pending_metadata_file_handoff_consumed=\\(senderDebugPendingMetadataFileHandoffConsumed)"))
+        #expect(adapterSource.contains("sender_debug_pending_metadata_file_handoff_consume_result_bucket=\\(senderDebugPendingMetadataFileHandoffConsumeResultBucket)"))
+        #expect(adapterSource.contains("sender_pending_metadata_memory_reference_present=\\(senderPendingMetadataMemoryReferencePresent)"))
+        #expect(adapterSource.contains("sender_pending_metadata_handoff_result_bucket=\\(senderPendingMetadataHandoffResultBucket)"))
+        #expect(adapterSource.contains("sender_pending_metadata_raw_identifiers_logged=\\(senderPendingMetadataRawIdentifiersLogged)"))
+        #expect(adapterSource.contains("private static let senderPendingMetadataReferenceHandoffFileName = \"salemx-debug-sender-pending-metadata-handoff.json\""))
+        #expect(adapterSource.contains("private static var senderPendingMetadataReferenceHandoffFilePollTask: Task<Void, Never>?"))
+        #expect(adapterSource.contains("startSenderPendingMetadataReferenceHandoffFilePolling()"))
+        #expect(adapterSource.contains("consumeSenderPendingMetadataReferenceHandoffFileIfNeeded()"))
+        #expect(adapterSource.contains("senderPendingMetadataReferenceHandoffFileDiagnostics"))
+        #expect(adapterSource.contains("triggerKind == \"sender_pending_metadata_reference_handoff\""))
+        #expect(adapterSource.contains("markerVersion == \"2.49W\""))
+        #expect(adapterSource.contains("json[\"pending_metadata_reference\"] as? String"))
+        #expect(adapterSource.contains("try FileManager.default.removeItem(at: handoffURL)"))
+        #expect(adapterSource.contains("recordSenderDebugPendingMetadataFileHandoffConsumed(resultBucket: \"deleted_redacted\")"))
+        #expect(adapterSource.contains("armSenderPendingMetadataReferenceHandoff(reference: reference"))
+        #expect(adapterSource.contains("source: \"file_handoff_redacted\""))
+        #expect(adapterSource.contains("\"valid_sender_pending_metadata_handoff_redacted\""))
+        #expect(adapterSource.contains("let rawReferenceLogged = false"))
+        #expect(adapterSource.contains("let rawMetadataLogged = false"))
+        #expect(adapterSource.contains("let rawRoomLogged = false"))
+        #expect(adapterSource.contains("let rawCallLogged = false"))
+        #expect(adapterSource.contains("let rawUserLogged = false"))
+        #expect(adapterSource.contains("let rawDeviceLogged = false"))
+        #expect(!handoffConsumerSource.isEmpty)
+        #expect(handoffConsumerSource.contains("FileManager.default.fileExists(atPath: handoffURL.path)"))
+        #expect(handoffConsumerSource.contains("recordSenderDebugPendingMetadataFileHandoffSeen(shapeBucket: diagnostics.shapeBucket)"))
+        #expect(handoffConsumerSource.contains("recordSenderDebugPendingMetadataFileHandoffConsumed(resultBucket: \"invalid_shape_redacted\")"))
+        #expect(handoffConsumerSource.contains("recordSenderDebugPendingMetadataFileHandoffConsumed(resultBucket: \"delete_failed_redacted\")"))
+        #expect(adapterSource.contains("summary.markDebugPendingMetadataFileHandoffSeen(shapeBucket: shapeBucket)"))
+        #expect(adapterSource.contains("summary.markDebugPendingMetadataFileHandoffConsumed(resultBucket: resultBucket)"))
+        #expect(!handoffConsumerSource.contains("handleUploadSmokeURL"))
+        #expect(!handoffConsumerSource.contains("startSenderNoMediaRuntimeTrigger(confirmed: true)"))
+        #expect(!handoffConsumerSource.contains("sendRealInvite"))
+        #expect(!handoffConsumerSource.contains("postRealInvite"))
+        #expect(!handoffConsumerSource.contains("background_apns_push_requested=true"))
+        #expect(!handoffConsumerSource.contains("DirectCallLiveKitConnectExecutor"))
+        #expect(!handoffConsumerSource.contains("executor.connectAudio"))
+        #expect(!handoffConsumerSource.contains("setMicrophoneEnabled(true)"))
+        #expect(!handoffConsumerSource.contains("matrixEventEmitRequested = true"))
+        #expect(!handoffConsumerSource.contains("cameraPermissionRequested = true"))
+        #expect(!handoffConsumerSource.contains("microphonePermissionRequested = true"))
     }
 
     @Test

@@ -2,6 +2,49 @@
 
 This file records durable phase-level progress for future Codex and strategy sessions.
 
+## 2026-06-30 — 2.49W-ZhanielkaFreshInviteFileBackedSenderHandoff
+
+Implemented the controlled sender-device swap for the next SalemX direct-call proof: receiver stays iPhone PRO, sender is now iPhone Жанелька, and Alpamys/Carpediem are no longer required for this phase.
+
+What changed:
+- added DEBUG-only sender pending metadata file handoff proof fields to the sender runtime proof
+- added an app-container Documents file consumer for `salemx-debug-sender-pending-metadata-handoff.json`
+- the handoff file validates a static 2.49W marker shape, deletes the file on success, and arms the existing sender pending metadata memory reference
+- the handoff file does not trigger no-media execution, APNs, invite sending, media connect, LiveKit, microphone/camera permission, Matrix events, or full flow by itself
+- the existing file-backed sender no-media trigger can then proceed past the pending-metadata guard and request/classify sender credentials while remaining guarded before media connect/LiveKit
+- added source-guard regression coverage for the file handoff, deletion/consumption, memory-reference proof, raw-identifier redaction, and safety boundaries
+- created the next helper path: `/tmp/salemx_2_49w_zhanielka_fresh_invite_file_backed_sender_handoff.command`
+
+Expected runtime fields:
+
+```text
+sender_debug_pending_metadata_file_handoff_seen=<runtime>
+sender_debug_pending_metadata_file_handoff_shape_bucket=<runtime_redacted_bucket>
+sender_debug_pending_metadata_file_handoff_consumed=<runtime>
+sender_debug_pending_metadata_file_handoff_consume_result_bucket=<runtime_redacted_bucket>
+sender_pending_metadata_memory_reference_present=<runtime>
+sender_pending_metadata_handoff_result_bucket=<runtime_redacted_bucket>
+sender_pending_metadata_raw_identifiers_logged=false
+sender_no_media_runtime_trigger_attempted=<runtime>
+sender_no_media_runtime_trigger_terminal_observed=<runtime>
+sender_no_media_runtime_trigger_result_bucket=<runtime_redacted_bucket>
+sender_media_credentials_requested=<runtime>
+sender_media_credentials_request_seen=<runtime>
+sender_media_credentials_http_status_bucket=<runtime_redacted_bucket>
+sender_media_credentials_result_bucket=<runtime_redacted_bucket>
+sender_media_credentials_failure_reason_bucket=<runtime_redacted_bucket>
+sender_media_connect_requested=false
+sender_livekit_join_triggered=false
+sender_permissions_requested=false
+sender_runtime_boundary_blocked_reason=<runtime_redacted_bucket>
+```
+
+Safety:
+- no APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, LiveKit join, microphone/camera permission, microphone enablement, video, Matrix call/media event emission, full flow, uninstall/container reset, signing/project changes, or raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room/call/user/device/pending-metadata logging was performed during implementation
+- the next helper must stop before APNs until exact `SEND_2_49W_ZHANIELKA_FRESH_INVITE_FILE_BACKED_SENDER_HANDOFF`
+
+Next phase: `2.49W-ZhanielkaFreshInviteFileBackedSenderHandoff — one-shot fresh invite plus file-backed sender metadata handoff, stop before media connect/LiveKit`.
+
 ## 2026-06-29 — 2.49A-TwoSimulatorPublicationObservationAudit
 
 Closed Retry31 as a final one-shot physical proof and implemented the pre-physical publication observation audit/repair. Do not rerun Retry31 or send another APNs for it.

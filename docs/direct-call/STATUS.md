@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-After 2.49A-TwoSimulatorPublicationObservationAudit — Retry31 remains final and must not be rerun. Retry31 proved receiver/sender LiveKit join, sender audio publish, receiver participant callback, and retained receiver audio observer lease binding, then narrowed the blocker to receiver-side remote audio publication observation. The next phase is `2.49A-Physical2-Retry32 — one-shot remote audio publication snapshot/replay + subscription/liveness validation`.
+After 2.49W-ZhanielkaFreshInviteFileBackedSenderHandoff — the sender role is swapped to iPhone Жанелька and Alpamys/Carpediem are no longer required for this proof. The next physical helper must send at most one explicit SEND-confirmed real non-dev invite to iPhone PRO, then use a DEBUG-only app-container file handoff on iPhone Жанелька for the sender pending metadata reference before running the existing file-backed no-media sender trigger. The next phase is `2.49W-ZhanielkaFreshInviteFileBackedSenderHandoff — one-shot fresh invite plus file-backed sender metadata handoff, stop before media connect/LiveKit`.
 
 ## Latest App Code Checkpoint
 
@@ -38,6 +38,35 @@ Wrapper tag: `salemx-matrix-rust-components-swift-26.03.10-salemx.3`
 - Checksum: `654f7433a6f5a5782abd8aa4d4c2a429a41d679e0612bf38bc05541e7126420e`
 
 ## Proven Checkpoints
+
+- 2.49W-ZhanielkaFreshInviteFileBackedSenderHandoff implements the controlled sender swap from Alpamys/Carpediem to iPhone Жанелька without changing production behavior:
+  ```text
+  receiver_device=iPhone PRO
+  sender_device=iPhone Жанелька
+  alpamys_required=false
+  carpediem_required=false
+  sender_debug_pending_metadata_file_handoff_seen=<runtime>
+  sender_debug_pending_metadata_file_handoff_shape_bucket=<runtime_redacted_bucket>
+  sender_debug_pending_metadata_file_handoff_consumed=<runtime>
+  sender_debug_pending_metadata_file_handoff_consume_result_bucket=<runtime_redacted_bucket>
+  sender_pending_metadata_memory_reference_present=<runtime>
+  sender_pending_metadata_handoff_result_bucket=<runtime_redacted_bucket>
+  sender_pending_metadata_raw_identifiers_logged=false
+  sender_no_media_runtime_trigger_attempted=<runtime>
+  sender_no_media_runtime_trigger_terminal_observed=<runtime>
+  sender_media_credentials_requested=<runtime>
+  sender_media_credentials_request_seen=<runtime>
+  sender_media_connect_requested=false
+  sender_livekit_join_triggered=false
+  sender_permissions_requested=false
+  matrix_call_media_event_emitted=false
+  full_flow_started=false
+  ```
+  - The app-side handoff is DEBUG-only and file-backed: `salemx-debug-sender-pending-metadata-handoff.json` is consumed from the app Documents container, shape-validated, deleted on success, and translated into the existing in-memory sender pending metadata reference.
+  - The handoff file does not start no-media trigger execution by itself; the existing file-backed no-media trigger remains the separate one-shot credentials-boundary action.
+  - The helper path for the next physical proof is `/tmp/salemx_2_49w_zhanielka_fresh_invite_file_backed_sender_handoff.command`.
+  - Safety preserved during this repair: no APNs, production APNs, `dev/invite`, physical media connect, LiveKit join, microphone/camera permission, microphone enablement, video, Matrix call/media event emission, full flow, uninstall/container reset, or raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room/call/user/device/pending-metadata logging was performed.
+  - Next phase: `2.49W-ZhanielkaFreshInviteFileBackedSenderHandoff — one-shot fresh invite plus file-backed sender metadata handoff, stop before media connect/LiveKit`.
 
 - 2.49A-TwoSimulatorPublicationObservationAudit closes Retry31 as a final one-shot physical proof and implements the pre-physical simulator-safe publication observation repair:
   ```text

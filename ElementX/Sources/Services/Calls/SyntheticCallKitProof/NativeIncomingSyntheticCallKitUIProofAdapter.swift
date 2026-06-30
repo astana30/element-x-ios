@@ -1061,6 +1061,12 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
     var senderDebugFileTriggerGenerationBucket = "none"
     var senderDebugFileTriggerConsumed = false
     var senderDebugFileTriggerConsumeResultBucket = "not_requested"
+    var senderDebugPendingMetadataFileHandoffSeen = false
+    var senderDebugPendingMetadataFileHandoffShapeBucket = "none"
+    var senderDebugPendingMetadataFileHandoffConsumed = false
+    var senderDebugPendingMetadataFileHandoffConsumeResultBucket = "not_requested"
+    var senderPendingMetadataHandoffResultBucket = "not_requested"
+    var senderPendingMetadataRawIdentifiersLogged = false
     var senderCallStateAfterAnswerBucket = "sender_runtime_not_triggered_redacted"
     var senderMediaCredentialsGateState = "not_requested"
     var senderMediaCredentialsHTTPStatusBucket = "not_requested"
@@ -1174,6 +1180,10 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         }
     }
 
+    var senderPendingMetadataMemoryReferencePresent: Bool {
+        pendingMetadataReferenceHandoffPresent && pendingMetadataReferenceHandoffArmedBeforeSenderTrigger
+    }
+
     var redactedLines: [String] {
         [
             "proof_generation=\(proofGeneration)",
@@ -1218,6 +1228,13 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             "sender_debug_file_trigger_generation_bucket=\(senderDebugFileTriggerGenerationBucket)",
             "sender_debug_file_trigger_consumed=\(senderDebugFileTriggerConsumed)",
             "sender_debug_file_trigger_consume_result_bucket=\(senderDebugFileTriggerConsumeResultBucket)",
+            "sender_debug_pending_metadata_file_handoff_seen=\(senderDebugPendingMetadataFileHandoffSeen)",
+            "sender_debug_pending_metadata_file_handoff_shape_bucket=\(senderDebugPendingMetadataFileHandoffShapeBucket)",
+            "sender_debug_pending_metadata_file_handoff_consumed=\(senderDebugPendingMetadataFileHandoffConsumed)",
+            "sender_debug_pending_metadata_file_handoff_consume_result_bucket=\(senderDebugPendingMetadataFileHandoffConsumeResultBucket)",
+            "sender_pending_metadata_memory_reference_present=\(senderPendingMetadataMemoryReferencePresent)",
+            "sender_pending_metadata_handoff_result_bucket=\(senderPendingMetadataHandoffResultBucket)",
+            "sender_pending_metadata_raw_identifiers_logged=\(senderPendingMetadataRawIdentifiersLogged)",
             "sender_call_state_after_answer_bucket=\(senderCallStateAfterAnswerBucket)",
             "sender_media_credentials_gate_state=\(senderMediaCredentialsGateState)",
             "sender_media_credentials_requested=\(credentialsRequested)",
@@ -1347,6 +1364,18 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         noMediaRuntimeTriggerHandlerRegisteredBucket = "registered_redacted"
     }
 
+    mutating func markDebugPendingMetadataFileHandoffSeen(shapeBucket: String) {
+        senderDebugPendingMetadataFileHandoffSeen = true
+        senderDebugPendingMetadataFileHandoffShapeBucket = shapeBucket
+        senderPendingMetadataHandoffResultBucket = "file_handoff_seen_redacted"
+    }
+
+    mutating func markDebugPendingMetadataFileHandoffConsumed(resultBucket: String) {
+        senderDebugPendingMetadataFileHandoffConsumed = resultBucket == "deleted_redacted"
+        senderDebugPendingMetadataFileHandoffConsumeResultBucket = resultBucket
+        senderPendingMetadataHandoffResultBucket = resultBucket == "deleted_redacted" ? "file_handoff_consumed_redacted" : resultBucket
+    }
+
     mutating func markReferenceHandoff(_ handoff: SalemXSenderPendingMetadataReferenceHandoff, armGenerationChanged: Bool = false) {
         pendingMetadataReferenceHandoffPresent = handoff.referencePresent
         pendingMetadataReferenceHandoffDebugOnly = handoff.debugOnly
@@ -1369,6 +1398,9 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             bridgeConsumed = false
             bridgeRepeated = false
             bridgeStateClassification = "sender_runtime_join_bridge_armed_current_generation_redacted"
+        }
+        if handoff.referencePresent {
+            senderPendingMetadataHandoffResultBucket = "memory_reference_present_redacted"
         }
     }
 
@@ -9132,6 +9164,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let localBackgroundCallKitOnlyProofFileName = "salemx-local-background-callkit-proof.txt"
     private static let senderRuntimeLiveKitJoinProofFileName = "salemx-sender-runtime-livekit-join-proof.txt"
     private static let senderNoMediaRuntimeTriggerFileName = "salemx-debug-sender-no-media-runtime-trigger.json"
+    private static let senderPendingMetadataReferenceHandoffFileName = "salemx-debug-sender-pending-metadata-handoff.json"
     private static let pendingMetadataEndpointPathPrefix = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata"
     private static let voIPPushReceiptCallKitReportTimeout: TimeInterval = 3
     private static let voIPPushReceiptAnswerableWindowTimeout: TimeInterval = 1.5
@@ -9155,6 +9188,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var senderNoMediaRuntimeTriggerConsumed = false
     private static var senderNoMediaRuntimeTriggerConsumedGeneration: Int?
     private static var senderNoMediaRuntimeTriggerFilePollTask: Task<Void, Never>?
+    private static var senderPendingMetadataReferenceHandoffFilePollTask: Task<Void, Never>?
     private static var senderRuntimeLiveKitClient: DirectCallLiveKitClientProtocol?
     private static var senderRuntimeE2EEContextProvider: DirectCallLiveKitE2EEContextProvider?
     private static var senderRuntimeE2EEContext: (any DirectCallMediaE2EEContextProtocol)?
@@ -9551,6 +9585,12 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let sourceValue = components?.queryItems?.first { $0.name == "source" }?.value ?? ""
         let source = sourceValue == "invite_response" || sourceValue == "invite_response_redacted" ? "invite_response_redacted" : "debug_handoff_redacted"
+        armSenderPendingMetadataReferenceHandoff(reference: reference,
+                                                 source: source)
+    }
+
+    private static func armSenderPendingMetadataReferenceHandoff(reference: String?,
+                                                                 source: String) {
         let handoff = SalemXSenderPendingMetadataReferenceHandoff(reference: reference?.isEmpty == false ? reference : nil,
                                                                   source: source,
                                                                   armed: reference?.isEmpty == false,
@@ -12000,7 +12040,79 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         lock.unlock()
 
         updateLatestSenderRuntimeLiveKitJoinSummary(summary)
+        startSenderPendingMetadataReferenceHandoffFilePolling()
         startSenderNoMediaRuntimeTriggerFilePolling()
+    }
+
+    private static func startSenderPendingMetadataReferenceHandoffFilePolling() {
+        senderPendingMetadataReferenceHandoffFilePollTask?.cancel()
+        senderPendingMetadataReferenceHandoffFilePollTask = Task {
+            for _ in 0..<240 {
+                if Task.isCancelled {
+                    return
+                }
+                if consumeSenderPendingMetadataReferenceHandoffFileIfNeeded() {
+                    return
+                }
+                try? await Task.sleep(nanoseconds: 500_000_000)
+            }
+        }
+    }
+
+    private static func consumeSenderPendingMetadataReferenceHandoffFileIfNeeded() -> Bool {
+        guard let handoffURL = senderPendingMetadataReferenceHandoffFileURL(),
+              FileManager.default.fileExists(atPath: handoffURL.path) else {
+            return false
+        }
+
+        let diagnostics = senderPendingMetadataReferenceHandoffFileDiagnostics(handoffURL)
+        recordSenderDebugPendingMetadataFileHandoffSeen(shapeBucket: diagnostics.shapeBucket)
+
+        guard diagnostics.validShape, let reference = diagnostics.reference else {
+            recordSenderDebugPendingMetadataFileHandoffConsumed(resultBucket: "invalid_shape_redacted")
+            return true
+        }
+
+        do {
+            try FileManager.default.removeItem(at: handoffURL)
+            recordSenderDebugPendingMetadataFileHandoffConsumed(resultBucket: "deleted_redacted")
+            armSenderPendingMetadataReferenceHandoff(reference: reference,
+                                                     source: "file_handoff_redacted")
+        } catch {
+            recordSenderDebugPendingMetadataFileHandoffConsumed(resultBucket: "delete_failed_redacted")
+        }
+        return true
+    }
+
+    private struct SenderPendingMetadataReferenceHandoffFileDiagnostics {
+        let validShape: Bool
+        let shapeBucket: String
+        let reference: String?
+    }
+
+    private static func senderPendingMetadataReferenceHandoffFileDiagnostics(_ handoffURL: URL) -> SenderPendingMetadataReferenceHandoffFileDiagnostics {
+        guard let data = try? Data(contentsOf: handoffURL),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return .init(validShape: false,
+                         shapeBucket: "invalid_json_redacted",
+                         reference: nil)
+        }
+
+        let triggerKind = json["trigger_kind"] as? String
+        let markerVersion = json["marker_version"] as? String
+        let reference = (json["pending_metadata_reference"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let referenceAllowed = reference.count <= 256 && reference.allSatisfy { character in
+            character.isLetter || character.isNumber || character == "-" || character == "_"
+        }
+        let validShape = triggerKind == "sender_pending_metadata_reference_handoff" && markerVersion == "2.49W" && referenceAllowed && !reference.isEmpty
+        return .init(validShape: validShape,
+                     shapeBucket: validShape ? "valid_sender_pending_metadata_handoff_redacted" : "invalid_shape_redacted",
+                     reference: validShape ? reference : nil)
+    }
+
+    private static func senderPendingMetadataReferenceHandoffFileURL() -> URL? {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
+            .appending(component: senderPendingMetadataReferenceHandoffFileName)
     }
 
     private static func startSenderNoMediaRuntimeTriggerFilePolling() {
@@ -12088,6 +12200,24 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         lock.lock()
         var summary = latestSenderRuntimeLiveKitJoinSummary
         summary.markDebugFileTriggerConsumed(resultBucket: resultBucket)
+        lock.unlock()
+
+        updateLatestSenderRuntimeLiveKitJoinSummary(summary)
+    }
+
+    private static func recordSenderDebugPendingMetadataFileHandoffSeen(shapeBucket: String) {
+        lock.lock()
+        var summary = latestSenderRuntimeLiveKitJoinSummary
+        summary.markDebugPendingMetadataFileHandoffSeen(shapeBucket: shapeBucket)
+        lock.unlock()
+
+        updateLatestSenderRuntimeLiveKitJoinSummary(summary)
+    }
+
+    private static func recordSenderDebugPendingMetadataFileHandoffConsumed(resultBucket: String) {
+        lock.lock()
+        var summary = latestSenderRuntimeLiveKitJoinSummary
+        summary.markDebugPendingMetadataFileHandoffConsumed(resultBucket: resultBucket)
         lock.unlock()
 
         updateLatestSenderRuntimeLiveKitJoinSummary(summary)
