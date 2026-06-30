@@ -1083,6 +1083,9 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
     var senderIsRoomMemberBucket = "not_evaluated"
     var senderIsPeerOfMetadataBucket = "not_evaluated"
     var senderAuthorizedMetadataSourceAvailable = false
+    var senderAuthorizedMetadataSourceRoleBucket = "not_requested"
+    var senderAuthorizedMetadataSourceScopeBucket = "not_requested"
+    var senderUsesReceiverPendingMetadataReference = false
     var senderLocalInviteStateAvailable = false
     var senderCanRequestCredentialsWithoutReceiverPendingFetch = false
     var senderCredentialsRequestBlockedReason = "not_requested"
@@ -1210,6 +1213,8 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         }
 
         switch source {
+        case "sender_authorized_file_handoff_redacted":
+            return "sender_authorized_metadata_reference_redacted"
         case "atomic_file_handoff_redacted", "file_handoff_redacted", "invite_response_redacted":
             return "receiver_invite_pending_metadata_reference_redacted"
         default:
@@ -1289,21 +1294,25 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
 
     mutating func markSenderPendingMetadataAuthorizationStarted(referencePresent: Bool,
                                                                 handoff: SalemXSenderPendingMetadataReferenceHandoff) {
+        let senderAuthorizedSource = handoff.source == "sender_authorized_file_handoff_redacted"
         pendingMetadataReferenceRoleBucket = senderPendingMetadataReferenceRoleBucket(for: handoff.source,
                                                                                       referencePresent: referencePresent)
-        pendingMetadataReferenceScopeBucket = referencePresent ? "opaque_reference_scope_unknown_redacted" : "missing_redacted"
+        pendingMetadataReferenceScopeBucket = senderAuthorizedSource ? "sender_authorized_metadata_scope_redacted" : (referencePresent ? "opaque_reference_scope_unknown_redacted" : "missing_redacted")
         receiverPendingMetadataFetchAuthBucket = "not_observed_by_sender_runtime_redacted"
         senderPendingMetadataFetchAuthBucket = "not_requested"
         senderPendingMetadataFetchHTTPStatusBucket = "not_requested"
         senderPendingMetadataFetchFailureReasonBucket = "none"
-        senderIsInviteCreatorBucket = handoff.source == "atomic_file_handoff_redacted" ? "invite_response_handoff_source_redacted" : "not_evaluated"
+        senderIsInviteCreatorBucket = senderAuthorizedSource || handoff.source == "atomic_file_handoff_redacted" ? "invite_response_handoff_source_redacted" : "not_evaluated"
         senderIsRoomMemberBucket = "external_room_preflight_required_redacted"
         senderIsPeerOfMetadataBucket = referencePresent ? "requires_sender_metadata_fetch_redacted" : "missing_reference_redacted"
-        senderAuthorizedMetadataSourceAvailable = false
-        senderLocalInviteStateAvailable = false
-        senderCanRequestCredentialsWithoutReceiverPendingFetch = false
+        senderAuthorizedMetadataSourceAvailable = senderAuthorizedSource && referencePresent
+        senderAuthorizedMetadataSourceRoleBucket = senderAuthorizedSource ? "invite_creator_sender_metadata_reference_redacted" : "not_available_redacted"
+        senderAuthorizedMetadataSourceScopeBucket = senderAuthorizedSource ? "sender_authorized_metadata_scope_redacted" : "not_available_redacted"
+        senderUsesReceiverPendingMetadataReference = referencePresent && !senderAuthorizedSource
+        senderLocalInviteStateAvailable = senderAuthorizedSource && referencePresent
+        senderCanRequestCredentialsWithoutReceiverPendingFetch = senderAuthorizedSource && referencePresent
         senderCredentialsRequestBlockedReason = referencePresent ? "pending_metadata_fetch_required_redacted" : "pending_metadata_reference_missing_redacted"
-        recommendedNextFixBucket = referencePresent ? "diagnose_sender_metadata_authorization_redacted" : "provide_sender_pending_metadata_reference_redacted"
+        recommendedNextFixBucket = senderAuthorizedSource ? "verify_sender_authorized_metadata_credentials_redacted" : (referencePresent ? "diagnose_sender_metadata_authorization_redacted" : "provide_sender_pending_metadata_reference_redacted")
     }
 
     var redactedLines: [String] {
@@ -1373,6 +1382,9 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             "sender_is_room_member_bucket=\(senderIsRoomMemberBucket)",
             "sender_is_peer_of_metadata_bucket=\(senderIsPeerOfMetadataBucket)",
             "sender_authorized_metadata_source_available=\(senderAuthorizedMetadataSourceAvailable)",
+            "sender_authorized_metadata_source_role_bucket=\(senderAuthorizedMetadataSourceRoleBucket)",
+            "sender_authorized_metadata_source_scope_bucket=\(senderAuthorizedMetadataSourceScopeBucket)",
+            "sender_uses_receiver_pending_metadata_reference=\(senderUsesReceiverPendingMetadataReference)",
             "sender_local_invite_state_available=\(senderLocalInviteStateAvailable)",
             "sender_can_request_credentials_without_receiver_pending_fetch=\(senderCanRequestCredentialsWithoutReceiverPendingFetch)",
             "sender_credentials_request_blocked_reason=\(senderCredentialsRequestBlockedReason)",
@@ -1744,6 +1756,9 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         senderIsRoomMemberBucket = "server_authorized_room_binding_redacted"
         senderIsPeerOfMetadataBucket = "peer_binding_present_redacted"
         senderAuthorizedMetadataSourceAvailable = true
+        senderAuthorizedMetadataSourceRoleBucket = "invite_creator_sender_metadata_reference_redacted"
+        senderAuthorizedMetadataSourceScopeBucket = "sender_authorized_metadata_scope_redacted"
+        senderUsesReceiverPendingMetadataReference = false
         senderCanRequestCredentialsWithoutReceiverPendingFetch = true
         senderCredentialsRequestBlockedReason = "none"
         recommendedNextFixBucket = "none"
@@ -1788,9 +1803,21 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         senderIsInviteCreatorBucket = "not_accepted_by_sender_endpoint_redacted"
         senderIsRoomMemberBucket = "external_room_preflight_required_redacted"
         senderIsPeerOfMetadataBucket = "unknown_due_to_fetch_blocked_redacted"
-        senderAuthorizedMetadataSourceAvailable = false
-        senderLocalInviteStateAvailable = false
-        senderCanRequestCredentialsWithoutReceiverPendingFetch = false
+        if pendingMetadataReferenceRoleBucket == "sender_authorized_metadata_reference_redacted" {
+            senderAuthorizedMetadataSourceAvailable = true
+            senderAuthorizedMetadataSourceRoleBucket = "invite_creator_sender_metadata_reference_redacted"
+            senderAuthorizedMetadataSourceScopeBucket = "sender_authorized_metadata_scope_redacted"
+            senderUsesReceiverPendingMetadataReference = false
+            senderLocalInviteStateAvailable = true
+            senderCanRequestCredentialsWithoutReceiverPendingFetch = true
+        } else {
+            senderAuthorizedMetadataSourceAvailable = false
+            senderAuthorizedMetadataSourceRoleBucket = "not_available_redacted"
+            senderAuthorizedMetadataSourceScopeBucket = "not_available_redacted"
+            senderUsesReceiverPendingMetadataReference = pendingMetadataReferencePresent
+            senderLocalInviteStateAvailable = false
+            senderCanRequestCredentialsWithoutReceiverPendingFetch = false
+        }
         senderCredentialsRequestBlockedReason = reason
         recommendedNextFixBucket = recommendedSenderMetadataNextFixBucket(reason: reason,
                                                                           failureReasonBucket: resolvedFailureReasonBucket)
@@ -12286,7 +12313,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         do {
             try FileManager.default.removeItem(at: triggerURL)
             armSenderPendingMetadataReferenceHandoff(reference: reference,
-                                                     source: "atomic_file_handoff_redacted")
+                                                     source: diagnostics.source)
             recordSenderDebugAtomicHandoffTriggerReadyForTrigger(referencePresent: true)
             recordSenderDebugAtomicHandoffTriggerConsumed(resultBucket: "deleted_redacted")
             startSenderNoMediaRuntimeTrigger(confirmed: true)
@@ -12300,6 +12327,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         let validShape: Bool
         let shapeBucket: String
         let reference: String?
+        let source: String
     }
 
     private static func senderAtomicPendingMetadataHandoffTriggerFileDiagnostics(_ triggerURL: URL) -> SenderAtomicPendingMetadataHandoffTriggerFileDiagnostics {
@@ -12307,20 +12335,26 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return .init(validShape: false,
                          shapeBucket: "invalid_json_redacted",
-                         reference: nil)
+                         reference: nil,
+                         source: "invalid_redacted")
         }
 
         let triggerKind = json["trigger_kind"] as? String
         let markerVersion = json["marker_version"] as? String
         let command = json["command"] as? String
-        let reference = (json["pending_metadata_reference"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let senderAuthorizedReference = (json["sender_authorized_metadata_reference"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let legacyReference = (json["pending_metadata_reference"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let reference = senderAuthorizedReference.isEmpty ? legacyReference : senderAuthorizedReference
         let referenceAllowed = reference.count <= 256 && reference.allSatisfy { character in
             character.isLetter || character.isNumber || character == "-" || character == "_"
         }
-        let validShape = triggerKind == "sender_pending_metadata_and_no_media_trigger" && markerVersion == "2.49X" && command == "run_no_media_trigger" && referenceAllowed && !reference.isEmpty
+        let senderAuthorizedShape = markerVersion == "2.49Z" && !senderAuthorizedReference.isEmpty && legacyReference.isEmpty
+        let legacyShape = markerVersion == "2.49X" && senderAuthorizedReference.isEmpty && !legacyReference.isEmpty
+        let validShape = triggerKind == "sender_pending_metadata_and_no_media_trigger" && (senderAuthorizedShape || legacyShape) && command == "run_no_media_trigger" && referenceAllowed && !reference.isEmpty
         return .init(validShape: validShape,
                      shapeBucket: validShape ? "valid_sender_atomic_handoff_trigger_redacted" : "invalid_shape_redacted",
-                     reference: validShape ? reference : nil)
+                     reference: validShape ? reference : nil,
+                     source: senderAuthorizedShape ? "sender_authorized_file_handoff_redacted" : "atomic_file_handoff_redacted")
     }
 
     private static func senderAtomicPendingMetadataHandoffTriggerFileURL() -> URL? {

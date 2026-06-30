@@ -2,6 +2,55 @@
 
 This file records durable phase-level progress for future Codex and strategy sessions.
 
+## 2026-06-30 — 2.49Z-ZhanielkaSenderAuthorizedMetadataBoundary
+
+Implemented the minimal sender-authorized metadata source required by 2.49Y.
+
+2.49Y runtime result:
+- receiver-side pending metadata fetch succeeds
+- sender atomic handoff-and-trigger succeeds structurally and preserves the memory reference through trigger time
+- sender no-media runtime blocks at `sender_pending_metadata_fetch_unauthorized_redacted`
+- sender media credentials are not requested
+- all media connect, LiveKit, microphone/camera, microphone enablement, video, Matrix event, and full-flow gates stay closed
+
+What changed:
+- the call-service now creates a second sender-only metadata reference on real non-dev invite success
+- the receiver/APNs pending metadata reference remains the only reference sent in APNs
+- the sender-only reference is returned in the invite response as `sender_authorized_metadata_reference` with redacted source/scope diagnostics
+- `/pending-metadata/{receiver_reference}/sender` rejects receiver/APNs references, and `/pending-metadata/{sender_authorized_reference}/sender` is available only to the authenticated invite creator
+- the DEBUG atomic sender handoff-and-trigger file accepts `sender_authorized_metadata_reference` with marker `2.49Z` and arms the sender runtime with `sender_authorized_file_handoff_redacted`
+- sender proof now records sender-authorized source role/scope and `sender_uses_receiver_pending_metadata_reference=false`
+- sender credentials remain gated behind successful sender metadata fetch; there is no credentials bypass and no media/LiveKit connection path change
+- created the next helper path: `/tmp/salemx_2_49z_zhanielka_sender_authorized_metadata_boundary.command`
+
+Expected runtime fields:
+
+```text
+sender_authorized_metadata_source_available=<runtime>
+sender_authorized_metadata_source_role_bucket=<runtime_redacted_bucket>
+sender_authorized_metadata_source_scope_bucket=<runtime_redacted_bucket>
+sender_uses_receiver_pending_metadata_reference=false
+sender_pending_metadata_fetch_auth_bucket=<runtime_redacted_bucket>
+sender_media_credentials_gate_state=<runtime_redacted_bucket>
+sender_media_credentials_requested=<runtime>
+sender_media_credentials_request_seen=<runtime>
+sender_media_credentials_http_status_bucket=<runtime_redacted_bucket>
+sender_media_credentials_result_bucket=<runtime_redacted_bucket>
+sender_media_credentials_failure_reason_bucket=<runtime_redacted_bucket>
+sender_media_connect_gate_state=<runtime_redacted_bucket>
+sender_media_connect_requested=false
+sender_livekit_join_triggered=false
+sender_permissions_requested=false
+sender_runtime_boundary_blocked_reason=<runtime_redacted_bucket>
+sender_pending_metadata_raw_identifiers_logged=false
+```
+
+Safety:
+- no APNs, production APNs, repeated APNs, `dev/invite`, physical media connect, LiveKit join, microphone/camera permission, microphone enablement, video, Matrix call/media event emission, full flow, uninstall/container reset, signing/project changes, or raw token/JWT/auth header/APNs payload/invite body/LiveKit URL/room/call/user/device/pending-metadata logging was performed during implementation
+- the next helper must stop before APNs until exact `SEND_2_49Z_ZHANIELKA_SENDER_AUTHORIZED_METADATA_BOUNDARY`
+
+Next phase: `2.49Z-ZhanielkaSenderAuthorizedMetadataBoundary — one-shot fresh invite with sender-authorized metadata source, stop before media connect/LiveKit`.
+
 ## 2026-06-30 — 2.49Y-SenderPendingMetadataAuthDiagnostics
 
 Closed the 2.49X runtime result as a sender pending metadata authorization/scope blocker, not as an atomic handoff failure.

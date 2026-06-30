@@ -584,6 +584,16 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["pending_metadata_reference_present"], True)
         self.assertIsInstance(body["pending_metadata_reference"], str)
         self.assertNotEqual(body["pending_metadata_reference"], "")
+        self.assertEqual(body["sender_authorized_metadata_source_available"], True)
+        self.assertEqual(body["sender_authorized_metadata_reference_present"], True)
+        self.assertIsInstance(body["sender_authorized_metadata_reference"], str)
+        self.assertNotEqual(body["sender_authorized_metadata_reference"], "")
+        self.assertNotEqual(body["sender_authorized_metadata_reference"], body["pending_metadata_reference"])
+        self.assertEqual(body["sender_authorized_metadata_source_role_bucket"], "invite_creator_sender_metadata_reference_redacted")
+        self.assertEqual(body["sender_authorized_metadata_source_scope_bucket"], "sender_authorized_metadata_scope_redacted")
+        self.assertEqual(body["sender_uses_receiver_pending_metadata_reference"], False)
+        self.assertEqual(body["sender_authorized_metadata_fetch_authenticated_required"], True)
+        self.assertEqual(body["sender_authorized_metadata_raw_identifiers_logged"], False)
         self.assertEqual(body["pending_metadata_payload_redacted"], True)
         self.assertEqual(body["pending_metadata_has_call_identifier"], True)
         self.assertEqual(body["pending_metadata_has_room_binding"], True)
@@ -613,6 +623,7 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         salemx_payload = provider_payload["salemx_direct_call"]
         self.assertIsInstance(salemx_payload, dict)
         metadata_reference = salemx_payload["pending_metadata_reference"]
+        sender_metadata_reference = body["sender_authorized_metadata_reference"]
         self.assertIsInstance(metadata_reference, str)
         self.assertNotEqual(metadata_reference, "")
         self.assertEqual(body["pending_metadata_reference"], metadata_reference)
@@ -634,19 +645,29 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
             f"/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{metadata_reference}",
             {"authorization": self.authorization("auth-c")},
         )
-        sender_status, sender_body = await _asgi_get_json(
+        receiver_reference_sender_status, receiver_reference_sender_body = await _asgi_get_json(
             app,
             f"/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{metadata_reference}/sender",
             {"authorization": self.authorization("auth-a")},
         )
+        sender_status, sender_body = await _asgi_get_json(
+            app,
+            f"/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{sender_metadata_reference}/sender",
+            {"authorization": self.authorization("auth-a")},
+        )
         sender_wrong_user_status, sender_wrong_user_body = await _asgi_get_json(
             app,
-            f"/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{metadata_reference}/sender",
+            f"/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{sender_metadata_reference}/sender",
+            {"authorization": self.authorization("auth-b")},
+        )
+        sender_receiver_path_status, sender_receiver_path_body = await _asgi_get_json(
+            app,
+            f"/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{sender_metadata_reference}",
             {"authorization": self.authorization("auth-b")},
         )
         sender_unauthenticated_status, sender_unauthenticated_body = await _asgi_get_json(
             app,
-            f"/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{metadata_reference}/sender",
+            f"/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{sender_metadata_reference}/sender",
             {},
         )
 
@@ -661,6 +682,8 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(wrong_user_body["errcode"], "M_FORBIDDEN")
         self.assertEqual(wrong_device_status, 403)
         self.assertEqual(wrong_device_body["errcode"], "M_FORBIDDEN")
+        self.assertEqual(receiver_reference_sender_status, 403)
+        self.assertEqual(receiver_reference_sender_body["errcode"], "M_FORBIDDEN")
         self.assertEqual(sender_status, 200)
         self.assertEqual(sender_body["version"], 1)
         self.assertEqual(sender_body["call_id"], "call-a")
@@ -670,6 +693,8 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sender_body["intent"], "audio")
         self.assertEqual(sender_wrong_user_status, 403)
         self.assertEqual(sender_wrong_user_body["errcode"], "M_FORBIDDEN")
+        self.assertEqual(sender_receiver_path_status, 403)
+        self.assertEqual(sender_receiver_path_body["errcode"], "M_FORBIDDEN")
         self.assertEqual(sender_unauthenticated_status, 401)
         self.assertEqual(sender_unauthenticated_body["errcode"], "M_UNKNOWN_TOKEN")
 

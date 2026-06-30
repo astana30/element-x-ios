@@ -361,6 +361,7 @@ def create_app(config: ServiceConfig | None = None,
             invite_request = ForegroundCallInviteRequest.from_mapping(payload)
             pending_metadata = pending_metadata_from_invite_payload(payload, authenticated_user)
             pending_metadata_reference: str | None = None
+            sender_authorized_metadata_reference: str | None = None
             pending_metadata_diagnostics = no_pending_metadata_diagnostics()
             if pending_metadata is not None:
                 metadata_recipient_device = _pending_metadata_recipient_device(
@@ -373,11 +374,19 @@ def create_app(config: ServiceConfig | None = None,
                     expires_at_ms=invite_request.invite.expires_at_ms,
                     metadata=pending_metadata,
                 )
+                sender_authorized_metadata_reference = pending_store.store(
+                    recipient=invite_request.recipient,
+                    recipient_device=None,
+                    expires_at_ms=invite_request.invite.expires_at_ms,
+                    metadata=pending_metadata,
+                    sender_only=True,
+                )
                 pending_metadata_diagnostics = pending_metadata.safe_diagnostics()
             result = signaling_service.publish_invite(invite_request)
             result_body = result.as_dict()
             if pending_metadata_reference is not None:
                 result_body["pending_metadata_reference"] = pending_metadata_reference
+            result_body.update(_sender_authorized_metadata_diagnostics(sender_authorized_metadata_reference))
             result_body.update(_foreground_signaling_invite_diagnostics(invite_request, signaling_service))
             result_body.update(pending_metadata_diagnostics)
             result_body.update(_background_invite_apns_diagnostics(
@@ -594,6 +603,22 @@ def _foreground_signaling_invite_diagnostics(
         "target_subscriber_count": target_subscriber_count,
         "target_active_subscriber_count": target_subscriber_count,
     }
+
+
+def _sender_authorized_metadata_diagnostics(reference: str | None) -> dict[str, object]:
+    reference_present = reference is not None
+    diagnostics: dict[str, object] = {
+        "sender_authorized_metadata_source_available": reference_present,
+        "sender_authorized_metadata_reference_present": reference_present,
+        "sender_authorized_metadata_source_role_bucket": "invite_creator_sender_metadata_reference_redacted" if reference_present else "missing_redacted",
+        "sender_authorized_metadata_source_scope_bucket": "sender_authorized_metadata_scope_redacted" if reference_present else "missing_redacted",
+        "sender_uses_receiver_pending_metadata_reference": False,
+        "sender_authorized_metadata_fetch_authenticated_required": reference_present,
+        "sender_authorized_metadata_raw_identifiers_logged": False,
+    }
+    if reference_present:
+        diagnostics["sender_authorized_metadata_reference"] = reference
+    return diagnostics
 
 
 def _pending_metadata_recipient_device(
