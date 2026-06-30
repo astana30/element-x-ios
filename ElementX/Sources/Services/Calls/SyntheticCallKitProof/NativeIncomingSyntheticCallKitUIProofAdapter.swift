@@ -1047,6 +1047,7 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
     var noMediaRuntimeTriggerConsumed = false
     var noMediaRuntimeTriggerRepeated = false
     var noMediaRuntimeTriggerResultBucket = "not_requested"
+    var noMediaRuntimeTriggerHandlerRegisteredBucket = "registered_redacted"
     var noMediaRuntimeTriggerRawIdentifiersLogged = false
     var senderCallStateAfterAnswerBucket = "sender_runtime_not_triggered_redacted"
     var senderMediaCredentialsGateState = "not_requested"
@@ -1152,6 +1153,15 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         microphonePermissionRequested || cameraPermissionRequested
     }
 
+    var senderNoMediaRuntimeTriggerTerminalObserved: Bool {
+        switch noMediaRuntimeTriggerResultBucket {
+        case "not_requested", "pending_metadata_pending_redacted", "pending_metadata_success_redacted":
+            return false
+        default:
+            return true
+        }
+    }
+
     var redactedLines: [String] {
         [
             "proof_generation=\(proofGeneration)",
@@ -1181,6 +1191,8 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             "sender_no_media_runtime_trigger_consumed=\(noMediaRuntimeTriggerConsumed)",
             "sender_no_media_runtime_trigger_repeated=\(noMediaRuntimeTriggerRepeated)",
             "sender_no_media_runtime_trigger_result_bucket=\(noMediaRuntimeTriggerResultBucket)",
+            "sender_no_media_runtime_trigger_handler_registered_bucket=\(noMediaRuntimeTriggerHandlerRegisteredBucket)",
+            "sender_no_media_runtime_trigger_terminal_observed=\(senderNoMediaRuntimeTriggerTerminalObserved)",
             "sender_no_media_runtime_trigger_raw_identifiers_logged=\(noMediaRuntimeTriggerRawIdentifiersLogged)",
             "sender_call_state_after_answer_bucket=\(senderCallStateAfterAnswerBucket)",
             "sender_media_credentials_gate_state=\(senderMediaCredentialsGateState)",
@@ -1436,10 +1448,12 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         senderMediaConnectGateState = "sender_no_media_guarded_no_connect_redacted"
         if repeated, repeatedOnlyAfterConsumed {
             bridgeStateClassification = "sender_no_media_runtime_repeated_after_consumed_redacted"
+            noMediaRuntimeTriggerResultBucket = "repeated_blocked_redacted"
             senderRuntimeBoundaryBlockedReason = "sender_no_media_runtime_repeated_blocked_redacted"
             blockedReason = "sender_no_media_runtime_repeated_blocked_redacted"
         } else if staleGenerationDetected {
             bridgeStateClassification = "sender_no_media_runtime_stale_generation_redacted"
+            noMediaRuntimeTriggerResultBucket = "stale_generation_blocked_redacted"
             senderRuntimeBoundaryBlockedReason = "sender_no_media_runtime_stale_generation_redacted"
             blockedReason = "sender_no_media_runtime_stale_generation_redacted"
         } else if referencePresent {
@@ -1448,6 +1462,7 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             blockedReason = "sender_no_media_runtime_credentials_pending_redacted"
         } else {
             bridgeStateClassification = "sender_no_media_runtime_reference_missing_redacted"
+            noMediaRuntimeTriggerResultBucket = "pending_metadata_reference_missing_redacted"
             senderRuntimeBoundaryBlockedReason = "sender_pending_metadata_reference_missing_redacted"
             blockedReason = "sender_pending_metadata_reference_missing_redacted"
         }
@@ -9146,30 +9161,61 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         return redactedStateSummary()
     }
 
+    private static func normalizedDebugURLPath(_ url: URL) -> String? {
+        guard url.scheme == "kz.salemx.msg" else {
+            return nil
+        }
+
+        if url.host == uploadSmokeURLHost {
+            return url.path
+        }
+
+        if url.host == "direct-call" {
+            return "/direct-call\(url.path)"
+        }
+
+        if url.host == nil, url.path.hasPrefix("/direct-call/") {
+            return url.path
+        }
+
+        return nil
+    }
+
     static func handleUploadSmokeURL(_ url: URL) -> Bool {
-        guard url.scheme == "kz.salemx.msg",
-              url.host == uploadSmokeURLHost else {
+        guard let normalizedPath = normalizedDebugURLPath(url) else {
             return false
         }
 
-        if url.path == uploadSmokeURLPath {
+        if handleReceiverDebugURLHook(url, normalizedPath: normalizedPath) {
+            return true
+        }
+
+        if handleSenderRuntimeURLHook(url, normalizedPath: normalizedPath) {
+            return true
+        }
+
+        return false
+    }
+
+    private static func handleReceiverDebugURLHook(_ url: URL, normalizedPath: String) -> Bool {
+        if normalizedPath == uploadSmokeURLPath {
             _ = startRegistrationUploadSmokeWithCurrentSessionURLString(uploadSmokeDefaultURLString)
             return true
         }
 
-        if url.path == matrixSessionWhoamiSmokeURLPath {
+        if normalizedPath == matrixSessionWhoamiSmokeURLPath {
             let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
             let expectedUserHash = components?.queryItems?.first { $0.name == "expected_user_hash" }?.value ?? ""
             _ = startMatrixSessionWhoamiSmokeWithExpectedUserHash(expectedUserHash)
             return true
         }
 
-        if url.path == physical6RuntimeEnablementURLHookPath {
+        if normalizedPath == physical6RuntimeEnablementURLHookPath {
             armPhysical6RuntimeEnablementURLHook()
             return true
         }
 
-        if url.path == remotePeerContextHandoffURLHookPath {
+        if normalizedPath == remotePeerContextHandoffURLHookPath {
             let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
             let peerKind = components?.queryItems?.first { $0.name == "peer_kind" || $0.name == "remote_peer_kind" }?.value ?? ""
             if peerKind == "physical_ios" || peerKind == "physical_ios_redacted" {
@@ -9180,53 +9226,49 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             return true
         }
 
-        if url.path == receiverPushKitTokenReadinessURLHookPath {
+        if normalizedPath == receiverPushKitTokenReadinessURLHookPath {
             startReceiverPushKitTokenReadinessURLHook()
             return true
         }
 
-        if url.path == receiverVoIPPushDeliveryTriageURLHookPath {
+        if normalizedPath == receiverVoIPPushDeliveryTriageURLHookPath {
             let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
             recordReceiverVoIPPushDeliveryTriageURLHook(components)
             return true
         }
 
-        if url.path == receiverCallKitOperatorReadyURLHookPath {
+        if normalizedPath == receiverCallKitOperatorReadyURLHookPath {
             let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
             armReceiverCallKitOperatorReadyURLHook(components)
             return true
         }
 
-        if url.path == receiverForegroundInAppAnswerURLHookPath {
+        if normalizedPath == receiverForegroundInAppAnswerURLHookPath {
             startReceiverForegroundInAppAnswerURLHook()
-            return true
-        }
-
-        if handleSenderRuntimeURLHook(url) {
             return true
         }
 
         return false
     }
 
-    private static func handleSenderRuntimeURLHook(_ url: URL) -> Bool {
+    private static func handleSenderRuntimeURLHook(_ url: URL, normalizedPath: String) -> Bool {
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        if url.path == senderLiveKitReadinessURLHookPath {
+        if normalizedPath == senderLiveKitReadinessURLHookPath {
             armSenderLiveKitReadinessURLHook(components)
             return true
-        } else if url.path == senderSideLiveKitJoinURLHookPath {
+        } else if normalizedPath == senderSideLiveKitJoinURLHookPath {
             armSenderSideLiveKitJoinURLHook(components)
             return true
-        } else if url.path == senderPendingMetadataReferenceHandoffURLHookPath {
+        } else if normalizedPath == senderPendingMetadataReferenceHandoffURLHookPath {
             armSenderPendingMetadataReferenceHandoffURLHook(components)
             return true
-        } else if url.path == senderRuntimeLiveKitJoinURLHookPath {
+        } else if normalizedPath == senderRuntimeLiveKitJoinURLHookPath {
             startSenderRuntimeLiveKitJoinURLHook(components)
             return true
-        } else if url.path == senderNoMediaRuntimeTriggerURLHookPath {
+        } else if normalizedPath == senderNoMediaRuntimeTriggerURLHookPath {
             startSenderNoMediaRuntimeTriggerURLHook(components)
             return true
-        } else if url.path == senderConnectedSignalHandoffURLHookPath {
+        } else if normalizedPath == senderConnectedSignalHandoffURLHookPath {
             armSenderConnectedSignalHandoffURLHook(components)
             return true
         }
