@@ -1039,6 +1039,20 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
     var bridgeStaleGenerationDetected = false
     var bridgeRepeatedOnlyAfterConsumed = true
     var bridgeStateClassification = "sender_runtime_join_bridge_not_triggered_redacted"
+    var noMediaRuntimeTriggerAvailable = true
+    var noMediaRuntimeTriggerDebugOnly = true
+    var noMediaRuntimeTriggerDefaultDisabled = true
+    var noMediaRuntimeTriggerOneShot = true
+    var noMediaRuntimeTriggerAttempted = false
+    var noMediaRuntimeTriggerConsumed = false
+    var noMediaRuntimeTriggerRepeated = false
+    var noMediaRuntimeTriggerResultBucket = "not_requested"
+    var noMediaRuntimeTriggerRawIdentifiersLogged = false
+    var senderCallStateAfterAnswerBucket = "sender_runtime_not_triggered_redacted"
+    var senderMediaCredentialsGateState = "not_requested"
+    var senderMediaCredentialsHTTPStatusBucket = "not_requested"
+    var senderMediaConnectGateState = "sender_runtime_not_triggered_redacted"
+    var senderRuntimeBoundaryBlockedReason = "sender_runtime_not_triggered_redacted"
     var restoredMatrixSessionUsed = false
     var pendingMetadataReferenceHandoffPresent = false
     var pendingMetadataReferenceHandoffDebugOnly = true
@@ -1113,6 +1127,31 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
     var realCallFlowStarted = false
     var blockedReason = "default_disabled_no_connect"
 
+    var senderMediaCredentialsRequestSeen: Bool {
+        credentialsRequested || credentialsAuthorized || tokenReceived || urlReceived || credentialsResult != "not_requested"
+    }
+
+    var senderMediaCredentialsFailureReasonBucket: String {
+        switch credentialsResult {
+        case "blocked_redacted":
+            runtimeErrorBucket == "none" ? senderRuntimeBoundaryBlockedReason : runtimeErrorBucket
+        default:
+            "none"
+        }
+    }
+
+    var senderMediaConnectRequested: Bool {
+        executorInvoked
+    }
+
+    var senderLiveKitJoinTriggered: Bool {
+        executorInvoked || senderLiveKitRoomConnected
+    }
+
+    var senderPermissionsRequested: Bool {
+        microphonePermissionRequested || cameraPermissionRequested
+    }
+
     var redactedLines: [String] {
         [
             "proof_generation=\(proofGeneration)",
@@ -1134,6 +1173,27 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             "sender_runtime_join_bridge_stale_generation_detected=\(bridgeStaleGenerationDetected)",
             "sender_runtime_join_bridge_repeated_only_after_consumed=\(bridgeRepeatedOnlyAfterConsumed)",
             "sender_runtime_join_bridge_state_classification=\(bridgeStateClassification)",
+            "sender_no_media_runtime_trigger_available=\(noMediaRuntimeTriggerAvailable)",
+            "sender_no_media_runtime_trigger_debug_only=\(noMediaRuntimeTriggerDebugOnly)",
+            "sender_no_media_runtime_trigger_default_disabled=\(noMediaRuntimeTriggerDefaultDisabled)",
+            "sender_no_media_runtime_trigger_one_shot=\(noMediaRuntimeTriggerOneShot)",
+            "sender_no_media_runtime_trigger_attempted=\(noMediaRuntimeTriggerAttempted)",
+            "sender_no_media_runtime_trigger_consumed=\(noMediaRuntimeTriggerConsumed)",
+            "sender_no_media_runtime_trigger_repeated=\(noMediaRuntimeTriggerRepeated)",
+            "sender_no_media_runtime_trigger_result_bucket=\(noMediaRuntimeTriggerResultBucket)",
+            "sender_no_media_runtime_trigger_raw_identifiers_logged=\(noMediaRuntimeTriggerRawIdentifiersLogged)",
+            "sender_call_state_after_answer_bucket=\(senderCallStateAfterAnswerBucket)",
+            "sender_media_credentials_gate_state=\(senderMediaCredentialsGateState)",
+            "sender_media_credentials_requested=\(credentialsRequested)",
+            "sender_media_credentials_request_seen=\(senderMediaCredentialsRequestSeen)",
+            "sender_media_credentials_http_status_bucket=\(senderMediaCredentialsHTTPStatusBucket)",
+            "sender_media_credentials_result_bucket=\(credentialsResult)",
+            "sender_media_credentials_failure_reason_bucket=\(senderMediaCredentialsFailureReasonBucket)",
+            "sender_media_connect_gate_state=\(senderMediaConnectGateState)",
+            "sender_media_connect_requested=\(senderMediaConnectRequested)",
+            "sender_livekit_join_triggered=\(senderLiveKitJoinTriggered)",
+            "sender_permissions_requested=\(senderPermissionsRequested)",
+            "sender_runtime_boundary_blocked_reason=\(senderRuntimeBoundaryBlockedReason)",
             "sender_runtime_join_uses_restored_matrix_session=\(restoredMatrixSessionUsed)",
             "sender_pending_metadata_reference_handoff_present=\(pendingMetadataReferenceHandoffPresent)",
             "sender_pending_metadata_reference_handoff_debug_only=\(pendingMetadataReferenceHandoffDebugOnly)",
@@ -1311,6 +1371,88 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         blockedReason = repeated ? "sender_runtime_join_repeated_blocked_redacted" : "sender_runtime_join_started_redacted"
     }
 
+    mutating func markNoMediaRuntimeTriggerStarted(referencePresent: Bool,
+                                                   repeated: Bool,
+                                                   handoff: SalemXSenderPendingMetadataReferenceHandoff,
+                                                   triggerGenerationMatchesArm: Bool,
+                                                   staleGenerationDetected: Bool,
+                                                   repeatedOnlyAfterConsumed: Bool) {
+        proofGeneration = UUID().uuidString
+        proofLastUpdatedBy = "sender_no_media_runtime_trigger"
+        noMediaRuntimeTriggerAttempted = !repeated
+        noMediaRuntimeTriggerConsumed = !repeated
+        noMediaRuntimeTriggerRepeated = repeated
+        noMediaRuntimeTriggerResultBucket = repeated ? "repeated_blocked_redacted" : "pending_metadata_pending_redacted"
+        markReferenceHandoff(handoff)
+        bridgeTriggerGenerationMatchesArm = triggerGenerationMatchesArm
+        bridgeStaleGenerationDetected = staleGenerationDetected
+        bridgeRepeatedOnlyAfterConsumed = repeatedOnlyAfterConsumed
+        pendingMetadataReferencePresent = referencePresent
+        pendingMetadataReferenceMatchesInviteSenderMemory = referencePresent && handoff.armed
+        pendingMetadataReferenceMatchesSenderViewRoute = false
+        pendingMetadataFetchRequested = false
+        pendingMetadataFetchAuthorized = false
+        pendingMetadataFetchResult = "not_requested"
+        pendingMetadataFetchErrorBucket = "none"
+        pendingMetadataCallBindingPresent = false
+        pendingMetadataRoomBindingPresent = false
+        pendingMetadataPeerBindingPresent = false
+        pendingMetadataDirectionValid = false
+        pendingMetadataIntentAudio = false
+        metadataDirection = "none"
+        metadataIntent = "none"
+        metadataHasCallIdentifier = false
+        metadataHasRoomBinding = false
+        metadataHasPeer = false
+        credentialsRequested = false
+        credentialsAuthorized = false
+        credentialsResult = "not_requested"
+        senderMediaCredentialsHTTPStatusBucket = "not_requested"
+        tokenReceived = false
+        urlReceived = false
+        executorInvoked = false
+        runtimeResult = "not_requested"
+        runtimeErrorBucket = "none"
+        senderLiveKitRoomConnected = false
+        senderLiveKitRoomDisconnected = false
+        senderCleanupResult = "not_required_redacted"
+        senderConnectedSignalEmitted = false
+        senderConnectedSignalEmitSource = "none"
+        senderConnectedSignalEmittedAfterRuntimeJoinSuccess = false
+        senderConnectedSignalOpaqueCorrelationPresent = false
+        senderLocalAudioPublishRequested = false
+        senderLocalAudioPublishAllowed = false
+        senderLocalAudioPublishResult = "not_requested"
+        senderLocalAudioMutedStateBucket = "unknown"
+        senderAudioSessionActivationObserved = false
+        senderMicrophonePermissionResultBucket = "not_requested_or_not_required_redacted"
+        microphonePermissionRequested = false
+        cameraPermissionRequested = false
+        matrixEventEmitRequested = false
+        realCallFlowStarted = false
+        restoredMatrixSessionUsed = false
+        senderCallStateAfterAnswerBucket = repeated ? "sender_no_media_runtime_repeated_redacted" : "sender_no_media_runtime_triggered_redacted"
+        senderMediaCredentialsGateState = referencePresent ? "pending_metadata_pending_redacted" : "pending_metadata_missing_redacted"
+        senderMediaConnectGateState = "sender_no_media_guarded_no_connect_redacted"
+        if repeated, repeatedOnlyAfterConsumed {
+            bridgeStateClassification = "sender_no_media_runtime_repeated_after_consumed_redacted"
+            senderRuntimeBoundaryBlockedReason = "sender_no_media_runtime_repeated_blocked_redacted"
+            blockedReason = "sender_no_media_runtime_repeated_blocked_redacted"
+        } else if staleGenerationDetected {
+            bridgeStateClassification = "sender_no_media_runtime_stale_generation_redacted"
+            senderRuntimeBoundaryBlockedReason = "sender_no_media_runtime_stale_generation_redacted"
+            blockedReason = "sender_no_media_runtime_stale_generation_redacted"
+        } else if referencePresent {
+            bridgeStateClassification = "sender_no_media_runtime_triggered_current_generation_redacted"
+            senderRuntimeBoundaryBlockedReason = "sender_no_media_runtime_credentials_pending_redacted"
+            blockedReason = "sender_no_media_runtime_credentials_pending_redacted"
+        } else {
+            bridgeStateClassification = "sender_no_media_runtime_reference_missing_redacted"
+            senderRuntimeBoundaryBlockedReason = "sender_pending_metadata_reference_missing_redacted"
+            blockedReason = "sender_pending_metadata_reference_missing_redacted"
+        }
+    }
+
     mutating func markPendingMetadataSuccess(_ session: DirectCallSession) {
         restoredMatrixSessionUsed = true
         pendingMetadataReferenceMatchesSenderViewRoute = true
@@ -1328,7 +1470,16 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         pendingMetadataPeerBindingPresent = metadataHasPeer
         pendingMetadataDirectionValid = session.direction == .outgoing
         pendingMetadataIntentAudio = session.intent == .audio
-        blockedReason = "sender_runtime_credentials_pending_redacted"
+        if noMediaRuntimeTriggerAttempted {
+            noMediaRuntimeTriggerResultBucket = "pending_metadata_success_redacted"
+            senderCallStateAfterAnswerBucket = "sender_no_media_runtime_pending_metadata_success_redacted"
+            senderMediaCredentialsGateState = "ready_for_sender_credentials_redacted"
+            senderMediaConnectGateState = "sender_no_media_guarded_no_connect_redacted"
+            senderRuntimeBoundaryBlockedReason = "sender_no_media_runtime_credentials_pending_redacted"
+            blockedReason = "sender_no_media_runtime_credentials_pending_redacted"
+        } else {
+            blockedReason = "sender_runtime_credentials_pending_redacted"
+        }
     }
 
     mutating func markPendingMetadataBlocked(_ reason: String, authorized: Bool) {
@@ -1340,6 +1491,13 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         runtimeErrorBucket = "pending_metadata_unavailable_redacted"
         senderCleanupResult = "not_required_redacted"
         bridgeStateClassification = "sender_runtime_join_executor_not_invoked_redacted"
+        if noMediaRuntimeTriggerAttempted {
+            noMediaRuntimeTriggerResultBucket = "pending_metadata_blocked_redacted"
+            senderCallStateAfterAnswerBucket = "sender_no_media_runtime_pending_metadata_blocked_redacted"
+            senderMediaCredentialsGateState = "pending_metadata_blocked_redacted"
+            senderMediaConnectGateState = "sender_no_media_guarded_no_connect_redacted"
+            senderRuntimeBoundaryBlockedReason = reason
+        }
         blockedReason = reason
     }
 
@@ -1349,15 +1507,33 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         switch result {
         case .success:
             credentialsResult = "success_redacted"
+            senderMediaCredentialsHTTPStatusBucket = "2xx"
             tokenReceived = true
             urlReceived = true
-            blockedReason = "sender_runtime_e2ee_pending_redacted"
+            if noMediaRuntimeTriggerAttempted {
+                noMediaRuntimeTriggerResultBucket = "credentials_success_no_media_connect_redacted"
+                senderCallStateAfterAnswerBucket = "sender_no_media_runtime_credentials_success_redacted"
+                senderMediaCredentialsGateState = "success_redacted"
+                senderMediaConnectGateState = "guarded_ready_no_connect_redacted"
+                senderRuntimeBoundaryBlockedReason = "sender_no_media_runtime_connect_deferred_redacted"
+                blockedReason = "sender_no_media_runtime_connect_deferred_redacted"
+            } else {
+                blockedReason = "sender_runtime_e2ee_pending_redacted"
+            }
         case .failure(let error):
             credentialsResult = "blocked_redacted"
+            senderMediaCredentialsHTTPStatusBucket = "unknown"
             runtimeResult = "blocked_redacted"
             runtimeErrorBucket = DirectCallDiagnosticMediaFailureReason(error).rawValue
             senderCleanupResult = "not_required_redacted"
             bridgeStateClassification = "sender_runtime_join_not_connected_redacted"
+            if noMediaRuntimeTriggerAttempted {
+                noMediaRuntimeTriggerResultBucket = "credentials_blocked_no_media_connect_redacted"
+                senderCallStateAfterAnswerBucket = "sender_no_media_runtime_credentials_blocked_redacted"
+                senderMediaCredentialsGateState = "blocked_redacted"
+                senderMediaConnectGateState = "sender_no_media_guarded_no_connect_redacted"
+                senderRuntimeBoundaryBlockedReason = "sender_runtime_credentials_failed_redacted"
+            }
             blockedReason = "sender_runtime_credentials_failed_redacted"
         }
     }
@@ -8861,12 +9037,14 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let senderSideLiveKitJoinURLHookPath = "/direct-call/sender-side-livekit-join"
     private static let senderPendingMetadataReferenceHandoffURLHookPath = "/direct-call/sender-pending-metadata-reference-handoff"
     private static let senderRuntimeLiveKitJoinURLHookPath = "/direct-call/sender-runtime-livekit-join"
+    private static let senderNoMediaRuntimeTriggerURLHookPath = "/direct-call/sender-no-media-runtime-trigger"
     private static let senderConnectedSignalHandoffURLHookPath = "/direct-call/sender-connected-signal-handoff"
     private static let receiverPushKitTokenReadinessURLHookPath = "/direct-call/receiver-pushkit-token-readiness"
     private static let receiverVoIPPushDeliveryTriageURLHookPath = "/direct-call/receiver-voip-push-delivery-triage"
     private static let receiverCallKitOperatorReadyURLHookPath = "/direct-call/receiver-callkit-operator-ready"
     private static let receiverForegroundInAppAnswerURLHookPath = "/direct-call/receiver-foreground-in-app-answer"
     private static let senderRuntimeLiveKitJoinConfirmation = "RUN_2_48Z_REAL_SENDER_RUNTIME_JOIN"
+    private static let senderNoMediaRuntimeTriggerConfirmation = "RUN_2_49N_SENDER_NO_MEDIA_RUNTIME_TRIGGER"
     private static let uploadSmokeDefaultURLString = "https://matrix.mertis.kz/_matrix/client/unstable/kz.salemx.direct_call/pushkit/token"
     private static let matrixSessionWhoamiURLString = "https://matrix.mertis.kz/_matrix/client/v3/account/whoami"
     private static let controlledMediaCredentialsTokenEndpointPath = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/livekit/token"
@@ -8897,6 +9075,8 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var senderRuntimeLiveKitJoinConsumed = false
     private static var senderRuntimeLiveKitJoinArmGeneration = 0
     private static var senderRuntimeLiveKitJoinConsumedGeneration: Int?
+    private static var senderNoMediaRuntimeTriggerConsumed = false
+    private static var senderNoMediaRuntimeTriggerConsumedGeneration: Int?
     private static var senderRuntimeLiveKitClient: DirectCallLiveKitClientProtocol?
     private static var senderRuntimeE2EEContextProvider: DirectCallLiveKitE2EEContextProvider?
     private static var senderRuntimeE2EEContext: (any DirectCallMediaE2EEContextProtocol)?
@@ -9042,6 +9222,9 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             return true
         } else if url.path == senderRuntimeLiveKitJoinURLHookPath {
             startSenderRuntimeLiveKitJoinURLHook(components)
+            return true
+        } else if url.path == senderNoMediaRuntimeTriggerURLHookPath {
+            startSenderNoMediaRuntimeTriggerURLHook(components)
             return true
         } else if url.path == senderConnectedSignalHandoffURLHookPath {
             armSenderConnectedSignalHandoffURLHook(components)
@@ -9242,6 +9425,8 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             senderRuntimeLiveKitJoinArmGeneration += 1
             senderRuntimeLiveKitJoinConsumed = false
             senderRuntimeLiveKitJoinConsumedGeneration = nil
+            senderNoMediaRuntimeTriggerConsumed = false
+            senderNoMediaRuntimeTriggerConsumedGeneration = nil
         }
         let armGenerationChanged = senderRuntimeLiveKitJoinArmGeneration != previousArmGeneration
         senderPendingMetadataReferenceHandoff = handoff
@@ -9409,6 +9594,68 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         Task { @MainActor in
             await runSenderRuntimeLiveKitJoin(reference: reference)
         }
+    }
+
+    private static func startSenderNoMediaRuntimeTriggerURLHook(_ components: URLComponents?) {
+        let confirmed = components?.queryItems?.first { $0.name == "confirm" }?.value == senderNoMediaRuntimeTriggerConfirmation
+
+        lock.lock()
+        var handoff = senderPendingMetadataReferenceHandoff
+        if confirmed, handoff.referencePresent {
+            handoff = handoff.receivedByRuntimeCopy()
+            senderPendingMetadataReferenceHandoff = handoff
+        }
+        let reference = handoff.reference ?? ""
+        let referencePresent = handoff.referencePresent
+        let currentArmGeneration = senderRuntimeLiveKitJoinArmGeneration
+        let consumedGeneration = senderNoMediaRuntimeTriggerConsumedGeneration
+        let triggerGenerationMatchesArm = confirmed && referencePresent && handoff.armed && currentArmGeneration > 0
+        let staleGenerationDetected = confirmed && senderNoMediaRuntimeTriggerConsumed && consumedGeneration != currentArmGeneration
+        let consumedCurrentGeneration = confirmed && senderNoMediaRuntimeTriggerConsumed && consumedGeneration == currentArmGeneration
+        let repeated = consumedCurrentGeneration
+        let repeatedOnlyAfterConsumed = !repeated || consumedCurrentGeneration
+        if confirmed, referencePresent, !repeated {
+            senderNoMediaRuntimeTriggerConsumed = true
+            senderNoMediaRuntimeTriggerConsumedGeneration = currentArmGeneration
+        }
+        var summary = latestSenderRuntimeLiveKitJoinSummary
+        summary.markNoMediaRuntimeTriggerStarted(referencePresent: referencePresent,
+                                                 repeated: repeated,
+                                                 handoff: handoff,
+                                                 triggerGenerationMatchesArm: triggerGenerationMatchesArm,
+                                                 staleGenerationDetected: staleGenerationDetected,
+                                                 repeatedOnlyAfterConsumed: repeatedOnlyAfterConsumed)
+        if !confirmed {
+            summary.noMediaRuntimeTriggerAttempted = false
+            summary.noMediaRuntimeTriggerConsumed = false
+            summary.noMediaRuntimeTriggerResultBucket = "not_attempted_default_disabled_redacted"
+            summary.senderRuntimeBoundaryBlockedReason = "sender_no_media_runtime_default_disabled_redacted"
+            summary.blockedReason = "sender_no_media_runtime_default_disabled_redacted"
+        } else if !referencePresent {
+            let reason = handoff.armed ? "sender_pending_metadata_reference_missing_redacted" : "sender_pending_metadata_reference_sender_memory_missing_redacted"
+            summary.markPendingMetadataBlocked(reason,
+                                               authorized: false)
+        }
+        lock.unlock()
+
+        updateLatestSenderRuntimeLiveKitJoinSummary(summary)
+
+        guard confirmed, referencePresent, !repeated else {
+            return
+        }
+
+        Task { @MainActor in
+            await runSenderNoMediaRuntimeTrigger(reference: reference)
+        }
+    }
+
+    @MainActor
+    private static func runSenderNoMediaRuntimeTrigger(reference: String) async {
+        guard let session = await fetchSenderRuntimePendingMetadata(reference: reference) else {
+            return
+        }
+
+        _ = await requestSenderRuntimeCredentials(for: session)
     }
 
     @MainActor
