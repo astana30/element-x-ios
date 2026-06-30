@@ -3923,6 +3923,7 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("recordSenderDebugDirectCallRouteSeen()"))
         #expect(adapterSource.contains("recordSenderDebugNoMediaRouteSeen()"))
         #expect(adapterSource.contains("recordSenderDebugNoMediaHandlerEntrySeen()"))
+        Self.assertSenderNoMediaFileTriggerSourceGuards(in: adapterSource)
         #expect(adapterSource.contains("redactedDebugURLShapeBucket(_ url: URL)"))
         #expect(adapterSource.contains("\"debug_direct_call_redacted\""))
         #expect(adapterSource.contains("\"direct_call_host_redacted\""))
@@ -3957,7 +3958,8 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(noMediaHookSource.contains("senderNoMediaRuntimeTriggerConsumed"))
         #expect(noMediaHookSource.contains("senderNoMediaRuntimeTriggerConsumedGeneration"))
         #expect(noMediaHookSource.contains("recordSenderDebugNoMediaHandlerEntrySeen()"))
-        #expect(noMediaHookSource.contains("summary.markNoMediaRuntimeTriggerStarted"))
+        #expect(noMediaHookSource.contains("startSenderNoMediaRuntimeTrigger(confirmed: confirmed)"))
+        #expect(adapterSource.contains("summary.markNoMediaRuntimeTriggerStarted"))
         #expect(noMediaHookSource.contains("Task { @MainActor in"))
         #expect(noMediaHookSource.contains("await runSenderNoMediaRuntimeTrigger(reference: reference)"))
         #expect(noMediaRunSource.contains("await fetchSenderRuntimePendingMetadata(reference: reference)"))
@@ -3975,6 +3977,28 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(!noMediaRunSource.contains("matrixEventEmitRequested = true"))
         #expect(!noMediaRunSource.contains("cameraPermissionRequested = true"))
         #expect(!noMediaRunSource.contains("microphonePermissionRequested = true"))
+    }
+
+    private static func assertSenderNoMediaFileTriggerSourceGuards(in adapterSource: String) {
+        #expect(adapterSource.contains("sender_debug_file_trigger_seen=\\(senderDebugFileTriggerSeen)"))
+        #expect(adapterSource.contains("sender_debug_file_trigger_shape_bucket=\\(senderDebugFileTriggerShapeBucket)"))
+        #expect(adapterSource.contains("sender_debug_file_trigger_generation_bucket=\\(senderDebugFileTriggerGenerationBucket)"))
+        #expect(adapterSource.contains("sender_debug_file_trigger_consumed=\\(senderDebugFileTriggerConsumed)"))
+        #expect(adapterSource.contains("sender_debug_file_trigger_consume_result_bucket=\\(senderDebugFileTriggerConsumeResultBucket)"))
+        #expect(adapterSource.contains("mutating func markDebugFileTriggerSeen(shapeBucket: String, generationBucket: String)"))
+        #expect(adapterSource.contains("mutating func markDebugFileTriggerConsumed(resultBucket: String)"))
+        #expect(adapterSource.contains("private static let senderNoMediaRuntimeTriggerFileName = \"salemx-debug-sender-no-media-runtime-trigger.json\""))
+        #expect(adapterSource.contains("private static var senderNoMediaRuntimeTriggerFilePollTask: Task<Void, Never>?"))
+        #expect(adapterSource.contains("startSenderNoMediaRuntimeTriggerFilePolling()"))
+        #expect(adapterSource.contains("consumeSenderNoMediaRuntimeTriggerFileIfNeeded()"))
+        #expect(adapterSource.contains("senderNoMediaRuntimeTriggerFileDiagnostics"))
+        #expect(adapterSource.contains("triggerKind == \"sender_no_media_runtime_trigger\""))
+        #expect(adapterSource.contains("markerVersion == \"2.49T\""))
+        #expect(adapterSource.contains("try FileManager.default.removeItem(at: triggerURL)"))
+        #expect(adapterSource.contains("recordSenderDebugFileTriggerConsumed(resultBucket: \"deleted_redacted\")"))
+        #expect(adapterSource.contains("startSenderNoMediaRuntimeTrigger(confirmed: true)"))
+        #expect(adapterSource.contains("\"valid_sender_no_media_trigger_redacted\""))
+        #expect(adapterSource.contains("\"invalid_shape_redacted\""))
     }
 
     @Test

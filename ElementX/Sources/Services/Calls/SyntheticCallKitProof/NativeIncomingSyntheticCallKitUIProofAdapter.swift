@@ -1056,6 +1056,11 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
     var senderDebugDirectCallRouteSeen = false
     var senderDebugNoMediaRouteSeen = false
     var senderDebugNoMediaHandlerEntrySeen = false
+    var senderDebugFileTriggerSeen = false
+    var senderDebugFileTriggerShapeBucket = "none"
+    var senderDebugFileTriggerGenerationBucket = "none"
+    var senderDebugFileTriggerConsumed = false
+    var senderDebugFileTriggerConsumeResultBucket = "not_requested"
     var senderCallStateAfterAnswerBucket = "sender_runtime_not_triggered_redacted"
     var senderMediaCredentialsGateState = "not_requested"
     var senderMediaCredentialsHTTPStatusBucket = "not_requested"
@@ -1208,6 +1213,11 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             "sender_debug_direct_call_route_seen=\(senderDebugDirectCallRouteSeen)",
             "sender_debug_no_media_route_seen=\(senderDebugNoMediaRouteSeen)",
             "sender_debug_no_media_handler_entry_seen=\(senderDebugNoMediaHandlerEntrySeen)",
+            "sender_debug_file_trigger_seen=\(senderDebugFileTriggerSeen)",
+            "sender_debug_file_trigger_shape_bucket=\(senderDebugFileTriggerShapeBucket)",
+            "sender_debug_file_trigger_generation_bucket=\(senderDebugFileTriggerGenerationBucket)",
+            "sender_debug_file_trigger_consumed=\(senderDebugFileTriggerConsumed)",
+            "sender_debug_file_trigger_consume_result_bucket=\(senderDebugFileTriggerConsumeResultBucket)",
             "sender_call_state_after_answer_bucket=\(senderCallStateAfterAnswerBucket)",
             "sender_media_credentials_gate_state=\(senderMediaCredentialsGateState)",
             "sender_media_credentials_requested=\(credentialsRequested)",
@@ -1321,6 +1331,19 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
 
     mutating func markDebugNoMediaHandlerEntry() {
         senderDebugNoMediaHandlerEntrySeen = true
+        noMediaRuntimeTriggerHandlerRegisteredBucket = "registered_redacted"
+    }
+
+    mutating func markDebugFileTriggerSeen(shapeBucket: String, generationBucket: String) {
+        senderDebugFileTriggerSeen = true
+        senderDebugFileTriggerShapeBucket = shapeBucket
+        senderDebugFileTriggerGenerationBucket = generationBucket
+        noMediaRuntimeTriggerHandlerRegisteredBucket = "registered_redacted"
+    }
+
+    mutating func markDebugFileTriggerConsumed(resultBucket: String) {
+        senderDebugFileTriggerConsumed = resultBucket == "deleted_redacted"
+        senderDebugFileTriggerConsumeResultBucket = resultBucket
         noMediaRuntimeTriggerHandlerRegisteredBucket = "registered_redacted"
     }
 
@@ -9108,6 +9131,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let localCallKitOnlyProofFileName = "salemx-local-callkit-only-proof.txt"
     private static let localBackgroundCallKitOnlyProofFileName = "salemx-local-background-callkit-proof.txt"
     private static let senderRuntimeLiveKitJoinProofFileName = "salemx-sender-runtime-livekit-join-proof.txt"
+    private static let senderNoMediaRuntimeTriggerFileName = "salemx-debug-sender-no-media-runtime-trigger.json"
     private static let pendingMetadataEndpointPathPrefix = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata"
     private static let voIPPushReceiptCallKitReportTimeout: TimeInterval = 3
     private static let voIPPushReceiptAnswerableWindowTimeout: TimeInterval = 1.5
@@ -9130,6 +9154,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var senderRuntimeLiveKitJoinConsumedGeneration: Int?
     private static var senderNoMediaRuntimeTriggerConsumed = false
     private static var senderNoMediaRuntimeTriggerConsumedGeneration: Int?
+    private static var senderNoMediaRuntimeTriggerFilePollTask: Task<Void, Never>?
     private static var senderRuntimeLiveKitClient: DirectCallLiveKitClientProtocol?
     private static var senderRuntimeE2EEContextProvider: DirectCallLiveKitE2EEContextProvider?
     private static var senderRuntimeE2EEContext: (any DirectCallMediaE2EEContextProtocol)?
@@ -9711,7 +9736,10 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         recordSenderDebugNoMediaHandlerEntrySeen()
 
         let confirmed = components?.queryItems?.first { $0.name == "confirm" }?.value == senderNoMediaRuntimeTriggerConfirmation
+        startSenderNoMediaRuntimeTrigger(confirmed: confirmed)
+    }
 
+    private static func startSenderNoMediaRuntimeTrigger(confirmed: Bool) {
         lock.lock()
         var handoff = senderPendingMetadataReferenceHandoff
         if confirmed, handoff.referencePresent {
@@ -11969,6 +11997,97 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         lock.lock()
         var summary = latestSenderRuntimeLiveKitJoinSummary
         summary.markDebugBuildLaunchMarker()
+        lock.unlock()
+
+        updateLatestSenderRuntimeLiveKitJoinSummary(summary)
+        startSenderNoMediaRuntimeTriggerFilePolling()
+    }
+
+    private static func startSenderNoMediaRuntimeTriggerFilePolling() {
+        senderNoMediaRuntimeTriggerFilePollTask?.cancel()
+        senderNoMediaRuntimeTriggerFilePollTask = Task {
+            for _ in 0..<240 {
+                if Task.isCancelled {
+                    return
+                }
+                if consumeSenderNoMediaRuntimeTriggerFileIfNeeded() {
+                    return
+                }
+                try? await Task.sleep(nanoseconds: 500_000_000)
+            }
+        }
+    }
+
+    private static func consumeSenderNoMediaRuntimeTriggerFileIfNeeded() -> Bool {
+        guard let triggerURL = senderNoMediaRuntimeTriggerFileURL(),
+              FileManager.default.fileExists(atPath: triggerURL.path) else {
+            return false
+        }
+
+        let diagnostics = senderNoMediaRuntimeTriggerFileDiagnostics(triggerURL)
+        recordSenderDebugFileTriggerSeen(shapeBucket: diagnostics.shapeBucket,
+                                         generationBucket: diagnostics.generationBucket)
+
+        guard diagnostics.validShape else {
+            recordSenderDebugFileTriggerConsumed(resultBucket: "invalid_shape_redacted")
+            return true
+        }
+
+        do {
+            try FileManager.default.removeItem(at: triggerURL)
+            recordSenderDebugFileTriggerConsumed(resultBucket: "deleted_redacted")
+            startSenderNoMediaRuntimeTrigger(confirmed: true)
+        } catch {
+            recordSenderDebugFileTriggerConsumed(resultBucket: "delete_failed_redacted")
+        }
+        return true
+    }
+
+    private struct SenderNoMediaRuntimeTriggerFileDiagnostics {
+        let validShape: Bool
+        let shapeBucket: String
+        let generationBucket: String
+    }
+
+    private static func senderNoMediaRuntimeTriggerFileDiagnostics(_ triggerURL: URL) -> SenderNoMediaRuntimeTriggerFileDiagnostics {
+        guard let data = try? Data(contentsOf: triggerURL),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return .init(validShape: false,
+                         shapeBucket: "invalid_json_redacted",
+                         generationBucket: "unknown")
+        }
+
+        let triggerKind = json["trigger_kind"] as? String
+        let markerVersion = json["marker_version"] as? String
+        let generation = (json["generation"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let generationAllowed = generation.count <= 64 && generation.allSatisfy { character in
+            character.isLetter || character.isNumber || character == "-" || character == "_"
+        }
+        let validShape = triggerKind == "sender_no_media_runtime_trigger" && markerVersion == "2.49T" && generationAllowed && !generation.isEmpty
+        return .init(validShape: validShape,
+                     shapeBucket: validShape ? "valid_sender_no_media_trigger_redacted" : "invalid_shape_redacted",
+                     generationBucket: generationAllowed && !generation.isEmpty ? "present_redacted" : "missing_or_invalid_redacted")
+    }
+
+    private static func senderNoMediaRuntimeTriggerFileURL() -> URL? {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
+            .appending(component: senderNoMediaRuntimeTriggerFileName)
+    }
+
+    private static func recordSenderDebugFileTriggerSeen(shapeBucket: String, generationBucket: String) {
+        lock.lock()
+        var summary = latestSenderRuntimeLiveKitJoinSummary
+        summary.markDebugFileTriggerSeen(shapeBucket: shapeBucket,
+                                         generationBucket: generationBucket)
+        lock.unlock()
+
+        updateLatestSenderRuntimeLiveKitJoinSummary(summary)
+    }
+
+    private static func recordSenderDebugFileTriggerConsumed(resultBucket: String) {
+        lock.lock()
+        var summary = latestSenderRuntimeLiveKitJoinSummary
+        summary.markDebugFileTriggerConsumed(resultBucket: resultBucket)
         lock.unlock()
 
         updateLatestSenderRuntimeLiveKitJoinSummary(summary)
