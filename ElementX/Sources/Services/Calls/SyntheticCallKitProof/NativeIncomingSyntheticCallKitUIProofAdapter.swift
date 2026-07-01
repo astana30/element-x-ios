@@ -12965,8 +12965,8 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     static func consumeDebugProcessLaunchTriggerIfNeeded() {
         let environmentValue = ProcessInfo.processInfo.environment[senderProcessLaunchTriggerEnvironmentKey]
         let argumentValue = ProcessInfo.processInfo.arguments
-            .first { $0.hasPrefix(senderProcessLaunchTriggerArgumentPrefix) }?
-            .dropFirst(senderProcessLaunchTriggerArgumentPrefix.count)
+            .first { $0.hasPrefix(senderProcessLaunchTriggerArgumentPrefix) }
+            .map { String($0.dropFirst(senderProcessLaunchTriggerArgumentPrefix.count)) }
         guard environmentValue == senderProcessLaunchSyntheticTriggerValue ||
             argumentValue == senderProcessLaunchSyntheticTriggerValue else {
             return
