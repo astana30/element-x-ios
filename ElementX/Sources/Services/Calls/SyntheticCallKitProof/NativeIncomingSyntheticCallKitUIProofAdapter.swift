@@ -12921,6 +12921,9 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
 
     private static func recordDebugProofExportHealth(triggerBucket: String) {
         let proof = [
+            "salemx_debug_console_health_probe=true",
+            "debug_console_health_written=true",
+            "debug_console_health_trigger_bucket=\(triggerBucket)",
             "salemx_debug_oslog_health_probe=true",
             "debug_oslog_health_written=true",
             "debug_oslog_health_trigger_bucket=\(triggerBucket)",
@@ -12938,6 +12941,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             "matrix_call_media_event_emitted=false",
             "full_flow_started=false"
         ].joined(separator: "\n")
+        emitDebugProofConsole(proof)
         emitDebugProofOSLog(proof)
         writeDebugDocumentsProof(proof, fileName: debugProofExportHealthFileName)
     }
@@ -12970,6 +12974,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
 
     @discardableResult private static func writeSenderRuntimeTerminalProof(_ proof: String) -> String {
         let terminalProof = senderRuntimeTerminalProofLines(from: proof)
+        emitDebugProofConsole(terminalProof)
         emitDebugProofOSLog(terminalProof)
         return writeDebugDocumentsProof(terminalProof,
                                         fileName: senderRuntimeTerminalProofFileName)
@@ -13019,6 +13024,11 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
 
     private static func emitDebugProofOSLog(_ proof: String) {
         debugProofOSLog.info("\(proof, privacy: .public)")
+    }
+
+    private static func emitDebugProofConsole(_ proof: String) {
+        let data = Data("\(proof)\n".utf8)
+        FileHandle.standardError.write(data)
     }
 
     private static func senderRuntimeProofFields(from proof: String) -> [String: String] {
