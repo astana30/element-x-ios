@@ -27,6 +27,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         NSTextAttachment.registerViewProviderClass(PillAttachmentViewProvider.self, forFileType: InfoPlistReader.main.pillsUTType)
+        #if DEBUG
+        SalemXPushKitRegistrationSmokeDebugBridge.recordDebugProofExportHealthOnLaunch()
+        #endif
         return true
     }
     

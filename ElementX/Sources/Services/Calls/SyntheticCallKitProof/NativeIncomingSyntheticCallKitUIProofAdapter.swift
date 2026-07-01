@@ -9415,6 +9415,8 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let localBackgroundCallKitOnlyProofFileName = "salemx-local-background-callkit-proof.txt"
     private static let senderRuntimeLiveKitJoinProofFileName = "salemx-sender-runtime-livekit-join-proof.txt"
     private static let senderRuntimeAccessibleProofMirrorFileName = senderRuntimeLiveKitJoinProofFileName
+    private static let senderRuntimeTerminalProofFileName = "salemx-sender-runtime-terminal-proof.txt"
+    private static let debugProofExportHealthFileName = "salemx-debug-proof-export-health.txt"
     private static let appSessionProofRefreshFileName = "salemx-debug-app-session-proof-refresh.json"
     private static let senderNoMediaRuntimeTriggerFileName = "salemx-debug-sender-no-media-runtime-trigger.json"
     private static let senderPendingMetadataReferenceHandoffFileName = "salemx-debug-sender-pending-metadata-handoff.json"
@@ -12897,11 +12899,30 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         let result = writeProof(proof, fileName: senderRuntimeLiveKitJoinProofFileName)
         #if DEBUG
         writeSenderRuntimeAccessibleProofMirror(proof)
+        writeSenderRuntimeTerminalProof(proof)
         #endif
         return result
     }
 
     #if DEBUG
+    static func recordDebugProofExportHealthOnLaunch() {
+        let proof = [
+            "debug_documents_proof_export_health_written=true",
+            "debug_documents_proof_export_health_path_bucket=documents_debug_export",
+            "raw_values_printed=false",
+            "APNs_sent=false",
+            "pending_metadata_created=false",
+            "valid_invite_sent=false",
+            "background_apns_push_requested=false",
+            "media_connect_requested=false",
+            "livekit_join_triggered=false",
+            "permissions_requested=false",
+            "matrix_call_media_event_emitted=false",
+            "full_flow_started=false"
+        ].joined(separator: "\n")
+        writeProof(proof, fileName: debugProofExportHealthFileName)
+    }
+
     private static func senderRuntimeAccessibleProofMirrorLines() -> String {
         [
             "sender_runtime_accessible_proof_surface_written=true",
@@ -12926,6 +12947,83 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                                        fileName: senderRuntimeAccessibleProofMirrorFileName,
                                        directoryURL: FileManager.default.temporaryDirectory))
         return writeResults.contains("success_redacted") ? "success_redacted" : "write_failed_redacted"
+    }
+
+    @discardableResult private static func writeSenderRuntimeTerminalProof(_ proof: String) -> String {
+        writeProof(senderRuntimeTerminalProofLines(from: proof),
+                   fileName: senderRuntimeTerminalProofFileName)
+    }
+
+    private static func senderRuntimeTerminalProofLines(from proof: String) -> String {
+        let fields = senderRuntimeProofFields(from: proof)
+        let triggerSeen = senderRuntimeBoolField("sender_debug_atomic_handoff_trigger_file_seen", in: fields)
+        let triggerConsumed = senderRuntimeBoolField("sender_debug_atomic_handoff_trigger_consumed", in: fields)
+        let lifecycleSeen = triggerSeen == "true" ||
+            triggerConsumed == "true" ||
+            senderRuntimeBoolField("sender_no_media_runtime_trigger_attempted", in: fields) == "true" ||
+            senderRuntimeBoolField("sender_no_media_runtime_trigger_terminal_observed", in: fields) == "true"
+
+        return [
+            "proof_generation=\(senderRuntimeField("proof_generation", in: fields))",
+            "sender_documents_terminal_proof_written=true",
+            "sender_atomic_trigger_file_seen_by_app=\(triggerSeen)",
+            "sender_atomic_trigger_consumed_by_app=\(triggerConsumed)",
+            "sender_atomic_trigger_consumer_lifecycle_seen=\(lifecycleSeen)",
+            "sender_no_media_runtime_trigger_attempted=\(senderRuntimeBoolField("sender_no_media_runtime_trigger_attempted", in: fields))",
+            "sender_no_media_runtime_trigger_terminal_observed=\(senderRuntimeBoolField("sender_no_media_runtime_trigger_terminal_observed", in: fields))",
+            "sender_authorized_metadata_source_available=\(senderRuntimeBoolField("sender_authorized_metadata_source_available", in: fields))",
+            "sender_uses_receiver_pending_metadata_reference=\(senderRuntimeBoolField("sender_uses_receiver_pending_metadata_reference", in: fields))",
+            "sender_media_credentials_requested=\(senderRuntimeBoolField("sender_media_credentials_requested", in: fields))",
+            "sender_media_credentials_request_seen=\(senderRuntimeBoolField("sender_media_credentials_request_seen", in: fields))",
+            "sender_media_credentials_http_status_bucket=\(senderRuntimeField("sender_media_credentials_http_status_bucket", in: fields))",
+            "sender_media_credentials_result_bucket=\(senderRuntimeField("sender_media_credentials_result_bucket", in: fields))",
+            "sender_media_credentials_failure_reason_bucket=\(senderRuntimeField("sender_media_credentials_failure_reason_bucket", in: fields))",
+            "sender_media_connect_requested=\(senderRuntimeBoolField("sender_media_connect_requested", in: fields))",
+            "sender_livekit_join_triggered=\(senderRuntimeBoolField("sender_livekit_join_triggered", in: fields))",
+            "sender_permissions_requested=\(senderRuntimeBoolField("sender_permissions_requested", in: fields))",
+            "sender_runtime_boundary_blocked_reason=\(senderRuntimeField("sender_runtime_boundary_blocked_reason", in: fields))",
+            "raw_values_printed=false",
+            "APNs_sent=false",
+            "pending_metadata_created=false",
+            "valid_invite_sent=false",
+            "background_apns_push_requested=false",
+            "media_connect_requested=false",
+            "livekit_join_triggered=false",
+            "permissions_requested=false",
+            "matrix_call_media_event_emitted=false",
+            "full_flow_started=false"
+        ].joined(separator: "\n")
+    }
+
+    private static func senderRuntimeProofFields(from proof: String) -> [String: String] {
+        proof.split(separator: "\n").reduce(into: [String: String]()) { fields, line in
+            let parts = line.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            guard parts.count == 2 else {
+                return
+            }
+            fields[String(parts[0]).trimmingCharacters(in: .whitespacesAndNewlines)] = String(parts[1]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+    }
+
+    private static func senderRuntimeBoolField(_ key: String, in fields: [String: String]) -> String {
+        switch fields[key]?.lowercased() {
+        case "true":
+            "true"
+        case "false":
+            "false"
+        default:
+            "missing"
+        }
+    }
+
+    private static func senderRuntimeField(_ key: String, in fields: [String: String]) -> String {
+        let value = fields[key]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "missing"
+        let allowedScalars = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.>")
+        guard !value.isEmpty,
+              value.unicodeScalars.allSatisfy({ allowedScalars.contains($0) }) else {
+            return "redacted"
+        }
+        return value
     }
     #endif
 
