@@ -12483,12 +12483,18 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                 }
                 try? await Task.sleep(nanoseconds: 500_000_000)
             }
+            recordSenderDebugAtomicHandoffTriggerConsumed(resultBucket: "missing_file_redacted")
         }
     }
 
     private static func consumeSenderAtomicPendingMetadataHandoffTriggerFileIfNeeded() -> Bool {
-        guard let triggerURL = senderAtomicPendingMetadataHandoffTriggerFileURL(),
-              FileManager.default.fileExists(atPath: triggerURL.path) else {
+        let triggerURLs = senderAtomicPendingMetadataHandoffTriggerFileURLs()
+        guard !triggerURLs.isEmpty else {
+            recordSenderDebugAtomicHandoffTriggerConsumed(resultBucket: "path_unavailable_redacted")
+            return false
+        }
+
+        guard let triggerURL = triggerURLs.first(where: { FileManager.default.fileExists(atPath: $0.path) }) else {
             return false
         }
 
@@ -12496,22 +12502,34 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         recordSenderDebugAtomicHandoffTriggerSeen(shapeBucket: diagnostics.shapeBucket)
 
         guard diagnostics.validShape, let reference = diagnostics.reference else {
-            try? FileManager.default.removeItem(at: triggerURL)
-            recordSenderDebugAtomicHandoffTriggerConsumed(resultBucket: "invalid_shape_redacted")
+            do {
+                try FileManager.default.removeItem(at: triggerURL)
+                recordSenderDebugAtomicHandoffTriggerConsumed(resultBucket: "invalid_shape_redacted")
+            } catch {
+                recordSenderDebugAtomicHandoffTriggerConsumed(resultBucket: "invalid_shape_delete_failed_redacted")
+            }
             return true
         }
 
+        consumeSenderAtomicPendingMetadataHandoffTrigger(triggerURL,
+                                                         reference: reference,
+                                                         source: diagnostics.source)
+        return true
+    }
+
+    private static func consumeSenderAtomicPendingMetadataHandoffTrigger(_ triggerURL: URL,
+                                                                         reference: String,
+                                                                         source: String) {
         do {
             try FileManager.default.removeItem(at: triggerURL)
             armSenderPendingMetadataReferenceHandoff(reference: reference,
-                                                     source: diagnostics.source)
+                                                     source: source)
             recordSenderDebugAtomicHandoffTriggerReadyForTrigger(referencePresent: true)
             recordSenderDebugAtomicHandoffTriggerConsumed(resultBucket: "deleted_redacted")
             startSenderNoMediaRuntimeTrigger(confirmed: true)
         } catch {
             recordSenderDebugAtomicHandoffTriggerConsumed(resultBucket: "delete_failed_redacted")
         }
-        return true
     }
 
     private struct SenderAtomicPendingMetadataHandoffTriggerFileDiagnostics {
@@ -12548,9 +12566,13 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                      source: senderAuthorizedShape ? "sender_authorized_file_handoff_redacted" : "atomic_file_handoff_redacted")
     }
 
-    private static func senderAtomicPendingMetadataHandoffTriggerFileURL() -> URL? {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
-            .appending(component: senderAtomicPendingMetadataHandoffTriggerFileName)
+    private static func senderAtomicPendingMetadataHandoffTriggerFileURLs() -> [URL] {
+        var urls = [URL]()
+        if let libraryURL = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first {
+            urls.append(libraryURL.appending(component: senderAtomicPendingMetadataHandoffTriggerFileName))
+        }
+        urls.append(FileManager.default.temporaryDirectory.appending(component: senderAtomicPendingMetadataHandoffTriggerFileName))
+        return urls
     }
 
     private static func startSenderPendingMetadataReferenceHandoffFilePolling() {

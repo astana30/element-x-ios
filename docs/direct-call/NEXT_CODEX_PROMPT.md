@@ -221,3 +221,81 @@ Return:
 * APNs_sent=false during creation/checks
 * final `git status --short --branch`
 * explicit statement that no APNs, production APNs, repeated APNs, `dev/invite`, media connect, LiveKit join, microphone/camera permission, microphone enablement, video, Matrix event emit, full flow, uninstall/container reset, or raw-value logging was performed
+
+# 2.49Z4T Next — Carpediem Sender Atomic Trigger Library/tmp Repair
+
+Continue SalemX direct-call physical proof at:
+
+```bash
+cd /Users/aibattt/Movies/element-x-ios
+```
+
+Immediate blocker:
+- Z4S proved the Carpediem sender atomic trigger file was missing after helper write
+- Documents/appData root are unreliable for this trigger path
+- Library/tmp are accessible and already carry the sender runtime proof mirror
+
+Z4T scope:
+- keep the change minimal
+- move only the atomic sender-authorized handoff+trigger transport to a DEBUG-only Library/tmp file path
+- make the app consumer watch the same Library/tmp path
+- keep terminal proof on success, early exit, missing file, validation failure, and deletion failure
+- stop before APNs/media/LiveKit during implementation
+- do not change production behavior
+
+Hard limits:
+- do not send APNs
+- do not use `dev/invite`
+- do not create pending metadata
+- do not connect media
+- do not join LiveKit
+- do not request microphone/camera permission
+- do not enable microphone
+- do not emit Matrix call/media events
+- do not start full flow
+- do not uninstall apps or reset containers
+- do not print raw tokens, JWTs, auth headers, APNs payloads, invite bodies, LiveKit URLs/tokens, room IDs, call IDs, user IDs, device IDs, pending metadata references, or secrets
+- do not stage or commit `docs/direct-call/REPEAT_CALL_FASTPATH_DIAGNOSTICS.md`
+
+After Z4T code lands, create:
+
+```text
+/tmp/salemx_2_49z4t_carpediem_fast_fresh_invite_sender_credentials_fixed_trigger_path.command
+```
+
+The helper must:
+- use the exact new HEAD
+- use one fresh real non-dev invite only after exact SEND confirmation
+- write the atomic sender-authorized trigger file to the same Library/tmp app-container path watched by the app
+- poll sender proof via the accessible Library/tmp mirror
+- stop before media connect and LiveKit
+
+# 2.50A Contracts Cleanup Backlog
+
+Do not execute 2.50A until the sender credentials boundary is closed, unless explicitly requested.
+
+1. Canonical invite body builder
+   - one `foreground_invite_envelope_with_pending_metadata_v1` builder
+   - forbid legacy flat invite body in physical helpers
+2. Canonical Authorization header function
+   - one sender-token auth construction
+   - no duplicated curl/header builders
+3. Proof surface registry
+   - receiver proof surface
+   - sender runtime proof surface
+   - accessible Library/tmp mirror
+   - app-session proof surface
+4. File-backed debug transport only
+   - no URL dispatch for physical DEBUG triggers
+   - all debug triggers use app-container files
+5. Terminal proof required on every debug hook
+   - success
+   - early exit
+   - missing state
+   - validation failure
+6. Preflight-first helper template
+   - server/token/room/schema first
+   - build/install only after external preflight passes
+   - SEND gate before APNs
+   - one APNs max
+   - no LiveKit/media unless an explicit later helper enables it

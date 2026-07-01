@@ -11033,3 +11033,21 @@ Next phase:
 ```text
 2.48Z-Physical2-Retry19 — one-shot real sender join with receiver/sender connected-window overlap proof
 ```
+
+# 2026-07-01 — 2.49Z4T Carpediem Sender Atomic Trigger Library/tmp Repair
+
+Started the minimal DEBUG-only repair after Z4S classified the Carpediem sender atomic trigger as not consumed.
+
+Z4S result captured:
+- receiver CallKit Answer and receiver credentials were already ready
+- sender accessible runtime proof mirror was present under Library/tmp
+- sender atomic handoff trigger file was not seen or consumed
+- sender no-media runtime trigger and sender credentials remained not requested
+
+Repair scope:
+- move the atomic sender-authorized handoff+trigger transport away from Documents/appData-root and onto the accessible Library/tmp debug path
+- keep the app consumer and helper write path aligned
+- require terminal sender proof for missing file, invalid shape, deletion failure, and success
+- no APNs, `dev/invite`, pending metadata creation, media connect, LiveKit join, microphone/camera permission, Matrix event emission, video, uninstall, container reset, or full flow in this repair phase
+
+2.50A contracts cleanup was recorded as the next consolidation backlog only; it remains blocked until the sender credentials boundary is closed unless explicitly requested.

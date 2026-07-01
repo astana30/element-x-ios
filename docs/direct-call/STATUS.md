@@ -7638,3 +7638,21 @@ Safety:
 
 Next:
 - `2.48Z-Physical2-Retry19` should run one sandbox APNs only after the corrected receiver/sender connected-window proof is installed on both devices.
+
+# 2.49Z4T Carpediem Sender Atomic Trigger Library/tmp Repair
+
+Status: minimal DEBUG-only repair in progress after Z4S showed the Carpediem sender atomic trigger file was missing after helper write.
+
+Current Z4S interpretation:
+- receiver side is ready: CallKit Answer was observed, receiver media credentials succeeded, and receiver media connect / LiveKit stayed false
+- sender accessible proof mirror exists and is readable from the Library/tmp debug mirror
+- sender atomic handoff trigger was not seen or consumed by the app
+- Documents/appData-root delivery is unreliable for the sender trigger path; Library/tmp is the accessible debug surface
+
+Z4T scope:
+- move only the sender-authorized atomic handoff+trigger transport to a DEBUG-only Library/tmp file path
+- make the app consumer watch the same Library/tmp path
+- keep terminal proof for success, missing file, invalid shape, and deletion failure paths
+- stop before APNs, media, LiveKit, permissions, Matrix events, and full flow during implementation
+
+2.50A contracts cleanup is captured as backlog only. It must not execute until the sender credentials boundary is closed unless explicitly requested.
