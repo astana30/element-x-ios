@@ -82,6 +82,7 @@ DEFAULT_PUSHKIT_TOKEN_STORE_PATH = "/tmp/salemx-call-service-pushkit-token-store
 CAPABILITIES_PATH = "/_matrix/client/v3/capabilities"
 HEALTH_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/health"
 READINESS_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/readiness"
+INVITE_DIAGNOSTICS_NO_SEND_HEADER_VALUE = "z4f_invite_401_reason"
 REDIS_READINESS_TIMEOUT_SECONDS = 0.5
 FOREGROUND_SIGNALING_STREAM_HEARTBEAT_SECONDS = 15.0
 LOGGER = logging.getLogger(__name__)
@@ -347,19 +348,45 @@ def create_app(config: ServiceConfig | None = None,
         )
 
     @app.post(FOREGROUND_SIGNALING_INVITE_PATH)
-    async def foreground_signaling_invite(request: Request, authorization: Optional[str] = Header(default=None)) -> JSONResponse:
+    async def foreground_signaling_invite(
+        request: Request,
+        authorization: Optional[str] = Header(default=None),
+        invite_diagnostics_no_send: Optional[str] = Header(default=None, alias="X-SalemX-Invite-Diagnostics-No-Send"),
+    ) -> JSONResponse:
+        diagnostics_no_send_requested = _invite_diagnostics_no_send_requested(invite_diagnostics_no_send)
         try:
             if service is None:
                 raise CallServiceError(status_code=503,
                                        errcode="M_DIRECT_CALL_SERVICE_UNAVAILABLE",
                                        error="Direct-call service is not ready.")
-            bearer_token = bearer_token_from_authorization(authorization)
-            authenticated_user = await service.auth_validator.validate_bearer_token(bearer_token)
+            try:
+                bearer_token = bearer_token_from_authorization(authorization)
+            except CallServiceError as error:
+                raise error.with_diagnostics(_invite_401_diagnostics(
+                    "request_auth_header_missing" if authorization is None else "request_auth_header_invalid",
+                    diagnostics_no_send_requested,
+                )) from error
+            try:
+                authenticated_user = await service.auth_validator.validate_bearer_token(bearer_token)
+            except CallServiceError as error:
+                if error.status_code == 401:
+                    raise error.with_diagnostics(_invite_401_diagnostics(
+                        "request_matrix_whoami_failed",
+                        diagnostics_no_send_requested,
+                    )) from error
+                raise
             payload: Any = await request.json()
             if not isinstance(payload, dict):
                 raise bad_request(error="Request body must be a JSON object.")
-            invite_request = ForegroundCallInviteRequest.from_mapping(payload)
-            pending_metadata = pending_metadata_from_invite_payload(payload, authenticated_user)
+            try:
+                invite_request = ForegroundCallInviteRequest.from_mapping(payload)
+                pending_metadata = pending_metadata_from_invite_payload(payload, authenticated_user)
+            except CallServiceError as error:
+                if diagnostics_no_send_requested:
+                    raise error.with_diagnostics(_invite_no_send_error_diagnostics("invite_body_validation_failed")) from error
+                raise
+            if diagnostics_no_send_requested:
+                return JSONResponse(status_code=200, content=_invite_no_send_success_diagnostics(pending_metadata is not None))
             pending_metadata_reference: str | None = None
             sender_authorized_metadata_reference: str | None = None
             pending_metadata_diagnostics = no_pending_metadata_diagnostics()
@@ -619,6 +646,79 @@ def _sender_authorized_metadata_diagnostics(reference: str | None) -> dict[str, 
     if reference_present:
         diagnostics["sender_authorized_metadata_reference"] = reference
     return diagnostics
+
+
+def _invite_diagnostics_no_send_requested(header_value: str | None) -> bool:
+    return header_value == INVITE_DIAGNOSTICS_NO_SEND_HEADER_VALUE
+
+
+def _invite_401_diagnostics(reason_bucket: str, no_send_requested: bool) -> dict[str, object]:
+    return {
+        "invite_401_reason_bucket": reason_bucket,
+        "invite_diagnostic_auth_result_bucket": "auth_failed_redacted",
+        "invite_diagnostic_validation_result_bucket": "not_reached_redacted",
+        "invite_diagnostic_no_send_requested": no_send_requested,
+        "invite_diagnostic_reason_buckets_supported": [
+            "request_auth_header_missing",
+            "request_auth_header_invalid",
+            "request_matrix_whoami_failed",
+            "sender_room_membership_auth_failed",
+            "sender_not_room_member",
+            "receiver_not_room_member",
+            "encrypted_room_check_failed",
+            "sender_authorized_metadata_source_failed",
+            "invite_body_validation_failed",
+            "pending_metadata_authorization_failed",
+            "apns_preflight_auth_failed",
+            "unknown_401_source",
+        ],
+        "pending_metadata_created": False,
+        "valid_invite_sent": False,
+        "background_apns_push_requested": False,
+        "APNs_sent": False,
+        "raw_identifiers_logged": False,
+    }
+
+
+def _invite_no_send_error_diagnostics(reason_bucket: str) -> dict[str, object]:
+    return {
+        "invite_401_reason_bucket": reason_bucket,
+        "invite_diagnostic_auth_result_bucket": "auth_passed_redacted",
+        "invite_diagnostic_validation_result_bucket": "validation_failed_redacted",
+        "invite_diagnostic_no_send_requested": True,
+        "pending_metadata_created": False,
+        "valid_invite_sent": False,
+        "background_apns_push_requested": False,
+        "APNs_sent": False,
+        "raw_identifiers_logged": False,
+    }
+
+
+def _invite_no_send_success_diagnostics(pending_metadata_requested: bool) -> dict[str, object]:
+    return {
+        "invite_401_reason_bucket": "none",
+        "invite_diagnostic_auth_result_bucket": "auth_passed_redacted",
+        "invite_diagnostic_validation_result_bucket": "validation_passed_no_send_redacted",
+        "invite_diagnostic_no_send_requested": True,
+        "real_non_dev_invite_used": True,
+        "dev_invite_used": False,
+        "pending_metadata_source_requested": pending_metadata_requested,
+        "pending_metadata_source_created": False,
+        "pending_metadata_reference_present": False,
+        "sender_authorized_metadata_source_available": False,
+        "sender_authorized_metadata_reference_present": False,
+        "background_apns_push_requested": False,
+        "background_apns_push_result": "not_requested",
+        "background_apns_failure_reason": "none",
+        "safe_to_send_apns": False,
+        "APNs_sent": False,
+        "valid_invite_sent": False,
+        "media_credentials_requested": False,
+        "media_connect_requested": False,
+        "matrix_event_emit_requested": False,
+        "raw_identifiers_logged": False,
+        "blocked_reason": "diagnostic_no_send",
+    }
 
 
 def _pending_metadata_recipient_device(

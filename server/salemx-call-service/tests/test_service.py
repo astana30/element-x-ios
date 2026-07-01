@@ -839,6 +839,154 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.invite_issuer(app).issued), 0)
         self.assertNotIn("unsafe handle", output)
 
+    async def test_real_invite_diagnostic_no_send_malformed_probe_reaches_validation(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
+        app = self.invite_app(app_module, signaling)
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_INVITE_PATH,
+            {
+                "authorization": self.authorization("auth-a"),
+                "x-salemx-invite-diagnostics-no-send": app_module.INVITE_DIAGNOSTICS_NO_SEND_HEADER_VALUE,
+            },
+            self.targeted_invite_payload(call_handle="unsafe handle"),
+        )
+        output = json.dumps(body, sort_keys=True)
+        diagnostics = body["diagnostics"]
+
+        self.assertEqual(status, 400)
+        self.assertEqual(diagnostics["invite_401_reason_bucket"], "invite_body_validation_failed")
+        self.assertEqual(diagnostics["invite_diagnostic_auth_result_bucket"], "auth_passed_redacted")
+        self.assertEqual(diagnostics["invite_diagnostic_validation_result_bucket"], "validation_failed_redacted")
+        self.assertEqual(diagnostics["pending_metadata_created"], False)
+        self.assertEqual(diagnostics["APNs_sent"], False)
+        self.assertEqual(signaling.diagnostics.delivered_invite_count, 0)
+        self.assertEqual(len(self.invite_issuer(app).issued), 0)
+        self.assertNotIn("unsafe handle", output)
+        self.assertNotIn("auth-a", output)
+
+    async def test_real_invite_diagnostic_no_send_valid_shape_has_no_side_effects(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
+        store = InMemoryPushKitTokenStore()
+        token_request = app_module.PushKitTokenRegistrationRequest.from_mapping({
+            "version": 1,
+            "token": "synthetic-" + "recipient-" + "pushkit-token-fixture",
+            "environment": "development",
+        })
+        store.store("callee", "device-b", token_request)
+        provider = FakeAPNsVoIPProvider(result="sandbox_success")
+        send_service = APNsVoIPSandboxSendService(
+            APNsVoIPSandboxConfig(
+                enabled=True,
+                environment="sandbox",
+                team_id="TEAMID",
+                key_id="KEYID",
+                auth_key_path="/redacted/apns-auth-key.p8",
+                topic="kz.salemx.msg.voip",
+            ),
+            provider=provider,
+        )
+        app = app_module.create_app(
+            token_service=self.make_token_service(),
+            foreground_signaling_service=signaling,
+            pushkit_token_store=store,
+            apns_voip_send_service=send_service,
+        )
+        payload = self.targeted_invite_payload(
+            expires_at_ms=4102444800000,
+            pending_metadata={
+                "version": 1,
+                "call_id": "call-a",
+                "room_id": "!room:example.test",
+                "intent": "audio",
+            },
+        )
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_INVITE_PATH,
+            {
+                "authorization": self.authorization("auth-a"),
+                "x-salemx-invite-diagnostics-no-send": app_module.INVITE_DIAGNOSTICS_NO_SEND_HEADER_VALUE,
+            },
+            payload,
+        )
+        output = json.dumps(body, sort_keys=True)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["invite_401_reason_bucket"], "none")
+        self.assertEqual(body["invite_diagnostic_auth_result_bucket"], "auth_passed_redacted")
+        self.assertEqual(body["invite_diagnostic_validation_result_bucket"], "validation_passed_no_send_redacted")
+        self.assertEqual(body["pending_metadata_source_requested"], True)
+        self.assertEqual(body["pending_metadata_source_created"], False)
+        self.assertEqual(body["pending_metadata_reference_present"], False)
+        self.assertEqual(body["sender_authorized_metadata_source_available"], False)
+        self.assertEqual(body["background_apns_push_requested"], False)
+        self.assertEqual(body["APNs_sent"], False)
+        self.assertEqual(body["valid_invite_sent"], False)
+        self.assertEqual(len(provider.requests), 0)
+        self.assertEqual(signaling.diagnostics.delivered_invite_count, 0)
+        self.assertNotIn("call-a", output)
+        self.assertNotIn("!room:example.test", output)
+        self.assertNotIn("caller", output)
+        self.assertNotIn("callee", output)
+        self.assertNotIn("device-b", output)
+        self.assertNotIn("synthetic-recipient-pushkit-token-fixture", output)
+        self.assertNotIn("auth-a", output)
+
+    async def test_real_invite_diagnostic_401_branches_emit_redacted_reason_buckets(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
+        app = self.invite_app(app_module, signaling)
+        headers = {"x-salemx-invite-diagnostics-no-send": app_module.INVITE_DIAGNOSTICS_NO_SEND_HEADER_VALUE}
+
+        missing_status, missing_body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_INVITE_PATH,
+            headers,
+            self.targeted_invite_payload(),
+        )
+        invalid_header_status, invalid_header_body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_INVITE_PATH,
+            {**headers, "authorization": "Token invalid-token"},
+            self.targeted_invite_payload(),
+        )
+        invalid_token_status, invalid_token_body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_INVITE_PATH,
+            {**headers, "authorization": self.authorization("invalid-token")},
+            self.targeted_invite_payload(),
+        )
+        output = "\n".join([
+            json.dumps(missing_body, sort_keys=True),
+            json.dumps(invalid_header_body, sort_keys=True),
+            json.dumps(invalid_token_body, sort_keys=True),
+        ])
+
+        self.assertEqual(missing_status, 401)
+        self.assertEqual(missing_body["diagnostics"]["invite_401_reason_bucket"], "request_auth_header_missing")
+        self.assertEqual(invalid_header_status, 401)
+        self.assertEqual(invalid_header_body["diagnostics"]["invite_401_reason_bucket"], "request_auth_header_invalid")
+        self.assertEqual(invalid_token_status, 401)
+        self.assertEqual(invalid_token_body["diagnostics"]["invite_401_reason_bucket"], "request_matrix_whoami_failed")
+        for body in [missing_body, invalid_header_body, invalid_token_body]:
+            diagnostics = body["diagnostics"]
+            self.assertEqual(diagnostics["invite_diagnostic_auth_result_bucket"], "auth_failed_redacted")
+            self.assertEqual(diagnostics["invite_diagnostic_validation_result_bucket"], "not_reached_redacted")
+            self.assertEqual(diagnostics["pending_metadata_created"], False)
+            self.assertEqual(diagnostics["valid_invite_sent"], False)
+            self.assertEqual(diagnostics["background_apns_push_requested"], False)
+            self.assertEqual(diagnostics["APNs_sent"], False)
+            self.assertIn("unknown_401_source", diagnostics["invite_diagnostic_reason_buckets_supported"])
+        self.assertNotIn("invalid-token", output)
+        self.assertNotIn("caller", output)
+        self.assertNotIn("callee", output)
+        self.assertNotIn("device-b", output)
+
     async def test_stream_endpoint_yields_local_injected_invite_event(self) -> None:
         app_module = _load_app_module()
         signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
