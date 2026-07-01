@@ -9414,6 +9414,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let localCallKitOnlyProofFileName = "salemx-local-callkit-only-proof.txt"
     private static let localBackgroundCallKitOnlyProofFileName = "salemx-local-background-callkit-proof.txt"
     private static let senderRuntimeLiveKitJoinProofFileName = "salemx-sender-runtime-livekit-join-proof.txt"
+    private static let senderRuntimeAccessibleProofMirrorFileName = senderRuntimeLiveKitJoinProofFileName
     private static let appSessionProofRefreshFileName = "salemx-debug-app-session-proof-refresh.json"
     private static let senderNoMediaRuntimeTriggerFileName = "salemx-debug-sender-no-media-runtime-trigger.json"
     private static let senderPendingMetadataReferenceHandoffFileName = "salemx-debug-sender-pending-metadata-handoff.json"
@@ -12871,15 +12872,51 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     }
 
     @discardableResult private static func writeSenderRuntimeLiveKitJoinProof(_ proof: String) -> String {
-        writeProof(proof, fileName: senderRuntimeLiveKitJoinProofFileName)
+        let result = writeProof(proof, fileName: senderRuntimeLiveKitJoinProofFileName)
+        #if DEBUG
+        writeSenderRuntimeAccessibleProofMirror(proof)
+        #endif
+        return result
     }
+
+    #if DEBUG
+    private static func senderRuntimeAccessibleProofMirrorLines() -> String {
+        [
+            "sender_runtime_accessible_proof_surface_written=true",
+            "sender_runtime_accessible_proof_surface_bucket=library_tmp_debug_mirror"
+        ].joined(separator: "\n")
+    }
+
+    @discardableResult private static func writeSenderRuntimeAccessibleProofMirror(_ proof: String) -> String {
+        let mirroredProof = [
+            proof,
+            senderRuntimeAccessibleProofMirrorLines()
+        ].joined(separator: "\n")
+        var writeResults = [String]()
+        if let libraryURL = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first {
+            writeResults.append(writeProof(mirroredProof,
+                                           fileName: senderRuntimeAccessibleProofMirrorFileName,
+                                           directoryURL: libraryURL))
+        } else {
+            writeResults.append("library_unavailable_redacted")
+        }
+        writeResults.append(writeProof(mirroredProof,
+                                       fileName: senderRuntimeAccessibleProofMirrorFileName,
+                                       directoryURL: FileManager.default.temporaryDirectory))
+        return writeResults.contains("success_redacted") ? "success_redacted" : "write_failed_redacted"
+    }
+    #endif
 
     @discardableResult private static func writeProof(_ proof: String, fileName: String) -> String {
         guard let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
             return "documents_unavailable_redacted"
         }
 
-        let proofURL = documentsURL.appending(component: fileName)
+        return writeProof(proof, fileName: fileName, directoryURL: documentsURL)
+    }
+
+    @discardableResult private static func writeProof(_ proof: String, fileName: String, directoryURL: URL) -> String {
+        let proofURL = directoryURL.appending(component: fileName)
         do {
             try proof.write(to: proofURL, atomically: true, encoding: .utf8)
             return "success_redacted"

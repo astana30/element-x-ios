@@ -3877,6 +3877,67 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func senderRuntimeAccessibleProofMirrorWritesLibraryTmpDebugOnlySurface() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+        let writerStart = try #require(adapterSource.range(of: "@discardableResult private static func writeSenderRuntimeLiveKitJoinProof")?.lowerBound)
+        let genericWriterStart = try #require(adapterSource.range(of: "@discardableResult private static func writeProof(_ proof: String, fileName: String) -> String")?.lowerBound)
+        let writerSource = String(adapterSource[writerStart..<genericWriterStart])
+
+        #expect(adapterSource.contains("private static let senderRuntimeAccessibleProofMirrorFileName = senderRuntimeLiveKitJoinProofFileName"))
+        #expect(adapterSource.contains("private static func senderRuntimeAccessibleProofMirrorLines() -> String"))
+        #expect(adapterSource.contains("@discardableResult private static func writeSenderRuntimeAccessibleProofMirror(_ proof: String) -> String"))
+        #expect(adapterSource.contains("sender_runtime_accessible_proof_surface_written=true"))
+        #expect(adapterSource.contains("sender_runtime_accessible_proof_surface_bucket=library_tmp_debug_mirror"))
+        #expect(writerSource.contains("#if DEBUG"))
+        #expect(writerSource.contains("writeSenderRuntimeAccessibleProofMirror(proof)"))
+        #expect(writerSource.contains("FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first"))
+        #expect(writerSource.contains("FileManager.default.temporaryDirectory"))
+        #expect(writerSource.contains("writeProof(mirroredProof"))
+        #expect(writerSource.contains("return result"))
+        #expect(adapterSource.contains("@discardableResult private static func writeProof(_ proof: String, fileName: String, directoryURL: URL) -> String"))
+        #expect(adapterSource.contains("let proofURL = directoryURL.appending(component: fileName)"))
+    }
+
+    @Test
+    func senderRuntimeAccessibleProofMirrorCarriesTerminalNoMediaSafetyFields() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+        let redactedLinesStart = try #require(adapterSource.range(of: "var redactedLines: [String]")?.lowerBound)
+        let debugMarkerStart = try #require(adapterSource.range(of: "mutating func markDebugBuildLaunchMarker()")?.lowerBound)
+        let redactedLinesSource = String(adapterSource[redactedLinesStart..<debugMarkerStart])
+        let noMediaRunStart = try #require(adapterSource.range(of: "@MainActor\n    private static func runSenderNoMediaRuntimeTrigger")?.lowerBound)
+        let runtimeJoinStart = try #require(adapterSource.range(of: "@MainActor\n    private static func runSenderRuntimeLiveKitJoin")?.lowerBound)
+        let noMediaRunSource = String(adapterSource[noMediaRunStart..<runtimeJoinStart])
+
+        #expect(redactedLinesSource.contains("sender_debug_atomic_handoff_trigger_file_seen=\\(senderDebugAtomicHandoffTriggerFileSeen)"))
+        #expect(redactedLinesSource.contains("sender_debug_atomic_handoff_trigger_consumed=\\(senderDebugAtomicHandoffTriggerConsumed)"))
+        #expect(redactedLinesSource.contains("sender_no_media_runtime_trigger_attempted=\\(noMediaRuntimeTriggerAttempted)"))
+        #expect(redactedLinesSource.contains("sender_no_media_runtime_trigger_terminal_observed=\\(senderNoMediaRuntimeTriggerTerminalObserved)"))
+        #expect(redactedLinesSource.contains("sender_authorized_metadata_source_available=\\(senderAuthorizedMetadataSourceAvailable)"))
+        #expect(redactedLinesSource.contains("sender_uses_receiver_pending_metadata_reference=\\(senderUsesReceiverPendingMetadataReference)"))
+        #expect(redactedLinesSource.contains("sender_media_credentials_requested=\\(credentialsRequested)"))
+        #expect(redactedLinesSource.contains("sender_media_credentials_request_seen=\\(senderMediaCredentialsRequestSeen)"))
+        #expect(redactedLinesSource.contains("sender_media_credentials_http_status_bucket=\\(senderMediaCredentialsHTTPStatusBucket)"))
+        #expect(redactedLinesSource.contains("sender_media_credentials_result_bucket=\\(credentialsResult)"))
+        #expect(redactedLinesSource.contains("sender_media_credentials_failure_reason_bucket=\\(senderMediaCredentialsFailureReasonBucket)"))
+        #expect(redactedLinesSource.contains("sender_media_connect_requested=\\(senderMediaConnectRequested)"))
+        #expect(redactedLinesSource.contains("sender_livekit_join_triggered=\\(senderLiveKitJoinTriggered)"))
+        #expect(redactedLinesSource.contains("sender_permissions_requested=\\(senderPermissionsRequested)"))
+        #expect(redactedLinesSource.contains("sender_runtime_boundary_blocked_reason=\\(senderRuntimeBoundaryBlockedReason)"))
+        #expect(redactedLinesSource.contains("sender_pending_metadata_raw_identifiers_logged=\\(senderPendingMetadataRawIdentifiersLogged)"))
+        #expect(adapterSource.contains("senderPendingMetadataRawIdentifiersLogged = false"))
+        #expect(noMediaRunSource.contains("await fetchSenderRuntimePendingMetadata(reference: reference)"))
+        #expect(noMediaRunSource.contains("await requestSenderRuntimeCredentials(for: session)"))
+        #expect(!noMediaRunSource.contains("DirectCallLiveKitConnectExecutor"))
+        #expect(!noMediaRunSource.contains("executor.connectAudio"))
+        #expect(!noMediaRunSource.contains("setMicrophoneEnabled(true)"))
+        #expect(!noMediaRunSource.contains("sendRealInvite"))
+        #expect(!noMediaRunSource.contains("postRealInvite"))
+        #expect(!noMediaRunSource.contains("matrixEventEmitRequested = true"))
+        #expect(!noMediaRunSource.contains("cameraPermissionRequested = true"))
+        #expect(!noMediaRunSource.contains("microphonePermissionRequested = true"))
+    }
+
+    @Test
     func senderNoMediaRuntimeTriggerStopsBeforeLiveKitJoinAndMicrophone() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
         let noMediaHookStart = try #require(adapterSource.range(of: "private static func startSenderNoMediaRuntimeTriggerURLHook")?.lowerBound)
