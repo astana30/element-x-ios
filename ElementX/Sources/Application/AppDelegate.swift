@@ -29,6 +29,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         NSTextAttachment.registerViewProviderClass(PillAttachmentViewProvider.self, forFileType: InfoPlistReader.main.pillsUTType)
         #if DEBUG
         SalemXPushKitRegistrationSmokeDebugBridge.recordDebugProofExportHealthOnLaunch()
+        SalemXPushKitRegistrationSmokeDebugBridge.consumeDebugProcessLaunchTriggerIfNeeded()
         #endif
         return true
     }

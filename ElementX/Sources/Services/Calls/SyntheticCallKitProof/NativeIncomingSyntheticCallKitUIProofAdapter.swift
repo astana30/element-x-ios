@@ -1075,6 +1075,9 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
     var senderDebugAtomicHandoffTriggerShapeBucket = "none"
     var senderDebugAtomicHandoffTriggerConsumed = false
     var senderDebugAtomicHandoffTriggerConsumeResultBucket = "not_requested"
+    var senderProcessLaunchTriggerSeenByApp = false
+    var senderProcessLaunchTriggerConsumedByApp = false
+    var senderProcessLaunchTriggerTransportBucket = "not_requested"
     var senderPendingMetadataMemoryReferencePresentBeforeTrigger = false
     var senderPendingMetadataMemoryReferencePresentAtTrigger = false
     var pendingMetadataReferenceRoleBucket = "not_requested"
@@ -1374,6 +1377,9 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             "sender_debug_atomic_handoff_trigger_shape_bucket=\(senderDebugAtomicHandoffTriggerShapeBucket)",
             "sender_debug_atomic_handoff_trigger_consumed=\(senderDebugAtomicHandoffTriggerConsumed)",
             "sender_debug_atomic_handoff_trigger_consume_result_bucket=\(senderDebugAtomicHandoffTriggerConsumeResultBucket)",
+            "sender_process_launch_trigger_seen_by_app=\(senderProcessLaunchTriggerSeenByApp)",
+            "sender_process_launch_trigger_consumed_by_app=\(senderProcessLaunchTriggerConsumedByApp)",
+            "sender_process_launch_trigger_transport_bucket=\(senderProcessLaunchTriggerTransportBucket)",
             "sender_pending_metadata_memory_reference_present_before_trigger=\(senderPendingMetadataMemoryReferencePresentBeforeTrigger)",
             "sender_pending_metadata_memory_reference_present_at_trigger=\(senderPendingMetadataMemoryReferencePresentAtTrigger)",
             "pending_metadata_reference_role_bucket=\(pendingMetadataReferenceRoleBucket)",
@@ -1551,6 +1557,40 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         if resultBucket != "deleted_redacted" {
             senderPendingMetadataHandoffResultBucket = resultBucket
         }
+    }
+
+    mutating func markDebugProcessLaunchSyntheticTrigger() {
+        proofGeneration = UUID().uuidString
+        proofLastUpdatedBy = "sender_process_launch_debug_trigger"
+        senderProcessLaunchTriggerSeenByApp = true
+        senderProcessLaunchTriggerConsumedByApp = true
+        senderProcessLaunchTriggerTransportBucket = "process_launch_redacted"
+        noMediaRuntimeTriggerAttempted = true
+        noMediaRuntimeTriggerConsumed = true
+        noMediaRuntimeTriggerRepeated = false
+        noMediaRuntimeTriggerResultBucket = "synthetic_trigger_no_metadata_redacted"
+        senderAuthorizedMetadataSourceAvailable = false
+        senderUsesReceiverPendingMetadataReference = false
+        senderLocalInviteStateAvailable = false
+        senderCanRequestCredentialsWithoutReceiverPendingFetch = false
+        senderCredentialsRequestBlockedReason = "synthetic_trigger_no_metadata_redacted"
+        recommendedNextFixBucket = "none"
+        senderCallStateAfterAnswerBucket = "synthetic_process_launch_trigger_redacted"
+        senderMediaCredentialsGateState = "not_requested"
+        credentialsRequested = false
+        credentialsAuthorized = false
+        credentialsResult = "not_requested"
+        senderMediaCredentialsHTTPStatusBucket = "not_requested"
+        senderMediaConnectGateState = "sender_no_media_guarded_no_connect_redacted"
+        senderRuntimeBoundaryBlockedReason = "synthetic_trigger_no_metadata_redacted"
+        executorInvoked = false
+        runtimeResult = "not_requested"
+        runtimeErrorBucket = "none"
+        microphonePermissionRequested = false
+        cameraPermissionRequested = false
+        matrixEventEmitRequested = false
+        realCallFlowStarted = false
+        blockedReason = "synthetic_trigger_no_metadata_redacted"
     }
 
     mutating func markReferenceHandoff(_ handoff: SalemXSenderPendingMetadataReferenceHandoff, armGenerationChanged: Bool = false) {
@@ -9425,6 +9465,9 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let senderNoMediaRuntimeTriggerFileName = "salemx-debug-sender-no-media-runtime-trigger.json"
     private static let senderPendingMetadataReferenceHandoffFileName = "salemx-debug-sender-pending-metadata-handoff.json"
     private static let senderAtomicPendingMetadataHandoffTriggerFileName = "salemx-debug-sender-pending-metadata-and-no-media-trigger.json"
+    private static let senderProcessLaunchTriggerEnvironmentKey = "SALEMX_DEBUG_SENDER_PROCESS_LAUNCH_TRIGGER"
+    private static let senderProcessLaunchTriggerArgumentPrefix = "--salemx-debug-sender-process-launch-trigger="
+    private static let senderProcessLaunchSyntheticTriggerValue = "synthetic_no_metadata_redacted"
     private static let pendingMetadataEndpointPathPrefix = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata"
     private static let voIPPushReceiptCallKitReportTimeout: TimeInterval = 3
     private static let voIPPushReceiptAnswerableWindowTimeout: TimeInterval = 1.5
@@ -12919,6 +12962,24 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         recordDebugProofExportHealth(triggerBucket: "foreground_or_launch_redacted")
     }
 
+    static func consumeDebugProcessLaunchTriggerIfNeeded() {
+        let environmentValue = ProcessInfo.processInfo.environment[senderProcessLaunchTriggerEnvironmentKey]
+        let argumentValue = ProcessInfo.processInfo.arguments
+            .first { $0.hasPrefix(senderProcessLaunchTriggerArgumentPrefix) }?
+            .dropFirst(senderProcessLaunchTriggerArgumentPrefix.count)
+        guard environmentValue == senderProcessLaunchSyntheticTriggerValue ||
+            argumentValue == senderProcessLaunchSyntheticTriggerValue else {
+            return
+        }
+
+        lock.lock()
+        var summary = latestSenderRuntimeLiveKitJoinSummary
+        summary.markDebugProcessLaunchSyntheticTrigger()
+        lock.unlock()
+
+        updateLatestSenderRuntimeLiveKitJoinSummary(summary)
+    }
+
     private static func recordDebugProofExportHealth(triggerBucket: String) {
         let proof = [
             "salemx_debug_console_health_probe=true",
@@ -12996,6 +13057,9 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             "sender_atomic_trigger_file_seen_by_app=\(triggerSeen)",
             "sender_atomic_trigger_consumed_by_app=\(triggerConsumed)",
             "sender_atomic_trigger_consumer_lifecycle_seen=\(lifecycleSeen)",
+            "sender_process_launch_trigger_seen_by_app=\(senderRuntimeBoolField("sender_process_launch_trigger_seen_by_app", in: fields))",
+            "sender_process_launch_trigger_consumed_by_app=\(senderRuntimeBoolField("sender_process_launch_trigger_consumed_by_app", in: fields))",
+            "sender_process_launch_trigger_transport_bucket=\(senderRuntimeField("sender_process_launch_trigger_transport_bucket", in: fields))",
             "sender_no_media_runtime_trigger_attempted=\(senderRuntimeBoolField("sender_no_media_runtime_trigger_attempted", in: fields))",
             "sender_no_media_runtime_trigger_terminal_observed=\(senderRuntimeBoolField("sender_no_media_runtime_trigger_terminal_observed", in: fields))",
             "sender_authorized_metadata_source_available=\(senderRuntimeBoolField("sender_authorized_metadata_source_available", in: fields))",
