@@ -1564,7 +1564,7 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         proofLastUpdatedBy = "sender_process_launch_debug_trigger"
         senderProcessLaunchTriggerSeenByApp = true
         senderProcessLaunchTriggerConsumedByApp = true
-        senderProcessLaunchTriggerTransportBucket = "process_launch_redacted"
+        senderProcessLaunchTriggerTransportBucket = "process_launch_constant_redacted"
         noMediaRuntimeTriggerAttempted = true
         noMediaRuntimeTriggerConsumed = true
         noMediaRuntimeTriggerRepeated = false
@@ -9467,7 +9467,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let senderAtomicPendingMetadataHandoffTriggerFileName = "salemx-debug-sender-pending-metadata-and-no-media-trigger.json"
     private static let senderProcessLaunchTriggerEnvironmentKey = "SALEMX_DEBUG_SENDER_PROCESS_LAUNCH_TRIGGER"
     private static let senderProcessLaunchTriggerArgumentPrefix = "--salemx-debug-sender-process-launch-trigger="
-    private static let senderProcessLaunchSyntheticTriggerValue = "synthetic_no_metadata_redacted"
+    private static let senderProcessLaunchSyntheticTriggerValue = "salemx_debug_process_trigger_synthetic_no_metadata"
     private static let pendingMetadataEndpointPathPrefix = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata"
     private static let voIPPushReceiptCallKitReportTimeout: TimeInterval = 3
     private static let voIPPushReceiptAnswerableWindowTimeout: TimeInterval = 1.5

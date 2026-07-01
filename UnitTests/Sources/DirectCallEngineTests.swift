@@ -3969,6 +3969,8 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("senderProcessLaunchTriggerEnvironmentKey"))
         #expect(adapterSource.contains("senderProcessLaunchTriggerArgumentPrefix"))
         #expect(adapterSource.contains("senderProcessLaunchSyntheticTriggerValue"))
+        #expect(adapterSource.contains("salemx_debug_process_trigger_synthetic_no_metadata"))
+        #expect(adapterSource.contains("senderProcessLaunchTriggerTransportBucket = \"process_launch_constant_redacted\""))
         #expect(adapterSource.contains("markDebugProcessLaunchSyntheticTrigger()"))
         #expect(adapterSource.contains("sender_process_launch_trigger_seen_by_app=\\(senderProcessLaunchTriggerSeenByApp)"))
         #expect(adapterSource.contains("sender_process_launch_trigger_consumed_by_app=\\(senderProcessLaunchTriggerConsumedByApp)"))
