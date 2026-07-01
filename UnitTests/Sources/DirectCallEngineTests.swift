@@ -3913,6 +3913,11 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("private static let debugProofExportHealthFileName = \"salemx-debug-proof-export-health.txt\""))
         #expect(writerSource.contains("#if DEBUG"))
         #expect(writerSource.contains("writeSenderRuntimeTerminalProof(proof)"))
+        #expect(terminalWriterSource.contains("private static func debugDocumentsProofExportURL(fileName: String) -> URL?"))
+        #expect(terminalWriterSource.contains("FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?"))
+        #expect(terminalWriterSource.contains(".appending(component: fileName)"))
+        #expect(terminalWriterSource.contains("@discardableResult private static func writeDebugDocumentsProof(_ proof: String, fileName: String) -> String"))
+        #expect(terminalWriterSource.contains("debugDocumentsProofExportURL(fileName: fileName)"))
         #expect(terminalWriterSource.contains("proof_generation=\\(senderRuntimeField(\"proof_generation\", in: fields))"))
         #expect(terminalWriterSource.contains("sender_documents_terminal_proof_written=true"))
         #expect(terminalWriterSource.contains("sender_atomic_trigger_file_seen_by_app=\\(triggerSeen)"))
@@ -3938,7 +3943,7 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(terminalWriterSource.contains("permissions_requested=false"))
         #expect(terminalWriterSource.contains("matrix_call_media_event_emitted=false"))
         #expect(terminalWriterSource.contains("full_flow_started=false"))
-        #expect(terminalWriterSource.contains("writeProof(senderRuntimeTerminalProofLines(from: proof),"))
+        #expect(terminalWriterSource.contains("writeDebugDocumentsProof(senderRuntimeTerminalProofLines(from: proof),"))
         #expect(terminalWriterSource.contains("fileName: senderRuntimeTerminalProofFileName"))
         #expect(terminalWriterSource.contains("senderRuntimeProofFields(from: proof)"))
         #expect(terminalWriterSource.contains("allowedScalars"))
@@ -3947,8 +3952,9 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(!terminalWriterSource.contains("call_id="))
         #expect(appDelegateSource.contains("#if DEBUG\n        SalemXPushKitRegistrationSmokeDebugBridge.recordDebugProofExportHealthOnLaunch()\n        #endif"))
         #expect(adapterSource.contains("static func recordDebugProofExportHealthOnLaunch()"))
+        #expect(adapterSource.contains("writeDebugDocumentsProof(proof, fileName: debugProofExportHealthFileName)"))
         #expect(adapterSource.contains("debug_documents_proof_export_health_written=true"))
-        #expect(adapterSource.contains("debug_documents_proof_export_health_path_bucket=documents_debug_export"))
+        #expect(adapterSource.contains("debug_documents_proof_export_health_path_bucket=documents_directory"))
     }
 
     @Test

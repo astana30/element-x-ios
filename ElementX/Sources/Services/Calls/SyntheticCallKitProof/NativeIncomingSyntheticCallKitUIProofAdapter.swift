@@ -12908,7 +12908,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     static func recordDebugProofExportHealthOnLaunch() {
         let proof = [
             "debug_documents_proof_export_health_written=true",
-            "debug_documents_proof_export_health_path_bucket=documents_debug_export",
+            "debug_documents_proof_export_health_path_bucket=documents_directory",
             "raw_values_printed=false",
             "APNs_sent=false",
             "pending_metadata_created=false",
@@ -12920,7 +12920,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             "matrix_call_media_event_emitted=false",
             "full_flow_started=false"
         ].joined(separator: "\n")
-        writeProof(proof, fileName: debugProofExportHealthFileName)
+        writeDebugDocumentsProof(proof, fileName: debugProofExportHealthFileName)
     }
 
     private static func senderRuntimeAccessibleProofMirrorLines() -> String {
@@ -12950,8 +12950,8 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     }
 
     @discardableResult private static func writeSenderRuntimeTerminalProof(_ proof: String) -> String {
-        writeProof(senderRuntimeTerminalProofLines(from: proof),
-                   fileName: senderRuntimeTerminalProofFileName)
+        writeDebugDocumentsProof(senderRuntimeTerminalProofLines(from: proof),
+                                 fileName: senderRuntimeTerminalProofFileName)
     }
 
     private static func senderRuntimeTerminalProofLines(from proof: String) -> String {
@@ -13024,6 +13024,24 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             return "redacted"
         }
         return value
+    }
+
+    private static func debugDocumentsProofExportURL(fileName: String) -> URL? {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
+            .appending(component: fileName)
+    }
+
+    @discardableResult private static func writeDebugDocumentsProof(_ proof: String, fileName: String) -> String {
+        guard let proofURL = debugDocumentsProofExportURL(fileName: fileName) else {
+            return "documents_unavailable_redacted"
+        }
+
+        do {
+            try proof.write(to: proofURL, atomically: true, encoding: .utf8)
+            return "success_redacted"
+        } catch {
+            return "write_failed_redacted"
+        }
     }
     #endif
 
