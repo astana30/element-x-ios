@@ -9268,6 +9268,11 @@ private struct SalemXMatrixSessionWhoamiProofSummary {
     var matrixSessionUserHashMatchesExpected = false
     var matrixSessionDevicePresent = false
     var pendingMetadataAuthReady = false
+    var appSessionFileRefreshSeen = false
+    var appSessionFileRefreshShapeBucket = "not_requested"
+    var appSessionFileRefreshConsumed = false
+    var appSessionFileRefreshConsumeResultBucket = "not_requested"
+    var appSessionProofRawIdentifiersLogged = false
     var blockedReason = "none"
 
     var redactedLines: [String] {
@@ -9275,6 +9280,16 @@ private struct SalemXMatrixSessionWhoamiProofSummary {
             "proof_generation=\(proofGeneration)",
             "proof_last_updated_by=\(proofLastUpdatedBy)",
             "proof_source=matrix_session_whoami_smoke",
+            "app_session_file_refresh_seen=\(appSessionFileRefreshSeen)",
+            "app_session_file_refresh_shape_bucket=\(appSessionFileRefreshShapeBucket)",
+            "app_session_file_refresh_consumed=\(appSessionFileRefreshConsumed)",
+            "app_session_file_refresh_consume_result_bucket=\(appSessionFileRefreshConsumeResultBucket)",
+            "app_session_proof_generation=\(proofGeneration)",
+            "app_matrix_session_whoami_result=\(whoamiResult)",
+            "app_matrix_session_user_hash=\(matrixSessionUserHash)",
+            "app_matrix_session_device_present=\(matrixSessionDevicePresent)",
+            "app_pending_metadata_auth_ready=\(pendingMetadataAuthReady)",
+            "app_session_proof_raw_identifiers_logged=\(appSessionProofRawIdentifiersLogged)",
             "manual_invoked=\(manualInvoked)",
             "expected_user_hash_provided=\(expectedUserHashProvided)",
             "iphone_app_matrix_session_active_session_available=\(activeSessionAvailable)",
@@ -9389,6 +9404,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let localCallKitOnlyProofFileName = "salemx-local-callkit-only-proof.txt"
     private static let localBackgroundCallKitOnlyProofFileName = "salemx-local-background-callkit-proof.txt"
     private static let senderRuntimeLiveKitJoinProofFileName = "salemx-sender-runtime-livekit-join-proof.txt"
+    private static let appSessionProofRefreshFileName = "salemx-debug-app-session-proof-refresh.json"
     private static let senderNoMediaRuntimeTriggerFileName = "salemx-debug-sender-no-media-runtime-trigger.json"
     private static let senderPendingMetadataReferenceHandoffFileName = "salemx-debug-sender-pending-metadata-handoff.json"
     private static let senderAtomicPendingMetadataHandoffTriggerFileName = "salemx-debug-sender-pending-metadata-and-no-media-trigger.json"
@@ -9404,6 +9420,10 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var uploadSmoke: SalemXPushKitTokenUploadSmoke?
     private static var latestUploadSummary = initialUploadRedactedSummary()
     private static var latestMatrixSessionWhoamiSummary = SalemXMatrixSessionWhoamiProofSummary()
+    private static var appSessionFileRefreshSeen = false
+    private static var appSessionFileRefreshShapeBucket = "not_requested"
+    private static var appSessionFileRefreshConsumed = false
+    private static var appSessionFileRefreshConsumeResultBucket = "not_requested"
     private static var latestVoIPPushReceiptSummary = SalemXVoIPPushReceiptProofSummary()
     private static var latestStartupPushKitRegistrySummary = SalemXStartupPushKitRegistryProofSummary()
     private static var latestLocalCallKitOnlySummary = SalemXLocalCallKitOnlyProofSummary()
@@ -9414,6 +9434,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var senderRuntimeLiveKitJoinConsumedGeneration: Int?
     private static var senderNoMediaRuntimeTriggerConsumed = false
     private static var senderNoMediaRuntimeTriggerConsumedGeneration: Int?
+    private static var appSessionProofRefreshFilePollTask: Task<Void, Never>?
     private static var senderNoMediaRuntimeTriggerFilePollTask: Task<Void, Never>?
     private static var senderPendingMetadataReferenceHandoffFilePollTask: Task<Void, Never>?
     private static var senderAtomicPendingMetadataHandoffTriggerFilePollTask: Task<Void, Never>?
@@ -12214,6 +12235,11 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         var summary = summary
         summary.proofGeneration = nextProofGenerationLocked()
         summary.proofLastUpdatedBy = "matrix_session_whoami_smoke"
+        summary.appSessionFileRefreshSeen = appSessionFileRefreshSeen
+        summary.appSessionFileRefreshShapeBucket = appSessionFileRefreshShapeBucket
+        summary.appSessionFileRefreshConsumed = appSessionFileRefreshConsumed
+        summary.appSessionFileRefreshConsumeResultBucket = appSessionFileRefreshConsumeResultBucket
+        summary.appSessionProofRawIdentifiersLogged = false
         latestMatrixSessionWhoamiSummary = summary
         let proof = summary.redactedLines.joined(separator: "\n")
         lock.unlock()
@@ -12275,9 +12301,106 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         lock.unlock()
 
         updateLatestSenderRuntimeLiveKitJoinSummary(summary)
+        startAppSessionProofRefreshFilePolling()
         startSenderAtomicPendingMetadataHandoffTriggerFilePolling()
         startSenderPendingMetadataReferenceHandoffFilePolling()
         startSenderNoMediaRuntimeTriggerFilePolling()
+    }
+
+    private static func startAppSessionProofRefreshFilePolling() {
+        appSessionProofRefreshFilePollTask?.cancel()
+        appSessionProofRefreshFilePollTask = Task {
+            for _ in 0..<240 {
+                if Task.isCancelled {
+                    return
+                }
+                if consumeAppSessionProofRefreshFileIfNeeded() {
+                    return
+                }
+                try? await Task.sleep(nanoseconds: 500_000_000)
+            }
+        }
+    }
+
+    private static func consumeAppSessionProofRefreshFileIfNeeded() -> Bool {
+        guard let refreshURL = appSessionProofRefreshFileURL(),
+              FileManager.default.fileExists(atPath: refreshURL.path) else {
+            return false
+        }
+
+        let diagnostics = appSessionProofRefreshFileDiagnostics(refreshURL)
+        recordAppSessionFileRefreshSeen(shapeBucket: diagnostics.shapeBucket)
+
+        guard diagnostics.validShape else {
+            try? FileManager.default.removeItem(at: refreshURL)
+            recordAppSessionFileRefreshConsumed(resultBucket: "invalid_shape_redacted")
+            return true
+        }
+
+        do {
+            try FileManager.default.removeItem(at: refreshURL)
+            recordAppSessionFileRefreshConsumed(resultBucket: "deleted_redacted")
+            _ = startMatrixSessionWhoamiSmokeWithExpectedUserHash(diagnostics.expectedUserHash)
+        } catch {
+            recordAppSessionFileRefreshConsumed(resultBucket: "delete_failed_redacted")
+        }
+        return true
+    }
+
+    private struct AppSessionProofRefreshFileDiagnostics {
+        let validShape: Bool
+        let shapeBucket: String
+        let expectedUserHash: String
+    }
+
+    private static func appSessionProofRefreshFileDiagnostics(_ refreshURL: URL) -> AppSessionProofRefreshFileDiagnostics {
+        guard let data = try? Data(contentsOf: refreshURL),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return .init(validShape: false,
+                         shapeBucket: "invalid_json_redacted",
+                         expectedUserHash: "")
+        }
+
+        let refreshKind = json["refresh_kind"] as? String
+        let markerVersion = json["marker_version"] as? String
+        let command = json["command"] as? String
+        let generation = json["generation"] as? String
+        let expectedUserHash = sanitizedSessionUserHash(json["expected_user_hash"] as? String ?? "")
+        let generationAllowed = generation?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            && (generation?.count ?? 0) <= 64
+        let validShape = refreshKind == "app_session_proof_refresh"
+            && markerVersion == "2.49Z2"
+            && command == "refresh_app_session_proof"
+            && generationAllowed
+            && !expectedUserHash.isEmpty
+        return .init(validShape: validShape,
+                     shapeBucket: validShape ? "valid_app_session_proof_refresh_redacted" : "invalid_shape_redacted",
+                     expectedUserHash: validShape ? expectedUserHash : "")
+    }
+
+    private static func appSessionProofRefreshFileURL() -> URL? {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
+            .appending(component: appSessionProofRefreshFileName)
+    }
+
+    private static func recordAppSessionFileRefreshSeen(shapeBucket: String) {
+        lock.lock()
+        appSessionFileRefreshSeen = true
+        appSessionFileRefreshShapeBucket = shapeBucket
+        let summary = latestMatrixSessionWhoamiSummary
+        lock.unlock()
+
+        updateLatestMatrixSessionWhoamiSummary(summary)
+    }
+
+    private static func recordAppSessionFileRefreshConsumed(resultBucket: String) {
+        lock.lock()
+        appSessionFileRefreshConsumed = true
+        appSessionFileRefreshConsumeResultBucket = resultBucket
+        let summary = latestMatrixSessionWhoamiSummary
+        lock.unlock()
+
+        updateLatestMatrixSessionWhoamiSummary(summary)
     }
 
     private static func startSenderAtomicPendingMetadataHandoffTriggerFilePolling() {

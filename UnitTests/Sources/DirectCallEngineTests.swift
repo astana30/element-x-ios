@@ -6797,6 +6797,7 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("iphone_app_matrix_session_user_hash=\\(matrixSessionUserHash)"))
         #expect(adapterSource.contains("iphone_app_matrix_session_device_present=\\(matrixSessionDevicePresent)"))
         #expect(adapterSource.contains("iphone_app_pending_metadata_auth_ready=\\(pendingMetadataAuthReady)"))
+        Self.assertAppSessionProofRefreshFileSourceGuards(in: adapterSource)
         #expect(adapterSource.contains("APNs_sent=false"))
         #expect(adapterSource.contains("SHA256.hash(data: Data(value.utf8))"))
         #expect(adapterSource.contains("token.map { String(format: \"%02x\", $0) }.joined()"))
@@ -6826,6 +6827,54 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(!appSessionSource.contains("DirectCallPushKitTokenRegistrationClient"))
         #expect(!appSessionSource.contains("registerForRemoteNotifications"))
         #expect(!adapterSource.contains("print("))
+    }
+
+    private static func assertAppSessionProofRefreshFileSourceGuards(in adapterSource: String) {
+        let refreshConsumerSource: String
+        if let refreshConsumerStart = adapterSource.range(of: "private static func startAppSessionProofRefreshFilePolling")?.lowerBound,
+           let atomicConsumerStart = adapterSource.range(of: "private static func startSenderAtomicPendingMetadataHandoffTriggerFilePolling")?.lowerBound {
+            refreshConsumerSource = String(adapterSource[refreshConsumerStart..<atomicConsumerStart])
+        } else {
+            refreshConsumerSource = ""
+        }
+
+        #expect(adapterSource.contains("private static let appSessionProofRefreshFileName = \"salemx-debug-app-session-proof-refresh.json\""))
+        #expect(adapterSource.contains("private static var appSessionProofRefreshFilePollTask: Task<Void, Never>?"))
+        #expect(adapterSource.contains("startAppSessionProofRefreshFilePolling()"))
+        #expect(adapterSource.contains("consumeAppSessionProofRefreshFileIfNeeded()"))
+        #expect(adapterSource.contains("appSessionProofRefreshFileDiagnostics"))
+        #expect(adapterSource.contains("app_session_file_refresh_seen=\\(appSessionFileRefreshSeen)"))
+        #expect(adapterSource.contains("app_session_file_refresh_shape_bucket=\\(appSessionFileRefreshShapeBucket)"))
+        #expect(adapterSource.contains("app_session_file_refresh_consumed=\\(appSessionFileRefreshConsumed)"))
+        #expect(adapterSource.contains("app_session_file_refresh_consume_result_bucket=\\(appSessionFileRefreshConsumeResultBucket)"))
+        #expect(adapterSource.contains("app_session_proof_generation=\\(proofGeneration)"))
+        #expect(adapterSource.contains("app_matrix_session_whoami_result=\\(whoamiResult)"))
+        #expect(adapterSource.contains("app_matrix_session_user_hash=\\(matrixSessionUserHash)"))
+        #expect(adapterSource.contains("app_matrix_session_device_present=\\(matrixSessionDevicePresent)"))
+        #expect(adapterSource.contains("app_pending_metadata_auth_ready=\\(pendingMetadataAuthReady)"))
+        #expect(adapterSource.contains("app_session_proof_raw_identifiers_logged=\\(appSessionProofRawIdentifiersLogged)"))
+        #expect(!refreshConsumerSource.isEmpty)
+        #expect(refreshConsumerSource.contains("FileManager.default.fileExists(atPath: refreshURL.path)"))
+        #expect(refreshConsumerSource.contains("try FileManager.default.removeItem(at: refreshURL)"))
+        #expect(refreshConsumerSource.contains("recordAppSessionFileRefreshSeen(shapeBucket: diagnostics.shapeBucket)"))
+        #expect(refreshConsumerSource.contains("recordAppSessionFileRefreshConsumed(resultBucket: \"deleted_redacted\")"))
+        #expect(refreshConsumerSource.contains("recordAppSessionFileRefreshConsumed(resultBucket: \"invalid_shape_redacted\")"))
+        #expect(refreshConsumerSource.contains("recordAppSessionFileRefreshConsumed(resultBucket: \"delete_failed_redacted\")"))
+        #expect(refreshConsumerSource.contains("refreshKind == \"app_session_proof_refresh\""))
+        #expect(refreshConsumerSource.contains("markerVersion == \"2.49Z2\""))
+        #expect(refreshConsumerSource.contains("command == \"refresh_app_session_proof\""))
+        #expect(refreshConsumerSource.contains("\"valid_app_session_proof_refresh_redacted\""))
+        #expect(refreshConsumerSource.contains("startMatrixSessionWhoamiSmokeWithExpectedUserHash(diagnostics.expectedUserHash)"))
+        #expect(!refreshConsumerSource.contains("sendRealInvite"))
+        #expect(!refreshConsumerSource.contains("postRealInvite"))
+        #expect(!refreshConsumerSource.contains("background_apns_push_requested=true"))
+        #expect(!refreshConsumerSource.contains("createPendingMetadata"))
+        #expect(!refreshConsumerSource.contains("DirectCallLiveKitConnectExecutor"))
+        #expect(!refreshConsumerSource.contains("executor.connectAudio"))
+        #expect(!refreshConsumerSource.contains("setMicrophoneEnabled(true)"))
+        #expect(!refreshConsumerSource.contains("matrixEventEmitRequested = true"))
+        #expect(!refreshConsumerSource.contains("cameraPermissionRequested = true"))
+        #expect(!refreshConsumerSource.contains("microphonePermissionRequested = true"))
     }
 
     @Test
