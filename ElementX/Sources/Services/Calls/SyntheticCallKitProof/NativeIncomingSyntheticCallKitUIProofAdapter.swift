@@ -8,6 +8,10 @@
 import CryptoKit
 import Foundation
 
+#if DEBUG
+import OSLog
+#endif
+
 #if os(iOS)
 import UIKit
 #endif
@@ -12905,6 +12909,8 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     }
 
     #if DEBUG
+    private static let debugProofOSLog = Logger(subsystem: "kz.salemx.debug.proof", category: "direct-call")
+
     static func recordDebugProofExportHealthOnLaunch() {
         recordDebugProofExportHealth(triggerBucket: "foreground_or_launch_redacted")
     }
@@ -12915,6 +12921,9 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
 
     private static func recordDebugProofExportHealth(triggerBucket: String) {
         let proof = [
+            "salemx_debug_oslog_health_probe=true",
+            "debug_oslog_health_written=true",
+            "debug_oslog_health_trigger_bucket=\(triggerBucket)",
             "debug_documents_proof_export_health_written=true",
             "debug_documents_proof_export_health_path_bucket=documents_directory",
             "debug_documents_proof_export_health_trigger_bucket=\(triggerBucket)",
@@ -12929,6 +12938,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             "matrix_call_media_event_emitted=false",
             "full_flow_started=false"
         ].joined(separator: "\n")
+        emitDebugProofOSLog(proof)
         writeDebugDocumentsProof(proof, fileName: debugProofExportHealthFileName)
     }
 
@@ -12959,8 +12969,10 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     }
 
     @discardableResult private static func writeSenderRuntimeTerminalProof(_ proof: String) -> String {
-        writeDebugDocumentsProof(senderRuntimeTerminalProofLines(from: proof),
-                                 fileName: senderRuntimeTerminalProofFileName)
+        let terminalProof = senderRuntimeTerminalProofLines(from: proof)
+        emitDebugProofOSLog(terminalProof)
+        return writeDebugDocumentsProof(terminalProof,
+                                        fileName: senderRuntimeTerminalProofFileName)
     }
 
     private static func senderRuntimeTerminalProofLines(from proof: String) -> String {
@@ -12973,6 +12985,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             senderRuntimeBoolField("sender_no_media_runtime_trigger_terminal_observed", in: fields) == "true"
 
         return [
+            "salemx_sender_runtime_terminal_proof=true",
             "proof_generation=\(senderRuntimeField("proof_generation", in: fields))",
             "sender_documents_terminal_proof_written=true",
             "sender_atomic_trigger_file_seen_by_app=\(triggerSeen)",
@@ -13002,6 +13015,10 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             "matrix_call_media_event_emitted=false",
             "full_flow_started=false"
         ].joined(separator: "\n")
+    }
+
+    private static func emitDebugProofOSLog(_ proof: String) {
+        debugProofOSLog.info("\(proof, privacy: .public)")
     }
 
     private static func senderRuntimeProofFields(from proof: String) -> [String: String] {
