@@ -9268,10 +9268,15 @@ private struct SalemXMatrixSessionWhoamiProofSummary {
     var matrixSessionUserHashMatchesExpected = false
     var matrixSessionDevicePresent = false
     var pendingMetadataAuthReady = false
+    var appSessionFileRefreshPathBucket = "not_checked"
+    var appSessionFileRefreshExistsBeforeConsume = false
+    var appSessionFileRefreshConsumerLifecycleSeen = false
     var appSessionFileRefreshSeen = false
     var appSessionFileRefreshShapeBucket = "not_requested"
     var appSessionFileRefreshConsumed = false
     var appSessionFileRefreshConsumeResultBucket = "not_requested"
+    var appSessionProofWriteAttempted = false
+    var appSessionProofWriteResultBucket = "not_requested"
     var appSessionProofRawIdentifiersLogged = false
     var blockedReason = "none"
 
@@ -9280,10 +9285,15 @@ private struct SalemXMatrixSessionWhoamiProofSummary {
             "proof_generation=\(proofGeneration)",
             "proof_last_updated_by=\(proofLastUpdatedBy)",
             "proof_source=matrix_session_whoami_smoke",
+            "app_session_file_refresh_path_bucket=\(appSessionFileRefreshPathBucket)",
+            "app_session_file_refresh_exists_before_consume=\(appSessionFileRefreshExistsBeforeConsume)",
+            "app_session_file_refresh_consumer_lifecycle_seen=\(appSessionFileRefreshConsumerLifecycleSeen)",
             "app_session_file_refresh_seen=\(appSessionFileRefreshSeen)",
             "app_session_file_refresh_shape_bucket=\(appSessionFileRefreshShapeBucket)",
             "app_session_file_refresh_consumed=\(appSessionFileRefreshConsumed)",
             "app_session_file_refresh_consume_result_bucket=\(appSessionFileRefreshConsumeResultBucket)",
+            "app_session_proof_write_attempted=\(appSessionProofWriteAttempted)",
+            "app_session_proof_write_result_bucket=\(appSessionProofWriteResultBucket)",
             "app_session_proof_generation=\(proofGeneration)",
             "app_matrix_session_whoami_result=\(whoamiResult)",
             "app_matrix_session_user_hash=\(matrixSessionUserHash)",
@@ -9420,10 +9430,14 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var uploadSmoke: SalemXPushKitTokenUploadSmoke?
     private static var latestUploadSummary = initialUploadRedactedSummary()
     private static var latestMatrixSessionWhoamiSummary = SalemXMatrixSessionWhoamiProofSummary()
+    private static var appSessionFileRefreshPathBucket = "not_checked"
+    private static var appSessionFileRefreshExistsBeforeConsume = false
+    private static var appSessionFileRefreshConsumerLifecycleSeen = false
     private static var appSessionFileRefreshSeen = false
     private static var appSessionFileRefreshShapeBucket = "not_requested"
     private static var appSessionFileRefreshConsumed = false
     private static var appSessionFileRefreshConsumeResultBucket = "not_requested"
+    private static var appSessionFileRefreshMissingProofRecorded = false
     private static var latestVoIPPushReceiptSummary = SalemXVoIPPushReceiptProofSummary()
     private static var latestStartupPushKitRegistrySummary = SalemXStartupPushKitRegistryProofSummary()
     private static var latestLocalCallKitOnlySummary = SalemXLocalCallKitOnlyProofSummary()
@@ -12235,15 +12249,27 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         var summary = summary
         summary.proofGeneration = nextProofGenerationLocked()
         summary.proofLastUpdatedBy = "matrix_session_whoami_smoke"
+        summary.appSessionFileRefreshPathBucket = appSessionFileRefreshPathBucket
+        summary.appSessionFileRefreshExistsBeforeConsume = appSessionFileRefreshExistsBeforeConsume
+        summary.appSessionFileRefreshConsumerLifecycleSeen = appSessionFileRefreshConsumerLifecycleSeen
         summary.appSessionFileRefreshSeen = appSessionFileRefreshSeen
         summary.appSessionFileRefreshShapeBucket = appSessionFileRefreshShapeBucket
         summary.appSessionFileRefreshConsumed = appSessionFileRefreshConsumed
         summary.appSessionFileRefreshConsumeResultBucket = appSessionFileRefreshConsumeResultBucket
+        summary.appSessionProofWriteAttempted = true
+        summary.appSessionProofWriteResultBucket = "success_redacted"
         summary.appSessionProofRawIdentifiersLogged = false
         latestMatrixSessionWhoamiSummary = summary
         let proof = summary.redactedLines.joined(separator: "\n")
         lock.unlock()
-        writeMatrixSessionWhoamiProof(proof)
+        let writeResultBucket = writeMatrixSessionWhoamiProof(proof)
+        guard writeResultBucket != "success_redacted" else {
+            return
+        }
+
+        lock.lock()
+        latestMatrixSessionWhoamiSummary.appSessionProofWriteResultBucket = writeResultBucket
+        lock.unlock()
     }
 
     private static func updateLatestVoIPPushReceiptSummary(_ summary: SalemXVoIPPushReceiptProofSummary) {
@@ -12309,6 +12335,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
 
     private static func startAppSessionProofRefreshFilePolling() {
         appSessionProofRefreshFilePollTask?.cancel()
+        recordAppSessionFileRefreshConsumerLifecycleSeen(pathBucket: appSessionProofRefreshFilePathBucket())
         appSessionProofRefreshFilePollTask = Task {
             for _ in 0..<240 {
                 if Task.isCancelled {
@@ -12323,8 +12350,16 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     }
 
     private static func consumeAppSessionProofRefreshFileIfNeeded() -> Bool {
-        guard let refreshURL = appSessionProofRefreshFileURL(),
-              FileManager.default.fileExists(atPath: refreshURL.path) else {
+        guard let refreshURL = appSessionProofRefreshFileURL() else {
+            recordAppSessionFileRefreshPathChecked(pathBucket: "documents_unavailable_redacted",
+                                                   existsBeforeConsume: false)
+            return true
+        }
+
+        let existsBeforeConsume = FileManager.default.fileExists(atPath: refreshURL.path)
+        recordAppSessionFileRefreshPathChecked(pathBucket: "documents_redacted",
+                                               existsBeforeConsume: existsBeforeConsume)
+        guard existsBeforeConsume else {
             return false
         }
 
@@ -12369,7 +12404,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         let generationAllowed = generation?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
             && (generation?.count ?? 0) <= 64
         let validShape = refreshKind == "app_session_proof_refresh"
-            && markerVersion == "2.49Z2"
+            && markerVersion == "2.49Z3"
             && command == "refresh_app_session_proof"
             && generationAllowed
             && !expectedUserHash.isEmpty
@@ -12383,8 +12418,40 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             .appending(component: appSessionProofRefreshFileName)
     }
 
+    private static func appSessionProofRefreshFilePathBucket() -> String {
+        appSessionProofRefreshFileURL() == nil ? "documents_unavailable_redacted" : "documents_redacted"
+    }
+
+    private static func recordAppSessionFileRefreshConsumerLifecycleSeen(pathBucket: String) {
+        lock.lock()
+        appSessionFileRefreshConsumerLifecycleSeen = true
+        appSessionFileRefreshPathBucket = pathBucket
+        let summary = latestMatrixSessionWhoamiSummary
+        lock.unlock()
+
+        updateLatestMatrixSessionWhoamiSummary(summary)
+    }
+
+    private static func recordAppSessionFileRefreshPathChecked(pathBucket: String, existsBeforeConsume: Bool) {
+        lock.lock()
+        let shouldWriteProof = existsBeforeConsume || !appSessionFileRefreshMissingProofRecorded || appSessionFileRefreshPathBucket != pathBucket
+        appSessionFileRefreshConsumerLifecycleSeen = true
+        appSessionFileRefreshPathBucket = pathBucket
+        appSessionFileRefreshExistsBeforeConsume = existsBeforeConsume
+        if !existsBeforeConsume {
+            appSessionFileRefreshMissingProofRecorded = true
+        }
+        let summary = latestMatrixSessionWhoamiSummary
+        lock.unlock()
+
+        if shouldWriteProof {
+            updateLatestMatrixSessionWhoamiSummary(summary)
+        }
+    }
+
     private static func recordAppSessionFileRefreshSeen(shapeBucket: String) {
         lock.lock()
+        appSessionFileRefreshExistsBeforeConsume = true
         appSessionFileRefreshSeen = true
         appSessionFileRefreshShapeBucket = shapeBucket
         let summary = latestMatrixSessionWhoamiSummary
@@ -12779,41 +12846,46 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         return "generation_\(proofGenerationCounter)"
     }
 
-    private static func writeUploadSmokeProof(_ proof: String) {
+    @discardableResult private static func writeUploadSmokeProof(_ proof: String) -> String {
         writeProof(proof, fileName: uploadSmokeProofFileName)
     }
 
-    private static func writeMatrixSessionWhoamiProof(_ proof: String) {
+    @discardableResult private static func writeMatrixSessionWhoamiProof(_ proof: String) -> String {
         writeProof(proof, fileName: matrixSessionWhoamiProofFileName)
     }
 
-    private static func writeVoIPPushReceiptProof(_ proof: String) {
+    @discardableResult private static func writeVoIPPushReceiptProof(_ proof: String) -> String {
         writeProof(proof, fileName: voIPPushReceiptProofFileName)
     }
 
-    private static func writeStartupPushKitRegistryProof(_ proof: String) {
+    @discardableResult private static func writeStartupPushKitRegistryProof(_ proof: String) -> String {
         writeProof(proof, fileName: startupPushKitRegistryProofFileName)
     }
 
-    private static func writeLocalCallKitOnlyProof(_ proof: String) {
+    @discardableResult private static func writeLocalCallKitOnlyProof(_ proof: String) -> String {
         writeProof(proof, fileName: localCallKitOnlyProofFileName)
     }
 
-    private static func writeLocalBackgroundCallKitOnlyProof(_ proof: String) {
+    @discardableResult private static func writeLocalBackgroundCallKitOnlyProof(_ proof: String) -> String {
         writeProof(proof, fileName: localBackgroundCallKitOnlyProofFileName)
     }
 
-    private static func writeSenderRuntimeLiveKitJoinProof(_ proof: String) {
+    @discardableResult private static func writeSenderRuntimeLiveKitJoinProof(_ proof: String) -> String {
         writeProof(proof, fileName: senderRuntimeLiveKitJoinProofFileName)
     }
 
-    private static func writeProof(_ proof: String, fileName: String) {
+    @discardableResult private static func writeProof(_ proof: String, fileName: String) -> String {
         guard let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-            return
+            return "documents_unavailable_redacted"
         }
 
         let proofURL = documentsURL.appending(component: fileName)
-        try? proof.write(to: proofURL, atomically: true, encoding: .utf8)
+        do {
+            try proof.write(to: proofURL, atomically: true, encoding: .utf8)
+            return "success_redacted"
+        } catch {
+            return "write_failed_redacted"
+        }
     }
 
     private static func redactedSummary(for result: DirectCallPushKitRegistrarResult? = nil) -> String {
