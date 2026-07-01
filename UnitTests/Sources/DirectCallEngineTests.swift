@@ -3951,10 +3951,16 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(!terminalWriterSource.contains("room_id="))
         #expect(!terminalWriterSource.contains("call_id="))
         #expect(appDelegateSource.contains("#if DEBUG\n        SalemXPushKitRegistrationSmokeDebugBridge.recordDebugProofExportHealthOnLaunch()\n        #endif"))
+        #expect(appDelegateSource.contains("func applicationDidBecomeActive(_ application: UIApplication)"))
+        #expect(appDelegateSource.contains("#if DEBUG\n        SalemXPushKitRegistrationSmokeDebugBridge.recordDebugProofExportHealthOnForegroundActivation()\n        #endif"))
         #expect(adapterSource.contains("static func recordDebugProofExportHealthOnLaunch()"))
+        #expect(adapterSource.contains("static func recordDebugProofExportHealthOnForegroundActivation()"))
+        #expect(adapterSource.contains("private static func recordDebugProofExportHealth(triggerBucket: String)"))
         #expect(adapterSource.contains("writeDebugDocumentsProof(proof, fileName: debugProofExportHealthFileName)"))
         #expect(adapterSource.contains("debug_documents_proof_export_health_written=true"))
         #expect(adapterSource.contains("debug_documents_proof_export_health_path_bucket=documents_directory"))
+        #expect(adapterSource.contains("debug_documents_proof_export_health_trigger_bucket=\\(triggerBucket)"))
+        #expect(adapterSource.contains("recordDebugProofExportHealth(triggerBucket: \"foreground_or_launch_redacted\")"))
     }
 
     @Test

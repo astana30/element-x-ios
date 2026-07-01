@@ -12906,9 +12906,18 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
 
     #if DEBUG
     static func recordDebugProofExportHealthOnLaunch() {
+        recordDebugProofExportHealth(triggerBucket: "foreground_or_launch_redacted")
+    }
+
+    static func recordDebugProofExportHealthOnForegroundActivation() {
+        recordDebugProofExportHealth(triggerBucket: "foreground_or_launch_redacted")
+    }
+
+    private static func recordDebugProofExportHealth(triggerBucket: String) {
         let proof = [
             "debug_documents_proof_export_health_written=true",
             "debug_documents_proof_export_health_path_bucket=documents_directory",
+            "debug_documents_proof_export_health_trigger_bucket=\(triggerBucket)",
             "raw_values_printed=false",
             "APNs_sent=false",
             "pending_metadata_created=false",

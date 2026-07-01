@@ -32,6 +32,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         #endif
         return true
     }
+
+    func applicationDidBecomeActive(_ application: UIApplication) {
+        #if DEBUG
+        SalemXPushKitRegistrationSmokeDebugBridge.recordDebugProofExportHealthOnForegroundActivation()
+        #endif
+    }
     
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         callbacks.send(.registeredNotifications(deviceToken: deviceToken))
