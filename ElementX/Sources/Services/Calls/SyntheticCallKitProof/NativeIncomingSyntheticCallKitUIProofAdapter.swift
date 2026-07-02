@@ -8558,9 +8558,11 @@ private extension SalemXVoIPPushReceiptProofSummary {
         mediaConnectPreflightExpiresAtPresent = expiresAtPresent && mediaCredentialsRequestMetadataAvailable
         mediaConnectGuardEnabled = true
         recordPhysical6RuntimeEnablementURLHook(physical6RuntimeEnablementHook)
+        let receiverControlledRuntimeSessionValidated = (pendingMetadataFetchAuthorized && pendingMetadataFetchResult == "success_redacted") ||
+            (mediaCredentialsRequestMetadataAvailable && mediaCredentialsResult == "success_redacted")
         attemptControlledAudioConnectRuntimeIfAllowed(activationConfiguration: physical6RuntimeEnablementHook.activationConfiguration,
                                                       enablementConfiguration: physical6RuntimeEnablementHook.enablementConfiguration,
-                                                      receiverAppSessionValidated: pendingMetadataFetchAuthorized && pendingMetadataFetchResult == "success_redacted",
+                                                      receiverAppSessionValidated: receiverControlledRuntimeSessionValidated,
                                                       oneShotNotConsumed: physical6RuntimeEnablementHook.oneShotNotConsumed)
         if controlledConnectFirstAttemptRequested {
             recordPhysical6RuntimeEnablementURLHook(physical6RuntimeEnablementHook.consumedCopy())
