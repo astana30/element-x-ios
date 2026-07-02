@@ -9309,7 +9309,17 @@ private final class SalemXPushKitTokenUploadSmoke: NSObject, DirectCallPushKitRe
         self.updateSummary = updateSummary
     }
 
-    func start() {
+    func start(cachedElementCallToken: Data? = nil) {
+        if let cachedElementCallToken, !cachedElementCallToken.isEmpty {
+            updateSummary(.init(physicalDeviceAvailable: true,
+                                manualInvoked: true,
+                                tokenReceived: true,
+                                uploadURLResolved: true,
+                                registrationResult: "cached_element_call_voip_token"))
+            uploadToken(cachedElementCallToken)
+            return
+        }
+
         guard let registry = registryFactory.makeRegistry(delegate: self) else {
             updateSummary(.init(physicalDeviceAvailable: true,
                                 manualInvoked: true,
@@ -9716,6 +9726,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var senderJoinFailureDiagnostics = SalemXSenderJoinFailureDiagnostics.defaultDisabled
     private static var senderTransportFailureDiagnostics = SalemXSenderTransportFailureDiagnostics.defaultDisabled
     private static var senderTransportErrorSurface = SalemXSenderTransportErrorSurface.defaultDisabled
+    private static var latestElementCallServiceVoIPPushTokenForDebugUpload: Data?
     #if canImport(CallKit) && os(iOS)
     private static var callKitProofHarness: NativeIncomingSyntheticCallKitUIProofHarness?
     private static var callKitProofGeneration = 0
@@ -11353,7 +11364,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         }
 
         Task { @MainActor in
-            guard let accessToken = await SalemXForegroundSSESmokeDebug.matrixAccessTokenForPushKitUploadSmoke() else {
+            guard let accessToken = await SalemXForegroundSSESmokeDebug.matrixAccessTokenForPushKitUploadSmokeWaitingIfNeeded() else {
                 updateLatestUploadSummary(.init(physicalDeviceAvailable: true,
                                                 manualInvoked: true,
                                                 blockedReason: "pushkit_token_upload_blocked_by_auth"))
@@ -11365,11 +11376,26 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                                                       registryFactory: DirectCallRealPushKitRegistryFactory(),
                                                       updateSummary: updateLatestUploadSummary)
             uploadSmoke = smoke
-            smoke.start()
+            smoke.start(cachedElementCallToken: cachedElementCallServiceVoIPPushTokenForDebugUpload())
         }
         #endif
 
         return redactedUploadStateSummary()
+    }
+
+    static func recordElementCallServiceVoIPPushTokenForDebugUpload(_ token: Data) {
+        guard !token.isEmpty else {
+            return
+        }
+        lock.lock()
+        latestElementCallServiceVoIPPushTokenForDebugUpload = token
+        lock.unlock()
+    }
+
+    private static func cachedElementCallServiceVoIPPushTokenForDebugUpload() -> Data? {
+        lock.lock()
+        defer { lock.unlock() }
+        return latestElementCallServiceVoIPPushTokenForDebugUpload
     }
 
     @objc static func redactedUploadStateSummary() -> String {
@@ -14655,6 +14681,21 @@ final class SalemXForegroundSSESmokeDebug: NSObject {
             return nil
         }
         return accessToken
+    }
+
+    fileprivate static func matrixAccessTokenForPushKitUploadSmokeWaitingIfNeeded() async -> String? {
+        if let accessToken = await matrixAccessTokenForPushKitUploadSmoke() {
+            return accessToken
+        }
+
+        for _ in 0..<16 {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            if let accessToken = await matrixAccessTokenForPushKitUploadSmoke() {
+                return accessToken
+            }
+        }
+
+        return nil
     }
 
     fileprivate static func matrixAccessTokenProviderForPushKitUploadSmoke() -> DirectCallMatrixAccessTokenProviding? {

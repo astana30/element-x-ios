@@ -540,6 +540,9 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         }
         
         voIPPushToken = pushCredentials.token
+        #if DEBUG
+        SalemXPushKitRegistrationSmokeDebugBridge.recordElementCallServiceVoIPPushTokenForDebugUpload(pushCredentials.token)
+        #endif
         
         Task { await registerVoIPPusherIfNeeded() }
     }
