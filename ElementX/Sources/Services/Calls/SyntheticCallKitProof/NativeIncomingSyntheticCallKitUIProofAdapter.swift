@@ -14103,13 +14103,35 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
     @MainActor
     private static func startReceiverControlledRuntimeConnectLeaseIfAllowed(session: DirectCallSession, connectionInfo: DirectCallMediaConnectionInfo) {
         lock.lock()
-        let summary = latestVoIPPushReceiptSummary
+        var summary = latestVoIPPushReceiptSummary
+        let physical6RuntimeEnablementURLHookSnapshot = physical6RuntimeEnablementURLHook
         let alreadyRunning = receiverConnectedSessionLeaseTask != nil || receiverConnectedSessionLease != nil
+        var shouldPublishUpdatedSummary = false
+        if !alreadyRunning,
+           !summary.controlledConnectFirstAttemptAllowed,
+           summary.mediaCredentialsResult == "success_redacted",
+           summary.mediaCredentialsRequestMetadataAvailable,
+           physical6RuntimeEnablementURLHookSnapshot.oneShotNotConsumed {
+            summary.recordControlledMediaConnectPreflight(credentialsAvailable: true,
+                                                          tokenPresent: summary.mediaCredentialsTokenReceived,
+                                                          urlPresent: summary.mediaCredentialsURLReceived,
+                                                          expiresAtPresent: summary.mediaCredentialsExpiresAtPresent,
+                                                          physical6RuntimeEnablementHook: physical6RuntimeEnablementURLHookSnapshot)
+            if summary.physical6RuntimeEnablementURLHookConsumed {
+                physical6RuntimeEnablementURLHook = physical6RuntimeEnablementURLHookSnapshot.consumedCopy()
+            }
+            latestVoIPPushReceiptSummary = summary
+            shouldPublishUpdatedSummary = true
+        }
         let allowed = summary.controlledConnectFirstAttemptAllowed &&
             summary.mediaConnectPreflightCredentialsAvailable &&
             summary.physical6RuntimeEnablementURLHookConsumed &&
             !alreadyRunning
         lock.unlock()
+
+        if shouldPublishUpdatedSummary {
+            updateLatestVoIPPushReceiptSummary(summary)
+        }
 
         guard allowed else {
             return
