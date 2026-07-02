@@ -606,6 +606,12 @@ def create_app(config: ServiceConfig | None = None,
 
     @app.get(FOREGROUND_SIGNALING_PENDING_METADATA_SENDER_CLAIM_PATH)
     async def foreground_signaling_pending_metadata_sender_claim(authorization: Optional[str] = Header(default=None)) -> JSONResponse:
+        auth_header_seen = authorization is not None
+        auth_scheme_bucket = _authorization_scheme_bucket(authorization)
+        token_validation_bucket = "not_reached"
+        authenticated_user_bucket = "not_reached"
+        bound_sender_bucket = "not_checked"
+        bound_device_bucket = "not_checked"
         try:
             if service is None:
                 raise CallServiceError(status_code=503,
@@ -613,14 +619,42 @@ def create_app(config: ServiceConfig | None = None,
                                        error="Direct-call service is not ready.")
             bearer_token = bearer_token_from_authorization(authorization)
             authenticated_user = await service.auth_validator.validate_bearer_token(bearer_token)
+            token_validation_bucket = "success_redacted"
+            authenticated_user_bucket = "present_redacted"
             metadata = pending_store.claim_latest_sender_view(authenticated_user, int(time.time() * 1000))
+            bound_sender_bucket = "matched_redacted"
+            bound_device_bucket = "matched_redacted"
             body = metadata.token_request_payload()
-            body.update(_sender_metadata_claim_diagnostics("success_redacted"))
+            body.update(_sender_metadata_claim_diagnostics(
+                "success_redacted",
+                auth_header_seen=auth_header_seen,
+                auth_scheme_bucket=auth_scheme_bucket,
+                token_validation_bucket=token_validation_bucket,
+                authenticated_user_bucket=authenticated_user_bucket,
+                bound_sender_bucket=bound_sender_bucket,
+                bound_device_bucket=bound_device_bucket,
+            ))
             return JSONResponse(status_code=200, content=body)
         except CallServiceError as error:
             status_code, body = error_response(error)
             if status_code in (401, 403, 404):
-                body["diagnostics"] = _sender_metadata_claim_diagnostics(_sender_metadata_claim_result_bucket(status_code))
+                if status_code == 401 and auth_header_seen and auth_scheme_bucket == "bearer_redacted":
+                    token_validation_bucket = "unauthorized_redacted"
+                    authenticated_user_bucket = "missing"
+                elif status_code == 403 and authenticated_user_bucket == "present_redacted":
+                    bound_sender_bucket = "matched_redacted"
+                    bound_device_bucket = "mismatch_redacted"
+                elif status_code == 404 and authenticated_user_bucket == "present_redacted":
+                    bound_sender_bucket = "mismatch_redacted"
+                body["diagnostics"] = _sender_metadata_claim_diagnostics(
+                    _sender_metadata_claim_result_bucket(status_code),
+                    auth_header_seen=auth_header_seen,
+                    auth_scheme_bucket=auth_scheme_bucket,
+                    token_validation_bucket=token_validation_bucket,
+                    authenticated_user_bucket=authenticated_user_bucket,
+                    bound_sender_bucket=bound_sender_bucket,
+                    bound_device_bucket=bound_device_bucket,
+                )
             return JSONResponse(status_code=status_code, content=body)
 
     if environ.get(FOREGROUND_SIGNALING_DEV_INVITE_ENABLED_ENV) == "1":
@@ -811,13 +845,34 @@ def _sender_metadata_claim_result_bucket(status_code: int) -> str:
     return "blocked_redacted"
 
 
-def _sender_metadata_claim_diagnostics(result_bucket: str) -> dict[str, object]:
+def _authorization_scheme_bucket(authorization: str | None) -> str:
+    if authorization is None:
+        return "missing"
+    if authorization.startswith("Bearer ") and len(authorization) > len("Bearer "):
+        return "bearer_redacted"
+    return "unknown_redacted"
+
+
+def _sender_metadata_claim_diagnostics(result_bucket: str,
+                                       *,
+                                       auth_header_seen: bool = False,
+                                       auth_scheme_bucket: str = "missing",
+                                       token_validation_bucket: str = "not_reached",
+                                       authenticated_user_bucket: str = "not_reached",
+                                       bound_sender_bucket: str = "not_checked",
+                                       bound_device_bucket: str = "not_checked") -> dict[str, object]:
     success = result_bucket == "success_redacted"
     return {
         "server_side_sender_metadata_lookup_requested": True,
         "server_side_sender_metadata_lookup_result_bucket": result_bucket,
         "server_side_sender_metadata_claim_requested": True,
         "server_side_sender_metadata_claim_result_bucket": result_bucket,
+        "server_claim_auth_header_seen": auth_header_seen,
+        "server_claim_auth_scheme_bucket": auth_scheme_bucket,
+        "server_claim_token_validation_bucket": token_validation_bucket,
+        "server_claim_authenticated_user_bucket": authenticated_user_bucket,
+        "server_claim_bound_sender_bucket": bound_sender_bucket,
+        "server_claim_bound_device_bucket": bound_device_bucket,
         "sender_authorized_metadata_source_available": success,
         "sender_uses_receiver_pending_metadata_reference": False,
         "server_side_sender_metadata_claim_raw_identifiers_logged": False,

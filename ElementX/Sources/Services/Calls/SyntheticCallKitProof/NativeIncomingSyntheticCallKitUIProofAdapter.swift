@@ -1088,6 +1088,16 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
     var carpediemAccessTokenAvailableBucket = "missing"
     var senderMetadataClaimAuthHeaderAttached = false
     var senderMetadataClaimAuthSourceBucket = "missing"
+    var appClaimRequestStarted = false
+    var appClaimRequestURLBucket = "missing"
+    var appClaimAuthSchemeBucket = "missing"
+    var appClaimAuthTokenBucket = "missing"
+    var appClaimAuthSourceBucket = "missing"
+    var appClaimHTTPStatusBucket = "not_requested"
+    var serverClaimAuthHeaderSeen = false
+    var serverClaimAuthSchemeBucket = "missing"
+    var serverClaimTokenValidationBucket = "not_reached"
+    var serverClaimAuthenticatedUserBucket = "not_reached"
     var serverClaimAuthValidationBucket = "not_reached"
     var serverClaimBoundSenderBucket = "not_checked"
     var serverClaimBoundDeviceBucket = "not_checked"
@@ -1404,6 +1414,17 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             "carpediem_access_token_available_bucket=\(carpediemAccessTokenAvailableBucket)",
             "sender_metadata_claim_auth_header_attached=\(senderMetadataClaimAuthHeaderAttached)",
             "sender_metadata_claim_auth_source_bucket=\(senderMetadataClaimAuthSourceBucket)",
+            "app_claim_request_started=\(appClaimRequestStarted)",
+            "app_claim_request_url_bucket=\(appClaimRequestURLBucket)",
+            "app_claim_auth_header_present=\(senderMetadataClaimAuthHeaderAttached)",
+            "app_claim_auth_scheme_bucket=\(appClaimAuthSchemeBucket)",
+            "app_claim_auth_token_bucket=\(appClaimAuthTokenBucket)",
+            "app_claim_auth_source_bucket=\(appClaimAuthSourceBucket)",
+            "app_claim_http_status_bucket=\(appClaimHTTPStatusBucket)",
+            "server_claim_auth_header_seen=\(serverClaimAuthHeaderSeen)",
+            "server_claim_auth_scheme_bucket=\(serverClaimAuthSchemeBucket)",
+            "server_claim_token_validation_bucket=\(serverClaimTokenValidationBucket)",
+            "server_claim_authenticated_user_bucket=\(serverClaimAuthenticatedUserBucket)",
             "server_claim_auth_validation_bucket=\(serverClaimAuthValidationBucket)",
             "server_claim_bound_sender_bucket=\(serverClaimBoundSenderBucket)",
             "server_claim_bound_device_bucket=\(serverClaimBoundDeviceBucket)",
@@ -1634,6 +1655,16 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         carpediemAccessTokenAvailableBucket = "missing"
         senderMetadataClaimAuthHeaderAttached = false
         senderMetadataClaimAuthSourceBucket = "missing"
+        appClaimRequestStarted = false
+        appClaimRequestURLBucket = "missing"
+        appClaimAuthSchemeBucket = "missing"
+        appClaimAuthTokenBucket = "missing"
+        appClaimAuthSourceBucket = "missing"
+        appClaimHTTPStatusBucket = "not_requested"
+        serverClaimAuthHeaderSeen = false
+        serverClaimAuthSchemeBucket = "missing"
+        serverClaimTokenValidationBucket = "not_reached"
+        serverClaimAuthenticatedUserBucket = "not_reached"
         serverClaimAuthValidationBucket = "not_reached"
         serverClaimBoundSenderBucket = "not_checked"
         serverClaimBoundDeviceBucket = "not_checked"
@@ -1668,12 +1699,29 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
                                                                authSourceBucket: String,
                                                                authValidationBucket: String,
                                                                boundSenderBucket: String,
-                                                               boundDeviceBucket: String) {
+                                                               boundDeviceBucket: String,
+                                                               requestStarted: Bool = false,
+                                                               requestURLBucket: String = "missing",
+                                                               appHTTPStatusBucket: String = "not_requested",
+                                                               serverAuthHeaderSeen: Bool = false,
+                                                               serverAuthSchemeBucket: String = "missing",
+                                                               serverTokenValidationBucket: String = "not_reached",
+                                                               serverAuthenticatedUserBucket: String = "not_reached") {
         carpediemMatrixSessionPresent = activeSessionAvailable
         carpediemMatrixSessionUserBucket = userIDAvailable ? "present_redacted" : "missing"
         carpediemAccessTokenAvailableBucket = accessTokenAvailable ? "present_redacted" : "missing"
         senderMetadataClaimAuthHeaderAttached = authHeaderAttached
         senderMetadataClaimAuthSourceBucket = authSourceBucket
+        appClaimRequestStarted = requestStarted
+        appClaimRequestURLBucket = requestURLBucket
+        appClaimAuthSchemeBucket = authHeaderAttached ? "bearer_redacted" : "missing"
+        appClaimAuthTokenBucket = accessTokenAvailable ? "present_redacted" : "missing"
+        appClaimAuthSourceBucket = authSourceBucket
+        appClaimHTTPStatusBucket = appHTTPStatusBucket
+        serverClaimAuthHeaderSeen = serverAuthHeaderSeen
+        serverClaimAuthSchemeBucket = serverAuthSchemeBucket
+        serverClaimTokenValidationBucket = serverTokenValidationBucket
+        serverClaimAuthenticatedUserBucket = serverAuthenticatedUserBucket
         serverClaimAuthValidationBucket = authValidationBucket
         serverClaimBoundSenderBucket = boundSenderBucket
         serverClaimBoundDeviceBucket = boundDeviceBucket
@@ -10432,7 +10480,8 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                                                        authSourceBucket: "missing",
                                                        authValidationBucket: "not_reached",
                                                        boundSenderBucket: "not_checked",
-                                                       boundDeviceBucket: "not_checked")
+                                                       boundDeviceBucket: "not_checked",
+                                                       requestURLBucket: "expected_route_redacted")
         guard let accessToken = await SalemXForegroundSSESmokeDebug.matrixAccessTokenForPushKitUploadSmoke() else {
             recordServerSideSenderMetadataClaimBlocked(resultBucket: "unauthorized_redacted",
                                                        reason: "server_side_sender_metadata_claim_unauthorized_redacted",
@@ -10445,38 +10494,30 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                                                        authSourceBucket: "current_session_redacted",
                                                        authValidationBucket: "not_reached",
                                                        boundSenderBucket: "not_checked",
-                                                       boundDeviceBucket: "not_checked")
+                                                       boundDeviceBucket: "not_checked",
+                                                       requestStarted: true,
+                                                       requestURLBucket: "expected_route_redacted")
 
-        var request = URLRequest(url: fetchURL)
-        request.httpMethod = "GET"
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("B" + "earer " + accessToken, forHTTPHeaderField: "Authorization")
+        let request = senderMetadataClaimRequest(url: fetchURL, accessToken: accessToken)
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse,
                   (200..<300).contains(httpResponse.statusCode) else {
                 let diagnostics = pendingMetadataFetchFailureDiagnostics(response: response, data: data)
-                recordServerSideSenderMetadataClaimAuthContext(sessionAvailability,
-                                                               accessTokenAvailable: true,
-                                                               authHeaderAttached: true,
-                                                               authSourceBucket: "current_session_redacted",
-                                                               authValidationBucket: serverSideSenderMetadataClaimAuthValidationBucket(diagnostics),
-                                                               boundSenderBucket: serverSideSenderMetadataClaimBoundSenderBucket(diagnostics),
-                                                               boundDeviceBucket: serverSideSenderMetadataClaimBoundDeviceBucket(diagnostics))
+                recordServerSideSenderMetadataClaimAuthFailureContext(sessionAvailability, diagnostics: diagnostics)
+                if let retrySession = try await retryServerSideSenderMetadataClaim(fetchURL: fetchURL,
+                                                                                   sessionAvailability: sessionAvailability,
+                                                                                   diagnostics: diagnostics) {
+                    return retrySession
+                }
                 recordServerSideSenderMetadataClaimBlocked(resultBucket: serverSideSenderMetadataClaimResultBucket(diagnostics),
                                                            reason: serverSideSenderMetadataClaimBlockedReason(diagnostics),
                                                            authorized: true,
                                                            diagnostics: diagnostics)
                 return nil
             }
-            recordServerSideSenderMetadataClaimAuthContext(sessionAvailability,
-                                                           accessTokenAvailable: true,
-                                                           authHeaderAttached: true,
-                                                           authSourceBucket: "current_session_redacted",
-                                                           authValidationBucket: "success_redacted",
-                                                           boundSenderBucket: "matched_redacted",
-                                                           boundDeviceBucket: "matched_redacted")
+            recordServerSideSenderMetadataClaimAuthSuccessContext(sessionAvailability)
             guard let session = directCallSessionFromSenderPendingMetadata(data: data) else {
                 recordServerSideSenderMetadataClaimBlocked(resultBucket: "blocked_redacted",
                                                            reason: senderPendingMetadataPayloadBlockedReason(data: data),
@@ -10488,6 +10529,20 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             recordServerSideSenderMetadataClaimSuccess(session)
             return session
         } catch {
+            recordServerSideSenderMetadataClaimAuthContext(sessionAvailability,
+                                                           accessTokenAvailable: true,
+                                                           authHeaderAttached: true,
+                                                           authSourceBucket: "current_session_redacted",
+                                                           authValidationBucket: "not_reached",
+                                                           boundSenderBucket: "not_checked",
+                                                           boundDeviceBucket: "not_checked",
+                                                           requestStarted: true,
+                                                           requestURLBucket: "expected_route_redacted",
+                                                           appHTTPStatusBucket: "failed_redacted",
+                                                           serverAuthHeaderSeen: false,
+                                                           serverAuthSchemeBucket: "missing",
+                                                           serverTokenValidationBucket: "not_reached",
+                                                           serverAuthenticatedUserBucket: "not_reached")
             recordServerSideSenderMetadataClaimBlocked(resultBucket: "blocked_redacted",
                                                        reason: "server_side_sender_metadata_claim_network_failure_redacted",
                                                        authorized: true,
@@ -10495,6 +10550,78 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                                                        failureReasonBucket: "network_failure")
             return nil
         }
+    }
+
+    private static func senderMetadataClaimRequest(url: URL, accessToken: String) -> URLRequest {
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("B" + "earer " + accessToken, forHTTPHeaderField: "Authorization")
+        return request
+    }
+
+    @MainActor
+    private static func retryServerSideSenderMetadataClaim(fetchURL: URL,
+                                                           sessionAvailability: MatrixSessionWhoamiSmokeAvailability,
+                                                           diagnostics: PendingMetadataFetchFailureDiagnostics) async throws -> DirectCallSession? {
+        guard diagnostics.failureReason == "auth_rejected",
+              let retryAccessToken = await SalemXForegroundSSESmokeDebug.matrixAccessTokenForPushKitUploadSmoke(),
+              !retryAccessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+
+        let retryRequest = senderMetadataClaimRequest(url: fetchURL, accessToken: retryAccessToken)
+        let (retryData, retryResponse) = try await URLSession.shared.data(for: retryRequest)
+        if let retryHTTPResponse = retryResponse as? HTTPURLResponse,
+           (200..<300).contains(retryHTTPResponse.statusCode),
+           let retrySession = directCallSessionFromSenderPendingMetadata(data: retryData) {
+            recordServerSideSenderMetadataClaimAuthSuccessContext(sessionAvailability)
+            recordServerSideSenderMetadataClaimSuccess(retrySession)
+            return retrySession
+        }
+
+        let retryDiagnostics = pendingMetadataFetchFailureDiagnostics(response: retryResponse, data: retryData)
+        recordServerSideSenderMetadataClaimAuthFailureContext(sessionAvailability, diagnostics: retryDiagnostics)
+        recordServerSideSenderMetadataClaimBlocked(resultBucket: serverSideSenderMetadataClaimResultBucket(retryDiagnostics),
+                                                   reason: serverSideSenderMetadataClaimBlockedReason(retryDiagnostics),
+                                                   authorized: true,
+                                                   diagnostics: retryDiagnostics)
+        return nil
+    }
+
+    private static func recordServerSideSenderMetadataClaimAuthSuccessContext(_ availability: MatrixSessionWhoamiSmokeAvailability) {
+        recordServerSideSenderMetadataClaimAuthContext(availability,
+                                                       accessTokenAvailable: true,
+                                                       authHeaderAttached: true,
+                                                       authSourceBucket: "current_session_redacted",
+                                                       authValidationBucket: "success_redacted",
+                                                       boundSenderBucket: "matched_redacted",
+                                                       boundDeviceBucket: "matched_redacted",
+                                                       requestStarted: true,
+                                                       requestURLBucket: "expected_route_redacted",
+                                                       appHTTPStatusBucket: "2xx_redacted",
+                                                       serverAuthHeaderSeen: true,
+                                                       serverAuthSchemeBucket: "bearer_redacted",
+                                                       serverTokenValidationBucket: "success_redacted",
+                                                       serverAuthenticatedUserBucket: "present_redacted")
+    }
+
+    private static func recordServerSideSenderMetadataClaimAuthFailureContext(_ availability: MatrixSessionWhoamiSmokeAvailability,
+                                                                              diagnostics: PendingMetadataFetchFailureDiagnostics) {
+        recordServerSideSenderMetadataClaimAuthContext(availability,
+                                                       accessTokenAvailable: true,
+                                                       authHeaderAttached: true,
+                                                       authSourceBucket: "current_session_redacted",
+                                                       authValidationBucket: serverSideSenderMetadataClaimAuthValidationBucket(diagnostics),
+                                                       boundSenderBucket: serverSideSenderMetadataClaimBoundSenderBucket(diagnostics),
+                                                       boundDeviceBucket: serverSideSenderMetadataClaimBoundDeviceBucket(diagnostics),
+                                                       requestStarted: true,
+                                                       requestURLBucket: "expected_route_redacted",
+                                                       appHTTPStatusBucket: appClaimHTTPStatusBucket(diagnostics.httpStatusBucket),
+                                                       serverAuthHeaderSeen: diagnostics.serverAuthHeaderSeen,
+                                                       serverAuthSchemeBucket: diagnostics.serverAuthSchemeBucket,
+                                                       serverTokenValidationBucket: diagnostics.serverTokenValidationBucket,
+                                                       serverAuthenticatedUserBucket: diagnostics.serverAuthenticatedUserBucket)
     }
 
     private static func recordServerSideSenderMetadataClaimSuccess(_ session: DirectCallSession) {
@@ -10530,7 +10657,14 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                                                                        authSourceBucket: String,
                                                                        authValidationBucket: String,
                                                                        boundSenderBucket: String,
-                                                                       boundDeviceBucket: String) {
+                                                                       boundDeviceBucket: String,
+                                                                       requestStarted: Bool = false,
+                                                                       requestURLBucket: String = "missing",
+                                                                       appHTTPStatusBucket: String = "not_requested",
+                                                                       serverAuthHeaderSeen: Bool = false,
+                                                                       serverAuthSchemeBucket: String = "missing",
+                                                                       serverTokenValidationBucket: String = "not_reached",
+                                                                       serverAuthenticatedUserBucket: String = "not_reached") {
         lock.lock()
         var summary = latestSenderRuntimeLiveKitJoinSummary
         summary.markServerSideSenderMetadataClaimAuthContext(activeSessionAvailable: availability.activeSessionAvailable,
@@ -10540,7 +10674,14 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                                                              authSourceBucket: authSourceBucket,
                                                              authValidationBucket: authValidationBucket,
                                                              boundSenderBucket: boundSenderBucket,
-                                                             boundDeviceBucket: boundDeviceBucket)
+                                                             boundDeviceBucket: boundDeviceBucket,
+                                                             requestStarted: requestStarted,
+                                                             requestURLBucket: requestURLBucket,
+                                                             appHTTPStatusBucket: appHTTPStatusBucket,
+                                                             serverAuthHeaderSeen: serverAuthHeaderSeen,
+                                                             serverAuthSchemeBucket: serverAuthSchemeBucket,
+                                                             serverTokenValidationBucket: serverTokenValidationBucket,
+                                                             serverAuthenticatedUserBucket: serverAuthenticatedUserBucket)
         lock.unlock()
 
         updateLatestSenderRuntimeLiveKitJoinSummary(summary)
@@ -10681,6 +10822,9 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     }
 
     private static func serverSideSenderMetadataClaimAuthValidationBucket(_ diagnostics: PendingMetadataFetchFailureDiagnostics) -> String {
+        if diagnostics.serverTokenValidationBucket != "not_reached" {
+            return diagnostics.serverTokenValidationBucket
+        }
         switch diagnostics.failureReason {
         case "auth_rejected":
             return "unauthorized_redacted"
@@ -10692,6 +10836,9 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     }
 
     private static func serverSideSenderMetadataClaimBoundSenderBucket(_ diagnostics: PendingMetadataFetchFailureDiagnostics) -> String {
+        if diagnostics.serverBoundSenderBucket != "not_checked" {
+            return diagnostics.serverBoundSenderBucket
+        }
         switch diagnostics.failureReason {
         case "forbidden":
             return "matched_redacted"
@@ -10703,6 +10850,9 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     }
 
     private static func serverSideSenderMetadataClaimBoundDeviceBucket(_ diagnostics: PendingMetadataFetchFailureDiagnostics) -> String {
+        if diagnostics.serverBoundDeviceBucket != "not_checked" {
+            return diagnostics.serverBoundDeviceBucket
+        }
         switch diagnostics.failureReason {
         case "forbidden":
             return "mismatch_redacted"
@@ -10725,6 +10875,25 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             return "server_side_sender_metadata_claim_server_error_redacted"
         default:
             return "server_side_sender_metadata_claim_blocked_redacted"
+        }
+    }
+
+    private static func appClaimHTTPStatusBucket(_ httpStatusBucket: String) -> String {
+        switch httpStatusBucket {
+        case "2xx":
+            return "2xx_redacted"
+        case "401":
+            return "401_redacted"
+        case "403":
+            return "403_redacted"
+        case "404":
+            return "404_redacted"
+        case "5xx":
+            return "5xx_redacted"
+        case "network_failure":
+            return "failed_redacted"
+        default:
+            return "failed_redacted"
         }
     }
 
@@ -13438,6 +13607,17 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             "carpediem_access_token_available_bucket=\(senderRuntimeField("carpediem_access_token_available_bucket", in: fields))",
             "sender_metadata_claim_auth_header_attached=\(senderRuntimeBoolField("sender_metadata_claim_auth_header_attached", in: fields))",
             "sender_metadata_claim_auth_source_bucket=\(senderRuntimeField("sender_metadata_claim_auth_source_bucket", in: fields))",
+            "app_claim_request_started=\(senderRuntimeBoolField("app_claim_request_started", in: fields))",
+            "app_claim_request_url_bucket=\(senderRuntimeField("app_claim_request_url_bucket", in: fields))",
+            "app_claim_auth_header_present=\(senderRuntimeBoolField("app_claim_auth_header_present", in: fields))",
+            "app_claim_auth_scheme_bucket=\(senderRuntimeField("app_claim_auth_scheme_bucket", in: fields))",
+            "app_claim_auth_token_bucket=\(senderRuntimeField("app_claim_auth_token_bucket", in: fields))",
+            "app_claim_auth_source_bucket=\(senderRuntimeField("app_claim_auth_source_bucket", in: fields))",
+            "app_claim_http_status_bucket=\(senderRuntimeField("app_claim_http_status_bucket", in: fields))",
+            "server_claim_auth_header_seen=\(senderRuntimeBoolField("server_claim_auth_header_seen", in: fields))",
+            "server_claim_auth_scheme_bucket=\(senderRuntimeField("server_claim_auth_scheme_bucket", in: fields))",
+            "server_claim_token_validation_bucket=\(senderRuntimeField("server_claim_token_validation_bucket", in: fields))",
+            "server_claim_authenticated_user_bucket=\(senderRuntimeField("server_claim_authenticated_user_bucket", in: fields))",
             "server_claim_auth_validation_bucket=\(senderRuntimeField("server_claim_auth_validation_bucket", in: fields))",
             "server_claim_bound_sender_bucket=\(senderRuntimeField("server_claim_bound_sender_bucket", in: fields))",
             "server_claim_bound_device_bucket=\(senderRuntimeField("server_claim_bound_device_bucket", in: fields))",
@@ -13690,6 +13870,12 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
         let httpStatusBucket: String
         let errcode: String
         let failureReason: String
+        let serverAuthHeaderSeen: Bool
+        let serverAuthSchemeBucket: String
+        let serverTokenValidationBucket: String
+        let serverAuthenticatedUserBucket: String
+        let serverBoundSenderBucket: String
+        let serverBoundDeviceBucket: String
     }
 
     private static func pendingMetadataFetchFailureDiagnostics(response: URLResponse?,
@@ -13697,13 +13883,49 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
         guard let httpResponse = response as? HTTPURLResponse else {
             return .init(httpStatusBucket: "unknown",
                          errcode: "none",
-                         failureReason: "missing_http_response")
+                         failureReason: "missing_http_response",
+                         serverAuthHeaderSeen: false,
+                         serverAuthSchemeBucket: "missing",
+                         serverTokenValidationBucket: "not_reached",
+                         serverAuthenticatedUserBucket: "not_reached",
+                         serverBoundSenderBucket: "not_checked",
+                         serverBoundDeviceBucket: "not_checked")
         }
 
         let errcode = pendingMetadataFetchErrcode(data: data)
         return .init(httpStatusBucket: pendingMetadataFetchHTTPStatusBucket(httpResponse.statusCode),
                      errcode: errcode,
-                     failureReason: pendingMetadataFetchFailureReason(statusCode: httpResponse.statusCode, errcode: errcode))
+                     failureReason: pendingMetadataFetchFailureReason(statusCode: httpResponse.statusCode, errcode: errcode),
+                     serverAuthHeaderSeen: pendingMetadataFetchDiagnosticBool(data: data, key: "server_claim_auth_header_seen"),
+                     serverAuthSchemeBucket: pendingMetadataFetchDiagnosticField(data: data, key: "server_claim_auth_scheme_bucket", defaultValue: "missing"),
+                     serverTokenValidationBucket: pendingMetadataFetchDiagnosticField(data: data, key: "server_claim_token_validation_bucket", defaultValue: "not_reached"),
+                     serverAuthenticatedUserBucket: pendingMetadataFetchDiagnosticField(data: data, key: "server_claim_authenticated_user_bucket", defaultValue: "not_reached"),
+                     serverBoundSenderBucket: pendingMetadataFetchDiagnosticField(data: data, key: "server_claim_bound_sender_bucket", defaultValue: "not_checked"),
+                     serverBoundDeviceBucket: pendingMetadataFetchDiagnosticField(data: data, key: "server_claim_bound_device_bucket", defaultValue: "not_checked"))
+    }
+
+    private static func pendingMetadataFetchDiagnosticField(data: Data, key: String, defaultValue: String) -> String {
+        guard let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return defaultValue
+        }
+        let diagnostics = payload["diagnostics"] as? [String: Any]
+        let value = diagnostics?[key] as? String ?? payload[key] as? String ?? defaultValue
+        return redactedBucketValue(value, defaultValue: defaultValue)
+    }
+
+    private static func pendingMetadataFetchDiagnosticBool(data: Data, key: String) -> Bool {
+        guard let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return false
+        }
+        let diagnostics = payload["diagnostics"] as? [String: Any]
+        return diagnostics?[key] as? Bool ?? payload[key] as? Bool ?? false
+    }
+
+    private static func redactedBucketValue(_ value: String, defaultValue: String) -> String {
+        guard value.range(of: #"^[A-Za-z0-9_.>-]+$"#, options: .regularExpression) != nil else {
+            return defaultValue
+        }
+        return value
     }
 
     private static func pendingMetadataFetchErrcode(data: Data) -> String {
