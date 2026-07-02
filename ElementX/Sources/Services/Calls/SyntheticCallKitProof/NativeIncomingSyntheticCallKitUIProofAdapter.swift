@@ -12892,6 +12892,10 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         latestVoIPPushReceiptSummary = summary
         let proof = summary.redactedLines.joined(separator: "\n")
         lock.unlock()
+        #if DEBUG
+        emitDebugProofConsole(proof)
+        emitDebugProofOSLog(proof)
+        #endif
         writeVoIPPushReceiptProof(proof)
         scheduleRemoteParticipantObservationTimeoutIfNeeded()
         scheduleReceiverRemoteAudioPublicationSnapshotReplayIfNeeded()

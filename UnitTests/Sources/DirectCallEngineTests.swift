@@ -2205,6 +2205,22 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func debugVoIPPushReceiptProofEmitsConsoleMarkersForPhysicalPolling() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+        let voIPSummaryUpdate = try #require(adapterSource.range(of: "private static func updateLatestVoIPPushReceiptSummary")?.lowerBound)
+        let voIPConsoleEmitter = try #require(adapterSource.range(of: "emitDebugProofConsole(proof)", range: voIPSummaryUpdate..<adapterSource.endIndex)?.lowerBound)
+        let voIPOSLogEmitter = try #require(adapterSource.range(of: "emitDebugProofOSLog(proof)", range: voIPSummaryUpdate..<adapterSource.endIndex)?.lowerBound)
+        let voIPProofWriterCall = try #require(adapterSource.range(of: "writeVoIPPushReceiptProof(proof)", range: voIPSummaryUpdate..<adapterSource.endIndex)?.lowerBound)
+
+        #expect(voIPSummaryUpdate < voIPConsoleEmitter)
+        #expect(voIPSummaryUpdate < voIPOSLogEmitter)
+        #expect(voIPConsoleEmitter < voIPProofWriterCall)
+        #expect(adapterSource.contains("physical_voip_push_received=\\(physicalVoIPPushReceived)"))
+        #expect(adapterSource.contains("pushkit_callback_invoked=\\(callbackInvoked)"))
+        #expect(adapterSource.contains("FileHandle.standardError.write(data)"))
+    }
+
+    @Test
     func callKitSurfaceRepairProofFieldsClassifyNoSurfaceWithoutConnect() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
 
