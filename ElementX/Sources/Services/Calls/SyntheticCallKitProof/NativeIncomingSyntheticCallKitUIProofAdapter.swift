@@ -13188,6 +13188,10 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         lock.unlock()
 
         updateLatestSenderRuntimeLiveKitJoinSummary(summary)
+
+        Task { @MainActor in
+            await runServerSideSenderMetadataClaimNoMediaTrigger()
+        }
     }
 
     private static func recordDebugProofExportHealth(triggerBucket: String) {
