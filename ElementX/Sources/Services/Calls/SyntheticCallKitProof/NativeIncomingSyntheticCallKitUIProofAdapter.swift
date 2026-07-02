@@ -1091,6 +1091,8 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
     var serverClaimAuthValidationBucket = "not_reached"
     var serverClaimBoundSenderBucket = "not_checked"
     var serverClaimBoundDeviceBucket = "not_checked"
+    var sessionAccessorSourceBucket = "unknown"
+    var sessionAccessorBindingResultBucket = "missing_redacted"
     var senderPendingMetadataMemoryReferencePresentBeforeTrigger = false
     var senderPendingMetadataMemoryReferencePresentAtTrigger = false
     var pendingMetadataReferenceRoleBucket = "not_requested"
@@ -1405,6 +1407,8 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             "server_claim_auth_validation_bucket=\(serverClaimAuthValidationBucket)",
             "server_claim_bound_sender_bucket=\(serverClaimBoundSenderBucket)",
             "server_claim_bound_device_bucket=\(serverClaimBoundDeviceBucket)",
+            "session_accessor_source_bucket=\(sessionAccessorSourceBucket)",
+            "session_accessor_binding_result_bucket=\(sessionAccessorBindingResultBucket)",
             "sender_pending_metadata_memory_reference_present_before_trigger=\(senderPendingMetadataMemoryReferencePresentBeforeTrigger)",
             "sender_pending_metadata_memory_reference_present_at_trigger=\(senderPendingMetadataMemoryReferencePresentAtTrigger)",
             "pending_metadata_reference_role_bucket=\(pendingMetadataReferenceRoleBucket)",
@@ -1633,6 +1637,8 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         serverClaimAuthValidationBucket = "not_reached"
         serverClaimBoundSenderBucket = "not_checked"
         serverClaimBoundDeviceBucket = "not_checked"
+        sessionAccessorSourceBucket = "unknown"
+        sessionAccessorBindingResultBucket = "missing_redacted"
         noMediaRuntimeTriggerAttempted = true
         noMediaRuntimeTriggerConsumed = true
         noMediaRuntimeTriggerRepeated = false
@@ -1671,6 +1677,8 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         serverClaimAuthValidationBucket = authValidationBucket
         serverClaimBoundSenderBucket = boundSenderBucket
         serverClaimBoundDeviceBucket = boundDeviceBucket
+        sessionAccessorSourceBucket = activeSessionAvailable ? "main_app_session_redacted" : "debug_container_missing"
+        sessionAccessorBindingResultBucket = activeSessionAvailable && accessTokenAvailable ? "success_redacted" : "missing_redacted"
     }
 
     mutating func markServerSideSenderMetadataClaimSuccess(_ session: DirectCallSession) {
@@ -10270,11 +10278,30 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     @MainActor
     private static func runServerSideSenderMetadataClaimNoMediaTrigger() async {
         recordServerSideSenderMetadataClaimStarted()
+        _ = await waitForServerSideSenderMetadataClaimSessionAvailability()
         guard let session = await fetchServerSideSenderMetadataClaim() else {
             return
         }
 
         _ = await requestSenderRuntimeCredentials(for: session)
+    }
+
+    @MainActor
+    private static func waitForServerSideSenderMetadataClaimSessionAvailability() async -> MatrixSessionWhoamiSmokeAvailability {
+        var availability = SalemXForegroundSSESmokeDebug.matrixSessionWhoamiSmokeAvailability()
+        guard !availability.activeSessionAvailable || !availability.accessTokenProviderAvailable else {
+            return availability
+        }
+
+        for _ in 0..<16 {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            availability = SalemXForegroundSSESmokeDebug.matrixSessionWhoamiSmokeAvailability()
+            if availability.activeSessionAvailable, availability.accessTokenProviderAvailable {
+                return availability
+            }
+        }
+
+        return availability
     }
 
     @MainActor
@@ -13414,6 +13441,8 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             "server_claim_auth_validation_bucket=\(senderRuntimeField("server_claim_auth_validation_bucket", in: fields))",
             "server_claim_bound_sender_bucket=\(senderRuntimeField("server_claim_bound_sender_bucket", in: fields))",
             "server_claim_bound_device_bucket=\(senderRuntimeField("server_claim_bound_device_bucket", in: fields))",
+            "session_accessor_source_bucket=\(senderRuntimeField("session_accessor_source_bucket", in: fields))",
+            "session_accessor_binding_result_bucket=\(senderRuntimeField("session_accessor_binding_result_bucket", in: fields))",
             "sender_no_media_runtime_trigger_attempted=\(senderRuntimeBoolField("sender_no_media_runtime_trigger_attempted", in: fields))",
             "sender_no_media_runtime_trigger_terminal_observed=\(senderRuntimeBoolField("sender_no_media_runtime_trigger_terminal_observed", in: fields))",
             "sender_authorized_metadata_source_available=\(senderRuntimeBoolField("sender_authorized_metadata_source_available", in: fields))",
