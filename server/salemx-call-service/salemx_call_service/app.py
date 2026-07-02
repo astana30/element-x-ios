@@ -72,6 +72,7 @@ FOREGROUND_SIGNALING_STREAM_PATH = "/_matrix/client/unstable/kz.salemx.direct_ca
 FOREGROUND_SIGNALING_INVITE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/invite"
 FOREGROUND_SIGNALING_PENDING_METADATA_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{metadata_reference}"
 FOREGROUND_SIGNALING_PENDING_METADATA_SENDER_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{metadata_reference}/sender"
+FOREGROUND_SIGNALING_PENDING_METADATA_SENDER_CLAIM_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/sender/claim"
 FOREGROUND_SIGNALING_LIVEKIT_TOKEN_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/livekit/token"
 FOREGROUND_SIGNALING_DEV_INVITE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/invite"
 FOREGROUND_SIGNALING_DEV_INJECT_ACTIVE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/inject-active"
@@ -407,6 +408,7 @@ def create_app(config: ServiceConfig | None = None,
                     expires_at_ms=invite_request.invite.expires_at_ms,
                     metadata=pending_metadata,
                     sender_only=True,
+                    sender_device=authenticated_user.device_id,
                 )
                 pending_metadata_diagnostics = pending_metadata.safe_diagnostics()
             result = signaling_service.publish_invite(invite_request)
@@ -468,6 +470,25 @@ def create_app(config: ServiceConfig | None = None,
             return JSONResponse(status_code=200, content=metadata.token_request_payload())
         except CallServiceError as error:
             status_code, body = error_response(error)
+            return JSONResponse(status_code=status_code, content=body)
+
+    @app.get(FOREGROUND_SIGNALING_PENDING_METADATA_SENDER_CLAIM_PATH)
+    async def foreground_signaling_pending_metadata_sender_claim(authorization: Optional[str] = Header(default=None)) -> JSONResponse:
+        try:
+            if service is None:
+                raise CallServiceError(status_code=503,
+                                       errcode="M_DIRECT_CALL_SERVICE_UNAVAILABLE",
+                                       error="Direct-call service is not ready.")
+            bearer_token = bearer_token_from_authorization(authorization)
+            authenticated_user = await service.auth_validator.validate_bearer_token(bearer_token)
+            metadata = pending_store.claim_latest_sender_view(authenticated_user, int(time.time() * 1000))
+            body = metadata.token_request_payload()
+            body.update(_sender_metadata_claim_diagnostics("success_redacted"))
+            return JSONResponse(status_code=200, content=body)
+        except CallServiceError as error:
+            status_code, body = error_response(error)
+            if status_code in (401, 403, 404):
+                body["diagnostics"] = _sender_metadata_claim_diagnostics(_sender_metadata_claim_result_bucket(status_code))
             return JSONResponse(status_code=status_code, content=body)
 
     if environ.get(FOREGROUND_SIGNALING_DEV_INVITE_ENABLED_ENV) == "1":
@@ -646,6 +667,29 @@ def _sender_authorized_metadata_diagnostics(reference: str | None) -> dict[str, 
     if reference_present:
         diagnostics["sender_authorized_metadata_reference"] = reference
     return diagnostics
+
+
+def _sender_metadata_claim_result_bucket(status_code: int) -> str:
+    if status_code == 401:
+        return "unauthorized_redacted"
+    if status_code == 403:
+        return "forbidden_redacted"
+    if status_code == 404:
+        return "missing_redacted"
+    return "blocked_redacted"
+
+
+def _sender_metadata_claim_diagnostics(result_bucket: str) -> dict[str, object]:
+    success = result_bucket == "success_redacted"
+    return {
+        "server_side_sender_metadata_lookup_requested": True,
+        "server_side_sender_metadata_lookup_result_bucket": result_bucket,
+        "server_side_sender_metadata_claim_requested": True,
+        "server_side_sender_metadata_claim_result_bucket": result_bucket,
+        "sender_authorized_metadata_source_available": success,
+        "sender_uses_receiver_pending_metadata_reference": False,
+        "server_side_sender_metadata_claim_raw_identifiers_logged": False,
+    }
 
 
 def _invite_diagnostics_no_send_requested(header_value: str | None) -> bool:

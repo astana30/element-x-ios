@@ -1078,6 +1078,10 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
     var senderProcessLaunchTriggerSeenByApp = false
     var senderProcessLaunchTriggerConsumedByApp = false
     var senderProcessLaunchTriggerTransportBucket = "not_requested"
+    var serverSideSenderMetadataLookupRequested = false
+    var serverSideSenderMetadataLookupResultBucket = "not_requested"
+    var serverSideSenderMetadataClaimRequested = false
+    var serverSideSenderMetadataClaimResultBucket = "not_requested"
     var senderPendingMetadataMemoryReferencePresentBeforeTrigger = false
     var senderPendingMetadataMemoryReferencePresentAtTrigger = false
     var pendingMetadataReferenceRoleBucket = "not_requested"
@@ -1380,6 +1384,10 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             "sender_process_launch_trigger_seen_by_app=\(senderProcessLaunchTriggerSeenByApp)",
             "sender_process_launch_trigger_consumed_by_app=\(senderProcessLaunchTriggerConsumedByApp)",
             "sender_process_launch_trigger_transport_bucket=\(senderProcessLaunchTriggerTransportBucket)",
+            "server_side_sender_metadata_lookup_requested=\(serverSideSenderMetadataLookupRequested)",
+            "server_side_sender_metadata_lookup_result_bucket=\(serverSideSenderMetadataLookupResultBucket)",
+            "server_side_sender_metadata_claim_requested=\(serverSideSenderMetadataClaimRequested)",
+            "server_side_sender_metadata_claim_result_bucket=\(serverSideSenderMetadataClaimResultBucket)",
             "sender_pending_metadata_memory_reference_present_before_trigger=\(senderPendingMetadataMemoryReferencePresentBeforeTrigger)",
             "sender_pending_metadata_memory_reference_present_at_trigger=\(senderPendingMetadataMemoryReferencePresentAtTrigger)",
             "pending_metadata_reference_role_bucket=\(pendingMetadataReferenceRoleBucket)",
@@ -1591,6 +1599,68 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         matrixEventEmitRequested = false
         realCallFlowStarted = false
         blockedReason = "synthetic_trigger_no_metadata_redacted"
+    }
+
+    mutating func markServerSideSenderMetadataClaimStarted() {
+        proofGeneration = UUID().uuidString
+        proofLastUpdatedBy = "server_side_sender_metadata_claim"
+        serverSideSenderMetadataLookupRequested = true
+        serverSideSenderMetadataLookupResultBucket = "pending_redacted"
+        serverSideSenderMetadataClaimRequested = true
+        serverSideSenderMetadataClaimResultBucket = "pending_redacted"
+        noMediaRuntimeTriggerAttempted = true
+        noMediaRuntimeTriggerConsumed = true
+        noMediaRuntimeTriggerRepeated = false
+        noMediaRuntimeTriggerResultBucket = "server_side_sender_metadata_claim_pending_redacted"
+        senderAuthorizedMetadataSourceAvailable = false
+        senderUsesReceiverPendingMetadataReference = false
+        senderCredentialsRequestBlockedReason = "server_side_sender_metadata_claim_pending_redacted"
+        recommendedNextFixBucket = "none"
+        senderCallStateAfterAnswerBucket = "server_side_sender_metadata_claim_pending_redacted"
+        senderMediaCredentialsGateState = "server_side_sender_metadata_claim_pending_redacted"
+        senderMediaConnectGateState = "sender_no_media_guarded_no_connect_redacted"
+        senderRuntimeBoundaryBlockedReason = "server_side_sender_metadata_claim_pending_redacted"
+        executorInvoked = false
+        runtimeResult = "not_requested"
+        runtimeErrorBucket = "none"
+        microphonePermissionRequested = false
+        cameraPermissionRequested = false
+        matrixEventEmitRequested = false
+        realCallFlowStarted = false
+        blockedReason = "server_side_sender_metadata_claim_pending_redacted"
+    }
+
+    mutating func markServerSideSenderMetadataClaimSuccess(_ session: DirectCallSession) {
+        serverSideSenderMetadataLookupRequested = true
+        serverSideSenderMetadataLookupResultBucket = "success_redacted"
+        serverSideSenderMetadataClaimRequested = true
+        serverSideSenderMetadataClaimResultBucket = "success_redacted"
+        markPendingMetadataSuccess(session)
+        pendingMetadataReferenceRoleBucket = "server_side_sender_metadata_claim_redacted"
+        pendingMetadataReferenceScopeBucket = "sender_authorized_metadata_scope_redacted"
+        senderAuthorizedMetadataSourceRoleBucket = "server_side_sender_metadata_claim_redacted"
+        senderAuthorizedMetadataSourceScopeBucket = "sender_authorized_metadata_scope_redacted"
+        senderUsesReceiverPendingMetadataReference = false
+        senderRuntimeBoundaryBlockedReason = "sender_no_media_runtime_credentials_pending_redacted"
+        blockedReason = "sender_no_media_runtime_credentials_pending_redacted"
+    }
+
+    mutating func markServerSideSenderMetadataClaimBlocked(_ resultBucket: String,
+                                                           reason: String,
+                                                           authorized: Bool,
+                                                           httpStatusBucket: String = "not_requested",
+                                                           failureReasonBucket: String? = nil) {
+        serverSideSenderMetadataLookupRequested = true
+        serverSideSenderMetadataLookupResultBucket = resultBucket
+        serverSideSenderMetadataClaimRequested = true
+        serverSideSenderMetadataClaimResultBucket = resultBucket
+        markPendingMetadataBlocked(reason,
+                                   authorized: authorized,
+                                   httpStatusBucket: httpStatusBucket,
+                                   failureReasonBucket: failureReasonBucket)
+        noMediaRuntimeTriggerResultBucket = "server_side_sender_metadata_claim_blocked_redacted"
+        senderRuntimeBoundaryBlockedReason = reason
+        blockedReason = reason
     }
 
     mutating func markReferenceHandoff(_ handoff: SalemXSenderPendingMetadataReferenceHandoff, armGenerationChanged: Bool = false) {
@@ -9469,6 +9539,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let senderProcessLaunchTriggerArgumentPrefix = "--salemx-debug-sender-process-launch-trigger="
     private static let senderProcessLaunchSyntheticTriggerValue = "salemx_debug_process_trigger_synthetic_no_metadata"
     private static let pendingMetadataEndpointPathPrefix = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata"
+    private static let pendingMetadataSenderClaimEndpointPath = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/sender/claim"
     private static let voIPPushReceiptCallKitReportTimeout: TimeInterval = 3
     private static let voIPPushReceiptAnswerableWindowTimeout: TimeInterval = 1.5
     private static let remoteParticipantObservationWindowTimeout: TimeInterval = 8
@@ -9927,6 +9998,10 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         lock.unlock()
 
         updateLatestSenderRuntimeLiveKitJoinSummary(summary)
+
+        Task { @MainActor in
+            await runServerSideSenderMetadataClaimNoMediaTrigger()
+        }
     }
 
     private static func armSenderConnectedSignalHandoffURLHook(_ components: URLComponents?) {
@@ -10153,6 +10228,16 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     }
 
     @MainActor
+    private static func runServerSideSenderMetadataClaimNoMediaTrigger() async {
+        recordServerSideSenderMetadataClaimStarted()
+        guard let session = await fetchServerSideSenderMetadataClaim() else {
+            return
+        }
+
+        _ = await requestSenderRuntimeCredentials(for: session)
+    }
+
+    @MainActor
     private static func runSenderRuntimeLiveKitJoin(reference: String) async {
         guard let session = await fetchSenderRuntimePendingMetadata(reference: reference) else {
             return
@@ -10252,6 +10337,93 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         updateLatestSenderRuntimeLiveKitJoinSummary(summary)
     }
 
+    private static func recordServerSideSenderMetadataClaimStarted() {
+        lock.lock()
+        var summary = latestSenderRuntimeLiveKitJoinSummary
+        summary.markServerSideSenderMetadataClaimStarted()
+        lock.unlock()
+
+        updateLatestSenderRuntimeLiveKitJoinSummary(summary)
+    }
+
+    @MainActor
+    private static func fetchServerSideSenderMetadataClaim() async -> DirectCallSession? {
+        guard let fetchURL = senderMetadataClaimURL() else {
+            recordServerSideSenderMetadataClaimBlocked(resultBucket: "missing_redacted",
+                                                       reason: "server_side_sender_metadata_claim_url_unresolved_redacted",
+                                                       authorized: false)
+            return nil
+        }
+        guard let accessToken = await SalemXForegroundSSESmokeDebug.matrixAccessTokenForPushKitUploadSmoke() else {
+            recordServerSideSenderMetadataClaimBlocked(resultBucket: "unauthorized_redacted",
+                                                       reason: "server_side_sender_metadata_claim_unauthorized_redacted",
+                                                       authorized: false)
+            return nil
+        }
+
+        var request = URLRequest(url: fetchURL)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("B" + "earer " + accessToken, forHTTPHeaderField: "Authorization")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200..<300).contains(httpResponse.statusCode) else {
+                let diagnostics = pendingMetadataFetchFailureDiagnostics(response: response, data: data)
+                recordServerSideSenderMetadataClaimBlocked(resultBucket: serverSideSenderMetadataClaimResultBucket(diagnostics),
+                                                           reason: serverSideSenderMetadataClaimBlockedReason(diagnostics),
+                                                           authorized: true,
+                                                           diagnostics: diagnostics)
+                return nil
+            }
+            guard let session = directCallSessionFromSenderPendingMetadata(data: data) else {
+                recordServerSideSenderMetadataClaimBlocked(resultBucket: "blocked_redacted",
+                                                           reason: senderPendingMetadataPayloadBlockedReason(data: data),
+                                                           authorized: true,
+                                                           httpStatusBucket: "2xx")
+                return nil
+            }
+
+            recordServerSideSenderMetadataClaimSuccess(session)
+            return session
+        } catch {
+            recordServerSideSenderMetadataClaimBlocked(resultBucket: "blocked_redacted",
+                                                       reason: "server_side_sender_metadata_claim_network_failure_redacted",
+                                                       authorized: true,
+                                                       httpStatusBucket: "network_failure",
+                                                       failureReasonBucket: "network_failure")
+            return nil
+        }
+    }
+
+    private static func recordServerSideSenderMetadataClaimSuccess(_ session: DirectCallSession) {
+        lock.lock()
+        var summary = latestSenderRuntimeLiveKitJoinSummary
+        summary.markServerSideSenderMetadataClaimSuccess(session)
+        lock.unlock()
+
+        updateLatestSenderRuntimeLiveKitJoinSummary(summary)
+    }
+
+    private static func recordServerSideSenderMetadataClaimBlocked(resultBucket: String,
+                                                                   reason: String,
+                                                                   authorized: Bool,
+                                                                   diagnostics: PendingMetadataFetchFailureDiagnostics? = nil,
+                                                                   httpStatusBucket: String? = nil,
+                                                                   failureReasonBucket: String? = nil) {
+        lock.lock()
+        var summary = latestSenderRuntimeLiveKitJoinSummary
+        summary.markServerSideSenderMetadataClaimBlocked(resultBucket,
+                                                         reason: reason,
+                                                         authorized: authorized,
+                                                         httpStatusBucket: httpStatusBucket ?? diagnostics?.httpStatusBucket ?? "not_requested",
+                                                         failureReasonBucket: failureReasonBucket ?? diagnostics?.failureReason)
+        lock.unlock()
+
+        updateLatestSenderRuntimeLiveKitJoinSummary(summary)
+    }
+
     @MainActor
     private static func requestSenderRuntimeCredentials(for session: DirectCallSession) async -> Result<DirectCallMediaConnectionInfo, DirectCallMediaError> {
         guard let tokenEndpointURL = controlledMediaCredentialsTokenEndpointURL(),
@@ -10322,6 +10494,16 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         return components.url
     }
 
+    private static func senderMetadataClaimURL() -> URL? {
+        guard var components = URLComponents(string: uploadSmokeDefaultURLString) else {
+            return nil
+        }
+        components.path = pendingMetadataSenderClaimEndpointPath
+        components.query = nil
+        components.fragment = nil
+        return components.url
+    }
+
     private static func directCallSessionFromSenderPendingMetadata(data: Data) -> DirectCallSession? {
         guard let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               payload["version"] as? Int == 1,
@@ -10360,6 +10542,34 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             return "sender_runtime_join_pending_metadata_fetch_server_error_redacted"
         default:
             return "sender_runtime_join_pending_metadata_fetch_failed_redacted"
+        }
+    }
+
+    private static func serverSideSenderMetadataClaimResultBucket(_ diagnostics: PendingMetadataFetchFailureDiagnostics) -> String {
+        switch diagnostics.failureReason {
+        case "auth_rejected":
+            return "unauthorized_redacted"
+        case "forbidden":
+            return "forbidden_redacted"
+        case "not_found":
+            return "missing_redacted"
+        default:
+            return "blocked_redacted"
+        }
+    }
+
+    private static func serverSideSenderMetadataClaimBlockedReason(_ diagnostics: PendingMetadataFetchFailureDiagnostics) -> String {
+        switch diagnostics.failureReason {
+        case "auth_rejected":
+            return "server_side_sender_metadata_claim_unauthorized_redacted"
+        case "forbidden":
+            return "server_side_sender_metadata_claim_forbidden_redacted"
+        case "not_found":
+            return "server_side_sender_metadata_claim_missing_redacted"
+        case "server_error":
+            return "server_side_sender_metadata_claim_server_error_redacted"
+        default:
+            return "server_side_sender_metadata_claim_blocked_redacted"
         }
     }
 
@@ -13060,6 +13270,10 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             "sender_process_launch_trigger_seen_by_app=\(senderRuntimeBoolField("sender_process_launch_trigger_seen_by_app", in: fields))",
             "sender_process_launch_trigger_consumed_by_app=\(senderRuntimeBoolField("sender_process_launch_trigger_consumed_by_app", in: fields))",
             "sender_process_launch_trigger_transport_bucket=\(senderRuntimeField("sender_process_launch_trigger_transport_bucket", in: fields))",
+            "server_side_sender_metadata_lookup_requested=\(senderRuntimeBoolField("server_side_sender_metadata_lookup_requested", in: fields))",
+            "server_side_sender_metadata_lookup_result_bucket=\(senderRuntimeField("server_side_sender_metadata_lookup_result_bucket", in: fields))",
+            "server_side_sender_metadata_claim_requested=\(senderRuntimeBoolField("server_side_sender_metadata_claim_requested", in: fields))",
+            "server_side_sender_metadata_claim_result_bucket=\(senderRuntimeField("server_side_sender_metadata_claim_result_bucket", in: fields))",
             "sender_no_media_runtime_trigger_attempted=\(senderRuntimeBoolField("sender_no_media_runtime_trigger_attempted", in: fields))",
             "sender_no_media_runtime_trigger_terminal_observed=\(senderRuntimeBoolField("sender_no_media_runtime_trigger_terminal_observed", in: fields))",
             "sender_authorized_metadata_source_available=\(senderRuntimeBoolField("sender_authorized_metadata_source_available", in: fields))",

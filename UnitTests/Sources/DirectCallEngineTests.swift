@@ -3978,6 +3978,14 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("sender_process_launch_trigger_seen_by_app=\\(senderRuntimeBoolField(\"sender_process_launch_trigger_seen_by_app\", in: fields))"))
         #expect(adapterSource.contains("sender_process_launch_trigger_consumed_by_app=\\(senderRuntimeBoolField(\"sender_process_launch_trigger_consumed_by_app\", in: fields))"))
         #expect(adapterSource.contains("sender_process_launch_trigger_transport_bucket=\\(senderRuntimeField(\"sender_process_launch_trigger_transport_bucket\", in: fields))"))
+        #expect(adapterSource.contains("pendingMetadataSenderClaimEndpointPath = \"/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/sender/claim\""))
+        #expect(adapterSource.contains("await runServerSideSenderMetadataClaimNoMediaTrigger()"))
+        #expect(adapterSource.contains("server_side_sender_metadata_lookup_requested=\\(serverSideSenderMetadataLookupRequested)"))
+        #expect(adapterSource.contains("server_side_sender_metadata_lookup_result_bucket=\\(serverSideSenderMetadataLookupResultBucket)"))
+        #expect(adapterSource.contains("server_side_sender_metadata_claim_requested=\\(serverSideSenderMetadataClaimRequested)"))
+        #expect(adapterSource.contains("server_side_sender_metadata_claim_result_bucket=\\(serverSideSenderMetadataClaimResultBucket)"))
+        #expect(adapterSource.contains("server_side_sender_metadata_lookup_requested=\\(senderRuntimeBoolField(\"server_side_sender_metadata_lookup_requested\", in: fields))"))
+        #expect(adapterSource.contains("server_side_sender_metadata_claim_result_bucket=\\(senderRuntimeField(\"server_side_sender_metadata_claim_result_bucket\", in: fields))"))
         #expect(adapterSource.contains("senderRuntimeBoundaryBlockedReason = \"synthetic_trigger_no_metadata_redacted\""))
         #expect(adapterSource.contains("private static func recordDebugProofExportHealth(triggerBucket: String)"))
         #expect(adapterSource.contains("salemx_debug_console_health_probe=true"))
@@ -4007,6 +4015,10 @@ final class NativeIncomingCallLifecycleContractTests {
 
         #expect(redactedLinesSource.contains("sender_debug_atomic_handoff_trigger_file_seen=\\(senderDebugAtomicHandoffTriggerFileSeen)"))
         #expect(redactedLinesSource.contains("sender_debug_atomic_handoff_trigger_consumed=\\(senderDebugAtomicHandoffTriggerConsumed)"))
+        #expect(redactedLinesSource.contains("server_side_sender_metadata_lookup_requested=\\(serverSideSenderMetadataLookupRequested)"))
+        #expect(redactedLinesSource.contains("server_side_sender_metadata_lookup_result_bucket=\\(serverSideSenderMetadataLookupResultBucket)"))
+        #expect(redactedLinesSource.contains("server_side_sender_metadata_claim_requested=\\(serverSideSenderMetadataClaimRequested)"))
+        #expect(redactedLinesSource.contains("server_side_sender_metadata_claim_result_bucket=\\(serverSideSenderMetadataClaimResultBucket)"))
         #expect(redactedLinesSource.contains("sender_no_media_runtime_trigger_attempted=\\(noMediaRuntimeTriggerAttempted)"))
         #expect(redactedLinesSource.contains("sender_no_media_runtime_trigger_terminal_observed=\\(senderNoMediaRuntimeTriggerTerminalObserved)"))
         #expect(redactedLinesSource.contains("sender_authorized_metadata_source_available=\\(senderAuthorizedMetadataSourceAvailable)"))
@@ -4032,6 +4044,30 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(!noMediaRunSource.contains("matrixEventEmitRequested = true"))
         #expect(!noMediaRunSource.contains("cameraPermissionRequested = true"))
         #expect(!noMediaRunSource.contains("microphonePermissionRequested = true"))
+    }
+
+    @Test
+    func senderProcessLaunchServerSideClaimStopsBeforeMediaConnect() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+        let claimRunStart = try #require(adapterSource.range(of: "@MainActor\n    private static func runServerSideSenderMetadataClaimNoMediaTrigger")?.lowerBound)
+        let runtimeJoinStart = try #require(adapterSource.range(of: "@MainActor\n    private static func runSenderRuntimeLiveKitJoin")?.lowerBound)
+        let claimRunSource = String(adapterSource[claimRunStart..<runtimeJoinStart])
+
+        #expect(claimRunSource.contains("await fetchServerSideSenderMetadataClaim()"))
+        #expect(claimRunSource.contains("await requestSenderRuntimeCredentials(for: session)"))
+        #expect(claimRunSource.contains("senderMetadataClaimURL()"))
+        #expect(claimRunSource.contains("pendingMetadataSenderClaimEndpointPath"))
+        #expect(claimRunSource.contains("markServerSideSenderMetadataClaimSuccess(session)"))
+        #expect(!claimRunSource.contains("DirectCallLiveKitConnectExecutor"))
+        #expect(!claimRunSource.contains("executor.connectAudio"))
+        #expect(!claimRunSource.contains("setMicrophoneEnabled(true)"))
+        #expect(!claimRunSource.contains("sendRealInvite"))
+        #expect(!claimRunSource.contains("postRealInvite"))
+        #expect(!claimRunSource.contains("matrixEventEmitRequested = true"))
+        #expect(!claimRunSource.contains("cameraPermissionRequested = true"))
+        #expect(!claimRunSource.contains("microphonePermissionRequested = true"))
+        #expect(!adapterSource.contains("server_side_sender_metadata_reference="))
+        #expect(!adapterSource.contains("pending_metadata_reference=\\(serverSide"))
     }
 
     @Test

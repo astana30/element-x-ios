@@ -250,6 +250,7 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
                 "auth-a": AuthenticatedUser("caller", "device-a"),
                 "auth-b": AuthenticatedUser("callee", "device-b"),
                 "auth-c": AuthenticatedUser("callee", "device-c"),
+                "auth-d": AuthenticatedUser("caller", "device-d"),
             }),
             room_validator=InMemoryRoomValidator({}),
             allocation_store=InMemoryAllocationStore(allocation_ttl_seconds=300),
@@ -704,6 +705,105 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("auth-a", output)
         self.assertNotIn("auth-b", output)
         self.assertNotIn("auth-c", output)
+
+    async def test_sender_can_claim_latest_authenticated_sender_metadata_without_reference_transport(self) -> None:
+        app_module = _load_app_module()
+        store = InMemoryPushKitTokenStore()
+        token_request = app_module.PushKitTokenRegistrationRequest.from_mapping({
+            "version": 1,
+            "token": "synthetic-" + "recipient-" + "pushkit-token-fixture",
+            "environment": "development",
+        })
+        store.store("callee", "device-b", token_request)
+        provider = FakeAPNsVoIPProvider(result="sandbox_success")
+        send_service = APNsVoIPSandboxSendService(
+            APNsVoIPSandboxConfig(
+                enabled=True,
+                environment="sandbox",
+                team_id="TEAMID",
+                key_id="KEYID",
+                auth_key_path="/redacted/apns-auth-key.p8",
+                topic="kz.salemx.msg.voip",
+            ),
+            provider=provider,
+        )
+        app = app_module.create_app(
+            token_service=self.make_token_service(),
+            pushkit_token_store=store,
+            apns_voip_send_service=send_service,
+        )
+        payload = self.targeted_invite_payload(
+            expires_at_ms=4102444800000,
+            pending_metadata={
+                "version": 1,
+                "call_id": "call-claim",
+                "room_id": "!claim-room:example.test",
+                "intent": "audio",
+            },
+        )
+
+        invite_status, invite_body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_INVITE_PATH,
+            {"authorization": self.authorization("auth-a")},
+            payload,
+        )
+        claim_path = app_module.FOREGROUND_SIGNALING_PENDING_METADATA_SENDER_CLAIM_PATH
+        claim_status, claim_body = await _asgi_get_json(
+            app,
+            claim_path,
+            {"authorization": self.authorization("auth-a")},
+        )
+        wrong_user_status, wrong_user_body = await _asgi_get_json(
+            app,
+            claim_path,
+            {"authorization": self.authorization("auth-b")},
+        )
+        wrong_device_status, wrong_device_body = await _asgi_get_json(
+            app,
+            claim_path,
+            {"authorization": self.authorization("auth-d")},
+        )
+        unauthenticated_status, unauthenticated_body = await _asgi_get_json(app, claim_path, {})
+
+        self.assertEqual(invite_status, 200)
+        self.assertEqual(invite_body["sender_authorized_metadata_source_available"], True)
+        self.assertEqual(claim_status, 200)
+        self.assertEqual(claim_body["version"], 1)
+        self.assertEqual(claim_body["call_id"], "call-claim")
+        self.assertEqual(claim_body["room_id"], "!claim-room:example.test")
+        self.assertEqual(claim_body["peer_user_id"], "callee")
+        self.assertEqual(claim_body["direction"], "outgoing")
+        self.assertEqual(claim_body["intent"], "audio")
+        self.assertEqual(claim_body["server_side_sender_metadata_lookup_requested"], True)
+        self.assertEqual(claim_body["server_side_sender_metadata_lookup_result_bucket"], "success_redacted")
+        self.assertEqual(claim_body["server_side_sender_metadata_claim_requested"], True)
+        self.assertEqual(claim_body["server_side_sender_metadata_claim_result_bucket"], "success_redacted")
+        self.assertEqual(claim_body["sender_authorized_metadata_source_available"], True)
+        self.assertEqual(claim_body["sender_uses_receiver_pending_metadata_reference"], False)
+        self.assertEqual(claim_body["server_side_sender_metadata_claim_raw_identifiers_logged"], False)
+        self.assertEqual(wrong_user_status, 404)
+        self.assertEqual(wrong_user_body["diagnostics"]["server_side_sender_metadata_claim_result_bucket"], "missing_redacted")
+        self.assertEqual(wrong_device_status, 403)
+        self.assertEqual(wrong_device_body["diagnostics"]["server_side_sender_metadata_claim_result_bucket"], "forbidden_redacted")
+        self.assertEqual(unauthenticated_status, 401)
+        self.assertEqual(unauthenticated_body["diagnostics"]["server_side_sender_metadata_claim_result_bucket"], "unauthorized_redacted")
+        self.assertEqual(len(provider.requests), 1)
+
+        diagnostic_output = json.dumps({
+            "success": {
+                key: value for key, value in claim_body.items()
+                if key.startswith("server_side_") or key.startswith("sender_")
+            },
+            "wrong_user": wrong_user_body.get("diagnostics", {}),
+            "wrong_device": wrong_device_body.get("diagnostics", {}),
+            "unauthenticated": unauthenticated_body.get("diagnostics", {}),
+        }, sort_keys=True)
+        for raw_value in ["call-claim", "!claim-room:example.test", "caller", "callee", "device-a", "device-b", "device-d"]:
+            self.assertNotIn(raw_value, diagnostic_output)
+        self.assertNotIn("auth-a", diagnostic_output)
+        self.assertNotIn("auth-b", diagnostic_output)
+        self.assertNotIn("auth-d", diagnostic_output)
 
     async def test_real_invite_pending_metadata_follows_latest_pushkit_token_when_requested_device_is_stale(self) -> None:
         app_module = _load_app_module()

@@ -82,6 +82,7 @@ class PendingCallMetadataRecord:
     expires_at_ms: int
     metadata: PendingCallMetadataRequest
     sender_only: bool = False
+    sender_device: str | None = None
 
 
 class PendingCallMetadataStoreProtocol(Protocol):
@@ -90,13 +91,17 @@ class PendingCallMetadataStoreProtocol(Protocol):
               recipient_device: str | None,
               expires_at_ms: int,
               metadata: PendingCallMetadataRequest,
-              sender_only: bool = False) -> str:
+              sender_only: bool = False,
+              sender_device: str | None = None) -> str:
         ...
 
     def retrieve(self, reference: str, authenticated_user: AuthenticatedUser, now_ms: int) -> PendingCallMetadataRequest:
         ...
 
     def retrieve_sender_view(self, reference: str, authenticated_user: AuthenticatedUser, now_ms: int) -> PendingCallMetadataRequest:
+        ...
+
+    def claim_latest_sender_view(self, authenticated_user: AuthenticatedUser, now_ms: int) -> PendingCallMetadataRequest:
         ...
 
 
@@ -109,7 +114,8 @@ class InMemoryPendingCallMetadataStore:
               recipient_device: str | None,
               expires_at_ms: int,
               metadata: PendingCallMetadataRequest,
-              sender_only: bool = False) -> str:
+              sender_only: bool = False,
+              sender_device: str | None = None) -> str:
         reference = secrets.token_urlsafe(24)
         self._records[reference] = PendingCallMetadataRecord(
             reference=reference,
@@ -118,6 +124,7 @@ class InMemoryPendingCallMetadataStore:
             expires_at_ms=expires_at_ms,
             metadata=metadata,
             sender_only=sender_only,
+            sender_device=sender_device,
         )
         return reference
 
@@ -144,6 +151,31 @@ class InMemoryPendingCallMetadataStore:
                                    errcode="M_FORBIDDEN",
                                    error="Pending call metadata is not available.")
         if record.metadata.peer_user_id != authenticated_user.user_id:
+            raise CallServiceError(status_code=403,
+                                   errcode="M_FORBIDDEN",
+                                   error="Pending call metadata is not available.")
+        if record.sender_device is not None and record.sender_device != authenticated_user.device_id:
+            raise CallServiceError(status_code=403,
+                                   errcode="M_FORBIDDEN",
+                                   error="Pending call metadata is not available.")
+        return record.metadata.sender_view_payload(record.recipient)
+
+    def claim_latest_sender_view(self, authenticated_user: AuthenticatedUser, now_ms: int) -> PendingCallMetadataRequest:
+        active_sender_records: list[PendingCallMetadataRecord] = []
+        for reference, record in list(self._records.items()):
+            if record.expires_at_ms <= now_ms:
+                self._records.pop(reference, None)
+                continue
+            if record.sender_only and record.metadata.peer_user_id == authenticated_user.user_id:
+                active_sender_records.append(record)
+
+        if not active_sender_records:
+            raise CallServiceError(status_code=404,
+                                   errcode="M_NOT_FOUND",
+                                   error="Pending call metadata was not found.")
+
+        record = active_sender_records[-1]
+        if record.sender_device is not None and record.sender_device != authenticated_user.device_id:
             raise CallServiceError(status_code=403,
                                    errcode="M_FORBIDDEN",
                                    error="Pending call metadata is not available.")
