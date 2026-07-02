@@ -3979,7 +3979,6 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("sender_process_launch_trigger_consumed_by_app=\\(senderRuntimeBoolField(\"sender_process_launch_trigger_consumed_by_app\", in: fields))"))
         #expect(adapterSource.contains("sender_process_launch_trigger_transport_bucket=\\(senderRuntimeField(\"sender_process_launch_trigger_transport_bucket\", in: fields))"))
         #expect(adapterSource.contains("pendingMetadataSenderClaimEndpointPath = \"/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/sender/claim\""))
-        #expect(adapterSource.contains("await runServerSideSenderMetadataClaimNoMediaTrigger()"))
         #expect(adapterSource.contains("server_side_sender_metadata_lookup_requested=\\(serverSideSenderMetadataLookupRequested)"))
         #expect(adapterSource.contains("server_side_sender_metadata_lookup_result_bucket=\\(serverSideSenderMetadataLookupResultBucket)"))
         #expect(adapterSource.contains("server_side_sender_metadata_claim_requested=\\(serverSideSenderMetadataClaimRequested)"))
@@ -4049,10 +4048,15 @@ final class NativeIncomingCallLifecycleContractTests {
     @Test
     func senderProcessLaunchServerSideClaimStopsBeforeMediaConnect() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+        let processLaunchStart = try #require(adapterSource.range(of: "static func consumeDebugProcessLaunchTriggerIfNeeded()")?.lowerBound)
+        let healthStart = try #require(adapterSource.range(of: "private static func recordDebugProofExportHealth",
+                                                           range: processLaunchStart..<adapterSource.endIndex)?.lowerBound)
+        let processLaunchSource = String(adapterSource[processLaunchStart..<healthStart])
         let claimRunStart = try #require(adapterSource.range(of: "@MainActor\n    private static func runServerSideSenderMetadataClaimNoMediaTrigger")?.lowerBound)
         let runtimeJoinStart = try #require(adapterSource.range(of: "@MainActor\n    private static func runSenderRuntimeLiveKitJoin")?.lowerBound)
         let claimRunSource = String(adapterSource[claimRunStart..<runtimeJoinStart])
 
+        #expect(processLaunchSource.contains("await runServerSideSenderMetadataClaimNoMediaTrigger()"))
         #expect(claimRunSource.contains("await fetchServerSideSenderMetadataClaim()"))
         #expect(claimRunSource.contains("await requestSenderRuntimeCredentials(for: session)"))
         #expect(claimRunSource.contains("senderMetadataClaimURL()"))

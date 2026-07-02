@@ -9998,10 +9998,6 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         lock.unlock()
 
         updateLatestSenderRuntimeLiveKitJoinSummary(summary)
-
-        Task { @MainActor in
-            await runServerSideSenderMetadataClaimNoMediaTrigger()
-        }
     }
 
     private static func armSenderConnectedSignalHandoffURLHook(_ components: URLComponents?) {
@@ -10272,6 +10268,10 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         lock.unlock()
 
         updateLatestSenderRuntimeLiveKitJoinSummary(summary)
+
+        Task { @MainActor in
+            await runServerSideSenderMetadataClaimNoMediaTrigger()
+        }
     }
 
     @MainActor
