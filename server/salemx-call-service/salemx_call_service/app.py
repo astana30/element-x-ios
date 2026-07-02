@@ -385,7 +385,7 @@ def create_app(config: ServiceConfig | None = None,
                 expires_at_ms=invite_request.invite.expires_at_ms,
                 metadata=pending_metadata,
                 sender_only=True,
-                sender_device=authenticated_user.device_id,
+                sender_device=None,
                 prepared_receiver_reference=pending_metadata_reference,
             )
             body: dict[str, object] = {
@@ -394,6 +394,9 @@ def create_app(config: ServiceConfig | None = None,
                 "fresh_metadata_state_bucket": "prepared_not_sent_redacted",
                 "fresh_metadata_bound_sender_bucket": "matched_redacted",
                 "fresh_metadata_bound_receiver_bucket": "matched_redacted",
+                "prepare_sender_device_binding_mode_bucket": "user_only_until_claim_redacted",
+                "claim_sender_device_lock_result_bucket": "not_reached",
+                "send_prepared_claimed_device_required": True,
                 "prepared_metadata_claimed_by_sender": False,
                 "sender_authorized_metadata_source_available": True,
                 "sender_authorized_metadata_reference_present": True,
@@ -458,6 +461,9 @@ def create_app(config: ServiceConfig | None = None,
                 "fresh_metadata_state_bucket": "sent_redacted" if apns_sent else "send_attempted_redacted",
                 "fresh_metadata_bound_sender_bucket": "matched_redacted",
                 "fresh_metadata_bound_receiver_bucket": "matched_redacted",
+                "prepare_sender_device_binding_mode_bucket": "user_only_until_claim_redacted",
+                "claim_sender_device_lock_result_bucket": "success_redacted",
+                "send_prepared_claimed_device_required": True,
                 "prepared_metadata_claimed_by_sender": True,
                 "valid_invite_sent": apns_sent,
                 "pending_metadata_created": True,
@@ -623,7 +629,7 @@ def create_app(config: ServiceConfig | None = None,
             authenticated_user_bucket = "present_redacted"
             metadata = pending_store.claim_latest_sender_view(authenticated_user, int(time.time() * 1000))
             bound_sender_bucket = "matched_redacted"
-            bound_device_bucket = "matched_redacted"
+            bound_device_bucket = "claimed_by_current_app_device_redacted"
             body = metadata.token_request_payload()
             body.update(_sender_metadata_claim_diagnostics(
                 "success_redacted",
@@ -862,11 +868,20 @@ def _sender_metadata_claim_diagnostics(result_bucket: str,
                                        bound_sender_bucket: str = "not_checked",
                                        bound_device_bucket: str = "not_checked") -> dict[str, object]:
     success = result_bucket == "success_redacted"
+    if bound_device_bucket in ("claimed_by_current_app_device_redacted", "matched_redacted"):
+        claim_lock_bucket = "success_redacted"
+    elif bound_device_bucket == "mismatch_redacted":
+        claim_lock_bucket = "mismatch_redacted"
+    else:
+        claim_lock_bucket = "not_reached"
     return {
         "server_side_sender_metadata_lookup_requested": True,
         "server_side_sender_metadata_lookup_result_bucket": result_bucket,
         "server_side_sender_metadata_claim_requested": True,
         "server_side_sender_metadata_claim_result_bucket": result_bucket,
+        "prepare_sender_device_binding_mode_bucket": "user_only_until_claim_redacted",
+        "claim_sender_device_lock_result_bucket": claim_lock_bucket,
+        "send_prepared_claimed_device_required": True,
         "server_claim_auth_header_seen": auth_header_seen,
         "server_claim_auth_scheme_bucket": auth_scheme_bucket,
         "server_claim_token_validation_bucket": token_validation_bucket,

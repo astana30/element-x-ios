@@ -187,11 +187,11 @@ class InMemoryPendingCallMetadataStore:
                                    error="Pending call metadata was not found.")
 
         record = active_sender_records[-1]
-        if record.sender_device is not None and record.sender_device != authenticated_user.device_id:
-            raise CallServiceError(status_code=403,
-                                   errcode="M_FORBIDDEN",
-                                   error="Pending call metadata is not available.")
         if record.prepared_receiver_reference is not None:
+            if authenticated_user.device_id is None:
+                raise CallServiceError(status_code=403,
+                                       errcode="M_FORBIDDEN",
+                                       error="Pending call metadata is not available.")
             self._records[record.reference] = PendingCallMetadataRecord(
                 reference=record.reference,
                 recipient=record.recipient,
@@ -199,11 +199,16 @@ class InMemoryPendingCallMetadataStore:
                 expires_at_ms=record.expires_at_ms,
                 metadata=record.metadata,
                 sender_only=record.sender_only,
-                sender_device=record.sender_device,
+                sender_device=authenticated_user.device_id,
                 prepared_receiver_reference=record.prepared_receiver_reference,
                 claimed_by_sender=True,
                 sent=record.sent,
             )
+            return record.metadata.sender_view_payload(record.recipient)
+        if record.sender_device is not None and record.sender_device != authenticated_user.device_id:
+            raise CallServiceError(status_code=403,
+                                   errcode="M_FORBIDDEN",
+                                   error="Pending call metadata is not available.")
         return record.metadata.sender_view_payload(record.recipient)
 
     def mark_prepared_sender_claimed(self, reference: str, authenticated_user: AuthenticatedUser, now_ms: int) -> PendingCallMetadataRequest:
@@ -223,11 +228,15 @@ class InMemoryPendingCallMetadataStore:
         return record.metadata.sender_view_payload(record.recipient)
 
     def begin_prepared_send(self, reference: str, authenticated_user: AuthenticatedUser, now_ms: int) -> PendingCallMetadataRecord:
-        record = self._sender_record(reference, authenticated_user, now_ms)
+        record = self._sender_record(reference, authenticated_user, now_ms, enforce_device=False)
         if not record.claimed_by_sender:
             raise CallServiceError(status_code=403,
                                    errcode="M_FORBIDDEN",
                                    error="Prepared call metadata has not been claimed.")
+        if record.sender_device is None:
+            raise CallServiceError(status_code=403,
+                                   errcode="M_FORBIDDEN",
+                                   error="Prepared call metadata claimed device is unavailable.")
         if record.sent:
             raise CallServiceError(status_code=409,
                                    errcode="M_LIMIT_EXCEEDED",
@@ -251,7 +260,11 @@ class InMemoryPendingCallMetadataStore:
         )
         return receiver_record
 
-    def _sender_record(self, reference: str, authenticated_user: AuthenticatedUser, now_ms: int) -> PendingCallMetadataRecord:
+    def _sender_record(self,
+                       reference: str,
+                       authenticated_user: AuthenticatedUser,
+                       now_ms: int,
+                       enforce_device: bool = True) -> PendingCallMetadataRecord:
         record = self._active_record(reference, now_ms)
         if not record.sender_only:
             raise CallServiceError(status_code=403,
@@ -261,7 +274,7 @@ class InMemoryPendingCallMetadataStore:
             raise CallServiceError(status_code=403,
                                    errcode="M_FORBIDDEN",
                                    error="Pending call metadata is not available.")
-        if record.sender_device is not None and record.sender_device != authenticated_user.device_id:
+        if enforce_device and record.sender_device is not None and record.sender_device != authenticated_user.device_id:
             raise CallServiceError(status_code=403,
                                    errcode="M_FORBIDDEN",
                                    error="Pending call metadata is not available.")

@@ -784,7 +784,8 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(claim_body["server_claim_token_validation_bucket"], "success_redacted")
         self.assertEqual(claim_body["server_claim_authenticated_user_bucket"], "present_redacted")
         self.assertEqual(claim_body["server_claim_bound_sender_bucket"], "matched_redacted")
-        self.assertEqual(claim_body["server_claim_bound_device_bucket"], "matched_redacted")
+        self.assertEqual(claim_body["server_claim_bound_device_bucket"], "claimed_by_current_app_device_redacted")
+        self.assertEqual(claim_body["claim_sender_device_lock_result_bucket"], "success_redacted")
         self.assertEqual(claim_body["sender_authorized_metadata_source_available"], True)
         self.assertEqual(claim_body["sender_uses_receiver_pending_metadata_reference"], False)
         self.assertEqual(claim_body["server_side_sender_metadata_claim_raw_identifiers_logged"], False)
@@ -891,7 +892,7 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         claim_status, claim_body = await _asgi_get_json(
             app,
             app_module.FOREGROUND_SIGNALING_PENDING_METADATA_SENDER_CLAIM_PATH,
-            {"authorization": self.authorization("auth-a")},
+            {"authorization": self.authorization("auth-d")},
         )
         send_status, send_body = await _asgi_post_json(
             app,
@@ -927,7 +928,7 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
             },
             "claim": {
                 key: value for key, value in claim_body.items()
-                if key.startswith("server_side_") or key.startswith("sender_")
+                if key.startswith("server_side_") or key.startswith("server_claim_") or key.startswith("sender_")
             },
             "send": send_body,
             "repeat": repeat_body.get("diagnostics", {}),
@@ -940,6 +941,9 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(prepare_body["fresh_metadata_state_bucket"], "prepared_not_sent_redacted")
         self.assertEqual(prepare_body["fresh_metadata_bound_sender_bucket"], "matched_redacted")
         self.assertEqual(prepare_body["fresh_metadata_bound_receiver_bucket"], "matched_redacted")
+        self.assertEqual(prepare_body["prepare_sender_device_binding_mode_bucket"], "user_only_until_claim_redacted")
+        self.assertEqual(prepare_body["claim_sender_device_lock_result_bucket"], "not_reached")
+        self.assertEqual(prepare_body["send_prepared_claimed_device_required"], True)
         self.assertEqual(prepare_body["prepared_metadata_claimed_by_sender"], False)
         self.assertEqual(prepare_body["pending_metadata_created"], True)
         self.assertEqual(prepare_body["background_apns_push_requested"], False)
@@ -951,9 +955,15 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(claim_status, 200)
         self.assertEqual(claim_body["server_side_sender_metadata_claim_result_bucket"], "success_redacted")
         self.assertEqual(claim_body["sender_authorized_metadata_source_available"], True)
+        self.assertEqual(claim_body["server_claim_bound_sender_bucket"], "matched_redacted")
+        self.assertEqual(claim_body["server_claim_bound_device_bucket"], "claimed_by_current_app_device_redacted")
+        self.assertEqual(claim_body["claim_sender_device_lock_result_bucket"], "success_redacted")
 
         self.assertEqual(send_status, 200)
         self.assertEqual(send_body["fresh_metadata_state_bucket"], "sent_redacted")
+        self.assertEqual(send_body["prepare_sender_device_binding_mode_bucket"], "user_only_until_claim_redacted")
+        self.assertEqual(send_body["claim_sender_device_lock_result_bucket"], "success_redacted")
+        self.assertEqual(send_body["send_prepared_claimed_device_required"], True)
         self.assertEqual(send_body["prepared_metadata_claimed_by_sender"], True)
         self.assertEqual(send_body["background_apns_push_requested"], True)
         self.assertEqual(send_body["background_apns_push_result"], "sandbox_success")
