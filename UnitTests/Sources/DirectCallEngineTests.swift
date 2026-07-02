@@ -4003,6 +4003,24 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func senderProcessLaunchClaimEmitsSessionAuthDiagnosticBuckets() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+
+        #expect(adapterSource.contains("carpediem_matrix_session_present=\\(carpediemMatrixSessionPresent)"))
+        #expect(adapterSource.contains("carpediem_matrix_session_user_bucket=\\(carpediemMatrixSessionUserBucket)"))
+        #expect(adapterSource.contains("carpediem_access_token_available_bucket=\\(carpediemAccessTokenAvailableBucket)"))
+        #expect(adapterSource.contains("sender_metadata_claim_auth_header_attached=\\(senderMetadataClaimAuthHeaderAttached)"))
+        #expect(adapterSource.contains("sender_metadata_claim_auth_source_bucket=\\(senderMetadataClaimAuthSourceBucket)"))
+        #expect(adapterSource.contains("server_claim_auth_validation_bucket=\\(serverClaimAuthValidationBucket)"))
+        #expect(adapterSource.contains("server_claim_bound_sender_bucket=\\(serverClaimBoundSenderBucket)"))
+        #expect(adapterSource.contains("server_claim_bound_device_bucket=\\(serverClaimBoundDeviceBucket)"))
+        #expect(adapterSource.contains("userIDAvailable: clientProxy?.userID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false"))
+        #expect(adapterSource.contains("authSourceBucket: \"current_session_redacted\""))
+        #expect(!adapterSource.contains("sender_metadata_claim_authorization="))
+        #expect(!adapterSource.contains("carpediem_matrix_session_user_id="))
+    }
+
+    @Test
     func senderRuntimeAccessibleProofMirrorCarriesTerminalNoMediaSafetyFields() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
         let redactedLinesStart = try #require(adapterSource.range(of: "var redactedLines: [String]")?.lowerBound)
@@ -4018,6 +4036,8 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(redactedLinesSource.contains("server_side_sender_metadata_lookup_result_bucket=\\(serverSideSenderMetadataLookupResultBucket)"))
         #expect(redactedLinesSource.contains("server_side_sender_metadata_claim_requested=\\(serverSideSenderMetadataClaimRequested)"))
         #expect(redactedLinesSource.contains("server_side_sender_metadata_claim_result_bucket=\\(serverSideSenderMetadataClaimResultBucket)"))
+        #expect(redactedLinesSource.contains("sender_metadata_claim_auth_header_attached=\\(senderMetadataClaimAuthHeaderAttached)"))
+        #expect(redactedLinesSource.contains("server_claim_auth_validation_bucket=\\(serverClaimAuthValidationBucket)"))
         #expect(redactedLinesSource.contains("sender_no_media_runtime_trigger_attempted=\\(noMediaRuntimeTriggerAttempted)"))
         #expect(redactedLinesSource.contains("sender_no_media_runtime_trigger_terminal_observed=\\(senderNoMediaRuntimeTriggerTerminalObserved)"))
         #expect(redactedLinesSource.contains("sender_authorized_metadata_source_available=\\(senderAuthorizedMetadataSourceAvailable)"))
@@ -4061,6 +4081,13 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(claimRunSource.contains("await requestSenderRuntimeCredentials(for: session)"))
         #expect(claimRunSource.contains("senderMetadataClaimURL()"))
         #expect(claimRunSource.contains("pendingMetadataSenderClaimEndpointPath"))
+        #expect(claimRunSource.contains("matrixSessionWhoamiSmokeAvailability()"))
+        #expect(claimRunSource.contains("recordServerSideSenderMetadataClaimAuthContext(sessionAvailability"))
+        #expect(claimRunSource.contains("authHeaderAttached: true"))
+        #expect(claimRunSource.contains("authSourceBucket: \"current_session_redacted\""))
+        #expect(claimRunSource.contains("serverSideSenderMetadataClaimAuthValidationBucket(diagnostics)"))
+        #expect(claimRunSource.contains("serverSideSenderMetadataClaimBoundSenderBucket(diagnostics)"))
+        #expect(claimRunSource.contains("serverSideSenderMetadataClaimBoundDeviceBucket(diagnostics)"))
         #expect(claimRunSource.contains("markServerSideSenderMetadataClaimSuccess(session)"))
         #expect(!claimRunSource.contains("DirectCallLiveKitConnectExecutor"))
         #expect(!claimRunSource.contains("executor.connectAudio"))
@@ -4070,6 +4097,8 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(!claimRunSource.contains("matrixEventEmitRequested = true"))
         #expect(!claimRunSource.contains("cameraPermissionRequested = true"))
         #expect(!claimRunSource.contains("microphonePermissionRequested = true"))
+        #expect(!claimRunSource.contains("Authorization=\""))
+        #expect(!claimRunSource.contains("access_token="))
         #expect(!adapterSource.contains("server_side_sender_metadata_reference="))
         #expect(!adapterSource.contains("pending_metadata_reference=\\(serverSide"))
     }
