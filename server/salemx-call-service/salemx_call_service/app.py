@@ -70,6 +70,8 @@ ENDPOINT_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/livekit/token"
 ELIGIBILITY_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/eligibility"
 FOREGROUND_SIGNALING_STREAM_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/stream"
 FOREGROUND_SIGNALING_INVITE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/invite"
+FOREGROUND_SIGNALING_INVITE_PREPARE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/invite/prepare"
+FOREGROUND_SIGNALING_INVITE_SEND_PREPARED_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/invite/send-prepared"
 FOREGROUND_SIGNALING_PENDING_METADATA_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{metadata_reference}"
 FOREGROUND_SIGNALING_PENDING_METADATA_SENDER_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{metadata_reference}/sender"
 FOREGROUND_SIGNALING_PENDING_METADATA_SENDER_CLAIM_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/sender/claim"
@@ -347,6 +349,136 @@ def create_app(config: ServiceConfig | None = None,
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
+
+    @app.post(FOREGROUND_SIGNALING_INVITE_PREPARE_PATH)
+    async def foreground_signaling_invite_prepare(
+        request: Request,
+        authorization: Optional[str] = Header(default=None),
+    ) -> JSONResponse:
+        try:
+            if service is None:
+                raise CallServiceError(status_code=503,
+                                       errcode="M_DIRECT_CALL_SERVICE_UNAVAILABLE",
+                                       error="Direct-call service is not ready.")
+            bearer_token = bearer_token_from_authorization(authorization)
+            authenticated_user = await service.auth_validator.validate_bearer_token(bearer_token)
+            payload: Any = await request.json()
+            if not isinstance(payload, dict):
+                raise bad_request(error="Request body must be a JSON object.")
+            invite_request = ForegroundCallInviteRequest.from_mapping(payload)
+            pending_metadata = pending_metadata_from_invite_payload(payload, authenticated_user)
+            if pending_metadata is None:
+                raise bad_request(error="Pending metadata is required.")
+            metadata_recipient_device = _pending_metadata_recipient_device(
+                invite_request=invite_request,
+                token_store=token_store,
+            )
+            pending_metadata_reference = pending_store.store(
+                recipient=invite_request.recipient,
+                recipient_device=metadata_recipient_device,
+                expires_at_ms=invite_request.invite.expires_at_ms,
+                metadata=pending_metadata,
+            )
+            sender_authorized_metadata_reference = pending_store.store(
+                recipient=invite_request.recipient,
+                recipient_device=None,
+                expires_at_ms=invite_request.invite.expires_at_ms,
+                metadata=pending_metadata,
+                sender_only=True,
+                sender_device=authenticated_user.device_id,
+                prepared_receiver_reference=pending_metadata_reference,
+            )
+            body: dict[str, object] = {
+                "fresh_metadata_created": True,
+                "fresh_metadata_result_bucket": "success_redacted",
+                "fresh_metadata_state_bucket": "prepared_not_sent_redacted",
+                "fresh_metadata_bound_sender_bucket": "matched_redacted",
+                "fresh_metadata_bound_receiver_bucket": "matched_redacted",
+                "prepared_metadata_claimed_by_sender": False,
+                "sender_authorized_metadata_source_available": True,
+                "sender_authorized_metadata_reference_present": True,
+                "sender_authorized_metadata_reference": sender_authorized_metadata_reference,
+                "sender_uses_receiver_pending_metadata_reference": False,
+                "pending_metadata_reference_present": True,
+                "pending_metadata_payload_redacted": True,
+                "pending_metadata_created": True,
+                "valid_invite_sent": False,
+                "background_apns_push_requested": False,
+                "APNs_sent": False,
+                "APNs_send_count": 0,
+                "APNs_type_bucket": "not_requested",
+                "production_APNs_sent": False,
+                "media_credentials_requested": False,
+                "media_connect_requested": False,
+                "matrix_event_emit_requested": False,
+                "raw_identifiers_logged": False,
+                "blocked_reason": "none",
+            }
+            return JSONResponse(status_code=200, content=body)
+        except CallServiceError as error:
+            status_code, body = error_response(error)
+            return JSONResponse(status_code=status_code, content=body)
+
+    @app.post(FOREGROUND_SIGNALING_INVITE_SEND_PREPARED_PATH)
+    async def foreground_signaling_invite_send_prepared(
+        request: Request,
+        authorization: Optional[str] = Header(default=None),
+    ) -> JSONResponse:
+        try:
+            if service is None:
+                raise CallServiceError(status_code=503,
+                                       errcode="M_DIRECT_CALL_SERVICE_UNAVAILABLE",
+                                       error="Direct-call service is not ready.")
+            bearer_token = bearer_token_from_authorization(authorization)
+            authenticated_user = await service.auth_validator.validate_bearer_token(bearer_token)
+            payload: Any = await request.json()
+            if not isinstance(payload, dict):
+                raise bad_request(error="Request body must be a JSON object.")
+            version = payload.get("version")
+            if version != 1:
+                raise bad_request(errcode="M_UNRECOGNIZED", error="Unsupported prepared invite send version.")
+            sender_reference = payload.get("sender_authorized_metadata_reference")
+            if not isinstance(sender_reference, str) or not sender_reference:
+                raise bad_request(error="Missing prepared metadata reference.")
+            receiver_record = pending_store.begin_prepared_send(
+                sender_reference,
+                authenticated_user,
+                int(time.time() * 1000),
+            )
+            body = _prepared_invite_apns_diagnostics(
+                recipient=receiver_record.recipient,
+                token_store=token_store,
+                voip_send_service=voip_send_service,
+                pending_metadata_reference=receiver_record.reference,
+            )
+            apns_sent = body.get("APNs_sent") is True
+            body.update({
+                "fresh_metadata_created": True,
+                "fresh_metadata_result_bucket": "success_redacted",
+                "fresh_metadata_state_bucket": "sent_redacted" if apns_sent else "send_attempted_redacted",
+                "fresh_metadata_bound_sender_bucket": "matched_redacted",
+                "fresh_metadata_bound_receiver_bucket": "matched_redacted",
+                "prepared_metadata_claimed_by_sender": True,
+                "valid_invite_sent": apns_sent,
+                "pending_metadata_created": True,
+                "APNs_send_count": 1 if body.get("background_apns_push_requested") is True else 0,
+                "APNs_type_bucket": "sandbox_redacted" if body.get("background_apns_push_requested") is True else "not_requested",
+                "production_APNs_sent": False,
+                "raw_identifiers_logged": False,
+            })
+            return JSONResponse(status_code=200, content=body)
+        except CallServiceError as error:
+            status_code, body = error_response(error)
+            if status_code == 409:
+                body["diagnostics"] = {
+                    "prepared_metadata_claimed_by_sender": True,
+                    "APNs_sent": False,
+                    "APNs_send_count": 0,
+                    "APNs_type_bucket": "not_requested",
+                    "production_APNs_sent": False,
+                    "blocked_reason": "prepared_invite_already_sent_redacted",
+                }
+            return JSONResponse(status_code=status_code, content=body)
 
     @app.post(FOREGROUND_SIGNALING_INVITE_PATH)
     async def foreground_signaling_invite(
@@ -787,6 +919,74 @@ def _pending_metadata_recipient_device(
     if exact_record is not None and exact_record == latest_record:
         return invite_request.recipient_device
     return None
+
+
+def _prepared_invite_apns_diagnostics(
+    recipient: str,
+    token_store: PushKitTokenStoreProtocol,
+    voip_send_service: APNsVoIPSandboxSendService,
+    pending_metadata_reference: str,
+) -> dict[str, object]:
+    token_record = token_store.retrieve_latest_for_user(recipient, "development")
+    lookup_store_key_redacted = redacted_latest_user_record_key(recipient, "development")
+    if token_record is None:
+        return {
+            "real_non_dev_invite_used": True,
+            "dev_invite_used": False,
+            "background_apns_push_requested": False,
+            "background_apns_push_result": "skipped_redacted",
+            "background_apns_failure_reason": "none",
+            "persisted_pushkit_token_lookup_result": "missing",
+            "pushkit_token_redacted": True,
+            "media_credentials_requested": False,
+            "media_connect_requested": False,
+            "matrix_event_emit_requested": False,
+            "pushkit_upload_store_key_redacted": "none",
+            "pushkit_upload_record_updated_age_bucket": "missing",
+            "pushkit_upload_environment": "development",
+            "pushkit_upload_token_is_hex": False,
+            "real_invite_lookup_store_key_redacted": lookup_store_key_redacted,
+            "real_invite_lookup_record_updated_age_bucket": "missing",
+            "real_invite_lookup_environment": "development",
+            "real_invite_lookup_token_is_hex": False,
+            "upload_invite_store_key_match": False,
+            "safe_to_send_apns": False,
+            "APNs_sent": False,
+            "blocked_reason": "receiver_pushkit_token_missing",
+        }
+
+    diagnostics = voip_send_service.send(
+        APNsVoIPSandboxSendRequest(version=1, dry_run=False),
+        token_record,
+        payload_kind="real_invite_controlled",
+        pending_metadata_reference=pending_metadata_reference,
+    )
+    return {
+        "real_non_dev_invite_used": True,
+        "dev_invite_used": False,
+        "background_apns_push_requested": diagnostics.apns_voip_push_send_requested,
+        "background_apns_push_result": diagnostics.apns_voip_push_send_result,
+        "background_apns_failure_reason": diagnostics.apns_failure_reason,
+        "persisted_pushkit_token_lookup_result": diagnostics.persisted_pushkit_token_lookup_result,
+        "pushkit_token_redacted": diagnostics.pushkit_token_redacted,
+        "apns_environment": diagnostics.apns_environment,
+        "apns_topic_resolved": diagnostics.apns_topic_resolved,
+        "media_credentials_requested": diagnostics.media_credentials_requested,
+        "media_connect_requested": diagnostics.media_connect_requested,
+        "matrix_event_emit_requested": diagnostics.matrix_event_emit_requested,
+        "pushkit_upload_store_key_redacted": lookup_store_key_redacted,
+        "pushkit_upload_record_updated_age_bucket": record_updated_age_bucket(token_record),
+        "pushkit_upload_environment": token_record.environment_class,
+        "pushkit_upload_token_is_hex": is_hex_pushkit_token(token_record.token),
+        "real_invite_lookup_store_key_redacted": lookup_store_key_redacted,
+        "real_invite_lookup_record_updated_age_bucket": record_updated_age_bucket(token_record),
+        "real_invite_lookup_environment": "development",
+        "real_invite_lookup_token_is_hex": is_hex_pushkit_token(token_record.token),
+        "upload_invite_store_key_match": True,
+        "safe_to_send_apns": True,
+        "APNs_sent": diagnostics.apns_voip_push_send_result == "sandbox_success",
+        "blocked_reason": "none" if diagnostics.apns_voip_push_send_result == "sandbox_success" else diagnostics.blocked_reason,
+    }
 
 
 def _background_invite_apns_diagnostics(

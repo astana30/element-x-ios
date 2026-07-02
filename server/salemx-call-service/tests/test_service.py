@@ -805,6 +805,154 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("auth-b", diagnostic_output)
         self.assertNotIn("auth-d", diagnostic_output)
 
+    async def test_prepare_route_splits_metadata_creation_from_apns_send(self) -> None:
+        app_module = _load_app_module()
+        store = InMemoryPushKitTokenStore()
+        token_request = app_module.PushKitTokenRegistrationRequest.from_mapping({
+            "version": 1,
+            "token": "synthetic-" + "recipient-" + "pushkit-token-fixture",
+            "environment": "development",
+        })
+        store.store("callee", "device-b", token_request)
+        provider = FakeAPNsVoIPProvider(result="sandbox_success")
+        send_service = APNsVoIPSandboxSendService(
+            APNsVoIPSandboxConfig(
+                enabled=True,
+                environment="sandbox",
+                team_id="TEAMID",
+                key_id="KEYID",
+                auth_key_path="/redacted/apns-auth-key.p8",
+                topic="kz.salemx.msg.voip",
+            ),
+            provider=provider,
+        )
+        app = app_module.create_app(
+            token_service=self.make_token_service(),
+            pushkit_token_store=store,
+            apns_voip_send_service=send_service,
+        )
+        payload = self.targeted_invite_payload(
+            expires_at_ms=4102444800000,
+            pending_metadata={
+                "version": 1,
+                "call_id": "call-prepare",
+                "room_id": "!prepare-room:example.test",
+                "intent": "audio",
+            },
+        )
+
+        unauth_prepare_status, _ = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_INVITE_PREPARE_PATH,
+            {},
+            payload,
+        )
+        prepare_status, prepare_body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_INVITE_PREPARE_PATH,
+            {"authorization": self.authorization("auth-a")},
+            payload,
+        )
+        self.assertEqual(len(provider.requests), 0)
+        sender_reference = prepare_body["sender_authorized_metadata_reference"]
+        unclaimed_send_status, _ = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_INVITE_SEND_PREPARED_PATH,
+            {"authorization": self.authorization("auth-a")},
+            {
+                "version": 1,
+                "sender_authorized_metadata_reference": sender_reference,
+            },
+        )
+        claim_status, claim_body = await _asgi_get_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_PENDING_METADATA_SENDER_CLAIM_PATH,
+            {"authorization": self.authorization("auth-a")},
+        )
+        send_status, send_body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_INVITE_SEND_PREPARED_PATH,
+            {"authorization": self.authorization("auth-a")},
+            {
+                "version": 1,
+                "sender_authorized_metadata_reference": sender_reference,
+            },
+        )
+        repeat_status, repeat_body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_INVITE_SEND_PREPARED_PATH,
+            {"authorization": self.authorization("auth-a")},
+            {
+                "version": 1,
+                "sender_authorized_metadata_reference": sender_reference,
+            },
+        )
+        unauth_send_status, _ = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_INVITE_SEND_PREPARED_PATH,
+            {},
+            {
+                "version": 1,
+                "sender_authorized_metadata_reference": sender_reference,
+            },
+        )
+        output = json.dumps({
+            "prepare": {
+                key: value for key, value in prepare_body.items()
+                if key != "sender_authorized_metadata_reference"
+            },
+            "claim": {
+                key: value for key, value in claim_body.items()
+                if key.startswith("server_side_") or key.startswith("sender_")
+            },
+            "send": send_body,
+            "repeat": repeat_body.get("diagnostics", {}),
+        }, sort_keys=True)
+
+        self.assertEqual(unauth_prepare_status, 401)
+        self.assertEqual(prepare_status, 200)
+        self.assertEqual(prepare_body["fresh_metadata_created"], True)
+        self.assertEqual(prepare_body["fresh_metadata_result_bucket"], "success_redacted")
+        self.assertEqual(prepare_body["fresh_metadata_state_bucket"], "prepared_not_sent_redacted")
+        self.assertEqual(prepare_body["fresh_metadata_bound_sender_bucket"], "matched_redacted")
+        self.assertEqual(prepare_body["fresh_metadata_bound_receiver_bucket"], "matched_redacted")
+        self.assertEqual(prepare_body["prepared_metadata_claimed_by_sender"], False)
+        self.assertEqual(prepare_body["pending_metadata_created"], True)
+        self.assertEqual(prepare_body["background_apns_push_requested"], False)
+        self.assertEqual(prepare_body["APNs_sent"], False)
+        self.assertEqual(prepare_body["APNs_send_count"], 0)
+        self.assertEqual(prepare_body["valid_invite_sent"], False)
+
+        self.assertEqual(unclaimed_send_status, 403)
+        self.assertEqual(claim_status, 200)
+        self.assertEqual(claim_body["server_side_sender_metadata_claim_result_bucket"], "success_redacted")
+        self.assertEqual(claim_body["sender_authorized_metadata_source_available"], True)
+
+        self.assertEqual(send_status, 200)
+        self.assertEqual(send_body["fresh_metadata_state_bucket"], "sent_redacted")
+        self.assertEqual(send_body["prepared_metadata_claimed_by_sender"], True)
+        self.assertEqual(send_body["background_apns_push_requested"], True)
+        self.assertEqual(send_body["background_apns_push_result"], "sandbox_success")
+        self.assertEqual(send_body["APNs_sent"], True)
+        self.assertEqual(send_body["APNs_send_count"], 1)
+        self.assertEqual(send_body["APNs_type_bucket"], "sandbox_redacted")
+        self.assertEqual(send_body["production_APNs_sent"], False)
+        self.assertEqual(send_body["media_credentials_requested"], False)
+        self.assertEqual(send_body["media_connect_requested"], False)
+        self.assertEqual(send_body["matrix_event_emit_requested"], False)
+        self.assertEqual(len(provider.requests), 1)
+
+        self.assertEqual(repeat_status, 409)
+        self.assertEqual(repeat_body["diagnostics"]["blocked_reason"], "prepared_invite_already_sent_redacted")
+        self.assertEqual(repeat_body["diagnostics"]["APNs_sent"], False)
+        self.assertEqual(repeat_body["diagnostics"]["APNs_send_count"], 0)
+        self.assertEqual(unauth_send_status, 401)
+        self.assertEqual(len(provider.requests), 1)
+        for raw_value in ["call-prepare", "!prepare-room:example.test", "caller", "callee", "device-a", "device-b"]:
+            self.assertNotIn(raw_value, output)
+        self.assertNotIn("auth-a", output)
+        self.assertNotIn("synthetic-recipient-pushkit-token-fixture", output)
+
     async def test_real_invite_pending_metadata_follows_latest_pushkit_token_when_requested_device_is_stale(self) -> None:
         app_module = _load_app_module()
         signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
