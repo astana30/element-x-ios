@@ -9697,6 +9697,8 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var receiverConnectedSessionLeaseTask: Task<Void, Never>?
     private static var receiverConnectedSessionLeaseReleased = false
     private static var receiverConnectedWindowRetentionExtensionUsed = false
+    private static var receiverControlledRuntimePendingSession: DirectCallSession?
+    private static var receiverControlledRuntimePendingConnectionInfo: DirectCallMediaConnectionInfo?
     private static var receiverRuntimeLiveKitClientFactory: @MainActor () -> DirectCallLiveKitClientProtocol = {
         LiveKitDirectCallClient()
     }
@@ -9903,6 +9905,8 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static func armPhysical6RuntimeEnablementURLHook() {
         lock.lock()
         physical6RuntimeEnablementURLHook = .armed
+        let pendingSession = receiverControlledRuntimePendingSession
+        let pendingConnectionInfo = receiverControlledRuntimePendingConnectionInfo
         var summary = latestVoIPPushReceiptSummary
         summary.recordPhysical6RuntimeEnablementURLHook(physical6RuntimeEnablementURLHook)
         summary.mediaConnectRequested = false
@@ -9919,6 +9923,12 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         lock.unlock()
 
         updateLatestVoIPPushReceiptSummary(summary)
+
+        if let pendingSession, let pendingConnectionInfo {
+            Task { @MainActor in
+                startReceiverControlledRuntimeConnectLeaseIfAllowed(session: pendingSession, connectionInfo: pendingConnectionInfo)
+            }
+        }
     }
 
     private static func startReceiverPushKitTokenReadinessURLHook() {
@@ -14096,6 +14106,11 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
                                                 source: source,
                                                 diagnostics: tokenProvider.diagnosticSnapshot)
         if let connectionInfo = receivedConnectionInfo {
+            lock.lock()
+            receiverControlledRuntimePendingSession = session
+            receiverControlledRuntimePendingConnectionInfo = connectionInfo
+            lock.unlock()
+
             startReceiverControlledRuntimeConnectLeaseIfAllowed(session: session, connectionInfo: connectionInfo)
         }
     }
@@ -14149,6 +14164,11 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
 
     @MainActor
     private static func runReceiverControlledRuntimeConnectLease(session: DirectCallSession, connectionInfo: DirectCallMediaConnectionInfo) async {
+        lock.lock()
+        receiverControlledRuntimePendingSession = nil
+        receiverControlledRuntimePendingConnectionInfo = nil
+        lock.unlock()
+
         let keyStore = DirectCallLiveKitMediaKeyStore()
         let keyMaterial = UUID().uuidString + UUID().uuidString
         let e2eeContext: any DirectCallMediaE2EEContextProtocol
