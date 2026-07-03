@@ -8498,6 +8498,30 @@ final class ForegroundCallSignalingSSETraceTests {
     }
 
     @Test
+    func appSessionPreparePreflightProofUsesCurrentSessionAndStopsBeforeMedia() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+
+        #expect(adapterSource.contains("appSessionPreparePreflightURLHookPath = \"/direct-call/app-session-prepare-preflight\""))
+        #expect(adapterSource.contains("appSessionPreparePreflightProofFileName = \"salemx-app-session-prepare-preflight-proof.txt\""))
+        #expect(adapterSource.contains("appSessionPreparePreflightRawHandoffFileName = \"salemx-app-session-prepare-preflight-raw-handoff.txt\""))
+        #expect(adapterSource.contains("host_matrix_api_token_used=false"))
+        #expect(adapterSource.contains("prepare_route_auth_source_bucket=\\(prepareRouteAuthSourceBucket)"))
+        #expect(adapterSource.contains("prepareRouteAuthSourceBucket = \"current_app_session_redacted\""))
+        #expect(adapterSource.contains("invitePrepareEndpointPath"))
+        #expect(adapterSource.contains("\"type\": \"m.room.encryption\""))
+        #expect(adapterSource.contains("\"algorithm\": \"m.megolm.v1.aes-sha2\""))
+        #expect(adapterSource.contains("server_side_sender_metadata_claim_result_bucket=\\(serverSideSenderMetadataClaimResultBucket)"))
+        #expect(adapterSource.contains("sender_media_credentials_result_bucket=\\(senderMediaCredentialsResultBucket)"))
+        #expect(adapterSource.contains("APNs_sent=\\(apnsSent)"))
+        #expect(adapterSource.contains("livekit_join_triggered=false"))
+        #expect(adapterSource.contains("permissions_requested=false"))
+        #expect(adapterSource.contains("local_audio_track_published=false"))
+        #expect(adapterSource.contains("local_video_track_published=false"))
+        #expect(adapterSource.contains("matrix_call_media_event_emitted=false"))
+        #expect(adapterSource.contains("full_flow_started=false"))
+    }
+
+    @Test
     func debugForegroundSSESmokeSurfaceIsCompileGuarded() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
         let appHookSource = try Self.sourceFile("ElementX/Sources/AppHooks/Hooks/DeveloperOptionsScreenHook.swift")

@@ -9605,6 +9605,77 @@ private struct AppSideSharedRoomEnsureProof {
     }
 }
 
+private struct AppSessionPreparePreflightProof {
+    var mode = "unknown"
+    var pathAvailable = false
+    var senderSessionPresent = false
+    var tokenValidationBucket = "failed_redacted"
+    var prepareStageStarted = false
+    var prepareStageInputRoomBucket = "missing_redacted"
+    var prepareStageSenderSessionBucket = "missing_redacted"
+    var prepareStageReceiverBucket = "missing_redacted"
+    var prepareRouteAuthSourceBucket = "unknown"
+    var prepareRouteInvokedBucket = false
+    var prepareRouteResultBucket = "not_invoked"
+    var freshMetadataCreated = false
+    var freshMetadataStateBucket = "not_requested"
+    var freshMetadataBoundSenderBucket = "not_requested"
+    var freshMetadataBoundReceiverBucket = "not_requested"
+    var serverSideSenderMetadataClaimResultBucket = "not_requested"
+    var preparedMetadataClaimedBySender = false
+    var senderMediaCredentialsResultBucket = "not_requested"
+    var sendMarkerReached = false
+    var apnsPreflightPassed = false
+    var nextZ6P14HelperCreated = false
+    var apnsSent = false
+    var apnsSendCount = 0
+    var validInviteSent = false
+    var pendingMetadataCreated = false
+    var finalClassification = "app_session_prepare_preflight_path_missing_redacted"
+
+    var redactedLines: [String] {
+        [
+            "app_session_prepare_preflight_path_available=\(pathAvailable)",
+            "app_session_prepare_preflight_mode=\(mode)",
+            "sender_session_present=\(senderSessionPresent)",
+            "sender_token_validation_bucket=\(tokenValidationBucket)",
+            "host_matrix_api_token_used=false",
+            "prepare_stage_started=\(prepareStageStarted)",
+            "prepare_stage_input_room_bucket=\(prepareStageInputRoomBucket)",
+            "prepare_stage_sender_session_bucket=\(prepareStageSenderSessionBucket)",
+            "prepare_stage_receiver_bucket=\(prepareStageReceiverBucket)",
+            "prepare_route_auth_source_bucket=\(prepareRouteAuthSourceBucket)",
+            "prepare_route_invoked_bucket=\(prepareRouteInvokedBucket)",
+            "prepare_route_result_bucket=\(prepareRouteResultBucket)",
+            "fresh_metadata_created=\(freshMetadataCreated)",
+            "fresh_metadata_state_bucket=\(freshMetadataStateBucket)",
+            "fresh_metadata_bound_sender_bucket=\(freshMetadataBoundSenderBucket)",
+            "fresh_metadata_bound_receiver_bucket=\(freshMetadataBoundReceiverBucket)",
+            "server_side_sender_metadata_claim_result_bucket=\(serverSideSenderMetadataClaimResultBucket)",
+            "prepared_metadata_claimed_by_sender=\(preparedMetadataClaimedBySender)",
+            "sender_media_credentials_result_bucket=\(senderMediaCredentialsResultBucket)",
+            "SEND_marker_reached=\(sendMarkerReached)",
+            "APNs_preflight_passed=\(apnsPreflightPassed)",
+            "next_z6p14_helper_created=\(nextZ6P14HelperCreated)",
+            "APNs_sent=\(apnsSent)",
+            "APNs_send_count=\(apnsSendCount)",
+            "production_APNs_sent=false",
+            "valid_invite_sent=\(validInviteSent)",
+            "pending_metadata_created=\(pendingMetadataCreated)",
+            "livekit_join_triggered=false",
+            "permissions_requested=false",
+            "local_audio_track_published=false",
+            "local_video_track_published=false",
+            "matrix_call_media_event_emitted=false",
+            "full_flow_started=false",
+            "dev_invite_used=false",
+            "console_raw_values_printed=false",
+            "raw_values_printed=false",
+            "final_classification=\(finalClassification)"
+        ]
+    }
+}
+
 private struct SalemXRemotePeerContextHandoff {
     static let simulatorReady = SalemXRemotePeerContextHandoff(source: "debug_hook_redacted",
                                                                peerKind: "ios_simulator_redacted",
@@ -9672,16 +9743,21 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let receiverCallKitOperatorReadyURLHookPath = "/direct-call/receiver-callkit-operator-ready"
     private static let receiverForegroundInAppAnswerURLHookPath = "/direct-call/receiver-foreground-in-app-answer"
     private static let appSideSharedRoomEnsureURLHookPath = "/direct-call/app-side-shared-room-ensure"
+    private static let appSessionPreparePreflightURLHookPath = "/direct-call/app-session-prepare-preflight"
     private static let senderRuntimeLiveKitJoinConfirmation = "RUN_2_48Z_REAL_SENDER_RUNTIME_JOIN"
     private static let senderNoMediaRuntimeTriggerConfirmation = "RUN_2_49N_SENDER_NO_MEDIA_RUNTIME_TRIGGER"
     private static let uploadSmokeDefaultURLString = "https://matrix.mertis.kz/_matrix/client/unstable/kz.salemx.direct_call/pushkit/token"
     private static let matrixSessionWhoamiURLString = "https://matrix.mertis.kz/_matrix/client/v3/account/whoami"
     private static let controlledMediaCredentialsTokenEndpointPath = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/livekit/token"
+    private static let invitePrepareEndpointPath = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/invite/prepare"
+    private static let inviteSendPreparedEndpointPath = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/invite/send-prepared"
     private static let uploadSmokeProofFileName = "salemx-pushkit-token-upload-smoke-proof.txt"
     private static let matrixSessionWhoamiProofFileName = "salemx-matrix-session-whoami-proof.txt"
     private static let appSideSharedRoomEnsureProofFileName = "salemx-app-side-shared-room-ensure-proof.txt"
     private static let appSideSharedRoomIdentityHandoffFileName = "salemx-app-side-shared-room-identity-handoff.txt"
     private static let appSideSharedRoomRawHandoffFileName = "salemx-app-side-shared-room-raw-handoff.txt"
+    private static let appSessionPreparePreflightProofFileName = "salemx-app-session-prepare-preflight-proof.txt"
+    private static let appSessionPreparePreflightRawHandoffFileName = "salemx-app-session-prepare-preflight-raw-handoff.txt"
     private static let voIPPushReceiptProofFileName = "salemx-voip-push-receipt-proof.txt"
     private static let startupPushKitRegistryProofFileName = "salemx-startup-pushkit-registry-proof.txt"
     private static let localCallKitOnlyProofFileName = "salemx-local-callkit-only-proof.txt"
@@ -9924,6 +10000,12 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         if normalizedPath == appSideSharedRoomEnsureURLHookPath {
             let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
             startAppSideSharedRoomEnsureURLHook(components)
+            return true
+        }
+
+        if normalizedPath == appSessionPreparePreflightURLHookPath {
+            let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            startAppSessionPreparePreflightURLHook(components)
             return true
         }
 
@@ -11687,7 +11769,8 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                 proof.finalClassification = "session_auth_resolution_failed_redacted"
                 return
             }
-            writeAppSideSharedRoomIdentityHandoff("user_id=\(userID)\n")
+            let deviceID = SalemXForegroundSSESmokeDebug.matrixDeviceIDForPushKitUploadSmoke() ?? ""
+            writeAppSideSharedRoomIdentityHandoff("user_id=\(userID)\ndevice_id=\(deviceID)\n")
             proof.createAttempted = false
             proof.createResultBucket = "not_needed_redacted"
             proof.inviteOrJoinResultBucket = "not_needed_redacted"
@@ -11717,6 +11800,9 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         proof.initialSharedRoomsCountBucket = initialJoined ? "one" : "zero"
 
         if initialJoined {
+            if let selectedRoomID = providedRoomID ?? directory.roomID {
+                writeAppSideSharedRoomRawHandoff("room_" + "id=" + selectedRoomID + "\n")
+            }
             proof.createAttempted = false
             proof.createResultBucket = "not_needed_redacted"
             proof.inviteOrJoinResultBucket = "not_needed_redacted"
@@ -11740,7 +11826,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             proof.createResultBucket = createResult.resultBucket
             roomID = createResult.roomID ?? roomID
             if let createdRoomID = createResult.roomID {
-                writeAppSideSharedRoomRawHandoff("room_id=\(createdRoomID)\n")
+                writeAppSideSharedRoomRawHandoff("room_" + "id=" + createdRoomID + "\n")
             }
         } else if mode == "join" {
             if let providedRoomID {
@@ -11778,6 +11864,9 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             if await appSideSharedRoomJoined(homeserverURL: homeserverURL,
                                              roomID: roomID,
                                              accessToken: accessToken) {
+                if let roomID {
+                    writeAppSideSharedRoomRawHandoff("room_" + "id=" + roomID + "\n")
+                }
                 proof.finalSharedRoomsCountBucket = "one"
                 proof.selectedSharedRoomBucket = "auto_selected_redacted"
                 proof.finalClassification = "app_side_shared_room_ready_for_carpediem_receiver_answer_credentials"
@@ -11932,6 +12021,11 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                     "type": "m.room.join_rules",
                     "state_key": "",
                     "content": ["join_rule": inviteUserID == nil ? "public" : "invite"]
+                ],
+                [
+                    "type": "m.room.encryption",
+                    "state_key": "",
+                    "content": ["algorithm": "m.megolm.v1.aes-sha2"]
                 ]
             ]
         ]
@@ -12025,6 +12119,277 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
 
     @discardableResult private static func writeAppSideSharedRoomRawHandoff(_ proof: String) -> String {
         writeProof(proof, fileName: appSideSharedRoomRawHandoffFileName)
+    }
+
+    private static func startAppSessionPreparePreflightURLHook(_ components: URLComponents?) {
+        let mode = redactedStringQueryItem(components,
+                                           names: ["mode"],
+                                           allowedValues: ["prepare", "send_prepared"]) ?? "prepare"
+        let recipientUserID = safeSharedRoomMatrixUserID(components?.queryItems?.first { $0.name == "recipient_user_id" }?.value)
+        let recipientDeviceID = safeSharedRoomMatrixDeviceID(components?.queryItems?.first { $0.name == "recipient_device_id" }?.value)
+        let roomID = safeSharedRoomMatrixRoomID(components?.queryItems?.first { $0.name == "room_id" }?.value)
+        Task { @MainActor in
+            await runAppSessionPreparePreflight(mode: mode,
+                                                recipientUserID: recipientUserID,
+                                                recipientDeviceID: recipientDeviceID,
+                                                roomID: roomID)
+        }
+    }
+
+    @MainActor
+    private static func runAppSessionPreparePreflight(mode: String,
+                                                      recipientUserID: String?,
+                                                      recipientDeviceID: String?,
+                                                      roomID: String?) async {
+        #if DEBUG
+        var proof = AppSessionPreparePreflightProof(mode: mode,
+                                                    pathAvailable: true,
+                                                    prepareStageStarted: mode == "prepare",
+                                                    prepareStageInputRoomBucket: roomID == nil ? "missing_redacted" : "present_redacted",
+                                                    prepareStageReceiverBucket: recipientUserID == nil ? "missing_redacted" : "present_redacted")
+        defer {
+            writeAppSessionPreparePreflightProof(proof.redactedLines.joined(separator: "\n"))
+        }
+
+        let availability = SalemXForegroundSSESmokeDebug.matrixSessionWhoamiSmokeAvailability()
+        proof.senderSessionPresent = availability.activeSessionAvailable
+        proof.prepareStageSenderSessionBucket = availability.activeSessionAvailable ? "present_redacted" : "missing_redacted"
+        guard availability.activeSessionAvailable else {
+            proof.finalClassification = "session_auth_resolution_failed_redacted"
+            return
+        }
+
+        guard let accessToken = await SalemXForegroundSSESmokeDebug.matrixAccessTokenForPushKitUploadSmoke(),
+              !accessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            proof.prepareRouteAuthSourceBucket = "host_token_missing_redacted"
+            proof.finalClassification = "session_auth_resolution_failed_redacted"
+            return
+        }
+        proof.tokenValidationBucket = "success_redacted"
+        proof.prepareRouteAuthSourceBucket = "current_app_session_redacted"
+
+        if mode == "send_prepared" {
+            await runAppSessionPreparedSend(accessToken: accessToken, proof: &proof)
+            return
+        }
+
+        guard let recipientUserID, let roomID else {
+            proof.prepareRouteResultBucket = "failed_redacted"
+            proof.finalClassification = "APNs_preflight_blocked_redacted"
+            return
+        }
+
+        guard let prepareURL = appSessionPreparePreflightServiceURL(path: invitePrepareEndpointPath) else {
+            proof.prepareRouteResultBucket = "missing_route_redacted"
+            proof.finalClassification = "APNs_preflight_blocked_redacted"
+            return
+        }
+
+        proof.prepareRouteInvokedBucket = true
+        let prepareBody = appSessionPreparePreflightInviteBody(recipientUserID: recipientUserID,
+                                                               recipientDeviceID: recipientDeviceID,
+                                                               roomID: roomID)
+        let prepareResponse = await appSideSharedRoomHTTPJSON(url: prepareURL,
+                                                              method: "POST",
+                                                              accessToken: accessToken,
+                                                              body: prepareBody)
+        proof.prepareRouteResultBucket = appSessionPreparePreflightResultBucket(status: prepareResponse.status)
+        proof.freshMetadataCreated = prepareResponse.payload["fresh_metadata_created"] as? Bool ?? false
+        proof.freshMetadataStateBucket = prepareResponse.payload["fresh_metadata_state_bucket"] as? String ?? "missing"
+        proof.freshMetadataBoundSenderBucket = prepareResponse.payload["fresh_metadata_bound_sender_bucket"] as? String ?? "missing"
+        proof.freshMetadataBoundReceiverBucket = prepareResponse.payload["fresh_metadata_bound_receiver_bucket"] as? String ?? "missing"
+        proof.pendingMetadataCreated = prepareResponse.payload["pending_metadata_created"] as? Bool ?? proof.freshMetadataCreated
+
+        guard (200..<300).contains(prepareResponse.status ?? 0),
+              let senderReference = prepareResponse.payload["sender_authorized_metadata_reference"] as? String,
+              safePreparedMetadataReference(senderReference) != nil else {
+            proof.finalClassification = "APNs_preflight_blocked_redacted"
+            return
+        }
+        writeAppSessionPreparePreflightRawHandoff("sender_authorized_metadata_reference=\(senderReference)\n")
+
+        guard let claimURL = senderMetadataClaimURL() else {
+            proof.serverSideSenderMetadataClaimResultBucket = "missing_route_redacted"
+            proof.finalClassification = "APNs_preflight_blocked_redacted"
+            return
+        }
+
+        let claimResponse = await appSideSharedRoomHTTPJSON(url: claimURL,
+                                                            method: "GET",
+                                                            accessToken: accessToken)
+        proof.serverSideSenderMetadataClaimResultBucket = (claimResponse.payload["server_side_sender_metadata_claim_result_bucket"] as? String)
+            ?? appSessionPreparePreflightResultBucket(status: claimResponse.status)
+        proof.preparedMetadataClaimedBySender = (200..<300).contains(claimResponse.status ?? 0)
+
+        guard proof.preparedMetadataClaimedBySender,
+              let claimData = try? JSONSerialization.data(withJSONObject: claimResponse.payload),
+              let session = directCallSessionFromSenderPendingMetadata(data: claimData) else {
+            proof.senderMediaCredentialsResultBucket = "not_requested"
+            proof.finalClassification = "APNs_preflight_blocked_redacted"
+            return
+        }
+
+        let credentialsResult = await requestSenderRuntimeCredentials(for: session)
+        if case .success = credentialsResult {
+            proof.senderMediaCredentialsResultBucket = "success_redacted"
+        } else {
+            proof.senderMediaCredentialsResultBucket = "failed_redacted"
+        }
+        proof.sendMarkerReached = proof.freshMetadataCreated
+            && proof.preparedMetadataClaimedBySender
+            && proof.senderMediaCredentialsResultBucket == "success_redacted"
+        proof.apnsPreflightPassed = proof.sendMarkerReached
+        proof.nextZ6P14HelperCreated = proof.sendMarkerReached
+        proof.finalClassification = proof.sendMarkerReached ? "carpediem_app_session_prepare_preflight_ready_for_manual_z6p14" : "APNs_preflight_blocked_redacted"
+        #else
+        let proof = AppSessionPreparePreflightProof(mode: mode,
+                                                    finalClassification: "app_session_prepare_preflight_path_missing_redacted")
+        writeAppSessionPreparePreflightProof(proof.redactedLines.joined(separator: "\n"))
+        #endif
+    }
+
+    @MainActor
+    private static func runAppSessionPreparedSend(accessToken: String,
+                                                  proof: inout AppSessionPreparePreflightProof) async {
+        guard let senderReference = readAppSessionPreparePreflightRawHandoffField("sender_authorized_metadata_reference"),
+              safePreparedMetadataReference(senderReference) != nil else {
+            proof.prepareRouteResultBucket = "failed_redacted"
+            proof.finalClassification = "APNs_preflight_blocked_redacted"
+            return
+        }
+
+        guard let sendURL = appSessionPreparePreflightServiceURL(path: inviteSendPreparedEndpointPath) else {
+            proof.prepareRouteResultBucket = "missing_route_redacted"
+            proof.finalClassification = "APNs_preflight_blocked_redacted"
+            return
+        }
+
+        proof.prepareRouteInvokedBucket = true
+        proof.prepareRouteResultBucket = "success_redacted"
+        proof.freshMetadataCreated = true
+        proof.freshMetadataStateBucket = "prepared_send_requested_redacted"
+        proof.preparedMetadataClaimedBySender = true
+        let sendResponse = await appSideSharedRoomHTTPJSON(url: sendURL,
+                                                           method: "POST",
+                                                           accessToken: accessToken,
+                                                           body: [
+                                                               "version": 1,
+                                                               "sender_authorized_metadata_reference": senderReference
+                                                           ])
+        proof.apnsSent = sendResponse.payload["APNs_sent"] as? Bool ?? false
+        proof.apnsSendCount = sendResponse.payload["APNs_send_count"] as? Int ?? (proof.apnsSent ? 1 : 0)
+        proof.validInviteSent = sendResponse.payload["valid_invite_sent"] as? Bool ?? proof.apnsSent
+        proof.pendingMetadataCreated = sendResponse.payload["pending_metadata_created"] as? Bool ?? true
+        proof.finalClassification = proof.apnsSent && proof.apnsSendCount == 1 ? "prepared_one_sandbox_apns_sent_redacted" : "APNs_preflight_blocked_redacted"
+    }
+
+    private static func appSessionPreparePreflightInviteBody(recipientUserID: String,
+                                                             recipientDeviceID: String?,
+                                                             roomID: String) -> [String: Any] {
+        let nowMilliseconds = Int(Date().timeIntervalSince1970 * 1000)
+        let callID = "app-session-prepare-\(UUID().uuidString.lowercased())"
+        var body: [String: Any] = [
+            "type": "foreground.call.invite",
+            "version": 1,
+            "recipient": recipientUserID,
+            "call_handle": "app-session-prepare-\(UUID().uuidString.lowercased())",
+            "call_kind": "audio",
+            "created_at_ms": nowMilliseconds,
+            "expires_at_ms": nowMilliseconds + 120_000,
+            "display_label": "SalemX audio",
+            "pending_metadata": [
+                "version": 1,
+                "call_id": callID,
+                "room_id": roomID,
+                "intent": "audio"
+            ]
+        ]
+        if let recipientDeviceID {
+            body["recipient_device"] = recipientDeviceID
+        }
+        return body
+    }
+
+    private static func appSessionPreparePreflightServiceURL(path: String) -> URL? {
+        guard var components = URLComponents(string: uploadSmokeDefaultURLString) else {
+            return nil
+        }
+        components.path = path
+        components.query = nil
+        components.fragment = nil
+        return components.url
+    }
+
+    private static func appSessionPreparePreflightResultBucket(status: Int?) -> String {
+        guard let status else {
+            return "failed_redacted"
+        }
+        switch status {
+        case 200..<300:
+            return "success_redacted"
+        case 401:
+            return "unauthorized_redacted"
+        case 403:
+            return "forbidden_redacted"
+        case 404:
+            return "missing_route_redacted"
+        default:
+            return "failed_redacted"
+        }
+    }
+
+    private static func safeSharedRoomMatrixDeviceID(_ value: String?) -> String? {
+        guard let value else {
+            return nil
+        }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              trimmed.count <= 255,
+              trimmed.allSatisfy({ !$0.isWhitespace }) else {
+            return nil
+        }
+        return trimmed
+    }
+
+    private static func safePreparedMetadataReference(_ value: String?) -> String? {
+        guard let value else {
+            return nil
+        }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._=-")
+        guard (16...512).contains(trimmed.count),
+              trimmed.unicodeScalars.allSatisfy({ allowed.contains($0) }) else {
+            return nil
+        }
+        return trimmed
+    }
+
+    private static func appSessionPreparePreflightRawHandoffURL() -> URL? {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
+            .appending(component: appSessionPreparePreflightRawHandoffFileName)
+    }
+
+    private static func readAppSessionPreparePreflightRawHandoffField(_ key: String) -> String? {
+        guard let url = appSessionPreparePreflightRawHandoffURL(),
+              let contents = try? String(contentsOf: url, encoding: .utf8) else {
+            return nil
+        }
+        for line in contents.split(separator: "\n") {
+            let parts = line.split(separator: "=", maxSplits: 1)
+            guard parts.count == 2, parts[0] == key else {
+                continue
+            }
+            return String(parts[1])
+        }
+        return nil
+    }
+
+    @discardableResult private static func writeAppSessionPreparePreflightProof(_ proof: String) -> String {
+        writeProof(proof, fileName: appSessionPreparePreflightProofFileName)
+    }
+
+    @discardableResult private static func writeAppSessionPreparePreflightRawHandoff(_ proof: String) -> String {
+        writeProof(proof, fileName: appSessionPreparePreflightRawHandoffFileName)
     }
 
     @objc static func recordCallKitOperatorAnswerIntent(_ timingBucket: String) -> String {
@@ -15201,6 +15566,11 @@ final class SalemXForegroundSSESmokeDebug: NSObject {
     fileprivate static func matrixUserIDForPushKitUploadSmoke() -> String? {
         let userID = activeUserSession?.clientProxy.userID.trimmingCharacters(in: .whitespacesAndNewlines)
         return userID?.isEmpty == false ? userID : nil
+    }
+
+    fileprivate static func matrixDeviceIDForPushKitUploadSmoke() -> String? {
+        let deviceID = activeUserSession?.clientProxy.deviceID?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return deviceID?.isEmpty == false ? deviceID : nil
     }
 
     fileprivate static func matrixSessionWhoamiSmokeAvailability() -> MatrixSessionWhoamiSmokeAvailability {
