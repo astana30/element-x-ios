@@ -6530,6 +6530,41 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func receiverAudioPublishGateIsDebugOnlyAndRequiresConnectedAnswerBeforeMicrophone() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+        let debugGuardStart = try #require(adapterSource.range(of: "#if DEBUG && canImport(PushKit) && os(iOS)")?.lowerBound)
+        let hookPath = try #require(adapterSource.range(of: "receiverAudioPublishTriggerURLHookPath = \"/direct-call/receiver-audio-publish-trigger\"")?.lowerBound)
+        let triggerStart = try #require(adapterSource.range(of: "private static func startReceiverAudioPublishTriggerURLHook")?.lowerBound)
+        let triggerEnd = try #require(adapterSource.range(of: "private static func armSimulatorRemotePeerContextHandoffURLHook")?.lowerBound)
+        let source = String(adapterSource[triggerStart..<triggerEnd])
+
+        #expect(debugGuardStart < hookPath)
+        #expect(adapterSource.contains("receiverAudioPublishTriggerConfirmation = \"RUN_2_49Z6X_RECEIVER_AUDIO_PUBLISH\""))
+        #expect(source.contains("summary.recordReceiverAudioPublishGateInspection()"))
+        #expect(source.contains("summary.callKitAnswerActionReceived &&"))
+        #expect(source.contains("summary.mediaCredentialsResult == \"success_redacted\""))
+        #expect(source.contains("summary.liveKitJoinResult == \"success_redacted\""))
+        #expect(source.contains("summary.liveKitRoomConnected &&"))
+        #expect(source.contains("leaseAvailable"))
+        #expect(source.contains("receiverAudioPublishTriggerConsumed = true"))
+        #expect(source.contains("lease.client.setMicrophoneEnabled(true)"))
+        #expect(source.contains("summary.recordReceiverAudioPublishResult(result)"))
+        #expect(!source.contains("AVCaptureDevice.requestAccess"))
+        #expect(!source.contains("setCameraEnabled(true)"))
+        #expect(!source.contains("emitSignal(type:"))
+        #expect(!source.contains("realCallFlowStarted = true"))
+
+        #expect(adapterSource.contains("receiver_audio_permission_gate_available=\\(receiverAudioPermissionGateAvailable)"))
+        #expect(adapterSource.contains("receiver_audio_publish_gate_available=\\(receiverAudioPublishGateAvailable)"))
+        #expect(adapterSource.contains("receiver_audio_publish_trigger_consumable_when_ready=\\(receiverAudioPublishTriggerConsumableWhenReady)"))
+        #expect(adapterSource.contains("receiver_livekit_join_state_latch_bucket=\\(receiverLiveKitJoinStateLatchBucket)"))
+        #expect(adapterSource.contains("receiver_audio_track_publish_path_available=\\(receiverAudioTrackPublishPathAvailable)"))
+        #expect(adapterSource.contains("sender_subscribe_remote_audio_path_available=\\(senderSubscribeRemoteAudioPathAvailable)"))
+        #expect(adapterSource.contains("receiver_local_audio_track_published=\\(receiverLocalAudioTrackPublished)"))
+        #expect(!adapterSource.contains("receiverAudioPermissionResultBucket = \"raw"))
+    }
+
+    @Test
     func controlledRealRuntimePathDefaultsDisabledAndCallsFakeMediaOnlyWhenAllGatesTrue() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
         let debugGuardStart = try #require(adapterSource.range(of: "#if DEBUG && canImport(PushKit) && os(iOS)")?.lowerBound)
