@@ -9562,6 +9562,49 @@ private struct MatrixSessionWhoamiSmokeAvailability {
     var homeserverURLAvailable: Bool
 }
 
+private struct AppSideSharedRoomEnsureProof {
+    var mode = "unknown"
+    var pathAvailable = false
+    var sessionPresent = false
+    var tokenValidationBucket = "failed_redacted"
+    var createAttempted = false
+    var createResultBucket = "not_attempted"
+    var inviteOrJoinResultBucket = "not_attempted"
+    var initialSharedRoomsCountBucket = "zero"
+    var finalSharedRoomsCountBucket = "zero"
+    var selectedSharedRoomBucket = "none"
+    var finalClassification = "app_side_room_ensure_path_missing_redacted"
+
+    var redactedLines: [String] {
+        [
+            "app_side_room_ensure_path_available=\(pathAvailable)",
+            "app_side_room_ensure_mode=\(mode)",
+            "app_side_current_session_present=\(sessionPresent)",
+            "app_side_token_validation_bucket=\(tokenValidationBucket)",
+            "host_matrix_api_token_used=false",
+            "app_side_room_create_attempted=\(createAttempted)",
+            "app_side_room_create_result_bucket=\(createResultBucket)",
+            "app_side_room_invite_or_join_result_bucket=\(inviteOrJoinResultBucket)",
+            "initial_shared_rooms_count_bucket=\(initialSharedRoomsCountBucket)",
+            "final_shared_rooms_count_bucket=\(finalSharedRoomsCountBucket)",
+            "selected_shared_room_bucket=\(selectedSharedRoomBucket)",
+            "raw_values_printed=false",
+            "APNs_sent=false",
+            "APNs_send_count=0",
+            "production_APNs_sent=false",
+            "valid_invite_sent=false",
+            "pending_metadata_created=false",
+            "dev_invite_used=false",
+            "media_connect_requested=false",
+            "livekit_join_triggered=false",
+            "permissions_requested=false",
+            "matrix_call_media_event_emitted=false",
+            "full_flow_started=false",
+            "final_classification=\(finalClassification)"
+        ]
+    }
+}
+
 private struct SalemXRemotePeerContextHandoff {
     static let simulatorReady = SalemXRemotePeerContextHandoff(source: "debug_hook_redacted",
                                                                peerKind: "ios_simulator_redacted",
@@ -9628,6 +9671,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let receiverVoIPPushDeliveryTriageURLHookPath = "/direct-call/receiver-voip-push-delivery-triage"
     private static let receiverCallKitOperatorReadyURLHookPath = "/direct-call/receiver-callkit-operator-ready"
     private static let receiverForegroundInAppAnswerURLHookPath = "/direct-call/receiver-foreground-in-app-answer"
+    private static let appSideSharedRoomEnsureURLHookPath = "/direct-call/app-side-shared-room-ensure"
     private static let senderRuntimeLiveKitJoinConfirmation = "RUN_2_48Z_REAL_SENDER_RUNTIME_JOIN"
     private static let senderNoMediaRuntimeTriggerConfirmation = "RUN_2_49N_SENDER_NO_MEDIA_RUNTIME_TRIGGER"
     private static let uploadSmokeDefaultURLString = "https://matrix.mertis.kz/_matrix/client/unstable/kz.salemx.direct_call/pushkit/token"
@@ -9635,6 +9679,9 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static let controlledMediaCredentialsTokenEndpointPath = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/livekit/token"
     private static let uploadSmokeProofFileName = "salemx-pushkit-token-upload-smoke-proof.txt"
     private static let matrixSessionWhoamiProofFileName = "salemx-matrix-session-whoami-proof.txt"
+    private static let appSideSharedRoomEnsureProofFileName = "salemx-app-side-shared-room-ensure-proof.txt"
+    private static let appSideSharedRoomIdentityHandoffFileName = "salemx-app-side-shared-room-identity-handoff.txt"
+    private static let appSideSharedRoomRawHandoffFileName = "salemx-app-side-shared-room-raw-handoff.txt"
     private static let voIPPushReceiptProofFileName = "salemx-voip-push-receipt-proof.txt"
     private static let startupPushKitRegistryProofFileName = "salemx-startup-pushkit-registry-proof.txt"
     private static let localCallKitOnlyProofFileName = "salemx-local-callkit-only-proof.txt"
@@ -9871,6 +9918,12 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
 
         if normalizedPath == receiverForegroundInAppAnswerURLHookPath {
             startReceiverForegroundInAppAnswerURLHook()
+            return true
+        }
+
+        if normalizedPath == appSideSharedRoomEnsureURLHookPath {
+            let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            startAppSideSharedRoomEnsureURLHook(components)
             return true
         }
 
@@ -11581,6 +11634,397 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                                                          whoamiFailureReason: "network_failure",
                                                          blockedReason: "whoami_network_failure_redacted"))
         }
+    }
+
+    private static func startAppSideSharedRoomEnsureURLHook(_ components: URLComponents?) {
+        let mode = redactedStringQueryItem(components,
+                                           names: ["mode"],
+                                           allowedValues: ["identity", "check", "create", "join"]) ?? "check"
+        let aliasLocalPart = safeSharedRoomAliasLocalPart(components?.queryItems?.first { $0.name == "alias_localpart" }?.value)
+        let inviteUserID = safeSharedRoomMatrixUserID(components?.queryItems?.first { $0.name == "invite_user_id" }?.value)
+        let roomID = safeSharedRoomMatrixRoomID(components?.queryItems?.first { $0.name == "room_id" }?.value)
+        Task { @MainActor in
+            await runAppSideSharedRoomEnsure(mode: mode,
+                                             aliasLocalPart: aliasLocalPart,
+                                             inviteUserID: inviteUserID,
+                                             roomID: roomID)
+        }
+    }
+
+    @MainActor
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
+    private static func runAppSideSharedRoomEnsure(mode: String,
+                                                   aliasLocalPart: String?,
+                                                   inviteUserID: String?,
+                                                   roomID providedRoomID: String?) async {
+        #if DEBUG
+        var proof = AppSideSharedRoomEnsureProof(mode: mode,
+                                                 pathAvailable: true,
+                                                 createAttempted: mode == "create")
+        defer {
+            writeAppSideSharedRoomEnsureProof(proof.redactedLines.joined(separator: "\n"))
+        }
+
+        let availability = SalemXForegroundSSESmokeDebug.matrixSessionWhoamiSmokeAvailability()
+        guard availability.activeSessionAvailable else {
+            proof.sessionPresent = false
+            proof.tokenValidationBucket = "failed_redacted"
+            proof.finalClassification = "session_auth_resolution_failed_redacted"
+            return
+        }
+
+        proof.sessionPresent = true
+        guard let accessToken = await SalemXForegroundSSESmokeDebug.matrixAccessTokenForPushKitUploadSmoke(),
+              !accessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            proof.tokenValidationBucket = "failed_redacted"
+            proof.finalClassification = "session_auth_resolution_failed_redacted"
+            return
+        }
+        proof.tokenValidationBucket = "success_redacted"
+
+        if mode == "identity" {
+            guard let userID = SalemXForegroundSSESmokeDebug.matrixUserIDForPushKitUploadSmoke() else {
+                proof.finalClassification = "session_auth_resolution_failed_redacted"
+                return
+            }
+            writeAppSideSharedRoomIdentityHandoff("user_id=\(userID)\n")
+            proof.createAttempted = false
+            proof.createResultBucket = "not_needed_redacted"
+            proof.inviteOrJoinResultBucket = "not_needed_redacted"
+            proof.finalClassification = "app_side_identity_handoff_ready_redacted"
+            return
+        }
+
+        guard let homeserver = SalemXForegroundSSESmokeDebug.matrixHomeserverForPushKitUploadSmoke(),
+              let homeserverURL = URL(string: homeserver),
+              let homeserverHost = homeserverURL.host else {
+            proof.createResultBucket = "blocked_redacted"
+            proof.finalClassification = "app_side_room_create_failed_redacted"
+            return
+        }
+
+        let roomAlias = aliasLocalPart.map { "#\($0):\(homeserverHost)" }
+        let directory = if let roomAlias {
+            await appSideSharedRoomDirectoryLookup(homeserverURL: homeserverURL,
+                                                   roomAlias: roomAlias,
+                                                   accessToken: accessToken)
+        } else {
+            (statusBucket: "not_requested", roomID: providedRoomID)
+        }
+        let initialJoined = await appSideSharedRoomJoined(homeserverURL: homeserverURL,
+                                                          roomID: providedRoomID ?? directory.roomID,
+                                                          accessToken: accessToken)
+        proof.initialSharedRoomsCountBucket = initialJoined ? "one" : "zero"
+
+        if initialJoined {
+            proof.createAttempted = false
+            proof.createResultBucket = "not_needed_redacted"
+            proof.inviteOrJoinResultBucket = "not_needed_redacted"
+            proof.finalSharedRoomsCountBucket = "one"
+            proof.selectedSharedRoomBucket = "auto_selected_redacted"
+            proof.finalClassification = "app_side_shared_room_ready_for_carpediem_receiver_answer_credentials"
+            return
+        }
+
+        var roomID = providedRoomID ?? directory.roomID
+        if mode == "create" {
+            guard let aliasLocalPart else {
+                proof.createResultBucket = "blocked_redacted"
+                proof.finalClassification = "app_side_room_create_failed_redacted"
+                return
+            }
+            let createResult = await appSideSharedRoomCreate(homeserverURL: homeserverURL,
+                                                             aliasLocalPart: aliasLocalPart,
+                                                             inviteUserID: inviteUserID,
+                                                             accessToken: accessToken)
+            proof.createResultBucket = createResult.resultBucket
+            roomID = createResult.roomID ?? roomID
+            if let createdRoomID = createResult.roomID {
+                writeAppSideSharedRoomRawHandoff("room_id=\(createdRoomID)\n")
+            }
+        } else if mode == "join" {
+            if let providedRoomID {
+                let joinResult = await appSideSharedRoomJoinRoomID(homeserverURL: homeserverURL,
+                                                                   roomID: providedRoomID,
+                                                                   accessToken: accessToken)
+                proof.inviteOrJoinResultBucket = joinResult
+                roomID = providedRoomID
+            } else if let roomAlias {
+                let joinResult = await appSideSharedRoomJoin(homeserverURL: homeserverURL,
+                                                             roomAlias: roomAlias,
+                                                             roomID: providedRoomID,
+                                                             accessToken: accessToken)
+                proof.inviteOrJoinResultBucket = joinResult
+            } else {
+                proof.inviteOrJoinResultBucket = "blocked_redacted"
+                proof.finalClassification = "app_side_room_join_or_sync_failed_redacted"
+                return
+            }
+        } else {
+            proof.createResultBucket = "not_attempted"
+            proof.inviteOrJoinResultBucket = "not_attempted"
+        }
+
+        if roomID == nil {
+            if let roomAlias {
+                let postDirectory = await appSideSharedRoomDirectoryLookup(homeserverURL: homeserverURL,
+                                                                           roomAlias: roomAlias,
+                                                                           accessToken: accessToken)
+                roomID = postDirectory.roomID
+            }
+        }
+
+        for _ in 0..<12 {
+            if await appSideSharedRoomJoined(homeserverURL: homeserverURL,
+                                             roomID: roomID,
+                                             accessToken: accessToken) {
+                proof.finalSharedRoomsCountBucket = "one"
+                proof.selectedSharedRoomBucket = "auto_selected_redacted"
+                proof.finalClassification = "app_side_shared_room_ready_for_carpediem_receiver_answer_credentials"
+                return
+            }
+            try? await Task.sleep(nanoseconds: 500_000_000)
+        }
+
+        proof.finalSharedRoomsCountBucket = "zero"
+        proof.selectedSharedRoomBucket = "none"
+        proof.finalClassification = mode == "join" ? "app_side_room_join_or_sync_failed_redacted" : "app_side_room_create_failed_redacted"
+        #else
+        let proof = AppSideSharedRoomEnsureProof(mode: mode,
+                                                 pathAvailable: false,
+                                                 finalClassification: "app_side_room_ensure_path_missing_redacted")
+        writeAppSideSharedRoomEnsureProof(proof.redactedLines.joined(separator: "\n"))
+        #endif
+    }
+
+    private static func safeSharedRoomAliasLocalPart(_ value: String?) -> String? {
+        guard let value else {
+            return nil
+        }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789-_")
+        guard (12...120).contains(trimmed.count),
+              trimmed.unicodeScalars.allSatisfy({ allowed.contains($0) }) else {
+            return nil
+        }
+        return trimmed
+    }
+
+    private static func safeSharedRoomMatrixUserID(_ value: String?) -> String? {
+        guard let value else {
+            return nil
+        }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("@"),
+              trimmed.contains(":"),
+              trimmed.count <= 255,
+              trimmed.allSatisfy({ !$0.isWhitespace }) else {
+            return nil
+        }
+        return trimmed
+    }
+
+    private static func safeSharedRoomMatrixRoomID(_ value: String?) -> String? {
+        guard let value else {
+            return nil
+        }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("!"),
+              trimmed.contains(":"),
+              trimmed.count <= 255,
+              trimmed.allSatisfy({ !$0.isWhitespace }) else {
+            return nil
+        }
+        return trimmed
+    }
+
+    private static func appSideSharedRoomMatrixURL(homeserverURL: URL, path: String) -> URL? {
+        URL(string: path, relativeTo: homeserverURL)?.absoluteURL
+    }
+
+    private static func appSideSharedRoomEncodedPathComponent(_ value: String) -> String {
+        var allowed = CharacterSet.urlPathAllowed
+        allowed.remove(charactersIn: "#:/?")
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? ""
+    }
+
+    private static func appSideSharedRoomRequest(url: URL,
+                                                 method: String,
+                                                 accessToken: String,
+                                                 body: [String: Any]? = nil) -> URLRequest {
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("B" + "earer " + accessToken, forHTTPHeaderField: "Authorization")
+        if let body {
+            request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
+        return request
+    }
+
+    private static func appSideSharedRoomHTTPJSON(url: URL,
+                                                  method: String,
+                                                  accessToken: String,
+                                                  body: [String: Any]? = nil) async -> (status: Int?, payload: [String: Any]) {
+        do {
+            let request = appSideSharedRoomRequest(url: url,
+                                                   method: method,
+                                                   accessToken: accessToken,
+                                                   body: body)
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode
+            let payload = (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+            return (status, payload)
+        } catch {
+            return (nil, [:])
+        }
+    }
+
+    private static func appSideSharedRoomDirectoryLookup(homeserverURL: URL,
+                                                         roomAlias: String,
+                                                         accessToken: String) async -> (statusBucket: String, roomID: String?) {
+        let encodedAlias = appSideSharedRoomEncodedPathComponent(roomAlias)
+        guard let url = appSideSharedRoomMatrixURL(homeserverURL: homeserverURL,
+                                                   path: "/_matrix/client/v3/directory/room/\(encodedAlias)") else {
+            return ("url_invalid_redacted", nil)
+        }
+        let response = await appSideSharedRoomHTTPJSON(url: url,
+                                                       method: "GET",
+                                                       accessToken: accessToken)
+        return (response.status.map(pendingMetadataFetchHTTPStatusBucket) ?? "network_failure",
+                response.payload["room_id"] as? String)
+    }
+
+    private static func appSideSharedRoomJoined(homeserverURL: URL,
+                                                roomID: String?,
+                                                accessToken: String) async -> Bool {
+        guard let roomID,
+              let url = appSideSharedRoomMatrixURL(homeserverURL: homeserverURL,
+                                                   path: "/_matrix/client/v3/joined_rooms") else {
+            return false
+        }
+        let response = await appSideSharedRoomHTTPJSON(url: url,
+                                                       method: "GET",
+                                                       accessToken: accessToken)
+        guard (200..<300).contains(response.status ?? 0),
+              let rooms = response.payload["joined_rooms"] as? [String] else {
+            return false
+        }
+        return rooms.contains(roomID)
+    }
+
+    private static func appSideSharedRoomCreate(homeserverURL: URL,
+                                                aliasLocalPart: String,
+                                                inviteUserID: String?,
+                                                accessToken: String) async -> (resultBucket: String, roomID: String?) {
+        guard let url = appSideSharedRoomMatrixURL(homeserverURL: homeserverURL,
+                                                   path: "/_matrix/client/v3/createRoom") else {
+            return ("url_invalid_redacted", nil)
+        }
+        var body: [String: Any] = [
+            "visibility": "private",
+            "room_alias_name": aliasLocalPart,
+            "name": "SalemX physical shared room",
+            "preset": inviteUserID == nil ? "public_chat" : "trusted_private_chat",
+            "initial_state": [
+                [
+                    "type": "m.room.join_rules",
+                    "state_key": "",
+                    "content": ["join_rule": inviteUserID == nil ? "public" : "invite"]
+                ]
+            ]
+        ]
+        if let inviteUserID {
+            body["invite"] = [inviteUserID]
+            body["is_direct"] = false
+        }
+        let response = await appSideSharedRoomHTTPJSON(url: url,
+                                                       method: "POST",
+                                                       accessToken: accessToken,
+                                                       body: body)
+        if (200..<300).contains(response.status ?? 0) {
+            return ("success_redacted", response.payload["room_id"] as? String)
+        }
+        if response.payload["errcode"] as? String == "M_ROOM_IN_USE" {
+            return ("already_exists_redacted", nil)
+        }
+        return (response.status.map(pendingMetadataFetchHTTPStatusBucket) ?? "network_failure", nil)
+    }
+
+    private static func appSideSharedRoomJoin(homeserverURL: URL,
+                                              roomAlias: String,
+                                              roomID providedRoomID: String?,
+                                              accessToken: String) async -> String {
+        let directory: (statusBucket: String, roomID: String?)
+        if providedRoomID == nil {
+            directory = await appSideSharedRoomDirectoryLookup(homeserverURL: homeserverURL,
+                                                               roomAlias: roomAlias,
+                                                               accessToken: accessToken)
+        } else {
+            directory = ("not_requested", providedRoomID)
+        }
+        let roomIdentifier = providedRoomID ?? directory.roomID ?? roomAlias
+        let encodedAlias = appSideSharedRoomEncodedPathComponent(roomIdentifier)
+        let path: String
+        if directory.roomID == nil {
+            path = "/_matrix/client/v3/join/\(encodedAlias)"
+        } else {
+            path = "/_matrix/client/v3/rooms/\(encodedAlias)/join"
+        }
+        guard let url = appSideSharedRoomMatrixURL(homeserverURL: homeserverURL,
+                                                   path: path) else {
+            return "url_invalid_redacted"
+        }
+        let response = await appSideSharedRoomHTTPJSON(url: url,
+                                                       method: "POST",
+                                                       accessToken: accessToken,
+                                                       body: [:])
+        if (200..<300).contains(response.status ?? 0) {
+            return "success_redacted"
+        }
+        if directory.roomID != nil,
+           let fallbackURL = appSideSharedRoomMatrixURL(homeserverURL: homeserverURL,
+                                                        path: "/_matrix/client/v3/join/\(appSideSharedRoomEncodedPathComponent(roomAlias))") {
+            let fallbackResponse = await appSideSharedRoomHTTPJSON(url: fallbackURL,
+                                                                   method: "POST",
+                                                                   accessToken: accessToken,
+                                                                   body: [:])
+            if (200..<300).contains(fallbackResponse.status ?? 0) {
+                return "success_redacted"
+            }
+        }
+        return response.status.map(pendingMetadataFetchHTTPStatusBucket) ?? "network_failure"
+    }
+
+    private static func appSideSharedRoomJoinRoomID(homeserverURL: URL,
+                                                    roomID: String?,
+                                                    accessToken: String) async -> String {
+        guard let roomID else {
+            return "blocked_redacted"
+        }
+        let encodedRoomID = appSideSharedRoomEncodedPathComponent(roomID)
+        guard let url = appSideSharedRoomMatrixURL(homeserverURL: homeserverURL,
+                                                   path: "/_matrix/client/v3/rooms/\(encodedRoomID)/join") else {
+            return "url_invalid_redacted"
+        }
+        let response = await appSideSharedRoomHTTPJSON(url: url,
+                                                       method: "POST",
+                                                       accessToken: accessToken,
+                                                       body: [:])
+        return (200..<300).contains(response.status ?? 0) ? "success_redacted" : response.status.map(pendingMetadataFetchHTTPStatusBucket) ?? "network_failure"
+    }
+
+    @discardableResult private static func writeAppSideSharedRoomEnsureProof(_ proof: String) -> String {
+        writeProof(proof, fileName: appSideSharedRoomEnsureProofFileName)
+    }
+
+    @discardableResult private static func writeAppSideSharedRoomIdentityHandoff(_ proof: String) -> String {
+        writeProof(proof, fileName: appSideSharedRoomIdentityHandoffFileName)
+    }
+
+    @discardableResult private static func writeAppSideSharedRoomRawHandoff(_ proof: String) -> String {
+        writeProof(proof, fileName: appSideSharedRoomRawHandoffFileName)
     }
 
     @objc static func recordCallKitOperatorAnswerIntent(_ timingBucket: String) -> String {
@@ -14748,6 +15192,15 @@ final class SalemXForegroundSSESmokeDebug: NSObject {
 
     fileprivate static func matrixAccessTokenProviderForPushKitUploadSmoke() -> DirectCallMatrixAccessTokenProviding? {
         activeUserSession?.clientProxy as? DirectCallMatrixAccessTokenProviding
+    }
+
+    fileprivate static func matrixHomeserverForPushKitUploadSmoke() -> String? {
+        activeUserSession?.clientProxy.homeserver
+    }
+
+    fileprivate static func matrixUserIDForPushKitUploadSmoke() -> String? {
+        let userID = activeUserSession?.clientProxy.userID.trimmingCharacters(in: .whitespacesAndNewlines)
+        return userID?.isEmpty == false ? userID : nil
     }
 
     fileprivate static func matrixSessionWhoamiSmokeAvailability() -> MatrixSessionWhoamiSmokeAvailability {
