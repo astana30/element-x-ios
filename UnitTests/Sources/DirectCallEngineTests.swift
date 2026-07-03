@@ -4673,6 +4673,31 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func senderNoMediaRuntimeTriggerConnectsWithoutLocalMediaPublish() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+        let triggerStart = try #require(adapterSource.range(of: "private static func runSenderNoMediaRuntimeTrigger(reference: String)")?.lowerBound)
+        let nextFunctionStart = try #require(adapterSource.range(of: "@MainActor\n    private static func runServerSideSenderMetadataClaimNoMediaTrigger")?.lowerBound)
+        let triggerSource = String(adapterSource[triggerStart..<nextFunctionStart])
+
+        #expect(triggerSource.contains("let credentials = await requestSenderRuntimeCredentials(for: session)"))
+        #expect(triggerSource.contains("guard case .success(let connectionInfo) = credentials"))
+        #expect(triggerSource.contains("guard case .success(let e2eeContext) = prepareSenderRuntimeE2EEContext(for: session)"))
+        #expect(triggerSource.contains("let executor = DirectCallLiveKitConnectExecutor(liveKitClient: client)"))
+        #expect(triggerSource.contains("let result = await executor.connectAudio(connectionInfo: connectionInfo, e2eeContext: e2eeContext)"))
+        #expect(triggerSource.contains("summary.markRuntime(result)"))
+        #expect(triggerSource.contains("summary.markNoMediaRuntimeJoin(result)"))
+        #expect(!triggerSource.contains("setMicrophoneEnabled"))
+
+        #expect(adapterSource.contains("mutating func markNoMediaRuntimeJoin(_ result: Result<Void, DirectCallMediaError>)"))
+        #expect(adapterSource.contains("livekit_join_success_no_local_media_redacted"))
+        #expect(adapterSource.contains("livekit_join_failed_no_local_media_redacted"))
+        #expect(adapterSource.contains("sender_no_media_runtime_livekit_join_success_redacted"))
+        #expect(adapterSource.contains("sender_no_media_runtime_livekit_join_failed_redacted"))
+        #expect(adapterSource.contains("sender_local_audio_publish_requested=\\(senderLocalAudioPublishRequested)"))
+        #expect(adapterSource.contains("sender_microphone_permission_requested=\\(senderMicrophonePermissionRequested)"))
+    }
+
+    @Test
     func senderJoinFailureDiagnosticsClassifyRedactedBucketsWithoutRuntime() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
 

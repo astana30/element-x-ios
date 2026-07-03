@@ -2122,6 +2122,27 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         }
     }
 
+    mutating func markNoMediaRuntimeJoin(_ result: Result<Void, DirectCallMediaError>) {
+        guard noMediaRuntimeTriggerAttempted else {
+            return
+        }
+
+        switch result {
+        case .success:
+            noMediaRuntimeTriggerResultBucket = "livekit_join_success_no_local_media_redacted"
+            senderCallStateAfterAnswerBucket = "sender_no_media_runtime_livekit_join_success_redacted"
+            senderMediaConnectGateState = "livekit_join_success_no_local_media_redacted"
+            senderRuntimeBoundaryBlockedReason = "none"
+            blockedReason = "none"
+        case .failure:
+            noMediaRuntimeTriggerResultBucket = "livekit_join_failed_no_local_media_redacted"
+            senderCallStateAfterAnswerBucket = "sender_no_media_runtime_livekit_join_failed_redacted"
+            senderMediaConnectGateState = "livekit_join_failed_no_local_media_redacted"
+            senderRuntimeBoundaryBlockedReason = "sender_no_media_runtime_livekit_join_failed_redacted"
+            blockedReason = "sender_no_media_runtime_livekit_join_failed_redacted"
+        }
+    }
+
     mutating func markLocalAudioPublish(_ result: Result<Void, DirectCallMediaError>) {
         senderLocalAudioPublishRequested = true
         senderLocalAudioPublishAllowed = runtimeResult == "success_redacted" && audioOnly && !videoAllowed && !matrixEventsAllowed
@@ -10478,7 +10499,27 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             return
         }
 
-        _ = await requestSenderRuntimeCredentials(for: session)
+        let credentials = await requestSenderRuntimeCredentials(for: session)
+        guard case .success(let connectionInfo) = credentials else {
+            return
+        }
+
+        guard case .success(let e2eeContext) = prepareSenderRuntimeE2EEContext(for: session) else {
+            return
+        }
+
+        let client = senderRuntimeLiveKitClientFactory()
+        let executor = DirectCallLiveKitConnectExecutor(liveKitClient: client)
+        senderRuntimeLiveKitClient = client
+        let result = await executor.connectAudio(connectionInfo: connectionInfo, e2eeContext: e2eeContext)
+
+        lock.lock()
+        var summary = latestSenderRuntimeLiveKitJoinSummary
+        summary.markRuntime(result)
+        summary.markNoMediaRuntimeJoin(result)
+        lock.unlock()
+
+        updateLatestSenderRuntimeLiveKitJoinSummary(summary)
     }
 
     @MainActor
