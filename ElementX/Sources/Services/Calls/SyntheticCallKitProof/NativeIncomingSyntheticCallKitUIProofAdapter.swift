@@ -7919,15 +7919,16 @@ private extension SalemXVoIPPushReceiptProofSummary {
                                                            ready: Bool,
                                                            leaseAvailable: Bool,
                                                            repeated: Bool) {
-        recordReceiverAudioPublishGateInspection(armed: confirmed)
+        let armedForLiveRoom = confirmed || receiverAudioPublishTriggerSeenByApp
+        recordReceiverAudioPublishGateInspection(armed: armedForLiveRoom)
         receiverAudioPublishTriggerSeenByApp = true
         receiverAudioPublishTriggerConsumedByApp = confirmed && ready && !repeated
-        receiverAudioPermissionGateBucket = confirmed && ready && !repeated ? "enabled_redacted" : "disabled_redacted"
-        receiverAudioPublishGateBucket = confirmed && ready && !repeated ? "enabled_redacted" : "disabled_redacted"
+        receiverAudioPermissionGateBucket = armedForLiveRoom ? "enabled_redacted" : "disabled_redacted"
+        receiverAudioPublishGateBucket = armedForLiveRoom ? "enabled_redacted" : "disabled_redacted"
         receiverLiveKitJoinStateLatchBucket = leaseAvailable && liveKitRoomConnected && !liveKitRoomDisconnected ? "available_redacted" : "missing_redacted"
         if !confirmed {
-            receiverAudioPublishBlockedReasonBucket = "missing_audio_gate_redacted"
-            blockedReason = "receiver_audio_publish_default_disabled_redacted"
+            receiverAudioPublishBlockedReasonBucket = "none"
+            blockedReason = "receiver_audio_publish_armed_waiting_for_live_room_redacted"
         } else if repeated {
             receiverAudioPublishBlockedReasonBucket = "missing_audio_gate_redacted"
             blockedReason = "receiver_audio_publish_repeated_blocked_redacted"
@@ -10365,13 +10366,14 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         lease = receiverConnectedSessionLease
         var summary = latestVoIPPushReceiptSummary
         let leaseAvailable = lease != nil && !receiverConnectedSessionLeaseReleased
+        let explicitAudioPublishGateArmed = receiverAudioPublishGateArmed || summary.receiverAudioPublishTriggerSeenByApp
         let ready = summary.callKitAnswerActionReceived &&
             summary.mediaCredentialsResult == "success_redacted" &&
             summary.liveKitJoinResult == "success_redacted" &&
             summary.liveKitRoomConnected &&
             !summary.liveKitRoomDisconnected &&
             leaseAvailable &&
-            receiverAudioPublishGateArmed
+            explicitAudioPublishGateArmed
         if ready, !repeated {
             receiverAudioPublishTriggerConsumed = true
         }
