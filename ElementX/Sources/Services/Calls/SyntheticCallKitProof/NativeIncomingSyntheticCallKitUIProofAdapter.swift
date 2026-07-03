@@ -6687,7 +6687,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
             receiverAudioPublishTriggerConsumableWhenReady &&
             liveKitJoinResult == "success_redacted" &&
             !receiverAudioPublishTerminal
-        receiverConnectedSessionLeaseAcquired &&
+        return receiverConnectedSessionLeaseAcquired &&
             receiverConnectedSessionLeaseRoomRetained &&
             !receiverConnectedSessionLeaseReleased &&
             (receiverAudioPublishPending ||
