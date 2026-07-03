@@ -14926,9 +14926,26 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
 
     @MainActor
     private static func startReceiverControlledRuntimeConnectLeaseIfAllowed(session: DirectCallSession, connectionInfo: DirectCallMediaConnectionInfo) {
+        let staleLeaseToCleanup: SalemXReceiverConnectedSessionLease?
+        let staleTaskToCancel: Task<Void, Never>?
         lock.lock()
         var summary = latestVoIPPushReceiptSummary
         let physical6RuntimeEnablementURLHookSnapshot = physical6RuntimeEnablementURLHook
+        let staleRuntimeBlocksFreshNoLocalMediaJoin = physical6RuntimeEnablementURLHookSnapshot.oneShotNotConsumed &&
+            summary.mediaCredentialsResult == "success_redacted" &&
+            summary.mediaCredentialsRequestMetadataAvailable &&
+            (receiverConnectedSessionLeaseTask != nil || receiverConnectedSessionLease != nil)
+        if staleRuntimeBlocksFreshNoLocalMediaJoin {
+            staleLeaseToCleanup = receiverConnectedSessionLease
+            staleTaskToCancel = receiverConnectedSessionLeaseTask
+            receiverConnectedSessionLease = nil
+            receiverConnectedSessionLeaseTask = nil
+            receiverConnectedSessionLeaseReleased = true
+            receiverConnectedWindowRetentionExtensionUsed = false
+        } else {
+            staleLeaseToCleanup = nil
+            staleTaskToCancel = nil
+        }
         let alreadyRunning = receiverConnectedSessionLeaseTask != nil || receiverConnectedSessionLease != nil
         var shouldPublishUpdatedSummary = false
         if !alreadyRunning,
@@ -14955,6 +14972,12 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
 
         if shouldPublishUpdatedSummary {
             updateLatestVoIPPushReceiptSummary(summary)
+        }
+        staleTaskToCancel?.cancel()
+        if let staleLeaseToCleanup {
+            Task { @MainActor in
+                await staleLeaseToCleanup.cleanup()
+            }
         }
 
         guard allowed else {

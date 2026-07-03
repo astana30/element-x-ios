@@ -6484,6 +6484,27 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func controlledNoLocalMediaJoinReleasesStaleDebugLeaseBeforeOneShotConnect() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+        let start = try #require(adapterSource.range(of: "private static func startReceiverControlledRuntimeConnectLeaseIfAllowed")?.lowerBound)
+        let end = try #require(adapterSource.range(of: "@MainActor\n    private static func runReceiverControlledRuntimeConnectLease")?.lowerBound)
+        let source = String(adapterSource[start..<end])
+
+        #expect(source.contains("staleRuntimeBlocksFreshNoLocalMediaJoin"))
+        #expect(source.contains("physical6RuntimeEnablementURLHookSnapshot.oneShotNotConsumed"))
+        #expect(source.contains("summary.mediaCredentialsResult == \"success_redacted\""))
+        #expect(source.contains("summary.mediaCredentialsRequestMetadataAvailable"))
+        #expect(source.contains("receiverConnectedSessionLease = nil"))
+        #expect(source.contains("receiverConnectedSessionLeaseTask = nil"))
+        #expect(source.contains("staleTaskToCancel?.cancel()"))
+        #expect(source.contains("await staleLeaseToCleanup.cleanup()"))
+        #expect(source.contains("recordControlledMediaConnectPreflight(credentialsAvailable: true"))
+        #expect(!source.contains("requestRecordPermission"))
+        #expect(!source.contains("AVCaptureDevice.requestAccess"))
+        #expect(!source.contains("emitSignal(type:"))
+    }
+
+    @Test
     func controlledRealRuntimePathDefaultsDisabledAndCallsFakeMediaOnlyWhenAllGatesTrue() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
         let debugGuardStart = try #require(adapterSource.range(of: "#if DEBUG && canImport(PushKit) && os(iOS)")?.lowerBound)
