@@ -6735,6 +6735,39 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func callStateHangupLifecycleSkeletonPreservesTwoWayAudioValidation() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+
+        #expect(adapterSource.contains("call_state_hangup_lifecycle_bucket=\\(callStateHangupLifecycleBucket)"))
+        #expect(adapterSource.contains("active_call_state_bucket=\\(activeCallStateBucket)"))
+        #expect(adapterSource.contains("audio_session_lifecycle_bucket=\\(audioSessionLifecycleBucket)"))
+        #expect(adapterSource.contains("local_track_stop_unpublish_bucket=\\(localTrackStopUnpublishBucket)"))
+        #expect(adapterSource.contains("remote_subscription_cleanup_bucket=\\(remoteSubscriptionCleanupBucket)"))
+        #expect(adapterSource.contains("livekit_disconnect_cleanup_bucket=\\(liveKitDisconnectCleanupBucket)"))
+        #expect(adapterSource.contains("callkit_end_action_bucket=\\(callKitEndActionBucket)"))
+        #expect(adapterSource.contains("no_duplicate_hangup_guard_bucket=\\(noDuplicateHangupGuardBucket)"))
+        #expect(adapterSource.contains("missing_call_id_hangup_regression_guard_bucket=\\(missingCallIDHangupRegressionGuardBucket)"))
+        #expect(adapterSource.contains("no_malformed_matrix_call_events_guard_bucket=\\(noMalformedMatrixCallEventsGuardBucket)"))
+        #expect(adapterSource.contains("normal_two_way_audio_validation_preserved_bucket=\\(normalTwoWayAudioValidationPreservedBucket)"))
+        #expect(adapterSource.contains("callStateHangupLifecycleBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("activeCallStateBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("audioSessionLifecycleBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("localTrackStopUnpublishBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("remoteSubscriptionCleanupBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("liveKitDisconnectCleanupBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("callKitEndActionBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("noDuplicateHangupGuardBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("missingCallIDHangupRegressionGuardBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("noMalformedMatrixCallEventsGuardBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("normalTwoWayAudioValidationPreservedBucket = \"true\""))
+        #expect(adapterSource.contains("normalTwoWayAudioConvergenceBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("productionAudioEnabledBucket = \"false\""))
+        #expect(!adapterSource.contains("AVCaptureDevice.requestAccess"))
+        #expect(!adapterSource.contains("setCameraEnabled(true)"))
+        #expect(!adapterSource.contains("realCallFlowStarted = true"))
+    }
+
+    @Test
     func controlledRealRuntimePathDefaultsDisabledAndCallsFakeMediaOnlyWhenAllGatesTrue() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
         let debugGuardStart = try #require(adapterSource.range(of: "#if DEBUG && canImport(PushKit) && os(iOS)")?.lowerBound)
