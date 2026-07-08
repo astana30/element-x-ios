@@ -1195,6 +1195,9 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
     var senderRemoteAudioSubscribedProofPathAvailable = true
     var senderRemoteAudioPublicationEventPathAvailable = true
     var senderRemoteAudioSubscriptionStatePathAvailable = true
+    var senderRemoteAudioObserverRegisteredBeforeJoinBucket = "unknown"
+    var senderRemoteAudioObserverRegisteredAfterJoinBucket = "unknown"
+    var senderRemoteAudioObserverRegistrationBucket = "unknown"
     var senderLiveKitRoomConnectedLatchBucket = "missing_redacted"
     var receiverAudioPublishSuccessLatchBucket = "unknown"
     var senderRemoteAudioPublicationSeenBucket = "unknown"
@@ -1540,6 +1543,9 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             "sender_remote_audio_subscribed_proof_path_available=\(senderRemoteAudioSubscribedProofPathAvailable)",
             "sender_remote_audio_publication_event_path_available=\(senderRemoteAudioPublicationEventPathAvailable)",
             "sender_remote_audio_subscription_state_path_available=\(senderRemoteAudioSubscriptionStatePathAvailable)",
+            "sender_remote_audio_observer_registered_before_join_bucket=\(senderRemoteAudioObserverRegisteredBeforeJoinBucket)",
+            "sender_remote_audio_observer_registered_after_join_bucket=\(senderRemoteAudioObserverRegisteredAfterJoinBucket)",
+            "sender_remote_audio_observer_registration_bucket=\(senderRemoteAudioObserverRegistrationBucket)",
             "sender_livekit_room_connected_latch_bucket=\(senderLiveKitRoomConnectedLatchBucket)",
             "receiver_audio_publish_success_latch_bucket=\(receiverAudioPublishSuccessLatchBucket)",
             "sender_remote_audio_publication_seen_bucket=\(senderRemoteAudioPublicationSeenBucket)",
@@ -2170,6 +2176,9 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         senderRemoteAudioSubscribedProofPathAvailable = true
         senderRemoteAudioPublicationEventPathAvailable = true
         senderRemoteAudioSubscriptionStatePathAvailable = true
+        senderRemoteAudioObserverRegisteredBeforeJoinBucket = "true"
+        senderRemoteAudioObserverRegisteredAfterJoinBucket = senderLiveKitRoomConnected ? "true" : "unknown"
+        senderRemoteAudioObserverRegistrationBucket = senderLiveKitRoomConnected ? "success_redacted" : "unknown"
         senderLiveKitRoomConnectedLatchBucket = senderLiveKitRoomConnected ? "available_redacted" : "missing_redacted"
         receiverAudioPublishSuccessLatchBucket = "awaiting_remote_audio_redacted"
     }
@@ -2178,10 +2187,13 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
                                              snapshot: DirectCallRemoteParticipantSnapshot) {
         markSenderRemoteAudioProofStarted()
         let audioPublicationSeen = snapshot.audioPublicationSeen || snapshot.audioTrackSubscribed || snapshot.audioTrackUnmuted
+        senderRemoteAudioObserverRegisteredBeforeJoinBucket = "true"
+        senderRemoteAudioObserverRegisteredAfterJoinBucket = senderLiveKitRoomConnected ? "true" : "unknown"
+        senderRemoteAudioObserverRegistrationBucket = senderLiveKitRoomConnected ? "success_redacted" : "unknown"
         senderRemoteAudioPublicationSeenBucket = audioPublicationSeen ? "seen_redacted" : "not_seen_redacted"
         senderRemoteAudioTrackSeenBucket = audioPublicationSeen ? "seen_redacted" : "not_seen_redacted"
         senderRemoteAudioSubscribedBucket = snapshot.audioTrackSubscribed ? "subscribed_redacted" : "not_subscribed_redacted"
-        receiverAudioPublishSuccessLatchBucket = audioPublicationSeen ? "available_redacted" : "missing_redacted"
+        receiverAudioPublishSuccessLatchBucket = audioPublicationSeen ? "present_redacted" : "missing_redacted"
         if case .failure(let error) = remotePlaybackResult {
             runtimeErrorBucket = DirectCallDiagnosticMediaFailureReason(error).rawValue
         }
@@ -10896,9 +10908,20 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             return
         }
 
-        let remotePlaybackResult = await client.setRemoteAudioPlaybackEnabled(true)
-        try? await Task.sleep(nanoseconds: 1_500_000_000)
-        let snapshot = await client.remoteParticipantSnapshot()
+        var remotePlaybackResult = await client.setRemoteAudioPlaybackEnabled(true)
+        var snapshot = DirectCallRemoteParticipantSnapshot.empty
+        for attempt in 0..<30 {
+            if attempt > 0 {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+            if attempt > 0, attempt % 5 == 0 {
+                remotePlaybackResult = await client.setRemoteAudioPlaybackEnabled(true)
+            }
+            snapshot = await client.remoteParticipantSnapshot()
+            if snapshot.audioPublicationSeen || snapshot.audioTrackSubscribed || snapshot.audioTrackUnmuted {
+                break
+            }
+        }
 
         lock.lock()
         var summary = latestSenderRuntimeLiveKitJoinSummary

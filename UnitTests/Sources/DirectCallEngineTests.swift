@@ -6569,6 +6569,12 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("receiver_audio_track_publish_path_available=\\(receiverAudioTrackPublishPathAvailable)"))
         #expect(adapterSource.contains("sender_remote_audio_observer_path_available=\\(senderRemoteAudioObserverPathAvailable)"))
         #expect(adapterSource.contains("sender_subscribe_remote_audio_path_available=\\(senderSubscribeRemoteAudioPathAvailable)"))
+        #expect(adapterSource.contains("sender_remote_audio_observer_registered_before_join_bucket=\\(senderRemoteAudioObserverRegisteredBeforeJoinBucket)"))
+        #expect(adapterSource.contains("sender_remote_audio_observer_registered_after_join_bucket=\\(senderRemoteAudioObserverRegisteredAfterJoinBucket)"))
+        #expect(adapterSource.contains("sender_remote_audio_observer_registration_bucket=\\(senderRemoteAudioObserverRegistrationBucket)"))
+        #expect(adapterSource.contains("for attempt in 0..<30"))
+        #expect(adapterSource.contains("remotePlaybackResult = await client.setRemoteAudioPlaybackEnabled(true)"))
+        #expect(adapterSource.contains("receiverAudioPublishSuccessLatchBucket = audioPublicationSeen ? \"present_redacted\" : \"missing_redacted\""))
         #expect(adapterSource.contains("receiver_local_audio_track_published=\\(receiverLocalAudioTrackPublished)"))
         #expect(!adapterSource.contains("receiverAudioPermissionResultBucket = \"raw"))
     }
