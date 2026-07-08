@@ -6691,6 +6691,50 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func normalTwoWayAudioConvergenceSkeletonKeepsProductionAudioDisabled() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+
+        #expect(adapterSource.contains("normal_two_way_audio_convergence_bucket=\\(normalTwoWayAudioConvergenceBucket)"))
+        #expect(adapterSource.contains("two_way_metadata_path_bucket=\\(twoWayMetadataPathBucket)"))
+        #expect(adapterSource.contains("two_way_sender_credentials_path_bucket=\\(twoWaySenderCredentialsPathBucket)"))
+        #expect(adapterSource.contains("two_way_receiver_credentials_path_bucket=\\(twoWayReceiverCredentialsPathBucket)"))
+        #expect(adapterSource.contains("two_way_sender_livekit_join_path_bucket=\\(twoWaySenderLiveKitJoinPathBucket)"))
+        #expect(adapterSource.contains("two_way_receiver_livekit_join_path_bucket=\\(twoWayReceiverLiveKitJoinPathBucket)"))
+        #expect(adapterSource.contains("two_way_both_participants_connected_gate_bucket=\\(twoWayBothParticipantsConnectedGateBucket)"))
+        #expect(adapterSource.contains("two_way_receiver_audio_publish_readiness_bucket=\\(twoWayReceiverAudioPublishReadinessBucket)"))
+        #expect(adapterSource.contains("two_way_sender_audio_publish_readiness_bucket=\\(twoWaySenderAudioPublishReadinessBucket)"))
+        #expect(adapterSource.contains("two_way_sender_remote_subscribe_readiness_bucket=\\(twoWaySenderRemoteSubscribeReadinessBucket)"))
+        #expect(adapterSource.contains("two_way_receiver_remote_subscribe_readiness_bucket=\\(twoWayReceiverRemoteSubscribeReadinessBucket)"))
+        #expect(adapterSource.contains("no_audio_before_credentials_guard_bucket=\\(noAudioBeforeCredentialsGuardBucket)"))
+        #expect(adapterSource.contains("no_audio_before_livekit_guard_bucket=\\(noAudioBeforeLiveKitGuardBucket)"))
+        #expect(adapterSource.contains("remote_subscribe_requires_track_seen_guard_bucket=\\(remoteSubscribeRequiresTrackSeenGuardBucket)"))
+        #expect(adapterSource.contains("normal_two_way_physical_validation_required_bucket=\\(normalTwoWayPhysicalValidationRequiredBucket)"))
+        #expect(adapterSource.contains("normalTwoWayAudioConvergenceBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("twoWayMetadataPathBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("twoWaySenderCredentialsPathBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("twoWayReceiverCredentialsPathBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("twoWaySenderLiveKitJoinPathBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("twoWayReceiverLiveKitJoinPathBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("twoWayBothParticipantsConnectedGateBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("twoWayReceiverAudioPublishReadinessBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("twoWaySenderAudioPublishReadinessBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("twoWaySenderRemoteSubscribeReadinessBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("twoWayReceiverRemoteSubscribeReadinessBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("noAudioBeforeCredentialsGuardBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("noAudioBeforeLiveKitGuardBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("remoteSubscribeRequiresTrackSeenGuardBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("normalTwoWayPhysicalValidationRequiredBucket = \"true\""))
+        #expect(adapterSource.contains("productionAudioEnabledBucket = \"false\""))
+        #expect(adapterSource.contains("normalIncomingAnswerAudioLifecycleBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("normalOutgoingStartAudioLifecycleBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("receiverAudioPublishToRemoteSubscribeReadinessBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("senderAudioPublishToReceiverRemoteSubscribeReadinessBucket = \"present_redacted\""))
+        #expect(!adapterSource.contains("AVCaptureDevice.requestAccess"))
+        #expect(!adapterSource.contains("setCameraEnabled(true)"))
+        #expect(!adapterSource.contains("realCallFlowStarted = true"))
+    }
+
+    @Test
     func controlledRealRuntimePathDefaultsDisabledAndCallsFakeMediaOnlyWhenAllGatesTrue() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
         let debugGuardStart = try #require(adapterSource.range(of: "#if DEBUG && canImport(PushKit) && os(iOS)")?.lowerBound)
