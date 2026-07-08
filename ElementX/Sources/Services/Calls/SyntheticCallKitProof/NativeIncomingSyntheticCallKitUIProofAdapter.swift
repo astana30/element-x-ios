@@ -7302,6 +7302,8 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverConnectedSessionLeaseActiveAtSenderSignal = receiverWindowActive
         receiverConnectedSessionLeaseActiveAfterSenderTrigger = receiverConnectedSessionLeaseActiveAfterSenderTrigger || receiverWindowActive
         receiverParticipantObserverActiveAfterSenderSignal = receiverRemoteParticipantObserverStarted && receiverWindowActive
+        receiverRemoteAudioSubscriptionWaitStarted = receiverRemoteAudioSubscriptionWaitStarted || receiverWindowActive
+        receiverRemoteAudioLivenessWaitStarted = receiverRemoteAudioLivenessWaitStarted || receiverWindowActive
 
         if !correlationMatched {
             receiverSenderConnectedSignalFinalClassification = "sender_connected_signal_correlation_mismatch_redacted"
@@ -7467,7 +7469,9 @@ private extension SalemXVoIPPushReceiptProofSummary {
                 liveKitConnectAudioInvoked &&
                 receiverLeaseActive)
 
-        if liveKitRemoteParticipantSeen, !remoteParticipantObservationWaitCompleted {
+        if liveKitRemoteParticipantSeen,
+           !remoteParticipantObservationWaitCompleted,
+           shouldCompleteRemoteParticipantObservationAfterRemoteAudioUpdate {
             completeRemoteParticipantObservation(classification: remoteParticipantSeenClassification(), timeoutBucket: "none")
         }
     }
