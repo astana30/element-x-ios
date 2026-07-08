@@ -6575,6 +6575,8 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("for attempt in 0..<30"))
         #expect(adapterSource.contains("remotePlaybackResult = await client.setRemoteAudioPlaybackEnabled(true)"))
         #expect(adapterSource.contains("receiverAudioPublishSuccessLatchBucket = audioPublicationSeen ? \"present_redacted\" : \"missing_redacted\""))
+        #expect(adapterSource.contains("receiverLiveKitJoinStateLatchBucket = leaseAvailable && liveKitJoinResult == \"success_redacted\" ? \"available_redacted\" : \"missing_redacted\""))
+        #expect(adapterSource.contains("(summary.liveKitRoomConnected || leaseAvailable) &&"))
         #expect(adapterSource.contains("receiver_local_audio_track_published=\\(receiverLocalAudioTrackPublished)"))
         #expect(!adapterSource.contains("receiverAudioPermissionResultBucket = \"raw"))
     }

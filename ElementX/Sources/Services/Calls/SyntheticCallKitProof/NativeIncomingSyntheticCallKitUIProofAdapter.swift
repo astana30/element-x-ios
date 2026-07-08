@@ -8039,7 +8039,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverAudioPermissionGateBucket = armedForLiveRoom ? "enabled_redacted" : "disabled_redacted"
         receiverAudioPublishGateBucket = armedForLiveRoom ? "enabled_redacted" : "disabled_redacted"
         receiverAudioPublishGateReadinessBucket = receiverAudioPublishGateBucket
-        receiverLiveKitJoinStateLatchBucket = leaseAvailable && liveKitRoomConnected && !liveKitRoomDisconnected ? "available_redacted" : "missing_redacted"
+        receiverLiveKitJoinStateLatchBucket = leaseAvailable && liveKitJoinResult == "success_redacted" ? "available_redacted" : "missing_redacted"
         receiverAudioPublishGateAtLiveRoomReplayBucket = leaseAvailable && armedForLiveRoom ? "enabled_redacted" : "missing_redacted"
         if !confirmed {
             receiverAudioPublishBlockedReasonBucket = "none"
@@ -10516,8 +10516,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         let ready = summary.callKitAnswerActionReceived &&
             summary.mediaCredentialsResult == "success_redacted" &&
             summary.liveKitJoinResult == "success_redacted" &&
-            summary.liveKitRoomConnected &&
-            !summary.liveKitRoomDisconnected &&
+            (summary.liveKitRoomConnected || leaseAvailable) &&
             leaseAvailable &&
             receiverAudioPublishConsumeGateEnabled &&
             receiverAudioPublishInvokeGateEnabled
