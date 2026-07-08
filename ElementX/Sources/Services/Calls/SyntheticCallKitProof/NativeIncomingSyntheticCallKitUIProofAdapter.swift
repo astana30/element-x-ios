@@ -1190,6 +1190,7 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
     var senderLocalAudioMutedStateBucket = "unknown"
     var senderAudioSessionActivationObserved = false
     var senderMicrophonePermissionResultBucket = "not_requested_or_not_required_redacted"
+    var senderRemoteAudioObserverPathAvailable = true
     var senderRemoteAudioTrackSeenProofPathAvailable = true
     var senderRemoteAudioSubscribedProofPathAvailable = true
     var senderRemoteAudioPublicationEventPathAvailable = true
