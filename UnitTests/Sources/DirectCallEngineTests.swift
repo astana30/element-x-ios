@@ -3396,6 +3396,7 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(liveKitClientSource.contains("recordReceiverRemoteAudioLivenessFrame()"))
         #expect(liveKitClientSource.contains("recordReceiverRemoteAudioSubscriptionCallback()"))
         #expect(liveKitClientSource.contains("publication.track as? RemoteAudioTrack"))
+        #expect(liveKitClientSource.contains("remotePublication.track is RemoteAudioTrack"))
         #expect(liveKitClientSource.contains("remoteAudioTrack.add(audioRenderer: renderer)"))
         #expect(liveKitClientSource.contains("await self?.subscribeToRemoteAudioIfNeeded(room: room, publication: publication)"))
         #expect(liveKitClientSource.contains("audioTrackSubscribed: publication.kind == .audio"))

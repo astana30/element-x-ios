@@ -499,7 +499,7 @@ final class LiveKitDirectCallClient: DirectCallLiveKitClientProtocol, @unchecked
                     return false
                 }
 
-                return remotePublication.isSubscribed
+                return remotePublication.isSubscribed || remotePublication.track is RemoteAudioTrack
             }
         }
     }
