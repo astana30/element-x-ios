@@ -6646,6 +6646,41 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func normalOutgoingStartAudioLifecycleSkeletonKeepsProductionAudioDisabled() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+
+        #expect(adapterSource.contains("normal_outgoing_start_audio_lifecycle_bucket=\\(normalOutgoingStartAudioLifecycleBucket)"))
+        #expect(adapterSource.contains("outgoing_start_to_metadata_path_bucket=\\(outgoingStartToMetadataPathBucket)"))
+        #expect(adapterSource.contains("metadata_to_sender_claim_path_bucket=\\(metadataToSenderClaimPathBucket)"))
+        #expect(adapterSource.contains("sender_claim_to_sender_credentials_path_bucket=\\(senderClaimToSenderCredentialsPathBucket)"))
+        #expect(adapterSource.contains("sender_credentials_to_livekit_join_path_bucket=\\(senderCredentialsToLiveKitJoinPathBucket)"))
+        #expect(adapterSource.contains("sender_livekit_join_to_audio_publish_readiness_bucket=\\(senderLiveKitJoinToAudioPublishReadinessBucket)"))
+        #expect(adapterSource.contains("sender_audio_publish_to_receiver_remote_subscribe_readiness_bucket=\\(senderAudioPublishToReceiverRemoteSubscribeReadinessBucket)"))
+        #expect(adapterSource.contains("normalOutgoingStartAudioLifecycleBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("outgoingStartToMetadataPathBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("metadataToSenderClaimPathBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("senderClaimToSenderCredentialsPathBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("senderCredentialsToLiveKitJoinPathBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("senderLiveKitJoinToAudioPublishReadinessBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("senderAudioPublishToReceiverRemoteSubscribeReadinessBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("no_sender_audio_before_credentials_guard_bucket=\\(noSenderAudioBeforeCredentialsGuardBucket)"))
+        #expect(adapterSource.contains("no_sender_audio_before_livekit_guard_bucket=\\(noSenderAudioBeforeLiveKitGuardBucket)"))
+        #expect(adapterSource.contains("noSenderAudioBeforeCredentialsGuardBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("noSenderAudioBeforeLiveKitGuardBucket = \"present_redacted\""))
+        #expect(adapterSource.contains("normalOutgoingPhysicalValidationRequiredBucket = \"true\""))
+        #expect(adapterSource.contains("productionAudioEnabledBucket = \"false\""))
+        #expect(adapterSource.contains("prepared_metadata_claimed_by_sender=\\(preparedMetadataClaimedBySender)"))
+        #expect(adapterSource.contains("sender_media_credentials_result_bucket=\\(senderMediaCredentialsResultBucket)"))
+        #expect(adapterSource.contains("sender_side_livekit_join_result=\\(senderSideLiveKitJoinResult)"))
+        #expect(adapterSource.contains("sender_local_audio_publish_requested=\\(senderLocalAudioPublishRequested)"))
+        #expect(adapterSource.contains("receiver_remote_audio_track_subscribed=\\(receiverRemoteAudioTrackSubscribed)"))
+        #expect(!adapterSource.contains("AVCaptureDevice.requestAccess"))
+        #expect(!adapterSource.contains("setCameraEnabled(true)"))
+        #expect(adapterSource.contains("senderLocalAudioPublishRequested = false"))
+        #expect(!adapterSource.contains("realCallFlowStarted = true"))
+    }
+
+    @Test
     func controlledRealRuntimePathDefaultsDisabledAndCallsFakeMediaOnlyWhenAllGatesTrue() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
         let debugGuardStart = try #require(adapterSource.range(of: "#if DEBUG && canImport(PushKit) && os(iOS)")?.lowerBound)
