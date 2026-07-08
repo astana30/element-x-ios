@@ -5091,10 +5091,21 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var senderRemoteAudioObserverPathAvailable = true
     var senderSubscribeRemoteAudioPathAvailable = true
     var receiverAudioPermissionBridgeAvailable = true
+    var receiverAudioPublishFunctionEnteredBucket = "unknown"
+    var receiverAudioPublishStageAfterInvokeBucket = "not_reached_redacted"
+    var receiverAudioPermissionStateBucket = "unknown"
+    var receiverAudioPermissionRequestNeededBucket = "unknown"
+    var receiverAudioPermissionRequestDispatchPathAvailable = true
+    var receiverAudioPermissionRequestDecisionBucket = "unknown"
+    var receiverAudioPermissionRequestBlockedReasonBucket = "unknown_redacted"
     var receiverAudioPermissionRequested = false
     var receiverAudioPermissionResultBucket = "not_requested"
     var receiverLocalAudioTrackCreateResultBucket = "not_requested"
+    var receiverLocalAudioTrackCreateAttempted = false
+    var receiverLocalAudioTrackCreateBlockedReasonBucket = "unknown_redacted"
     var receiverLocalAudioTrackPublishResultBucket = "not_requested"
+    var receiverLocalAudioTrackPublishAttempted = false
+    var receiverLocalAudioTrackPublishBlockedReasonBucket = "unknown_redacted"
     var receiverLocalAudioTrackPublished = false
     var localAudioPublishRequested = false
     var localAudioPublishStarted = false
@@ -6189,10 +6200,21 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "sender_remote_audio_observer_path_available=\(senderRemoteAudioObserverPathAvailable)",
             "sender_subscribe_remote_audio_path_available=\(senderSubscribeRemoteAudioPathAvailable)",
             "receiver_audio_permission_bridge_available=\(receiverAudioPermissionBridgeAvailable)",
+            "receiver_audio_publish_function_entered_bucket=\(receiverAudioPublishFunctionEnteredBucket)",
+            "receiver_audio_publish_stage_after_invoke_bucket=\(receiverAudioPublishStageAfterInvokeBucket)",
+            "receiver_audio_permission_state_bucket=\(receiverAudioPermissionStateBucket)",
+            "receiver_audio_permission_request_needed_bucket=\(receiverAudioPermissionRequestNeededBucket)",
+            "receiver_audio_permission_request_dispatch_path_available=\(receiverAudioPermissionRequestDispatchPathAvailable)",
+            "receiver_audio_permission_request_decision_bucket=\(receiverAudioPermissionRequestDecisionBucket)",
+            "receiver_audio_permission_request_blocked_reason_bucket=\(receiverAudioPermissionRequestBlockedReasonBucket)",
             "receiver_audio_permission_requested=\(receiverAudioPermissionRequested)",
             "receiver_audio_permission_result_bucket=\(receiverAudioPermissionResultBucket)",
             "receiver_local_audio_track_create_result_bucket=\(receiverLocalAudioTrackCreateResultBucket)",
+            "receiver_local_audio_track_create_attempted=\(receiverLocalAudioTrackCreateAttempted)",
+            "receiver_local_audio_track_create_blocked_reason_bucket=\(receiverLocalAudioTrackCreateBlockedReasonBucket)",
             "receiver_local_audio_track_publish_result_bucket=\(receiverLocalAudioTrackPublishResultBucket)",
+            "receiver_local_audio_track_publish_attempted=\(receiverLocalAudioTrackPublishAttempted)",
+            "receiver_local_audio_track_publish_blocked_reason_bucket=\(receiverLocalAudioTrackPublishBlockedReasonBucket)",
             "receiver_local_audio_track_published=\(receiverLocalAudioTrackPublished)",
             "local_audio_publish_requested=\(localAudioPublishRequested)",
             "local_audio_publish_started=\(localAudioPublishStarted)",
@@ -8079,18 +8101,60 @@ private extension SalemXVoIPPushReceiptProofSummary {
         }
     }
 
-    mutating func recordReceiverAudioPublishResult(_ result: Result<Void, DirectCallMediaError>) {
-        receiverAudioPublishCallInvokedInApp = true
+    mutating func recordReceiverAudioPublishFunctionEntered(ready: Bool) {
+        receiverAudioPublishFunctionEnteredBucket = ready ? "true" : "false"
+        receiverAudioPublishStageAfterInvokeBucket = ready ? "permission_decision_redacted" : "not_reached_redacted"
+        receiverAudioPermissionBridgeAvailable = true
+        receiverAudioPermissionStateBucket = "unknown"
+        receiverAudioPermissionRequestNeededBucket = ready ? "true" : "unknown"
+        receiverAudioPermissionRequestDispatchPathAvailable = true
+        receiverAudioPermissionRequestDecisionBucket = ready ? "request_redacted" : "blocked_redacted"
+        receiverAudioPermissionRequestBlockedReasonBucket = ready ? "none" : "debug_gate_redacted"
+        if ready {
+            receiverAudioPublishBlockedReasonBucket = "none"
+            blockedReason = "receiver_audio_publish_permission_decision_redacted"
+        }
+    }
+
+    mutating func recordReceiverAudioPublishRequestDispatched() {
+        receiverAudioPublishFunctionEnteredBucket = "true"
+        receiverAudioPublishStageAfterInvokeBucket = "publish_track_redacted"
         receiverAudioPermissionRequested = true
         microphonePermissionRequested = true
+        receiverAudioPermissionResultBucket = "requested_redacted"
+        receiverLocalAudioTrackCreateAttempted = true
+        receiverLocalAudioTrackCreateBlockedReasonBucket = "none"
+        receiverLocalAudioTrackPublishAttempted = true
+        receiverLocalAudioTrackPublishBlockedReasonBucket = "none"
+        localAudioPublishRequested = true
+        localAudioPublishStarted = true
+        localAudioPublishResult = "pending_redacted"
+        localAudioPublishErrorBucket = "none"
+        localAudioPublishNotRequiredReason = "none"
+        recordMicrophonePermissionResult(requested: true, notRequiredReason: "requested_redacted")
+    }
+
+    mutating func recordReceiverAudioPublishResult(_ result: Result<Void, DirectCallMediaError>) {
+        receiverAudioPublishCallInvokedInApp = true
+        receiverAudioPublishFunctionEnteredBucket = "true"
+        receiverAudioPublishStageAfterInvokeBucket = "publish_track_redacted"
+        receiverAudioPermissionRequested = true
+        microphonePermissionRequested = true
+        receiverAudioPermissionRequestDispatchPathAvailable = true
+        receiverAudioPermissionRequestDecisionBucket = "request_redacted"
         switch result {
         case .success:
             receiverAudioPublishInvokeDispatchResultBucket = "ready_redacted"
             receiverAudioPublishCallInvocationFailureBucket = "none"
             receiverAudioPublishBlockedReasonBucket = "none"
             receiverAudioPermissionResultBucket = "granted_redacted"
+            receiverAudioPermissionRequestBlockedReasonBucket = "none"
+            receiverLocalAudioTrackCreateAttempted = true
             receiverLocalAudioTrackCreateResultBucket = "success_redacted"
+            receiverLocalAudioTrackCreateBlockedReasonBucket = "none"
+            receiverLocalAudioTrackPublishAttempted = true
             receiverLocalAudioTrackPublishResultBucket = "success_redacted"
+            receiverLocalAudioTrackPublishBlockedReasonBucket = "none"
             receiverLocalAudioTrackPublished = true
             recordLocalAudioPublishResult(requested: true, started: true, succeeded: true)
             recordMicrophonePermissionResult(requested: true, notRequiredReason: "requested_redacted")
@@ -8101,8 +8165,13 @@ private extension SalemXVoIPPushReceiptProofSummary {
             receiverAudioPublishCallInvocationFailureBucket = bucket
             receiverAudioPublishBlockedReasonBucket = "audio_track_publish_redacted"
             receiverAudioPermissionResultBucket = bucket
+            receiverAudioPermissionRequestBlockedReasonBucket = bucket
+            receiverLocalAudioTrackCreateAttempted = true
             receiverLocalAudioTrackCreateResultBucket = "failed_redacted"
+            receiverLocalAudioTrackCreateBlockedReasonBucket = bucket
+            receiverLocalAudioTrackPublishAttempted = true
             receiverLocalAudioTrackPublishResultBucket = "failed_redacted"
+            receiverLocalAudioTrackPublishBlockedReasonBucket = bucket
             receiverLocalAudioTrackPublished = false
             recordLocalAudioPublishResult(requested: true, started: true, succeeded: false, errorBucket: bucket)
             recordMicrophonePermissionResult(requested: true, notRequiredReason: "requested_redacted")
@@ -10563,6 +10632,14 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         guard ready, !repeated, let lease else {
             return
         }
+
+        lock.lock()
+        summary = latestVoIPPushReceiptSummary
+        summary.recordReceiverAudioPublishFunctionEntered(ready: true)
+        summary.recordReceiverAudioPublishRequestDispatched()
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
 
         let result = await lease.client.setMicrophoneEnabled(true)
         lock.lock()
