@@ -10326,6 +10326,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var remoteParticipantObservationWindowStartedAt: Date?
     private static var receiverParticipantSnapshotSweepID: UUID?
     private static var receiverRemoteAudioPublicationSnapshotReplayID: UUID?
+    private static var receiverRemoteAudioSubscribeVerificationID: UUID?
     private static var pendingOperatorReadyToAnswer = false
     private static var pendingOperatorExpectedSurface = "unknown"
     private static let pendingForegroundCallMetadataMaxAge: TimeInterval = 120
@@ -13752,6 +13753,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                 remoteParticipantObservationWindowStartedAt = nil
                 receiverParticipantSnapshotSweepID = nil
                 receiverRemoteAudioPublicationSnapshotReplayID = nil
+                receiverRemoteAudioSubscribeVerificationID = nil
                 if summary.remoteParticipantObservationFinalClassification != "pending_redacted" {
                     pendingRemotePeerContextHandoff = nil
                 }
@@ -13788,6 +13790,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             remoteParticipantObservationWindowStartedAt = nil
             receiverParticipantSnapshotSweepID = nil
             receiverRemoteAudioPublicationSnapshotReplayID = nil
+            receiverRemoteAudioSubscribeVerificationID = nil
             lock.unlock()
             return
         }
@@ -13810,6 +13813,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         remoteParticipantObservationWindowStartedAt = nil
         receiverParticipantSnapshotSweepID = nil
         receiverRemoteAudioPublicationSnapshotReplayID = nil
+        receiverRemoteAudioSubscribeVerificationID = nil
         pendingRemotePeerContextHandoff = nil
         let releaseReason = summary.remoteParticipantObservationFinalClassification
         lock.unlock()
@@ -13882,6 +13886,141 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         }
     }
 
+    private static func scheduleReceiverRemoteAudioSubscriptionVerificationIfNeeded() {
+        lock.lock()
+        let summary = latestVoIPPushReceiptSummary
+        guard summary.senderConnectedSignalReceivedByReceiver,
+              summary.receiverRemoteAudioSubscriptionWaitStarted,
+              !summary.receiverRemoteAudioTrackSubscribed,
+              receiverConnectedSessionLease != nil,
+              receiverRemoteAudioSubscribeVerificationID == nil else {
+            lock.unlock()
+            return
+        }
+
+        let verificationID = UUID()
+        receiverRemoteAudioSubscribeVerificationID = verificationID
+        lock.unlock()
+
+        requestReceiverRemoteAudioSubscribeVerificationIfCurrent(verificationID)
+        [0.75, 1.5, 3.0, 5.0].forEach { delay in
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                requestReceiverRemoteAudioSubscribeVerificationIfCurrent(verificationID)
+            }
+        }
+    }
+
+    private static func requestReceiverRemoteAudioSubscribeVerificationIfCurrent(_ verificationID: UUID) {
+        Task { @MainActor in
+            await requestReceiverRemoteAudioSubscribeVerificationIfCurrentOnMain(verificationID)
+        }
+    }
+
+    @MainActor
+    // swiftlint:disable:next cyclomatic_complexity
+    private static func requestReceiverRemoteAudioSubscribeVerificationIfCurrentOnMain(_ verificationID: UUID) async {
+        lock.lock()
+        guard receiverRemoteAudioSubscribeVerificationID == verificationID else {
+            lock.unlock()
+            return
+        }
+
+        var summary = latestVoIPPushReceiptSummary
+        guard summary.senderConnectedSignalReceivedByReceiver,
+              summary.receiverRemoteAudioSubscriptionWaitStarted,
+              !summary.receiverRemoteAudioTrackSubscribed,
+              !summary.remoteParticipantObservationWaitCompleted,
+              let lease = receiverConnectedSessionLease else {
+            receiverRemoteAudioSubscribeVerificationID = nil
+            lock.unlock()
+            return
+        }
+
+        let boundToRetainedRoom = summary.receiverConnectedSessionLeaseRoomRetained &&
+            !summary.receiverConnectedSessionLeaseReleased
+        let boundToConnectedRoom = boundToRetainedRoom &&
+            summary.liveKitRoomConnected &&
+            !summary.liveKitRoomDisconnected
+        summary.recordReceiverParticipantSnapshotRequested(boundToRetainedRoom: boundToRetainedRoom,
+                                                           boundToConnectedRoom: boundToConnectedRoom)
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+
+        let beforeSubscribeSnapshot = await lease.client.remoteParticipantSnapshot()
+
+        lock.lock()
+        guard receiverRemoteAudioSubscribeVerificationID == verificationID else {
+            lock.unlock()
+            return
+        }
+
+        summary = latestVoIPPushReceiptSummary
+        guard summary.senderConnectedSignalReceivedByReceiver,
+              summary.receiverRemoteAudioSubscriptionWaitStarted,
+              !summary.remoteParticipantObservationWaitCompleted else {
+            receiverRemoteAudioSubscribeVerificationID = nil
+            lock.unlock()
+            return
+        }
+
+        summary.recordReceiverParticipantSnapshotObservation(beforeSubscribeSnapshot)
+        let shouldInvokeSubscribe = beforeSubscribeSnapshot.audioPublicationSeen &&
+            !beforeSubscribeSnapshot.audioTrackSubscribed
+        if shouldInvokeSubscribe {
+            summary.recordReceiverRemoteAudioExplicitSubscribeStarted()
+        }
+        if beforeSubscribeSnapshot.audioTrackSubscribed {
+            receiverRemoteAudioSubscribeVerificationID = nil
+        }
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+
+        guard shouldInvokeSubscribe else {
+            return
+        }
+
+        let remoteAudioSubscriptionResult = await lease.client.setRemoteAudioPlaybackEnabled(true)
+        let afterSubscribeSnapshot = await lease.client.remoteParticipantSnapshot()
+
+        lock.lock()
+        guard receiverRemoteAudioSubscribeVerificationID == verificationID else {
+            lock.unlock()
+            return
+        }
+
+        summary = latestVoIPPushReceiptSummary
+        guard summary.senderConnectedSignalReceivedByReceiver,
+              summary.receiverRemoteAudioSubscriptionWaitStarted else {
+            receiverRemoteAudioSubscribeVerificationID = nil
+            lock.unlock()
+            return
+        }
+
+        summary.recordReceiverRemoteAudioExplicitSubscribeResult(remoteAudioSubscriptionResult)
+        summary.recordReceiverParticipantSnapshotObservation(afterSubscribeSnapshot)
+        let shouldReleaseLease = summary.remoteParticipantObservationWaitCompleted
+        let releaseReason = summary.remoteParticipantObservationFinalClassification
+        if summary.receiverRemoteAudioTrackSubscribed || shouldReleaseLease {
+            receiverRemoteAudioSubscribeVerificationID = nil
+        }
+        if shouldReleaseLease {
+            receiverParticipantSnapshotSweepID = nil
+            remoteParticipantObservationWindowID = nil
+            remoteParticipantObservationWindowStartedAt = nil
+            receiverRemoteAudioPublicationSnapshotReplayID = nil
+            receiverRemoteAudioSubscribeVerificationID = nil
+            pendingRemotePeerContextHandoff = nil
+        }
+        lock.unlock()
+
+        updateLatestVoIPPushReceiptSummary(summary)
+        if shouldReleaseLease {
+            releaseReceiverConnectedSessionLease(reason: releaseReason)
+        }
+    }
+
     @MainActor
     private static func requestReceiverRemoteAudioPublicationSnapshotReplayIfCurrentOnMain(_ replayID: UUID) async {
         lock.lock()
@@ -13947,6 +14086,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             remoteParticipantObservationWindowID = nil
             remoteParticipantObservationWindowStartedAt = nil
             receiverRemoteAudioPublicationSnapshotReplayID = nil
+            receiverRemoteAudioSubscribeVerificationID = nil
             pendingRemotePeerContextHandoff = nil
         }
         lock.unlock()
@@ -13970,6 +14110,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
               !summary.remoteParticipantObservationWaitCompleted else {
             receiverParticipantSnapshotSweepID = nil
             receiverRemoteAudioPublicationSnapshotReplayID = nil
+            receiverRemoteAudioSubscribeVerificationID = nil
             lock.unlock()
             return
         }
@@ -14004,6 +14145,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
               !summary.remoteParticipantObservationWaitCompleted else {
             receiverParticipantSnapshotSweepID = nil
             receiverRemoteAudioPublicationSnapshotReplayID = nil
+            receiverRemoteAudioSubscribeVerificationID = nil
             lock.unlock()
             return
         }
@@ -14016,6 +14158,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             remoteParticipantObservationWindowID = nil
             remoteParticipantObservationWindowStartedAt = nil
             receiverRemoteAudioPublicationSnapshotReplayID = nil
+            receiverRemoteAudioSubscribeVerificationID = nil
             pendingRemotePeerContextHandoff = nil
         }
         lock.unlock()
@@ -14526,6 +14669,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         writeVoIPPushReceiptProof(proof)
         scheduleRemoteParticipantObservationTimeoutIfNeeded()
         scheduleReceiverRemoteAudioPublicationSnapshotReplayIfNeeded()
+        scheduleReceiverRemoteAudioSubscriptionVerificationIfNeeded()
     }
 
     private static func updateLatestStartupPushKitRegistrySummary(_ summary: SalemXStartupPushKitRegistryProofSummary) {
@@ -15912,6 +16056,7 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
         receiverConnectedWindowRetentionExtensionUsed = false
         receiverParticipantSnapshotSweepID = nil
         receiverRemoteAudioPublicationSnapshotReplayID = nil
+        receiverRemoteAudioSubscribeVerificationID = nil
         summary.recordReceiverConnectedSessionLeaseReleased(reason: reason, repeated: repeated)
         lock.unlock()
 
@@ -16049,6 +16194,7 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
             remoteParticipantObservationWindowStartedAt = nil
             receiverParticipantSnapshotSweepID = nil
             receiverRemoteAudioPublicationSnapshotReplayID = nil
+            receiverRemoteAudioSubscribeVerificationID = nil
             pendingRemotePeerContextHandoff = nil
         }
         lock.unlock()
@@ -16084,6 +16230,7 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
             remoteParticipantObservationWindowStartedAt = nil
             receiverParticipantSnapshotSweepID = nil
             receiverRemoteAudioPublicationSnapshotReplayID = nil
+            receiverRemoteAudioSubscribeVerificationID = nil
             pendingRemotePeerContextHandoff = nil
         }
         lock.unlock()
@@ -16120,6 +16267,7 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
             remoteParticipantObservationWindowStartedAt = nil
             receiverParticipantSnapshotSweepID = nil
             receiverRemoteAudioPublicationSnapshotReplayID = nil
+            receiverRemoteAudioSubscribeVerificationID = nil
             pendingRemotePeerContextHandoff = nil
         }
         lock.unlock()
