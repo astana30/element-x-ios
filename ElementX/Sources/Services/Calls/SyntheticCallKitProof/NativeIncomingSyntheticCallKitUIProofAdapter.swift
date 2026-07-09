@@ -9321,9 +9321,12 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverConnectedSessionLeaseReleasedAfterTerminal = false
         receiverConnectedSessionLeaseReleaseReason = "not_released"
         receiverConnectedSessionLeaseRepeatedRelease = false
+        liveKitJoinResult = "success_redacted"
+        liveKitJoinErrorBucket = "none"
         liveKitRoomConnected = true
         liveKitRoomDisconnected = false
         liveKitLocalParticipantPresent = true
+        receiverLiveKitJoinStateLatchBucket = "available_redacted"
         receiverRemoteParticipantObserverStarted = true
         recordReceiverAudioObserverLeaseBinding(leasePresent: true,
                                                 boundToConnectedRoom: true,
@@ -9361,6 +9364,10 @@ private extension SalemXVoIPPushReceiptProofSummary {
         mediaConnectAttempted = true
         liveKitJoinRequested = true
         liveKitConnectAudioInvoked = true
+        liveKitJoinResult = succeeded ? "success_redacted" : "failed_redacted"
+        liveKitJoinErrorBucket = succeeded ? "none" : errorBucket
+        liveKitRoomConnected = succeeded
+        liveKitLocalParticipantPresent = succeeded
         microphonePermissionRequested = false
         cameraPermissionRequested = false
         matrixEventEmitRequested = false
@@ -9369,6 +9376,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         if succeeded {
             activateRemoteParticipantObservationRuntimeWindowIfNeeded()
         } else {
+            receiverLiveKitJoinStateLatchBucket = "missing_redacted"
             refreshRemoteAudioLivenessDiagnostics()
             refreshDisconnectCleanupDiagnostics()
             refreshSenderJoinTriggerOrchestration()
@@ -16042,8 +16050,17 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
             lock.lock()
             receiverConnectedSessionLease = lease
             receiverAudioPublishTriggerConsumed = false
-            let shouldReplayReceiverAudioPublishTrigger = receiverAudioPublishPendingTriggerLatched
             var summary = latestVoIPPushReceiptSummary
+            let pendingReceiverAudioPublishTrigger = receiverAudioPublishPendingTriggerLatched ||
+                receiverAudioPublishGateArmed ||
+                summary.receiverRuntimeAudioTriggerPayloadGateBucket == "present_redacted" ||
+                summary.receiverAudioPublishTriggerSeenByApp ||
+                summary.receiverAudioPublishGateLatchedWithPendingTriggerBucket == "present_redacted" ||
+                summary.receiverAudioPublishGateAtLiveRoomReplayBucket == "enabled_redacted"
+            if pendingReceiverAudioPublishTrigger {
+                receiverAudioPublishPendingTriggerLatched = true
+            }
+            let shouldReplayReceiverAudioPublishTrigger = pendingReceiverAudioPublishTrigger
             summary.recordReceiverControlledRuntimeConnectResult(succeeded: true, errorBucket: "none")
             summary.recordReceiverConnectedSessionLeaseAcquired(taskRetained: receiverConnectedSessionLeaseTask != nil)
             summary.recordReceiverAudioPublishGateInspection(armed: receiverAudioPublishGateArmed || receiverAudioPublishPendingTriggerLatched)

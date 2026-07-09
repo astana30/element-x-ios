@@ -6623,6 +6623,13 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("receiverAudioPublishSuccessLatchBucket = audioPublicationSeen ? \"present_redacted\" : \"missing_redacted\""))
         #expect(adapterSource.contains("receiverLiveKitJoinStateLatchBucket = leaseAvailable && liveKitJoinResult == \"success_redacted\" ? \"available_redacted\" : \"missing_redacted\""))
         #expect(adapterSource.contains("(summary.liveKitRoomConnected || leaseAvailable) &&"))
+        #expect(adapterSource.contains("liveKitJoinResult = succeeded ? \"success_redacted\" : \"failed_redacted\""))
+        #expect(adapterSource.contains("liveKitJoinResult = \"success_redacted\""))
+        #expect(adapterSource.contains("receiverLiveKitJoinStateLatchBucket = \"available_redacted\""))
+        #expect(adapterSource.contains("let pendingReceiverAudioPublishTrigger = receiverAudioPublishPendingTriggerLatched ||"))
+        #expect(adapterSource.contains("summary.receiverAudioPublishTriggerSeenByApp ||"))
+        #expect(adapterSource.contains("receiverAudioPublishPendingTriggerLatched = true"))
+        #expect(adapterSource.contains("let shouldReplayReceiverAudioPublishTrigger = pendingReceiverAudioPublishTrigger"))
         #expect(adapterSource.contains("receiver_local_audio_track_published=\\(receiverLocalAudioTrackPublished)"))
         #expect(!adapterSource.contains("receiverAudioPermissionResultBucket = \"raw"))
     }
