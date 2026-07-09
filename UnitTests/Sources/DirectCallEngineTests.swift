@@ -6658,6 +6658,22 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func receiverAudioPublishRendezvousAttemptRecordsRealDispatchDiagnostics() throws {
+        let source = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+
+        #expect(source.contains("receiver_publish_rendezvous_fix_source_bucket=\\(receiverPublishRendezvousFixSourceBucket)"))
+        #expect(source.contains("receiver_publish_rendezvous_attempt_reached_bucket=\\(receiverPublishRendezvousAttemptReachedBucket)"))
+        #expect(source.contains("receiver_publish_rendezvous_preconditions_bucket=\\(receiverPublishRendezvousPreconditionsBucket)"))
+        #expect(source.contains("receiver_publish_rendezvous_dispatcher_state_bucket=\\(receiverPublishRendezvousDispatcherStateBucket)"))
+        #expect(source.contains("receiver_publish_rendezvous_dispatch_call_result_bucket=\\(receiverPublishRendezvousDispatchCallResultBucket)"))
+        #expect(source.contains("receiverPublishRendezvousFixSourceBucket = \"z8k16b_redacted\""))
+        #expect(source.contains("summary.recordReceiverPublishRendezvousAttempt(reason: reason"))
+        #expect(source.contains("let receiverAudioPublishRendezvousPending = callKitAnswerActionReceived &&"))
+        #expect(source.contains("receiverAudioPublishRendezvousPending ||"))
+        #expect(source.contains("receiverPublishRendezvousDispatchCallResultBucket = dispatchCallResultBucket"))
+    }
+
+    @Test
     func normalIncomingAnswerAudioLifecycleSkeletonKeepsProductionAudioDisabled() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
 
