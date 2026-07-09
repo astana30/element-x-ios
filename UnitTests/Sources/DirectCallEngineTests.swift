@@ -6648,6 +6648,16 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func receiverAudioPublishRendezvousDrainsReadyTransitionWithoutAPNs() throws {
+        let source = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+
+        #expect(source.contains("private static func attemptReceiverAudioPublishDispatchIfReady(reason: String) async"))
+        #expect(source.contains("await attemptReceiverAudioPublishDispatchIfReady(reason: \"scheduled_replay_redacted\")"))
+        #expect(source.contains("await attemptReceiverAudioPublishDispatchIfReady(reason: \"ready_transition_redacted\")"))
+        #expect(source.contains("receiverAudioPublishTriggerConsumed = true"))
+    }
+
+    @Test
     func normalIncomingAnswerAudioLifecycleSkeletonKeepsProductionAudioDisabled() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
 

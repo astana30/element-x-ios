@@ -10806,7 +10806,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         lock.unlock()
 
         Task { @MainActor in
-            await runReceiverAudioPublishTriggerIfAllowed()
+            await attemptReceiverAudioPublishDispatchIfReady(reason: "scheduled_replay_redacted")
 
             lock.lock()
             let summary = latestVoIPPushReceiptSummary
@@ -10858,7 +10858,9 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             return
         }
 
-        scheduleReceiverAudioPublishDispatchReplay()
+        Task { @MainActor in
+            await attemptReceiverAudioPublishDispatchIfReady(reason: "ready_transition_redacted")
+        }
     }
 
     private enum SalemXReceiverAudioPermissionRequestResult: Equatable {
@@ -10935,7 +10937,12 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     }
 
     @MainActor
-    private static func runReceiverAudioPublishTriggerIfAllowed() async {
+    private static func attemptReceiverAudioPublishDispatchIfReady(reason: String) async {
+        await runReceiverAudioPublishTriggerIfAllowed(reason: reason)
+    }
+
+    @MainActor
+    private static func runReceiverAudioPublishTriggerIfAllowed(reason _: String) async {
         let lease: SalemXReceiverConnectedSessionLease?
         lock.lock()
         let repeated = receiverAudioPublishTriggerConsumed
