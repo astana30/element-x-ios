@@ -10776,9 +10776,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             return
         }
 
-        Task { @MainActor in
-            await runReceiverAudioPublishTriggerIfAllowed()
-        }
+        scheduleReceiverAudioPublishDispatchReplay()
     }
 
     private static func receiverAudioPublishTriggerPayloadGatePresent(_ components: URLComponents?) -> Bool {
@@ -10786,6 +10784,32 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             ["controlled_audio_gate", "audio_gate", "gate"].contains(item.name) &&
                 item.value == receiverAudioPublishTriggerGateMarker
         } ?? false
+    }
+
+    private static func scheduleReceiverAudioPublishDispatchReplay(attempt: Int = 0) {
+        Task { @MainActor in
+            await runReceiverAudioPublishTriggerIfAllowed()
+
+            lock.lock()
+            let summary = latestVoIPPushReceiptSummary
+            let shouldRetry = attempt < 4 &&
+                !receiverAudioPublishTriggerConsumed &&
+                (receiverAudioPublishPendingTriggerLatched ||
+                    receiverAudioPublishGateArmed ||
+                    summary.receiverRuntimeAudioTriggerPayloadGateBucket == "present_redacted" ||
+                    summary.receiverAudioPublishTriggerSeenByApp ||
+                    summary.receiverAudioPublishGateLatchedWithPendingTriggerBucket == "present_redacted") &&
+                receiverConnectedSessionLease != nil &&
+                !receiverConnectedSessionLeaseReleased
+            lock.unlock()
+
+            guard shouldRetry else {
+                return
+            }
+
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            scheduleReceiverAudioPublishDispatchReplay(attempt: attempt + 1)
+        }
     }
 
     private enum SalemXReceiverAudioPermissionRequestResult: Equatable {
@@ -16078,9 +16102,7 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
 
             updateLatestVoIPPushReceiptSummary(summary)
             if shouldReplayReceiverAudioPublishTrigger {
-                Task { @MainActor in
-                    await runReceiverAudioPublishTriggerIfAllowed()
-                }
+                scheduleReceiverAudioPublishDispatchReplay()
             }
 
             let remoteAudioSubscriptionResult = await client.setRemoteAudioPlaybackEnabled(true)
