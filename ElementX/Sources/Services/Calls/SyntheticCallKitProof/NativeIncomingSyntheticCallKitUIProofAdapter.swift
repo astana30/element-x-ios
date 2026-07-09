@@ -8207,7 +8207,9 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverAudioPermissionGateBucket = armedForLiveRoom ? "enabled_redacted" : "disabled_redacted"
         receiverAudioPublishGateBucket = armedForLiveRoom ? "enabled_redacted" : "disabled_redacted"
         receiverAudioPublishGateReadinessBucket = receiverAudioPublishGateBucket
-        receiverLiveKitJoinStateLatchBucket = leaseAvailable && liveKitJoinResult == "success_redacted" ? "available_redacted" : "missing_redacted"
+        let liveKitReadyForPublish = liveKitJoinResult == "success_redacted" ||
+            receiverLiveKitJoinStateLatchBucket == "available_redacted"
+        receiverLiveKitJoinStateLatchBucket = leaseAvailable && liveKitReadyForPublish ? "available_redacted" : "missing_redacted"
         receiverAudioPublishGateAtLiveRoomReplayBucket = leaseAvailable && armedForLiveRoom ? "enabled_redacted" : "missing_redacted"
         if !confirmed {
             receiverAudioPublishBlockedReasonBucket = "none"
@@ -10867,6 +10869,8 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         lease = receiverConnectedSessionLease
         var summary = latestVoIPPushReceiptSummary
         let leaseAvailable = lease != nil && !receiverConnectedSessionLeaseReleased
+        let liveKitReadyForPublish = summary.liveKitJoinResult == "success_redacted" ||
+            summary.receiverLiveKitJoinStateLatchBucket == "available_redacted"
         let latchedRuntimeAudioGateArmed = receiverAudioPublishGateArmed ||
             receiverAudioPublishPendingTriggerLatched ||
             summary.receiverRuntimeAudioTriggerPayloadGateBucket == "present_redacted" ||
@@ -10880,7 +10884,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         let receiverAudioPublishInvokeGateEnabled = receiverAudioPublishConsumeGateEnabled
         let ready = summary.callKitAnswerActionReceived &&
             summary.mediaCredentialsResult == "success_redacted" &&
-            summary.liveKitJoinResult == "success_redacted" &&
+            liveKitReadyForPublish &&
             (summary.liveKitRoomConnected || leaseAvailable) &&
             leaseAvailable &&
             receiverAudioPublishConsumeGateEnabled &&
