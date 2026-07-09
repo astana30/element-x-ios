@@ -6674,6 +6674,27 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func receiverRecoveredPublishSuccessNormalizesDispatchProofWithoutFakingLocalPublish() throws {
+        let source = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+        let resultStart = try #require(source.range(of: "mutating func recordReceiverAudioPublishResult")?.lowerBound)
+        let resultEnd = try #require(source.range(of: "mutating func recordRemotePeerContextHandoff")?.lowerBound)
+        let resultSource = String(source[resultStart..<resultEnd])
+
+        #expect(source.contains("receiver_publish_recovered_dispatch_success_bucket=\\(receiverPublishRecoveredDispatchSuccessBucket)"))
+        #expect(source.contains("receiver_publish_recovered_dispatch_source_bucket=\\(receiverPublishRecoveredDispatchSourceBucket)"))
+        #expect(source.contains("receiver_publish_recovered_dispatch_result_bucket=\\(receiverPublishRecoveredDispatchResultBucket)"))
+        #expect(source.contains("mutating func recordReceiverPublishRecoveredDispatchSuccess()"))
+        #expect(source.contains("receiverPublishRecoveredDispatchSourceBucket = \"z8k18b_redacted\""))
+        #expect(source.contains("receiverAudioPublishInvokeDispatchResultBucket = \"recovered_success_redacted\""))
+        #expect(source.contains("receiverAudioPublishTriggerConsumedByApp = true"))
+        #expect(source.contains("receiverPublishRendezvousDispatchCallResultBucket = \"invoked_redacted\""))
+        #expect(source.contains("if receiverLocalAudioTrackPublished {"))
+        let localPublishRange = try #require(resultSource.range(of: "receiverLocalAudioTrackPublished = true"))
+        let recoveredProofRange = try #require(resultSource.range(of: "recordReceiverPublishRecoveredDispatchSuccess()"))
+        #expect(localPublishRange.lowerBound < recoveredProofRange.lowerBound)
+    }
+
+    @Test
     func normalIncomingAnswerAudioLifecycleSkeletonKeepsProductionAudioDisabled() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
 

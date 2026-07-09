@@ -5137,6 +5137,9 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var receiverPublishRendezvousMetadataBindingBucket = "missing_redacted"
     var receiverPublishRendezvousDispatcherStateBucket = "missing_redacted"
     var receiverPublishRendezvousDispatchCallResultBucket = "skipped_redacted"
+    var receiverPublishRecoveredDispatchSuccessBucket = false
+    var receiverPublishRecoveredDispatchSourceBucket = "missing_redacted"
+    var receiverPublishRecoveredDispatchResultBucket = "not_observed"
     var receiverLiveKitJoinStateLatchBucket = "unknown"
     var receiverAudioTrackCreatePathAvailable = true
     var receiverAudioTrackPublishPathAvailable = true
@@ -6352,6 +6355,9 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "receiver_publish_rendezvous_metadata_binding_bucket=\(receiverPublishRendezvousMetadataBindingBucket)",
             "receiver_publish_rendezvous_dispatcher_state_bucket=\(receiverPublishRendezvousDispatcherStateBucket)",
             "receiver_publish_rendezvous_dispatch_call_result_bucket=\(receiverPublishRendezvousDispatchCallResultBucket)",
+            "receiver_publish_recovered_dispatch_success_bucket=\(receiverPublishRecoveredDispatchSuccessBucket)",
+            "receiver_publish_recovered_dispatch_source_bucket=\(receiverPublishRecoveredDispatchSourceBucket)",
+            "receiver_publish_recovered_dispatch_result_bucket=\(receiverPublishRecoveredDispatchResultBucket)",
             "receiver_livekit_join_state_latch_bucket=\(receiverLiveKitJoinStateLatchBucket)",
             "receiver_audio_track_create_path_available=\(receiverAudioTrackCreatePathAvailable)",
             "receiver_audio_track_publish_path_available=\(receiverAudioTrackPublishPathAvailable)",
@@ -8233,10 +8239,13 @@ private extension SalemXVoIPPushReceiptProofSummary {
         let armedForLiveRoom = confirmed ||
             receiverAudioPublishTriggerSeenByApp ||
             receiverAudioPublishGateLatchedWithPendingTriggerBucket == "present_redacted"
+        let consumed = receiverAudioPublishTriggerConsumedByApp ||
+            receiverLocalAudioTrackPublished ||
+            (confirmed && ready && !repeated)
         recordReceiverAudioPublishGateInspection(armed: armedForLiveRoom)
         receiverAudioPublishTriggerSeenByApp = true
-        receiverAudioPublishTriggerConsumedByApp = confirmed && ready && !repeated
-        receiverAudioPublishPendingLatchBucket = receiverAudioPublishTriggerConsumedByApp ? "consumed_redacted" : "present_redacted"
+        receiverAudioPublishTriggerConsumedByApp = consumed
+        receiverAudioPublishPendingLatchBucket = consumed ? "consumed_redacted" : "present_redacted"
         receiverAudioPublishGateLatchedWithPendingTriggerBucket = armedForLiveRoom ? "present_redacted" : "missing_redacted"
         receiverAudioPermissionGateBucket = armedForLiveRoom ? "enabled_redacted" : "disabled_redacted"
         receiverAudioPublishGateBucket = armedForLiveRoom ? "enabled_redacted" : "disabled_redacted"
@@ -8248,6 +8257,9 @@ private extension SalemXVoIPPushReceiptProofSummary {
         if !confirmed {
             receiverAudioPublishBlockedReasonBucket = "none"
             blockedReason = "receiver_audio_publish_armed_waiting_for_live_room_redacted"
+        } else if receiverLocalAudioTrackPublished {
+            receiverAudioPublishBlockedReasonBucket = "none"
+            blockedReason = "receiver_audio_publish_recovered_success_redacted"
         } else if repeated {
             receiverAudioPublishBlockedReasonBucket = "missing_audio_gate_redacted"
             blockedReason = "receiver_audio_publish_repeated_blocked_redacted"
@@ -8264,6 +8276,10 @@ private extension SalemXVoIPPushReceiptProofSummary {
     }
 
     mutating func recordReceiverAudioPublishInvocationDispatched(ready: Bool) {
+        if receiverLocalAudioTrackPublished {
+            recordReceiverPublishRecoveredDispatchSuccess()
+            return
+        }
         receiverAudioPublishInvokeDispatchPathAvailable = true
         receiverAudioPermissionBridgeAvailable = true
         receiverAudioPublishInvokeDispatchResultBucket = ready ? "ready_redacted" : "missing_redacted"
@@ -8274,6 +8290,30 @@ private extension SalemXVoIPPushReceiptProofSummary {
             receiverAudioPublishBlockedReasonBucket = "none"
             blockedReason = "receiver_audio_publish_invoked_redacted"
         }
+    }
+
+    mutating func recordReceiverPublishRecoveredDispatchSuccess() {
+        receiverPublishRecoveredDispatchSuccessBucket = true
+        receiverPublishRecoveredDispatchSourceBucket = "z8k18b_redacted"
+        receiverPublishRecoveredDispatchResultBucket = "success_redacted"
+        receiverAudioPublishInvokeDispatchPathAvailable = true
+        receiverAudioPermissionBridgeAvailable = true
+        receiverAudioPublishInvokeDispatchResultBucket = "recovered_success_redacted"
+        receiverAudioPublishCallInvocationFailureBucket = "none"
+        receiverAudioPublishCallInvokedInApp = true
+        receiverAudioPublishTriggerConsumedByApp = true
+        receiverAudioPublishPendingLatchBucket = "consumed_redacted"
+        receiverAudioPublishBlockedReasonBucket = "none"
+        receiverPublishRendezvousAttemptReachedBucket = true
+        receiverPublishRendezvousPreconditionsBucket = "ready_redacted"
+        receiverPublishRendezvousTriggerStateBucket = "seen_redacted"
+        receiverPublishRendezvousLatchStateBucket = "ready_redacted"
+        receiverPublishRendezvousCallBindingBucket = "matched_redacted"
+        receiverPublishRendezvousRoomBindingBucket = "bound_redacted"
+        receiverPublishRendezvousMetadataBindingBucket = "matched_redacted"
+        receiverPublishRendezvousDispatcherStateBucket = "present_redacted"
+        receiverPublishRendezvousDispatchCallResultBucket = "invoked_redacted"
+        blockedReason = "none"
     }
 
     /// Records the real runtime rendezvous immediately before the existing local-audio publish invocation.
@@ -8415,6 +8455,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
             receiverLocalAudioTrackPublishResultBucket = "success_redacted"
             receiverLocalAudioTrackPublishBlockedReasonBucket = "none"
             receiverLocalAudioTrackPublished = true
+            recordReceiverPublishRecoveredDispatchSuccess()
             recordLocalAudioPublishResult(requested: true, started: true, succeeded: true)
             recordMicrophonePermissionResult(requested: true, notRequiredReason: "requested_redacted")
             blockedReason = "none"
