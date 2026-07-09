@@ -5286,6 +5286,14 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var receiverPublishRendezvousMetadataBindingBucket = "missing_redacted"
     var receiverPublishRendezvousDispatcherStateBucket = "missing_redacted"
     var receiverPublishRendezvousDispatchCallResultBucket = "skipped_redacted"
+    var receiverPublishRendezvousBindingSourceBucket = "missing_redacted"
+    var receiverPublishRendezvousRoomBindingSourceBucket = "missing_redacted"
+    var receiverPublishRendezvousLatchBindingSourceBucket = "missing_redacted"
+    var receiverPublishRendezvousMetadataBindingSourceBucket = "missing_redacted"
+    var receiverPublishRendezvousDispatcherBindingSourceBucket = "missing_redacted"
+    var receiverLeaseRetentionAfterAnswerBucket = "unknown"
+    var receiverLeaseRetentionAfterPublishBucket = "unknown"
+    var receiverLeaseReleaseDeferredForSenderVisibilityBucket = false
     var receiverPublishRecoveredDispatchSuccessBucket = false
     var receiverPublishRecoveredDispatchSourceBucket = "missing_redacted"
     var receiverPublishRecoveredDispatchResultBucket = "not_observed"
@@ -6510,6 +6518,14 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "receiver_publish_rendezvous_metadata_binding_bucket=\(receiverPublishRendezvousMetadataBindingBucket)",
             "receiver_publish_rendezvous_dispatcher_state_bucket=\(receiverPublishRendezvousDispatcherStateBucket)",
             "receiver_publish_rendezvous_dispatch_call_result_bucket=\(receiverPublishRendezvousDispatchCallResultBucket)",
+            "receiver_publish_rendezvous_binding_source_bucket=\(receiverPublishRendezvousBindingSourceBucket)",
+            "receiver_publish_rendezvous_room_binding_source_bucket=\(receiverPublishRendezvousRoomBindingSourceBucket)",
+            "receiver_publish_rendezvous_latch_binding_source_bucket=\(receiverPublishRendezvousLatchBindingSourceBucket)",
+            "receiver_publish_rendezvous_metadata_binding_source_bucket=\(receiverPublishRendezvousMetadataBindingSourceBucket)",
+            "receiver_publish_rendezvous_dispatcher_binding_source_bucket=\(receiverPublishRendezvousDispatcherBindingSourceBucket)",
+            "receiver_lease_retention_after_answer_bucket=\(receiverLeaseRetentionAfterAnswerBucket)",
+            "receiver_lease_retention_after_publish_bucket=\(receiverLeaseRetentionAfterPublishBucket)",
+            "receiver_lease_release_deferred_for_sender_visibility_bucket=\(receiverLeaseReleaseDeferredForSenderVisibilityBucket)",
             "receiver_publish_recovered_dispatch_success_bucket=\(receiverPublishRecoveredDispatchSuccessBucket)",
             "receiver_publish_recovered_dispatch_source_bucket=\(receiverPublishRecoveredDispatchSourceBucket)",
             "receiver_publish_recovered_dispatch_result_bucket=\(receiverPublishRecoveredDispatchResultBucket)",
@@ -7121,6 +7137,12 @@ private extension SalemXVoIPPushReceiptProofSummary {
             receiverAudioPublishTriggerConsumableWhenReady &&
             liveKitJoinResult == "success_redacted" &&
             !receiverAudioPublishTerminal
+        let receiverAudioPublishTriggerPending = !receiverAudioPublishTerminal &&
+            (receiverAudioPublishTriggerSeenByApp ||
+                receiverRuntimeAudioTriggerPayloadGateBucket == "present_redacted" ||
+                receiverAudioPublishGateLatchedWithPendingTriggerBucket == "present_redacted" ||
+                receiverAudioPublishGateAtLiveRoomReplayBucket == "enabled_redacted" ||
+                receiverAudioPublishPendingLatchBucket == "present_redacted")
         let receiverVisibilityHoldActive = receiverLocalAudioTrackPublished &&
             senderConnectedSignalReceivedByReceiver &&
             !controlledCallKitCleanupRequested
@@ -7129,11 +7151,16 @@ private extension SalemXVoIPPushReceiptProofSummary {
             !receiverConnectedSessionLeaseReleased &&
             (receiverAudioPublishPending ||
                 receiverAudioPublishRendezvousPending ||
+                receiverAudioPublishTriggerPending ||
                 receiverRemoteAudioSubscriptionWaitStarted ||
                 receiverRemoteAudioLivenessWaitStarted ||
                 liveKitRemoteParticipantSeen ||
                 receiverVisibilityHoldActive) &&
-            (!receiverAudioObservationTerminal || receiverAudioPublishPending || receiverAudioPublishRendezvousPending || receiverVisibilityHoldActive)
+            (!receiverAudioObservationTerminal ||
+                receiverAudioPublishPending ||
+                receiverAudioPublishRendezvousPending ||
+                receiverAudioPublishTriggerPending ||
+                receiverVisibilityHoldActive)
     }
 
     mutating func recordReceiverConnectedSessionLeaseReleaseDeferredForAudioTerminal(reason _: String) {
@@ -7142,6 +7169,11 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverAudioObserverLeaseBindingRawIdentifiersLogged = false
         receiverAudioObserverLeaseReleasedBeforeAudioTerminal = false
         receiverConnectedSessionLeaseReleaseReason = "deferred_until_audio_terminal_redacted"
+        receiverLeaseRetentionAfterAnswerBucket = "held"
+        if receiverLocalAudioTrackPublished {
+            receiverLeaseRetentionAfterPublishBucket = "held"
+            receiverLeaseReleaseDeferredForSenderVisibilityBucket = senderConnectedSignalReceivedByReceiver
+        }
         liveKitCleanupRequested = false
         liveKitCleanupCompleted = false
         liveKitCleanupResult = "deferred_until_audio_terminal_redacted"
@@ -8454,7 +8486,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
 
     mutating func recordReceiverPublishRecoveredDispatchSuccess() {
         receiverPublishRecoveredDispatchSuccessBucket = true
-        receiverPublishRecoveredDispatchSourceBucket = "z8k18b_redacted"
+        receiverPublishRecoveredDispatchSourceBucket = "z8k22b_redacted"
         receiverPublishRecoveredDispatchResultBucket = "success_redacted"
         receiverAudioPublishInvokeDispatchPathAvailable = true
         receiverAudioPermissionBridgeAvailable = true
@@ -8473,6 +8505,11 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverPublishRendezvousMetadataBindingBucket = "matched_redacted"
         receiverPublishRendezvousDispatcherStateBucket = "present_redacted"
         receiverPublishRendezvousDispatchCallResultBucket = "invoked_redacted"
+        receiverPublishRendezvousBindingSourceBucket = "z8k22b_redacted"
+        receiverPublishRendezvousRoomBindingSourceBucket = "active_receiver_lease_redacted"
+        receiverPublishRendezvousLatchBindingSourceBucket = "active_receiver_lease_redacted"
+        receiverPublishRendezvousMetadataBindingSourceBucket = "active_metadata_redacted"
+        receiverPublishRendezvousDispatcherBindingSourceBucket = "active_dispatcher_redacted"
         blockedReason = "none"
     }
 
@@ -8486,7 +8523,8 @@ private extension SalemXVoIPPushReceiptProofSummary {
                                                          dispatcherPresent: Bool,
                                                          preconditionsReady: Bool,
                                                          dispatchCallResultBucket: String) {
-        receiverPublishRendezvousFixSourceBucket = "z8k16b_redacted"
+        receiverPublishRendezvousFixSourceBucket = "z8k22b_redacted"
+        receiverPublishRendezvousBindingSourceBucket = "z8k22b_redacted"
         receiverPublishRendezvousAttemptReachedBucket = true
         switch reason {
         case "scheduled_replay_redacted", "ready_transition_redacted":
@@ -8501,6 +8539,10 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverPublishRendezvousRoomBindingBucket = roomBound ? "bound_redacted" : "missing_redacted"
         receiverPublishRendezvousMetadataBindingBucket = metadataMatched ? "matched_redacted" : "missing_redacted"
         receiverPublishRendezvousDispatcherStateBucket = dispatcherPresent ? "present_redacted" : "missing_redacted"
+        receiverPublishRendezvousLatchBindingSourceBucket = latchReady ? "active_receiver_lease_redacted" : "missing_redacted"
+        receiverPublishRendezvousRoomBindingSourceBucket = roomBound ? "active_receiver_lease_redacted" : "missing_redacted"
+        receiverPublishRendezvousMetadataBindingSourceBucket = metadataMatched ? "active_metadata_redacted" : "missing_redacted"
+        receiverPublishRendezvousDispatcherBindingSourceBucket = dispatcherPresent ? "active_dispatcher_redacted" : "missing_redacted"
         switch dispatchCallResultBucket {
         case "invoked_redacted", "skipped_redacted", "failed_redacted":
             receiverPublishRendezvousDispatchCallResultBucket = dispatchCallResultBucket
@@ -8616,6 +8658,8 @@ private extension SalemXVoIPPushReceiptProofSummary {
             receiverLocalAudioTrackPublishBlockedReasonBucket = "none"
             receiverLocalAudioTrackPublished = true
             receiverPublishLocalPublicationSnapshotBucket = "present_redacted"
+            receiverLeaseRetentionAfterPublishBucket = receiverConnectedSessionLeaseReleased ? "released" : "held"
+            receiverLeaseReleaseDeferredForSenderVisibilityBucket = !receiverConnectedSessionLeaseReleased
             recordReceiverPublishRecoveredDispatchSuccess()
             recordLocalAudioPublishResult(requested: true, started: true, succeeded: true)
             recordMicrophonePermissionResult(requested: true, notRequiredReason: "requested_redacted")
@@ -8636,6 +8680,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
             receiverLocalAudioTrackPublishBlockedReasonBucket = bucket
             receiverLocalAudioTrackPublished = false
             receiverPublishLocalPublicationSnapshotBucket = "missing_redacted"
+            receiverLeaseRetentionAfterPublishBucket = receiverConnectedSessionLeaseReleased ? "released" : "held"
             recordLocalAudioPublishResult(requested: true, started: true, succeeded: false, errorBucket: bucket)
             recordMicrophonePermissionResult(requested: true, notRequiredReason: "requested_redacted")
             blockedReason = "receiver_audio_publish_failed_redacted"
@@ -9604,6 +9649,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverConnectedSessionLeaseReleasedAfterTerminal = false
         receiverConnectedSessionLeaseReleaseReason = "not_released"
         receiverConnectedSessionLeaseRepeatedRelease = false
+        receiverLeaseRetentionAfterAnswerBucket = "held"
         liveKitJoinResult = "success_redacted"
         liveKitJoinErrorBucket = "none"
         liveKitRoomConnected = true
@@ -9675,6 +9721,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverConnectedSessionLeaseReleaseReason = reason
         receiverConnectedSessionLeaseRepeatedRelease = repeated
         receiverConnectedSessionLeaseTaskRetained = false
+        receiverLeaseRetentionAfterPublishBucket = receiverLocalAudioTrackPublished ? "released" : receiverLeaseRetentionAfterPublishBucket
         liveKitRoomDisconnected = true
         liveKitCleanupRequested = true
         liveKitCleanupCompleted = true
@@ -11225,7 +11272,8 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         var summary = latestVoIPPushReceiptSummary
         let leaseAvailable = lease != nil && !receiverConnectedSessionLeaseReleased
         let liveKitReadyForPublish = summary.liveKitJoinResult == "success_redacted" ||
-            summary.receiverLiveKitJoinStateLatchBucket == "available_redacted"
+            summary.receiverLiveKitJoinStateLatchBucket == "available_redacted" ||
+            leaseAvailable
         let latchedRuntimeAudioGateArmed = receiverAudioPublishGateArmed ||
             receiverAudioPublishPendingTriggerLatched ||
             summary.receiverRuntimeAudioTriggerPayloadGateBucket == "present_redacted" ||
@@ -11238,8 +11286,9 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         let receiverAudioPublishConsumeGateEnabled = latchedRuntimeAudioGateArmed && triggerPayloadGatePresent
         let receiverAudioPublishInvokeGateEnabled = receiverAudioPublishConsumeGateEnabled
         let callBindingMatched = summary.callKitAnswerActionReceived
-        let metadataMatched = summary.mediaCredentialsResult == "success_redacted" &&
-            summary.mediaCredentialsRequestMetadataAvailable
+        let metadataMatched = (summary.mediaCredentialsResult == "success_redacted" &&
+            summary.mediaCredentialsRequestMetadataAvailable) ||
+            leaseAvailable
         let roomBound = summary.liveKitRoomConnected || leaseAvailable
         let preconditionsReady = callBindingMatched &&
             metadataMatched &&
