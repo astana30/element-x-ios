@@ -6695,6 +6695,20 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func senderRemoteSubscribeRendezvousRetriesAfterBothLocalPublishWithoutFakeReady() throws {
+        let source = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+
+        #expect(source.contains("sender_remote_subscribe_rendezvous_source_bucket=\\(senderRemoteSubscribeRendezvousSourceBucket)"))
+        #expect(source.contains("senderRemoteSubscribeRendezvousSourceBucket = \"z8k19b_redacted\""))
+        #expect(source.contains("senderRemoteSubscribeAfterBothLocalGateBucket = \"passed_redacted\""))
+        #expect(source.contains("senderRemoteSubscribeSnapshotResultBucket = audioPublicationSeen ? \"found_redacted\" : \"missing_redacted\""))
+        #expect(source.contains("senderRemoteSubscribeManualResultBucket = snapshot.audioTrackSubscribed ? \"verified_redacted\" : \"not_verified_redacted\""))
+        #expect(source.contains("senderRemoteSubscribeFinalResultBucket = snapshot.audioTrackSubscribed ? \"subscribed_redacted\" : \"missing_redacted\""))
+        #expect(source.contains("for attempt in 0..<75"))
+        #expect(source.contains("if !snapshot.audioTrackSubscribed, audioPublicationSeen"))
+    }
+
+    @Test
     func normalIncomingAnswerAudioLifecycleSkeletonKeepsProductionAudioDisabled() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
 
