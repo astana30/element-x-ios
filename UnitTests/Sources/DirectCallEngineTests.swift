@@ -6572,6 +6572,7 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(source.contains("scheduleReceiverAudioPublishDispatchReplay(attempt: attempt + 1)"))
         #expect(source.contains("receiverAudioPublishDispatchReplayScheduled"))
         #expect(source.contains("receiverPublishDispatchRuntimeFixMarkerBucket = \"present_redacted\""))
+        #expect(source.contains("receiverPublishDispatchRuntimeFixReachedBucket = true") && source.contains("receiverPublishDispatchRuntimeFixSourceBucket = \"z8k15a_redacted\""))
         #expect(source.contains("receiver_publish_dispatch_runtime_fix_marker_bucket=\\(receiverPublishDispatchRuntimeFixMarkerBucket)"))
         #expect(source.contains("receiverPublishDispatchRuntimeFixReachedBucket = ready"))
         #expect(source.contains("lease.client.setMicrophoneEnabled(true)"))
