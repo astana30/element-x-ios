@@ -5123,6 +5123,9 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var receiverAudioPublishCallInvokedInApp = false
     var receiverAudioPublishCallInvocationFailureBucket = "unknown_redacted"
     var receiverAudioPublishBlockedReasonBucket = "missing_helper_trigger_redacted"
+    var receiverPublishDispatchRuntimeFixMarkerBucket = "present_redacted"
+    var receiverPublishDispatchRuntimeFixReachedBucket = false
+    var receiverPublishDispatchRuntimeFixSourceBucket = "z8k14b_redacted"
     var receiverLiveKitJoinStateLatchBucket = "unknown"
     var receiverAudioTrackCreatePathAvailable = true
     var receiverAudioTrackPublishPathAvailable = true
@@ -6324,6 +6327,9 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "receiver_audio_publish_call_invoked_in_app=\(receiverAudioPublishCallInvokedInApp)",
             "receiver_audio_publish_call_invocation_failure_bucket=\(receiverAudioPublishCallInvocationFailureBucket)",
             "receiver_audio_publish_blocked_reason_bucket=\(receiverAudioPublishBlockedReasonBucket)",
+            "receiver_publish_dispatch_runtime_fix_marker_bucket=\(receiverPublishDispatchRuntimeFixMarkerBucket)",
+            "receiver_publish_dispatch_runtime_fix_reached_bucket=\(receiverPublishDispatchRuntimeFixReachedBucket)",
+            "receiver_publish_dispatch_runtime_fix_source_bucket=\(receiverPublishDispatchRuntimeFixSourceBucket)",
             "receiver_livekit_join_state_latch_bucket=\(receiverLiveKitJoinStateLatchBucket)",
             "receiver_audio_track_create_path_available=\(receiverAudioTrackCreatePathAvailable)",
             "receiver_audio_track_publish_path_available=\(receiverAudioTrackPublishPathAvailable)",
@@ -8235,6 +8241,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverAudioPublishInvokeDispatchResultBucket = ready ? "ready_redacted" : "missing_redacted"
         receiverAudioPublishCallInvocationFailureBucket = ready ? "none" : "missing_dispatch_redacted"
         receiverAudioPublishCallInvokedInApp = ready
+        receiverPublishDispatchRuntimeFixReachedBucket = ready
         if ready {
             receiverAudioPublishBlockedReasonBucket = "none"
             blockedReason = "receiver_audio_publish_invoked_redacted"
@@ -10379,6 +10386,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var receiverAudioPublishGateArmed = false
     private static var receiverAudioPublishPendingTriggerLatched = false
     private static var receiverAudioPublishTriggerConsumed = false
+    private static var receiverAudioPublishDispatchReplayScheduled = false
     private static var receiverRuntimeLiveKitClientFactory: @MainActor () -> DirectCallLiveKitClientProtocol = {
         LiveKitDirectCallClient()
     }
@@ -10787,6 +10795,16 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     }
 
     private static func scheduleReceiverAudioPublishDispatchReplay(attempt: Int = 0) {
+        lock.lock()
+        if attempt == 0, receiverAudioPublishDispatchReplayScheduled {
+            lock.unlock()
+            return
+        }
+        if attempt == 0 {
+            receiverAudioPublishDispatchReplayScheduled = true
+        }
+        lock.unlock()
+
         Task { @MainActor in
             await runReceiverAudioPublishTriggerIfAllowed()
 
@@ -10801,6 +10819,9 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                     summary.receiverAudioPublishGateLatchedWithPendingTriggerBucket == "present_redacted") &&
                 receiverConnectedSessionLease != nil &&
                 !receiverConnectedSessionLeaseReleased
+            if !shouldRetry {
+                receiverAudioPublishDispatchReplayScheduled = false
+            }
             lock.unlock()
 
             guard shouldRetry else {
@@ -10810,6 +10831,34 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             try? await Task.sleep(nanoseconds: 300_000_000)
             scheduleReceiverAudioPublishDispatchReplay(attempt: attempt + 1)
         }
+    }
+
+    private static func scheduleReceiverAudioPublishDispatchReplayIfReady() {
+        lock.lock()
+        let summary = latestVoIPPushReceiptSummary
+        let liveKitReadyForPublish = summary.liveKitJoinResult == "success_redacted" ||
+            summary.receiverLiveKitJoinStateLatchBucket == "available_redacted"
+        let triggerPending = !receiverAudioPublishTriggerConsumed &&
+            (receiverAudioPublishPendingTriggerLatched ||
+                receiverAudioPublishGateArmed ||
+                summary.receiverRuntimeAudioTriggerPayloadGateBucket == "present_redacted" ||
+                summary.receiverAudioPublishTriggerSeenByApp ||
+                summary.receiverAudioPublishGateLatchedWithPendingTriggerBucket == "present_redacted" ||
+                summary.receiverAudioPublishGateAtLiveRoomReplayBucket == "enabled_redacted")
+        let leaseAvailable = receiverConnectedSessionLease != nil && !receiverConnectedSessionLeaseReleased
+        let ready = triggerPending &&
+            leaseAvailable &&
+            summary.callKitAnswerActionReceived &&
+            summary.mediaCredentialsResult == "success_redacted" &&
+            liveKitReadyForPublish &&
+            (summary.liveKitRoomConnected || leaseAvailable)
+        lock.unlock()
+
+        guard ready else {
+            return
+        }
+
+        scheduleReceiverAudioPublishDispatchReplay()
     }
 
     private enum SalemXReceiverAudioPermissionRequestResult: Equatable {
@@ -10988,6 +11037,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         if case .success = result {
             receiverAudioPublishGateArmed = false
             receiverAudioPublishPendingTriggerLatched = false
+            receiverAudioPublishDispatchReplayScheduled = false
         }
         lock.unlock()
 
@@ -14759,6 +14809,7 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         emitDebugProofOSLog(proof)
         #endif
         writeVoIPPushReceiptProof(proof)
+        scheduleReceiverAudioPublishDispatchReplayIfReady()
         scheduleRemoteParticipantObservationTimeoutIfNeeded()
         scheduleReceiverRemoteAudioPublicationSnapshotReplayIfNeeded()
         scheduleReceiverRemoteAudioSubscriptionVerificationIfNeeded()
@@ -16078,6 +16129,7 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
             lock.lock()
             receiverConnectedSessionLease = lease
             receiverAudioPublishTriggerConsumed = false
+            receiverAudioPublishDispatchReplayScheduled = false
             var summary = latestVoIPPushReceiptSummary
             let pendingReceiverAudioPublishTrigger = receiverAudioPublishPendingTriggerLatched ||
                 receiverAudioPublishGateArmed ||
