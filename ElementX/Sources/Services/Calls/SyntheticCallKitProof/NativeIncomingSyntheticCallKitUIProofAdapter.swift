@@ -1205,6 +1205,11 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
     var senderRemoteAudioObserverRegisteredAfterJoinBucket = "unknown"
     var senderRemoteAudioObserverRegistrationBucket = "unknown"
     var senderLiveKitRoomConnectedLatchBucket = "missing_redacted"
+    var senderLiveKitRoomNameHash = "missing_redacted"
+    var senderLiveKitURLHash = "missing_redacted"
+    var senderLiveKitLocalIdentityHash = "missing_redacted"
+    var senderTokenRoomGrantHash = "missing_redacted"
+    var senderLiveKitRoomIdentityMatchBucket = "unknown"
     var receiverAudioPublishSuccessLatchBucket = "unknown"
     var senderRemoteSubscribeRendezvousSourceBucket = "missing_redacted"
     var senderRemoteSubscribeRendezvousAttemptReachedBucket = false
@@ -1225,6 +1230,15 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
     var senderRemoteAudioPublicationSeenBucket = "unknown"
     var senderRemoteAudioTrackSeenBucket = "unknown"
     var senderRemoteAudioSubscribedBucket = "unknown"
+    var receiverPublishServerVisibilityBucket = "unknown"
+    var senderRemoteExpectedIdentityBucket = "missing_redacted"
+    var senderRemoteObservedIdentityBucket = "missing_redacted"
+    var senderRemoteObservedIdentityHash = "missing_redacted"
+    var senderRemoteIdentityFilterResultBucket = "unknown"
+    var senderRemoteParticipantSnapshotCountBucket = "unknown"
+    var senderRemotePublicationSnapshotCountBucket = "unknown"
+    var senderLiveKitObserverBindingBucket = "unknown"
+    var senderRemoteSubscribeVisibilityFailureBucket = "unknown_redacted"
     var runtimeDerived = true
     var queryOutcomeIgnored = true
     var audioOnly = true
@@ -1575,6 +1589,11 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             "sender_remote_audio_observer_registered_after_join_bucket=\(senderRemoteAudioObserverRegisteredAfterJoinBucket)",
             "sender_remote_audio_observer_registration_bucket=\(senderRemoteAudioObserverRegistrationBucket)",
             "sender_livekit_room_connected_latch_bucket=\(senderLiveKitRoomConnectedLatchBucket)",
+            "sender_livekit_room_name_hash=\(senderLiveKitRoomNameHash)",
+            "sender_livekit_url_hash=\(senderLiveKitURLHash)",
+            "sender_livekit_local_identity_hash=\(senderLiveKitLocalIdentityHash)",
+            "sender_token_room_grant_hash=\(senderTokenRoomGrantHash)",
+            "sender_livekit_room_identity_match_bucket=\(senderLiveKitRoomIdentityMatchBucket)",
             "receiver_audio_publish_success_latch_bucket=\(receiverAudioPublishSuccessLatchBucket)",
             "sender_remote_subscribe_rendezvous_source_bucket=\(senderRemoteSubscribeRendezvousSourceBucket)",
             "sender_remote_subscribe_rendezvous_attempt_reached_bucket=\(senderRemoteSubscribeRendezvousAttemptReachedBucket)",
@@ -1595,6 +1614,15 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             "sender_remote_audio_publication_seen_bucket=\(senderRemoteAudioPublicationSeenBucket)",
             "sender_remote_audio_track_seen_bucket=\(senderRemoteAudioTrackSeenBucket)",
             "sender_remote_audio_subscribed_bucket=\(senderRemoteAudioSubscribedBucket)",
+            "receiver_publish_server_visibility_bucket=\(receiverPublishServerVisibilityBucket)",
+            "sender_remote_expected_identity_bucket=\(senderRemoteExpectedIdentityBucket)",
+            "sender_remote_observed_identity_bucket=\(senderRemoteObservedIdentityBucket)",
+            "sender_remote_observed_identity_hash=\(senderRemoteObservedIdentityHash)",
+            "sender_remote_identity_filter_result_bucket=\(senderRemoteIdentityFilterResultBucket)",
+            "sender_remote_participant_snapshot_count_bucket=\(senderRemoteParticipantSnapshotCountBucket)",
+            "sender_remote_publication_snapshot_count_bucket=\(senderRemotePublicationSnapshotCountBucket)",
+            "sender_livekit_observer_binding_bucket=\(senderLiveKitObserverBindingBucket)",
+            "sender_remote_subscribe_visibility_failure_bucket=\(senderRemoteSubscribeVisibilityFailureBucket)",
             "sender_runtime_join_runtime_derived=\(runtimeDerived)",
             "sender_runtime_join_query_outcome_ignored=\(queryOutcomeIgnored)",
             "sender_runtime_join_audio_only=\(audioOnly)",
@@ -2122,11 +2150,18 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         credentialsRequested = true
         credentialsAuthorized = true
         switch result {
-        case .success:
+        case .success(let connectionInfo):
             credentialsResult = "success_redacted"
             senderMediaCredentialsHTTPStatusBucket = "2xx"
             tokenReceived = true
             urlReceived = true
+            senderLiveKitRoomNameHash = connectionInfo.diagnosticRoomNameHash
+            senderLiveKitURLHash = connectionInfo.diagnosticServerURLHash
+            senderLiveKitLocalIdentityHash = connectionInfo.diagnosticTokenIdentityHash
+            senderTokenRoomGrantHash = connectionInfo.diagnosticTokenRoomGrantHash
+            senderLiveKitRoomIdentityMatchBucket = senderTokenRoomGrantHash == "missing_redacted" || senderLiveKitRoomNameHash == "missing_redacted" ?
+                "unknown" :
+                (senderTokenRoomGrantHash == senderLiveKitRoomNameHash ? "matched_redacted" : "mismatch_redacted")
             if noMediaRuntimeTriggerAttempted {
                 noMediaRuntimeTriggerResultBucket = "credentials_success_no_media_connect_redacted"
                 senderCallStateAfterAnswerBucket = "sender_no_media_runtime_credentials_success_redacted"
@@ -2230,6 +2265,7 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         senderRemoteAudioObserverRegisteredAfterJoinBucket = senderLiveKitRoomConnected ? "true" : "unknown"
         senderRemoteAudioObserverRegistrationBucket = senderLiveKitRoomConnected ? "success_redacted" : "unknown"
         senderLiveKitRoomConnectedLatchBucket = senderLiveKitRoomConnected ? "available_redacted" : "missing_redacted"
+        senderLiveKitObserverBindingBucket = senderLiveKitRoomConnected ? "bound_redacted" : "missing_redacted"
         receiverAudioPublishSuccessLatchBucket = "awaiting_remote_audio_redacted"
         senderRemoteSubscribeRendezvousSourceBucket = "z8k20b_redacted"
         senderRemoteSubscribeRendezvousAttemptReachedBucket = true
@@ -2250,6 +2286,14 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         senderRemoteAudioPublicationSeenBucket = "unknown"
         senderRemoteAudioTrackSeenBucket = "unknown"
         senderRemoteAudioSubscribedBucket = "unknown"
+        receiverPublishServerVisibilityBucket = "unknown"
+        senderRemoteExpectedIdentityBucket = pendingMetadataPeerBindingPresent || metadataHasPeer ? "present_redacted" : "missing_redacted"
+        senderRemoteObservedIdentityBucket = "missing_redacted"
+        senderRemoteObservedIdentityHash = "missing_redacted"
+        senderRemoteIdentityFilterResultBucket = "unknown"
+        senderRemoteParticipantSnapshotCountBucket = "unknown"
+        senderRemotePublicationSnapshotCountBucket = "unknown"
+        senderRemoteSubscribeVisibilityFailureBucket = "unknown_redacted"
     }
 
     mutating func markSenderRemoteAudioProof(remotePlaybackResult: Result<Void, DirectCallMediaError>,
@@ -2262,6 +2306,7 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         senderRemoteAudioObserverRegisteredBeforeJoinBucket = "true"
         senderRemoteAudioObserverRegisteredAfterJoinBucket = senderLiveKitRoomConnected ? "true" : "unknown"
         senderRemoteAudioObserverRegistrationBucket = senderLiveKitRoomConnected ? "success_redacted" : "unknown"
+        senderLiveKitObserverBindingBucket = senderLiveKitRoomConnected ? "bound_redacted" : "missing_redacted"
         senderRemoteAudioAutoSubscribeBucket = "disabled_redacted"
         senderRemoteAudioManualSubscribePathAvailable = true
         senderRemoteAudioManualSubscribeAttempted = manualSubscribeAttempted
@@ -2277,6 +2322,13 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         senderRemoteAudioTrackSeenBucket = audioPublicationSeen ? "seen_redacted" : "not_seen_redacted"
         senderRemoteAudioSubscribedBucket = snapshot.audioTrackSubscribed ? "subscribed_redacted" : "not_subscribed_redacted"
         receiverAudioPublishSuccessLatchBucket = audioPublicationSeen ? "present_redacted" : "missing_redacted"
+        receiverPublishServerVisibilityBucket = audioPublicationSeen ? "visible_redacted" : "missing_redacted"
+        senderRemoteExpectedIdentityBucket = pendingMetadataPeerBindingPresent || metadataHasPeer ? "present_redacted" : "missing_redacted"
+        senderRemoteObservedIdentityBucket = snapshot.observedIdentityHash == nil ? "missing_redacted" : "present_redacted"
+        senderRemoteObservedIdentityHash = snapshot.observedIdentityHash ?? "missing_redacted"
+        senderRemoteIdentityFilterResultBucket = snapshot.identityFilterApplied ? snapshot.identityFilterResult : "unknown"
+        senderRemoteParticipantSnapshotCountBucket = Self.safeParticipantCountBucket(snapshot.countBucket)
+        senderRemotePublicationSnapshotCountBucket = Self.safeParticipantCountBucket(snapshot.audioPublicationCountBucket)
         let remotePlaybackFailed: Bool
         if case .failure = remotePlaybackResult {
             remotePlaybackFailed = true
@@ -2296,13 +2348,23 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         senderRemoteSubscribeFinalResultBucket = snapshot.audioTrackSubscribed ? "subscribed_redacted" : (remotePlaybackFailed ? "missing_redacted" : "timeout_redacted")
         if snapshot.audioTrackSubscribed {
             senderRemoteAudioSubscribeFailureBucket = "none"
+            senderRemoteSubscribeVisibilityFailureBucket = "none"
         } else if case .failure(let error) = remotePlaybackResult {
             runtimeErrorBucket = DirectCallDiagnosticMediaFailureReason(error).rawValue
             senderRemoteAudioSubscribeFailureBucket = runtimeErrorBucket
+            senderRemoteSubscribeVisibilityFailureBucket = "unknown_redacted"
         } else if audioPublicationSeen {
             senderRemoteAudioSubscribeFailureBucket = subscribeWaitTimedOut ? "subscription_timeout_redacted" : "unknown_redacted"
+            senderRemoteSubscribeVisibilityFailureBucket = subscribeWaitTimedOut ? "timeout_redacted" : "unknown_redacted"
+        } else if !senderLiveKitRoomConnected {
+            senderRemoteAudioSubscribeFailureBucket = "livekit_state_redacted"
+            senderRemoteSubscribeVisibilityFailureBucket = "observer_stale_redacted"
+        } else if participantSeen {
+            senderRemoteAudioSubscribeFailureBucket = "livekit_state_redacted"
+            senderRemoteSubscribeVisibilityFailureBucket = "publication_missing_redacted"
         } else {
             senderRemoteAudioSubscribeFailureBucket = "livekit_state_redacted"
+            senderRemoteSubscribeVisibilityFailureBucket = "publication_missing_redacted"
         }
     }
 
@@ -2326,6 +2388,19 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             senderAudioSessionActivationObserved = false
             senderMicrophonePermissionResultBucket = DirectCallDiagnosticMediaFailureReason(error).rawValue
             blockedReason = "sender_local_audio_publish_failed_redacted"
+        }
+    }
+
+    private static func safeParticipantCountBucket(_ bucket: String) -> String {
+        switch bucket {
+        case "0":
+            return "zero"
+        case "1":
+            return "one"
+        case "2+":
+            return "many"
+        default:
+            return "unknown"
         }
     }
 }
@@ -5171,6 +5246,11 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var liveKitRoomConnected = false
     var liveKitRoomDisconnected = false
     var liveKitLocalParticipantPresent = false
+    var receiverLiveKitRoomNameHash = "missing_redacted"
+    var receiverLiveKitURLHash = "missing_redacted"
+    var receiverLiveKitLocalIdentityHash = "missing_redacted"
+    var receiverTokenRoomGrantHash = "missing_redacted"
+    var receiverTokenRoomGrantMatchBucket = "unknown"
     var receiverAudioPermissionGateAvailable = true
     var receiverAudioPermissionGateBucket = "disabled_redacted"
     var receiverAudioPublishGateAvailable = true
@@ -5279,6 +5359,7 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var receiverLocalAudioTrackPublishAttempted = false
     var receiverLocalAudioTrackPublishBlockedReasonBucket = "unknown_redacted"
     var receiverLocalAudioTrackPublished = false
+    var receiverPublishLocalPublicationSnapshotBucket = "missing_redacted"
     var localAudioPublishRequested = false
     var localAudioPublishStarted = false
     var localAudioPublishResult = "not_requested"
@@ -6388,6 +6469,11 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "livekit_room_connected=\(liveKitRoomConnected)",
             "livekit_room_disconnected=\(liveKitRoomDisconnected)",
             "livekit_local_participant_present=\(liveKitLocalParticipantPresent)",
+            "receiver_livekit_room_name_hash=\(receiverLiveKitRoomNameHash)",
+            "receiver_livekit_url_hash=\(receiverLiveKitURLHash)",
+            "receiver_livekit_local_identity_hash=\(receiverLiveKitLocalIdentityHash)",
+            "receiver_token_room_grant_hash=\(receiverTokenRoomGrantHash)",
+            "receiver_token_room_grant_match_bucket=\(receiverTokenRoomGrantMatchBucket)",
             "receiver_audio_permission_gate_available=\(receiverAudioPermissionGateAvailable)",
             "receiver_audio_permission_gate_bucket=\(receiverAudioPermissionGateBucket)",
             "receiver_audio_publish_gate_available=\(receiverAudioPublishGateAvailable)",
@@ -6453,6 +6539,7 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "receiver_local_audio_track_publish_attempted=\(receiverLocalAudioTrackPublishAttempted)",
             "receiver_local_audio_track_publish_blocked_reason_bucket=\(receiverLocalAudioTrackPublishBlockedReasonBucket)",
             "receiver_local_audio_track_published=\(receiverLocalAudioTrackPublished)",
+            "receiver_publish_local_publication_snapshot_bucket=\(receiverPublishLocalPublicationSnapshotBucket)",
             "local_audio_publish_requested=\(localAudioPublishRequested)",
             "local_audio_publish_started=\(localAudioPublishStarted)",
             "local_audio_publish_result=\(localAudioPublishResult)",
@@ -7034,6 +7121,9 @@ private extension SalemXVoIPPushReceiptProofSummary {
             receiverAudioPublishTriggerConsumableWhenReady &&
             liveKitJoinResult == "success_redacted" &&
             !receiverAudioPublishTerminal
+        let receiverVisibilityHoldActive = receiverLocalAudioTrackPublished &&
+            senderConnectedSignalReceivedByReceiver &&
+            !controlledCallKitCleanupRequested
         return receiverConnectedSessionLeaseAcquired &&
             receiverConnectedSessionLeaseRoomRetained &&
             !receiverConnectedSessionLeaseReleased &&
@@ -7041,8 +7131,9 @@ private extension SalemXVoIPPushReceiptProofSummary {
                 receiverAudioPublishRendezvousPending ||
                 receiverRemoteAudioSubscriptionWaitStarted ||
                 receiverRemoteAudioLivenessWaitStarted ||
-                liveKitRemoteParticipantSeen) &&
-            (!receiverAudioObservationTerminal || receiverAudioPublishPending || receiverAudioPublishRendezvousPending)
+                liveKitRemoteParticipantSeen ||
+                receiverVisibilityHoldActive) &&
+            (!receiverAudioObservationTerminal || receiverAudioPublishPending || receiverAudioPublishRendezvousPending || receiverVisibilityHoldActive)
     }
 
     mutating func recordReceiverConnectedSessionLeaseReleaseDeferredForAudioTerminal(reason _: String) {
@@ -8524,6 +8615,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
             receiverLocalAudioTrackPublishResultBucket = "success_redacted"
             receiverLocalAudioTrackPublishBlockedReasonBucket = "none"
             receiverLocalAudioTrackPublished = true
+            receiverPublishLocalPublicationSnapshotBucket = "present_redacted"
             recordReceiverPublishRecoveredDispatchSuccess()
             recordLocalAudioPublishResult(requested: true, started: true, succeeded: true)
             recordMicrophonePermissionResult(requested: true, notRequiredReason: "requested_redacted")
@@ -8543,6 +8635,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
             receiverLocalAudioTrackPublishResultBucket = "failed_redacted"
             receiverLocalAudioTrackPublishBlockedReasonBucket = bucket
             receiverLocalAudioTrackPublished = false
+            receiverPublishLocalPublicationSnapshotBucket = "missing_redacted"
             recordLocalAudioPublishResult(requested: true, started: true, succeeded: false, errorBucket: bucket)
             recordMicrophonePermissionResult(requested: true, notRequiredReason: "requested_redacted")
             blockedReason = "receiver_audio_publish_failed_redacted"
@@ -9218,6 +9311,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
                                                           expiresAtPresent: Bool,
                                                           session: DirectCallSession,
                                                           source: String,
+                                                          connectionInfo: DirectCallMediaConnectionInfo? = nil,
                                                           diagnostics: DirectCallDiagnosticSnapshot = .empty,
                                                           physical6RuntimeEnablementHook: SalemXPhysical6RuntimeEnablementURLHook = .defaultDisabled) {
         recordForegroundPendingCallMetadataHandoff(session: session, source: source)
@@ -9254,6 +9348,15 @@ private extension SalemXVoIPPushReceiptProofSummary {
         mediaCredentialsAllocationAttempted = diagnostics.tokenAllocationAttempted
         mediaCredentialsLiveKitRoomPrecreateAttempted = diagnostics.tokenLiveKitRoomPrecreateAttempted
         mediaCredentialsTokenIssued = diagnostics.tokenIssued
+        if let connectionInfo, succeeded && mediaCredentialsRequestMetadataAvailable {
+            receiverLiveKitRoomNameHash = connectionInfo.diagnosticRoomNameHash
+            receiverLiveKitURLHash = connectionInfo.diagnosticServerURLHash
+            receiverLiveKitLocalIdentityHash = connectionInfo.diagnosticTokenIdentityHash
+            receiverTokenRoomGrantHash = connectionInfo.diagnosticTokenRoomGrantHash
+            receiverTokenRoomGrantMatchBucket = receiverTokenRoomGrantHash == "missing_redacted" || receiverLiveKitRoomNameHash == "missing_redacted" ?
+                "unknown" :
+                (receiverTokenRoomGrantHash == receiverLiveKitRoomNameHash ? "matched_redacted" : "mismatch_redacted")
+        }
         recordPhysical6RuntimeEnablementURLHook(physical6RuntimeEnablementHook)
         if cleanupCleared {
             recordControlledMediaConnectPreflight(credentialsAvailable: true,
@@ -16220,6 +16323,7 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
                                                 expiresAtPresent: expiresAtPresent,
                                                 session: session,
                                                 source: source,
+                                                connectionInfo: receivedConnectionInfo,
                                                 diagnostics: tokenProvider.diagnosticSnapshot)
         if let connectionInfo = receivedConnectionInfo {
             lock.lock()
@@ -16649,6 +16753,7 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
                                                         expiresAtPresent: Bool,
                                                         session: DirectCallSession,
                                                         source: String,
+                                                        connectionInfo: DirectCallMediaConnectionInfo? = nil,
                                                         diagnostics: DirectCallDiagnosticSnapshot = .empty) {
         lock.lock()
         let physical6RuntimeEnablementURLHookSnapshot = physical6RuntimeEnablementURLHook
@@ -16657,6 +16762,7 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
                                                         expiresAtPresent: expiresAtPresent,
                                                         session: session,
                                                         source: source,
+                                                        connectionInfo: connectionInfo,
                                                         diagnostics: diagnostics,
                                                         physical6RuntimeEnablementHook: physical6RuntimeEnablementURLHookSnapshot)
         if summary.physical6RuntimeEnablementURLHookConsumed {

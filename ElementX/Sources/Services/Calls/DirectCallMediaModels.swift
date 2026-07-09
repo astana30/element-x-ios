@@ -62,7 +62,60 @@ struct DirectCallMediaConnectionInfo: Equatable, CustomStringConvertible {
     }
 
     var description: String {
-        "DirectCallMediaConnectionInfo(serverURL: <redacted>, roomName: \(roomName), token: <redacted>)"
+        "DirectCallMediaConnectionInfo(serverURL: <redacted>, roomName: <redacted>, token: <redacted>)"
+    }
+}
+
+extension DirectCallMediaConnectionInfo {
+    var diagnosticServerURLHash: String {
+        DirectCallDiagnosticRedactor.roomFingerprint(serverURL.absoluteString) ?? "missing_redacted"
+    }
+
+    var diagnosticRoomNameHash: String {
+        DirectCallDiagnosticRedactor.roomFingerprint(roomName) ?? "missing_redacted"
+    }
+
+    var diagnosticTokenRoomGrantHash: String {
+        guard let roomGrant = decodedLiveKitTokenPayload?.videoRoomGrant else {
+            return "missing_redacted"
+        }
+        return DirectCallDiagnosticRedactor.roomFingerprint(roomGrant) ?? "missing_redacted"
+    }
+
+    var diagnosticTokenIdentityHash: String {
+        guard let identity = decodedLiveKitTokenPayload?.identity else {
+            return "missing_redacted"
+        }
+        return DirectCallDiagnosticRedactor.roomFingerprint(identity) ?? "missing_redacted"
+    }
+
+    private var decodedLiveKitTokenPayload: LiveKitTokenDiagnosticPayload? {
+        let segments = token.split(separator: ".")
+        guard segments.count >= 2 else {
+            return nil
+        }
+
+        var encodedPayload = String(segments[1])
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        while encodedPayload.count % 4 != 0 {
+            encodedPayload.append("=")
+        }
+
+        guard let data = Data(base64Encoded: encodedPayload),
+              let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+
+        let video = payload["video"] as? [String: Any]
+        let roomGrant = video?["room"] as? String
+        let identity = (payload["sub"] as? String) ?? (payload["identity"] as? String)
+        return LiveKitTokenDiagnosticPayload(videoRoomGrant: roomGrant, identity: identity)
+    }
+
+    private struct LiveKitTokenDiagnosticPayload {
+        let videoRoomGrant: String?
+        let identity: String?
     }
 }
 

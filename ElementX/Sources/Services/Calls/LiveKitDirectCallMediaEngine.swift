@@ -21,6 +21,8 @@ protocol DirectCallLiveKitClientProtocol {
 struct DirectCallRemoteParticipantSnapshot: Equatable {
     static let empty = DirectCallRemoteParticipantSnapshot(participantSeen: false,
                                                            countBucket: "0",
+                                                           audioPublicationCountBucket: "0",
+                                                           observedIdentityHash: nil,
                                                            identityFilterApplied: false,
                                                            identityFilterResult: "not_applied_redacted",
                                                            audioPublicationSeen: false,
@@ -31,6 +33,8 @@ struct DirectCallRemoteParticipantSnapshot: Equatable {
 
     let participantSeen: Bool
     let countBucket: String
+    let audioPublicationCountBucket: String
+    let observedIdentityHash: String?
     let identityFilterApplied: Bool
     let identityFilterResult: String
     let audioPublicationSeen: Bool

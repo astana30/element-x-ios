@@ -258,12 +258,16 @@ final class LiveKitDirectCallClient: DirectCallLiveKitClientProtocol, @unchecked
         }
 
         let countBucket = Self.remoteParticipantCountBucket(for: room)
+        let publicationCountBucket = Self.remoteAudioPublicationCountBucket(for: room)
+        let observedIdentityHash = Self.remoteParticipantIdentityHash(in: room)
         let audioPublicationSeen = Self.remoteAudioPublicationSeen(in: room)
         let audioTrackSubscribed = Self.remoteAudioTrackSubscribed(in: room)
         let audioTrackUnmuted = Self.remoteAudioTrackUnmuted(in: room)
         let audioLevelObserved = Self.remoteAudioLevelObserved(in: room)
         return DirectCallRemoteParticipantSnapshot(participantSeen: countBucket != "0",
                                                    countBucket: countBucket,
+                                                   audioPublicationCountBucket: publicationCountBucket,
+                                                   observedIdentityHash: observedIdentityHash,
                                                    identityFilterApplied: false,
                                                    identityFilterResult: "not_applied_redacted",
                                                    audioPublicationSeen: audioPublicationSeen,
@@ -486,6 +490,28 @@ final class LiveKitDirectCallClient: DirectCallLiveKitClientProtocol, @unchecked
         default:
             return "2+"
         }
+    }
+
+    private static func remoteAudioPublicationCountBucket(for room: Room) -> String {
+        let count = room.remoteParticipants.values.reduce(0) { partialResult, participant in
+            partialResult + participant.audioTracks.count
+        }
+        switch count {
+        case 0:
+            return "0"
+        case 1:
+            return "1"
+        default:
+            return "2+"
+        }
+    }
+
+    private static func remoteParticipantIdentityHash(in room: Room) -> String? {
+        let identity = room.remoteParticipants.values
+            .compactMap { $0.identity?.stringValue }
+            .sorted()
+            .first
+        return identity.flatMap { DirectCallDiagnosticRedactor.roomFingerprint($0) }
     }
 
     private static func remoteAudioPublicationSeen(in room: Room) -> Bool {
