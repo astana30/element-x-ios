@@ -1216,6 +1216,12 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
     var senderRemoteSubscribeTrackStateBucket = "unknown"
     var senderRemoteSubscribeManualResultBucket = "unknown"
     var senderRemoteSubscribeFinalResultBucket = "unknown"
+    var senderRemoteSubscribeCompletionWaitPathAvailable = true
+    var senderRemoteSubscribeCompletionWaitInvokedBucket = false
+    var senderRemoteSubscribeCompletionWaitResultBucket = "unknown"
+    var senderRemoteSubscribeRoomBindingBucket = "unknown"
+    var senderRemoteSubscribeUsesSenderPublishRoomBucket = "unknown"
+    var senderRemoteSubscribeTerminalStateBucket = "unknown"
     var senderRemoteAudioPublicationSeenBucket = "unknown"
     var senderRemoteAudioTrackSeenBucket = "unknown"
     var senderRemoteAudioSubscribedBucket = "unknown"
@@ -1580,6 +1586,12 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             "sender_remote_subscribe_track_state_bucket=\(senderRemoteSubscribeTrackStateBucket)",
             "sender_remote_subscribe_manual_result_bucket=\(senderRemoteSubscribeManualResultBucket)",
             "sender_remote_subscribe_final_result_bucket=\(senderRemoteSubscribeFinalResultBucket)",
+            "sender_remote_subscribe_completion_wait_path_available=\(senderRemoteSubscribeCompletionWaitPathAvailable)",
+            "sender_remote_subscribe_completion_wait_invoked_bucket=\(senderRemoteSubscribeCompletionWaitInvokedBucket)",
+            "sender_remote_subscribe_completion_wait_result_bucket=\(senderRemoteSubscribeCompletionWaitResultBucket)",
+            "sender_remote_subscribe_room_binding_bucket=\(senderRemoteSubscribeRoomBindingBucket)",
+            "sender_remote_subscribe_uses_sender_publish_room_bucket=\(senderRemoteSubscribeUsesSenderPublishRoomBucket)",
+            "sender_remote_subscribe_terminal_state_bucket=\(senderRemoteSubscribeTerminalStateBucket)",
             "sender_remote_audio_publication_seen_bucket=\(senderRemoteAudioPublicationSeenBucket)",
             "sender_remote_audio_track_seen_bucket=\(senderRemoteAudioTrackSeenBucket)",
             "sender_remote_audio_subscribed_bucket=\(senderRemoteAudioSubscribedBucket)",
@@ -2219,7 +2231,7 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         senderRemoteAudioObserverRegistrationBucket = senderLiveKitRoomConnected ? "success_redacted" : "unknown"
         senderLiveKitRoomConnectedLatchBucket = senderLiveKitRoomConnected ? "available_redacted" : "missing_redacted"
         receiverAudioPublishSuccessLatchBucket = "awaiting_remote_audio_redacted"
-        senderRemoteSubscribeRendezvousSourceBucket = "z8k19b_redacted"
+        senderRemoteSubscribeRendezvousSourceBucket = "z8k20b_redacted"
         senderRemoteSubscribeRendezvousAttemptReachedBucket = true
         senderRemoteSubscribeAfterBothLocalGateBucket = "passed_redacted"
         senderRemoteSubscribeSnapshotResultBucket = "pending_redacted"
@@ -2229,6 +2241,15 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         senderRemoteSubscribeTrackStateBucket = "unknown"
         senderRemoteSubscribeManualResultBucket = "pending_redacted"
         senderRemoteSubscribeFinalResultBucket = "pending_redacted"
+        senderRemoteSubscribeCompletionWaitPathAvailable = true
+        senderRemoteSubscribeCompletionWaitInvokedBucket = true
+        senderRemoteSubscribeCompletionWaitResultBucket = "pending_redacted"
+        senderRemoteSubscribeRoomBindingBucket = senderLiveKitRoomConnected ? "bound_redacted" : "missing_redacted"
+        senderRemoteSubscribeUsesSenderPublishRoomBucket = senderLocalAudioPublishResult == "success_redacted" ? "true" : "false"
+        senderRemoteSubscribeTerminalStateBucket = "pending_redacted"
+        senderRemoteAudioPublicationSeenBucket = "unknown"
+        senderRemoteAudioTrackSeenBucket = "unknown"
+        senderRemoteAudioSubscribedBucket = "unknown"
     }
 
     mutating func markSenderRemoteAudioProof(remotePlaybackResult: Result<Void, DirectCallMediaError>,
@@ -2256,13 +2277,23 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         senderRemoteAudioTrackSeenBucket = audioPublicationSeen ? "seen_redacted" : "not_seen_redacted"
         senderRemoteAudioSubscribedBucket = snapshot.audioTrackSubscribed ? "subscribed_redacted" : "not_subscribed_redacted"
         receiverAudioPublishSuccessLatchBucket = audioPublicationSeen ? "present_redacted" : "missing_redacted"
+        let remotePlaybackFailed: Bool
+        if case .failure = remotePlaybackResult {
+            remotePlaybackFailed = true
+        } else {
+            remotePlaybackFailed = false
+        }
         senderRemoteSubscribeSnapshotResultBucket = audioPublicationSeen ? "found_redacted" : "missing_redacted"
         senderRemoteSubscribeEventWaitResultBucket = audioPublicationSeen ? "found_redacted" : (subscribeWaitTimedOut ? "timeout_redacted" : "missing_redacted")
         senderRemoteSubscribeParticipantStateBucket = participantSeen ? "seen_redacted" : "not_seen_redacted"
         senderRemoteSubscribePublicationStateBucket = audioPublicationSeen ? "seen_redacted" : "not_seen_redacted"
         senderRemoteSubscribeTrackStateBucket = snapshot.audioTrackSubscribed ? "seen_redacted" : "not_seen_redacted"
         senderRemoteSubscribeManualResultBucket = snapshot.audioTrackSubscribed ? "verified_redacted" : "not_verified_redacted"
-        senderRemoteSubscribeFinalResultBucket = snapshot.audioTrackSubscribed ? "subscribed_redacted" : "missing_redacted"
+        senderRemoteSubscribeCompletionWaitResultBucket = snapshot.audioTrackSubscribed ? "subscribed_redacted" : (remotePlaybackFailed ? "failed_redacted" : "timeout_redacted")
+        senderRemoteSubscribeRoomBindingBucket = senderLiveKitRoomConnected ? "bound_redacted" : "missing_redacted"
+        senderRemoteSubscribeUsesSenderPublishRoomBucket = senderLocalAudioPublishResult == "success_redacted" ? "true" : "false"
+        senderRemoteSubscribeTerminalStateBucket = snapshot.audioTrackSubscribed ? "subscribed_redacted" : "timeout_redacted"
+        senderRemoteSubscribeFinalResultBucket = snapshot.audioTrackSubscribed ? "subscribed_redacted" : (remotePlaybackFailed ? "missing_redacted" : "timeout_redacted")
         if snapshot.audioTrackSubscribed {
             senderRemoteAudioSubscribeFailureBucket = "none"
         } else if case .failure(let error) = remotePlaybackResult {

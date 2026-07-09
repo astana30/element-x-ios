@@ -6699,11 +6699,15 @@ final class NativeIncomingCallLifecycleContractTests {
         let source = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
 
         #expect(source.contains("sender_remote_subscribe_rendezvous_source_bucket=\\(senderRemoteSubscribeRendezvousSourceBucket)"))
-        #expect(source.contains("senderRemoteSubscribeRendezvousSourceBucket = \"z8k19b_redacted\""))
+        #expect(source.contains("senderRemoteSubscribeRendezvousSourceBucket = \"z8k20b_redacted\""))
         #expect(source.contains("senderRemoteSubscribeAfterBothLocalGateBucket = \"passed_redacted\""))
+        #expect(source.contains("sender_remote_subscribe_completion_wait_path_available=\\(senderRemoteSubscribeCompletionWaitPathAvailable)"))
+        #expect(source.contains("senderRemoteSubscribeCompletionWaitInvokedBucket = true"))
+        #expect(source.contains("senderRemoteSubscribeRoomBindingBucket = senderLiveKitRoomConnected ? \"bound_redacted\" : \"missing_redacted\""))
+        #expect(source.contains("senderRemoteSubscribeUsesSenderPublishRoomBucket = senderLocalAudioPublishResult == \"success_redacted\" ? \"true\" : \"false\""))
         #expect(source.contains("senderRemoteSubscribeSnapshotResultBucket = audioPublicationSeen ? \"found_redacted\" : \"missing_redacted\""))
         #expect(source.contains("senderRemoteSubscribeManualResultBucket = snapshot.audioTrackSubscribed ? \"verified_redacted\" : \"not_verified_redacted\""))
-        #expect(source.contains("senderRemoteSubscribeFinalResultBucket = snapshot.audioTrackSubscribed ? \"subscribed_redacted\" : \"missing_redacted\""))
+        #expect(source.contains("senderRemoteSubscribeFinalResultBucket = snapshot.audioTrackSubscribed ? \"subscribed_redacted\" : (remotePlaybackFailed ? \"missing_redacted\" : \"timeout_redacted\")"))
         #expect(source.contains("for attempt in 0..<75"))
         #expect(source.contains("if !snapshot.audioTrackSubscribed, audioPublicationSeen"))
     }
