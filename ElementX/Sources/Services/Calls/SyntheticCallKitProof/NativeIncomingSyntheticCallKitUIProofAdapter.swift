@@ -5313,6 +5313,10 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var receiverPublishBindingHydrationAttemptedBucket = false
     var receiverPublishBindingHydrationResultBucket = "not_requested"
     var receiverPublishBindingHydrationMissingSourcesBucket = "not_requested"
+    var receiverPublishMetadataHydrationSourceBucket = "missing_redacted"
+    var receiverPublishMetadataHydrationAttemptedBucket = false
+    var receiverPublishMetadataHydrationResultBucket = "not_requested"
+    var receiverPublishMetadataHydrationFailureBucket = "not_requested"
     var receiverPublishBindingPreservedBeforeBothLocalBucket = false
     var receiverPublishBindingPreservedBeforeSenderVisibilityBucket = false
     var senderVisibilityTerminalPrematureBlockBucket = false
@@ -6563,6 +6567,10 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "receiver_publish_binding_hydration_attempted_bucket=\(receiverPublishBindingHydrationAttemptedBucket)",
             "receiver_publish_binding_hydration_result_bucket=\(receiverPublishBindingHydrationResultBucket)",
             "receiver_publish_binding_hydration_missing_sources_bucket=\(receiverPublishBindingHydrationMissingSourcesBucket)",
+            "receiver_publish_metadata_hydration_source_bucket=\(receiverPublishMetadataHydrationSourceBucket)",
+            "receiver_publish_metadata_hydration_attempted_bucket=\(receiverPublishMetadataHydrationAttemptedBucket)",
+            "receiver_publish_metadata_hydration_result_bucket=\(receiverPublishMetadataHydrationResultBucket)",
+            "receiver_publish_metadata_hydration_failure_bucket=\(receiverPublishMetadataHydrationFailureBucket)",
             "receiver_publish_binding_preserved_before_both_local_bucket=\(receiverPublishBindingPreservedBeforeBothLocalBucket)",
             "receiver_publish_binding_preserved_before_sender_visibility_bucket=\(receiverPublishBindingPreservedBeforeSenderVisibilityBucket)",
             "sender_visibility_terminal_premature_block_bucket=\(senderVisibilityTerminalPrematureBlockBucket)",
@@ -8574,9 +8582,11 @@ private extension SalemXVoIPPushReceiptProofSummary {
     }
 
     private var receiverPublishActualBindingSourcesPresent: Bool {
-        receiverPublishRendezvousRoomBindingSourceBucket == "active_receiver_lease_redacted" &&
+        let metadataSourcePresent = receiverPublishRendezvousMetadataBindingSourceBucket == "active_metadata_redacted" ||
+            receiverPublishRendezvousMetadataBindingSourceBucket == "trigger_metadata_redacted"
+        return receiverPublishRendezvousRoomBindingSourceBucket == "active_receiver_lease_redacted" &&
             receiverPublishRendezvousLatchBindingSourceBucket == "active_receiver_lease_redacted" &&
-            receiverPublishRendezvousMetadataBindingSourceBucket == "active_metadata_redacted" &&
+            metadataSourcePresent &&
             receiverPublishRendezvousDispatcherBindingSourceBucket == "active_dispatcher_redacted"
     }
 
@@ -8612,19 +8622,31 @@ private extension SalemXVoIPPushReceiptProofSummary {
     mutating func recordReceiverPublishBindingHydration(leaseAvailable: Bool,
                                                         latchReady: Bool,
                                                         metadataAvailable: Bool,
+                                                        metadataBindingSourceBucket: String,
                                                         dispatcherAvailable: Bool) {
         receiverPublishBindingHydrationSourceBucket = "z8k26b_redacted"
         receiverPublishBindingHydrationAttemptedBucket = true
         receiverPublishRendezvousBindingRestoreSourceBucket = "z8k26b_redacted"
         receiverPublishRendezvousRoomBindingSourceBucket = leaseAvailable ? "active_receiver_lease_redacted" : "missing_redacted"
         receiverPublishRendezvousLatchBindingSourceBucket = latchReady ? "active_receiver_lease_redacted" : "missing_redacted"
-        receiverPublishRendezvousMetadataBindingSourceBucket = metadataAvailable ? "active_metadata_redacted" : "missing_redacted"
+        receiverPublishRendezvousMetadataBindingSourceBucket = metadataAvailable ? metadataBindingSourceBucket : "missing_redacted"
         receiverPublishRendezvousDispatcherBindingSourceBucket = dispatcherAvailable ? "active_dispatcher_redacted" : "missing_redacted"
         receiverPublishBindingHydrationMissingSourcesBucket = Self.receiverPublishHydrationMissingSourcesBucket(roomAvailable: leaseAvailable,
                                                                                                                 latchReady: latchReady,
                                                                                                                 metadataAvailable: metadataAvailable,
                                                                                                                 dispatcherAvailable: dispatcherAvailable)
         receiverPublishBindingHydrationResultBucket = receiverPublishBindingHydrationMissingSourcesBucket == "none" ? "success_redacted" : "missing_sources_redacted"
+        refreshReceiverPublishBindingPreservationBuckets()
+    }
+
+    mutating func recordReceiverPublishMetadataHydration(matched: Bool,
+                                                         metadataBindingSourceBucket: String,
+                                                         failureBucket: String) {
+        receiverPublishMetadataHydrationSourceBucket = "z8k27b_redacted"
+        receiverPublishMetadataHydrationAttemptedBucket = true
+        receiverPublishMetadataHydrationResultBucket = matched ? "matched_redacted" : (failureBucket.contains("mismatch") ? "mismatch_redacted" : "missing_redacted")
+        receiverPublishMetadataHydrationFailureBucket = matched ? "none" : failureBucket
+        receiverPublishRendezvousMetadataBindingSourceBucket = matched ? metadataBindingSourceBucket : "missing_redacted"
         refreshReceiverPublishBindingPreservationBuckets()
     }
 
@@ -8659,6 +8681,10 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverPublishBindingHydrationAttemptedBucket = true
         receiverPublishBindingHydrationResultBucket = "success_redacted"
         receiverPublishBindingHydrationMissingSourcesBucket = "none"
+        receiverPublishMetadataHydrationSourceBucket = "z8k27b_redacted"
+        receiverPublishMetadataHydrationAttemptedBucket = true
+        receiverPublishMetadataHydrationResultBucket = "matched_redacted"
+        receiverPublishMetadataHydrationFailureBucket = "none"
         refreshReceiverPublishBindingPreservationBuckets()
         receiverLeaseReleaseBlockedByReceiverPublishPendingBucket = false
         senderVisibilityTerminalPrematureBlockBucket = false
@@ -8693,7 +8719,8 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverPublishRendezvousDispatcherStateBucket = dispatcherPresent ? "present_redacted" : "missing_redacted"
         receiverPublishRendezvousLatchBindingSourceBucket = latchReady ? "active_receiver_lease_redacted" : "missing_redacted"
         receiverPublishRendezvousRoomBindingSourceBucket = roomBound ? "active_receiver_lease_redacted" : "missing_redacted"
-        receiverPublishRendezvousMetadataBindingSourceBucket = metadataMatched ? "active_metadata_redacted" : "missing_redacted"
+        let metadataSourceBucket = receiverPublishRendezvousMetadataBindingSourceBucket == "trigger_metadata_redacted" ? "trigger_metadata_redacted" : "active_metadata_redacted"
+        receiverPublishRendezvousMetadataBindingSourceBucket = metadataMatched ? metadataSourceBucket : "missing_redacted"
         receiverPublishRendezvousDispatcherBindingSourceBucket = dispatcherPresent ? "active_dispatcher_redacted" : "missing_redacted"
         refreshReceiverPublishBindingPreservationBuckets()
         switch dispatchCallResultBucket {
@@ -10963,6 +10990,9 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
     private static var pendingForegroundCallMetadataSession: DirectCallSession?
     private static var pendingForegroundCallMetadataSource = "none"
     private static var pendingForegroundCallMetadataRecordedAt: Date?
+    private static var receiverPublishActiveMetadataSession: DirectCallSession?
+    private static var receiverPublishActiveMetadataSource = "none"
+    private static var receiverPublishActiveMetadataRecordedAt: Date?
     private static var pendingAuthenticatedMetadataReference: String?
     private static var physical6RuntimeEnablementURLHook = SalemXPhysical6RuntimeEnablementURLHook.defaultDisabled
     private static var pendingRemotePeerContextHandoff: SalemXRemotePeerContextHandoff?
@@ -11350,6 +11380,57 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         } ?? false
     }
 
+    private struct ReceiverPublishMetadataHydration {
+        let matched: Bool
+        let sourceBucket: String
+        let failureBucket: String
+    }
+
+    private static func receiverPublishMetadataHydrationState(summary: SalemXVoIPPushReceiptProofSummary,
+                                                              leaseCallID: String?) -> ReceiverPublishMetadataHydration {
+        if summary.mediaCredentialsResult == "success_redacted",
+           summary.mediaCredentialsRequestMetadataAvailable {
+            return .init(matched: true, sourceBucket: "active_metadata_redacted", failureBucket: "none")
+        }
+
+        if let session = receiverPublishActiveMetadataSession,
+           let recordedAt = receiverPublishActiveMetadataRecordedAt,
+           Date().timeIntervalSince(recordedAt) <= pendingForegroundCallMetadataMaxAge {
+            return receiverPublishMetadataHydrationState(session: session,
+                                                         leaseCallID: leaseCallID,
+                                                         sourceBucket: "active_metadata_redacted")
+        }
+
+        if let session = pendingForegroundCallMetadataSession,
+           let recordedAt = pendingForegroundCallMetadataRecordedAt,
+           Date().timeIntervalSince(recordedAt) <= pendingForegroundCallMetadataMaxAge {
+            return receiverPublishMetadataHydrationState(session: session,
+                                                         leaseCallID: leaseCallID,
+                                                         sourceBucket: "trigger_metadata_redacted")
+        }
+
+        let failureBucket = summary.mediaCredentialsResult == "success_redacted" ? "active_metadata_missing_redacted" : "trigger_metadata_missing_redacted"
+        return .init(matched: false, sourceBucket: "missing_redacted", failureBucket: failureBucket)
+    }
+
+    private static func receiverPublishMetadataHydrationState(session: DirectCallSession,
+                                                              leaseCallID: String?,
+                                                              sourceBucket: String) -> ReceiverPublishMetadataHydration {
+        guard !session.callID.isEmpty,
+              !session.roomID.isEmpty,
+              !session.peerUserID.isEmpty,
+              session.intent == .audio else {
+            return .init(matched: false, sourceBucket: "missing_redacted", failureBucket: "metadata_instance_mismatch_redacted")
+        }
+        guard let leaseCallID, !leaseCallID.isEmpty else {
+            return .init(matched: false, sourceBucket: "missing_redacted", failureBucket: "active_metadata_missing_redacted")
+        }
+        guard session.callID == leaseCallID else {
+            return .init(matched: false, sourceBucket: "missing_redacted", failureBucket: "metadata_identity_mismatch_redacted")
+        }
+        return .init(matched: true, sourceBucket: sourceBucket, failureBucket: "none")
+    }
+
     private static func scheduleReceiverAudioPublishDispatchReplay(attempt: Int = 0) {
         lock.lock()
         if attempt == 0, receiverAudioPublishDispatchReplayScheduled {
@@ -11523,8 +11604,8 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         let callBindingMatched = summary.callKitAnswerActionReceived
         let activeReceiverLeaseAvailable = leaseAvailable
         let activeReceiverLatchReady = activeReceiverLeaseAvailable && liveKitReadyForPublish
-        let activeMetadataAvailable = summary.mediaCredentialsResult == "success_redacted" &&
-            summary.mediaCredentialsRequestMetadataAvailable
+        let metadataHydration = receiverPublishMetadataHydrationState(summary: summary, leaseCallID: lease?.callID)
+        let activeMetadataAvailable = metadataHydration.matched
         let activeDispatcherAvailable = activeReceiverLeaseAvailable
         let metadataMatched = activeMetadataAvailable
         let roomBound = activeReceiverLeaseAvailable
@@ -11548,9 +11629,13 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             receiverAudioPublishTriggerConsumed = true
             receiverAudioPublishPendingTriggerLatched = false
         }
+        summary.recordReceiverPublishMetadataHydration(matched: activeMetadataAvailable,
+                                                       metadataBindingSourceBucket: metadataHydration.sourceBucket,
+                                                       failureBucket: metadataHydration.failureBucket)
         summary.recordReceiverPublishBindingHydration(leaseAvailable: activeReceiverLeaseAvailable,
                                                       latchReady: activeReceiverLatchReady,
                                                       metadataAvailable: activeMetadataAvailable,
+                                                      metadataBindingSourceBucket: metadataHydration.sourceBucket,
                                                       dispatcherAvailable: activeDispatcherAvailable)
         summary.recordReceiverAudioPublishConsumeGateAlignment(armed: receiverAudioPublishConsumeGateEnabled)
         summary.recordReceiverAudioPublishLiveRoomReplayGate(armed: receiverAudioPublishConsumeGateEnabled,
@@ -17269,6 +17354,15 @@ extension SalemXPushKitRegistrationSmokeDebugBridge {
                                                         connectionInfo: connectionInfo,
                                                         diagnostics: diagnostics,
                                                         physical6RuntimeEnablementHook: physical6RuntimeEnablementURLHookSnapshot)
+        if succeeded, summary.mediaCredentialsRequestMetadataAvailable {
+            receiverPublishActiveMetadataSession = session
+            receiverPublishActiveMetadataSource = source
+            receiverPublishActiveMetadataRecordedAt = Date()
+        } else if !succeeded {
+            receiverPublishActiveMetadataSession = nil
+            receiverPublishActiveMetadataSource = "none"
+            receiverPublishActiveMetadataRecordedAt = nil
+        }
         if summary.physical6RuntimeEnablementURLHookConsumed {
             physical6RuntimeEnablementURLHook = physical6RuntimeEnablementURLHookSnapshot.consumedCopy()
         }

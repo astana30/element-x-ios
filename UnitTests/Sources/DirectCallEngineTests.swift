@@ -1847,6 +1847,10 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("receiver_publish_binding_hydration_attempted_bucket=\\(receiverPublishBindingHydrationAttemptedBucket)"))
         #expect(adapterSource.contains("receiver_publish_binding_hydration_result_bucket=\\(receiverPublishBindingHydrationResultBucket)"))
         #expect(adapterSource.contains("receiver_publish_binding_hydration_missing_sources_bucket=\\(receiverPublishBindingHydrationMissingSourcesBucket)"))
+        #expect(adapterSource.contains("receiver_publish_metadata_hydration_source_bucket=\\(receiverPublishMetadataHydrationSourceBucket)"))
+        #expect(adapterSource.contains("receiver_publish_metadata_hydration_attempted_bucket=\\(receiverPublishMetadataHydrationAttemptedBucket)"))
+        #expect(adapterSource.contains("receiver_publish_metadata_hydration_result_bucket=\\(receiverPublishMetadataHydrationResultBucket)"))
+        #expect(adapterSource.contains("receiver_publish_metadata_hydration_failure_bucket=\\(receiverPublishMetadataHydrationFailureBucket)"))
         #expect(adapterSource.contains("receiver_publish_binding_preserved_before_both_local_bucket=\\(receiverPublishBindingPreservedBeforeBothLocalBucket)"))
         #expect(adapterSource.contains("receiver_publish_binding_preserved_before_sender_visibility_bucket=\\(receiverPublishBindingPreservedBeforeSenderVisibilityBucket)"))
         #expect(adapterSource.contains("sender_visibility_terminal_premature_block_bucket=\\(senderVisibilityTerminalPrematureBlockBucket)"))
@@ -1866,17 +1870,36 @@ final class NativeIncomingCallLifecycleContractTests {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
 
         #expect(adapterSource.contains("private var receiverPublishActualBindingSourcesPresent: Bool"))
+        #expect(adapterSource.contains("let metadataSourcePresent = receiverPublishRendezvousMetadataBindingSourceBucket == \"active_metadata_redacted\""))
+        #expect(adapterSource.contains("receiverPublishRendezvousMetadataBindingSourceBucket == \"trigger_metadata_redacted\""))
         #expect(adapterSource.contains("receiverPublishRendezvousRoomBindingSourceBucket == \"active_receiver_lease_redacted\""))
         #expect(adapterSource.contains("receiverPublishRendezvousLatchBindingSourceBucket == \"active_receiver_lease_redacted\""))
-        #expect(adapterSource.contains("receiverPublishRendezvousMetadataBindingSourceBucket == \"active_metadata_redacted\""))
         #expect(adapterSource.contains("receiverPublishRendezvousDispatcherBindingSourceBucket == \"active_dispatcher_redacted\""))
         #expect(adapterSource.contains("receiverPublishBindingPreservedBeforeBothLocalBucket = sourcesPresent"))
         #expect(adapterSource.contains("receiverPublishBindingPreservedBeforeSenderVisibilityBucket = sourcesPresent"))
         #expect(adapterSource.contains("let activeReceiverLeaseAvailable = leaseAvailable"))
         #expect(adapterSource.contains("let activeReceiverLatchReady = activeReceiverLeaseAvailable && liveKitReadyForPublish"))
-        #expect(adapterSource.contains("let activeMetadataAvailable = summary.mediaCredentialsResult == \"success_redacted\""))
+        #expect(adapterSource.contains("let metadataHydration = receiverPublishMetadataHydrationState(summary: summary, leaseCallID: lease?.callID)"))
+        #expect(adapterSource.contains("let activeMetadataAvailable = metadataHydration.matched"))
         #expect(adapterSource.contains("summary.recordReceiverPublishBindingHydration(leaseAvailable: activeReceiverLeaseAvailable"))
         #expect(!adapterSource.contains("if latchReady || roomBound || metadataMatched || dispatcherPresent"))
+    }
+
+    @Test
+    func receiverPublishMetadataHydrationUsesMatchedActiveOrTriggerMetadata() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+
+        #expect(adapterSource.contains("var receiverPublishMetadataHydrationSourceBucket = \"missing_redacted\""))
+        #expect(adapterSource.contains("receiverPublishMetadataHydrationSourceBucket = \"z8k27b_redacted\""))
+        #expect(adapterSource.contains("receiverPublishMetadataHydrationResultBucket = matched ? \"matched_redacted\""))
+        #expect(adapterSource.contains("receiverPublishActiveMetadataSession = session"))
+        #expect(adapterSource.contains("receiverPublishMetadataHydrationState(summary: SalemXVoIPPushReceiptProofSummary"))
+        #expect(adapterSource.contains("sourceBucket: \"active_metadata_redacted\""))
+        #expect(adapterSource.contains("sourceBucket: \"trigger_metadata_redacted\""))
+        #expect(adapterSource.contains("failureBucket: \"metadata_identity_mismatch_redacted\""))
+        #expect(adapterSource.contains("summary.recordReceiverPublishMetadataHydration(matched: activeMetadataAvailable"))
+        #expect(adapterSource.contains("metadataBindingSourceBucket: metadataHydration.sourceBucket"))
+        #expect(adapterSource.contains("receiverPublishRendezvousMetadataBindingSourceBucket == \"trigger_metadata_redacted\" ? \"trigger_metadata_redacted\" : \"active_metadata_redacted\""))
     }
 
     @Test
@@ -6713,6 +6736,9 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(source.contains("receiverPublishBindingHydrationSourceBucket = \"z8k26b_redacted\""))
         #expect(source.contains("receiverPublishBindingHydrationResultBucket = receiverPublishBindingHydrationMissingSourcesBucket == \"none\" ? \"success_redacted\" : \"missing_sources_redacted\""))
         #expect(source.contains("receiverPublishBindingHydrationMissingSourcesBucket = Self.receiverPublishHydrationMissingSourcesBucket"))
+        #expect(source.contains("receiverPublishMetadataHydrationSourceBucket = \"z8k27b_redacted\""))
+        #expect(source.contains("receiverPublishMetadataHydrationFailureBucket = matched ? \"none\" : failureBucket"))
+        #expect(source.contains("summary.recordReceiverPublishMetadataHydration(matched: activeMetadataAvailable"))
         #expect(source.contains("summary.recordReceiverPublishRendezvousAttempt(reason: reason"))
         #expect(source.contains("let receiverAudioPublishRendezvousPending = callKitAnswerActionReceived &&"))
         #expect(source.contains("receiverAudioPublishRendezvousPending ||"))
