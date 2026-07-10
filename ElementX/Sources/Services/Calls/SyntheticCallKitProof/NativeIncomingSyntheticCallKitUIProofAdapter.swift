@@ -5314,6 +5314,9 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var receiverLeaseReleaseDeferredForSenderVisibilityBucket = false
     var receiverLeaseReleaseWaitsForSenderVisibilityTerminalBucket = false
     var receiverLeaseReleaseReasonBucket = "unknown_redacted"
+    var receiverLeaseReleaseBlockedByBothLocalGateBucket = false
+    var receiverLeaseReleaseBlockedBySenderVisibilityPendingBucket = false
+    var senderVisibilityTerminalReachedBucket = false
     var receiverPublishServerVisibilityWaitInvokedBucket = false
     var receiverPublishServerVisibilityWaitResultBucket = "missing_redacted"
     var receiverPublishServerVisibilityFailureBucket = "unknown_redacted"
@@ -6552,6 +6555,9 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "receiver_lease_release_deferred_for_sender_visibility_bucket=\(receiverLeaseReleaseDeferredForSenderVisibilityBucket)",
             "receiver_lease_release_waits_for_sender_visibility_terminal_bucket=\(receiverLeaseReleaseWaitsForSenderVisibilityTerminalBucket)",
             "receiver_lease_release_reason_bucket=\(receiverLeaseReleaseReasonBucket)",
+            "receiver_lease_release_blocked_by_both_local_gate_bucket=\(receiverLeaseReleaseBlockedByBothLocalGateBucket)",
+            "receiver_lease_release_blocked_by_sender_visibility_pending_bucket=\(receiverLeaseReleaseBlockedBySenderVisibilityPendingBucket)",
+            "sender_visibility_terminal_reached_bucket=\(senderVisibilityTerminalReachedBucket)",
             "receiver_publish_server_visibility_wait_invoked_bucket=\(receiverPublishServerVisibilityWaitInvokedBucket)",
             "receiver_publish_server_visibility_wait_result_bucket=\(receiverPublishServerVisibilityWaitResultBucket)",
             "receiver_publish_server_visibility_failure_bucket=\(receiverPublishServerVisibilityFailureBucket)",
@@ -7203,10 +7209,13 @@ private extension SalemXVoIPPushReceiptProofSummary {
             receiverLeaseRetentionDuringSenderVisibilityBucket = "held_redacted"
             receiverLeaseReleaseDeferredForSenderVisibilityBucket = true
             receiverLeaseReleaseWaitsForSenderVisibilityTerminalBucket = true
-            receiverLeaseReleaseReasonBucket = "sender_visibility_terminal_redacted"
-            receiverPublishServerVisibilityWaitInvokedBucket = true
-            receiverPublishServerVisibilityWaitResultBucket = "missing_redacted"
-            receiverPublishServerVisibilityFailureBucket = "unknown_redacted"
+            receiverLeaseReleaseReasonBucket = "blocked_redacted"
+            receiverLeaseReleaseBlockedByBothLocalGateBucket = true
+            receiverLeaseReleaseBlockedBySenderVisibilityPendingBucket = true
+            senderVisibilityTerminalReachedBucket = false
+            receiverPublishServerVisibilityWaitInvokedBucket = false
+            receiverPublishServerVisibilityWaitResultBucket = "not_requested"
+            receiverPublishServerVisibilityFailureBucket = "none"
         }
         liveKitCleanupRequested = false
         liveKitCleanupCompleted = false
@@ -8696,10 +8705,13 @@ private extension SalemXVoIPPushReceiptProofSummary {
             receiverLeaseRetentionDuringSenderVisibilityBucket = receiverConnectedSessionLeaseReleased ? "released_redacted" : "held_redacted"
             receiverLeaseReleaseDeferredForSenderVisibilityBucket = !receiverConnectedSessionLeaseReleased
             receiverLeaseReleaseWaitsForSenderVisibilityTerminalBucket = !receiverConnectedSessionLeaseReleased
-            receiverLeaseReleaseReasonBucket = receiverConnectedSessionLeaseReleased ? "premature_redacted" : "sender_visibility_terminal_redacted"
-            receiverPublishServerVisibilityWaitInvokedBucket = true
-            receiverPublishServerVisibilityWaitResultBucket = "missing_redacted"
-            receiverPublishServerVisibilityFailureBucket = receiverConnectedSessionLeaseReleased ? "lease_released_redacted" : "unknown_redacted"
+            receiverLeaseReleaseReasonBucket = receiverConnectedSessionLeaseReleased ? "premature_redacted" : "blocked_redacted"
+            receiverLeaseReleaseBlockedByBothLocalGateBucket = !receiverConnectedSessionLeaseReleased
+            receiverLeaseReleaseBlockedBySenderVisibilityPendingBucket = !receiverConnectedSessionLeaseReleased
+            senderVisibilityTerminalReachedBucket = false
+            receiverPublishServerVisibilityWaitInvokedBucket = false
+            receiverPublishServerVisibilityWaitResultBucket = "not_requested"
+            receiverPublishServerVisibilityFailureBucket = receiverConnectedSessionLeaseReleased ? "lease_released_redacted" : "none"
             recordReceiverPublishRecoveredDispatchSuccess()
             recordLocalAudioPublishResult(requested: true, started: true, succeeded: true)
             recordMicrophonePermissionResult(requested: true, notRequiredReason: "requested_redacted")
@@ -9766,6 +9778,9 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverLeaseRetentionDuringSenderVisibilityBucket = receiverLocalAudioTrackPublished ? "released_redacted" : receiverLeaseRetentionDuringSenderVisibilityBucket
         let mappedReleaseReasonBucket = Self.receiverLeaseReleaseReasonBucket(for: reason)
         receiverLeaseReleaseReasonBucket = receiverLocalAudioTrackPublished && mappedReleaseReasonBucket == "unknown_redacted" ? "premature_redacted" : mappedReleaseReasonBucket
+        senderVisibilityTerminalReachedBucket = receiverLeaseReleaseReasonBucket == "sender_visibility_terminal_redacted"
+        receiverLeaseReleaseBlockedByBothLocalGateBucket = false
+        receiverLeaseReleaseBlockedBySenderVisibilityPendingBucket = false
         if receiverLocalAudioTrackPublished,
            receiverLeaseReleaseWaitsForSenderVisibilityTerminalBucket,
            receiverLeaseReleaseReasonBucket == "premature_redacted" {
@@ -9791,14 +9806,13 @@ private extension SalemXVoIPPushReceiptProofSummary {
         if reason.contains("subscribed") ||
             reason.contains("timeout") ||
             reason.contains("failed") ||
-            reason.contains("missing") ||
             reason.contains("terminal") ||
             reason.contains("remote_participant") ||
             reason.contains("publication") {
             return "sender_visibility_terminal_redacted"
         }
         if reason.contains("deferred") {
-            return "sender_visibility_terminal_redacted"
+            return "blocked_redacted"
         }
         return "unknown_redacted"
     }

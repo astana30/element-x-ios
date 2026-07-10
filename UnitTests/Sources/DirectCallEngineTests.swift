@@ -1836,6 +1836,21 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func receiverLeaseDoesNotMarkSenderVisibilityTerminalBeforeBothLocalAudioGate() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+
+        #expect(adapterSource.contains("receiver_lease_release_blocked_by_both_local_gate_bucket=\\(receiverLeaseReleaseBlockedByBothLocalGateBucket)"))
+        #expect(adapterSource.contains("receiver_lease_release_blocked_by_sender_visibility_pending_bucket=\\(receiverLeaseReleaseBlockedBySenderVisibilityPendingBucket)"))
+        #expect(adapterSource.contains("sender_visibility_terminal_reached_bucket=\\(senderVisibilityTerminalReachedBucket)"))
+        #expect(adapterSource.contains("receiverLeaseReleaseReasonBucket = \"blocked_redacted\""))
+        #expect(adapterSource.contains("receiverPublishServerVisibilityWaitInvokedBucket = false"))
+        #expect(adapterSource.contains("receiverPublishServerVisibilityWaitResultBucket = \"not_requested\""))
+        #expect(adapterSource.contains("senderVisibilityTerminalReachedBucket = receiverLeaseReleaseReasonBucket == \"sender_visibility_terminal_redacted\""))
+        #expect(!adapterSource.contains("reason.contains(\"missing\") ||\n            reason.contains(\"terminal\")"))
+        #expect(!adapterSource.contains("reason.contains(\"deferred\") {\n            return \"sender_visibility_terminal_redacted\""))
+    }
+
+    @Test
     func fakePushKitLifecyclePayloadFlowsThroughParserIntakePlannerAndFakeCallKit() {
         let now = Date(timeIntervalSince1970: 1000)
         let provider = DirectCallBackgroundCallKitProviderSpy(reportResult: true)
