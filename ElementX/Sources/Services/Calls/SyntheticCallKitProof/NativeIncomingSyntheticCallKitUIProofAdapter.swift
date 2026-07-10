@@ -10522,6 +10522,10 @@ private struct AppSideSharedRoomEnsureProof {
     var initialSharedRoomsCountBucket = "zero"
     var finalSharedRoomsCountBucket = "zero"
     var selectedSharedRoomBucket = "none"
+    var senderRoomEnsureAuthSourceBucket = "missing_redacted"
+    var senderRoomEnsureHTTPStatusBucket = "not_requested"
+    var senderRoomEnsureFailureBucket = "auth_missing_redacted"
+    var senderRoomEnsureUsedDevInvite = false
     var finalClassification = "app_side_room_ensure_path_missing_redacted"
 
     var redactedLines: [String] {
@@ -10537,6 +10541,10 @@ private struct AppSideSharedRoomEnsureProof {
             "initial_shared_rooms_count_bucket=\(initialSharedRoomsCountBucket)",
             "final_shared_rooms_count_bucket=\(finalSharedRoomsCountBucket)",
             "selected_shared_room_bucket=\(selectedSharedRoomBucket)",
+            "sender_room_ensure_auth_source_bucket=\(senderRoomEnsureAuthSourceBucket)",
+            "sender_room_ensure_http_status_bucket=\(senderRoomEnsureHTTPStatusBucket)",
+            "sender_room_ensure_failure_bucket=\(senderRoomEnsureFailureBucket)",
+            "sender_room_ensure_used_dev_invite=\(senderRoomEnsureUsedDevInvite)",
             "raw_values_printed=false",
             "APNs_sent=false",
             "APNs_send_count=0",
@@ -10552,6 +10560,14 @@ private struct AppSideSharedRoomEnsureProof {
             "final_classification=\(finalClassification)"
         ]
     }
+}
+
+private struct AppSideSharedRoomAuthRetryResult {
+    let resultBucket: String
+    let httpStatusBucket: String
+    let failureBucket: String
+    let roomID: String?
+    let homeserverURL: URL?
 }
 
 private struct AppSessionPreparePreflightProof {
@@ -13145,10 +13161,14 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         guard let accessToken = await SalemXForegroundSSESmokeDebug.matrixAccessTokenForPushKitUploadSmoke(),
               !accessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             proof.tokenValidationBucket = "failed_redacted"
+            proof.senderRoomEnsureAuthSourceBucket = "missing_redacted"
+            proof.senderRoomEnsureFailureBucket = "auth_missing_redacted"
             proof.finalClassification = "session_auth_resolution_failed_redacted"
             return
         }
         proof.tokenValidationBucket = "success_redacted"
+        proof.senderRoomEnsureAuthSourceBucket = "current_sender_session_redacted"
+        proof.senderRoomEnsureFailureBucket = "none"
 
         if mode == "identity" {
             guard let userID = SalemXForegroundSSESmokeDebug.matrixUserIDForPushKitUploadSmoke() else {
@@ -13165,24 +13185,35 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         }
 
         guard let homeserver = SalemXForegroundSSESmokeDebug.matrixHomeserverForPushKitUploadSmoke(),
-              let homeserverURL = URL(string: homeserver),
-              let homeserverHost = homeserverURL.host else {
+              !homeserver.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             proof.createResultBucket = "blocked_redacted"
+            proof.senderRoomEnsureAuthSourceBucket = "missing_redacted"
+            proof.senderRoomEnsureFailureBucket = "homeserver_mismatch_redacted"
             proof.finalClassification = "app_side_room_create_failed_redacted"
             return
         }
 
-        let roomAlias = aliasLocalPart.map { "#\($0):\(homeserverHost)" }
+        let homeserverURLs = appSideSharedRoomHomeserverCandidates(activeHomeserver: homeserver)
+        guard let primaryHomeserverURL = homeserverURLs.first,
+              let primaryHomeserverHost = primaryHomeserverURL.host else {
+            proof.createResultBucket = "blocked_redacted"
+            proof.senderRoomEnsureFailureBucket = "homeserver_mismatch_redacted"
+            proof.finalClassification = "app_side_room_create_failed_redacted"
+            return
+        }
+
+        let roomAlias = aliasLocalPart.map { "#\($0):\(primaryHomeserverHost)" }
         let directory = if let roomAlias {
-            await appSideSharedRoomDirectoryLookup(homeserverURL: homeserverURL,
+            await appSideSharedRoomDirectoryLookup(homeserverURL: primaryHomeserverURL,
                                                    roomAlias: roomAlias,
                                                    accessToken: accessToken)
         } else {
             (statusBucket: "not_requested", roomID: providedRoomID)
         }
-        let initialJoined = await appSideSharedRoomJoined(homeserverURL: homeserverURL,
+        let initialJoined = await appSideSharedRoomJoined(homeserverURL: primaryHomeserverURL,
                                                           roomID: providedRoomID ?? directory.roomID,
                                                           accessToken: accessToken)
+        proof.senderRoomEnsureHTTPStatusBucket = appSideSharedRoomRedactedHTTPStatusBucket(directory.statusBucket)
         proof.initialSharedRoomsCountBucket = initialJoined ? "one" : "zero"
 
         if initialJoined {
@@ -13192,6 +13223,8 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
             proof.createAttempted = false
             proof.createResultBucket = "not_needed_redacted"
             proof.inviteOrJoinResultBucket = "not_needed_redacted"
+            proof.senderRoomEnsureHTTPStatusBucket = "2xx_redacted"
+            proof.senderRoomEnsureFailureBucket = "none"
             proof.finalSharedRoomsCountBucket = "one"
             proof.selectedSharedRoomBucket = "auto_selected_redacted"
             proof.finalClassification = "app_side_shared_room_ready_for_carpediem_receiver_answer_credentials"
@@ -13199,36 +13232,48 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         }
 
         var roomID = providedRoomID ?? directory.roomID
+        var selectedHomeserverURL = primaryHomeserverURL
         if mode == "create" {
             guard let aliasLocalPart else {
                 proof.createResultBucket = "blocked_redacted"
+                proof.senderRoomEnsureFailureBucket = "unknown_redacted"
                 proof.finalClassification = "app_side_room_create_failed_redacted"
                 return
             }
-            let createResult = await appSideSharedRoomCreate(homeserverURL: homeserverURL,
-                                                             aliasLocalPart: aliasLocalPart,
-                                                             inviteUserID: inviteUserID,
-                                                             accessToken: accessToken)
+            let createResult = await appSideSharedRoomCreateWithAuthRetry(homeserverURLs: homeserverURLs,
+                                                                          aliasLocalPart: aliasLocalPart,
+                                                                          inviteUserID: inviteUserID,
+                                                                          accessToken: accessToken)
             proof.createResultBucket = createResult.resultBucket
+            proof.senderRoomEnsureHTTPStatusBucket = createResult.httpStatusBucket
+            proof.senderRoomEnsureFailureBucket = createResult.failureBucket
+            selectedHomeserverURL = createResult.homeserverURL ?? selectedHomeserverURL
             roomID = createResult.roomID ?? roomID
             if let createdRoomID = createResult.roomID {
                 writeAppSideSharedRoomRawHandoff("room_" + "id=" + createdRoomID + "\n")
             }
         } else if mode == "join" {
             if let providedRoomID {
-                let joinResult = await appSideSharedRoomJoinRoomID(homeserverURL: homeserverURL,
-                                                                   roomID: providedRoomID,
-                                                                   accessToken: accessToken)
-                proof.inviteOrJoinResultBucket = joinResult
+                let joinResult = await appSideSharedRoomJoinRoomIDWithAuthRetry(homeserverURLs: homeserverURLs,
+                                                                                roomID: providedRoomID,
+                                                                                accessToken: accessToken)
+                proof.inviteOrJoinResultBucket = joinResult.resultBucket
+                proof.senderRoomEnsureHTTPStatusBucket = joinResult.httpStatusBucket
+                proof.senderRoomEnsureFailureBucket = joinResult.failureBucket
+                selectedHomeserverURL = joinResult.homeserverURL ?? selectedHomeserverURL
                 roomID = providedRoomID
-            } else if let roomAlias {
-                let joinResult = await appSideSharedRoomJoin(homeserverURL: homeserverURL,
-                                                             roomAlias: roomAlias,
-                                                             roomID: providedRoomID,
-                                                             accessToken: accessToken)
-                proof.inviteOrJoinResultBucket = joinResult
+            } else if aliasLocalPart != nil {
+                let joinResult = await appSideSharedRoomJoinWithAuthRetry(homeserverURLs: homeserverURLs,
+                                                                          aliasLocalPart: aliasLocalPart,
+                                                                          roomID: providedRoomID,
+                                                                          accessToken: accessToken)
+                proof.inviteOrJoinResultBucket = joinResult.resultBucket
+                proof.senderRoomEnsureHTTPStatusBucket = joinResult.httpStatusBucket
+                proof.senderRoomEnsureFailureBucket = joinResult.failureBucket
+                selectedHomeserverURL = joinResult.homeserverURL ?? selectedHomeserverURL
             } else {
                 proof.inviteOrJoinResultBucket = "blocked_redacted"
+                proof.senderRoomEnsureFailureBucket = "unknown_redacted"
                 proof.finalClassification = "app_side_room_join_or_sync_failed_redacted"
                 return
             }
@@ -13238,21 +13283,26 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         }
 
         if roomID == nil {
-            if let roomAlias {
-                let postDirectory = await appSideSharedRoomDirectoryLookup(homeserverURL: homeserverURL,
-                                                                           roomAlias: roomAlias,
+            if let aliasLocalPart,
+               let selectedHomeserverHost = selectedHomeserverURL.host {
+                let selectedRoomAlias = "#\(aliasLocalPart):\(selectedHomeserverHost)"
+                let postDirectory = await appSideSharedRoomDirectoryLookup(homeserverURL: selectedHomeserverURL,
+                                                                           roomAlias: selectedRoomAlias,
                                                                            accessToken: accessToken)
                 roomID = postDirectory.roomID
+                proof.senderRoomEnsureHTTPStatusBucket = appSideSharedRoomRedactedHTTPStatusBucket(postDirectory.statusBucket)
             }
         }
 
         for _ in 0..<12 {
-            if await appSideSharedRoomJoined(homeserverURL: homeserverURL,
+            if await appSideSharedRoomJoined(homeserverURL: selectedHomeserverURL,
                                              roomID: roomID,
                                              accessToken: accessToken) {
                 if let roomID {
                     writeAppSideSharedRoomRawHandoff("room_" + "id=" + roomID + "\n")
                 }
+                proof.senderRoomEnsureHTTPStatusBucket = "2xx_redacted"
+                proof.senderRoomEnsureFailureBucket = "none"
                 proof.finalSharedRoomsCountBucket = "one"
                 proof.selectedSharedRoomBucket = "auto_selected_redacted"
                 proof.finalClassification = "app_side_shared_room_ready_for_carpediem_receiver_answer_credentials"
@@ -13263,6 +13313,9 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
 
         proof.finalSharedRoomsCountBucket = "zero"
         proof.selectedSharedRoomBucket = "none"
+        if proof.senderRoomEnsureFailureBucket == "none" {
+            proof.senderRoomEnsureFailureBucket = proof.senderRoomEnsureHTTPStatusBucket == "401_redacted" ? "auth_rejected_redacted" : "unknown_redacted"
+        }
         proof.finalClassification = mode == "join" ? "app_side_room_join_or_sync_failed_redacted" : "app_side_room_create_failed_redacted"
         #else
         let proof = AppSideSharedRoomEnsureProof(mode: mode,
@@ -13315,6 +13368,61 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
 
     private static func appSideSharedRoomMatrixURL(homeserverURL: URL, path: String) -> URL? {
         URL(string: path, relativeTo: homeserverURL)?.absoluteURL
+    }
+
+    private static func appSideSharedRoomHomeserverCandidates(activeHomeserver: String) -> [URL] {
+        let activeURL = URL(string: activeHomeserver.trimmingCharacters(in: .whitespacesAndNewlines))
+        let canonicalURL = URL(string: matrixSessionWhoamiURLString).flatMap { url -> URL? in
+            guard let scheme = url.scheme,
+                  let host = url.host else {
+                return nil
+            }
+            var components = URLComponents()
+            components.scheme = scheme
+            components.host = host
+            components.port = url.port
+            return components.url
+        }
+        return [activeURL, canonicalURL].compactMap(\.self).reduce(into: [URL]()) { result, url in
+            guard !result.contains(where: { $0.scheme == url.scheme && $0.host == url.host && $0.port == url.port }) else {
+                return
+            }
+            result.append(url)
+        }
+    }
+
+    private static func appSideSharedRoomRedactedHTTPStatusBucket(_ bucket: String) -> String {
+        switch bucket {
+        case "2xx":
+            return "2xx_redacted"
+        case "401":
+            return "401_redacted"
+        case "403":
+            return "403_redacted"
+        case "404":
+            return "404_redacted"
+        case "not_requested":
+            return "not_requested"
+        case "network_failure":
+            return "failed_redacted"
+        default:
+            return "other_redacted"
+        }
+    }
+
+    private static func appSideSharedRoomFailureBucket(statusBucket: String) -> String {
+        switch statusBucket {
+        case "2xx":
+            return "none"
+        case "401":
+            return "auth_rejected_redacted"
+        case "403":
+            return "auth_rejected_redacted"
+        case "404":
+            return "homeserver_mismatch_redacted"
+        default:
+            return "unknown_redacted"
+        }
     }
 
     private static func appSideSharedRoomEncodedPathComponent(_ value: String) -> String {
@@ -13432,6 +13540,39 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         return (response.status.map(pendingMetadataFetchHTTPStatusBucket) ?? "network_failure", nil)
     }
 
+    private static func appSideSharedRoomCreateWithAuthRetry(homeserverURLs: [URL],
+                                                             aliasLocalPart: String,
+                                                             inviteUserID: String?,
+                                                             accessToken: String) async -> AppSideSharedRoomAuthRetryResult {
+        var lastStatusBucket = "not_requested"
+        for homeserverURL in homeserverURLs {
+            let result = await appSideSharedRoomCreate(homeserverURL: homeserverURL,
+                                                       aliasLocalPart: aliasLocalPart,
+                                                       inviteUserID: inviteUserID,
+                                                       accessToken: accessToken)
+            lastStatusBucket = result.resultBucket
+            if result.resultBucket == "success_redacted" || result.resultBucket == "already_exists_redacted" {
+                return .init(resultBucket: result.resultBucket,
+                             httpStatusBucket: "2xx_redacted",
+                             failureBucket: "none",
+                             roomID: result.roomID,
+                             homeserverURL: homeserverURL)
+            }
+            if result.resultBucket != "401" {
+                return .init(resultBucket: result.resultBucket,
+                             httpStatusBucket: appSideSharedRoomRedactedHTTPStatusBucket(result.resultBucket),
+                             failureBucket: appSideSharedRoomFailureBucket(statusBucket: result.resultBucket),
+                             roomID: result.roomID,
+                             homeserverURL: homeserverURL)
+            }
+        }
+        return .init(resultBucket: lastStatusBucket,
+                     httpStatusBucket: appSideSharedRoomRedactedHTTPStatusBucket(lastStatusBucket),
+                     failureBucket: appSideSharedRoomFailureBucket(statusBucket: lastStatusBucket),
+                     roomID: nil,
+                     homeserverURL: homeserverURLs.last)
+    }
+
     private static func appSideSharedRoomJoin(homeserverURL: URL,
                                               roomAlias: String,
                                               roomID providedRoomID: String?,
@@ -13477,6 +13618,44 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
         return response.status.map(pendingMetadataFetchHTTPStatusBucket) ?? "network_failure"
     }
 
+    private static func appSideSharedRoomJoinWithAuthRetry(homeserverURLs: [URL],
+                                                           aliasLocalPart: String?,
+                                                           roomID providedRoomID: String?,
+                                                           accessToken: String) async -> AppSideSharedRoomAuthRetryResult {
+        var lastStatusBucket = "not_requested"
+        for homeserverURL in homeserverURLs {
+            guard let host = homeserverURL.host,
+                  let aliasLocalPart else {
+                continue
+            }
+            let roomAlias = "#\(aliasLocalPart):\(host)"
+            let result = await appSideSharedRoomJoin(homeserverURL: homeserverURL,
+                                                     roomAlias: roomAlias,
+                                                     roomID: providedRoomID,
+                                                     accessToken: accessToken)
+            lastStatusBucket = result
+            if result == "success_redacted" {
+                return .init(resultBucket: result,
+                             httpStatusBucket: "2xx_redacted",
+                             failureBucket: "none",
+                             roomID: providedRoomID,
+                             homeserverURL: homeserverURL)
+            }
+            if result != "401" {
+                return .init(resultBucket: result,
+                             httpStatusBucket: appSideSharedRoomRedactedHTTPStatusBucket(result),
+                             failureBucket: appSideSharedRoomFailureBucket(statusBucket: result),
+                             roomID: providedRoomID,
+                             homeserverURL: homeserverURL)
+            }
+        }
+        return .init(resultBucket: lastStatusBucket,
+                     httpStatusBucket: appSideSharedRoomRedactedHTTPStatusBucket(lastStatusBucket),
+                     failureBucket: appSideSharedRoomFailureBucket(statusBucket: lastStatusBucket),
+                     roomID: providedRoomID,
+                     homeserverURL: homeserverURLs.last)
+    }
+
     private static func appSideSharedRoomJoinRoomID(homeserverURL: URL,
                                                     roomID: String?,
                                                     accessToken: String) async -> String {
@@ -13493,6 +13672,37 @@ final class SalemXPushKitRegistrationSmokeDebugBridge: NSObject {
                                                        accessToken: accessToken,
                                                        body: [:])
         return (200..<300).contains(response.status ?? 0) ? "success_redacted" : response.status.map(pendingMetadataFetchHTTPStatusBucket) ?? "network_failure"
+    }
+
+    private static func appSideSharedRoomJoinRoomIDWithAuthRetry(homeserverURLs: [URL],
+                                                                 roomID: String?,
+                                                                 accessToken: String) async -> AppSideSharedRoomAuthRetryResult {
+        var lastStatusBucket = "not_requested"
+        for homeserverURL in homeserverURLs {
+            let result = await appSideSharedRoomJoinRoomID(homeserverURL: homeserverURL,
+                                                           roomID: roomID,
+                                                           accessToken: accessToken)
+            lastStatusBucket = result
+            if result == "success_redacted" {
+                return .init(resultBucket: result,
+                             httpStatusBucket: "2xx_redacted",
+                             failureBucket: "none",
+                             roomID: roomID,
+                             homeserverURL: homeserverURL)
+            }
+            if result != "401" {
+                return .init(resultBucket: result,
+                             httpStatusBucket: appSideSharedRoomRedactedHTTPStatusBucket(result),
+                             failureBucket: appSideSharedRoomFailureBucket(statusBucket: result),
+                             roomID: roomID,
+                             homeserverURL: homeserverURL)
+            }
+        }
+        return .init(resultBucket: lastStatusBucket,
+                     httpStatusBucket: appSideSharedRoomRedactedHTTPStatusBucket(lastStatusBucket),
+                     failureBucket: appSideSharedRoomFailureBucket(statusBucket: lastStatusBucket),
+                     roomID: roomID,
+                     homeserverURL: homeserverURLs.last)
     }
 
     @discardableResult private static func writeAppSideSharedRoomEnsureProof(_ proof: String) -> String {
