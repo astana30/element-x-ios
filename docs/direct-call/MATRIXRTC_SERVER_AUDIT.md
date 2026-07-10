@@ -257,3 +257,227 @@ high_findings=2
 unknown_mandatory_requirements=13
 stage_1a_passed=false
 ```
+
+## Privileged audit execution result
+
+Stage: `1B-P2B`
+
+Execution validation:
+- Local baseline commit: `3b8951ba4a41a3dcfe79683e450a1073df74541b`
+- Audit output file: present, regular, not a symlink, non-empty.
+- `AUDIT_FORMAT_VERSION=1`: exactly one occurrence.
+- `AUDIT_COMPLETE=true`: exactly one occurrence.
+- `temporary_audit_file_removed=true`: exactly one occurrence.
+- Required safety markers: `remote_configuration_changed=false`, `remote_services_restarted=false`, `firewall_changed=false`, `APNs_sent=false`, `media_connected=false`.
+- Expected sections: all present exactly once.
+- Duplicate conflicting keys: none.
+- Secret/privacy scan: passed; no raw tokens, private keys, Matrix IDs, room IDs, APNs tokens, LiveKit secrets, Redis credentials, database credentials, auth headers, or complete environment arrays were imported.
+
+### Complete redacted component findings
+
+Deployment ownership:
+
+| Component | Deployment | Active | Config source | Version / image bucket | Pinning bucket |
+| --- | --- | --- | --- | --- | --- |
+| Synapse | systemd | PASS | `/etc/matrix-synapse/homeserver.yaml` | `1.150.0` from Synapse section | NOT_APPLICABLE for image pinning |
+| nginx | systemd | PASS | `/etc/nginx` | `nginx/1.18.0` | NOT_APPLICABLE for image pinning |
+| SalemX call-service | systemd | PASS | systemd unit | version unknown | NOT_APPLICABLE for image pinning |
+| MatrixRTC authorization service | docker | PASS | `/opt/matrixrtc/docker-compose.yml` | image tag `0.4.1`; direct version command did not produce a version | image pinned true |
+| LiveKit SFU | docker | PASS | effective config source not proven | version `1.9.11`; image tag `master` | image pinned true |
+| Redis | docker | PASS | `/opt/matrixrtc/docker-compose.yml` | image tag `7-alpine`; Redis version unknown | image pinned true |
+
+Authorization service:
+
+| Requirement | Privileged follow-up finding | Current classification |
+| --- | --- | --- |
+| Official MatrixRTC JWT service present | `authorization_service_official_lk_jwt=true` | PASS |
+| Health endpoint | `authorization_health_status=200` | PASS |
+| Internal bind safety | `authorization_bind_safe=true` | PASS |
+| Full access homeservers restricted | exact `mertis` match true; wildcard false | PASS |
+| LiveKit key and secret present | present true; values redacted | PASS |
+| TLS skip verify disabled | `authorization_tls_skip_verify_disabled=true` | PASS |
+| Unauthenticated token issuance | internal token probe returned `400`, not `2xx` | PASS |
+| LiveKit URL matches expected target | `authorization_livekit_url_matches=false` | FAIL_MEDIUM |
+| Auth-service key matches LiveKit key | `authorization_key_matches_livekit=false` | FAIL_MEDIUM |
+| Auth-service Redis configuration | `authorization_redis_configured=false` | FAIL_MEDIUM |
+| Sanity check interval non-zero | `authorization_sanity_check_nonzero=unknown` | UNKNOWN |
+| Webhook route | `authorization_internal_webhook_status=404` | FAIL_MEDIUM |
+
+LiveKit SFU:
+
+| Requirement | Privileged follow-up finding | Current classification |
+| --- | --- | --- |
+| Service identified | docker container active | PASS |
+| Version known | `livekit-server version 1.9.11` | PASS |
+| Image pinned | `livekit_image_pinned=true` | PASS |
+| Public WebSocket/TLS reverse proxy path | nginx SFU route present with WebSocket headers | PASS |
+| Bind safety | `livekit_bind_safe=false`; port `7880` binds all interfaces | FAIL_HIGH |
+| Effective config source | `livekit_config_source_known=false` | UNKNOWN |
+| `room.auto_create=false` | `livekit_room_auto_create=unknown` | UNKNOWN |
+| Webhook configured | `livekit_webhook_configured=false` | FAIL_MEDIUM |
+| Webhook key/target validity | key and target match buckets unknown | UNKNOWN |
+| Redis use | `livekit_redis_configured=false` | FAIL_MEDIUM |
+| TURN fallback | `livekit_turn_mode=none`; TLS unavailable | FAIL_MEDIUM |
+| UDP/RTC transport | UDP mux disabled, UDP range absent, TCP RTC disabled | FAIL_MEDIUM |
+
+Redis:
+
+| Requirement | Privileged follow-up finding | Current classification |
+| --- | --- | --- |
+| Service identified | docker container active | PASS |
+| Auth-service uses Redis | `redis_authorization_service_uses=false` | FAIL_MEDIUM |
+| LiveKit uses Redis | `redis_livekit_uses=false` | FAIL_MEDIUM |
+| Bind safety | `redis_bind_safe=false`; port `6379` binds all interfaces | FAIL_HIGH |
+| Auth/ACL/protected mode | unknown buckets | UNKNOWN |
+| Persistence mode | `redis_persistence_mode=unknown` | UNKNOWN |
+
+nginx and MatrixRTC focus:
+
+| Requirement | Initial unprivileged finding | Privileged follow-up finding | Current classification |
+| --- | --- | --- | --- |
+| `.well-known` focus reaches auth service | advertised `/livekit/jwt` returned `404` | root cause still unknown; `jwt_location_present=false`; `/sfu` route present | UNKNOWN |
+| `/sfu` route | observed in unprivileged route extraction | `sfu_location_present=true`, upstream loopback `7880` | PASS |
+| `/livekit/jwt` route | advertised but 404 | `jwt_location_present=false` | FAIL_MEDIUM |
+| WebSocket headers | present | present | PASS |
+| Proxy buffering/timeouts | present | present | PASS |
+
+Synapse:
+
+| Requirement | Privileged follow-up finding | Current classification |
+| --- | --- | --- |
+| Version | `1.150.0` | PASS |
+| Server name | `mertis` bucket true | PASS |
+| MSC3266 | enabled true | PASS |
+| MSC4222 | enabled true | PASS |
+| Max event delay | `24h` true | PASS |
+| OpenID or federation listener | true | PASS |
+| MatrixRTC rate limits | aggregate valid bucket unknown; individual rate limit buckets unknown | UNKNOWN |
+
+Network exposure distinction:
+
+| Service | Process bind / publish evidence | Firewall / external reachability evidence | Current classification |
+| --- | --- | --- | --- |
+| MatrixRTC authorization internal port | not public | not needed | PASS |
+| SalemX call-service internal port | not public | not needed | PASS |
+| Synapse client `8008` | not public | not needed | PASS |
+| LiveKit `7880` | bind-all true | firewall public unknown | FAIL_HIGH, actual public exposure unknown |
+| Redis `6379` | bind-all true | firewall public unknown | FAIL_HIGH, actual public exposure unknown |
+
+### Exact two high findings
+
+1. `livekit_7880_bind_all_publication_not_fully_restricted`
+   - Evidence: `livekit_bind_safe=false`, `livekit_7880_bind_all=true`, `livekit_7880_firewall_public=unknown`.
+   - Actual internet exposure confirmed: unknown.
+   - Remediation category: livekit.
+
+2. `redis_6379_bind_all_publication_not_fully_restricted`
+   - Evidence: `redis_bind_safe=false`, `redis_6379_bind_all=true`, `redis_6379_firewall_public=unknown`.
+   - Actual internet exposure confirmed: unknown.
+   - Remediation category: redis.
+
+### Exact five remaining mandatory unknowns
+
+1. `synapse_matrixrtc_rate_limits_valid`
+   - Reason: unknown_value.
+   - Blocking remediation: true.
+   - Minimum required evidence: redacted read of Synapse rate-limit keys showing message and delayed-event management rate/burst values.
+
+2. `authorization_sanity_check_nonzero`
+   - Reason: unknown_value.
+   - Blocking remediation: true.
+   - Minimum required evidence: redacted authorization-service configuration or environment bucket proving a non-zero sanity-check interval.
+
+3. `livekit_room_auto_create_false`
+   - Reason: unknown_value.
+   - Blocking remediation: true.
+   - Minimum required evidence: redacted effective LiveKit config source proving `room.auto_create=false`.
+
+4. `livekit_webhook_key_matches_authorization_key`
+   - Reason: unknown_value.
+   - Blocking remediation: true.
+   - Minimum required evidence: redacted key-fingerprint comparison between effective LiveKit webhook key and authorization-service LiveKit key.
+
+5. `livekit_webhook_target_matches_authorization_service`
+   - Reason: unknown_value.
+   - Blocking remediation: true.
+   - Minimum required evidence: redacted effective LiveKit webhook URL target bucket matching the authorization-service webhook route.
+
+The parsed audit summary reported `unknown_mandatory_requirements=5`, and these five findings are the corresponding mandatory unknowns. Additional non-mandatory Redis hardening buckets remain unknown (`redis_auth_or_acl_enabled`, `redis_protected_mode`, `redis_persistence_mode`) and should be included in a later hardening pass, but they are not counted in the five mandatory MatrixRTC gate unknowns imported here.
+
+### Focus 404 result
+
+```text
+focus_404_root_cause_known=false
+focus_404_root_cause=unknown
+well_known_advertised_path=unknown
+nginx_jwt_location=unknown
+authorization_internal_expected_path=/sfu
+```
+
+Initial unprivileged finding: the client `.well-known` advertised `/livekit/jwt`, and that path returned `404`.
+
+Privileged follow-up finding: nginx has the `/sfu` route and no JWT location, but the privileged output did not prove the advertised path from the effective `.well-known` value. The root cause therefore remains unknown rather than remediated.
+
+Current classification: focus route evidence incomplete; do not remediate until a narrow follow-up proves the effective advertised path and the intended public authorization endpoint.
+
+### Rollback baseline
+
+Remediation file allowlist:
+
+| File | Service | Reason | SHA-256 bucket |
+| --- | --- | --- | --- |
+| `/opt/matrixrtc/docker-compose.yml` | `lk-jwt-service` | authorization mandatory settings | `5fc62f41a2e17f6dac1bb27db36eedbe995e699566567e8194b194189fefa456` |
+| `/etc/livekit.yaml` | `livekit` | LiveKit mandatory settings | unknown |
+| `/etc/matrix-synapse/conf.d/91-matrixrtc.yaml` | `matrix-synapse` | Synapse MatrixRTC rate limits | `6fa0c998ea565791cd3510485327b51389ed90278163024d0b9d435e327b3722` |
+
+```text
+remediation_allowlist_complete=true
+rollback_baseline_complete=false
+livekit_hash_unknown_reason=unknown
+```
+
+The output names `/etc/livekit.yaml`, but the effective LiveKit config source is not proven (`livekit_config_source_known=false`) and the file hash is unknown. The output does not prove whether the path exists, whether it is regular or a symlink, whether it is mounted from another host path, or whether LiveKit receives config through arguments or environment. The rollback baseline is therefore incomplete.
+
+### Minimum follow-up evidence required
+
+Stage 1B-P is not complete because mandatory unknowns remain and rollback baseline is incomplete.
+
+One narrow supplemental privileged read-only probe is required. It must not repeat the full audit and must only emit redacted buckets for:
+
+1. Synapse MatrixRTC rate-limit values.
+2. Authorization-service sanity-check interval.
+3. Effective LiveKit config source, file type, mount source, and SHA-256 for the rollback file.
+4. LiveKit `room.auto_create`.
+5. LiveKit webhook URL target bucket and webhook key fingerprint comparison bucket.
+6. Effective `.well-known` MatrixRTC advertised path and nginx authorization-route mapping.
+7. Firewall/public reachability buckets for LiveKit `7880` and Redis `6379`, distinguishing bind-all from actual external exposure.
+
+### Stage 1B-P2B gate
+
+```text
+local_head_expected=true
+working_tree_clean_before=true
+audit_output_present=true
+audit_output_valid=true
+audit_complete=true
+temporary_remote_file_removed=true
+secret_scan_passed=true
+all_sections_present=true
+high_findings_count=2
+high_findings_exactly_classified=true
+unknown_mandatory_requirements=5
+unknown_count_consistent=true
+focus_404_root_cause_known=false
+remediation_allowlist_complete=true
+rollback_baseline_complete=false
+supplemental_privileged_probe_required=true
+runtime_code_changed=false
+server_accessed=false
+server_changed=false
+firewall_changed=false
+APNs_sent=false
+media_connected=false
+audit_document_updated=true
+commit_created=true
+stage_1b_p2b_passed=true
+```
