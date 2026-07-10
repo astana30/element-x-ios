@@ -3983,6 +3983,37 @@ final class NativeIncomingCallLifecycleContractTests {
     }
 
     @Test
+    func directCallProofStateMachineRequiresSenderLocalPublishBeforeVisibility() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+
+        #expect(adapterSource.contains("private struct SalemXDirectCallProofStateMachine"))
+        #expect(adapterSource.contains("let senderLiveKitJoined: Bool"))
+        #expect(adapterSource.contains("let senderLocalAudioPublishPending: Bool"))
+        #expect(adapterSource.contains("let senderLocalAudioPublished: Bool"))
+        #expect(adapterSource.contains("let receiverLocalAudioPublished: Bool"))
+        #expect(adapterSource.contains("var bothLocalAudioPublished: Bool"))
+        #expect(adapterSource.contains("senderLocalAudioPublished && receiverLocalAudioPublished"))
+        #expect(adapterSource.contains("var canStartSenderVisibilityWait: Bool"))
+        #expect(adapterSource.contains("bothLocalAudioPublished"))
+        #expect(adapterSource.contains("direct_call_state_machine_source_bucket=z8k29b_redacted"))
+        #expect(adapterSource.contains("sender_local_publish_required_state_bucket=\\(directCallProofStateMachine.senderLocalPublishRequired)"))
+        #expect(adapterSource.contains("sender_local_publish_state_transition_bucket=\\(directCallProofStateMachine.senderLocalPublishStateTransitionBucket)"))
+        #expect(adapterSource.contains("sender_local_publish_terminal_bucket=\\(directCallProofStateMachine.senderLocalPublishTerminalBucket)"))
+        #expect(adapterSource.contains("both_local_gate_waits_for_state_machine_bucket=true"))
+        #expect(adapterSource.contains("sender_visibility_wait_blocked_until_both_local_bucket=true"))
+        #expect(adapterSource.contains("receiver_lease_owned_by_call_state_machine_bucket=true"))
+        #expect(adapterSource.contains("receiverPublishServerVisibilityWaitInvokedBucket = false"))
+        #expect(adapterSource.contains("receiverPublishServerVisibilityWaitResultBucket = \"not_requested\""))
+        #expect(adapterSource.contains("receiverPublishServerVisibilityFailureBucket = \"blocked_until_both_local_redacted\""))
+        #expect(adapterSource.contains("state.bothLocalAudioPublished &&"))
+        #expect(adapterSource.contains("senderAudioPublishAfterJoinInvokedBucket = true"))
+        #expect(adapterSource.contains("senderLocalPublishFailureReasonBucket = Self.senderLocalPublishFailureReasonBucket(for: error)"))
+        #expect(!adapterSource.contains("localVideoTrackPublished = true"))
+        #expect(!adapterSource.contains("matrixEventEmitRequested = true"))
+        #expect(!adapterSource.contains("realCallFlowStarted = true"))
+    }
+
+    @Test
     func senderRuntimeAccessibleProofMirrorWritesLibraryTmpDebugOnlySurface() throws {
         let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
         let writerStart = try #require(adapterSource.range(of: "@discardableResult private static func writeSenderRuntimeLiveKitJoinProof")?.lowerBound)

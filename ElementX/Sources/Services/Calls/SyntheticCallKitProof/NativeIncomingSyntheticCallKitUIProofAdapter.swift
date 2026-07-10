@@ -1023,6 +1023,62 @@ private struct SalemXSenderConnectExecutorUnification {
     }
 }
 
+private struct SalemXDirectCallProofStateMachine {
+    let senderLiveKitJoined: Bool
+    let senderLocalAudioPublishPending: Bool
+    let senderLocalAudioPublished: Bool
+    let senderLocalAudioPublishFailed: Bool
+    let receiverAnswered: Bool
+    let receiverLiveKitJoined: Bool
+    let receiverLocalAudioPublished: Bool
+    let senderVisibilityWaitStarted: Bool
+    let senderVisibilityTerminal: Bool
+    let twoWayAudioReady: Bool
+    let hangupCleanupCompleted: Bool
+
+    var senderLocalPublishRequired: Bool {
+        senderLiveKitJoined
+    }
+
+    var senderLocalPublishStateTransitionBucket: String {
+        if senderLocalAudioPublished {
+            return "publish_to_published_redacted"
+        }
+        if senderLocalAudioPublishFailed {
+            return "failed_redacted"
+        }
+        if senderLocalAudioPublishPending || senderLiveKitJoined {
+            return "joined_to_publish_redacted"
+        }
+        return "not_started_redacted"
+    }
+
+    var senderLocalPublishTerminalBucket: String {
+        if senderLocalAudioPublished {
+            return "published_redacted"
+        }
+        if senderLocalAudioPublishFailed {
+            return "failed_redacted"
+        }
+        if senderLocalAudioPublishPending || senderLiveKitJoined {
+            return "timeout_redacted"
+        }
+        return "not_started_redacted"
+    }
+
+    var bothLocalAudioPublished: Bool {
+        senderLocalAudioPublished && receiverLocalAudioPublished
+    }
+
+    var canStartSenderVisibilityWait: Bool {
+        bothLocalAudioPublished
+    }
+
+    var canReleaseReceiverLease: Bool {
+        senderVisibilityTerminal || hangupCleanupCompleted || !receiverLiveKitJoined
+    }
+}
+
 // swiftlint:disable:next type_body_length
 private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
     var proofGeneration = "none"
@@ -1191,6 +1247,10 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
     var senderLocalAudioAfterJoinRequiredBucket = "not_requested"
     var senderLocalAudioAfterJoinAttemptCountBucket = "zero"
     var senderLocalAudioAfterJoinResultBucket = "not_requested"
+    var senderAudioPublishAfterJoinRequiredBucket = false
+    var senderAudioPublishAfterJoinInvokedBucket = false
+    var senderAudioPublishAfterJoinResultBucket = "not_requested"
+    var senderLocalPublishFailureReasonBucket = "none"
     var senderAudioSessionActivationObserved = false
     var senderMicrophonePermissionResultBucket = "not_requested_or_not_required_redacted"
     var senderRemoteAudioObserverPathAvailable = true
@@ -1580,6 +1640,10 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             "sender_local_audio_after_join_required_bucket=\(senderLocalAudioAfterJoinRequiredBucket)",
             "sender_local_audio_after_join_attempt_count_bucket=\(senderLocalAudioAfterJoinAttemptCountBucket)",
             "sender_local_audio_after_join_result_bucket=\(senderLocalAudioAfterJoinResultBucket)",
+            "sender_audio_publish_after_join_required_bucket=\(senderAudioPublishAfterJoinRequiredBucket)",
+            "sender_audio_publish_after_join_invoked_bucket=\(senderAudioPublishAfterJoinInvokedBucket)",
+            "sender_audio_publish_after_join_result_bucket=\(senderAudioPublishAfterJoinResultBucket)",
+            "sender_local_publish_failure_reason_bucket=\(senderLocalPublishFailureReasonBucket)",
             "sender_audio_session_activation_observed=\(senderAudioSessionActivationObserved)",
             "sender_microphone_permission_requested=\(microphonePermissionRequested)",
             "sender_microphone_permission_result_bucket=\(senderMicrophonePermissionResultBucket)",
@@ -1959,6 +2023,10 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         senderLocalAudioAfterJoinRequiredBucket = "not_requested"
         senderLocalAudioAfterJoinAttemptCountBucket = "zero"
         senderLocalAudioAfterJoinResultBucket = "not_requested"
+        senderAudioPublishAfterJoinRequiredBucket = false
+        senderAudioPublishAfterJoinInvokedBucket = false
+        senderAudioPublishAfterJoinResultBucket = "not_requested"
+        senderLocalPublishFailureReasonBucket = "none"
         senderAudioSessionActivationObserved = false
         senderMicrophonePermissionResultBucket = "not_requested_or_not_required_redacted"
         microphonePermissionRequested = false
@@ -2038,6 +2106,10 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         senderLocalAudioAfterJoinRequiredBucket = "not_required_redacted"
         senderLocalAudioAfterJoinAttemptCountBucket = "zero"
         senderLocalAudioAfterJoinResultBucket = "not_required_redacted"
+        senderAudioPublishAfterJoinRequiredBucket = false
+        senderAudioPublishAfterJoinInvokedBucket = false
+        senderAudioPublishAfterJoinResultBucket = "not_required_redacted"
+        senderLocalPublishFailureReasonBucket = "none"
         senderAudioSessionActivationObserved = false
         senderMicrophonePermissionResultBucket = "not_requested_or_not_required_redacted"
         microphonePermissionRequested = false
@@ -2232,6 +2304,10 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             senderLocalAudioAfterJoinRequiredBucket = "required_redacted"
             senderLocalAudioAfterJoinAttemptCountBucket = "zero"
             senderLocalAudioAfterJoinResultBucket = "pending_redacted"
+            senderAudioPublishAfterJoinRequiredBucket = true
+            senderAudioPublishAfterJoinInvokedBucket = false
+            senderAudioPublishAfterJoinResultBucket = "pending_redacted"
+            senderLocalPublishFailureReasonBucket = "none"
             bridgeStateClassification = "sender_runtime_join_connected_redacted"
             blockedReason = "none"
         case .failure(let error):
@@ -2246,6 +2322,10 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             senderLocalAudioAfterJoinRequiredBucket = "not_required_redacted"
             senderLocalAudioAfterJoinAttemptCountBucket = "zero"
             senderLocalAudioAfterJoinResultBucket = "not_required_redacted"
+            senderAudioPublishAfterJoinRequiredBucket = false
+            senderAudioPublishAfterJoinInvokedBucket = false
+            senderAudioPublishAfterJoinResultBucket = "not_required_redacted"
+            senderLocalPublishFailureReasonBucket = "none"
             bridgeStateClassification = "sender_runtime_join_not_connected_redacted"
             blockedReason = "sender_runtime_join_failed_redacted"
         }
@@ -2408,11 +2488,15 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         senderLocalAudioPublishAllowed = runtimeResult == "success_redacted" && audioOnly && !videoAllowed && !matrixEventsAllowed
         senderLocalAudioAfterJoinRequiredBucket = "required_redacted"
         senderLocalAudioAfterJoinAttemptCountBucket = Self.safeAttemptCountBucket(attemptCount)
+        senderAudioPublishAfterJoinRequiredBucket = true
+        senderAudioPublishAfterJoinInvokedBucket = true
         microphonePermissionRequested = true
         switch result {
         case .success:
             senderLocalAudioPublishResult = "success_redacted"
             senderLocalAudioAfterJoinResultBucket = "success_redacted"
+            senderAudioPublishAfterJoinResultBucket = "success_redacted"
+            senderLocalPublishFailureReasonBucket = "none"
             senderLocalAudioMutedStateBucket = "unmuted_redacted"
             senderAudioSessionActivationObserved = true
             senderMicrophonePermissionResultBucket = "success_redacted"
@@ -2423,6 +2507,8 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         case .failure(let error):
             senderLocalAudioPublishResult = "failed_redacted"
             senderLocalAudioAfterJoinResultBucket = "failed_redacted"
+            senderAudioPublishAfterJoinResultBucket = "failed_redacted"
+            senderLocalPublishFailureReasonBucket = Self.senderLocalPublishFailureReasonBucket(for: error)
             senderLocalAudioMutedStateBucket = "unknown"
             senderAudioSessionActivationObserved = false
             senderMicrophonePermissionResultBucket = DirectCallDiagnosticMediaFailureReason(error).rawValue
@@ -2440,6 +2526,32 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             return "two"
         default:
             return "multiple"
+        }
+    }
+
+    private static func senderLocalPublishFailureReasonBucket(for error: DirectCallMediaError) -> String {
+        switch error {
+        case .audioRouteFailed:
+            return "mic_permission_redacted"
+        case .invalidSession, .liveKitRoomJoinFailed:
+            return "room_missing_redacted"
+        case .mediaSetupUnavailable:
+            return "track_publish_failed_redacted"
+        case .liveKitURLInvalid, .liveKitURLUnreachable, .liveKitTokenRejected, .liveKitNetworkFailed:
+            return "stale_room_redacted"
+        case .liveKitSDKError, .liveKitUnknown:
+            return "track_publish_failed_redacted"
+        case .e2eeNotReady, .keyMismatch, .e2eeContextUnavailable:
+            return "stale_room_redacted"
+        case .unsupportedIntent,
+             .tokenUnavailable,
+             .tokenEndpointUnavailable,
+             .accessTokenUnavailable,
+             .tokenHTTPUnavailable,
+             .tokenBackendRejected,
+             .tokenResponseInvalid,
+             .liveKitE2EEConfigFailed:
+            return "unknown_redacted"
         }
     }
 
@@ -6724,6 +6836,17 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "sender_local_audio_after_join_required_bucket=\(senderLocalAudioAfterJoinRequiredBucket)",
             "sender_local_audio_after_join_attempt_count_bucket=\(senderLocalAudioAfterJoinAttemptCountBucket)",
             "sender_local_audio_after_join_result_bucket=\(senderLocalAudioAfterJoinResultBucket)",
+            "sender_audio_publish_after_join_required_bucket=\(directCallProofStateMachine.senderLocalPublishRequired)",
+            "sender_audio_publish_after_join_invoked_bucket=\(senderLocalAudioPublishRequested)",
+            "sender_audio_publish_after_join_result_bucket=\(senderLocalAudioAfterJoinResultBucket)",
+            "sender_local_publish_failure_reason_bucket=\(senderLocalAudioAfterJoinResultBucket == "failed_redacted" ? "unknown_redacted" : "none")",
+            "direct_call_state_machine_source_bucket=z8k29b_redacted",
+            "sender_local_publish_required_state_bucket=\(directCallProofStateMachine.senderLocalPublishRequired)",
+            "sender_local_publish_state_transition_bucket=\(directCallProofStateMachine.senderLocalPublishStateTransitionBucket)",
+            "sender_local_publish_terminal_bucket=\(directCallProofStateMachine.senderLocalPublishTerminalBucket)",
+            "both_local_gate_waits_for_state_machine_bucket=true",
+            "sender_visibility_wait_blocked_until_both_local_bucket=true",
+            "receiver_lease_owned_by_call_state_machine_bucket=true",
             "sender_audio_session_activation_observed=\(senderAudioSessionActivationObserved)",
             "sender_microphone_permission_requested=\(senderMicrophonePermissionRequested)",
             "sender_microphone_permission_result_bucket=\(senderMicrophonePermissionResultBucket)",
@@ -7229,6 +7352,53 @@ private extension SalemXVoIPPushReceiptProofSummary {
             (localAudioPublishResult == "success_redacted" || localAudioPublishResult == "failed_redacted")
     }
 
+    private var directCallProofStateMachine: SalemXDirectCallProofStateMachine {
+        let senderJoined = senderSideLiveKitJoinResult == "success_redacted" ||
+            senderLiveKitSDKTimelineConnectedStateSeen ||
+            senderLocalAudioPublishRequested
+        let senderPublishPending = senderJoined &&
+            !senderLocalAudioPublishRequested &&
+            senderLocalAudioAfterJoinResultBucket == "pending_redacted"
+        let senderPublished = senderLocalAudioPublishResult == "success_redacted" ||
+            senderLocalAudioAfterJoinResultBucket == "success_redacted"
+        let senderPublishFailed = senderLocalAudioPublishResult == "failed_redacted" ||
+            senderLocalAudioAfterJoinResultBucket == "failed_redacted"
+        let receiverJoined = liveKitJoinResult == "success_redacted" ||
+            liveKitRoomConnected ||
+            receiverLiveKitJoinStateLatchBucket == "ready_redacted"
+        let receiverPublished = receiverLocalAudioTrackPublished ||
+            localAudioPublishResult == "success_redacted"
+        let senderVisibilityTerminal = senderVisibilityTerminalReachedBucket ||
+            ["visible_redacted", "timeout_redacted", "failed_redacted"].contains(receiverPublishServerVisibilityWaitResultBucket)
+        let receiverRemoteSubscribed = receiverRemoteAudioTrackSubscribed ||
+            receiverRemoteAudioExplicitSubscribeConfirmed ||
+            receiverRemoteAudioSubscriptionFinalClassification == "subscribed_redacted"
+        return SalemXDirectCallProofStateMachine(senderLiveKitJoined: senderJoined,
+                                                 senderLocalAudioPublishPending: senderPublishPending,
+                                                 senderLocalAudioPublished: senderPublished,
+                                                 senderLocalAudioPublishFailed: senderPublishFailed,
+                                                 receiverAnswered: callKitAnswerActionReceived,
+                                                 receiverLiveKitJoined: receiverJoined,
+                                                 receiverLocalAudioPublished: receiverPublished,
+                                                 senderVisibilityWaitStarted: receiverPublishServerVisibilityWaitInvokedBucket,
+                                                 senderVisibilityTerminal: senderVisibilityTerminal,
+                                                 twoWayAudioReady: senderPublished && receiverPublished && receiverRemoteSubscribed && senderVisibilityTerminal,
+                                                 hangupCleanupCompleted: liveKitCleanupCompleted || controlledCallKitCleanupRequested)
+    }
+
+    mutating func refreshDirectCallStateMachineDiagnostics() {
+        let state = directCallProofStateMachine
+        receiverLeaseReleaseBlockedByBothLocalGateBucket = !state.bothLocalAudioPublished
+        if state.bothLocalAudioPublished, !state.senderVisibilityTerminal {
+            receiverLeaseReleaseBlockedBySenderVisibilityPendingBucket = true
+        }
+        if !state.bothLocalAudioPublished {
+            receiverPublishServerVisibilityWaitInvokedBucket = false
+            receiverPublishServerVisibilityWaitResultBucket = "not_requested"
+            receiverPublishServerVisibilityFailureBucket = "blocked_until_both_local_redacted"
+        }
+    }
+
     var shouldDeferReceiverConnectedSessionLeaseReleaseForAudioTerminal: Bool {
         let receiverAudioPublishPending = receiverAudioPublishTriggerSeenByApp &&
             receiverAudioPublishTriggerConsumableWhenReady &&
@@ -7247,6 +7417,9 @@ private extension SalemXVoIPPushReceiptProofSummary {
                 receiverAudioPublishPendingLatchBucket == "present_redacted")
         let receiverVisibilityHoldActive = receiverLocalAudioTrackPublished &&
             !controlledCallKitCleanupRequested
+        let state = directCallProofStateMachine
+        let receiverStateMachineHoldActive = !state.canStartSenderVisibilityWait &&
+            state.receiverLocalAudioPublished
         return receiverConnectedSessionLeaseAcquired &&
             receiverConnectedSessionLeaseRoomRetained &&
             !receiverConnectedSessionLeaseReleased &&
@@ -7256,12 +7429,14 @@ private extension SalemXVoIPPushReceiptProofSummary {
                 receiverRemoteAudioSubscriptionWaitStarted ||
                 receiverRemoteAudioLivenessWaitStarted ||
                 liveKitRemoteParticipantSeen ||
-                receiverVisibilityHoldActive) &&
+                receiverVisibilityHoldActive ||
+                receiverStateMachineHoldActive) &&
             (!receiverAudioObservationTerminal ||
                 receiverAudioPublishPending ||
                 receiverAudioPublishRendezvousPending ||
                 receiverAudioPublishTriggerPending ||
-                receiverVisibilityHoldActive)
+                receiverVisibilityHoldActive ||
+                receiverStateMachineHoldActive)
     }
 
     mutating func recordReceiverConnectedSessionLeaseReleaseDeferredForAudioTerminal(reason _: String) {
@@ -7288,6 +7463,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         liveKitCleanupCompleted = false
         liveKitCleanupResult = "deferred_until_audio_terminal_redacted"
         receiverCleanupDeferredUntilObservationTerminal = true
+        refreshDirectCallStateMachineDiagnostics()
         refreshReceiverAudioObserverLeaseBindingDiagnostics()
     }
 
@@ -7316,6 +7492,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         liveKitCleanupCompleted = false
         liveKitCleanupResult = "deferred_until_receiver_publish_redacted"
         receiverCleanupDeferredUntilObservationTerminal = true
+        refreshDirectCallStateMachineDiagnostics()
         refreshReceiverAudioObserverLeaseBindingDiagnostics()
     }
 
@@ -8440,6 +8617,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         senderAudioSessionActivationObserved = senderSummary.senderAudioSessionActivationObserved
         senderMicrophonePermissionRequested = senderSummary.microphonePermissionRequested
         senderMicrophonePermissionResultBucket = senderSummary.senderMicrophonePermissionResultBucket
+        refreshDirectCallStateMachineDiagnostics()
         refreshRemoteAudioTrackLivenessClassification()
     }
 
@@ -8898,6 +9076,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
             recordLocalAudioPublishResult(requested: true, started: true, succeeded: true)
             recordMicrophonePermissionResult(requested: true, notRequiredReason: "requested_redacted")
             blockedReason = "none"
+            refreshDirectCallStateMachineDiagnostics()
         case .failure(let error):
             let bucket = DirectCallDiagnosticMediaFailureReason(error).rawValue
             receiverAudioPublishInvokeDispatchResultBucket = "failed_redacted"
@@ -8919,6 +9098,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
             recordLocalAudioPublishResult(requested: true, started: true, succeeded: false, errorBucket: bucket)
             recordMicrophonePermissionResult(requested: true, notRequiredReason: "requested_redacted")
             blockedReason = "receiver_audio_publish_failed_redacted"
+            refreshDirectCallStateMachineDiagnostics()
         }
     }
 
@@ -9961,7 +10141,9 @@ private extension SalemXVoIPPushReceiptProofSummary {
         let mappedReleaseReasonBucket = Self.receiverLeaseReleaseReasonBucket(for: reason)
         let senderVisibilityWaitTerminal = receiverPublishServerVisibilityWaitInvokedBucket &&
             ["visible_redacted", "timeout_redacted", "failed_redacted"].contains(receiverPublishServerVisibilityWaitResultBucket)
+        let state = directCallProofStateMachine
         let validSenderVisibilityTerminal = receiverLocalAudioTrackPublished &&
+            state.bothLocalAudioPublished &&
             senderVisibilityWaitTerminal &&
             mappedReleaseReasonBucket == "sender_visibility_terminal_redacted"
         if validSenderVisibilityTerminal {
@@ -9996,6 +10178,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         liveKitCleanupCompleted = true
         liveKitCleanupResult = "completed_redacted"
         recordReceiverConnectedWindowClosed(reason: reason)
+        refreshDirectCallStateMachineDiagnostics()
         refreshReceiverAudioObserverLeaseBindingDiagnostics()
         refreshReceiverRemoteParticipantObserverClassification()
         refreshRemoteParticipantObservationTimingRepairDiagnostics()
