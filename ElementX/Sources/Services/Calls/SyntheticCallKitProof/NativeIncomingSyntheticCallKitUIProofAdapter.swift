@@ -1231,6 +1231,9 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
     var senderRemoteAudioTrackSeenBucket = "unknown"
     var senderRemoteAudioSubscribedBucket = "unknown"
     var receiverPublishServerVisibilityBucket = "unknown"
+    var receiverPublishServerVisibilityWaitInvokedBucket = false
+    var receiverPublishServerVisibilityWaitResultBucket = "missing_redacted"
+    var receiverPublishServerVisibilityFailureBucket = "unknown_redacted"
     var senderRemoteExpectedIdentityBucket = "missing_redacted"
     var senderRemoteObservedIdentityBucket = "missing_redacted"
     var senderRemoteObservedIdentityHash = "missing_redacted"
@@ -1615,6 +1618,9 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
             "sender_remote_audio_track_seen_bucket=\(senderRemoteAudioTrackSeenBucket)",
             "sender_remote_audio_subscribed_bucket=\(senderRemoteAudioSubscribedBucket)",
             "receiver_publish_server_visibility_bucket=\(receiverPublishServerVisibilityBucket)",
+            "receiver_publish_server_visibility_wait_invoked_bucket=\(receiverPublishServerVisibilityWaitInvokedBucket)",
+            "receiver_publish_server_visibility_wait_result_bucket=\(receiverPublishServerVisibilityWaitResultBucket)",
+            "receiver_publish_server_visibility_failure_bucket=\(receiverPublishServerVisibilityFailureBucket)",
             "sender_remote_expected_identity_bucket=\(senderRemoteExpectedIdentityBucket)",
             "sender_remote_observed_identity_bucket=\(senderRemoteObservedIdentityBucket)",
             "sender_remote_observed_identity_hash=\(senderRemoteObservedIdentityHash)",
@@ -2287,6 +2293,9 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         senderRemoteAudioTrackSeenBucket = "unknown"
         senderRemoteAudioSubscribedBucket = "unknown"
         receiverPublishServerVisibilityBucket = "unknown"
+        receiverPublishServerVisibilityWaitInvokedBucket = true
+        receiverPublishServerVisibilityWaitResultBucket = "missing_redacted"
+        receiverPublishServerVisibilityFailureBucket = "unknown_redacted"
         senderRemoteExpectedIdentityBucket = pendingMetadataPeerBindingPresent || metadataHasPeer ? "present_redacted" : "missing_redacted"
         senderRemoteObservedIdentityBucket = "missing_redacted"
         senderRemoteObservedIdentityHash = "missing_redacted"
@@ -2323,6 +2332,8 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         senderRemoteAudioSubscribedBucket = snapshot.audioTrackSubscribed ? "subscribed_redacted" : "not_subscribed_redacted"
         receiverAudioPublishSuccessLatchBucket = audioPublicationSeen ? "present_redacted" : "missing_redacted"
         receiverPublishServerVisibilityBucket = audioPublicationSeen ? "visible_redacted" : "missing_redacted"
+        receiverPublishServerVisibilityWaitInvokedBucket = true
+        receiverPublishServerVisibilityWaitResultBucket = audioPublicationSeen ? "visible_redacted" : (subscribeWaitTimedOut ? "timeout_redacted" : "missing_redacted")
         senderRemoteExpectedIdentityBucket = pendingMetadataPeerBindingPresent || metadataHasPeer ? "present_redacted" : "missing_redacted"
         senderRemoteObservedIdentityBucket = snapshot.observedIdentityHash == nil ? "missing_redacted" : "present_redacted"
         senderRemoteObservedIdentityHash = snapshot.observedIdentityHash ?? "missing_redacted"
@@ -2349,22 +2360,28 @@ private struct SalemXSenderRuntimeLiveKitJoinProofSummary {
         if snapshot.audioTrackSubscribed {
             senderRemoteAudioSubscribeFailureBucket = "none"
             senderRemoteSubscribeVisibilityFailureBucket = "none"
+            receiverPublishServerVisibilityFailureBucket = "none"
         } else if case .failure(let error) = remotePlaybackResult {
             runtimeErrorBucket = DirectCallDiagnosticMediaFailureReason(error).rawValue
             senderRemoteAudioSubscribeFailureBucket = runtimeErrorBucket
             senderRemoteSubscribeVisibilityFailureBucket = "unknown_redacted"
+            receiverPublishServerVisibilityFailureBucket = "unknown_redacted"
         } else if audioPublicationSeen {
             senderRemoteAudioSubscribeFailureBucket = subscribeWaitTimedOut ? "subscription_timeout_redacted" : "unknown_redacted"
             senderRemoteSubscribeVisibilityFailureBucket = subscribeWaitTimedOut ? "timeout_redacted" : "unknown_redacted"
+            receiverPublishServerVisibilityFailureBucket = subscribeWaitTimedOut ? "timeout_redacted" : "unknown_redacted"
         } else if !senderLiveKitRoomConnected {
             senderRemoteAudioSubscribeFailureBucket = "livekit_state_redacted"
             senderRemoteSubscribeVisibilityFailureBucket = "observer_stale_redacted"
+            receiverPublishServerVisibilityFailureBucket = "unknown_redacted"
         } else if participantSeen {
             senderRemoteAudioSubscribeFailureBucket = "livekit_state_redacted"
             senderRemoteSubscribeVisibilityFailureBucket = "publication_missing_redacted"
+            receiverPublishServerVisibilityFailureBucket = "publication_missing_redacted"
         } else {
             senderRemoteAudioSubscribeFailureBucket = "livekit_state_redacted"
             senderRemoteSubscribeVisibilityFailureBucket = "publication_missing_redacted"
+            receiverPublishServerVisibilityFailureBucket = "publication_missing_redacted"
         }
     }
 
@@ -5293,7 +5310,13 @@ private struct SalemXVoIPPushReceiptProofSummary {
     var receiverPublishRendezvousDispatcherBindingSourceBucket = "missing_redacted"
     var receiverLeaseRetentionAfterAnswerBucket = "unknown"
     var receiverLeaseRetentionAfterPublishBucket = "unknown"
+    var receiverLeaseRetentionDuringSenderVisibilityBucket = "unknown"
     var receiverLeaseReleaseDeferredForSenderVisibilityBucket = false
+    var receiverLeaseReleaseWaitsForSenderVisibilityTerminalBucket = false
+    var receiverLeaseReleaseReasonBucket = "unknown_redacted"
+    var receiverPublishServerVisibilityWaitInvokedBucket = false
+    var receiverPublishServerVisibilityWaitResultBucket = "missing_redacted"
+    var receiverPublishServerVisibilityFailureBucket = "unknown_redacted"
     var receiverPublishRecoveredDispatchSuccessBucket = false
     var receiverPublishRecoveredDispatchSourceBucket = "missing_redacted"
     var receiverPublishRecoveredDispatchResultBucket = "not_observed"
@@ -6525,7 +6548,13 @@ private struct SalemXVoIPPushReceiptProofSummary {
             "receiver_publish_rendezvous_dispatcher_binding_source_bucket=\(receiverPublishRendezvousDispatcherBindingSourceBucket)",
             "receiver_lease_retention_after_answer_bucket=\(receiverLeaseRetentionAfterAnswerBucket)",
             "receiver_lease_retention_after_publish_bucket=\(receiverLeaseRetentionAfterPublishBucket)",
+            "receiver_lease_retention_during_sender_visibility_bucket=\(receiverLeaseRetentionDuringSenderVisibilityBucket)",
             "receiver_lease_release_deferred_for_sender_visibility_bucket=\(receiverLeaseReleaseDeferredForSenderVisibilityBucket)",
+            "receiver_lease_release_waits_for_sender_visibility_terminal_bucket=\(receiverLeaseReleaseWaitsForSenderVisibilityTerminalBucket)",
+            "receiver_lease_release_reason_bucket=\(receiverLeaseReleaseReasonBucket)",
+            "receiver_publish_server_visibility_wait_invoked_bucket=\(receiverPublishServerVisibilityWaitInvokedBucket)",
+            "receiver_publish_server_visibility_wait_result_bucket=\(receiverPublishServerVisibilityWaitResultBucket)",
+            "receiver_publish_server_visibility_failure_bucket=\(receiverPublishServerVisibilityFailureBucket)",
             "receiver_publish_recovered_dispatch_success_bucket=\(receiverPublishRecoveredDispatchSuccessBucket)",
             "receiver_publish_recovered_dispatch_source_bucket=\(receiverPublishRecoveredDispatchSourceBucket)",
             "receiver_publish_recovered_dispatch_result_bucket=\(receiverPublishRecoveredDispatchResultBucket)",
@@ -7144,7 +7173,6 @@ private extension SalemXVoIPPushReceiptProofSummary {
                 receiverAudioPublishGateAtLiveRoomReplayBucket == "enabled_redacted" ||
                 receiverAudioPublishPendingLatchBucket == "present_redacted")
         let receiverVisibilityHoldActive = receiverLocalAudioTrackPublished &&
-            senderConnectedSignalReceivedByReceiver &&
             !controlledCallKitCleanupRequested
         return receiverConnectedSessionLeaseAcquired &&
             receiverConnectedSessionLeaseRoomRetained &&
@@ -7169,10 +7197,16 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverAudioObserverLeaseBindingRawIdentifiersLogged = false
         receiverAudioObserverLeaseReleasedBeforeAudioTerminal = false
         receiverConnectedSessionLeaseReleaseReason = "deferred_until_audio_terminal_redacted"
-        receiverLeaseRetentionAfterAnswerBucket = "held"
+        receiverLeaseRetentionAfterAnswerBucket = "held_redacted"
         if receiverLocalAudioTrackPublished {
-            receiverLeaseRetentionAfterPublishBucket = "held"
-            receiverLeaseReleaseDeferredForSenderVisibilityBucket = senderConnectedSignalReceivedByReceiver
+            receiverLeaseRetentionAfterPublishBucket = "held_redacted"
+            receiverLeaseRetentionDuringSenderVisibilityBucket = "held_redacted"
+            receiverLeaseReleaseDeferredForSenderVisibilityBucket = true
+            receiverLeaseReleaseWaitsForSenderVisibilityTerminalBucket = true
+            receiverLeaseReleaseReasonBucket = "sender_visibility_terminal_redacted"
+            receiverPublishServerVisibilityWaitInvokedBucket = true
+            receiverPublishServerVisibilityWaitResultBucket = "missing_redacted"
+            receiverPublishServerVisibilityFailureBucket = "unknown_redacted"
         }
         liveKitCleanupRequested = false
         liveKitCleanupCompleted = false
@@ -8486,7 +8520,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
 
     mutating func recordReceiverPublishRecoveredDispatchSuccess() {
         receiverPublishRecoveredDispatchSuccessBucket = true
-        receiverPublishRecoveredDispatchSourceBucket = "z8k22b_redacted"
+        receiverPublishRecoveredDispatchSourceBucket = "z8k23b_redacted"
         receiverPublishRecoveredDispatchResultBucket = "success_redacted"
         receiverAudioPublishInvokeDispatchPathAvailable = true
         receiverAudioPermissionBridgeAvailable = true
@@ -8505,7 +8539,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverPublishRendezvousMetadataBindingBucket = "matched_redacted"
         receiverPublishRendezvousDispatcherStateBucket = "present_redacted"
         receiverPublishRendezvousDispatchCallResultBucket = "invoked_redacted"
-        receiverPublishRendezvousBindingSourceBucket = "z8k22b_redacted"
+        receiverPublishRendezvousBindingSourceBucket = "z8k23b_redacted"
         receiverPublishRendezvousRoomBindingSourceBucket = "active_receiver_lease_redacted"
         receiverPublishRendezvousLatchBindingSourceBucket = "active_receiver_lease_redacted"
         receiverPublishRendezvousMetadataBindingSourceBucket = "active_metadata_redacted"
@@ -8523,8 +8557,8 @@ private extension SalemXVoIPPushReceiptProofSummary {
                                                          dispatcherPresent: Bool,
                                                          preconditionsReady: Bool,
                                                          dispatchCallResultBucket: String) {
-        receiverPublishRendezvousFixSourceBucket = "z8k22b_redacted"
-        receiverPublishRendezvousBindingSourceBucket = "z8k22b_redacted"
+        receiverPublishRendezvousFixSourceBucket = "z8k23b_redacted"
+        receiverPublishRendezvousBindingSourceBucket = "z8k23b_redacted"
         receiverPublishRendezvousAttemptReachedBucket = true
         switch reason {
         case "scheduled_replay_redacted", "ready_transition_redacted":
@@ -8658,8 +8692,14 @@ private extension SalemXVoIPPushReceiptProofSummary {
             receiverLocalAudioTrackPublishBlockedReasonBucket = "none"
             receiverLocalAudioTrackPublished = true
             receiverPublishLocalPublicationSnapshotBucket = "present_redacted"
-            receiverLeaseRetentionAfterPublishBucket = receiverConnectedSessionLeaseReleased ? "released" : "held"
+            receiverLeaseRetentionAfterPublishBucket = receiverConnectedSessionLeaseReleased ? "released_redacted" : "held_redacted"
+            receiverLeaseRetentionDuringSenderVisibilityBucket = receiverConnectedSessionLeaseReleased ? "released_redacted" : "held_redacted"
             receiverLeaseReleaseDeferredForSenderVisibilityBucket = !receiverConnectedSessionLeaseReleased
+            receiverLeaseReleaseWaitsForSenderVisibilityTerminalBucket = !receiverConnectedSessionLeaseReleased
+            receiverLeaseReleaseReasonBucket = receiverConnectedSessionLeaseReleased ? "premature_redacted" : "sender_visibility_terminal_redacted"
+            receiverPublishServerVisibilityWaitInvokedBucket = true
+            receiverPublishServerVisibilityWaitResultBucket = "missing_redacted"
+            receiverPublishServerVisibilityFailureBucket = receiverConnectedSessionLeaseReleased ? "lease_released_redacted" : "unknown_redacted"
             recordReceiverPublishRecoveredDispatchSuccess()
             recordLocalAudioPublishResult(requested: true, started: true, succeeded: true)
             recordMicrophonePermissionResult(requested: true, notRequiredReason: "requested_redacted")
@@ -8680,7 +8720,8 @@ private extension SalemXVoIPPushReceiptProofSummary {
             receiverLocalAudioTrackPublishBlockedReasonBucket = bucket
             receiverLocalAudioTrackPublished = false
             receiverPublishLocalPublicationSnapshotBucket = "missing_redacted"
-            receiverLeaseRetentionAfterPublishBucket = receiverConnectedSessionLeaseReleased ? "released" : "held"
+            receiverLeaseRetentionAfterPublishBucket = receiverConnectedSessionLeaseReleased ? "released_redacted" : "held_redacted"
+            receiverLeaseRetentionDuringSenderVisibilityBucket = receiverConnectedSessionLeaseReleased ? "released_redacted" : "held_redacted"
             recordLocalAudioPublishResult(requested: true, started: true, succeeded: false, errorBucket: bucket)
             recordMicrophonePermissionResult(requested: true, notRequiredReason: "requested_redacted")
             blockedReason = "receiver_audio_publish_failed_redacted"
@@ -9649,7 +9690,7 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverConnectedSessionLeaseReleasedAfterTerminal = false
         receiverConnectedSessionLeaseReleaseReason = "not_released"
         receiverConnectedSessionLeaseRepeatedRelease = false
-        receiverLeaseRetentionAfterAnswerBucket = "held"
+        receiverLeaseRetentionAfterAnswerBucket = "held_redacted"
         liveKitJoinResult = "success_redacted"
         liveKitJoinErrorBucket = "none"
         liveKitRoomConnected = true
@@ -9721,7 +9762,15 @@ private extension SalemXVoIPPushReceiptProofSummary {
         receiverConnectedSessionLeaseReleaseReason = reason
         receiverConnectedSessionLeaseRepeatedRelease = repeated
         receiverConnectedSessionLeaseTaskRetained = false
-        receiverLeaseRetentionAfterPublishBucket = receiverLocalAudioTrackPublished ? "released" : receiverLeaseRetentionAfterPublishBucket
+        receiverLeaseRetentionAfterPublishBucket = receiverLocalAudioTrackPublished ? "released_redacted" : receiverLeaseRetentionAfterPublishBucket
+        receiverLeaseRetentionDuringSenderVisibilityBucket = receiverLocalAudioTrackPublished ? "released_redacted" : receiverLeaseRetentionDuringSenderVisibilityBucket
+        let mappedReleaseReasonBucket = Self.receiverLeaseReleaseReasonBucket(for: reason)
+        receiverLeaseReleaseReasonBucket = receiverLocalAudioTrackPublished && mappedReleaseReasonBucket == "unknown_redacted" ? "premature_redacted" : mappedReleaseReasonBucket
+        if receiverLocalAudioTrackPublished,
+           receiverLeaseReleaseWaitsForSenderVisibilityTerminalBucket,
+           receiverLeaseReleaseReasonBucket == "premature_redacted" {
+            receiverPublishServerVisibilityFailureBucket = "lease_released_redacted"
+        }
         liveKitRoomDisconnected = true
         liveKitCleanupRequested = true
         liveKitCleanupCompleted = true
@@ -9730,6 +9779,28 @@ private extension SalemXVoIPPushReceiptProofSummary {
         refreshReceiverAudioObserverLeaseBindingDiagnostics()
         refreshReceiverRemoteParticipantObserverClassification()
         refreshRemoteParticipantObservationTimingRepairDiagnostics()
+    }
+
+    private static func receiverLeaseReleaseReasonBucket(for reason: String) -> String {
+        if reason.contains("hangup") || reason.contains("ended") {
+            return "hangup_redacted"
+        }
+        if reason.contains("cleanup") {
+            return "cleanup_redacted"
+        }
+        if reason.contains("subscribed") ||
+            reason.contains("timeout") ||
+            reason.contains("failed") ||
+            reason.contains("missing") ||
+            reason.contains("terminal") ||
+            reason.contains("remote_participant") ||
+            reason.contains("publication") {
+            return "sender_visibility_terminal_redacted"
+        }
+        if reason.contains("deferred") {
+            return "sender_visibility_terminal_redacted"
+        }
+        return "unknown_redacted"
     }
 
     mutating func attemptControlledAudioConnectRuntimeIfAllowed(activationConfiguration: SalemXControlledMediaConnectActivationConfiguration,
