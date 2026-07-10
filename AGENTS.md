@@ -375,3 +375,40 @@ Same pattern for publishers.
 | `localazy.json` | Localazy translation config |
 | `codecov.yml` | Codecov config |
 | `.periphery.yml` | Periphery dead-code detection |
+
+---
+
+## SalemX Secure Calls Plan v1.0
+
+### Frozen Production Architecture
+
+- Retain SalemX PushKit ingress for physical incoming-call delivery.
+- Retain native CallKit for incoming-call presentation, answer, end, and system call lifecycle integration.
+- Retain secure server metadata prepare/claim/send gates, including sender/device binding, expiry, anti-replay checks, authentication recheck, and redacted diagnostics.
+- Replace the current custom direct LiveKit Swift media path with upstream embedded Element Call / MatrixRTC.
+- MatrixRTC must become the sole call-state authority for normal production calls.
+- Embedded Element Call must become the sole production media and E2EE implementation.
+- SalemX v1 is audio-only.
+- Do not use a dynamic remote Element Call SPA in v1.
+- Do not keep a direct LiveKit production fallback in v1.
+- Do not add video or group calling in v1.
+
+### Permanent Guardrails
+
+- Do not print raw tokens, room IDs, user IDs, device IDs, call IDs, metadata references, APNs payloads, LiveKit URLs/tokens, cookies, authorization headers, or secrets.
+- Use redacted buckets for diagnostics.
+- Do not use `dev/invite` in physical or production call helpers.
+- Do not send production APNs from development proof helpers.
+- Do not request camera permission, publish video, emit Matrix call media events, or start full flow unless a later stage explicitly opens that gate.
+- Do not modify signing, project generation, entitlements, provisioning, bundle IDs, App Groups, dependencies, or server code unless a later stage explicitly authorizes that path.
+- Preserve containers and avoid uninstall/reset workflows unless explicitly requested.
+- Keep the existing Element Call route intact while migrating SalemX secure-call orchestration.
+
+### Future Stage Rules
+
+- Each future call stage must use a narrow file allowlist.
+- Each stage must make one logical commit.
+- Each stage must run targeted tests or state why they are unavailable.
+- Failed gates are hard stops; do not compensate by widening scope.
+- No stage may be skipped or combined without an explicit change request.
+- Completion means the predefined physical acceptance matrix passes end to end, not one successful call.

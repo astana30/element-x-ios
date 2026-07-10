@@ -1,0 +1,78 @@
+# SalemX Secure Calls Plan v1.0
+
+Status: frozen Stage 0 plan.
+
+Baseline:
+- Branch: `salemx-2.47a-controlled-media-credentials-boundary`
+- Baseline HEAD before Stage 0 edits: `95ee90544faa2ea7d64993c8187deaa6f83e5537`
+- Baseline commit subject: `Add deterministic direct-call proof state machine`
+
+## Fixed Architecture
+
+- SalemX keeps PushKit as the physical incoming-call ingress.
+- SalemX keeps native CallKit for system incoming-call UI, answer, end, and lifecycle.
+- SalemX keeps secure server metadata prepare/claim/send semantics: sender/device binding, expiry, anti-replay, authentication recheck, and redacted diagnostics.
+- Normal production media moves to upstream embedded Element Call / MatrixRTC.
+- MatrixRTC becomes the sole production call-state authority.
+- Embedded Element Call becomes the sole production media and E2EE implementation.
+- v1 is audio-only.
+- v1 does not use a dynamic remote Element Call SPA.
+- v1 does not keep a direct LiveKit production fallback.
+- v1 does not include video or group calling.
+
+## Stage Plan
+
+### Stage 0: Freeze Current Implementation
+
+Document the current implementation, ownership boundaries, race boundaries, and migration plan. Stage 0 is documentation-only and must not change runtime behavior.
+
+### Stage 1: Define MatrixRTC Integration Contract
+
+Define the SalemX-to-Element-Call handoff contract for incoming PushKit metadata, outgoing call intent, authenticated Matrix session, room selection, audio-only start mode, CallKit answer, hangup, and redacted diagnostics.
+
+### Stage 2: Add Adapter Seam
+
+Introduce the smallest adapter seam needed to route SalemX direct-call lifecycle events into embedded Element Call / MatrixRTC behind explicit disabled-by-default gates. Preserve the existing Element Call route and all current debug proof helpers.
+
+### Stage 3: Move Metadata Authority Into The MatrixRTC Handoff
+
+Bind prepared metadata and sender/device claim results to the MatrixRTC call context instead of custom direct LiveKit proof state. Keep server auth, expiry, anti-replay, and redacted failure buckets.
+
+### Stage 4: Integrate Embedded Element Call Audio-Only Media
+
+Use embedded Element Call as the audio and E2EE implementation for the controlled SalemX path. Do not enable camera, video, group calling, or a direct LiveKit production fallback.
+
+### Stage 5: Migrate Incoming And Outgoing Lifecycles
+
+Move incoming answer and outgoing start lifecycles onto MatrixRTC as the state authority. Keep PushKit and CallKit native, but remove duplicate media-state decisions from proof helpers.
+
+### Stage 6: Retire Custom Direct LiveKit Production Path
+
+After the physical acceptance matrix passes, remove the custom direct LiveKit production fallback. Keep only explicitly scoped DEBUG proofs that remain useful for diagnostics.
+
+### Stage 7: Production Hardening And Rollout Gates
+
+Finalize diagnostics, cleanup semantics, hangup behavior, recovery behavior, and rollout gates. Require the full physical acceptance matrix before production enablement.
+
+## Acceptance Definition
+
+The plan is complete only when the predefined physical acceptance matrix passes in full with redacted proof:
+- PushKit delivery through SalemX ingress.
+- CallKit report, answer, active UI retention, and end behavior.
+- Secure metadata prepare/claim/send gates.
+- MatrixRTC-controlled call state.
+- Embedded Element Call audio and E2EE.
+- Two-way audio.
+- Hangup cleanup.
+- No camera, video, group calling, Matrix call media event emission, production APNs from debug helpers, or direct LiveKit production fallback.
+
+One successful physical call is not sufficient for completion.
+
+## Stage Guardrails
+
+- Do not skip or combine stages without an explicit change request.
+- Use a narrow file allowlist for every stage.
+- Make one logical commit per stage.
+- Run targeted tests or report why they are unavailable.
+- Stop on failed gates.
+- Keep all logs and docs redacted.
