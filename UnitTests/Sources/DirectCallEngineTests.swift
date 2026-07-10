@@ -1843,6 +1843,10 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("receiver_lease_release_blocked_by_sender_visibility_pending_bucket=\\(receiverLeaseReleaseBlockedBySenderVisibilityPendingBucket)"))
         #expect(adapterSource.contains("receiver_lease_release_blocked_by_receiver_publish_pending_bucket=\\(receiverLeaseReleaseBlockedByReceiverPublishPendingBucket)"))
         #expect(adapterSource.contains("receiver_publish_rendezvous_binding_restore_source_bucket=\\(receiverPublishRendezvousBindingRestoreSourceBucket)"))
+        #expect(adapterSource.contains("receiver_publish_binding_hydration_source_bucket=\\(receiverPublishBindingHydrationSourceBucket)"))
+        #expect(adapterSource.contains("receiver_publish_binding_hydration_attempted_bucket=\\(receiverPublishBindingHydrationAttemptedBucket)"))
+        #expect(adapterSource.contains("receiver_publish_binding_hydration_result_bucket=\\(receiverPublishBindingHydrationResultBucket)"))
+        #expect(adapterSource.contains("receiver_publish_binding_hydration_missing_sources_bucket=\\(receiverPublishBindingHydrationMissingSourcesBucket)"))
         #expect(adapterSource.contains("receiver_publish_binding_preserved_before_both_local_bucket=\\(receiverPublishBindingPreservedBeforeBothLocalBucket)"))
         #expect(adapterSource.contains("receiver_publish_binding_preserved_before_sender_visibility_bucket=\\(receiverPublishBindingPreservedBeforeSenderVisibilityBucket)"))
         #expect(adapterSource.contains("sender_visibility_terminal_premature_block_bucket=\\(senderVisibilityTerminalPrematureBlockBucket)"))
@@ -1855,6 +1859,24 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("let validSenderVisibilityTerminal = receiverLocalAudioTrackPublished"))
         #expect(!adapterSource.contains("reason.contains(\"missing\") ||\n            reason.contains(\"terminal\")"))
         #expect(!adapterSource.contains("reason.contains(\"deferred\") {\n            return \"sender_visibility_terminal_redacted\""))
+    }
+
+    @Test
+    func receiverPublishBindingPreservationRequiresActualHydratedSources() throws {
+        let adapterSource = try Self.sourceFile("ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift")
+
+        #expect(adapterSource.contains("private var receiverPublishActualBindingSourcesPresent: Bool"))
+        #expect(adapterSource.contains("receiverPublishRendezvousRoomBindingSourceBucket == \"active_receiver_lease_redacted\""))
+        #expect(adapterSource.contains("receiverPublishRendezvousLatchBindingSourceBucket == \"active_receiver_lease_redacted\""))
+        #expect(adapterSource.contains("receiverPublishRendezvousMetadataBindingSourceBucket == \"active_metadata_redacted\""))
+        #expect(adapterSource.contains("receiverPublishRendezvousDispatcherBindingSourceBucket == \"active_dispatcher_redacted\""))
+        #expect(adapterSource.contains("receiverPublishBindingPreservedBeforeBothLocalBucket = sourcesPresent"))
+        #expect(adapterSource.contains("receiverPublishBindingPreservedBeforeSenderVisibilityBucket = sourcesPresent"))
+        #expect(adapterSource.contains("let activeReceiverLeaseAvailable = leaseAvailable"))
+        #expect(adapterSource.contains("let activeReceiverLatchReady = activeReceiverLeaseAvailable && liveKitReadyForPublish"))
+        #expect(adapterSource.contains("let activeMetadataAvailable = summary.mediaCredentialsResult == \"success_redacted\""))
+        #expect(adapterSource.contains("summary.recordReceiverPublishBindingHydration(leaseAvailable: activeReceiverLeaseAvailable"))
+        #expect(!adapterSource.contains("if latchReady || roomBound || metadataMatched || dispatcherPresent"))
     }
 
     @Test
@@ -6657,7 +6679,6 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(adapterSource.contains("senderRemoteAudioSubscribeFailureBucket = \"subscription_timeout_redacted\""))
         #expect(adapterSource.contains("receiverAudioPublishSuccessLatchBucket = audioPublicationSeen ? \"present_redacted\" : \"missing_redacted\""))
         #expect(adapterSource.contains("receiverLiveKitJoinStateLatchBucket = leaseAvailable && liveKitReadyForPublish ? \"available_redacted\" : \"missing_redacted\""))
-        #expect(adapterSource.contains("(summary.liveKitRoomConnected || leaseAvailable) &&"))
         #expect(adapterSource.contains("liveKitJoinResult = succeeded ? \"success_redacted\" : \"failed_redacted\""))
         #expect(adapterSource.contains("liveKitJoinResult = \"success_redacted\""))
         #expect(adapterSource.contains("receiverLiveKitJoinStateLatchBucket = \"available_redacted\""))
@@ -6688,7 +6709,10 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(source.contains("receiver_publish_rendezvous_preconditions_bucket=\\(receiverPublishRendezvousPreconditionsBucket)"))
         #expect(source.contains("receiver_publish_rendezvous_dispatcher_state_bucket=\\(receiverPublishRendezvousDispatcherStateBucket)"))
         #expect(source.contains("receiver_publish_rendezvous_dispatch_call_result_bucket=\\(receiverPublishRendezvousDispatchCallResultBucket)"))
-        #expect(source.contains("receiverPublishRendezvousFixSourceBucket = \"z8k16b_redacted\""))
+        #expect(source.contains("receiverPublishRendezvousFixSourceBucket = \"z8k23b_redacted\""))
+        #expect(source.contains("receiverPublishBindingHydrationSourceBucket = \"z8k26b_redacted\""))
+        #expect(source.contains("receiverPublishBindingHydrationResultBucket = receiverPublishBindingHydrationMissingSourcesBucket == \"none\" ? \"success_redacted\" : \"missing_sources_redacted\""))
+        #expect(source.contains("receiverPublishBindingHydrationMissingSourcesBucket = Self.receiverPublishHydrationMissingSourcesBucket"))
         #expect(source.contains("summary.recordReceiverPublishRendezvousAttempt(reason: reason"))
         #expect(source.contains("let receiverAudioPublishRendezvousPending = callKitAnswerActionReceived &&"))
         #expect(source.contains("receiverAudioPublishRendezvousPending ||"))
@@ -6706,7 +6730,7 @@ final class NativeIncomingCallLifecycleContractTests {
         #expect(source.contains("receiver_publish_recovered_dispatch_source_bucket=\\(receiverPublishRecoveredDispatchSourceBucket)"))
         #expect(source.contains("receiver_publish_recovered_dispatch_result_bucket=\\(receiverPublishRecoveredDispatchResultBucket)"))
         #expect(source.contains("mutating func recordReceiverPublishRecoveredDispatchSuccess()"))
-        #expect(source.contains("receiverPublishRecoveredDispatchSourceBucket = \"z8k18b_redacted\""))
+        #expect(source.contains("receiverPublishRecoveredDispatchSourceBucket = \"z8k23b_redacted\""))
         #expect(source.contains("receiverAudioPublishInvokeDispatchResultBucket = \"recovered_success_redacted\""))
         #expect(source.contains("receiverAudioPublishTriggerConsumedByApp = true"))
         #expect(source.contains("receiverPublishRendezvousDispatchCallResultBucket = \"invoked_redacted\""))
