@@ -1334,3 +1334,139 @@ server_changed=false
 ios_stage_2_blocked_until_reference_call_passes_twice=true
 stage_1d_r4_passed=true
 ```
+
+## MatrixRTC functional reference-call acceptance
+
+Stage: `1D-R6`
+
+Preflight cursor and baseline:
+
+```text
+reference_call_cursor_utc=2026-07-11T14:09:22Z
+livekit_room_count_before=0
+redis_relevant_state_count_before=1
+PREFLIGHT_COMPLETE=true
+reference_preflight_pipeline_rc=0
+```
+
+Functional postcheck:
+
+```text
+first_call_room_created=true
+first_call_two_participants_seen=true
+room_closed_or_empty=true
+stale_matrixrtc_membership_detected=false
+second_call_room_created=true
+second_call_two_participants_seen=true
+second_call_completed_cleanly=true
+repeated_call_trail_detected=false
+POSTCHECK_COMPLETE=true
+reference_postcheck_pipeline_rc=0
+```
+
+Current service health retained:
+
+```text
+authorization_healthy=true
+authorization_healthz_status=200
+current_room_count_zero=true
+redis_ping_pong=true
+```
+
+Webhook public transport evidence:
+
+```text
+public_webhook_post_count_since_cursor=23
+public_webhook_2xx_count_since_cursor=23
+public_webhook_non_2xx_count_since_cursor=0
+known_unsigned_preflight_probe_count=1
+public_webhook_requests_found=true
+webhook_public_transport_evidence=strong
+webhook_public_requests_seen=23
+webhook_public_non_2xx_seen=0
+signed_webhook_validation_proof=inconclusive
+webhook_failure_proven=false
+```
+
+Historical authorization and LiveKit logs were not available to the read-only audit user:
+
+```text
+authorization_container_logs_available=false
+authorization_journal_logs_available=false
+livekit_logs_available=false
+livekit_webhook_delivery_failure_count=inconclusive
+```
+
+This is an observability limitation, not affirmative proof that signed webhook delivery failed. The completed two-call functional result is kept separate from the historical webhook-validation attribution.
+
+Redis delayed-job applicability:
+
+```text
+delayed_event_id_used=false
+delegate_delayed_leave_used=false
+redis_delayed_job_expected=false
+redis_delayed_job_result=not_applicable
+redis_job_created_result=not_applicable
+redis_job_cleaned_result=not_applicable
+redis_relevant_state_count_after=1
+redis_relevant_state_growth_detected=false
+```
+
+Functional acceptance conclusion:
+
+```text
+upstream_reference_call_functional_gate_passed=true
+first_call_functional_passed=true
+second_call_functional_passed=true
+room_cleanup_passed=true
+stale_membership_absent=true
+repeated_call_trail_absent=true
+matrixrtc_server_functional_acceptance_passed=true
+ios_stage_2_embedded_element_call_migration_unblocked=true
+custom_salemx_direct_livekit_media_accepted=false
+signed_webhook_delivery_cryptographically_proven=false
+```
+
+Production observability debt:
+
+```text
+matrixrtc_webhook_observability_debt=open
+production_release_requires_privacy_safe_webhook_counters=true
+development_stage_2_blocked_by_observability_debt=false
+production_rollout_blocked_by_observability_debt=true
+```
+
+The future counter implementation must expose only privacy-safe aggregate counters with no identifiers, tokens, webhook bodies, headers, or secrets:
+
+```text
+webhook_requests_total
+webhook_signature_valid_total
+webhook_signature_invalid_total
+webhook_participant_join_total
+webhook_participant_leave_total
+webhook_processing_error_total
+```
+
+No authorization image, nginx, Docker Compose, Redis, server runtime, or iOS runtime changes were made in this stage.
+
+Stage 1D-R6 gate:
+
+```text
+first_call_functional_passed=true
+second_call_functional_passed=true
+room_cleanup_passed=true
+stale_membership_absent=true
+repeated_call_trail_absent=true
+webhook_public_transport_evidence_strong=true
+signed_webhook_validation_proof=inconclusive
+webhook_failure_proven=false
+redis_job_expected=false
+redis_job_result=not_applicable
+matrixrtc_server_functional_acceptance_passed=true
+ios_stage_2_unblocked=true
+production_webhook_observability_debt_open=true
+runtime_code_changed=false
+server_accessed=false
+server_changed=false
+stage_1d_r6_passed=true
+```

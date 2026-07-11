@@ -87,4 +87,15 @@ MatrixRTC server stabilization is complete as of Stage `1D-R4`:
 - External Redis, LiveKit HTTP, and authorization ports were not reachable from outside the server.
 - The nginx duplicate `matrix.mertis.kz` server-name warning is classified as cleanup recommended, not blocking.
 
-Stage 2 remains blocked until the standard upstream Element Call / MatrixRTC reference-call acceptance passes twice with redacted proof. That reference-call test must not use Salem foreground-signaling invite, APNs, camera, custom iOS direct LiveKit code, production users, or more than the scoped first call plus immediate second call.
+Stage 2 embedded Element Call migration is unblocked by Stage `1D-R6` functional MatrixRTC server acceptance:
+
+- Two upstream Element Call / MatrixRTC reference calls completed successfully.
+- Each call had two participants.
+- The room was cleaned up after the calls.
+- No stale MatrixRTC membership or repeated-call trail was detected.
+- Public webhook transport evidence is strong: 23 public webhook POSTs since the preflight cursor returned 2xx and none returned non-2xx.
+- Redis delayed jobs were not applicable because delayed-event delegation was not used.
+
+This does not accept or preserve custom SalemX direct LiveKit media. Stage 2 remains scoped to embedded Element Call migration only.
+
+Production rollout remains blocked on a privacy-safe MatrixRTC webhook observability debt. A future narrow stage must add aggregate counters for webhook requests, signature-valid and signature-invalid requests, participant joins, participant leaves, and processing errors without exposing identifiers, tokens, request bodies, headers, or secrets.
