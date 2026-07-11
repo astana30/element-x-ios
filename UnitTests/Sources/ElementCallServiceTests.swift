@@ -15,6 +15,114 @@ import PushKit
 import Testing
 
 @MainActor
+final class EmbeddedElementCallProductionHandoffTests {
+    @Test
+    func startNewMapsOnlyToAudioPresentation() async {
+        let presenter = HandoffPresenterSpy()
+        let handoff = EmbeddedElementCallProductionHandoff(presenter: presenter,
+                                                           stateProvider: HandoffStateProvider(presentedRoomID: nil))
+
+        let result = await handoff.prepareAudioCall(roomID: "!room:example.org", intent: .startNew)
+
+        #expect(result == .readyToPresent(.audio(roomID: "!room:example.org", intent: .startNew)))
+        #expect(presenter.calls == [.init(roomID: "!room:example.org", startMode: .audio)])
+    }
+
+    @Test
+    func joinExistingDoesNotFallBackToStartNew() async {
+        let presenter = HandoffPresenterSpy()
+        let handoff = EmbeddedElementCallProductionHandoff(presenter: presenter,
+                                                           stateProvider: HandoffStateProvider(presentedRoomID: nil))
+
+        let result = await handoff.prepareAudioCall(roomID: "!room:example.org", intent: .joinExisting)
+
+        #expect(result == .unsupportedIncomingJoin(.audio(roomID: "!room:example.org", intent: .joinExisting)))
+        #expect(presenter.calls.isEmpty)
+    }
+
+    @Test
+    func presentExistingDoesNotCreateNewCallWhenNoExistingCallIsKnown() async {
+        let presenter = HandoffPresenterSpy()
+        let handoff = EmbeddedElementCallProductionHandoff(presenter: presenter,
+                                                           stateProvider: HandoffStateProvider(presentedRoomID: nil))
+
+        let result = await handoff.prepareAudioCall(roomID: "!room:example.org", intent: .presentExisting)
+
+        #expect(result == .noExistingCall(.audio(roomID: "!room:example.org", intent: .presentExisting)))
+        #expect(presenter.calls.isEmpty)
+    }
+
+    @Test
+    func presentExistingCanRepresentAlreadyPresentedRoom() async {
+        let presenter = HandoffPresenterSpy()
+        let handoff = EmbeddedElementCallProductionHandoff(presenter: presenter,
+                                                           stateProvider: HandoffStateProvider(presentedRoomID: "!room:example.org"))
+
+        let result = await handoff.prepareAudioCall(roomID: "!room:example.org", intent: .presentExisting)
+
+        #expect(result == .alreadyPresented(.audio(roomID: "!room:example.org", intent: .presentExisting)))
+        #expect(presenter.calls == [.init(roomID: "!room:example.org", startMode: .audio)])
+    }
+
+    @Test
+    func audioIntentDoesNotExposeMediaCredentials() {
+        let preparation = EmbeddedElementCallPreparation.audio(roomID: "!room:example.org", intent: .startNew)
+        let exposedLabels = Mirror(reflecting: preparation).children.compactMap(\.label).joined(separator: ",")
+
+        #expect(preparation.startMode == .audio)
+        #expect(preparation.cameraRequested == false)
+        #expect(preparation.videoEnabled == false)
+        #expect(preparation.lifecycleEvents == EmbeddedElementCallLifecycleEvent.allCases)
+        #expect(!exposedLabels.localizedCaseInsensitiveContains("livekit"))
+        #expect(!exposedLabels.localizedCaseInsensitiveContains("token"))
+        #expect(!exposedLabels.localizedCaseInsensitiveContains("jwt"))
+        #expect(!exposedLabels.localizedCaseInsensitiveContains("url"))
+    }
+
+    @Test
+    func stage2BCurrentProductionDirectCallRouteRemainsUnchanged() {
+        let configuration = DirectCallProductionConfiguration()
+
+        #expect(configuration.isEnabled == false)
+        #expect(configuration.isConfigured == false)
+        #expect(configuration.tokenEndpointURL == nil)
+    }
+
+    @Test
+    func handoffDoesNotSynthesizeLifecycleFromCallKitState() async {
+        let presenter = HandoffPresenterSpy()
+        let handoff = EmbeddedElementCallProductionHandoff(presenter: presenter,
+                                                           stateProvider: HandoffStateProvider(presentedRoomID: nil))
+
+        let result = await handoff.prepareAudioCall(roomID: "!room:example.org", intent: .joinExisting)
+
+        #expect(result == .unsupportedIncomingJoin(.audio(roomID: "!room:example.org", intent: .joinExisting)))
+        #expect(presenter.calls.isEmpty)
+    }
+
+    private struct PresentationCall: Equatable {
+        let roomID: String
+        let startMode: ElementCallStartMode
+    }
+
+    private final class HandoffPresenterSpy: EmbeddedElementCallRoomCallPresenting {
+        private(set) var calls = [PresentationCall]()
+
+        func presentEmbeddedElementCall(roomID: String, startMode: ElementCallStartMode) async {
+            calls.append(.init(roomID: roomID, startMode: startMode))
+        }
+    }
+
+    private struct HandoffStateProvider: EmbeddedElementCallRoomCallStateProviding {
+        let presentedRoomID: String?
+
+        var presentedEmbeddedElementCallRoomID: String? {
+            presentedRoomID
+        }
+    }
+}
+
+@MainActor
 final class ElementCallServiceTests {
     private let appSettings = AppSettings()
     private var callProvider: CXProviderMock!

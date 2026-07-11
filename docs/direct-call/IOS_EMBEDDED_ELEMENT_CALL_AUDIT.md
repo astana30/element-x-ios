@@ -229,3 +229,89 @@ stage_2b_ready=true
 ```
 
 Stage 2B must not begin media connection or APNs work. It should add only the compile-time seam and tests proving that SalemX direct-call production routing can hand off to the existing embedded Element Call path without constructing LiveKit credentials or joining LiveKit from iOS.
+
+## Stage 2B handoff seam
+
+Stage 2B introduced a compile-time-only embedded Element Call handoff seam without changing active SalemX direct-call routing.
+
+Typed contract:
+
+```text
+protocol=EmbeddedElementCallHandoff
+method=prepareAudioCall(roomID:intent:)
+intent_cases=startNew,joinExisting,presentExisting
+result_cases=readyToPresent,alreadyPresented,noExistingCall,unsupportedIncomingJoin
+lifecycle_events=presented,joining,connected,remoteEnded,localEnded,failed,dismissed
+```
+
+Production adapter:
+
+```text
+adapter=EmbeddedElementCallProductionHandoff
+presenter_protocol=EmbeddedElementCallRoomCallPresenting
+state_protocol=EmbeddedElementCallRoomCallStateProviding
+state_adapter=EmbeddedElementCallServiceRoomCallStateProvider
+coordinator_conformance=UserSessionFlowCoordinator: EmbeddedElementCallRoomCallPresenting
+```
+
+Operation semantics recorded for Stage 2B:
+
+| Operation | Production symbol | Semantics proven | Stage 2B behavior |
+| --- | --- | --- | --- |
+| Start new audio room call | `UserSessionFlowCoordinator.startCall(roomID:startMode:)` -> `presentCallScreen(roomID:startMode:)` -> `ElementCallWidgetDriver.start` | true | `startNew` presents the embedded room-call path with `startMode=.audio` |
+| Join existing incoming MatrixRTC call | No separate proven programmatic API in this repository stage | unsupported | `joinExisting` returns `unsupportedIncomingJoin`; it never falls back to `startNew` |
+| Present existing call UI | `UserSessionFlowCoordinator.startCall` re-enters the existing overlay only when the same room is already the ongoing call | true | `presentExisting` requires the state provider to report the same room, otherwise returns `noExistingCall` |
+| End or leave | `CallScreenViewModel` sends widget hangup; `ElementCallService.requestCallTermination` emits end action | not wired in Stage 2B | lifecycle vocabulary only; no mutable SalemX state machine |
+
+The handoff result contains only the Matrix room ID, intent, `ElementCallStartMode.audio`, and the upstream lifecycle vocabulary needed by later stages. It intentionally contains no LiveKit URL, LiveKit JWT, LiveKit room alias, participant identity, media key, Matrix access token, raw widget URL, or remote SPA URL.
+
+Audio-only status:
+
+```text
+startMode=.audio
+camera_requested=false
+video_enabled=false
+audio_only_enforcement=partial
+```
+
+The stage keeps audio intent explicit, but camera hardening remains partial because the existing `WKWebView` media-permission delegate is origin-gated rather than v1 audio-only hard-denied.
+
+Production routing:
+
+```text
+production_direct_livekit_route_changed=false
+callkit_answer_wired=false
+pushkit_changed=false
+direct_livekit_dependency_added=false
+```
+
+Validation:
+
+```text
+changed_swift_files_swiftformat_lint=pass
+changed_swift_files_swiftlint=pass
+handoff_protocol_typecheck_harness=pass
+handoff_behavior_isolation_harness=pass
+coordinator_and_test_syntax_parse=pass
+xcodebuild_package_resolution_disabled_attempt=blocked_before_compile_by_local_cache_permissions
+simulator_run=false
+package_update=false
+```
+
+Stage 2C entry conditions after Stage 2B:
+
+```text
+typed_handoff_contract_created=true
+upstream_adapter_created=true
+start_new_semantics_proven=true
+join_existing_semantics_proven=unsupported
+present_existing_semantics_proven=true
+join_never_falls_back_to_start=true
+audio_only_intent_explicit=true
+camera_permission_requested=false
+livekit_credentials_exposed=false
+second_call_state_machine_created=false
+production_direct_livekit_route_changed=false
+callkit_answer_wired=false
+stage_2c_ready=true
+```

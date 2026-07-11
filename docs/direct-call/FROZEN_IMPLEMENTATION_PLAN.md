@@ -109,3 +109,13 @@ The selected seam is to keep SalemX secure metadata, PushKit and CallKit as boot
 The target path must use the pinned bundled `EmbeddedElementCall` package and MatrixRTC widget driver. It must not use a dynamic remote Element Call SPA, construct LiveKit JWTs on iOS, directly join LiveKit from SalemX code, keep `DirectCallEngine` as production state authority, or preserve a direct LiveKit production fallback.
 
 Stage 2B may start with a compile-time seam only. It must not send APNs, connect media, request camera, enable video, or remove the old direct LiveKit code before the replacement path passes repeated-call acceptance.
+
+Stage 2B added the compile-time seam `EmbeddedElementCallHandoff` and the conservative production adapter `EmbeddedElementCallProductionHandoff`.
+
+- `startNew` maps to the existing embedded Element Call room-call presentation path with `ElementCallStartMode.audio`.
+- `presentExisting` is allowed only when the existing Element Call service state already reports the same room.
+- `joinExisting` is explicitly unsupported until a proven programmatic incoming MatrixRTC join operation is wired; it must never fall back to starting a new call.
+- The seam exposes no LiveKit URLs, JWTs, room aliases, participant identities, media keys, Matrix access tokens, widget URLs, or remote SPA URLs.
+- The seam is not wired to PushKit or CallKit answer handling, and the current SalemX direct LiveKit production route remains unchanged.
+
+Stage 2C should bind authenticated SalemX metadata and a verified DM room into this seam without changing the join semantics or reintroducing direct LiveKit media.

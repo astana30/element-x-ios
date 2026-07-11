@@ -843,3 +843,9 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
         navigationTabCoordinator.setSheetCoordinator(coordinator, animated: true)
     }
 }
+
+extension UserSessionFlowCoordinator: EmbeddedElementCallRoomCallPresenting {
+    func presentEmbeddedElementCall(roomID: String, startMode: ElementCallStartMode) async {
+        startCall(roomID: roomID, startMode: startMode)
+    }
+}
