@@ -620,3 +620,467 @@ image_pulled=false
 runtime_code_changed=false
 audit_document_updated=true
 ```
+
+## Pinned upstream source candidate qualification
+
+Stage 1C-B evaluated the official upstream source candidate:
+
+```text
+candidate_repository=https://github.com/element-hq/lk-jwt-service.git
+candidate_commit=ac7d0de49060b0cabe25925c4b671d5e8f637567
+candidate_status=source_features_present_but_local_qualification_blocked
+deployment_status=not_installed
+```
+
+The local clone was checked out in detached-HEAD mode at the exact candidate commit. No branch name such as `main` was used for build or test selection after checkout.
+
+### Provenance
+
+```text
+origin_url_exact=true
+candidate_commit_exists=true
+candidate_commit_exact=ac7d0de49060b0cabe25925c4b671d5e8f637567
+detached_head=true
+working_tree_clean=true
+v0_5_0_commit=199ac87dbbf704320b277aebdf10a6280b18c77d
+candidate_descends_from_v0_5_0=true
+commits_after_v0_5_0=13
+author_bucket=upstream_external_contributor
+commit_date=2026-07-10T17:08:43+02:00
+commit_subject=Add black-box tests for LIVEKIT_INSECURE_SKIP_VERIFY_TLS (#199)
+parent_sha=a3ae883e62ed54a53535a1157679dd579f06bf4d
+tree_sha=074b7826670cf21aad7773302814180eac8fd7cd
+commit_signature_status=unknown
+```
+
+The commit contains a signature block, but local Git did not prove a valid signature because local signature verification could not complete with trusted key material. This is recorded as `unknown`, not valid.
+
+### Feature proof
+
+Feature support was proven from candidate source and tests, not from README alone:
+
+| Feature | Source present | Tests present | Proof bucket |
+| --- | --- | --- | --- |
+| `/sfu/get` | true | true | `handler.go`, `requests.go`, `sfu_get_test.go`, integration tests |
+| `/sfu_webhook` | true | true | `handler.prepareMux`, `handleSfuWebhook`, `handler_test.go` |
+| `LIVEKIT_REDIS_URL` | true | true | `config.go`, `main.go`, `store.go`, `config_test.go`, `store_test.go` |
+| `LIVEKIT_SANITY_CHECK_INTERVAL_SECONDS` | true | true | `config.go`, `delayedEventManager.go`, `config_test.go`, `delayedEventManager_test.go` |
+| `LIVEKIT_FULL_ACCESS_HOMESERVERS` | true | true | `config.go`, `handler.go`, `config_test.go` |
+| `LIVEKIT_URL` | true | true | `config.go`, token endpoint tests |
+| `LIVEKIT_KEY` | true | true | `config.go`, token/webhook tests |
+| `LIVEKIT_SECRET` | true | true | `config.go`, token/webhook tests |
+| `LIVEKIT_JWT_BIND` | true | true | `config.go`, `config_test.go`, integration harness |
+
+Additional verified behavior:
+
+```text
+sfu_webhook_route_registration=true
+sfu_webhook_post_handling=true
+sfu_webhook_livekit_signature_verification=true
+sfu_webhook_delegated_leave_integration=true
+sfu_webhook_invalid_unsigned_payload_rejected=true
+redis_state_backend_selection=true
+redis_persistence_restore_behavior=true
+redis_unset_fallback_to_in_memory=true
+redis_credentials_not_required_when_url_has_none=true
+sanity_check_unset_or_zero_disables=true
+sanity_check_positive_seconds_enables=true
+sanity_check_fallback_for_missed_sfu_lifecycle_events=true
+```
+
+### Change scope from `v0.5.0`
+
+```text
+commits_changed=13
+files_added=29
+files_modified=10
+files_deleted=1
+total_additions=11767
+total_deletions=2151
+```
+
+Changed areas:
+
+```text
+configuration=true
+HTTP_routing=true
+delegated_leave=true
+storage=true
+Redis=true
+tests=true
+integration_tests=true
+Dockerfile_build=true
+dependencies=true
+CI_workflows=true
+```
+
+Compatibility assessment:
+
+```text
+breaking_config_change_detected=true
+existing_0_4_1_environment_compatible=unknown
+existing_nginx_path_compatible=true
+host_network_compatible=true
+```
+
+Risk note: from `v0.5.0` to the candidate, the source adds delegated leave, Redis-backed state, sanity checks, new integration tests, Dockerfile changes, dependency updates, and CI changes. The candidate still supports the existing core settings (`LIVEKIT_URL`, LiveKit key/secret, `LIVEKIT_FULL_ACCESS_HOMESERVERS`, `LIVEKIT_JWT_BIND`) and keeps reverse-proxy path stripping compatible because the service exposes root-relative routes such as `/sfu/get` and `/sfu_webhook`. The effective `0.4.1` production environment remains `unknown` until the upgrade script validates exact active environment keys before mutation.
+
+### Dependency and build metadata
+
+```text
+go_version=1.26
+go_toolchain=go1.26.4
+builder_base_image=docker.io/golang:${GO_VERSION}-alpine
+runtime_base_image=scratch
+base_images_digest_pinned=false
+dependency_replace_directives_present=false
+local_path_dependencies_present=false
+govulncheck_available=false
+govulncheck_result=not_run
+```
+
+Direct Go modules:
+
+```text
+github.com/SladkyCitron/slogcolor v1.9.0
+github.com/alicebob/miniredis/v2 v2.38.0
+github.com/cenkalti/backoff/v5 v5.0.3
+github.com/golang-jwt/jwt/v5 v5.3.1
+github.com/livekit/protocol v1.48.1-0.20260624204523-bd5703442db6
+github.com/livekit/server-sdk-go/v2 v2.16.7
+github.com/matrix-org/gomatrix v0.0.0-20220926102614-ceba4d9f7530
+github.com/matrix-org/gomatrixserverlib v0.0.0-20260506075950-c9c468727353
+github.com/mattn/go-isatty v0.0.22
+github.com/redis/go-redis/v9 v9.21.0
+github.com/twitchtv/twirp v8.1.3+incompatible
+google.golang.org/protobuf v1.36.11
+maunium.net/go/mautrix v0.28.1
+```
+
+### Upstream validation commands
+
+Official workflow inspection found:
+
+```text
+upstream_unit_test_command=go test -timeout 30s
+upstream_integration_test_command=cargo test --locked
+upstream_lint_provider=golangci/golangci-lint-action
+```
+
+Local command results:
+
+| Command | Result | Reason |
+| --- | --- | --- |
+| `go test ./...` | blocked | `go` not installed locally |
+| `go test -timeout 30s` | blocked | `go` not installed locally |
+| `go vet ./...` | blocked | `go` not installed locally |
+| `golangci-lint run` | blocked | `golangci-lint` not installed locally |
+| `govulncheck ./...` | not_run | `govulncheck` not installed locally |
+| `cargo test --locked` | blocked | integration harness builds the service and requires local `go` |
+
+Required unit tests did not pass in this environment because they could not run.
+
+### Server architecture and local build gate
+
+The only server command executed in Stage 1C-B was the authorized read-only architecture query:
+
+```text
+server_architecture=x86_64
+target_platform=linux/amd64
+server_accessed_read_only=true
+server_changed=false
+```
+
+Local build tooling:
+
+```text
+docker_available=true
+docker_buildx_available=true
+docker_daemon_available=false
+docker_daemon_blocker=unix_socket_missing
+```
+
+Because required source tests did not pass and the Docker daemon was unavailable, the local image build, local smoke, and image export gates were not executed.
+
+```text
+image_build_success=false
+image_repository=salemx/lk-jwt-service
+image_tag=ac7d0de49060b0cabe25925c4b671d5e8f637567
+image_platform=linux/amd64
+image_id=unknown
+image_repo_digest=none
+binary_starts=false
+controlled_missing_config_failure=false
+unexpected_panic=false
+archive_created=false
+archive_sha256=unknown
+archive_size_bytes=0
+archive_regular_file=false
+archive_symlink=false
+```
+
+### External manifest
+
+An external, non-secret manifest was created outside the repository:
+
+```text
+manifest_path=/tmp/salemx-lk-jwt-service-ac7d0de49060b0cabe25925c4b671d5e8f637567.manifest.txt
+manifest_mode=0600
+manifest_created=true
+manifest_status=blocked
+```
+
+No image archive was created or copied to the server.
+
+### Configuration compatibility
+
+Expected future configuration for this candidate remains:
+
+```text
+LIVEKIT_URL=current_value_preserved
+LIVEKIT_KEY=current_value_or_file_equivalent_preserved
+LIVEKIT_SECRET variable current value or file equivalent preserved
+LIVEKIT_FULL_ACCESS_HOMESERVERS=current_allowlist_preserved
+LIVEKIT_JWT_BIND=current_bind_preserved
+LIVEKIT_REDIS_URL=redis://127.0.0.1:6379
+LIVEKIT_SANITY_CHECK_INTERVAL_SECONDS=60
+network_mode=host
+nginx_public_prefix=/livekit/jwt/
+```
+
+Endpoint acceptance for a future installed build:
+
+```text
+POST /sfu/get=not_404_for_route_existence
+POST /sfu_webhook_unsigned=signature_or_input_rejection_but_not_404
+GET /healthz=200_if_service_started
+```
+
+### Stage 1C-B gate
+
+```text
+local_head_expected=true
+working_tree_clean_before=true
+official_origin_verified=true
+candidate_commit_exact=true
+detached_head=true
+candidate_descends_from_v0_5_0=true
+required_features_source_proven=true
+required_features_tests_proven=true
+change_scope_audited=true
+configuration_compatibility_known=true
+required_unit_tests_passed=false
+required_integration_tests_passed=false
+server_architecture_known=true
+target_platform_known=true
+docker_build_available=false
+local_image_built=false
+local_image_id_known=false
+local_smoke_passed=false
+archive_created=false
+archive_sha256_known=false
+manifest_created=true
+secret_scan_passed=true
+server_accessed_read_only=true
+server_changed=false
+image_installed_on_server=false
+runtime_code_changed=false
+audit_document_updated=true
+commit_created=false
+stage_1c_b_passed=false
+```
+
+### Stage 1C-B2 resumed qualification
+
+Initial qualification attempt: blocked by unavailable local toolchain.
+
+Resumed qualification: passed. Stage 1C-B2 used temporary tooling under `/tmp`, kept the candidate source clean, built only a local `linux/amd64` image, exported it to a local archive, and did not install or transfer the image to the server.
+
+Baseline and dirty-path allowance:
+
+```text
+local_head_expected=true
+initial_dirty_paths=docs/direct-call/MATRIXRTC_SERVER_AUDIT.md
+preexisting_dirty_path_allowed=true
+unexpected_dirty_paths_present=false
+```
+
+Docker gate:
+
+```text
+docker_cli_available=true
+docker_buildx_available=true
+docker_daemon_available=true
+docker_client_version=29.4.2
+docker_server_version=29.4.2
+docker_daemon_platform=linux/aarch64
+```
+
+Temporary Go toolchain:
+
+```text
+go_archive_official=true
+go_archive=go1.26.4.darwin-arm64.tar.gz
+go_archive_sha256=b62ad2b6d7d2464f12a5bcad7ff47f19d08325773b5efd21610e445a05a9bf53
+go_archive_sha256_verified=true
+temporary_go_version=go version go1.26.4 darwin/arm64
+system_go_modified=false
+```
+
+Candidate source integrity:
+
+```text
+origin=https://github.com/element-hq/lk-jwt-service.git
+candidate_commit=ac7d0de49060b0cabe25925c4b671d5e8f637567
+detached_head=true
+candidate_source_clean_before=true
+candidate_source_clean_after=true
+go_mod_unchanged=true
+go_sum_unchanged=true
+```
+
+Verified source hashes:
+
+```text
+go.mod=589f37b8acb9c310330f4e02a06ec213988cc49642506afafaaadee0c61e095b
+go.sum=3f9cc679088432be2ec09f2c82725ac4935a89a20a4f099f494051b5d63f75de
+Dockerfile=90500ce06cbabb83020cf11292e7371a6528547d183e083c17f095fecacaa7d5
+.github/workflows/test.yaml=25402ef9306a1009b8aa1590773a61c7d3838b2c21499866fb1a54a9d8f6ee5d
+.github/workflows/lint.yaml=84832e46a03cd3d60016b9ab5e35c6e51676b79ecdbd1f2dae618e421b687b8b
+integration-tests/Cargo.lock=792f50f25fb6ea415d838cabe5d5c6eba5b7a9fd67e5ddaebf6df2936c3173ff
+```
+
+Unit, vet, lint, and integration results:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `go test -timeout 30s` | pass | official upstream unit command |
+| `go test ./...` | pass | rerun outside sandbox after local `httptest` bind denial |
+| `go vet ./...` | pass | temporary Go toolchain |
+| `golangci-lint run` | pass | pinned container image, `0 issues` |
+| `cargo test --locked` | pass | local fake homeserver/SFU integration suite |
+
+Lint resolution:
+
+```text
+upstream_lint_action=golangci/golangci-lint-action@82606bf257cbaff209d206a39f5134f0cfbfd2ee
+lint_workflow_version_input_absent=true
+lint_action_latest_resolved_version=v2.12.2
+lint_image=docker.io/golangci/golangci-lint:v2.12.2
+lint_image_index_digest=sha256:5cceeef04e53efe1470638d4b4b4f5ceefd574955ab3941b2d9a68a8c9ad5240
+golangci_lint_result=pass
+```
+
+Integration tooling:
+
+```text
+cargo_available=true
+cargo_version=cargo 1.93.1 (083ac5135 2025-12-15)
+rustc_version=rustc 1.93.1 (01f6ddf75 2026-02-11)
+integration_tests_passed=true
+production_credentials_used=false
+salemx_server_used=false
+```
+
+Builder image proof:
+
+```text
+builder_image_tag=docker.io/library/golang:1.26.4-alpine
+builder_image_index_digest=sha256:3ad57304ad93bbec8548a0437ad9e06a455660655d9af011d58b993f6f615648
+builder_image_linux_amd64_digest=sha256:0648ddfa35769070197ba1cdf22a16dc452caf9315e66b91791308a543baf229
+builder_image_digest_known=true
+```
+
+Local image:
+
+```text
+image_build_success=true
+image_repository=salemx/lk-jwt-service
+image_tag=ac7d0de49060b0cabe25925c4b671d5e8f637567
+image_platform=linux/amd64
+image_id=sha256:bd9f2c8e286a718ea72f22347ca6748e403415896be71509a032be70da07ece4
+image_repo_digest=salemx/lk-jwt-service@sha256:bd9f2c8e286a718ea72f22347ca6748e403415896be71509a032be70da07ece4
+entrypoint_or_cmd_expected=true
+exposed_port_8080=true
+healthcheck_present=true
+unexpected_environment_values=false
+embedded_secrets=false
+```
+
+Local smoke:
+
+```text
+image_platform_confirmed=linux/amd64
+healthcheck_binary_invoked=true
+binary_starts=true
+controlled_missing_config_failure=true
+unexpected_panic=false
+public_port_published=false
+smoke_containers_remaining=false
+```
+
+Exported artifact:
+
+```text
+archive_path=/tmp/salemx-lk-jwt-service-ac7d0de49060b0cabe25925c4b671d5e8f637567.tar
+archive_regular_file=true
+archive_symlink=false
+archive_mode=0600
+archive_sha256=c4cafbc2f08c60f7b83c0e4abb6bed1b7a0af63d1cf03409b894d8c36fabfd0d
+archive_size_bytes=24259584
+```
+
+External manifest:
+
+```text
+manifest_path=/tmp/salemx-lk-jwt-service-ac7d0de49060b0cabe25925c4b671d5e8f637567.manifest.txt
+manifest_mode=0600
+manifest_status=passed
+manifest_created=true
+```
+
+Deployment status:
+
+```text
+server_accessed_read_only=false
+server_changed=false
+image_installed_on_server=false
+server_container_changed=false
+runtime_code_changed=false
+APNs_sent=false
+media_connected=false
+```
+
+### Stage 1C-B2 gate
+
+```text
+local_head_expected=true
+preexisting_dirty_path_allowed=true
+unexpected_dirty_paths_present=false
+docker_daemon_available=true
+temporary_go_exact_version=true
+go_archive_sha256_verified=true
+candidate_commit_exact=true
+candidate_source_clean_before=true
+official_unit_test_passed=true
+go_test_all_passed=true
+go_vet_passed=true
+golangci_lint_result=pass
+integration_tests_passed=true
+candidate_source_clean_after=true
+builder_image_digest_known=true
+local_image_built=true
+local_image_platform_correct=true
+local_smoke_passed=true
+archive_created=true
+archive_sha256_known=true
+manifest_created=true
+secret_scan_passed=true
+server_accessed_read_only=false
+server_changed=false
+image_installed_on_server=false
+runtime_code_changed=false
+audit_document_updated=true
+commit_created=true
+stage_1c_b2_passed=true
+```
