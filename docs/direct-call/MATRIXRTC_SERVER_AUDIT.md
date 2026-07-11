@@ -481,3 +481,142 @@ audit_document_updated=true
 commit_created=true
 stage_1b_p2b_passed=true
 ```
+
+## Authorization service upgrade assessment
+
+Stage 1C-A audited the official `element-hq/lk-jwt-service` upstream release and tag evidence after the Stage 1B v5 rollback.
+
+Primary sources used:
+
+- Official repository and README: https://github.com/element-hq/lk-jwt-service
+- Official releases: https://github.com/element-hq/lk-jwt-service/releases
+- Official release-tag source snapshots: `v0.4.1`, `v0.4.2`, `v0.4.3`, `v0.4.4`, `v0.5.0`
+- Official GHCR image metadata: `ghcr.io/element-hq/lk-jwt-service`
+
+### Current deployed version
+
+```text
+current_authorization_image=ghcr.io/element-hq/lk-jwt-service:0.4.1
+current_authorization_version=0.4.1
+current_image_digest_present=true
+sfu_get_supported=true
+sfu_webhook_supported=false
+authorization_service_upgrade_required=true
+server_remediation_can_be_retried_without_version_upgrade=false
+```
+
+The post-rollback diagnostic proved that the active `0.4.1` deployment exposes `/sfu/get` but does not expose `/sfu_webhook`. That makes the previous v5 LiveKit webhook wiring invalid against the currently deployed authorization-service version.
+
+### Candidate release matrix
+
+Relevant published releases newer than `0.4.1`:
+
+| Candidate | Published release | Image available | Immutable digest available | `/sfu/get` | `/sfu_webhook` | `LIVEKIT_REDIS_URL` | `LIVEKIT_SANITY_CHECK_INTERVAL_SECONDS` | `LIVEKIT_FULL_ACCESS_HOMESERVERS` | Key/secret compatibility | Host-network compatible | `/livekit/jwt/` proxy compatible | Breaking configuration changes | Migration required |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `0.4.2` | true | true | true | true | false | false | false | true | true | true | true | none in release notes | false for current config |
+| `0.4.3` | true | true | true | true | false | false | false | true | true | true | true | LiveKit identity calculation changes for specific experimental modes | unknown, depends on Element Call mode |
+| `0.4.4` | true | true | true | true | false | false | false | true | true | true | true | none for the current config; release updates signed JWT request handling | false for current config |
+| `0.5.0` | true | true | true | true | false | false | false | true | true | true | true | `LIVEKIT_FULL_ACCESS_HOMESERVERS` is explicitly required and the old implicit wildcard fallback is removed | true if current deployment relied on implicit wildcard; otherwise false |
+
+Release-tag source inspection is the decisive check here: the official release tags through `v0.5.0` do not contain `/sfu_webhook`, `LIVEKIT_REDIS_URL`, or `LIVEKIT_SANITY_CHECK_INTERVAL_SECONDS`. Those features are present in the current `main` branch README/source, but Stage 1C-A must not select an unreleased `main` build or a floating tag.
+
+```text
+published_compatible_release_available=false
+source_build_or_wait_required=true
+selected_version=none
+selected_image=none
+selected_image_digest=unknown
+image_architecture_compatible=unknown
+image_pinned=false
+floating_tag_required=false
+```
+
+No published release currently satisfies all mandatory SalemX MatrixRTC authorization-service requirements.
+
+### Image metadata
+
+The official release notes publish GHCR image tags for `0.4.2`, `0.4.3`, `0.4.4`, and `0.5.0`. Read-only manifest inspection showed OCI image indexes with `linux/amd64` and `linux/arm64` entries, plus attestation manifests, for those tags. No image was pulled.
+
+Because no compatible published release exists, Stage 1C-A does not select a tag or digest. A future remediation must pin an immutable image reference only after a published compatible release exists.
+
+### Configuration compatibility
+
+Existing settings that remain compatible across the audited release tags:
+
+```text
+LIVEKIT_URL=compatible
+LIVEKIT_KEY=compatible
+LIVEKIT_KEY_FROM_FILE=compatible
+LIVEKIT_SECRET=compatible
+LIVEKIT_SECRET_FROM_FILE=compatible
+LIVEKIT_KEY_FILE=compatible
+LIVEKIT_JWT_BIND=compatible
+LIVEKIT_JWT_PORT=deprecated_but_supported
+network_mode=host=compatible
+reverse_proxy_path=/livekit/jwt/=compatible_with_proxy_path_stripping
+```
+
+Required SalemX additions that are not available in any published compatible release:
+
+```text
+LIVEKIT_REDIS_URL=redis://127.0.0.1:6379
+LIVEKIT_SANITY_CHECK_INTERVAL_SECONDS=60
+```
+
+`0.5.0` additionally requires `LIVEKIT_FULL_ACCESS_HOMESERVERS` to be set explicitly. This is a secure default change, but it does not solve the missing webhook or Redis persistence requirements.
+
+### Endpoint acceptance rules
+
+For a future compatible authorization-service release, acceptance checks must validate route existence rather than requiring success from unsigned or unauthenticated requests:
+
+```text
+GET /sfu/get = method rejection or auth/input rejection, but not 404
+POST /sfu/get with empty JSON = input/auth rejection, but not 404
+POST /sfu_webhook unsigned = signature/input rejection, but not 404
+```
+
+Do not require `/health` unless the selected release officially implements it. The current release-tag README documents `/healthz`, not `/health`.
+
+### Rollback strategy
+
+Do not retry the Stage 1B server remediation against `0.4.1`. For a future published compatible release:
+
+1. Pin the exact GHCR image tag and immutable digest.
+2. Preserve the current LiveKit API key/secret and homeserver allowlist.
+3. Add only the required authorization environment values and LiveKit webhook wiring.
+4. Apply changes in the existing safe order: Synapse restart, LiveKit-only recreation, authorization-service-only recreation.
+5. On any post-installation failure after file replacement, restore the exact three rollback file hashes and recreate only the services touched by the staged remediation. Do not restart Redis, nginx, or `salemx-call-service`.
+
+### Salem call-service route-contract finding
+
+The post-rollback diagnostic reported:
+
+```text
+invite_route_classified_method=GET
+invite_route_status=400
+stream_route_classified_method=GET
+stream_route_status=404
+salem_guardrail_result_reliable=false
+reason=method_or_route_discovery_conflicts_with_previous_confirmed_contract
+```
+
+This is a separate SalemX call-service route-contract issue. Do not include `salemx-call-service` in the authorization-service upgrade. A narrow route-contract audit must follow separately.
+
+### Stage 1C-A gate
+
+```text
+current_version_confirmed=true
+webhook_missing_confirmed=true
+published_releases_audited=true
+published_compatible_release_available=false
+selected_version=none
+selected_image_digest_known=false
+image_architecture_compatible=unknown
+configuration_compatibility_known=true
+floating_tag_required=false
+server_accessed=false
+server_changed=false
+image_pulled=false
+runtime_code_changed=false
+audit_document_updated=true
+```
