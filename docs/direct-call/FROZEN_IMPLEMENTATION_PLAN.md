@@ -99,3 +99,13 @@ Stage 2 embedded Element Call migration is unblocked by Stage `1D-R6` functional
 This does not accept or preserve custom SalemX direct LiveKit media. Stage 2 remains scoped to embedded Element Call migration only.
 
 Production rollout remains blocked on a privacy-safe MatrixRTC webhook observability debt. A future narrow stage must add aggregate counters for webhook requests, signature-valid and signature-invalid requests, participant joins, participant leaves, and processing errors without exposing identifiers, tokens, request bodies, headers, or secrets.
+
+## Stage 2A iOS Migration Boundary
+
+Stage 2A audited the local iOS source and recorded the minimal embedded Element Call migration boundary in `docs/direct-call/IOS_EMBEDDED_ELEMENT_CALL_AUDIT.md`.
+
+The selected seam is to keep SalemX secure metadata, PushKit and CallKit as bootstrap and OS presentation layers, then adapt the accepted CallKit answer path to call the existing embedded Element Call room-call entry point with a verified DM room and `startMode: .audio`.
+
+The target path must use the pinned bundled `EmbeddedElementCall` package and MatrixRTC widget driver. It must not use a dynamic remote Element Call SPA, construct LiveKit JWTs on iOS, directly join LiveKit from SalemX code, keep `DirectCallEngine` as production state authority, or preserve a direct LiveKit production fallback.
+
+Stage 2B may start with a compile-time seam only. It must not send APNs, connect media, request camera, enable video, or remove the old direct LiveKit code before the replacement path passes repeated-call acceptance.
