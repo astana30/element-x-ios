@@ -76,3 +76,15 @@ One successful physical call is not sufficient for completion.
 - Run targeted tests or report why they are unavailable.
 - Stop on failed gates.
 - Keep all logs and docs redacted.
+
+## Current Server Gate
+
+MatrixRTC server stabilization is complete as of Stage `1D-R4`:
+
+- The authorization service is running the qualified healthfix image `salemx/lk-jwt-service:ac7d0de49060b0cabe25925c4b671d5e8f637567-healthfix1`.
+- The public MatrixRTC authorization routes `/livekit/jwt/sfu/get` and `/livekit/jwt/sfu_webhook` are present.
+- The SalemX foreground-signaling contract remains unchanged: production invite and stream routes reject unauthenticated probes, and the development invite route remains disabled.
+- External Redis, LiveKit HTTP, and authorization ports were not reachable from outside the server.
+- The nginx duplicate `matrix.mertis.kz` server-name warning is classified as cleanup recommended, not blocking.
+
+Stage 2 remains blocked until the standard upstream Element Call / MatrixRTC reference-call acceptance passes twice with redacted proof. That reference-call test must not use Salem foreground-signaling invite, APNs, camera, custom iOS direct LiveKit code, production users, or more than the scoped first call plus immediate second call.
