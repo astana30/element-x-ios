@@ -119,3 +119,14 @@ Stage 2B added the compile-time seam `EmbeddedElementCallHandoff` and the conser
 - The seam is not wired to PushKit or CallKit answer handling, and the current SalemX direct LiveKit production route remains unchanged.
 
 Stage 2C should bind authenticated SalemX metadata and a verified DM room into this seam without changing the join semantics or reintroducing direct LiveKit media.
+
+Stage 2C added `SalemXAuthenticatedMatrixRTCHandoff` as a narrow authenticated metadata-to-room adapter.
+
+- The adapter accepts already-claimed SalemX MatrixRTC metadata containing only the redacted-bound room/user/device shape needed for room validation.
+- The local authenticated Matrix user must match the claimed local user before any room lookup is attempted.
+- The target room must resolve to a joined room, match the claimed room ID, be a one-to-one direct room, and contain both local and peer users.
+- Valid metadata delegates to the Stage 2B `EmbeddedElementCallHandoff` with the caller-supplied handoff intent; unsupported incoming `joinExisting` semantics remain unchanged and never fall back to `startNew`.
+- The adapter does not request media credentials, construct LiveKit URLs or JWTs, touch PushKit or CallKit answer handling, load a remote Element Call SPA, or emit Matrix call media events.
+- Metadata and adapter result descriptions redact room IDs, user IDs, and device IDs.
+
+Stage 2D may bridge CallKit answer to this adapter, but must preserve the Stage 2C validation boundary and keep incoming `joinExisting` unsupported until a proven programmatic incoming MatrixRTC join operation is wired.

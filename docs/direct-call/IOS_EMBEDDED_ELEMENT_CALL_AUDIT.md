@@ -315,3 +315,71 @@ production_direct_livekit_route_changed=false
 callkit_answer_wired=false
 stage_2c_ready=true
 ```
+
+## Stage 2C authenticated metadata binding
+
+Stage 2C introduced `SalemXAuthenticatedMatrixRTCHandoff`, a narrow adapter from already-claimed SalemX MatrixRTC metadata into the Stage 2B embedded Element Call handoff seam.
+
+Typed contract:
+
+```text
+adapter=SalemXAuthenticatedMatrixRTCHandoff
+input=SalemXMatrixRTCClaimedMetadata
+metadata_fields=roomID,localUserID,peerUserID,peerDeviceID,direction
+validation=authenticated_user_match,joined_room,room_id_match,direct_one_to_one_room,local_member,peer_member
+success=delegates_to_EmbeddedElementCallHandoff
+blocked_reasons=malformedClaimedMetadata,unauthenticatedSession,authenticatedUserMismatch,roomNotJoined,roomIDMismatch,roomNotDirectOneToOne,localUserNotMember,peerUserNotMember
+```
+
+Operation semantics recorded for Stage 2C:
+
+| Operation | Semantics proven | Stage 2C behavior |
+| --- | --- | --- |
+| Claimed outgoing DM metadata | Authenticated local user and verified joined one-to-one DM room are required before handoff | Delegates to Stage 2B handoff with `.startNew` and `.audio` preparation |
+| Claimed incoming DM metadata | Incoming metadata may be validated without changing join semantics | Delegates the caller's `.joinExisting` intent and preserves `unsupportedIncomingJoin` |
+| Missing or malformed metadata | No room lookup or handoff occurs | Blocks with `malformedClaimedMetadata` |
+| Missing authenticated session | No room lookup or handoff occurs | Blocks with `unauthenticatedSession` |
+| Claimed user mismatch | No room lookup or handoff occurs | Blocks with `authenticatedUserMismatch` |
+| Unjoined room | No handoff occurs | Blocks with `roomNotJoined` |
+| Non-DM or multi-member room | No member probe or handoff occurs | Blocks with `roomNotDirectOneToOne` |
+| Peer outside the room | No handoff occurs | Blocks with `peerUserNotMember` |
+
+The adapter intentionally carries no LiveKit URL, LiveKit JWT, LiveKit room alias, media key, Matrix access token, widget URL, remote SPA URL, PushKit payload, APNs payload, CallKit UUID, or direct-call engine session. It does not request media credentials, send APNs, wire CallKit answer, connect media, request camera, enable video, or emit Matrix call media events.
+
+Metadata and adapter result descriptions redact room IDs, user IDs and device IDs.
+
+Validation:
+
+```text
+claimed_joined_dm_room_handoff=covered_by_unit_test
+incoming_join_unsupported_semantics=covered_by_unit_test
+malformed_metadata_blocks_before_room_lookup=covered_by_unit_test
+unauthenticated_session_blocks_before_room_lookup=covered_by_unit_test
+authenticated_user_mismatch_blocks_before_room_lookup=covered_by_unit_test
+unjoined_room_blocks_before_handoff=covered_by_unit_test
+non_direct_room_blocks_before_handoff=covered_by_unit_test
+multi_member_room_blocks_before_handoff=covered_by_unit_test
+peer_outside_room_blocks_before_handoff=covered_by_unit_test
+metadata_description_redacted=covered_by_unit_test
+handoff_result_description_redacted=covered_by_unit_test
+changed_swift_files_swiftformat=pass
+changed_swift_files_swiftlint=pass
+changed_swift_files_syntax_parse=pass
+targeted_unit_test_attempt=blocked_before_suite_by_matrix_rust_sdk_uniffi_build_error
+```
+
+Stage 2D entry conditions after Stage 2C:
+
+```text
+authenticated_metadata_adapter_created=true
+local_authenticated_user_bound=true
+joined_dm_room_validation_created=true
+local_and_peer_membership_validation_created=true
+incoming_join_semantics_unchanged=true
+livekit_credentials_requested=false
+pushkit_changed=false
+callkit_answer_wired=false
+media_connection_started=false
+camera_permission_requested=false
+stage_2d_ready=true
+```
