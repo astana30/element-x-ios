@@ -180,7 +180,7 @@ final class SalemXEmbeddedCallAnswerBridgeTests {
               direction: direction)
     }
 
-    private static func source(named path: String) throws -> String {
+    fileprivate static func source(named path: String) throws -> String {
         let repositoryRootURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -205,6 +205,101 @@ final class SalemXEmbeddedCallAnswerBridgeTests {
         func prepareAudioCall(claimedMetadata: SalemXMatrixRTCClaimedMetadata,
                               intent: EmbeddedElementCallHandoffIntent) async -> SalemXMatrixRTCHandoffResult {
             calls.append(.init(metadata: claimedMetadata, intent: intent))
+            return result
+        }
+    }
+}
+
+@MainActor
+final class SalemXEmbeddedCallEndBridgeTests {
+    @Test
+    func validVerifiedBootstrapTerminatesUpstreamElementCall() async {
+        let terminator = EmbeddedElementCallTerminatorSpy(result: .accepted)
+        let bridge = makeBridge(terminator: terminator)
+
+        let result = await bridge.end(callID: callID,
+                                      bootstrap: verifiedBootstrap(),
+                                      source: .callKitLocalEnd)
+
+        #expect(result == .terminationAccepted)
+        #expect(terminator.roomIDs == [roomID])
+    }
+
+    @Test
+    func noActiveMatrixRTCCallFailsClosedBeforeTermination() async {
+        let terminator = EmbeddedElementCallTerminatorSpy(result: .accepted)
+        let bridge = makeBridge(terminator: terminator)
+
+        let result = await bridge.end(callID: callID,
+                                      bootstrap: verifiedBootstrap(activeCallState: .none),
+                                      source: .callKitLocalEnd)
+
+        #expect(result == .noActiveMatrixRTCCall)
+        #expect(terminator.roomIDs.isEmpty)
+    }
+
+    @Test
+    func sessionMismatchFailsClosedBeforeTermination() async {
+        let terminator = EmbeddedElementCallTerminatorSpy(result: .accepted)
+        let bridge = makeBridge(userID: "@other:matrix.org", terminator: terminator)
+
+        let result = await bridge.end(callID: callID,
+                                      bootstrap: verifiedBootstrap(),
+                                      source: .callKitLocalEnd)
+
+        #expect(result == .sessionIdentityMismatch)
+        #expect(terminator.roomIDs.isEmpty)
+    }
+
+    @Test
+    func audioAndPermissionBoundaryDoesNotExposeMedia() throws {
+        let source = try SalemXEmbeddedCallAnswerBridgeTests.source(named: "ElementX/Sources/Services/ElementCall/SalemXMatrixRTCHandoff.swift")
+
+        #expect(!source.contains("requestMediaCredentials"))
+        #expect(!source.contains("LiveKitDirectCall"))
+        #expect(!source.contains("sendDirectCallSignal"))
+        #expect(!source.contains("m.call.hangup"))
+        #expect(!source.contains("AVCaptureDevice.requestAccess"))
+        #expect(!source.contains("requestRecordPermission"))
+    }
+
+    private let callID = UUID()
+    private let roomID = "!room:matrix.org"
+    private let localUserID = "@me:matrix.org"
+    private let localDeviceID = "MEDEVICE"
+    private let peerUserID = "@alice:matrix.org"
+    private let peerDeviceID = "ALICEDEVICE"
+
+    private func makeBridge(userID: String? = nil,
+                            deviceID: String? = nil,
+                            terminator: EmbeddedElementCallTerminatorSpy) -> SalemXEmbeddedCallEndBridge {
+        let clientProxy = ClientProxyMock(.init(userID: userID ?? localUserID,
+                                                deviceID: deviceID ?? localDeviceID))
+        return SalemXEmbeddedCallEndBridge(clientProxy: clientProxy,
+                                           embeddedElementCallTerminator: terminator)
+    }
+
+    private func verifiedBootstrap(activeCallState: VerifiedIncomingCallBootstrapActiveCallState = .active) -> VerifiedIncomingCallBootstrap {
+        .init(callID: callID,
+              claimedMetadata: .init(roomID: roomID,
+                                     localUserID: localUserID,
+                                     peerUserID: peerUserID,
+                                     peerDeviceID: peerDeviceID,
+                                     direction: .incoming),
+              localDeviceID: localDeviceID,
+              activeCallState: activeCallState)
+    }
+
+    private final class EmbeddedElementCallTerminatorSpy: EmbeddedElementCallTerminating {
+        private let result: EmbeddedElementCallTerminationResult
+        private(set) var roomIDs = [String]()
+
+        init(result: EmbeddedElementCallTerminationResult) {
+            self.result = result
+        }
+
+        func terminateEmbeddedElementCall(roomID: String) async -> EmbeddedElementCallTerminationResult {
+            roomIDs.append(roomID)
             return result
         }
     }
@@ -634,16 +729,304 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
         #expect(bootstrapResolver.removedCallIDs == [callID])
     }
 
+    @Test
+    func defaultDisabledLocalEndUsesLegacyRoute() async throws {
+        let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
+        let endBridge = EndBridgeSpy(result: .terminationAccepted)
+        let bootstrapResolver = BootstrapResolverSpy()
+        service = makeAnswerBridgeService(configuration: .init(),
+                                          bootstrapResolver: bootstrapResolver,
+                                          answerBridge: answerBridge,
+                                          endBridge: endBridge)
+
+        var observedActions = [ElementCallServiceAction]()
+        service.actions
+            .sink { observedActions.append($0) }
+            .store(in: &cancellables)
+
+        let callID = try await reportIncomingCall()
+        bootstrapResolver.bootstrapByCallID[callID] = verifiedBootstrap(callID: callID)
+        await service.setupCallSession(roomID: Self.roomID, roomDisplayName: "welcome", startMode: .audio)
+
+        let action = EndActionSpy(callUUID: callID)
+        service.handleEndCallAction(action, provider: callProvider)
+
+        #expect(action.fulfillCount == 1)
+        #expect(action.failCount == 0)
+        #expect(endBridge.calls.isEmpty)
+        #expect(observedActions.contains { action in
+            guard case .requestCallTermination(let roomID) = action else {
+                return false
+            }
+            return roomID == Self.roomID
+        })
+    }
+
+    @Test
+    func enabledLocalEndInvokesEmbeddedBridgeAndFulfillsOnce() async throws {
+        let endBridge = EndBridgeSpy(result: .terminationAccepted)
+        let bootstrapResolver = BootstrapResolverSpy()
+        let callID = try await prepareOngoingEmbeddedCall(bootstrapResolver: bootstrapResolver,
+                                                          endBridge: endBridge)
+
+        let action = EndActionSpy(callUUID: callID)
+        service.handleEndCallAction(action, provider: callProvider)
+
+        #expect(await waitUntil { action.fulfillCount == 1 })
+        #expect(action.failCount == 0)
+        #expect(endBridge.calls.map(\.source) == [.callKitLocalEnd])
+        #expect(endBridge.calls.map(\.callID) == [callID])
+        #expect(bootstrapResolver.removedCallIDs == [callID])
+    }
+
+    @Test
+    func terminationFailureFailsActionOnce() async throws {
+        let endBridge = EndBridgeSpy(result: .failed)
+        let bootstrapResolver = BootstrapResolverSpy()
+        let callID = try await prepareOngoingEmbeddedCall(bootstrapResolver: bootstrapResolver,
+                                                          endBridge: endBridge)
+
+        let action = EndActionSpy(callUUID: callID)
+        service.handleEndCallAction(action, provider: callProvider)
+
+        #expect(await waitUntil { action.failCount == 1 })
+        #expect(action.fulfillCount == 0)
+        #expect(endBridge.calls.count == 1)
+        #expect(bootstrapResolver.removedCallIDs == [callID])
+    }
+
+    @Test
+    func duplicateEndInvokesTerminationOnceAndCompletesBothActions() async throws {
+        let endBridge = EndBridgeSpy(result: .terminationAccepted, delay: .milliseconds(50))
+        let bootstrapResolver = BootstrapResolverSpy()
+        let callID = try await prepareOngoingEmbeddedCall(bootstrapResolver: bootstrapResolver,
+                                                          endBridge: endBridge)
+
+        let firstAction = EndActionSpy(callUUID: callID)
+        let secondAction = EndActionSpy(callUUID: callID)
+        service.handleEndCallAction(firstAction, provider: callProvider)
+        service.handleEndCallAction(firstAction, provider: callProvider)
+        service.handleEndCallAction(secondAction, provider: callProvider)
+
+        #expect(await waitUntil { firstAction.fulfillCount == 1 && secondAction.fulfillCount == 1 })
+        #expect(firstAction.failCount == 0)
+        #expect(secondAction.failCount == 0)
+        #expect(endBridge.calls.count == 1)
+    }
+
+    @Test
+    func remoteTerminalEventReportsCallKitEndedOnce() async throws {
+        let endBridge = EndBridgeSpy(result: .terminationAccepted)
+        let bootstrapResolver = BootstrapResolverSpy()
+        let callID = try await prepareOngoingEmbeddedCall(bootstrapResolver: bootstrapResolver,
+                                                          endBridge: endBridge)
+
+        service.handleEmbeddedMatrixRTCUpstreamTerminalEvent(callID: callID, source: .embeddedRemoteEnd)
+        service.handleEmbeddedMatrixRTCUpstreamTerminalEvent(callID: callID, source: .embeddedRemoteEnd)
+
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 1)
+        #expect(callProvider.reportCallWithEndedAtReasonReceivedArguments?.uuid == callID)
+        #expect(callProvider.reportCallWithEndedAtReasonReceivedArguments?.reason == .remoteEnded)
+        #expect(endBridge.calls.isEmpty)
+        #expect(bootstrapResolver.removedCallIDs == [callID])
+    }
+
+    @Test
+    func localRemoteRaceCompletesOnceAndIgnoresLateCompletion() async throws {
+        let endBridge = EndBridgeSpy(result: .terminationAccepted, delay: .milliseconds(100))
+        let bootstrapResolver = BootstrapResolverSpy()
+        let callID = try await prepareOngoingEmbeddedCall(bootstrapResolver: bootstrapResolver,
+                                                          endBridge: endBridge)
+
+        let action = EndActionSpy(callUUID: callID)
+        service.handleEndCallAction(action, provider: callProvider)
+        service.handleEmbeddedMatrixRTCUpstreamTerminalEvent(callID: callID, source: .embeddedRemoteEnd)
+
+        #expect(await waitUntil { action.fulfillCount == 1 })
+        try? await Task.sleep(for: .milliseconds(150))
+        #expect(action.fulfillCount == 1)
+        #expect(action.failCount == 0)
+        #expect(endBridge.calls.count == 1)
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 1)
+        #expect(bootstrapResolver.removedCallIDs == [callID])
+    }
+
+    @Test
+    func endDuringAnswerCancelsAnswerAndTerminatesEmbeddedCall() async throws {
+        let answerBridge = AnswerBridgeSpy(result: .alreadyPresented, delay: .milliseconds(100))
+        let endBridge = EndBridgeSpy(result: .terminationAccepted)
+        let bootstrapResolver = BootstrapResolverSpy()
+        service = makeAnswerBridgeService(bootstrapResolver: bootstrapResolver,
+                                          answerBridge: answerBridge,
+                                          endBridge: endBridge)
+
+        let callID = try await reportIncomingCall()
+        bootstrapResolver.bootstrapByCallID[callID] = verifiedBootstrap(callID: callID)
+
+        let answerAction = AnswerActionSpy(callUUID: callID)
+        let endAction = EndActionSpy(callUUID: callID)
+        service.handleAnswerCallAction(answerAction, provider: callProvider)
+        service.handleEndCallAction(endAction, provider: callProvider)
+
+        #expect(await waitUntil { answerAction.failCount == 1 && endAction.fulfillCount == 1 })
+        #expect(answerAction.fulfillCount == 0)
+        #expect(endAction.failCount == 0)
+        #expect(answerBridge.calls.count == 1)
+        #expect(endBridge.calls.count == 1)
+        #expect(bootstrapResolver.removedCallIDs == [callID])
+    }
+
+    @Test
+    func answerTimeoutFollowedByEndIsIdempotent() async throws {
+        let answerBridge = AnswerBridgeSpy(result: .alreadyPresented, delay: .milliseconds(100))
+        let endBridge = EndBridgeSpy(result: .terminationAccepted)
+        let bootstrapResolver = BootstrapResolverSpy()
+        service = makeAnswerBridgeService(configuration: .init(embeddedMatrixRTCAnswerBridgeEnabled: true,
+                                                               answerTimeout: .milliseconds(10),
+                                                               endTimeout: .seconds(1)),
+                                          bootstrapResolver: bootstrapResolver,
+                                          answerBridge: answerBridge,
+                                          endBridge: endBridge)
+
+        let callID = try await reportIncomingCall()
+        bootstrapResolver.bootstrapByCallID[callID] = verifiedBootstrap(callID: callID)
+
+        let answerAction = AnswerActionSpy(callUUID: callID)
+        service.handleAnswerCallAction(answerAction, provider: callProvider)
+
+        #expect(await waitUntil { answerAction.failCount == 1 })
+
+        let endAction = EndActionSpy(callUUID: callID)
+        service.handleEndCallAction(endAction, provider: callProvider)
+
+        #expect(endAction.failCount == 1)
+        #expect(endAction.fulfillCount == 0)
+        #expect(endBridge.calls.isEmpty)
+        #expect(bootstrapResolver.removedCallIDs == [callID])
+    }
+
+    @Test
+    func providerResetReleasesEndGuardAndBootstrap() async throws {
+        let endBridge = EndBridgeSpy(result: .terminationAccepted, delay: .milliseconds(100))
+        let bootstrapResolver = BootstrapResolverSpy()
+        let callID = try await prepareOngoingEmbeddedCall(bootstrapResolver: bootstrapResolver,
+                                                          endBridge: endBridge)
+
+        let action = EndActionSpy(callUUID: callID)
+        service.handleEndCallAction(action, provider: callProvider)
+        service.providerDidReset(CXProvider(configuration: CXProviderConfiguration()))
+
+        #expect(await waitUntil { action.failCount == 1 })
+        try? await Task.sleep(for: .milliseconds(150))
+        #expect(action.fulfillCount == 0)
+        #expect(action.failCount == 1)
+        #expect(bootstrapResolver.removedCallIDs == [callID])
+    }
+
+    @Test
+    func endBootstrapUUIDMismatchFailsClosed() async throws {
+        let endBridge = EndBridgeSpy(result: .terminationAccepted)
+        let bootstrapResolver = BootstrapResolverSpy()
+        let callID = try await prepareOngoingEmbeddedCall(bootstrapResolver: bootstrapResolver,
+                                                          endBridge: endBridge,
+                                                          bootstrapCallID: UUID())
+
+        let action = EndActionSpy(callUUID: callID)
+        service.handleEndCallAction(action, provider: callProvider)
+
+        #expect(action.failCount == 1)
+        #expect(action.fulfillCount == 0)
+        #expect(endBridge.calls.isEmpty)
+        #expect(bootstrapResolver.removedCallIDs == [callID])
+    }
+
+    @Test
+    func missingBootstrapFailsEndClosed() async throws {
+        let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
+        let endBridge = EndBridgeSpy(result: .terminationAccepted)
+        let bootstrapResolver = BootstrapResolverSpy()
+        service = makeAnswerBridgeService(bootstrapResolver: bootstrapResolver,
+                                          answerBridge: answerBridge,
+                                          endBridge: endBridge)
+
+        let callID = try await reportIncomingCall()
+        await service.setupCallSession(roomID: Self.roomID, roomDisplayName: "welcome", startMode: .audio)
+
+        let action = EndActionSpy(callUUID: callID)
+        service.handleEndCallAction(action, provider: callProvider)
+
+        #expect(action.failCount == 1)
+        #expect(action.fulfillCount == 0)
+        #expect(endBridge.calls.isEmpty)
+    }
+
+    @Test
+    func noActiveMatrixRTCCallFailsEndClosed() async throws {
+        let endBridge = EndBridgeSpy(result: .noActiveMatrixRTCCall)
+        let bootstrapResolver = BootstrapResolverSpy()
+        let callID = try await prepareOngoingEmbeddedCall(bootstrapResolver: bootstrapResolver,
+                                                          endBridge: endBridge)
+
+        let action = EndActionSpy(callUUID: callID)
+        service.handleEndCallAction(action, provider: callProvider)
+
+        #expect(await waitUntil { action.failCount == 1 })
+        #expect(action.fulfillCount == 0)
+        #expect(endBridge.calls.count == 1)
+        #expect(bootstrapResolver.removedCallIDs == [callID])
+    }
+
+    @Test
+    func endTimeoutFailsOnceAndIgnoresLateCompletion() async throws {
+        let endBridge = EndBridgeSpy(result: .terminationAccepted, delay: .milliseconds(100))
+        let bootstrapResolver = BootstrapResolverSpy()
+        let callID = try await prepareOngoingEmbeddedCall(configuration: .init(embeddedMatrixRTCAnswerBridgeEnabled: true,
+                                                                               answerTimeout: .seconds(1),
+                                                                               endTimeout: .milliseconds(10)),
+                                                          bootstrapResolver: bootstrapResolver,
+                                                          endBridge: endBridge)
+
+        let action = EndActionSpy(callUUID: callID)
+        service.handleEndCallAction(action, provider: callProvider)
+
+        #expect(await waitUntil { action.failCount == 1 })
+        try? await Task.sleep(for: .milliseconds(150))
+        #expect(action.failCount == 1)
+        #expect(action.fulfillCount == 0)
+        #expect(endBridge.calls.count == 1)
+        #expect(bootstrapResolver.removedCallIDs == [callID])
+    }
+
     private func makeAnswerBridgeService(configuration: SalemXEmbeddedCallAnswerBridgeConfiguration = .init(embeddedMatrixRTCAnswerBridgeEnabled: true,
                                                                                                             answerTimeout: .seconds(1)),
                                          bootstrapResolver: BootstrapResolverSpy,
-                                         answerBridge: AnswerBridgeSpy) -> ElementCallService {
+                                         answerBridge: AnswerBridgeSpy,
+                                         endBridge: EndBridgeSpy? = nil) -> ElementCallService {
         ElementCallService(appSettings: appSettings,
                            callProvider: callProvider,
                            timeProvider: TimeProvider(clock: ContinuousClock()) { self.currentDate },
                            salemXAnswerBridgeConfiguration: configuration,
                            salemXIncomingCallBootstrapResolver: bootstrapResolver,
-                           salemXAnswerBridge: answerBridge)
+                           salemXAnswerBridge: answerBridge,
+                           salemXEndBridge: endBridge)
+    }
+
+    private func prepareOngoingEmbeddedCall(configuration: SalemXEmbeddedCallAnswerBridgeConfiguration = .init(embeddedMatrixRTCAnswerBridgeEnabled: true,
+                                                                                                               answerTimeout: .seconds(1),
+                                                                                                               endTimeout: .seconds(1)),
+                                            bootstrapResolver: BootstrapResolverSpy,
+                                            endBridge: EndBridgeSpy,
+                                            bootstrapCallID: UUID? = nil) async throws -> UUID {
+        let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
+        service = makeAnswerBridgeService(configuration: configuration,
+                                          bootstrapResolver: bootstrapResolver,
+                                          answerBridge: answerBridge,
+                                          endBridge: endBridge)
+
+        let callID = try await reportIncomingCall()
+        bootstrapResolver.bootstrapByCallID[callID] = verifiedBootstrap(callID: bootstrapCallID ?? callID)
+        await service.setupCallSession(roomID: Self.roomID, roomDisplayName: "welcome", startMode: .audio)
+        return callID
     }
 
     private func reportIncomingCall() async throws -> UUID {
@@ -722,6 +1105,24 @@ private final class AnswerActionSpy: SalemXCallKitAnswerActionCompleting {
     }
 }
 
+private final class EndActionSpy: SalemXCallKitEndActionCompleting {
+    let callUUID: UUID
+    private(set) var fulfillCount = 0
+    private(set) var failCount = 0
+
+    init(callUUID: UUID) {
+        self.callUUID = callUUID
+    }
+
+    func fulfill() {
+        fulfillCount += 1
+    }
+
+    func fail() {
+        failCount += 1
+    }
+}
+
 private final class BootstrapResolverSpy: SalemXIncomingCallBootstrapResolving {
     var bootstrapByCallID = [UUID: VerifiedIncomingCallBootstrap]()
     private(set) var requestedCallIDs = [UUID]()
@@ -735,6 +1136,34 @@ private final class BootstrapResolverSpy: SalemXIncomingCallBootstrapResolving {
     func removeVerifiedBootstrap(for callID: UUID) {
         removedCallIDs.append(callID)
         bootstrapByCallID.removeValue(forKey: callID)
+    }
+}
+
+@MainActor
+private final class EndBridgeSpy: SalemXEmbeddedCallEndBridging {
+    struct Call: Equatable {
+        let callID: UUID
+        let bootstrap: VerifiedIncomingCallBootstrap
+        let source: SalemXEmbeddedCallEndSource
+    }
+
+    private let result: SalemXEmbeddedCallEndResult
+    private let delay: Duration?
+    private(set) var calls = [Call]()
+
+    init(result: SalemXEmbeddedCallEndResult, delay: Duration? = nil) {
+        self.result = result
+        self.delay = delay
+    }
+
+    func end(callID: UUID,
+             bootstrap: VerifiedIncomingCallBootstrap,
+             source: SalemXEmbeddedCallEndSource) async -> SalemXEmbeddedCallEndResult {
+        calls.append(.init(callID: callID, bootstrap: bootstrap, source: source))
+        if let delay {
+            try? await Task.sleep(for: delay)
+        }
+        return result
     }
 }
 

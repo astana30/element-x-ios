@@ -62,9 +62,19 @@ enum EmbeddedElementCallHandoffResult: Equatable {
     case unsupportedIncomingJoin(EmbeddedElementCallPreparation)
 }
 
+enum EmbeddedElementCallTerminationResult: Equatable {
+    case accepted
+    case alreadyTerminated
+    case roomUnavailable
+    case noActiveCall
+    case unsupported
+    case failed
+}
+
 struct SalemXEmbeddedCallAnswerBridgeConfiguration: Equatable {
     var embeddedMatrixRTCAnswerBridgeEnabled = false
     var answerTimeout: Duration = .seconds(8)
+    var endTimeout: Duration = .seconds(8)
 }
 
 protocol SalemXCallKitAnswerActionCompleting: AnyObject {
@@ -76,9 +86,23 @@ protocol SalemXCallKitAnswerActionCompleting: AnyObject {
 
 extension CXAnswerCallAction: SalemXCallKitAnswerActionCompleting { }
 
+protocol SalemXCallKitEndActionCompleting: AnyObject {
+    var callUUID: UUID { get }
+
+    func fulfill()
+    func fail()
+}
+
+extension CXEndCallAction: SalemXCallKitEndActionCompleting { }
+
 @MainActor
 protocol EmbeddedElementCallHandoff {
     func prepareAudioCall(roomID: String, intent: EmbeddedElementCallHandoffIntent) async -> EmbeddedElementCallHandoffResult
+}
+
+@MainActor
+protocol EmbeddedElementCallTerminating {
+    func terminateEmbeddedElementCall(roomID: String) async -> EmbeddedElementCallTerminationResult
 }
 
 @MainActor

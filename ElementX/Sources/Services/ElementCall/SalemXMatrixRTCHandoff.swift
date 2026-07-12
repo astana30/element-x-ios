@@ -299,6 +299,174 @@ final class SalemXEmbeddedCallAnswerBridge: SalemXEmbeddedCallAnswerBridging {
     }
 }
 
+enum SalemXEmbeddedCallEndSource: Equatable, CustomStringConvertible {
+    case callKitLocalEnd
+    case embeddedLocalEnd
+    case embeddedRemoteEnd
+    case presentationFailure
+    case answerTimeout
+    case systemReset
+
+    var description: String {
+        switch self {
+        case .callKitLocalEnd:
+            "callKitLocalEnd"
+        case .embeddedLocalEnd:
+            "embeddedLocalEnd"
+        case .embeddedRemoteEnd:
+            "embeddedRemoteEnd"
+        case .presentationFailure:
+            "presentationFailure"
+        case .answerTimeout:
+            "answerTimeout"
+        case .systemReset:
+            "systemReset"
+        }
+    }
+}
+
+enum SalemXEmbeddedCallEndResult: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case terminationAccepted
+    case alreadyTerminated
+    case noVerifiedBootstrap
+    case bootstrapMismatch
+    case noAuthenticatedSession
+    case sessionIdentityMismatch
+    case sessionDeviceMismatch
+    case dmRoomUnavailable
+    case noActiveMatrixRTCCall
+    case terminationUnsupported
+    case timedOut
+    case cancelled
+    case failed
+
+    var isCallKitSuccess: Bool {
+        switch self {
+        case .terminationAccepted, .alreadyTerminated:
+            true
+        case .noVerifiedBootstrap,
+             .bootstrapMismatch,
+             .noAuthenticatedSession,
+             .sessionIdentityMismatch,
+             .sessionDeviceMismatch,
+             .dmRoomUnavailable,
+             .noActiveMatrixRTCCall,
+             .terminationUnsupported,
+             .timedOut,
+             .cancelled,
+             .failed:
+            false
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .terminationAccepted:
+            "terminationAccepted"
+        case .alreadyTerminated:
+            "alreadyTerminated"
+        case .noVerifiedBootstrap:
+            "noVerifiedBootstrap"
+        case .bootstrapMismatch:
+            "bootstrapMismatch"
+        case .noAuthenticatedSession:
+            "noAuthenticatedSession"
+        case .sessionIdentityMismatch:
+            "sessionIdentityMismatch"
+        case .sessionDeviceMismatch:
+            "sessionDeviceMismatch"
+        case .dmRoomUnavailable:
+            "dmRoomUnavailable"
+        case .noActiveMatrixRTCCall:
+            "noActiveMatrixRTCCall"
+        case .terminationUnsupported:
+            "terminationUnsupported"
+        case .timedOut:
+            "timedOut"
+        case .cancelled:
+            "cancelled"
+        case .failed:
+            "failed"
+        }
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+@MainActor
+protocol SalemXEmbeddedCallEndBridging {
+    func end(callID: UUID,
+             bootstrap: VerifiedIncomingCallBootstrap,
+             source: SalemXEmbeddedCallEndSource) async -> SalemXEmbeddedCallEndResult
+}
+
+@MainActor
+final class SalemXEmbeddedCallEndBridge: SalemXEmbeddedCallEndBridging {
+    private let clientProxy: ClientProxyProtocol
+    private let embeddedElementCallTerminator: any EmbeddedElementCallTerminating
+
+    init(clientProxy: ClientProxyProtocol,
+         embeddedElementCallTerminator: any EmbeddedElementCallTerminating) {
+        self.clientProxy = clientProxy
+        self.embeddedElementCallTerminator = embeddedElementCallTerminator
+    }
+
+    func end(callID: UUID,
+             bootstrap: VerifiedIncomingCallBootstrap,
+             source _: SalemXEmbeddedCallEndSource) async -> SalemXEmbeddedCallEndResult {
+        guard bootstrap.callID == callID else {
+            return .bootstrapMismatch
+        }
+
+        guard let localUserID = Self.normalized(clientProxy.userID) else {
+            return .noAuthenticatedSession
+        }
+
+        guard localUserID == Self.normalized(bootstrap.claimedMetadata.localUserID) else {
+            return .sessionIdentityMismatch
+        }
+
+        guard let sessionDeviceID = Self.normalized(clientProxy.deviceID),
+              sessionDeviceID == Self.normalized(bootstrap.localDeviceID) else {
+            return .sessionDeviceMismatch
+        }
+
+        switch bootstrap.activeCallState {
+        case .active:
+            break
+        case .unavailable, .none:
+            return .noActiveMatrixRTCCall
+        }
+
+        let result = await embeddedElementCallTerminator.terminateEmbeddedElementCall(roomID: bootstrap.claimedMetadata.roomID)
+        return Self.endResult(from: result)
+    }
+
+    private static func endResult(from terminationResult: EmbeddedElementCallTerminationResult) -> SalemXEmbeddedCallEndResult {
+        switch terminationResult {
+        case .accepted:
+            .terminationAccepted
+        case .alreadyTerminated:
+            .alreadyTerminated
+        case .roomUnavailable:
+            .dmRoomUnavailable
+        case .noActiveCall:
+            .noActiveMatrixRTCCall
+        case .unsupported:
+            .terminationUnsupported
+        case .failed:
+            .failed
+        }
+    }
+
+    private nonisolated static func normalized(_ value: String?) -> String? {
+        let normalizedValue = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalizedValue?.isEmpty == false ? normalizedValue : nil
+    }
+}
+
 @MainActor
 protocol SalemXMatrixRTCHandoff {
     func prepareAudioCall(claimedMetadata: SalemXMatrixRTCClaimedMetadata,

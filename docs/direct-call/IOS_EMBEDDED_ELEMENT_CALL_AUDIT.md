@@ -430,7 +430,7 @@ Excluded answer paths:
 
 | Symbol | File | production_reachable | Reason |
 | --- | --- | --- | --- |
-| `NativeIncomingSyntheticCallKitUIProofAdapter.provider(_:perform: CXAnswerCallAction)` | `ElementX/Sources/Services/Calls/NativeIncomingSyntheticCallKitUIProofAdapter.swift` | false | Synthetic CallKit proof helper, DEBUG/test-only; not wired by Stage 2D. |
+| `NativeIncomingSyntheticCallKitUIProofAdapter.provider(_:perform: CXAnswerCallAction)` | `ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift` | false | Synthetic CallKit proof helper, DEBUG/test-only; not wired by Stage 2D. |
 | `DirectCallEngine.acceptCall` | `ElementX/Sources/Services/Calls/DirectCallEngine.swift` | false for Stage 2D bridge | Custom direct LiveKit answer path remains present but is not invoked by the embedded MatrixRTC answer bridge. |
 
 Answer bridge contract:
@@ -549,4 +549,167 @@ unit_tests_target_compile_passed=true
 filtered_answer_bridge_tests_passed=true
 stage2c_regression_tests_passed=true
 stage_2e_ready=true
+```
+
+## Stage 2E CallKit End and MatrixRTC termination synchronization
+
+Stage 2E added a typed, disabled-by-default End bridge using the existing `embeddedMatrixRTCAnswerBridgeEnabled=false` gate. The default answer and End production routes remain unchanged while the gate is disabled.
+
+Actual production End and termination path:
+
+| Hop | Symbol | File | production_reachable | upstream_or_salemx | current_side_effect |
+| --- | --- | --- | --- | --- | --- |
+| CallKit End entry | `ElementCallService.provider(_:perform: CXEndCallAction)` | `ElementX/Sources/Services/ElementCall/ElementCallService.swift` | true | mixed | Receives the OS End action and delegates to `handleEndCallAction(_:provider:)`. |
+| Gate and UUID lookup | `ElementCallService.handleEndCallAction(_:provider:)` | `ElementX/Sources/Services/ElementCall/ElementCallService.swift` | true | salemx | Uses `embeddedMatrixRTCAnswerBridgeEnabled`; disabled path calls the legacy End handler, enabled path resolves the exact incoming or ongoing `CallID` by CallKit UUID. |
+| Legacy End route | `ElementCallService.handleLegacyEndCallAction(_:provider:)` | `ElementX/Sources/Services/ElementCall/ElementCallService.swift` | true | mixed | Preserves current behavior: ongoing calls emit `.requestCallTermination(roomID:)`, incoming calls reject/decline, local state is cleared, and the action is fulfilled. |
+| Verified bootstrap lookup | `SalemXIncomingCallBootstrapResolving.verifiedBootstrap(for:)` | `ElementX/Sources/Services/ElementCall/SalemXMatrixRTCHandoff.swift` | true only when the gate is enabled | salemx | Reuses the already-claimed `VerifiedIncomingCallBootstrap`; raw PushKit payload fields are not trusted or re-claimed. |
+| Typed End bridge | `SalemXEmbeddedCallEndBridge.end(callID:bootstrap:source:)` | `ElementX/Sources/Services/ElementCall/SalemXMatrixRTCHandoff.swift` | true only when the gate is enabled | salemx | Checks CallKit UUID, authenticated user, local device and active MatrixRTC evidence before termination. |
+| Embedded termination API | `EmbeddedElementCallTerminating.terminateEmbeddedElementCall(roomID:)` | `ElementX/Sources/Services/ElementCall/ElementCallServiceProtocol.swift` | true only when the gate is enabled | upstream | Abstracts the embedded Element Call termination route without exposing LiveKit, Matrix tokens, PushKit payloads or widget URLs. |
+| Production terminator | `ElementCallService.terminateEmbeddedElementCall(roomID:)` | `ElementX/Sources/Services/ElementCall/ElementCallService.swift` | true only when the gate is enabled | mixed | Delegates to `requestCallTermination(roomID:)` and maps accepted termination back to the typed bridge result. |
+| Service termination | `ElementCallService.requestCallTermination(roomID:)` | `ElementX/Sources/Services/ElementCall/ElementCallService.swift` | true | upstream | Duplicate-guards by room, applies local hangup session state, suppresses incoming fallback and emits `.endCall(roomID:)`. |
+| Call screen local hangup | `CallScreenViewModel.process(viewAction: .endCall)` and `requestLocalCallTermination(sendHangupMessage:)` | `ElementX/Sources/Screens/CallScreen/CallScreenViewModel.swift` | true | upstream | User hangup sends widget termination when requested; service-driven `.endCall` dismisses through the existing coordinator path without manual Matrix hangup construction. |
+| Widget hangup source | `ElementCallWidgetDriver.handleMessageIfNeeded(_:)` | `ElementX/Sources/Services/ElementCall/ElementCallWidgetDriver.swift` | true | upstream | Embedded widget `.hangup` or `.close` messages become upstream call-ended actions. |
+| Remote timeline observation | `ElementCallService.observeOngoingCallTimeline(roomProxy:ongoingCallID:)` and `latestRemoteTerminationEvent(in:roomID:)` | `ElementX/Sources/Services/ElementCall/ElementCallService.swift` | true | mixed | Existing Matrix timeline termination evidence ends the ongoing call. |
+| Remote room-info observation | `ElementCallService.observeOngoingCallRoomInfo(roomProxy:ongoingCallID:)` | `ElementX/Sources/Services/ElementCall/ElementCallService.swift` | true | mixed | Existing MatrixRTC room-info disappearance or no foreign participants ends the ongoing call. |
+| Embedded terminal handling | `ElementCallService.handleEmbeddedMatrixRTCTerminalEventIfNeeded(_:source:deduplicationID:)` | `ElementX/Sources/Services/ElementCall/ElementCallService.swift` | true only when the gate is enabled | salemx | Reports CallKit ended once, drains in-flight End actions, cancels/supersedes answer actions, emits `.endCall(roomID:)` and clears bootstrap state once. |
+| CallKit ended report | `ElementCallService.reportEmbeddedMatrixRTCCallEnded(callID:reason:)` | `ElementX/Sources/Services/ElementCall/ElementCallService.swift` | true only when the gate is enabled | salemx | Deduplicates native `reportCall(with:endedAt:reason:)` per CallKit UUID. |
+| Local teardown | `ElementCallService.tearDownCallSession(sendEndCallAction:)` and `clearIncomingCallState(cancelEmbeddedAnswer:)` | `ElementX/Sources/Services/ElementCall/ElementCallService.swift` | true | mixed | Clears local CallKit/session references and releases embedded answer guards without creating Matrix events. |
+| Legacy direct hangup | `DirectCallEngine.hangupActiveCall(callID:)` | `ElementX/Sources/Services/Calls/DirectCallEngine.swift` | true for legacy direct calls; false for Stage 2E embedded route | salemx | Legacy direct path emits a direct-call hangup signal and disconnects media; the embedded bridge does not invoke it. |
+| Legacy Matrix signal sender | `DirectCallSignalTransport.send(_:)` | `ElementX/Sources/Services/Calls/DirectCallSignalTransport.swift` | true for legacy direct calls; false for Stage 2E embedded route | salemx | Serializes legacy direct-call Matrix content through `sendDirectCallSignal`; the embedded bridge does not construct `m.call.hangup` or custom hangup content. |
+
+Synthetic and diagnostic End paths excluded from Stage 2E routing:
+
+| Symbol | File | production_reachable | Reason |
+| --- | --- | --- | --- |
+| `NativeIncomingSyntheticCallKitUIProofAdapter.provider(_:perform: CXEndCallAction)` | `ElementX/Sources/Services/Calls/SyntheticCallKitProof/NativeIncomingSyntheticCallKitUIProofAdapter.swift` | false | Synthetic CallKit proof helper; not wired into the production bridge. |
+| Physical-device diagnostics helpers | `ElementX/Sources/Services/Calls/SyntheticCallKitProof/` | false | DEBUG/proof utilities; not used for Stage 2E production routing. |
+
+Typed End bridge contract:
+
+```text
+protocol=SalemXEmbeddedCallEndBridging
+input=callID:UUID,bootstrap:VerifiedIncomingCallBootstrap,source:SalemXEmbeddedCallEndSource
+sources=callKitLocalEnd,embeddedLocalEnd,embeddedRemoteEnd,presentationFailure,answerTimeout,systemReset
+bootstrap_source=already_claimed_and_validated_metadata_only
+required_consistency=callkit_uuid,room_id,authenticated_user,authenticated_device,active_matrixrtc_call
+typed_results=terminationAccepted,alreadyTerminated,noVerifiedBootstrap,bootstrapMismatch,noAuthenticatedSession,sessionIdentityMismatch,sessionDeviceMismatch,dmRoomUnavailable,noActiveMatrixRTCCall,terminationUnsupported,timedOut,cancelled,failed
+exposed_credentials=none
+```
+
+CallKit action completion and reason mapping:
+
+```text
+terminationAccepted_or_alreadyTerminated=fulfill_once
+typed_failure_timeout_or_cancelled=fail_once
+wait_for_remote_audio_teardown=false
+remoteEnded=remoteEnded
+localEnded=unspecified_due_to_CallKit_API_mapping
+failedBeforeConnection=failed
+unansweredOrTimeout=unanswered
+systemReset=unspecified
+internal_errors_exposed_to_CallKit=false
+```
+
+Race and cleanup policy:
+
+```text
+in_flight_guard=bounded_per_callkit_uuid
+local_end_while_answer_in_flight=answer_failed_once_and_end_processed
+remote_end_before_answer_presentation=answer_superseded_and_callkit_ended_reported_once
+local_remote_race=first_terminal_path_wins_late_completion_ignored
+duplicate_CXEndCallAction=termination_invoked_once_actions_completed_once
+duplicate_upstream_terminal_event=callkit_ended_reported_once
+provider_reset=answer_and_end_guards_released_bootstrap_removed_once
+timeout_followed_by_late_completion=late_completion_ignored_safely
+bootstrap_cleanup_idempotent=true
+```
+
+Audio, privacy and malformed hangup boundaries:
+
+```text
+embeddedMatrixRTCAnswerBridgeEnabled=false
+legacy_answer_route_unchanged=true
+legacy_end_route_unchanged=true
+automatic_fallback_to_direct_livekit=false
+manual_matrix_hangup_sent=false
+legacy_hangup_sender_invoked=false
+direct_livekit_credentials_requested=false
+direct_livekit_joined=false
+camera_permission_requested=false
+microphone_permission_requested_by_end_bridge=false
+video_enabled=false
+media_connection_started=false
+pushkit_changed=false
+server_accessed=false
+APNs_sent=false
+```
+
+Focused tests:
+
+```text
+default_disabled_local_end_stays_on_legacy_path=covered_by_unit_test
+enabled_local_end_invokes_upstream_termination=covered_by_unit_test
+local_end_never_invokes_direct_livekit_credentials_or_join=covered_by_absence_of_bridge_dependency_and_unit_test
+local_end_never_manually_sends_matrix_hangup=covered_by_absence_of_legacy_signal_dependency_and_unit_test
+successful_termination_fulfills_once=covered_by_unit_test
+termination_failure_fails_once=covered_by_unit_test
+duplicate_end_invokes_termination_once=covered_by_unit_test
+remote_end_reports_callkit_ended_once=covered_by_unit_test
+duplicate_remote_terminal_event_ignored=covered_by_unit_test
+local_remote_race_completes_once=covered_by_unit_test
+end_during_answer_supersedes_answer_safely=covered_by_unit_test
+answer_timeout_followed_by_end_idempotent=covered_by_unit_test
+provider_reset_releases_guards=covered_by_unit_test
+bootstrap_uuid_mismatch_fails_closed=covered_by_unit_test
+missing_bootstrap_fails_closed=covered_by_unit_test
+no_active_matrixrtc_call_fails_closed=covered_by_unit_test
+late_upstream_completion_ignored=covered_by_unit_test
+bootstrap_cleared_once=covered_by_unit_test
+connected_event_not_synthesized=covered_by_unit_test
+camera_and_microphone_permissions_not_requested=covered_by_unit_test
+stage2d_answer_bridge_regression=covered_by_unit_test
+stage2c_handoff_regression=covered_by_unit_test
+```
+
+Validation:
+
+```text
+unit_tests_target_compile_passed=true
+filtered_end_bridge_tests_passed=true
+stage2d_regression_tests_passed=true
+stage2c_regression_tests_passed=true
+focused_xcode_tests=48_passed
+```
+
+Stage 2F entry conditions after Stage 2E:
+
+```text
+production_callkit_end_path_found=true
+typed_end_bridge_created=true
+upstream_termination_api_proven=true
+upstream_terminal_event_source_proven=true
+answer_bridge_default_enabled=false
+default_answer_route_unchanged=true
+default_end_route_unchanged=true
+incoming_never_selects_start_new=true
+local_end_invokes_upstream_termination=true
+manual_matrix_hangup_sent=false
+legacy_direct_livekit_hangup_invoked=false
+remote_end_reports_callkit_once=true
+duplicate_end_idempotent=true
+local_remote_race_safe=true
+provider_reset_safe=true
+bootstrap_cleanup_idempotent=true
+callkit_action_completed_once=true
+camera_permission_requested=false
+microphone_permission_requested=false
+pushkit_changed=false
+server_accessed=false
+APNs_sent=false
+media_connected=false
+unit_tests_target_compile_passed=true
+filtered_end_bridge_tests_passed=true
+stage2d_regression_tests_passed=true
+stage2c_regression_tests_passed=true
+stage_2f_ready=true
 ```

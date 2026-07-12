@@ -260,6 +260,27 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         case ownEvent
         case failed
     }
+
+    private enum SalemXEmbeddedCallEndedReportReason {
+        case remoteEnded
+        case localEnded
+        case failedBeforeConnection
+        case unansweredOrTimeout
+        case systemReset
+
+        var callKitEndedReason: CXCallEndedReason? {
+            switch self {
+            case .remoteEnded:
+                .remoteEnded
+            case .failedBeforeConnection:
+                .failed
+            case .unansweredOrTimeout:
+                .unanswered
+            case .localEnded, .systemReset:
+                nil
+            }
+        }
+    }
     
     private let pushRegistry: PKPushRegistry
     private let callController = CXCallController()
@@ -269,6 +290,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     private let salemXAnswerBridgeConfiguration: SalemXEmbeddedCallAnswerBridgeConfiguration
     private let salemXIncomingCallBootstrapResolver: (any SalemXIncomingCallBootstrapResolving)?
     private let salemXAnswerBridge: (any SalemXEmbeddedCallAnswerBridging)?
+    private let salemXEndBridge: (any SalemXEmbeddedCallEndBridging)?
     
     private var voIPPushToken: Data?
     private var registeredVoIPPushToken: Data?
@@ -337,13 +359,21 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     private var salemXEmbeddedAnswerTasks: [UUID: Task<Void, Never>] = [:]
     private var salemXEmbeddedAnswerActions: [UUID: [any SalemXCallKitAnswerActionCompleting]] = [:]
     private var salemXEmbeddedAnswerActionIDs: [UUID: Set<ObjectIdentifier>] = [:]
+    private var salemXEmbeddedSupersededAnswerCallIDs = Set<UUID>()
+    private var salemXEmbeddedEndTasks: [UUID: Task<Void, Never>] = [:]
+    private var salemXEmbeddedEndActions: [UUID: [any SalemXCallKitEndActionCompleting]] = [:]
+    private var salemXEmbeddedEndActionIDs: [UUID: Set<ObjectIdentifier>] = [:]
+    private var salemXEmbeddedTerminatedCallIDs = Set<UUID>()
+    private var salemXEmbeddedReportedEndedCallIDs = Set<UUID>()
+    private var salemXEmbeddedClearedBootstrapCallIDs = Set<UUID>()
     
     init(appSettings: AppSettings = AppSettings(),
          callProvider: CXProviderProtocol? = nil,
          timeProvider: TimeProvider? = nil,
          salemXAnswerBridgeConfiguration: SalemXEmbeddedCallAnswerBridgeConfiguration = .init(),
          salemXIncomingCallBootstrapResolver: (any SalemXIncomingCallBootstrapResolving)? = nil,
-         salemXAnswerBridge: (any SalemXEmbeddedCallAnswerBridging)? = nil) {
+         salemXAnswerBridge: (any SalemXEmbeddedCallAnswerBridging)? = nil,
+         salemXEndBridge: (any SalemXEmbeddedCallEndBridging)? = nil) {
         pushRegistry = PKPushRegistry(queue: nil)
         
         self.appSettings = appSettings
@@ -351,6 +381,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         self.salemXAnswerBridgeConfiguration = salemXAnswerBridgeConfiguration
         self.salemXIncomingCallBootstrapResolver = salemXIncomingCallBootstrapResolver
         self.salemXAnswerBridge = salemXAnswerBridge
+        self.salemXEndBridge = salemXEndBridge
         
         if let callProvider {
             self.callProvider = callProvider
@@ -667,6 +698,11 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     
     func providerDidReset(_ provider: CXProvider) {
         MXLog.info("Call provider did reset: \(provider)")
+        guard salemXAnswerBridgeConfiguration.embeddedMatrixRTCAnswerBridgeEnabled else {
+            return
+        }
+
+        handleEmbeddedMatrixRTCProviderReset()
     }
     
     func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
@@ -789,6 +825,14 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             let result = await self.embeddedMatrixRTCAnswerResult(callID: action.callUUID,
                                                                   bootstrap: bootstrap,
                                                                   answerBridge: salemXAnswerBridge)
+            guard !Task.isCancelled else {
+                return
+            }
+
+            guard !self.salemXEmbeddedSupersededAnswerCallIDs.contains(action.callUUID) else {
+                return
+            }
+
             self.finishEmbeddedMatrixRTCAnswer(callID: action.callUUID,
                                                incomingCallID: incomingCallID,
                                                result: result)
@@ -809,22 +853,14 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     private func embeddedMatrixRTCAnswerResult(callID: UUID,
                                                bootstrap: VerifiedIncomingCallBootstrap,
                                                answerBridge: any SalemXEmbeddedCallAnswerBridging) async -> SalemXEmbeddedCallAnswerResult {
-        let answerTask = Task { @MainActor in
-            await answerBridge.answer(callID: callID, bootstrap: bootstrap)
-        }
-
         let answerTimeout = salemXAnswerBridgeConfiguration.answerTimeout
-        let timeoutTask = Task {
-            try? await Task.sleep(for: answerTimeout)
-            return SalemXEmbeddedCallAnswerResult.timedOut
-        }
-
         let result = await withTaskGroup(of: SalemXEmbeddedCallAnswerResult.self) { group in
             group.addTask {
-                await answerTask.value
+                await answerBridge.answer(callID: callID, bootstrap: bootstrap)
             }
             group.addTask {
-                await timeoutTask.value
+                try? await Task.sleep(for: answerTimeout)
+                return SalemXEmbeddedCallAnswerResult.timedOut
             }
 
             guard let result = await group.next() else {
@@ -835,8 +871,6 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             return result
         }
 
-        answerTask.cancel()
-        timeoutTask.cancel()
         return Task.isCancelled ? .cancelled : result
     }
 
@@ -844,12 +878,12 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         salemXEmbeddedAnswerTasks.removeValue(forKey: callID)?.cancel()
         let actions = salemXEmbeddedAnswerActions.removeValue(forKey: callID) ?? []
         salemXEmbeddedAnswerActionIDs.removeValue(forKey: callID)
-        salemXIncomingCallBootstrapResolver?.removeVerifiedBootstrap(for: callID)
+        removeVerifiedBootstrapOnce(for: callID)
         endUnansweredCallTask?.cancel()
 
         if result.isCallKitSuccess {
             applySessionEvent(type: .accept, roomID: incomingCallID.roomID)
-            callProvider.reportCall(with: incomingCallID.callKitID, endedAt: nil, reason: .remoteEnded)
+            reportEmbeddedMatrixRTCCallEnded(callID: incomingCallID, reason: .remoteEnded)
             actions.forEach { $0.fulfill() }
         } else {
             reportEndedCall(incomingCallID: incomingCallID, reason: .failed)
@@ -868,6 +902,255 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
                                       incomingCallID: incomingCallID,
                                       result: .cancelled)
     }
+
+    private func handleEmbeddedMatrixRTCEndCallAction(_ action: any SalemXCallKitEndActionCompleting,
+                                                      source: SalemXEmbeddedCallEndSource) {
+        if salemXEmbeddedTerminatedCallIDs.contains(action.callUUID) {
+            action.fulfill()
+            return
+        }
+
+        guard let knownCallID = embeddedCallID(for: action.callUUID) else {
+            action.fail()
+            return
+        }
+
+        let actionID = ObjectIdentifier(action)
+        if salemXEmbeddedEndTasks[action.callUUID] != nil {
+            appendEmbeddedMatrixRTCEndAction(action, actionID: actionID)
+            cancelEmbeddedMatrixRTCAnswerForEmbeddedEnd(callID: action.callUUID)
+            return
+        }
+
+        appendEmbeddedMatrixRTCEndAction(action, actionID: actionID)
+
+        guard let salemXIncomingCallBootstrapResolver,
+              let salemXEndBridge else {
+            finishEmbeddedMatrixRTCEnd(callID: action.callUUID,
+                                       knownCallID: knownCallID,
+                                       result: .noVerifiedBootstrap)
+            return
+        }
+
+        guard let bootstrap = salemXIncomingCallBootstrapResolver.verifiedBootstrap(for: action.callUUID) else {
+            finishEmbeddedMatrixRTCEnd(callID: action.callUUID,
+                                       knownCallID: knownCallID,
+                                       result: .noVerifiedBootstrap)
+            return
+        }
+
+        guard bootstrap.callID == knownCallID.callKitID,
+              bootstrap.claimedMetadata.roomID == knownCallID.roomID else {
+            finishEmbeddedMatrixRTCEnd(callID: action.callUUID,
+                                       knownCallID: knownCallID,
+                                       result: .bootstrapMismatch)
+            return
+        }
+
+        cancelEmbeddedMatrixRTCAnswerForEmbeddedEnd(callID: action.callUUID)
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            let result = await self.embeddedMatrixRTCEndResult(callID: action.callUUID,
+                                                               bootstrap: bootstrap,
+                                                               source: source,
+                                                               endBridge: salemXEndBridge)
+            guard !Task.isCancelled else {
+                return
+            }
+
+            self.finishEmbeddedMatrixRTCEnd(callID: action.callUUID,
+                                            knownCallID: knownCallID,
+                                            result: result)
+        }
+        salemXEmbeddedEndTasks[action.callUUID] = task
+    }
+
+    private func appendEmbeddedMatrixRTCEndAction(_ action: any SalemXCallKitEndActionCompleting, actionID: ObjectIdentifier) {
+        guard salemXEmbeddedEndActionIDs[action.callUUID]?.contains(actionID) != true else {
+            return
+        }
+
+        salemXEmbeddedEndActions[action.callUUID, default: []].append(action)
+        salemXEmbeddedEndActionIDs[action.callUUID, default: []].insert(actionID)
+    }
+
+    @MainActor
+    private func embeddedMatrixRTCEndResult(callID: UUID,
+                                            bootstrap: VerifiedIncomingCallBootstrap,
+                                            source: SalemXEmbeddedCallEndSource,
+                                            endBridge: any SalemXEmbeddedCallEndBridging) async -> SalemXEmbeddedCallEndResult {
+        let endTimeout = salemXAnswerBridgeConfiguration.endTimeout
+        let result = await withTaskGroup(of: SalemXEmbeddedCallEndResult.self) { group in
+            group.addTask {
+                await endBridge.end(callID: callID, bootstrap: bootstrap, source: source)
+            }
+            group.addTask {
+                try? await Task.sleep(for: endTimeout)
+                return SalemXEmbeddedCallEndResult.timedOut
+            }
+
+            guard let result = await group.next() else {
+                return SalemXEmbeddedCallEndResult.failed
+            }
+
+            group.cancelAll()
+            return result
+        }
+
+        return Task.isCancelled ? .cancelled : result
+    }
+
+    private func finishEmbeddedMatrixRTCEnd(callID: UUID, knownCallID: CallID, result: SalemXEmbeddedCallEndResult) {
+        let actions = drainEmbeddedMatrixRTCEndActions(for: callID)
+        removeVerifiedBootstrapOnce(for: callID)
+        clearEmbeddedMatrixRTCState(for: knownCallID)
+
+        if result.isCallKitSuccess {
+            salemXEmbeddedTerminatedCallIDs.insert(callID)
+            actions.forEach { $0.fulfill() }
+        } else {
+            actions.forEach { $0.fail() }
+        }
+    }
+
+    func handleEmbeddedMatrixRTCUpstreamTerminalEvent(callID: UUID, source: SalemXEmbeddedCallEndSource) {
+        guard let knownCallID = embeddedCallID(for: callID) else {
+            return
+        }
+
+        _ = handleEmbeddedMatrixRTCTerminalEventIfNeeded(knownCallID,
+                                                         source: source,
+                                                         deduplicationID: "embedded-terminal:\(source)")
+    }
+
+    @discardableResult
+    private func handleEmbeddedMatrixRTCTerminalEventIfNeeded(_ knownCallID: CallID,
+                                                              source: SalemXEmbeddedCallEndSource,
+                                                              deduplicationID _: String?) -> Bool {
+        guard salemXAnswerBridgeConfiguration.embeddedMatrixRTCAnswerBridgeEnabled,
+              salemXIncomingCallBootstrapResolver?.verifiedBootstrap(for: knownCallID.callKitID) != nil else {
+            return false
+        }
+
+        let actions = drainEmbeddedMatrixRTCEndActions(for: knownCallID.callKitID)
+        cancelEmbeddedMatrixRTCAnswerForEmbeddedEnd(callID: knownCallID.callKitID)
+        removeVerifiedBootstrapOnce(for: knownCallID.callKitID)
+
+        let inserted = salemXEmbeddedTerminatedCallIDs.insert(knownCallID.callKitID).inserted
+        actions.forEach { $0.fulfill() }
+
+        if inserted {
+            if let callKitReason = callEndedReportReason(for: source).callKitEndedReason {
+                reportEmbeddedMatrixRTCCallEnded(callID: knownCallID, reason: callKitReason)
+            }
+            actionsSubject.send(.endCall(roomID: knownCallID.roomID))
+            clearEmbeddedMatrixRTCState(for: knownCallID)
+        }
+
+        return true
+    }
+
+    private func handleEmbeddedMatrixRTCProviderReset() {
+        let callIDs = Set(salemXEmbeddedAnswerTasks.keys)
+            .union(salemXEmbeddedEndTasks.keys)
+            .union(incomingCallID.map { [$0.callKitID] } ?? [])
+            .union(ongoingCallID.map { [$0.callKitID] } ?? [])
+
+        callIDs.forEach { callID in
+            cancelEmbeddedMatrixRTCAnswerForEmbeddedEnd(callID: callID)
+            releaseEmbeddedMatrixRTCEndGuard(for: callID, result: .cancelled)
+            removeVerifiedBootstrapOnce(for: callID)
+        }
+
+        if incomingCallID != nil {
+            clearIncomingCallState(cancelEmbeddedAnswer: false)
+        }
+
+        if ongoingCallID != nil {
+            tearDownCallSession(sendEndCallAction: false)
+        }
+    }
+
+    private func embeddedCallID(for callID: UUID) -> CallID? {
+        if let ongoingCallID, ongoingCallID.callKitID == callID {
+            return ongoingCallID
+        }
+
+        if let incomingCallID, incomingCallID.callKitID == callID {
+            return incomingCallID
+        }
+
+        return nil
+    }
+
+    private func drainEmbeddedMatrixRTCEndActions(for callID: UUID) -> [any SalemXCallKitEndActionCompleting] {
+        salemXEmbeddedEndTasks.removeValue(forKey: callID)?.cancel()
+        let actions = salemXEmbeddedEndActions.removeValue(forKey: callID) ?? []
+        salemXEmbeddedEndActionIDs.removeValue(forKey: callID)
+        return actions
+    }
+
+    private func releaseEmbeddedMatrixRTCEndGuard(for callID: UUID, result: SalemXEmbeddedCallEndResult) {
+        let actions = drainEmbeddedMatrixRTCEndActions(for: callID)
+        if result.isCallKitSuccess {
+            actions.forEach { $0.fulfill() }
+        } else {
+            actions.forEach { $0.fail() }
+        }
+    }
+
+    private func cancelEmbeddedMatrixRTCAnswerForEmbeddedEnd(callID: UUID) {
+        salemXEmbeddedSupersededAnswerCallIDs.insert(callID)
+        salemXEmbeddedAnswerTasks.removeValue(forKey: callID)
+        let actions = salemXEmbeddedAnswerActions.removeValue(forKey: callID) ?? []
+        salemXEmbeddedAnswerActionIDs.removeValue(forKey: callID)
+        endUnansweredCallTask?.cancel()
+        actions.forEach { $0.fail() }
+    }
+
+    private func clearEmbeddedMatrixRTCState(for knownCallID: CallID) {
+        suppressIncomingFallback(for: knownCallID.roomID)
+
+        if incomingCallID?.callKitID == knownCallID.callKitID {
+            clearIncomingCallState(cancelEmbeddedAnswer: false)
+        }
+
+        if ongoingCallID?.callKitID == knownCallID.callKitID {
+            tearDownCallSession(sendEndCallAction: false)
+        }
+    }
+
+    private func removeVerifiedBootstrapOnce(for callID: UUID) {
+        guard salemXEmbeddedClearedBootstrapCallIDs.insert(callID).inserted else {
+            return
+        }
+
+        salemXIncomingCallBootstrapResolver?.removeVerifiedBootstrap(for: callID)
+    }
+
+    private func reportEmbeddedMatrixRTCCallEnded(callID: CallID, reason: CXCallEndedReason) {
+        guard salemXEmbeddedReportedEndedCallIDs.insert(callID.callKitID).inserted else {
+            return
+        }
+
+        callProvider.reportCall(with: callID.callKitID, endedAt: nil, reason: reason)
+    }
+
+    private func callEndedReportReason(for source: SalemXEmbeddedCallEndSource) -> SalemXEmbeddedCallEndedReportReason {
+        switch source {
+        case .callKitLocalEnd, .embeddedLocalEnd:
+            .localEnded
+        case .embeddedRemoteEnd:
+            .remoteEnded
+        case .presentationFailure:
+            .failedBeforeConnection
+        case .answerTimeout:
+            .unansweredOrTimeout
+        case .systemReset:
+            .systemReset
+        }
+    }
     
     func provider(_ provider: CXProvider, perform action: CXSetMutedCallAction) {
         if let ongoingCallID {
@@ -884,6 +1167,20 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         // This gets called for no reason on simulators, where CallKit
         // isn't even supported, ignore it.
         #else
+        handleEndCallAction(action, provider: provider)
+        #endif
+    }
+
+    func handleEndCallAction(_ action: any SalemXCallKitEndActionCompleting, provider _: any CXProviderProtocol) {
+        guard salemXAnswerBridgeConfiguration.embeddedMatrixRTCAnswerBridgeEnabled else {
+            handleLegacyEndCallAction(action)
+            return
+        }
+
+        handleEmbeddedMatrixRTCEndCallAction(action, source: .callKitLocalEnd)
+    }
+
+    private func handleLegacyEndCallAction(_ action: any SalemXCallKitEndActionCompleting) {
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-ENDCALL-ENTRY] " +
             "ongoing_room_id=\(ongoingCallID?.roomID ?? "nil") " +
             "ongoing_callkit_id=\(ongoingCallID?.callKitID.uuidString ?? "nil") " +
@@ -924,7 +1221,6 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         }
 
         action.fulfill()
-        #endif
     }
     
     // MARK: - Private
@@ -2390,8 +2686,10 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         callProvider.reportCall(with: incomingCallID.callKitID, endedAt: nil, reason: reason)
     }
 
-    private func clearIncomingCallState() {
-        cancelEmbeddedMatrixRTCAnswer(for: incomingCallID?.callKitID)
+    private func clearIncomingCallState(cancelEmbeddedAnswer: Bool = true) {
+        if cancelEmbeddedAnswer {
+            cancelEmbeddedMatrixRTCAnswer(for: incomingCallID?.callKitID)
+        }
         incomingCallTimelineCancellable = nil
         declineListenerHandle?.cancel()
         declineListenerHandle = nil
@@ -2466,6 +2764,12 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             return
         }
 
+        if handleEmbeddedMatrixRTCTerminalEventIfNeeded(ongoingCallID,
+                                                        source: source(forEmbeddedTerminalReason: reason),
+                                                        deduplicationID: deduplicationID) {
+            return
+        }
+
         suppressIncomingFallback(for: ongoingCallID.roomID)
         
         applySessionEvent(type: sessionEventType(for: reason),
@@ -2490,6 +2794,27 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         actionsSubject.send(.endCall(roomID: ongoingCallID.roomID))
         tearDownCallSession(sendEndCallAction: false)
     }
+
+    private func source(forEmbeddedTerminalReason reason: CXCallEndedReason) -> SalemXEmbeddedCallEndSource {
+        switch reason {
+        case .failed:
+            .presentationFailure
+        case .unanswered:
+            .answerTimeout
+        case .remoteEnded, .declinedElsewhere, .answeredElsewhere:
+            .embeddedRemoteEnd
+        @unknown default:
+            .embeddedRemoteEnd
+        }
+    }
 }
 
 // swiftlint:enable type_body_length
+
+@MainActor
+extension ElementCallService: EmbeddedElementCallTerminating {
+    func terminateEmbeddedElementCall(roomID: String) async -> EmbeddedElementCallTerminationResult {
+        await requestCallTermination(roomID: roomID)
+        return .accepted
+    }
+}
