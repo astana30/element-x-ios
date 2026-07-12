@@ -170,7 +170,7 @@ final class SalemXAuthenticatedMatrixRTCHandoff: SalemXMatrixRTCHandoff {
         }
     }
 
-    private static func normalized(_ value: String) -> String? {
+    private nonisolated static func normalized(_ value: String) -> String? {
         let normalizedValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return normalizedValue.isEmpty ? nil : normalizedValue
     }

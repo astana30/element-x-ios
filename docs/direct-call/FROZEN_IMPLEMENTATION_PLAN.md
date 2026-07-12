@@ -122,6 +122,8 @@ Stage 2C should bind authenticated SalemX metadata and a verified DM room into t
 
 Stage 2C added `SalemXAuthenticatedMatrixRTCHandoff` as a narrow authenticated metadata-to-room adapter.
 
+Stage 2C-R2 also repaired the MatrixRustSDK packaging contract without changing the binary payloads or regenerated bindings. The verified `packagingfix1` XCFramework asset is pinned through wrapper commit `a4d568701a249bb7d1e8019ed6fef9ebf4a2c461`, with release asset hash `f9ace1c50d7facf73c80feae349e8317de4d229ee21b53e91e2083e25124669c`. Release governance remains open on `isImmutable=false`, but the build and focused handoff tests now pass against the repaired artifact.
+
 - The adapter accepts already-claimed SalemX MatrixRTC metadata containing only the redacted-bound room/user/device shape needed for room validation.
 - The local authenticated Matrix user must match the claimed local user before any room lookup is attempted.
 - The target room must resolve to a joined room, match the claimed room ID, be a one-to-one direct room, and contain both local and peer users.
@@ -130,3 +132,5 @@ Stage 2C added `SalemXAuthenticatedMatrixRTCHandoff` as a narrow authenticated m
 - Metadata and adapter result descriptions redact room IDs, user IDs, and device IDs.
 
 Stage 2D may bridge CallKit answer to this adapter, but must preserve the Stage 2C validation boundary and keep incoming `joinExisting` unsupported until a proven programmatic incoming MatrixRTC join operation is wired.
+
+Stage 2D entry conditions remain: the packaging defect stays repaired, the immutable asset and wrapper pin remain verified, `MatrixRustSDK` and `UnitTests` compile, the focused `SalemXMatrixRTCHandoffTests` pass, and no LiveKit, PushKit, CallKit-answer, camera, or media-routing changes are introduced.

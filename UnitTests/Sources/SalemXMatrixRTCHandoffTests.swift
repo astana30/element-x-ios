@@ -201,7 +201,7 @@ final class SalemXMatrixRTCHandoffTests {
                                  roomProxy: JoinedRoomProxyProtocol? = nil) -> ClientProxyMock {
         let clientProxy = ClientProxyMock(.init(userID: userID ?? localUserID))
         clientProxy.roomForIdentifierClosure = { requestedRoomID in
-            guard requestedRoomID == roomID, let roomProxy else {
+            guard requestedRoomID == self.roomID, let roomProxy else {
                 return nil
             }
 

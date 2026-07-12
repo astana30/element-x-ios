@@ -320,6 +320,8 @@ stage_2c_ready=true
 
 Stage 2C introduced `SalemXAuthenticatedMatrixRTCHandoff`, a narrow adapter from already-claimed SalemX MatrixRTC metadata into the Stage 2B embedded Element Call handoff seam.
 
+Stage 2C-R2 also closed the MatrixRustSDK packaging defect that had kept SwiftPM from exposing `matrix_sdk_ffiFFI` through the public XCFramework header root. The published `packagingfix1` asset keeps the binary payloads unchanged, exposes the module map from `Headers/MatrixSDKFFI`, and is pinned through wrapper commit `a4d568701a249bb7d1e8019ed6fef9ebf4a2c461`. The release asset hash is `f9ace1c50d7facf73c80feae349e8317de4d229ee21b53e91e2083e25124669c`; release governance still has an open debt because the release metadata remains `isImmutable=false`.
+
 Typed contract:
 
 ```text
@@ -362,15 +364,28 @@ multi_member_room_blocks_before_handoff=covered_by_unit_test
 peer_outside_room_blocks_before_handoff=covered_by_unit_test
 metadata_description_redacted=covered_by_unit_test
 handoff_result_description_redacted=covered_by_unit_test
+matrixrustsdk_target_compile_passed=true
+elementx_unittests_target_compile_passed=true
+filtered_salemx_handoff_tests_passed=true
 changed_swift_files_swiftformat=pass
 changed_swift_files_swiftlint=pass
 changed_swift_files_syntax_parse=pass
-targeted_unit_test_attempt=blocked_before_suite_by_matrix_rust_sdk_uniffi_build_error
+targeted_unit_test_attempt=passed
 ```
 
 Stage 2D entry conditions after Stage 2C:
 
 ```text
+packaging_defect_repaired=true
+generated_bindings_unchanged=true
+binary_payloads_unchanged=true
+immutable_asset_published=true
+published_asset_verified=true
+wrapper_commit_pushed=true
+elementx_pin_updated=true
+matrixrustsdk_target_compile_passed=true
+elementx_unittests_target_compile_passed=true
+filtered_salemx_handoff_tests_passed=true
 authenticated_metadata_adapter_created=true
 local_authenticated_user_bound=true
 joined_dm_room_validation_created=true
