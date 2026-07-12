@@ -322,6 +322,13 @@ Stage 2C introduced `SalemXAuthenticatedMatrixRTCHandoff`, a narrow adapter from
 
 Stage 2C-R2 also closed the MatrixRustSDK packaging defect that had kept SwiftPM from exposing `matrix_sdk_ffiFFI` through the public XCFramework header root. The published `packagingfix1` asset keeps the binary payloads unchanged, exposes the module map from `Headers/MatrixSDKFFI`, and is pinned through wrapper commit `a4d568701a249bb7d1e8019ed6fef9ebf4a2c461`. The release asset hash is `f9ace1c50d7facf73c80feae349e8317de4d229ee21b53e91e2083e25124669c`; release governance still has an open debt because the release metadata remains `isImmutable=false`.
 
+```text
+release_asset_published=true
+release_asset_hash_verified=true
+release_metadata_immutable=false
+release_immutability_debt=open
+```
+
 Typed contract:
 
 ```text
@@ -379,8 +386,10 @@ Stage 2D entry conditions after Stage 2C:
 packaging_defect_repaired=true
 generated_bindings_unchanged=true
 binary_payloads_unchanged=true
-immutable_asset_published=true
-published_asset_verified=true
+release_asset_published=true
+release_asset_hash_verified=true
+release_metadata_immutable=false
+release_immutability_debt=open
 wrapper_commit_pushed=true
 elementx_pin_updated=true
 matrixrustsdk_target_compile_passed=true
@@ -397,4 +406,147 @@ callkit_answer_wired=false
 media_connection_started=false
 camera_permission_requested=false
 stage_2d_ready=true
+```
+
+## Stage 2D disabled CallKit answer bridge
+
+Stage 2D added a disabled-by-default, audio-only CallKit answer bridge from the production `CXAnswerCallAction` handler into the verified Stage 2C MatrixRTC handoff. The default production route is unchanged while `embeddedMatrixRTCAnswerBridgeEnabled=false`.
+
+Actual production answer path:
+
+| Hop | Symbol | File | production_reachable | salemx_or_upstream | current_side_effect |
+| --- | --- | --- | --- | --- | --- |
+| PushKit ingress | `ElementCallService.pushRegistry(_:didReceiveIncomingPushWith:for:completion:)` | `ElementX/Sources/Services/ElementCall/ElementCallService.swift` | true | mixed | Parses the VoIP push into private `CallID`, records room and RTC notification IDs, creates incoming `CallSession`, reports a native CallKit incoming call and starts the unanswered timeout. |
+| CallKit answer entry | `ElementCallService.provider(_:perform: CXAnswerCallAction)` | `ElementX/Sources/Services/ElementCall/ElementCallService.swift` | true | mixed | Receives the OS answer action and delegates to `handleAnswerCallAction`. |
+| Gate and UUID lookup | `ElementCallService.handleAnswerCallAction(_:provider:)` | `ElementX/Sources/Services/ElementCall/ElementCallService.swift` | true | salemx | Uses `embeddedMatrixRTCAnswerBridgeEnabled`; disabled path calls the legacy answer handler, enabled path requires `incomingCallID.callKitID == action.callUUID`. |
+| Legacy route | `ElementCallService.handleLegacyAnswerCallAction(_:provider:)` | `ElementX/Sources/Services/ElementCall/ElementCallService.swift` | true | upstream | Preserves current behavior: apply accept, fulfill immediately, delay, report CallKit ended and send `.startCall(roomID:startMode:)`. |
+| Bootstrap lookup | `SalemXIncomingCallBootstrapResolving.verifiedBootstrap(for:)` | `ElementX/Sources/Services/ElementCall/SalemXMatrixRTCHandoff.swift` | true only when Stage 2D gate is enabled | salemx | Reuses an already-claimed `VerifiedIncomingCallBootstrap`; does not claim metadata again and does not read raw PushKit payload fields. |
+| Enabled answer bridge | `SalemXEmbeddedCallAnswerBridge.answer(callID:bootstrap:)` | `ElementX/Sources/Services/ElementCall/SalemXMatrixRTCHandoff.swift` | true only when Stage 2D gate is enabled | salemx | Checks bootstrap UUID, authenticated Matrix user, local device and active MatrixRTC evidence, then invokes handoff with `.presentExisting`. |
+| MatrixRTC handoff | `SalemXAuthenticatedMatrixRTCHandoff.prepareAudioCall(claimedMetadata:intent:)` | `ElementX/Sources/Services/ElementCall/SalemXMatrixRTCHandoff.swift` | true only when Stage 2D gate is enabled | salemx | Validates joined one-to-one DM room membership and delegates to `EmbeddedElementCallHandoff` without creating rooms or direct LiveKit media. |
+| Embedded presentation | `EmbeddedElementCallProductionHandoff.prepareAudioCall(roomID:intent:)` | `ElementX/Sources/Services/ElementCall/ElementCallServiceProtocol.swift` | true only when Stage 2D gate is enabled and state already reports the room | upstream | For `.presentExisting`, requires the same existing room and calls the embedded Element Call presenter with `ElementCallStartMode.audio`; `.startNew` is not selected by incoming answer. |
+| Action completion | `ElementCallService.finishEmbeddedMatrixRTCAnswer(callID:incomingCallID:result:)` | `ElementX/Sources/Services/ElementCall/ElementCallService.swift` | true only when Stage 2D gate is enabled | salemx | `presentationAccepted` or `alreadyPresented` fulfills once and reports native CallKit ended; every typed failure, timeout or cancellation fails once and tears down local state. |
+
+Excluded answer paths:
+
+| Symbol | File | production_reachable | Reason |
+| --- | --- | --- | --- |
+| `NativeIncomingSyntheticCallKitUIProofAdapter.provider(_:perform: CXAnswerCallAction)` | `ElementX/Sources/Services/Calls/NativeIncomingSyntheticCallKitUIProofAdapter.swift` | false | Synthetic CallKit proof helper, DEBUG/test-only; not wired by Stage 2D. |
+| `DirectCallEngine.acceptCall` | `ElementX/Sources/Services/Calls/DirectCallEngine.swift` | false for Stage 2D bridge | Custom direct LiveKit answer path remains present but is not invoked by the embedded MatrixRTC answer bridge. |
+
+Answer bridge contract:
+
+```text
+protocol=SalemXEmbeddedCallAnswerBridging
+input=callID:UUID,bootstrap:VerifiedIncomingCallBootstrap
+bootstrap_source=already_claimed_and_validated_metadata_only
+required_consistency=callkit_uuid,room_id,authenticated_user,authenticated_device,active_matrixrtc_call
+operation=SalemXMatrixRTCHandoff.prepareAudioCall(intent:.presentExisting)
+start_mode=audio
+typed_results=presentationAccepted,alreadyPresented,noAuthenticatedSession,sessionIdentityMismatch,sessionDeviceMismatch,dmRoomNotFound,dmRoomAmbiguous,dmRoomInvalid,noActiveMatrixRTCCall,activeCallStateUnavailable,unsupportedIncomingJoin,bootstrapUnavailable,bootstrapMismatch,timedOut,cancelled,failed
+exposed_credentials=none
+```
+
+Routing and completion semantics:
+
+```text
+embeddedMatrixRTCAnswerBridgeEnabled=false
+default_route_unchanged=true
+server_delivered_flag=false
+remote_configuration=false
+release_environment_activation=false
+presentationAccepted_or_alreadyPresented=fulfill_once
+typed_failure_timeout_or_cancelled=fail_once
+fulfill_on_tap_only=false
+wait_for_remote_audio_before_fulfill=false
+direct_livekit_fallback_after_bridge_start=false
+```
+
+Idempotency and lifecycle:
+
+```text
+in_flight_guard=bounded_per_callkit_uuid
+duplicate_answer_does_not_present_twice=true
+duplicate_answer_does_not_start_second_task=true
+action_fulfilled_or_failed_once=true
+guard_released_on=success,failure,timeout,cancellation,CallKit_end
+observed_lifecycle_only=presented,joining,connected,remoteEnded,localEnded,failed,dismissed
+connected_synthesized_from_callkit=false
+```
+
+Audio-only and privacy boundary:
+
+```text
+start_mode=audio
+camera_requested=false
+video_enabled=false
+microphone_permission_requested_by_bridge=false
+livekit_credentials_requested=false
+direct_livekit_joined=false
+APNs_sent=false
+media_connected=false
+pushkit_changed=false
+```
+
+Focused tests:
+
+```text
+default_feature_gate_keeps_current_answer_route=covered_by_unit_test
+enabled_bridge_accepts_valid_verified_bootstrap=covered_by_unit_test
+incoming_answer_selects_presentExisting=covered_by_unit_test
+incoming_answer_never_selects_startNew=covered_by_unit_test
+unsupported_incoming_join_fails_closed=covered_by_unit_test
+no_active_matrixrtc_call_fails_closed=covered_by_unit_test
+missing_authenticated_session_fails_closed=covered_by_unit_test
+session_user_mismatch_fails_closed=covered_by_unit_test
+session_device_mismatch_fails_closed=covered_by_unit_test
+dm_ambiguity_fails_closed=covered_by_unit_test
+missing_secure_bootstrap_fails_closed=covered_by_unit_test
+bootstrap_uuid_mismatch_fails_closed=covered_by_unit_test
+successful_presentation_fulfills_once=covered_by_unit_test
+failure_fails_once=covered_by_unit_test
+duplicate_answer_does_not_present_twice=covered_by_unit_test
+timeout_fails_once_and_releases_guard=covered_by_unit_test
+cancellation_releases_guard=covered_by_unit_test
+no_direct_livekit_credentials_request=covered_by_unit_test
+no_direct_livekit_join=covered_by_unit_test
+camera_permission_never_requested=covered_by_unit_test
+connected_lifecycle_not_synthesized_from_callkit=covered_by_unit_test
+```
+
+Validation:
+
+```text
+unit_tests_target_compile_passed=true
+filtered_answer_bridge_tests_passed=true
+stage2c_regression_tests_passed=true
+```
+
+Stage 2E entry conditions after Stage 2D:
+
+```text
+production_callkit_answer_path_found=true
+secure_bootstrap_lookup_proven=true
+typed_answer_bridge_created=true
+answer_bridge_default_enabled=false
+default_production_route_unchanged=true
+incoming_selects_present_existing=true
+incoming_never_selects_start_new=true
+presentation_runs_on_main_actor=true
+callkit_action_fulfilled_once=true
+callkit_action_failed_once_on_error=true
+duplicate_answer_idempotent=true
+timeout_handled=true
+cancellation_handled=true
+direct_livekit_credentials_requested=false
+direct_livekit_joined=false
+camera_permission_requested=false
+connected_synthesized_from_callkit=false
+pushkit_changed=false
+server_accessed=false
+APNs_sent=false
+media_connected=false
+unit_tests_target_compile_passed=true
+filtered_answer_bridge_tests_passed=true
+stage2c_regression_tests_passed=true
+stage_2e_ready=true
 ```

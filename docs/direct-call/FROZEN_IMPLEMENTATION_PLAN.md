@@ -122,7 +122,14 @@ Stage 2C should bind authenticated SalemX metadata and a verified DM room into t
 
 Stage 2C added `SalemXAuthenticatedMatrixRTCHandoff` as a narrow authenticated metadata-to-room adapter.
 
-Stage 2C-R2 also repaired the MatrixRustSDK packaging contract without changing the binary payloads or regenerated bindings. The verified `packagingfix1` XCFramework asset is pinned through wrapper commit `a4d568701a249bb7d1e8019ed6fef9ebf4a2c461`, with release asset hash `f9ace1c50d7facf73c80feae349e8317de4d229ee21b53e91e2083e25124669c`. Release governance remains open on `isImmutable=false`, but the build and focused handoff tests now pass against the repaired artifact.
+Stage 2C-R2 also repaired the MatrixRustSDK packaging contract without changing the binary payloads or regenerated bindings. The verified `packagingfix1` XCFramework asset is pinned through wrapper commit `a4d568701a249bb7d1e8019ed6fef9ebf4a2c461`, with release asset hash `f9ace1c50d7facf73c80feae349e8317de4d229ee21b53e91e2083e25124669c`. Release governance remains open because the release metadata is not immutable, but the build and focused handoff tests now pass against the repaired artifact.
+
+```text
+release_asset_published=true
+release_asset_hash_verified=true
+release_metadata_immutable=false
+release_immutability_debt=open
+```
 
 - The adapter accepts already-claimed SalemX MatrixRTC metadata containing only the redacted-bound room/user/device shape needed for room validation.
 - The local authenticated Matrix user must match the claimed local user before any room lookup is attempted.
@@ -131,6 +138,10 @@ Stage 2C-R2 also repaired the MatrixRustSDK packaging contract without changing 
 - The adapter does not request media credentials, construct LiveKit URLs or JWTs, touch PushKit or CallKit answer handling, load a remote Element Call SPA, or emit Matrix call media events.
 - Metadata and adapter result descriptions redact room IDs, user IDs, and device IDs.
 
-Stage 2D may bridge CallKit answer to this adapter, but must preserve the Stage 2C validation boundary and keep incoming `joinExisting` unsupported until a proven programmatic incoming MatrixRTC join operation is wired.
+Stage 2D bridges CallKit answer to this adapter behind `embeddedMatrixRTCAnswerBridgeEnabled=false` by default. The actual production answer entry point is `ElementCallService.provider(_:perform: CXAnswerCallAction)`, which previously fulfilled the action before sending the legacy `.startCall(roomID:startMode:)` route. With the gate enabled only in tests, Stage 2D resolves an already-claimed `VerifiedIncomingCallBootstrap`, requires CallKit UUID, room, authenticated user, device and active MatrixRTC evidence to match, then calls `SalemXMatrixRTCHandoff` only with `.presentExisting`.
 
-Stage 2D entry conditions remain: the packaging defect stays repaired, the immutable asset and wrapper pin remain verified, `MatrixRustSDK` and `UnitTests` compile, the focused `SalemXMatrixRTCHandoffTests` pass, and no LiveKit, PushKit, CallKit-answer, camera, or media-routing changes are introduced.
+The typed answer result distinguishes presentation success, already-presented success, missing authenticated session, identity mismatch, device mismatch, DM lookup failures, missing active MatrixRTC call, unsupported incoming join, bootstrap absence or mismatch, timeout, cancellation and failure. `presentationAccepted` and `alreadyPresented` fulfill the CallKit answer exactly once; every typed failure, timeout or cancellation fails exactly once. Duplicate answer actions for the same UUID share one in-flight task and cannot present twice.
+
+Stage 2D does not claim metadata again, trust raw PushKit payload room IDs, request direct LiveKit credentials, join LiveKit, send APNs, connect media, request microphone or camera permission, enable video, synthesize connected state from CallKit, change PushKit ingress or remove the old direct-call implementation. The bridge uses audio-only `EmbeddedElementCallPreparation.audio` and leaves media readiness to upstream MatrixRTC / embedded Element Call.
+
+Stage 2E may start only after the Stage 2D gate remains disabled by default, the legacy route is proven unchanged when disabled, incoming answer selects `presentExisting` and never `startNew`, duplicate/timeout/cancellation behavior is covered, and the UnitTests compile, Stage 2D answer-bridge tests and Stage 2C handoff regression all pass.

@@ -6,6 +6,7 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
+import CallKit
 import Combine
 
 enum ElementCallServiceAction {
@@ -60,6 +61,20 @@ enum EmbeddedElementCallHandoffResult: Equatable {
     case noExistingCall(EmbeddedElementCallPreparation)
     case unsupportedIncomingJoin(EmbeddedElementCallPreparation)
 }
+
+struct SalemXEmbeddedCallAnswerBridgeConfiguration: Equatable {
+    var embeddedMatrixRTCAnswerBridgeEnabled = false
+    var answerTimeout: Duration = .seconds(8)
+}
+
+protocol SalemXCallKitAnswerActionCompleting: AnyObject {
+    var callUUID: UUID { get }
+
+    func fulfill()
+    func fail()
+}
+
+extension CXAnswerCallAction: SalemXCallKitAnswerActionCompleting { }
 
 @MainActor
 protocol EmbeddedElementCallHandoff {

@@ -42,6 +42,7 @@ enum SalemXMatrixRTCHandoffBlockedReason: Equatable, CustomStringConvertible {
     case unauthenticatedSession
     case authenticatedUserMismatch
     case roomNotJoined
+    case roomAmbiguous
     case roomIDMismatch
     case roomNotDirectOneToOne
     case localUserNotMember
@@ -57,6 +58,8 @@ enum SalemXMatrixRTCHandoffBlockedReason: Equatable, CustomStringConvertible {
             "authenticatedUserMismatch"
         case .roomNotJoined:
             "roomNotJoined"
+        case .roomAmbiguous:
+            "roomAmbiguous"
         case .roomIDMismatch:
             "roomIDMismatch"
         case .roomNotDirectOneToOne:
@@ -84,6 +87,215 @@ enum SalemXMatrixRTCHandoffResult: Equatable, CustomStringConvertible, CustomDeb
 
     var debugDescription: String {
         description
+    }
+}
+
+enum VerifiedIncomingCallBootstrapActiveCallState: Equatable {
+    case active
+    case unavailable
+    case none
+}
+
+struct VerifiedIncomingCallBootstrap: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    let callID: UUID
+    let claimedMetadata: SalemXMatrixRTCClaimedMetadata
+    let localDeviceID: String
+    let activeCallState: VerifiedIncomingCallBootstrapActiveCallState
+
+    var description: String {
+        "VerifiedIncomingCallBootstrap(callID: <redacted>, claimedMetadata: \(claimedMetadata), localDeviceID: <redacted>, activeCallState: \(activeCallState))"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+protocol SalemXIncomingCallBootstrapResolving: AnyObject {
+    func verifiedBootstrap(for callID: UUID) -> VerifiedIncomingCallBootstrap?
+    func removeVerifiedBootstrap(for callID: UUID)
+}
+
+final class SalemXIncomingCallBootstrapStore: SalemXIncomingCallBootstrapResolving {
+    private var bootstrapsByCallID = [UUID: VerifiedIncomingCallBootstrap]()
+
+    func store(_ bootstrap: VerifiedIncomingCallBootstrap) {
+        bootstrapsByCallID[bootstrap.callID] = bootstrap
+    }
+
+    func verifiedBootstrap(for callID: UUID) -> VerifiedIncomingCallBootstrap? {
+        bootstrapsByCallID[callID]
+    }
+
+    func removeVerifiedBootstrap(for callID: UUID) {
+        bootstrapsByCallID.removeValue(forKey: callID)
+    }
+}
+
+enum SalemXEmbeddedCallAnswerResult: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    case presentationAccepted
+    case alreadyPresented
+    case noAuthenticatedSession
+    case sessionIdentityMismatch
+    case sessionDeviceMismatch
+    case dmRoomNotFound
+    case dmRoomAmbiguous
+    case dmRoomInvalid
+    case noActiveMatrixRTCCall
+    case activeCallStateUnavailable
+    case unsupportedIncomingJoin
+    case bootstrapUnavailable
+    case bootstrapMismatch
+    case timedOut
+    case cancelled
+    case failed
+
+    var isCallKitSuccess: Bool {
+        switch self {
+        case .presentationAccepted, .alreadyPresented:
+            true
+        case .noAuthenticatedSession,
+             .sessionIdentityMismatch,
+             .sessionDeviceMismatch,
+             .dmRoomNotFound,
+             .dmRoomAmbiguous,
+             .dmRoomInvalid,
+             .noActiveMatrixRTCCall,
+             .activeCallStateUnavailable,
+             .unsupportedIncomingJoin,
+             .bootstrapUnavailable,
+             .bootstrapMismatch,
+             .timedOut,
+             .cancelled,
+             .failed:
+            false
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .presentationAccepted:
+            "presentationAccepted"
+        case .alreadyPresented:
+            "alreadyPresented"
+        case .noAuthenticatedSession:
+            "noAuthenticatedSession"
+        case .sessionIdentityMismatch:
+            "sessionIdentityMismatch"
+        case .sessionDeviceMismatch:
+            "sessionDeviceMismatch"
+        case .dmRoomNotFound:
+            "dmRoomNotFound"
+        case .dmRoomAmbiguous:
+            "dmRoomAmbiguous"
+        case .dmRoomInvalid:
+            "dmRoomInvalid"
+        case .noActiveMatrixRTCCall:
+            "noActiveMatrixRTCCall"
+        case .activeCallStateUnavailable:
+            "activeCallStateUnavailable"
+        case .unsupportedIncomingJoin:
+            "unsupportedIncomingJoin"
+        case .bootstrapUnavailable:
+            "bootstrapUnavailable"
+        case .bootstrapMismatch:
+            "bootstrapMismatch"
+        case .timedOut:
+            "timedOut"
+        case .cancelled:
+            "cancelled"
+        case .failed:
+            "failed"
+        }
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+@MainActor
+protocol SalemXEmbeddedCallAnswerBridging {
+    func answer(callID: UUID, bootstrap: VerifiedIncomingCallBootstrap) async -> SalemXEmbeddedCallAnswerResult
+}
+
+@MainActor
+final class SalemXEmbeddedCallAnswerBridge: SalemXEmbeddedCallAnswerBridging {
+    private let clientProxy: ClientProxyProtocol
+    private let matrixRTCHandoff: SalemXMatrixRTCHandoff
+
+    init(clientProxy: ClientProxyProtocol, matrixRTCHandoff: SalemXMatrixRTCHandoff) {
+        self.clientProxy = clientProxy
+        self.matrixRTCHandoff = matrixRTCHandoff
+    }
+
+    func answer(callID: UUID, bootstrap: VerifiedIncomingCallBootstrap) async -> SalemXEmbeddedCallAnswerResult {
+        guard bootstrap.callID == callID else {
+            return .bootstrapMismatch
+        }
+
+        guard let localUserID = Self.normalized(clientProxy.userID) else {
+            return .noAuthenticatedSession
+        }
+
+        guard localUserID == Self.normalized(bootstrap.claimedMetadata.localUserID) else {
+            return .sessionIdentityMismatch
+        }
+
+        guard let sessionDeviceID = Self.normalized(clientProxy.deviceID),
+              sessionDeviceID == Self.normalized(bootstrap.localDeviceID) else {
+            return .sessionDeviceMismatch
+        }
+
+        switch bootstrap.activeCallState {
+        case .active:
+            break
+        case .unavailable:
+            return .activeCallStateUnavailable
+        case .none:
+            return .noActiveMatrixRTCCall
+        }
+
+        let result = await matrixRTCHandoff.prepareAudioCall(claimedMetadata: bootstrap.claimedMetadata,
+                                                             intent: .presentExisting)
+        return Self.answerResult(from: result)
+    }
+
+    private static func answerResult(from handoffResult: SalemXMatrixRTCHandoffResult) -> SalemXEmbeddedCallAnswerResult {
+        switch handoffResult {
+        case .handedOff(.readyToPresent):
+            return .presentationAccepted
+        case .handedOff(.alreadyPresented):
+            return .alreadyPresented
+        case .handedOff(.noExistingCall):
+            return .noActiveMatrixRTCCall
+        case .handedOff(.unsupportedIncomingJoin):
+            return .unsupportedIncomingJoin
+        case .blocked(let reason):
+            return answerResult(from: reason)
+        }
+    }
+
+    private static func answerResult(from blockedReason: SalemXMatrixRTCHandoffBlockedReason) -> SalemXEmbeddedCallAnswerResult {
+        switch blockedReason {
+        case .malformedClaimedMetadata:
+            return .bootstrapMismatch
+        case .unauthenticatedSession:
+            return .noAuthenticatedSession
+        case .authenticatedUserMismatch:
+            return .sessionIdentityMismatch
+        case .roomNotJoined:
+            return .dmRoomNotFound
+        case .roomAmbiguous:
+            return .dmRoomAmbiguous
+        case .roomIDMismatch, .roomNotDirectOneToOne, .localUserNotMember, .peerUserNotMember:
+            return .dmRoomInvalid
+        }
+    }
+
+    private nonisolated static func normalized(_ value: String?) -> String? {
+        let normalizedValue = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalizedValue?.isEmpty == false ? normalizedValue : nil
     }
 }
 
