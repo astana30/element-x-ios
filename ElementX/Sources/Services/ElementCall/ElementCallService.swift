@@ -482,6 +482,10 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     }
 
     func setupCallSession(roomID: String, roomDisplayName: String, startMode: ElementCallStartMode) async {
+        if ongoingCallID?.roomID == roomID {
+            return
+        }
+
         // Drop any ongoing calls when starting a new one
         if ongoingCallID != nil {
             tearDownCallSession()

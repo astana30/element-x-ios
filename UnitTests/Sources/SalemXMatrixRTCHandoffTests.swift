@@ -1005,6 +1005,32 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
     }
 
     @Test
+    func setupCallSessionForAnsweredEmbeddedRoomPreservesOriginalCallKitID() async throws {
+        let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
+        let bootstrapResolver = BootstrapResolverSpy()
+        service = makeAnswerBridgeService(bootstrapResolver: bootstrapResolver,
+                                          answerBridge: answerBridge)
+
+        let callID = try await reportIncomingCall()
+        bootstrapResolver.bootstrapByCallID[callID] = verifiedBootstrap(callID: callID)
+
+        let action = AnswerActionSpy(callUUID: callID)
+        service.handleAnswerCallAction(action, provider: callProvider)
+
+        #expect(await waitUntil { action.fulfillCount == 1 })
+        await service.setupCallSession(roomID: Self.roomID, roomDisplayName: "welcome", startMode: .audio)
+
+        #expect(service.ongoingCallRoomIDPublisher.value == Self.roomID)
+        #expect(bootstrapResolver.removedCallIDs.isEmpty)
+        #expect(callProvider.reportCallWithEndedAtReasonReceivedArguments == nil)
+
+        service.handleEmbeddedMatrixRTCUpstreamTerminalEvent(callID: callID, source: .embeddedRemoteEnd)
+
+        #expect(callProvider.reportCallWithEndedAtReasonReceivedArguments?.reason == .remoteEnded)
+        #expect(bootstrapResolver.removedCallIDs == [callID])
+    }
+
+    @Test
     func enabledBridgeFailsPresentationErrorOnce() async throws {
         let answerBridge = AnswerBridgeSpy(result: .noActiveMatrixRTCCall)
         let bootstrapResolver = BootstrapResolverSpy()
