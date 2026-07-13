@@ -1178,7 +1178,7 @@ enum SalemXStage2FSimulatorSignalingDebug {
             return
         }
 
-        proof.receiverActiveCallResolutionStarted = true
+        await roomProxy.subscribeForUpdates(); proof.receiverActiveCallResolutionStarted = true
         let receiverActiveCallEvidenceSeen = await waitForRemoteActiveCallEvidence(roomID: metadata.roomID,
                                                                                    roomProxy: roomProxy,
                                                                                    clientProxy: clientProxy)

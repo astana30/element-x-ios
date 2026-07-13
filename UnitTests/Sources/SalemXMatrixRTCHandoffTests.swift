@@ -453,6 +453,7 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
         let functionStart = try #require(source.range(of: "private static func claimReceiverMetadataAndReportCallKit")?.lowerBound)
         let functionEnd = try #require(source.range(of: "private static func resolveDirectOneToOneDM")?.lowerBound)
         let functionSource = source[functionStart..<functionEnd]
+        let exactRoomSubscription = try #require(functionSource.range(of: "await roomProxy.subscribeForUpdates()")?.lowerBound)
         let remoteResolver = try #require(functionSource.range(of: "await waitForRemoteActiveCallEvidence(roomID: metadata.roomID")?.lowerBound)
         let activeState = try #require(functionSource.range(of: "let activeCallState: VerifiedIncomingCallBootstrapActiveCallState")?.lowerBound)
         let callKitReport = try #require(functionSource.range(of: "salemXDebugReportStage2FSimulatorIncomingCall")?.lowerBound)
@@ -460,6 +461,7 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
         #expect(source.contains("private static func waitForRemoteActiveCallEvidence"))
         #expect(source.contains("private static func remoteActiveCallEvidence"))
         #expect(source.contains("clientProxy.roomSummaryForIdentifier(roomID)"))
+        #expect(exactRoomSubscription < remoteResolver)
         #expect(remoteResolver < activeState)
         #expect(activeState < callKitReport)
     }
