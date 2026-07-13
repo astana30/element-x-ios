@@ -459,8 +459,10 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
         let callKitReport = try #require(functionSource.range(of: "salemXDebugReportStage2FSimulatorIncomingCall")?.lowerBound)
 
         #expect(source.contains("private static func waitForRemoteActiveCallEvidence"))
-        #expect(source.contains("private static func remoteActiveCallEvidence"))
+        #expect(source.contains("private func salemXStage2FRemoteActiveCallEvidence"))
         #expect(source.contains("clientProxy.roomSummaryForIdentifier(roomID)"))
+        #expect(source.contains("private func salemXStage2FExactRoomTimelineRemoteCallEvidence"))
+        #expect(source.contains("roomProxy.timeline.timelineItemProvider.itemProxies"))
         #expect(exactRoomSubscription < remoteResolver)
         #expect(remoteResolver < activeState)
         #expect(activeState < callKitReport)
@@ -469,14 +471,36 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
     @Test
     func stage2FReceiverRemoteActiveCallResolutionDoesNotRequireLocalElementCallRoom() throws {
         let source = try stage2FSimulatorSignalingDebugSource()
-        let remoteStart = try #require(source.range(of: "private static func remoteActiveCallEvidence")?.lowerBound)
-        let remoteEnd = try #require(source.range(of: "private static func matrixErrorBucket")?.lowerBound)
+        let remoteStart = try #require(source.range(of: "private func salemXStage2FRemoteActiveCallEvidence")?.lowerBound)
+        let remoteEnd = try #require(source.range(of: "@MainActor\nenum SalemXStage2FSimulatorSignalingDebug")?.lowerBound)
         let remoteSource = source[remoteStart..<remoteEnd]
 
-        #expect(remoteSource.contains("proof.receiverActiveCallSnapshotChecked = true"))
         #expect(remoteSource.contains("info.hasRoomCall || !info.activeRoomCallParticipants.isEmpty"))
         #expect(remoteSource.contains("summary.hasOngoingCall || !summary.activeRoomCallParticipants.isEmpty"))
+        #expect(remoteSource.contains("await salemXStage2FExactRoomTimelineRemoteCallEvidence(roomProxy: roomProxy)"))
+        #expect(source.contains("proof.receiverActiveCallSnapshotChecked = true"))
+        #expect(source.contains("proof.receiverRemoteRoomSnapshotChecked = true"))
         #expect(!remoteSource.contains("ongoingCallRoomIDPublisher"))
+    }
+
+    @Test
+    func stage2FReceiverRemoteActiveCallResolutionUsesExactRoomTimelineFallback() throws {
+        let source = try stage2FSimulatorSignalingDebugSource()
+        let timelineStart = try #require(source.range(of: "private func salemXStage2FExactRoomTimelineRemoteCallEvidence")?.lowerBound)
+        let timelineEnd = try #require(source.range(of: "private func salemXStage2FRemoteActiveCallEvent")?.lowerBound)
+        let timelineSource = source[timelineStart..<timelineEnd]
+        let stateStart = try #require(source.range(of: "private func salemXStage2FRemoteActiveCallEvent")?.lowerBound)
+        let stateEnd = try #require(source.range(of: "@MainActor\nenum SalemXStage2FSimulatorSignalingDebug")?.lowerBound)
+        let stateSource = source[stateStart..<stateEnd]
+
+        #expect(timelineSource.contains("roomProxy.timeline.timelineItemProvider.itemProxies"))
+        #expect(timelineSource.contains("!eventProxy.isOwn"))
+        #expect(timelineSource.contains("RoomCallEventParser.parse(from: eventProxy)"))
+        #expect(timelineSource.contains("salemXStage2FRemoteActiveCallEvent(callEvent)"))
+        #expect(stateSource.contains("[.incoming, .started, .answered, .legacyInvite].contains(event.state)"))
+        #expect(source.contains("receiver_remote_room_snapshot_checked=\\(receiverRemoteRoomSnapshotChecked)"))
+        #expect(source.contains("receiver_remote_room_call_state_visible=\\(receiverRemoteRoomCallStateVisible)"))
+        #expect(source.contains("receiver_active_call_room_matches_claimed_metadata=\\(receiverActiveCallRoomMatchesClaimedMetadata)"))
     }
 
     @Test

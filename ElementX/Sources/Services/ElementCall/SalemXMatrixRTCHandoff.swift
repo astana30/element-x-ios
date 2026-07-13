@@ -585,6 +585,43 @@ private extension EmbeddedElementCallHandoffResult {
 #if DEBUG && canImport(CallKit) && os(iOS)
 import Foundation
 
+private func salemXStage2FExactRoomTimelineRemoteCallEvidence(roomProxy: JoinedRoomProxyProtocol) async -> Bool {
+    await MainActor.run {
+        roomProxy.timeline.timelineItemProvider.itemProxies.reversed().contains { itemProxy in
+            guard case let .event(eventProxy) = itemProxy,
+                  !eventProxy.isOwn,
+                  let callEvent = RoomCallEventParser.parse(from: eventProxy) else {
+                return false
+            }
+            return salemXStage2FRemoteActiveCallEvent(callEvent)
+        }
+    }
+}
+
+private func salemXStage2FRemoteActiveCallEvent(_ event: RoomCallEvent) -> Bool {
+    [.incoming, .started, .answered, .legacyInvite].contains(event.state)
+}
+
+private struct SalemXStage2FRemoteActiveCallEvidenceResult {
+    let seen: Bool
+    let callStateVisible: Bool
+}
+
+private func salemXStage2FRemoteActiveCallEvidence(roomID: String,
+                                                   roomProxy: JoinedRoomProxyProtocol,
+                                                   clientProxy: ClientProxyProtocol) async -> SalemXStage2FRemoteActiveCallEvidenceResult {
+    let info = roomProxy.infoPublisher.value
+    if info.hasRoomCall || !info.activeRoomCallParticipants.isEmpty {
+        return .init(seen: true, callStateVisible: true)
+    }
+    if let summary = clientProxy.roomSummaryForIdentifier(roomID),
+       summary.hasOngoingCall || !summary.activeRoomCallParticipants.isEmpty {
+        return .init(seen: true, callStateVisible: true)
+    }
+    let timelineEvidence = await salemXStage2FExactRoomTimelineRemoteCallEvidence(roomProxy: roomProxy)
+    return .init(seen: timelineEvidence, callStateVisible: timelineEvidence)
+}
+
 @MainActor
 enum SalemXStage2FSimulatorSignalingDebug {
     private static let streamPath = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/stream"
@@ -1291,29 +1328,18 @@ enum SalemXStage2FSimulatorSignalingDebug {
                                                         roomProxy: JoinedRoomProxyProtocol,
                                                         clientProxy: ClientProxyProtocol) async -> Bool {
         for _ in 0..<60 {
-            if remoteActiveCallEvidence(roomID: roomID,
-                                        roomProxy: roomProxy,
-                                        clientProxy: clientProxy) {
+            let evidence = await salemXStage2FRemoteActiveCallEvidence(roomID: roomID,
+                                                                       roomProxy: roomProxy,
+                                                                       clientProxy: clientProxy)
+            proof.receiverActiveCallSnapshotChecked = true; proof.receiverRemoteRoomSnapshotChecked = true
+            proof.receiverRemoteRoomCallStateVisible = evidence.callStateVisible
+            if evidence.seen {
+                proof.receiverActiveCallRoomMatchesClaimedMetadata = true
                 return true
             }
             try? await Task.sleep(for: .milliseconds(500))
         }
         return false
-    }
-
-    private static func remoteActiveCallEvidence(roomID: String,
-                                                 roomProxy: JoinedRoomProxyProtocol,
-                                                 clientProxy: ClientProxyProtocol) -> Bool {
-        proof.receiverActiveCallSnapshotChecked = true
-        let info = roomProxy.infoPublisher.value
-        if info.hasRoomCall || !info.activeRoomCallParticipants.isEmpty {
-            return true
-        }
-
-        guard let summary = clientProxy.roomSummaryForIdentifier(roomID) else {
-            return false
-        }
-        return summary.hasOngoingCall || !summary.activeRoomCallParticipants.isEmpty
     }
 
     private static func matrixErrorBucket(payload: [String: Any], status: Int?) -> String {
@@ -1577,6 +1603,8 @@ enum SalemXStage2FSimulatorSignalingDebug {
         var receiverMetadataClaimResponseDecodeSucceeded = false
         var receiverVerifiedBootstrapCreationAttempted = false
         var receiverActiveCallResolutionStarted = false, receiverActiveCallSnapshotChecked = false
+        var receiverRemoteRoomSnapshotChecked = false, receiverRemoteRoomCallStateVisible = false
+        var receiverActiveCallRoomMatchesClaimedMetadata = false
         var receiverActiveCallEvidenceSeen = false
         var receiverVerifiedBootstrapStored = false
         var receiverCallKitIncomingReported = false
@@ -1667,6 +1695,9 @@ enum SalemXStage2FSimulatorSignalingDebug {
                 "receiver_verified_bootstrap_creation_attempted=\(receiverVerifiedBootstrapCreationAttempted)",
                 "receiver_active_call_resolution_started=\(receiverActiveCallResolutionStarted)",
                 "receiver_active_call_snapshot_checked=\(receiverActiveCallSnapshotChecked)",
+                "receiver_remote_room_snapshot_checked=\(receiverRemoteRoomSnapshotChecked)",
+                "receiver_remote_room_call_state_visible=\(receiverRemoteRoomCallStateVisible)",
+                "receiver_active_call_room_matches_claimed_metadata=\(receiverActiveCallRoomMatchesClaimedMetadata)",
                 "receiver_active_call_evidence_seen=\(receiverActiveCallEvidenceSeen)",
                 "receiver_verified_bootstrap_stored=\(receiverVerifiedBootstrapStored)",
                 "receiver_callkit_incoming_reported=\(receiverCallKitIncomingReported)",
