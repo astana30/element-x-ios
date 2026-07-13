@@ -870,6 +870,9 @@ enum SalemXStage2FSimulatorSignalingDebug {
         }
 
         proof.simulatorSenderAuthenticatedSessionPresent = true
+        proof.senderExactRoomJoined = true
+        proof.receiverExactRoomJoined = true
+        proof.senderAndReceiverRoomMatch = true
         proof.senderStartModeAudio = true
         proof.receiverDeviceBindingPresent = true
         userSessionFlowCoordinator.startCall(roomID: roomProxy.id, startMode: .audio)
@@ -894,6 +897,9 @@ enum SalemXStage2FSimulatorSignalingDebug {
         proof.senderUpstreamAudioCallStarted = true
         proof.senderEmbeddedElementCallPresented = true
         proof.senderActiveCallEvidenceSeen = true
+        proof.senderActiveCallSnapshotPresent = true
+        proof.senderActiveCallStatePublished = true
+        proof.metadataRoomMatchesSenderActiveCallRoom = true
         proof.senderReadyToSendForegroundInvite = true
         writeProof()
     }
@@ -1170,11 +1176,12 @@ enum SalemXStage2FSimulatorSignalingDebug {
             return
         }
 
-        let activeCallState: VerifiedIncomingCallBootstrapActiveCallState = activeCallEvidence(roomID: metadata.roomID,
-                                                                                               roomProxy: roomProxy,
-                                                                                               clientProxy: clientProxy,
-                                                                                               elementCallService: elementCallService) ? .active : .none
-        proof.receiverActiveCallEvidenceSeen = activeCallState == .active
+        proof.receiverActiveCallResolutionStarted = true
+        let receiverActiveCallEvidenceSeen = await waitForRemoteActiveCallEvidence(roomID: metadata.roomID,
+                                                                                   roomProxy: roomProxy,
+                                                                                   clientProxy: clientProxy)
+        let activeCallState: VerifiedIncomingCallBootstrapActiveCallState = receiverActiveCallEvidenceSeen ? .active : .none
+        proof.receiverActiveCallEvidenceSeen = receiverActiveCallEvidenceSeen
         guard activeCallState == .active else {
             proof.lastFailure = "activeCallEvidenceTimeout"
             writeProof()
@@ -1267,6 +1274,35 @@ enum SalemXStage2FSimulatorSignalingDebug {
             return false
         }
 
+        let info = roomProxy.infoPublisher.value
+        if info.hasRoomCall || !info.activeRoomCallParticipants.isEmpty {
+            return true
+        }
+
+        guard let summary = clientProxy.roomSummaryForIdentifier(roomID) else {
+            return false
+        }
+        return summary.hasOngoingCall || !summary.activeRoomCallParticipants.isEmpty
+    }
+
+    private static func waitForRemoteActiveCallEvidence(roomID: String,
+                                                        roomProxy: JoinedRoomProxyProtocol,
+                                                        clientProxy: ClientProxyProtocol) async -> Bool {
+        for _ in 0..<60 {
+            if remoteActiveCallEvidence(roomID: roomID,
+                                        roomProxy: roomProxy,
+                                        clientProxy: clientProxy) {
+                return true
+            }
+            try? await Task.sleep(for: .milliseconds(500))
+        }
+        return false
+    }
+
+    private static func remoteActiveCallEvidence(roomID: String,
+                                                 roomProxy: JoinedRoomProxyProtocol,
+                                                 clientProxy: ClientProxyProtocol) -> Bool {
+        proof.receiverActiveCallSnapshotChecked = true
         let info = roomProxy.infoPublisher.value
         if info.hasRoomCall || !info.activeRoomCallParticipants.isEmpty {
             return true
@@ -1498,9 +1534,10 @@ enum SalemXStage2FSimulatorSignalingDebug {
         var foregroundStreamReady = false
         var senderStartModeAudio = false
         var receiverDeviceBindingPresent = false
-        var senderUpstreamAudioCallStarted = false
-        var senderEmbeddedElementCallPresented = false
+        var senderExactRoomJoined = false, receiverExactRoomJoined = false, senderAndReceiverRoomMatch = false
+        var senderUpstreamAudioCallStarted = false, senderEmbeddedElementCallPresented = false
         var senderActiveCallEvidenceSeen = false
+        var senderActiveCallSnapshotPresent = false, senderActiveCallStatePublished = false, metadataRoomMatchesSenderActiveCallRoom = false
         var senderReadyToSendForegroundInvite = false
         var senderCurrentSessionPresent = false
         var senderCurrentAccessTokenPresent = false
@@ -1537,6 +1574,7 @@ enum SalemXStage2FSimulatorSignalingDebug {
         var receiverMetadataClaimResponseReceived = false
         var receiverMetadataClaimResponseDecodeSucceeded = false
         var receiverVerifiedBootstrapCreationAttempted = false
+        var receiverActiveCallResolutionStarted = false, receiverActiveCallSnapshotChecked = false
         var receiverActiveCallEvidenceSeen = false
         var receiverVerifiedBootstrapStored = false
         var receiverCallKitIncomingReported = false
@@ -1580,9 +1618,15 @@ enum SalemXStage2FSimulatorSignalingDebug {
                 "foreground_stream_ready=\(foregroundStreamReady)",
                 "start_mode_audio=\(senderStartModeAudio)",
                 "receiver_device_binding_present=\(receiverDeviceBindingPresent)",
+                "sender_exact_room_joined=\(senderExactRoomJoined)",
+                "receiver_exact_room_joined=\(receiverExactRoomJoined)",
+                "sender_and_receiver_room_match=\(senderAndReceiverRoomMatch)",
                 "sender_upstream_audio_call_started=\(senderUpstreamAudioCallStarted)",
                 "sender_embedded_element_call_presented=\(senderEmbeddedElementCallPresented)",
                 "sender_active_call_evidence_seen=\(senderActiveCallEvidenceSeen)",
+                "sender_active_call_snapshot_present=\(senderActiveCallSnapshotPresent)",
+                "sender_active_call_state_published=\(senderActiveCallStatePublished)",
+                "metadata_room_matches_sender_active_call_room=\(metadataRoomMatchesSenderActiveCallRoom)",
                 "sender_ready_to_send_foreground_invite=\(senderReadyToSendForegroundInvite)",
                 "sender_current_session_present=\(senderCurrentSessionPresent)",
                 "sender_current_access_token_present=\(senderCurrentAccessTokenPresent)",
@@ -1619,6 +1663,8 @@ enum SalemXStage2FSimulatorSignalingDebug {
                 "receiver_metadata_claim_response_received=\(receiverMetadataClaimResponseReceived)",
                 "receiver_metadata_claim_response_decode_succeeded=\(receiverMetadataClaimResponseDecodeSucceeded)",
                 "receiver_verified_bootstrap_creation_attempted=\(receiverVerifiedBootstrapCreationAttempted)",
+                "receiver_active_call_resolution_started=\(receiverActiveCallResolutionStarted)",
+                "receiver_active_call_snapshot_checked=\(receiverActiveCallSnapshotChecked)",
                 "receiver_active_call_evidence_seen=\(receiverActiveCallEvidenceSeen)",
                 "receiver_verified_bootstrap_stored=\(receiverVerifiedBootstrapStored)",
                 "receiver_callkit_incoming_reported=\(receiverCallKitIncomingReported)",

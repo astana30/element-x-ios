@@ -448,6 +448,80 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
     }
 
     @Test
+    func stage2FReceiverActiveCallResolutionUsesClaimedRoomRemoteSnapshot() throws {
+        let source = try stage2FSimulatorSignalingDebugSource()
+        let functionStart = try #require(source.range(of: "private static func claimReceiverMetadataAndReportCallKit")?.lowerBound)
+        let functionEnd = try #require(source.range(of: "private static func resolveDirectOneToOneDM")?.lowerBound)
+        let functionSource = source[functionStart..<functionEnd]
+        let remoteResolver = try #require(functionSource.range(of: "await waitForRemoteActiveCallEvidence(roomID: metadata.roomID")?.lowerBound)
+        let activeState = try #require(functionSource.range(of: "let activeCallState: VerifiedIncomingCallBootstrapActiveCallState")?.lowerBound)
+        let callKitReport = try #require(functionSource.range(of: "salemXDebugReportStage2FSimulatorIncomingCall")?.lowerBound)
+
+        #expect(source.contains("private static func waitForRemoteActiveCallEvidence"))
+        #expect(source.contains("private static func remoteActiveCallEvidence"))
+        #expect(source.contains("clientProxy.roomSummaryForIdentifier(roomID)"))
+        #expect(remoteResolver < activeState)
+        #expect(activeState < callKitReport)
+    }
+
+    @Test
+    func stage2FReceiverRemoteActiveCallResolutionDoesNotRequireLocalElementCallRoom() throws {
+        let source = try stage2FSimulatorSignalingDebugSource()
+        let remoteStart = try #require(source.range(of: "private static func remoteActiveCallEvidence")?.lowerBound)
+        let remoteEnd = try #require(source.range(of: "private static func matrixErrorBucket")?.lowerBound)
+        let remoteSource = source[remoteStart..<remoteEnd]
+
+        #expect(remoteSource.contains("proof.receiverActiveCallSnapshotChecked = true"))
+        #expect(remoteSource.contains("info.hasRoomCall || !info.activeRoomCallParticipants.isEmpty"))
+        #expect(remoteSource.contains("summary.hasOngoingCall || !summary.activeRoomCallParticipants.isEmpty"))
+        #expect(!remoteSource.contains("ongoingCallRoomIDPublisher"))
+    }
+
+    @Test
+    func stage2FReceiverActiveCallTimeoutDoesNotReportCallKit() throws {
+        let source = try stage2FSimulatorSignalingDebugSource()
+        let functionStart = try #require(source.range(of: "private static func claimReceiverMetadataAndReportCallKit")?.lowerBound)
+        let functionEnd = try #require(source.range(of: "private static func resolveDirectOneToOneDM")?.lowerBound)
+        let functionSource = source[functionStart..<functionEnd]
+        let timeoutFailure = try #require(functionSource.range(of: "proof.lastFailure = \"activeCallEvidenceTimeout\"")?.lowerBound)
+        let callKitReport = try #require(functionSource.range(of: "salemXDebugReportStage2FSimulatorIncomingCall")?.lowerBound)
+
+        #expect(functionSource.contains("guard activeCallState == .active else"))
+        #expect(timeoutFailure < callKitReport)
+    }
+
+    @Test
+    func stage2FReceiverProofRecordsActiveCallResolutionMarkers() throws {
+        let source = try stage2FSimulatorSignalingDebugSource()
+
+        #expect(source.contains("receiver_active_call_resolution_started=\\(receiverActiveCallResolutionStarted)"))
+        #expect(source.contains("receiver_active_call_snapshot_checked=\\(receiverActiveCallSnapshotChecked)"))
+        #expect(source.contains("receiver_active_call_evidence_seen=\\(receiverActiveCallEvidenceSeen)"))
+        #expect(!source.contains("room_id=\\("))
+        #expect(!source.contains("call_id=\\("))
+    }
+
+    @Test
+    func stage2FSenderPublishesRoomAndCallReadinessMarkersBeforeInviteGate() throws {
+        let source = try stage2FSimulatorSignalingDebugSource()
+        let startSender = try #require(source.range(of: "private static func startSender")?.lowerBound)
+        let sendInvite = try #require(source.range(of: "private static func sendForegroundInvite")?.lowerBound)
+        let startSenderSource = source[startSender..<sendInvite]
+        let activeEvidence = try #require(startSenderSource.range(of: "proof.senderActiveCallEvidenceSeen = true")?.lowerBound)
+        let ready = try #require(startSenderSource.range(of: "proof.senderReadyToSendForegroundInvite = true")?.lowerBound)
+
+        #expect(startSenderSource.contains("proof.senderExactRoomJoined = true"))
+        #expect(startSenderSource.contains("proof.receiverExactRoomJoined = true"))
+        #expect(startSenderSource.contains("proof.senderAndReceiverRoomMatch = true"))
+        #expect(startSenderSource.contains("proof.senderActiveCallSnapshotPresent = true"))
+        #expect(startSenderSource.contains("proof.senderActiveCallStatePublished = true"))
+        #expect(startSenderSource.contains("proof.metadataRoomMatchesSenderActiveCallRoom = true"))
+        #expect(activeEvidence < ready)
+        #expect(source.contains("sender_active_call_state_published=\\(senderActiveCallStatePublished)"))
+        #expect(source.contains("metadata_room_matches_sender_active_call_room=\\(metadataRoomMatchesSenderActiveCallRoom)"))
+    }
+
+    @Test
     func stage2FReceiverClaim401OrDecodeFailureDoesNotReportCallKit() throws {
         let source = try stage2FSimulatorSignalingDebugSource()
         let statusGuard = try #require(source.range(of: "guard (200..<300).contains(response.status ?? 0) else")?.lowerBound)
