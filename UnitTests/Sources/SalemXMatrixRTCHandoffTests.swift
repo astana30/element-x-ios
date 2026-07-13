@@ -504,6 +504,21 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
     }
 
     @Test
+    func stage2FAnswerBridgePresentsVerifiedRemoteCallWithoutLocalParticipation() throws {
+        let source = try stage2FSimulatorSignalingDebugSource()
+        let configurationStart = try #require(source.range(of: "static func configureBridgeIfNeeded")?.lowerBound)
+        let configurationEnd = try #require(source.range(of: "static func handleURL")?.lowerBound)
+        let configurationSource = source[configurationStart..<configurationEnd]
+
+        #expect(source.contains("func hasActiveBootstrap(roomID: String) -> Bool"))
+        #expect(source.contains("bootstrap.activeCallState == .active"))
+        #expect(configurationSource.contains("bootstrapStore.hasActiveBootstrap(roomID: roomID)"))
+        #expect(configurationSource.contains("EmbeddedElementCallProductionHandoff"))
+        #expect(source.contains("intent: .presentExisting"))
+        #expect(!configurationSource.contains("intent: .startNew"))
+    }
+
+    @Test
     func stage2FReceiverActiveCallTimeoutDoesNotReportCallKit() throws {
         let source = try stage2FSimulatorSignalingDebugSource()
         let functionStart = try #require(source.range(of: "private static func claimReceiverMetadataAndReportCallKit")?.lowerBound)

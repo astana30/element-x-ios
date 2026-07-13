@@ -131,6 +131,12 @@ final class SalemXIncomingCallBootstrapStore: SalemXIncomingCallBootstrapResolvi
         bootstrapsByCallID.removeValue(forKey: callID)
     }
 
+    func hasActiveBootstrap(roomID: String) -> Bool {
+        bootstrapsByCallID.values.contains { bootstrap in
+            bootstrap.claimedMetadata.roomID == roomID && bootstrap.activeCallState == .active
+        }
+    }
+
     func removeAll() {
         bootstrapsByCallID.removeAll()
     }
@@ -657,7 +663,9 @@ enum SalemXStage2FSimulatorSignalingDebug {
         }
 
         let productionHandoff = EmbeddedElementCallProductionHandoff(presenter: presenter,
-                                                                     stateProvider: EmbeddedElementCallServiceRoomCallStateProvider(elementCallService: elementCallService))
+                                                                     stateProvider: EmbeddedElementCallServiceRoomCallStateProvider(elementCallService: elementCallService)) { roomID in
+            bootstrapStore.hasActiveBootstrap(roomID: roomID)
+        }
         let matrixRTCHandoff = SalemXAuthenticatedMatrixRTCHandoff(clientProxy: clientProxy,
                                                                    elementCallHandoff: productionHandoff)
         let answerBridge = SalemXEmbeddedCallAnswerBridge(clientProxy: clientProxy,

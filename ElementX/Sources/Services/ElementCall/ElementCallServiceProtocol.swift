@@ -132,11 +132,14 @@ struct EmbeddedElementCallServiceRoomCallStateProvider: EmbeddedElementCallRoomC
 final class EmbeddedElementCallProductionHandoff: EmbeddedElementCallHandoff {
     private let presenter: any EmbeddedElementCallRoomCallPresenting
     private let stateProvider: any EmbeddedElementCallRoomCallStateProviding
+    private let verifiedExistingCallProvider: (String) -> Bool
 
     init(presenter: any EmbeddedElementCallRoomCallPresenting,
-         stateProvider: any EmbeddedElementCallRoomCallStateProviding) {
+         stateProvider: any EmbeddedElementCallRoomCallStateProviding,
+         verifiedExistingCallProvider: @escaping (String) -> Bool = { _ in false }) {
         self.presenter = presenter
         self.stateProvider = stateProvider
+        self.verifiedExistingCallProvider = verifiedExistingCallProvider
     }
 
     func prepareAudioCall(roomID: String, intent: EmbeddedElementCallHandoffIntent) async -> EmbeddedElementCallHandoffResult {
@@ -149,7 +152,7 @@ final class EmbeddedElementCallProductionHandoff: EmbeddedElementCallHandoff {
         case .joinExisting:
             return .unsupportedIncomingJoin(preparation)
         case .presentExisting:
-            guard stateProvider.presentedEmbeddedElementCallRoomID == roomID else {
+            guard stateProvider.presentedEmbeddedElementCallRoomID == roomID || verifiedExistingCallProvider(roomID) else {
                 return .noExistingCall(preparation)
             }
 

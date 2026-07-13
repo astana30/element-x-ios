@@ -65,6 +65,30 @@ final class EmbeddedElementCallProductionHandoffTests {
     }
 
     @Test
+    func presentExistingCanUseVerifiedRemoteCallWithoutLocalParticipation() async {
+        let presenter = HandoffPresenterSpy()
+        let handoff = EmbeddedElementCallProductionHandoff(presenter: presenter,
+                                                           stateProvider: HandoffStateProvider(presentedRoomID: nil)) { $0 == "!room:example.org" }
+
+        let result = await handoff.prepareAudioCall(roomID: "!room:example.org", intent: .presentExisting)
+
+        #expect(result == .alreadyPresented(.audio(roomID: "!room:example.org", intent: .presentExisting)))
+        #expect(presenter.calls == [.init(roomID: "!room:example.org", startMode: .audio)])
+    }
+
+    @Test
+    func presentExistingRejectsWrongVerifiedRemoteCallRoom() async {
+        let presenter = HandoffPresenterSpy()
+        let handoff = EmbeddedElementCallProductionHandoff(presenter: presenter,
+                                                           stateProvider: HandoffStateProvider(presentedRoomID: nil)) { $0 == "!other:example.org" }
+
+        let result = await handoff.prepareAudioCall(roomID: "!room:example.org", intent: .presentExisting)
+
+        #expect(result == .noExistingCall(.audio(roomID: "!room:example.org", intent: .presentExisting)))
+        #expect(presenter.calls.isEmpty)
+    }
+
+    @Test
     func audioIntentDoesNotExposeMediaCredentials() {
         let preparation = EmbeddedElementCallPreparation.audio(roomID: "!room:example.org", intent: .startNew)
         let exposedLabels = Mirror(reflecting: preparation).children.compactMap(\.label).joined(separator: ",")
