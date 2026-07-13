@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import secrets
 import time
 from dataclasses import replace
 from os import environ
@@ -33,6 +34,7 @@ from .config import (
 from .eligibility import DisabledNativeAudioEligibilityPolicy, StaticAllowlistNativeAudioEligibilityPolicy
 from .errors import CallServiceError, bad_request
 from .foreground_signaling import (
+    ForegroundCallDeliveryMode,
     ForegroundCallInvitePayload,
     ForegroundCallInviteRequest,
     ForegroundCallSignalingService,
@@ -493,6 +495,7 @@ def create_app(config: ServiceConfig | None = None,
         invite_diagnostics_no_send: Optional[str] = Header(default=None, alias="X-SalemX-Invite-Diagnostics-No-Send"),
     ) -> JSONResponse:
         diagnostics_no_send_requested = _invite_diagnostics_no_send_requested(invite_diagnostics_no_send)
+        delivery_attempt_id: str | None = None
         try:
             if service is None:
                 raise CallServiceError(status_code=503,
@@ -514,6 +517,7 @@ def create_app(config: ServiceConfig | None = None,
                         diagnostics_no_send_requested,
                     )) from error
                 raise
+            delivery_attempt_id = _new_delivery_attempt_id()
             payload: Any = await request.json()
             if not isinstance(payload, dict):
                 raise bad_request(error="Request body must be a JSON object.")
@@ -526,6 +530,70 @@ def create_app(config: ServiceConfig | None = None,
                 raise
             if diagnostics_no_send_requested:
                 return JSONResponse(status_code=200, content=_invite_no_send_success_diagnostics(pending_metadata is not None))
+
+            if invite_request.delivery_mode == ForegroundCallDeliveryMode.FOREGROUND_ONLY:
+                if pending_metadata is None:
+                    raise bad_request(error="Pending metadata is required for foreground-only delivery.")
+
+                lease = signaling_service.exact_active_subscription_lease(invite_request)
+                if lease is None:
+                    raise _foreground_only_delivery_unavailable(
+                        delivery_attempt_id=delivery_attempt_id,
+                        result=None,
+                        blocked_reason="foreground_stream_unavailable",
+                    )
+
+                metadata_recipient_device = _pending_metadata_recipient_device(
+                    invite_request=invite_request,
+                    token_store=token_store,
+                )
+                pending_metadata_reference = pending_store.store(
+                    recipient=invite_request.recipient,
+                    recipient_device=metadata_recipient_device,
+                    expires_at_ms=invite_request.invite.expires_at_ms,
+                    metadata=pending_metadata,
+                )
+                sender_authorized_metadata_reference = pending_store.store(
+                    recipient=invite_request.recipient,
+                    recipient_device=None,
+                    expires_at_ms=invite_request.invite.expires_at_ms,
+                    metadata=pending_metadata,
+                    sender_only=True,
+                    sender_device=authenticated_user.device_id,
+                )
+                result = signaling_service.publish_invite_to_lease(invite_request, lease)
+                if not result.delivered:
+                    pending_store.discard(pending_metadata_reference)
+                    pending_store.discard(sender_authorized_metadata_reference)
+                    raise _foreground_only_delivery_unavailable(
+                        delivery_attempt_id=delivery_attempt_id,
+                        result=result,
+                        blocked_reason="foreground_delivery_failed_after_metadata_claim",
+                    )
+
+                result_body = result.as_dict()
+                result_body["pending_metadata_reference"] = pending_metadata_reference
+                result_body.update(_sender_authorized_metadata_diagnostics(sender_authorized_metadata_reference))
+                result_body.update(_foreground_signaling_invite_diagnostics(
+                    invite_request,
+                    signaling_service,
+                    delivery_attempt_id=delivery_attempt_id,
+                    result=result,
+                ))
+                result_body.update(pending_metadata.safe_diagnostics())
+                result_body.update(_foreground_only_no_apns_diagnostics())
+                LOGGER.info(
+                    "foreground signaling invite handled delivery_attempt_id=%s delivery_mode=foreground_only "
+                    "subscriber_available=%s delivered=%s dropped=%s call_kind=%s "
+                    "background_apns_push_requested=False background_apns_push_result=suppressed_redacted",
+                    delivery_attempt_id,
+                    result.subscriber_available,
+                    result.delivered,
+                    result.dropped,
+                    invite_request.invite.call_kind,
+                )
+                return JSONResponse(status_code=200, content=result_body)
+
             pending_metadata_reference: str | None = None
             sender_authorized_metadata_reference: str | None = None
             pending_metadata_diagnostics = no_pending_metadata_diagnostics()
@@ -554,7 +622,12 @@ def create_app(config: ServiceConfig | None = None,
             if pending_metadata_reference is not None:
                 result_body["pending_metadata_reference"] = pending_metadata_reference
             result_body.update(_sender_authorized_metadata_diagnostics(sender_authorized_metadata_reference))
-            result_body.update(_foreground_signaling_invite_diagnostics(invite_request, signaling_service))
+            result_body.update(_foreground_signaling_invite_diagnostics(
+                invite_request,
+                signaling_service,
+                delivery_attempt_id=delivery_attempt_id,
+                result=result,
+            ))
             result_body.update(pending_metadata_diagnostics)
             result_body.update(_background_invite_apns_diagnostics(
                 invite_request=invite_request,
@@ -564,8 +637,11 @@ def create_app(config: ServiceConfig | None = None,
                 pending_metadata_reference=pending_metadata_reference,
             ))
             LOGGER.info(
-                "foreground signaling invite handled subscriber_available=%s delivered=%s dropped=%s call_kind=%s "
+                "foreground signaling invite handled delivery_attempt_id=%s delivery_mode=%s "
+                "subscriber_available=%s delivered=%s dropped=%s call_kind=%s "
                 "background_apns_push_requested=%s background_apns_push_result=%s",
+                delivery_attempt_id,
+                invite_request.delivery_mode.value,
                 result.subscriber_available,
                 result.delivered,
                 result.dropped,
@@ -813,16 +889,88 @@ def _foreground_signaling_dev_invite_diagnostics(
 def _foreground_signaling_invite_diagnostics(
     invite_request: ForegroundCallInviteRequest,
     signaling_service: ForegroundCallSignalingService,
+    *,
+    delivery_attempt_id: str,
+    result: object,
 ) -> dict[str, object]:
     target_subscriber_count = signaling_service.subscriber_count_for(
         invite_request.recipient,
         invite_request.recipient_device,
     )
     return {
+        "delivery_attempt_id": delivery_attempt_id,
+        "delivery_attempt_id_present": True,
+        "delivery_mode": invite_request.delivery_mode.value,
         "active_subscriber_count": signaling_service.diagnostics.subscriber_count,
         "target_subscriber_count": target_subscriber_count,
         "target_active_subscriber_count": target_subscriber_count,
+        "foreground_stream_present": getattr(result, "subscriber_available", False),
+        "foreground_delivery_attempted": True,
+        "foreground_delivery_succeeded": getattr(result, "delivered", False),
     }
+
+
+def _new_delivery_attempt_id() -> str:
+    return "da_" + secrets.token_urlsafe(18)
+
+
+def _foreground_only_no_apns_diagnostics() -> dict[str, object]:
+    return {
+        "real_non_dev_invite_used": True,
+        "dev_invite_used": False,
+        "background_apns_push_requested": False,
+        "background_apns_push_result": "suppressed_redacted",
+        "background_apns_failure_reason": "none",
+        "persisted_pushkit_token_lookup_result": "not_requested",
+        "pushkit_token_redacted": True,
+        "apns_environment": "suppressed",
+        "apns_topic_resolved": False,
+        "apns_requested": False,
+        "apns_provider_invoked": False,
+        "apns_provider_accepted": False,
+        "media_credentials_requested": False,
+        "media_connect_requested": False,
+        "matrix_event_emit_requested": False,
+        "safe_to_send_apns": False,
+        "APNs_sent": False,
+        "blocked_reason": "none",
+    }
+
+
+def _foreground_only_delivery_unavailable(
+    *,
+    delivery_attempt_id: str,
+    result: object | None,
+    blocked_reason: str,
+) -> CallServiceError:
+    diagnostics = {
+        "delivery_attempt_id": delivery_attempt_id,
+        "delivery_attempt_id_present": True,
+        "delivery_mode": ForegroundCallDeliveryMode.FOREGROUND_ONLY.value,
+        "foreground_stream_present": getattr(result, "subscriber_available", False),
+        "foreground_delivery_attempted": result is not None,
+        "foreground_delivery_succeeded": False,
+        "background_apns_push_requested": False,
+        "background_apns_push_result": "suppressed_redacted",
+        "background_apns_failure_reason": "none",
+        "persisted_pushkit_token_lookup_result": "not_requested",
+        "pushkit_token_redacted": True,
+        "apns_requested": False,
+        "apns_provider_invoked": False,
+        "apns_provider_accepted": False,
+        "media_credentials_requested": False,
+        "media_connect_requested": False,
+        "matrix_event_emit_requested": False,
+        "safe_to_send_apns": False,
+        "APNs_sent": False,
+        "blocked_reason": blocked_reason,
+    }
+    return CallServiceError(
+        status_code=409,
+        errcode="M_DIRECT_CALL_FOREGROUND_STREAM_UNAVAILABLE",
+        error="A matching foreground call signaling stream is not available.",
+        diagnostics=diagnostics,
+    )
 
 
 def _sender_authorized_metadata_diagnostics(reference: str | None) -> dict[str, object]:
@@ -1021,6 +1169,9 @@ def _prepared_invite_apns_diagnostics(
             "real_invite_lookup_token_is_hex": False,
             "upload_invite_store_key_match": False,
             "safe_to_send_apns": False,
+            "apns_requested": False,
+            "apns_provider_invoked": False,
+            "apns_provider_accepted": False,
             "APNs_sent": False,
             "blocked_reason": "receiver_pushkit_token_missing",
         }
@@ -1054,6 +1205,9 @@ def _prepared_invite_apns_diagnostics(
         "real_invite_lookup_token_is_hex": is_hex_pushkit_token(token_record.token),
         "upload_invite_store_key_match": True,
         "safe_to_send_apns": True,
+        "apns_requested": diagnostics.apns_voip_push_send_requested,
+        "apns_provider_invoked": diagnostics.apns_provider_requested,
+        "apns_provider_accepted": diagnostics.apns_voip_push_send_result == "sandbox_success",
         "APNs_sent": diagnostics.apns_voip_push_send_result == "sandbox_success",
         "blocked_reason": "none" if diagnostics.apns_voip_push_send_result == "sandbox_success" else diagnostics.blocked_reason,
     }
@@ -1078,6 +1232,11 @@ def _background_invite_apns_diagnostics(
             "media_credentials_requested": False,
             "media_connect_requested": False,
             "matrix_event_emit_requested": False,
+            "safe_to_send_apns": False,
+            "apns_requested": False,
+            "apns_provider_invoked": False,
+            "apns_provider_accepted": False,
+            "APNs_sent": False,
             "blocked_reason": "real_invite_payload_mapping_blocked",
         }
 
@@ -1096,6 +1255,9 @@ def _background_invite_apns_diagnostics(
             "media_connect_requested": False,
             "matrix_event_emit_requested": False,
             "safe_to_send_apns": False,
+            "apns_requested": False,
+            "apns_provider_invoked": False,
+            "apns_provider_accepted": False,
             "APNs_sent": False,
             "pending_metadata_reference_repair_present": True,
             "pending_metadata_reference_repair_debug_only": True,
@@ -1136,6 +1298,9 @@ def _background_invite_apns_diagnostics(
             "real_invite_lookup_token_is_hex": False,
             "upload_invite_store_key_match": False,
             "safe_to_send_apns": False,
+            "apns_requested": False,
+            "apns_provider_invoked": False,
+            "apns_provider_accepted": False,
             "APNs_sent": False,
             "pending_metadata_reference_repair_present": True,
             "pending_metadata_reference_repair_debug_only": True,
@@ -1181,6 +1346,9 @@ def _background_invite_apns_diagnostics(
         "real_invite_lookup_token_is_hex": is_hex_pushkit_token(token_record.token),
         "upload_invite_store_key_match": True,
         "safe_to_send_apns": True,
+        "apns_requested": diagnostics.apns_voip_push_send_requested,
+        "apns_provider_invoked": diagnostics.apns_provider_requested,
+        "apns_provider_accepted": diagnostics.apns_voip_push_send_result == "sandbox_success",
         "APNs_sent": diagnostics.apns_voip_push_send_result == "sandbox_success",
         "pending_metadata_reference_repair_present": True,
         "pending_metadata_reference_repair_debug_only": True,

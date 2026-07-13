@@ -287,10 +287,10 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     private let callProvider: CXProviderProtocol
     private let timeProvider: TimeProvider
     private let appSettings: AppSettings
-    private let salemXAnswerBridgeConfiguration: SalemXEmbeddedCallAnswerBridgeConfiguration
-    private let salemXIncomingCallBootstrapResolver: (any SalemXIncomingCallBootstrapResolving)?
-    private let salemXAnswerBridge: (any SalemXEmbeddedCallAnswerBridging)?
-    private let salemXEndBridge: (any SalemXEmbeddedCallEndBridging)?
+    private var salemXAnswerBridgeConfiguration: SalemXEmbeddedCallAnswerBridgeConfiguration
+    private var salemXIncomingCallBootstrapResolver: (any SalemXIncomingCallBootstrapResolving)?
+    private var salemXAnswerBridge: (any SalemXEmbeddedCallAnswerBridging)?
+    private var salemXEndBridge: (any SalemXEmbeddedCallEndBridging)?
     
     private var voIPPushToken: Data?
     private var registeredVoIPPushToken: Data?
@@ -413,6 +413,18 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         self.clientProxy = clientProxy
         Task { await registerVoIPPusherIfNeeded() }
     }
+
+    #if DEBUG
+    func salemXDebugConfigureStage2FSimulatorBridge(configuration: SalemXEmbeddedCallAnswerBridgeConfiguration,
+                                                    bootstrapResolver: any SalemXIncomingCallBootstrapResolving,
+                                                    answerBridge: any SalemXEmbeddedCallAnswerBridging,
+                                                    endBridge: any SalemXEmbeddedCallEndBridging) {
+        salemXAnswerBridgeConfiguration = configuration
+        salemXIncomingCallBootstrapResolver = bootstrapResolver
+        salemXAnswerBridge = answerBridge
+        salemXEndBridge = endBridge
+    }
+    #endif
 
     @MainActor func observeForegroundRoom(roomProxy: JoinedRoomProxyProtocol, roomDisplayName: String?) {
         foregroundRoomTimelineCancellable = nil
@@ -547,6 +559,12 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             return
         }
         defer { finishCallTermination(for: roomID) }
+
+        #if DEBUG
+        Task { @MainActor in
+            SalemXStage2FSimulatorSignalingDebug.recordSenderUpstreamHangupInvoked(roomID: roomID)
+        }
+        #endif
 
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SERVICE-ENDCALL] room_id=\(roomID)")
         suppressIncomingFallback(for: roomID)
@@ -776,6 +794,12 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     }
 
     private func handleEmbeddedMatrixRTCAnswerCallAction(_ action: any SalemXCallKitAnswerActionCompleting) {
+        #if DEBUG
+        Task { @MainActor in
+            SalemXStage2FSimulatorSignalingDebug.recordCallKitAnswerActionSeen()
+        }
+        #endif
+
         guard let incomingCallID else {
             action.fail()
             return
@@ -880,6 +904,12 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         salemXEmbeddedAnswerActionIDs.removeValue(forKey: callID)
         removeVerifiedBootstrapOnce(for: callID)
         endUnansweredCallTask?.cancel()
+        #if DEBUG
+        Task { @MainActor in
+            SalemXStage2FSimulatorSignalingDebug.recordAnswerGuardReleased()
+            SalemXStage2FSimulatorSignalingDebug.recordReceiverAnswerResult(result)
+        }
+        #endif
 
         if result.isCallKitSuccess {
             applySessionEvent(type: .accept, roomID: incomingCallID.roomID)
@@ -1033,6 +1063,12 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             return false
         }
 
+        #if DEBUG
+        Task { @MainActor in
+            SalemXStage2FSimulatorSignalingDebug.recordReceiverRemoteEndSeen(source: source)
+        }
+        #endif
+
         let actions = drainEmbeddedMatrixRTCEndActions(for: knownCallID.callKitID)
         cancelEmbeddedMatrixRTCAnswerForEmbeddedEnd(callID: knownCallID.callKitID)
         removeVerifiedBootstrapOnce(for: knownCallID.callKitID)
@@ -1046,6 +1082,11 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             }
             actionsSubject.send(.endCall(roomID: knownCallID.roomID))
             clearEmbeddedMatrixRTCState(for: knownCallID)
+            #if DEBUG
+            Task { @MainActor in
+                SalemXStage2FSimulatorSignalingDebug.recordCallUIDismissed()
+            }
+            #endif
         }
 
         return true
@@ -1088,6 +1129,11 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         salemXEmbeddedEndTasks.removeValue(forKey: callID)?.cancel()
         let actions = salemXEmbeddedEndActions.removeValue(forKey: callID) ?? []
         salemXEmbeddedEndActionIDs.removeValue(forKey: callID)
+        #if DEBUG
+        Task { @MainActor in
+            SalemXStage2FSimulatorSignalingDebug.recordEndGuardReleased()
+        }
+        #endif
         return actions
     }
 
@@ -1127,10 +1173,21 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         }
 
         salemXIncomingCallBootstrapResolver?.removeVerifiedBootstrap(for: callID)
+        #if DEBUG
+        Task { @MainActor in
+            SalemXStage2FSimulatorSignalingDebug.recordVerifiedBootstrapCleared()
+        }
+        #endif
     }
 
     private func reportEmbeddedMatrixRTCCallEnded(callID: CallID, reason: CXCallEndedReason) {
-        guard salemXEmbeddedReportedEndedCallIDs.insert(callID.callKitID).inserted else {
+        let inserted = salemXEmbeddedReportedEndedCallIDs.insert(callID.callKitID).inserted
+        #if DEBUG
+        Task { @MainActor in
+            SalemXStage2FSimulatorSignalingDebug.recordReceiverCallKitEndReport(inserted: inserted)
+        }
+        #endif
+        guard inserted else {
             return
         }
 
@@ -1548,6 +1605,66 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             reportEndedCall(incomingCallID: incomingCallID, reason: .unanswered)
         }
     }
+
+    #if DEBUG
+    @MainActor
+    func salemXDebugReportStage2FSimulatorIncomingCall(roomID: String,
+                                                       roomDisplayName: String?,
+                                                       startMode: ElementCallStartMode,
+                                                       storeBootstrap: (UUID) -> Void) async -> UUID? {
+        guard incomingCallID == nil, ongoingCallID == nil else {
+            return nil
+        }
+
+        let nowDate = timeProvider.now()
+        let callID = CallID(callKitID: UUID(),
+                            roomID: roomID,
+                            rtcNotificationID: nil,
+                            remoteCallID: nil,
+                            startMode: startMode,
+                            startedAt: nowDate)
+
+        storeBootstrap(callID.callKitID)
+        incomingCallID = callID
+        openCallSession(roomID: roomID,
+                        callKitID: callID.callKitID,
+                        direction: .incoming,
+                        remoteCallID: callID.remoteCallID)
+
+        let update = CXCallUpdate()
+        update.hasVideo = startMode == .video
+        update.localizedCallerName = roomDisplayName
+        update.remoteHandle = .init(type: .generic, value: "salemx-call")
+
+        return await withCheckedContinuation { continuation in
+            callProvider.reportNewIncomingCall(with: callID.callKitID, update: update) { [weak self] error in
+                if error != nil {
+                    self?.clearIncomingCallState()
+                    continuation.resume(returning: nil)
+                    return
+                }
+
+                self?.actionsSubject.send(.receivedIncomingCallRequest)
+                continuation.resume(returning: callID.callKitID)
+            }
+
+            endUnansweredCallTask?.cancel()
+            endUnansweredCallTask = Task { [weak self] in
+                try? await self?.timeProvider.clock.sleep(for: IncomingFallbackConstants.unansweredTimeout)
+
+                guard let self, !Task.isCancelled else {
+                    return
+                }
+
+                guard let incomingCallID = self.incomingCallID, incomingCallID.callKitID == callID.callKitID else {
+                    return
+                }
+
+                reportEndedCall(incomingCallID: incomingCallID, reason: .unanswered)
+            }
+        }
+    }
+    #endif
 
     private static func isTerminalCallEvent(_ roomCallEvent: RoomCallEvent?) -> Bool {
         switch roomCallEvent?.state {
@@ -2232,6 +2349,12 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
 
                 let participants = Set(roomInfo.activeRoomCallParticipants)
                 let hasActiveCall = roomInfo.hasRoomCall || !participants.isEmpty
+                #if DEBUG
+                Task { @MainActor in
+                    SalemXStage2FSimulatorSignalingDebug.recordMatrixRTCObservation(participantCount: participants.count,
+                                                                                    hasActiveCall: hasActiveCall)
+                }
+                #endif
                 if hasActiveCall {
                     tracker.hasSeenActiveCall = true
                     return
@@ -2265,6 +2388,12 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
 
                 let participants = Set(roomInfo.activeRoomCallParticipants)
                 let hasActiveCall = roomInfo.hasRoomCall || !participants.isEmpty
+                #if DEBUG
+                Task { @MainActor in
+                    SalemXStage2FSimulatorSignalingDebug.recordMatrixRTCObservation(participantCount: participants.count,
+                                                                                    hasActiveCall: hasActiveCall)
+                }
+                #endif
                 if hasActiveCall {
                     tracker.hasSeenActiveCall = true
                 }
@@ -2764,6 +2893,14 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             return
         }
 
+        #if DEBUG
+        if reason == .remoteEnded {
+            Task { @MainActor in
+                SalemXStage2FSimulatorSignalingDebug.recordReceiverRemoteEndSeen(source: .embeddedRemoteEnd)
+            }
+        }
+        #endif
+
         if handleEmbeddedMatrixRTCTerminalEventIfNeeded(ongoingCallID,
                                                         source: source(forEmbeddedTerminalReason: reason),
                                                         deduplicationID: deduplicationID) {
@@ -2792,6 +2929,11 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         }
         
         actionsSubject.send(.endCall(roomID: ongoingCallID.roomID))
+        #if DEBUG
+        Task { @MainActor in
+            SalemXStage2FSimulatorSignalingDebug.recordCallUIDismissed()
+        }
+        #endif
         tearDownCallSession(sendEndCallAction: false)
     }
 

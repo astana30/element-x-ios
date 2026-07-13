@@ -112,7 +112,7 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
         let analyticsService = AnalyticsService(client: posthogAnalyticsClient, appSettings: appSettings)
         ServiceLocator.shared.register(analytics: analyticsService)
         
-        elementCallService = ElementCallService(appSettings: appSettings)
+        elementCallService = Self.makeElementCallService(appSettings: appSettings)
         
         navigationRootCoordinator = NavigationRootCoordinator()
         
@@ -249,6 +249,10 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
     }
 
     func handleDeepLink(_ url: URL, isExternalURL: Bool) -> Bool {
+        if handleSalemXStage2FSimulatorDebugURL(url) {
+            return true
+        }
+
         #if DEBUG && canImport(PushKit) && os(iOS)
         if SalemXPushKitRegistrationSmokeDebugBridge.handleUploadSmokeURL(url) {
             return true
@@ -780,6 +784,7 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
         userSessionFlowCoordinator.start()
         
         self.userSessionFlowCoordinator = userSessionFlowCoordinator
+        configureSalemXStage2FSimulatorBridgeIfNeeded(userSessionFlowCoordinator: userSessionFlowCoordinator)
         #if DEBUG
         configureNativeDirectCallIntegrationDiagnosticHarnessIfNeeded()
         #endif
@@ -1347,6 +1352,44 @@ extension AppCoordinator {
         #endif
     }
 }
+
+#if DEBUG && canImport(CallKit) && os(iOS)
+extension AppCoordinator {
+    static func makeElementCallService(appSettings: AppSettings) -> ElementCallServiceProtocol {
+        ElementCallService(appSettings: appSettings,
+                           salemXAnswerBridgeConfiguration: SalemXStage2FSimulatorSignalingDebug.initialBridgeConfiguration())
+    }
+
+    private func handleSalemXStage2FSimulatorDebugURL(_ url: URL) -> Bool {
+        SalemXStage2FSimulatorSignalingDebug.handleURL(url,
+                                                       userSession: userSession,
+                                                       userSessionFlowCoordinator: userSessionFlowCoordinator,
+                                                       elementCallService: elementCallService)
+    }
+
+    private func configureSalemXStage2FSimulatorBridgeIfNeeded(userSessionFlowCoordinator: UserSessionFlowCoordinator) {
+        guard let userSession else {
+            return
+        }
+
+        SalemXStage2FSimulatorSignalingDebug.configureBridgeIfNeeded(elementCallService: elementCallService,
+                                                                     clientProxy: userSession.clientProxy,
+                                                                     presenter: userSessionFlowCoordinator)
+    }
+}
+#else
+extension AppCoordinator {
+    static func makeElementCallService(appSettings: AppSettings) -> ElementCallServiceProtocol {
+        ElementCallService(appSettings: appSettings)
+    }
+
+    private func handleSalemXStage2FSimulatorDebugURL(_: URL) -> Bool {
+        false
+    }
+
+    private func configureSalemXStage2FSimulatorBridgeIfNeeded(userSessionFlowCoordinator _: UserSessionFlowCoordinator) { }
+}
+#endif
 
 #if DEBUG
 extension AppCoordinator {

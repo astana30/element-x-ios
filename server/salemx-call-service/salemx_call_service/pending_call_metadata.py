@@ -114,6 +114,9 @@ class PendingCallMetadataStoreProtocol(Protocol):
     def begin_prepared_send(self, reference: str, authenticated_user: AuthenticatedUser, now_ms: int) -> PendingCallMetadataRecord:
         ...
 
+    def discard(self, reference: str) -> None:
+        ...
+
 
 class InMemoryPendingCallMetadataStore:
     def __init__(self) -> None:
@@ -259,6 +262,9 @@ class InMemoryPendingCallMetadataStore:
             sent=True,
         )
         return receiver_record
+
+    def discard(self, reference: str) -> None:
+        self._records.pop(reference, None)
 
     def _sender_record(self,
                        reference: str,

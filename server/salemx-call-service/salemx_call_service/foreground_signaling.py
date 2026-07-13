@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import secrets
 import time
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any, Callable
 
 from .auth import AuthenticatedUser
@@ -21,6 +23,21 @@ MAX_CALL_HANDLE_LENGTH = 128
 MAX_DISPLAY_LABEL_LENGTH = 120
 DEFAULT_QUEUE_SIZE = 16
 DEFAULT_HEARTBEAT_COMMENT = "foreground.keepalive"
+
+
+class ForegroundCallDeliveryMode(Enum):
+    FOREGROUND_AND_APNS = "foreground_and_apns"
+    FOREGROUND_ONLY = "foreground_only"
+
+    @classmethod
+    def from_mapping(cls, payload: dict[str, Any]) -> "ForegroundCallDeliveryMode":
+        value = payload.get("delivery_mode", cls.FOREGROUND_AND_APNS.value)
+        if not isinstance(value, str):
+            raise bad_request(error="Invalid delivery mode.")
+        try:
+            return cls(value)
+        except ValueError as error:
+            raise bad_request(error="Unsupported delivery mode.") from error
 
 
 @dataclass(frozen=True)
@@ -86,6 +103,7 @@ class ForegroundCallInviteRequest:
     recipient: str
     recipient_device: str | None
     invite: ForegroundCallInvitePayload
+    delivery_mode: ForegroundCallDeliveryMode = ForegroundCallDeliveryMode.FOREGROUND_AND_APNS
 
     @classmethod
     def from_mapping(cls, payload: dict[str, Any]) -> "ForegroundCallInviteRequest":
@@ -95,6 +113,7 @@ class ForegroundCallInviteRequest:
             recipient=recipient,
             recipient_device=recipient_device,
             invite=ForegroundCallInvitePayload.from_mapping(payload),
+            delivery_mode=ForegroundCallDeliveryMode.from_mapping(payload),
         )
 
 
@@ -133,10 +152,18 @@ class ForegroundCallSignalingDiagnostics:
 class ForegroundCallSignalingSubscription:
     account_key: str
     device_key: str | None
+    lease_id: str
     queue: asyncio.Queue[ForegroundCallInvitePayload]
 
     async def next_event(self) -> ForegroundCallInvitePayload:
         return await self.queue.get()
+
+
+@dataclass(frozen=True)
+class ForegroundCallSignalingLease:
+    account_key: str
+    device_key: str
+    lease_id: str
 
 
 class ForegroundCallSignalingService:
@@ -162,6 +189,7 @@ class ForegroundCallSignalingService:
         subscription = ForegroundCallSignalingSubscription(
             account_key=key[0],
             device_key=key[1],
+            lease_id=secrets.token_urlsafe(18),
             queue=asyncio.Queue(maxsize=self._queue_size),
         )
         self._subscriptions.setdefault(key, []).append(subscription)
@@ -232,6 +260,89 @@ class ForegroundCallSignalingService:
             dropped=dropped > 0,
         )
 
+    def exact_active_subscription_lease(self, invite_request: ForegroundCallInviteRequest) -> ForegroundCallSignalingLease | None:
+        if invite_request.recipient_device is None:
+            return None
+
+        subscriptions = self._target_subscriptions(invite_request.recipient, invite_request.recipient_device)
+        if len(subscriptions) != 1:
+            return None
+
+        subscription = subscriptions[0]
+        if subscription.device_key is None:
+            return None
+
+        return ForegroundCallSignalingLease(
+            account_key=subscription.account_key,
+            device_key=subscription.device_key,
+            lease_id=subscription.lease_id,
+        )
+
+    def publish_invite_to_lease(
+        self,
+        invite_request: ForegroundCallInviteRequest,
+        lease: ForegroundCallSignalingLease,
+    ) -> ForegroundCallSignalingPublishResult:
+        if invite_request.recipient != lease.account_key or invite_request.recipient_device != lease.device_key:
+            self._latest_result = "lease_mismatch"
+            return ForegroundCallSignalingPublishResult(
+                subscriber_available=False,
+                delivered=False,
+                dropped=False,
+            )
+
+        subscription = self._subscription_for_lease(lease)
+        if subscription is None:
+            self._latest_result = "lease_unavailable"
+            LOGGER.info(
+                "foreground signaling invite lease_unavailable delivered=False dropped=False call_kind=%s",
+                invite_request.invite.call_kind,
+            )
+            return ForegroundCallSignalingPublishResult(
+                subscriber_available=False,
+                delivered=False,
+                dropped=False,
+            )
+
+        if invite_request.invite.is_expired(self._clock_ms()):
+            self._dropped_invite_count += 1
+            self._latest_result = "stale"
+            LOGGER.info(
+                "foreground signaling invite stale subscriber_available=True delivered=False dropped=True call_kind=%s",
+                invite_request.invite.call_kind,
+            )
+            return ForegroundCallSignalingPublishResult(
+                subscriber_available=True,
+                delivered=False,
+                dropped=True,
+            )
+
+        try:
+            subscription.queue.put_nowait(invite_request.invite)
+        except asyncio.QueueFull:
+            self._dropped_invite_count += 1
+            self._latest_result = "dropped"
+            delivered = False
+            dropped = True
+        else:
+            self._delivered_invite_count += 1
+            self._latest_result = "delivered"
+            delivered = True
+            dropped = False
+
+        LOGGER.info(
+            "foreground signaling invite lease_handled subscriber_available=True invite_enqueued=%s delivered=%s dropped=%s call_kind=%s",
+            delivered,
+            delivered,
+            dropped,
+            invite_request.invite.call_kind,
+        )
+        return ForegroundCallSignalingPublishResult(
+            subscriber_available=True,
+            delivered=delivered,
+            dropped=dropped,
+        )
+
     def publish_invite_to_single_active_subscriber(
         self,
         invite: ForegroundCallInvitePayload,
@@ -270,6 +381,13 @@ class ForegroundCallSignalingService:
             if account_key == recipient:
                 subscriptions.extend(current_subscriptions)
         return subscriptions
+
+    def _subscription_for_lease(self, lease: ForegroundCallSignalingLease) -> ForegroundCallSignalingSubscription | None:
+        subscriptions = self._subscriptions.get(_subscription_key(lease.account_key, lease.device_key), [])
+        for subscription in subscriptions:
+            if subscription.lease_id == lease.lease_id:
+                return subscription
+        return None
 
 
 def foreground_ready_sse_event() -> str:

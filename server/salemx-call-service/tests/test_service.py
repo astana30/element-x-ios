@@ -283,6 +283,49 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         payload.update(overrides)
         return payload
 
+    def pending_metadata(self, **overrides: object) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "version": 1,
+            "call_id": "call-a",
+            "room_id": "!room:example.test",
+            "intent": "audio",
+        }
+        payload.update(overrides)
+        return payload
+
+    def apns_enabled_invite_app(
+        self,
+        app_module: object,
+        signaling: ForegroundCallSignalingService,
+        provider: FakeAPNsVoIPProvider | None = None,
+    ) -> tuple[object, FakeAPNsVoIPProvider]:
+        store = InMemoryPushKitTokenStore()
+        token_request = app_module.PushKitTokenRegistrationRequest.from_mapping({
+            "version": 1,
+            "token": "synthetic-" + "recipient-" + "pushkit-token-fixture",
+            "environment": "development",
+        })
+        store.store("callee", "device-b", token_request)
+        provider = provider or FakeAPNsVoIPProvider(result="sandbox_success")
+        send_service = APNsVoIPSandboxSendService(
+            APNsVoIPSandboxConfig(
+                enabled=True,
+                environment="sandbox",
+                team_id="TEAMID",
+                key_id="KEYID",
+                auth_key_path="/redacted/apns-auth-key.p8",
+                topic="kz.salemx.msg.voip",
+            ),
+            provider=provider,
+        )
+        app = app_module.create_app(
+            token_service=self.make_token_service(),
+            foreground_signaling_service=signaling,
+            pushkit_token_store=store,
+            apns_voip_send_service=send_service,
+        )
+        return app, provider
+
     async def test_payload_validation_accepts_only_safe_opaque_invite(self) -> None:
         invite = ForegroundCallInvitePayload.from_mapping(self.invite_payload())
 
@@ -705,6 +748,305 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("auth-a", output)
         self.assertNotIn("auth-b", output)
         self.assertNotIn("auth-c", output)
+
+    async def test_real_invite_omitted_delivery_mode_preserves_foreground_and_apns(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
+        signaling.subscribe(AuthenticatedUser("callee", "device-b"))
+        app, provider = self.apns_enabled_invite_app(app_module, signaling)
+        payload = self.targeted_invite_payload(
+            expires_at_ms=4102444800000,
+            pending_metadata=self.pending_metadata(),
+        )
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_INVITE_PATH,
+            {"authorization": self.authorization("auth-a")},
+            payload,
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["delivery_mode"], "foreground_and_apns")
+        self.assertEqual(body["foreground_stream_present"], True)
+        self.assertEqual(body["foreground_delivery_attempted"], True)
+        self.assertEqual(body["foreground_delivery_succeeded"], True)
+        self.assertEqual(body["apns_requested"], True)
+        self.assertEqual(body["apns_provider_invoked"], True)
+        self.assertEqual(body["apns_provider_accepted"], True)
+        self.assertEqual(body["APNs_sent"], True)
+        self.assertEqual(len(provider.requests), 1)
+
+    async def test_real_invite_explicit_foreground_and_apns_preserves_apns(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
+        signaling.subscribe(AuthenticatedUser("callee", "device-b"))
+        app, provider = self.apns_enabled_invite_app(app_module, signaling)
+        payload = self.targeted_invite_payload(
+            delivery_mode="foreground_and_apns",
+            expires_at_ms=4102444800000,
+            pending_metadata=self.pending_metadata(),
+        )
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_INVITE_PATH,
+            {"authorization": self.authorization("auth-a")},
+            payload,
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["delivery_mode"], "foreground_and_apns")
+        self.assertEqual(body["foreground_delivery_succeeded"], True)
+        self.assertEqual(body["apns_requested"], True)
+        self.assertEqual(body["apns_provider_invoked"], True)
+        self.assertEqual(body["APNs_sent"], True)
+        self.assertEqual(len(provider.requests), 1)
+
+    async def test_foreground_only_delivers_to_exact_stream_without_apns(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
+        subscription = signaling.subscribe(AuthenticatedUser("callee", "device-b"))
+        app, provider = self.apns_enabled_invite_app(app_module, signaling)
+        payload = self.targeted_invite_payload(
+            delivery_mode="foreground_only",
+            expires_at_ms=4102444800000,
+            pending_metadata=self.pending_metadata(),
+        )
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_INVITE_PATH,
+            {"authorization": self.authorization("auth-a")},
+            payload,
+        )
+        received = await asyncio.wait_for(subscription.next_event(), timeout=0.1)
+        output = json.dumps(body, sort_keys=True)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(received.call_handle, "opaque-local-safe-handle")
+        self.assertEqual(body["delivery_mode"], "foreground_only")
+        self.assertEqual(body["foreground_stream_present"], True)
+        self.assertEqual(body["foreground_delivery_attempted"], True)
+        self.assertEqual(body["foreground_delivery_succeeded"], True)
+        self.assertEqual(body["apns_requested"], False)
+        self.assertEqual(body["apns_provider_invoked"], False)
+        self.assertEqual(body["apns_provider_accepted"], False)
+        self.assertEqual(body["APNs_sent"], False)
+        self.assertEqual(body["delivery_attempt_id_present"], True)
+        self.assertIsInstance(body["delivery_attempt_id"], str)
+        self.assertTrue(body["delivery_attempt_id"])
+        self.assertEqual(body["media_credentials_requested"], False)
+        self.assertEqual(body["media_connect_requested"], False)
+        self.assertEqual(len(provider.requests), 0)
+        self.assertNotIn("synthetic-recipient-pushkit-token-fixture", output)
+        self.assertNotIn("auth-a", output)
+        self.assertNotIn("device-b", output)
+
+    async def test_foreground_only_no_exact_stream_conflicts_without_apns(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
+        app, provider = self.apns_enabled_invite_app(app_module, signaling)
+        payload = self.targeted_invite_payload(
+            delivery_mode="foreground_only",
+            expires_at_ms=4102444800000,
+            pending_metadata=self.pending_metadata(),
+        )
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_INVITE_PATH,
+            {"authorization": self.authorization("auth-a")},
+            payload,
+        )
+        diagnostics = body["diagnostics"]
+
+        self.assertEqual(status, 409)
+        self.assertEqual(body["errcode"], "M_DIRECT_CALL_FOREGROUND_STREAM_UNAVAILABLE")
+        self.assertEqual(diagnostics["delivery_mode"], "foreground_only")
+        self.assertEqual(diagnostics["foreground_stream_present"], False)
+        self.assertEqual(diagnostics["foreground_delivery_attempted"], False)
+        self.assertEqual(diagnostics["foreground_delivery_succeeded"], False)
+        self.assertEqual(diagnostics["apns_requested"], False)
+        self.assertEqual(diagnostics["apns_provider_invoked"], False)
+        self.assertEqual(diagnostics["apns_provider_accepted"], False)
+        self.assertEqual(diagnostics["APNs_sent"], False)
+        self.assertEqual(len(provider.requests), 0)
+
+    async def test_foreground_only_wrong_recipient_or_device_stream_rejected(self) -> None:
+        app_module = _load_app_module()
+        for subscriber in [AuthenticatedUser("caller", "device-b"), AuthenticatedUser("callee", "device-c")]:
+            signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
+            signaling.subscribe(subscriber)
+            app, provider = self.apns_enabled_invite_app(app_module, signaling)
+            payload = self.targeted_invite_payload(
+                delivery_mode="foreground_only",
+                expires_at_ms=4102444800000,
+                pending_metadata=self.pending_metadata(),
+            )
+
+            status, body = await _asgi_post_json(
+                app,
+                app_module.FOREGROUND_SIGNALING_INVITE_PATH,
+                {"authorization": self.authorization("auth-a")},
+                payload,
+            )
+
+            self.assertEqual(status, 409)
+            self.assertEqual(body["diagnostics"]["foreground_stream_present"], False)
+            self.assertEqual(body["diagnostics"]["APNs_sent"], False)
+            self.assertEqual(len(provider.requests), 0)
+
+    async def test_foreground_only_disappearing_stream_consumes_metadata_without_apns_fallback(self) -> None:
+        class DisconnectingForegroundSignaling(ForegroundCallSignalingService):
+            def publish_invite_to_lease(self, invite_request, lease):  # type: ignore[no-untyped-def]
+                for subscription in self._target_subscriptions(invite_request.recipient, invite_request.recipient_device):
+                    self.unsubscribe(subscription)
+                return super().publish_invite_to_lease(invite_request, lease)
+
+        app_module = _load_app_module()
+        signaling = DisconnectingForegroundSignaling(clock_ms=lambda: 2000)
+        signaling.subscribe(AuthenticatedUser("callee", "device-b"))
+        app, provider = self.apns_enabled_invite_app(app_module, signaling)
+        payload = self.targeted_invite_payload(
+            delivery_mode="foreground_only",
+            expires_at_ms=4102444800000,
+            pending_metadata=self.pending_metadata(),
+        )
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_INVITE_PATH,
+            {"authorization": self.authorization("auth-a")},
+            payload,
+        )
+        claim_status, claim_body = await _asgi_get_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_PENDING_METADATA_SENDER_CLAIM_PATH,
+            {"authorization": self.authorization("auth-a")},
+        )
+
+        self.assertEqual(status, 409)
+        self.assertEqual(body["diagnostics"]["foreground_stream_present"], False)
+        self.assertEqual(body["diagnostics"]["foreground_delivery_attempted"], True)
+        self.assertEqual(body["diagnostics"]["APNs_sent"], False)
+        self.assertEqual(claim_status, 404)
+        self.assertEqual(claim_body["errcode"], "M_NOT_FOUND")
+        self.assertEqual(len(provider.requests), 0)
+
+    async def test_foreground_only_expired_invite_fails_after_claim_without_apns(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 50000)
+        subscription = signaling.subscribe(AuthenticatedUser("callee", "device-b"))
+        app, provider = self.apns_enabled_invite_app(app_module, signaling)
+        payload = self.targeted_invite_payload(
+            delivery_mode="foreground_only",
+            created_at_ms=1000,
+            expires_at_ms=46000,
+            pending_metadata=self.pending_metadata(),
+        )
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_INVITE_PATH,
+            {"authorization": self.authorization("auth-a")},
+            payload,
+        )
+
+        self.assertEqual(status, 409)
+        self.assertEqual(body["diagnostics"]["foreground_stream_present"], True)
+        self.assertEqual(body["diagnostics"]["foreground_delivery_attempted"], True)
+        self.assertEqual(body["diagnostics"]["foreground_delivery_succeeded"], False)
+        self.assertEqual(body["diagnostics"]["APNs_sent"], False)
+        self.assertEqual(len(provider.requests), 0)
+        with self.assertRaises(asyncio.TimeoutError):
+            await asyncio.wait_for(subscription.next_event(), timeout=0.01)
+
+    async def test_foreground_only_sender_binding_mismatch_rejected_after_delivery(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
+        signaling.subscribe(AuthenticatedUser("callee", "device-b"))
+        app, _ = self.apns_enabled_invite_app(app_module, signaling)
+        payload = self.targeted_invite_payload(
+            delivery_mode="foreground_only",
+            expires_at_ms=4102444800000,
+            pending_metadata=self.pending_metadata(),
+        )
+
+        status, body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_INVITE_PATH,
+            {"authorization": self.authorization("auth-a")},
+            payload,
+        )
+        sender_reference = body["sender_authorized_metadata_reference"]
+        wrong_sender_status, wrong_sender_body = await _asgi_get_json(
+            app,
+            f"/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{sender_reference}/sender",
+            {"authorization": self.authorization("auth-b")},
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(wrong_sender_status, 403)
+        self.assertEqual(wrong_sender_body["errcode"], "M_FORBIDDEN")
+
+    async def test_foreground_only_attempt_ids_are_unique_and_redacted(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
+        signaling.subscribe(AuthenticatedUser("callee", "device-b"))
+        app, provider = self.apns_enabled_invite_app(app_module, signaling)
+        payload = self.targeted_invite_payload(
+            delivery_mode="foreground_only",
+            expires_at_ms=4102444800000,
+            pending_metadata=self.pending_metadata(),
+        )
+
+        first_status, first_body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_INVITE_PATH,
+            {"authorization": self.authorization("auth-a")},
+            payload,
+        )
+        second_status, second_body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_INVITE_PATH,
+            {"authorization": self.authorization("auth-a")},
+            payload,
+        )
+        output = json.dumps({"first": first_body, "second": second_body}, sort_keys=True)
+
+        self.assertEqual(first_status, 200)
+        self.assertEqual(second_status, 200)
+        self.assertNotEqual(first_body["delivery_attempt_id"], second_body["delivery_attempt_id"])
+        self.assertEqual(first_body["delivery_attempt_id_present"], True)
+        self.assertEqual(second_body["delivery_attempt_id_present"], True)
+        self.assertEqual(len(provider.requests), 0)
+        for raw_value in ["synthetic-recipient-pushkit-token-fixture", "auth-a", "device-b", "!room:example.test", "call-a"]:
+            self.assertNotIn(raw_value, output)
+
+    async def test_unknown_delivery_mode_returns_authenticated_bad_request(self) -> None:
+        app_module = _load_app_module()
+        signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
+        app, provider = self.apns_enabled_invite_app(app_module, signaling)
+
+        unauthenticated_status, unauthenticated_body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_INVITE_PATH,
+            {},
+            self.targeted_invite_payload(delivery_mode="unsupported", pending_metadata=self.pending_metadata()),
+        )
+        status, body = await _asgi_post_json(
+            app,
+            app_module.FOREGROUND_SIGNALING_INVITE_PATH,
+            {"authorization": self.authorization("auth-a")},
+            self.targeted_invite_payload(delivery_mode="unsupported", pending_metadata=self.pending_metadata()),
+        )
+
+        self.assertEqual(unauthenticated_status, 401)
+        self.assertEqual(unauthenticated_body["errcode"], "M_UNKNOWN_TOKEN")
+        self.assertEqual(status, 400)
+        self.assertEqual(body["errcode"], "M_UNKNOWN")
+        self.assertEqual(len(provider.requests), 0)
 
     async def test_sender_can_claim_latest_authenticated_sender_metadata_without_reference_transport(self) -> None:
         app_module = _load_app_module()

@@ -1470,3 +1470,145 @@ server_accessed=false
 server_changed=false
 stage_1d_r6_passed=true
 ```
+
+## Stage 2F-SIM-R2D Foreground-Only Salem Invite Delivery
+
+Stage: `2F-SIM-R2D`
+
+Root cause from the first controlled Stage 2F-SIM attempt:
+
+```text
+real_non_dev_foreground_invite_used=true
+foreground_invite_request_count=1
+foreground_stream_delivery_count=1
+apns_provider_invocation_count=1
+apns_provider_success_count=1
+root_cause=foreground_invite_endpoint_sent_apns_even_after_foreground_stream_delivery
+```
+
+The foreground invite route needed an authenticated foreground-only mode. R2 extends:
+
+```text
+POST /_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/invite
+```
+
+with strict `delivery_mode` values:
+
+```text
+missing_delivery_mode=foreground_and_apns
+delivery_mode_foreground_and_apns=legacy_behavior_preserved
+delivery_mode_foreground_only=foreground_stream_only
+unknown_delivery_mode=authenticated_400
+unauthenticated_request=401_before_meaningful_processing
+```
+
+Foreground-only security semantics:
+
+```text
+exact_recipient_user_required=true
+exact_recipient_device_required=true
+exact_current_stream_lease_required=true
+no_stream_status=409_conflict_precondition
+no_stream_foreground_delivery_attempted=false
+no_stream_apns_requested=false
+no_stream_apns_provider_invoked=false
+no_stream_APNs_sent=false
+apns_fallback_disabled=true
+metadata_claim_single_use_preserved=true
+post_claim_delivery_race_consumes_metadata=true
+post_claim_delivery_race_reuses_metadata=false
+```
+
+Request-scoped observability:
+
+```text
+delivery_attempt_id=random_opaque_server_generated
+delivery_attempt_id_derived_from_user_room_metadata_or_device=false
+delivery_attempt_id_security_authority=false
+delivery_attempt_id_returned_in_response=true
+delivery_attempt_id_in_redacted_diagnostics=true
+```
+
+Successful `foreground_only` diagnostics must report:
+
+```text
+delivery_mode=foreground_only
+foreground_stream_present=true
+foreground_delivery_attempted=true
+foreground_delivery_succeeded=true
+apns_requested=false
+apns_provider_invoked=false
+apns_provider_accepted=false
+APNs_sent=false
+delivery_attempt_id_present=true
+```
+
+Server tests and local-to-deployed integrity:
+
+```text
+server_tests=181_passed
+deployed_app_py_sha256=2ed83fc6c1416526b94f79715d3e034c25bcc220bd7c6f97ee1bf7d6e7089746
+deployed_foreground_signaling_py_sha256=edbc7437923df7cba5114d79b6c7d44376227f7dd5d1791e2ba461e22c19c2bf
+deployed_pending_call_metadata_py_sha256=aeaf6ab120598e0f1c893c7466f107e543793b2abd06fb6510aeafe4efe11cb0
+local_app_matches_deployed=true
+local_foreground_signaling_matches_deployed=true
+local_pending_metadata_matches_deployed=true
+```
+
+Deployment history:
+
+```text
+first_deployment_rollback=true
+first_deployment_failure=validator_bug_wrong_static_file
+second_deployment_candidate_validation_passed=true
+second_deployment_files_changed=true
+second_deployment_reported_failure=localhost_readiness_probe_before_socket_ready
+readiness_gap_seconds_bucket=approximately_2_seconds
+delayed_acceptance_candidate_still_deployed=true
+delayed_acceptance_service_active=true
+delayed_acceptance_port_8091_listening=true
+delayed_acceptance_localhost_http_reachable=true
+```
+
+Delayed unauthenticated route acceptance:
+
+```text
+POST_invite_unauthenticated=401
+GET_invite=405
+GET_stream_unauthenticated=401
+POST_stream=405
+GET_dev_invite=404
+POST_dev_invite=404
+```
+
+The corrected local deployment validator now contains bounded readiness polling, explicit curl failure buckets, automatic rollback after file replacement, and restored-service readiness verification. The old R2B archive still contains macOS `LIBARCHIVE.xattr.com.apple.provenance` extended-attribute headers and must not be reused.
+
+Aborted Stage 2F-SIM cleanup was verified without sending another invite or APNs:
+
+```text
+sender_call_ui_active=false
+receiver_device_connected=true
+receiver_device_unlocked=true
+active_livekit_socket_count=0
+active_call_service_socket_count=0
+active_matrixrtc_participant_count=0_by_socket_evidence
+stale_matrixrtc_membership_detected=false
+rooms_or_participants_manually_deleted=false
+```
+
+Unprivileged LiveKit admin room listing was not exposed without reading deployment secrets, so room names and participant identifiers were not inspected or printed. Empty inactive room objects are not treated as failure when active participant evidence is zero and stale-membership detection is false.
+
+R2D acceptance boundary:
+
+```text
+server_upgrade_applied=true
+post_deployment_acceptance_passed=true
+real_invite_sent_during_r2=false
+APNs_sent_during_r2=false
+Matrix_event_created_during_r2=false
+media_connected_during_r2=false
+stage_2f_simulator_signaling_passed=false
+physical_two_way_audio_proven=false
+physical_stage_2f_still_required=true
+stage_2g_ready=false
+```

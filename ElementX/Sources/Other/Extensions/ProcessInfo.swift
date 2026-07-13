@@ -166,6 +166,15 @@ extension ProcessInfo {
         #endif
     }
 
+    static var isSalemXStage2FSimulatorReceiverBridgeEnabled: Bool {
+        #if DEBUG
+        isSalemXStage2FSimulatorReceiverBridgeEnabled(environment: processInfo.environment,
+                                                      arguments: processInfo.arguments)
+        #else
+        false
+        #endif
+    }
+
     static var isNativeDirectCallInternalPilotRolloutEnabled: Bool {
         #if DEBUG
         isNativeDirectCallInternalPilotRolloutEnabled(environment: processInfo.environment)
@@ -258,6 +267,12 @@ extension ProcessInfo {
         }
 
         return URL(string: value)
+    }
+
+    static func isSalemXStage2FSimulatorReceiverBridgeEnabled(environment: [String: String],
+                                                              arguments: [String]) -> Bool {
+        environment["SALEM_X_STAGE2F_SIM_RECEIVER_BRIDGE"] == "1" ||
+            arguments.contains("-salemx-stage2f-sim-receiver-bridge")
     }
 }
 #endif

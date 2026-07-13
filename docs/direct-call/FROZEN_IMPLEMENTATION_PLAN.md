@@ -151,3 +151,55 @@ The typed End result distinguishes accepted termination, already terminated, mis
 Remote and local upstream terminal events are accepted only from existing Element Call / MatrixRTC observation paths: widget hangup/close, ongoing call timeline termination events and ongoing call room-info disappearance. CallKit does not synthesize MatrixRTC connected or ended state from answer fulfillment, screen presentation, CallKit UI disappearance or audio-session interruption. Embedded End does not send manual Matrix hangup events, invoke legacy direct LiveKit hangup, request microphone or camera permission, start media, send APNs, access the server, alter PushKit ingress, or enable the bridge by default.
 
 Stage 2F may start only after the Stage 2E gate remains disabled by default, legacy answer and End routes are proven unchanged when disabled, incoming answer still selects `presentExisting` and never `startNew`, local End invokes upstream embedded termination, remote End reports CallKit ended once, duplicate and racing End events are idempotent, provider reset cleanup is safe, no manual Matrix hangup or direct LiveKit hangup occurs, and the UnitTests target compile, Stage 2E focused tests, Stage 2D answer-bridge regression and Stage 2C handoff regression all pass.
+
+## Stage 2F-SIM-R2D Foreground-Only Server Contract
+
+Stage 2F-SIM remains an intermediate simulator-to-device signaling proof only. It has not passed yet, and it does not replace the later two-physical-device Stage 2F audio proof.
+
+The first controlled Stage 2F-SIM attempt used the real authenticated foreground-signaling invite route and sent exactly one invite, but the production foreground invite endpoint also invoked sandbox APNs even when foreground stream delivery succeeded. That made the no-APNs Stage 2F-SIM acceptance impossible with the existing server contract. The result was classified as a server/API contract gap, not a stale marker, and no authenticated invite was sent during R2, R2B, R2C or R2D.
+
+R2 adds an explicit authenticated `delivery_mode` request field to `POST /_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/invite`:
+
+```text
+missing delivery_mode=foreground_and_apns
+delivery_mode=foreground_and_apns preserves legacy foreground plus APNs behavior
+delivery_mode=foreground_only delivers only to the validated foreground stream
+```
+
+`foreground_only` requires an active foreground stream bound to the exact validated recipient user, recipient device and current stream lease. If no exact stream is present, the route fails closed with a conflict/precondition response, does not attempt foreground delivery, does not request APNs, does not invoke the APNs provider and never falls back to APNs. If the stream disappears after metadata claim, the server returns a typed delivery failure, consumes the metadata through the existing single-claim/anti-replay boundary, does not make metadata reusable and still does not invoke APNs.
+
+The response now contains a privacy-safe server-generated `delivery_attempt_id`. It is random, opaque, not derived from user, room, metadata or device identifiers, has no security authority and exists only for request-scoped proof. Successful `foreground_only` diagnostics must report foreground delivery success with `apns_requested=false`, `apns_provider_invoked=false`, `apns_provider_accepted=false` and `APNs_sent=false`.
+
+The iOS DEBUG Stage 2F-SIM sender explicitly requests `delivery_mode=foreground_only`. Release/default clients preserve the legacy behavior by omitting the field unless intentionally migrated later. The embedded MatrixRTC answer bridge remains disabled by default and is enabled only by explicit DEBUG override for the controlled receiver.
+
+Validation and deployment evidence:
+
+```text
+server_tests=181_passed
+ios_focused_tests=62_passed
+local_app_matches_deployed=true
+local_foreground_signaling_matches_deployed=true
+local_pending_metadata_matches_deployed=true
+deployed_app_py_sha256=2ed83fc6c1416526b94f79715d3e034c25bcc220bd7c6f97ee1bf7d6e7089746
+deployed_foreground_signaling_py_sha256=edbc7437923df7cba5114d79b6c7d44376227f7dd5d1791e2ba461e22c19c2bf
+deployed_pending_call_metadata_py_sha256=aeaf6ab120598e0f1c893c7466f107e543793b2abd06fb6510aeafe4efe11cb0
+```
+
+The first privileged deployment rolled back because of a validator bug: a brittle post-static assertion looked for the legacy-default enum in the wrong file. The second deployment passed candidate/static validation and changed the three call-service files, but reported failure because localhost readiness was probed before port `8091` opened. Delayed R2C/R2D acceptance proved the candidate remained deployed and healthy; systemd became active before Uvicorn opened the socket, with an observed readiness gap of approximately two seconds. The corrected local deployment validator now uses bounded readiness polling, explicit curl failure handling and rollback readiness verification. The old R2B archive still contains macOS extended-attribute headers and must not be reused.
+
+Aborted Stage 2F-SIM cleanup was checked before accepting R2D. The sender simulator showed no active call UI, iPhone PRO was connected and unlocked, no LiveKit/call-service sockets were established, and existing client stale-membership markers were false. Unprivileged LiveKit admin room listing was not available without reading secrets, so no raw room or participant identifiers were inspected or printed.
+
+Current Stage 2F status after R2D:
+
+```text
+foreground_only_contract_created=true
+legacy_default_preserved=true
+exact_foreground_stream_required=true
+no_stream_fails_closed=true
+apns_fallback_disabled=true
+request_scoped_delivery_id_present=true
+stage_2f_simulator_signaling_passed=false
+physical_two_way_audio_proven=false
+physical_stage_2f_still_required=true
+stage_2g_ready=false
+```

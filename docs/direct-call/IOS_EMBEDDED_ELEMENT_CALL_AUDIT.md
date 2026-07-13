@@ -713,3 +713,79 @@ stage2d_regression_tests_passed=true
 stage2c_regression_tests_passed=true
 stage_2f_ready=true
 ```
+
+## Stage 2F-SIM-R2D Foreground-Only Simulator Signaling Readiness
+
+Stage 2F-SIM is still not passed. The accepted R2D state only adds the server/client contract needed for a later rerun of the simulator sender to physical iPhone receiver signaling proof without APNs.
+
+The failed initial Stage 2F-SIM execution proved the simulator sender could reach the real authenticated foreground-signaling route, but it also proved that the production foreground invite endpoint invoked sandbox APNs after foreground stream delivery. The helper stopped on that APNs guard before the full CallKit Answer, two-participant MatrixRTC, remote-end and cleanup proof was completed. This failure is recorded as a production route contract gap, not as a failure of Stage 2C, Stage 2D or Stage 2E.
+
+R2 adds a DEBUG-only sender adaptation in `SalemXMatrixRTCHandoff.swift`: the Stage 2F-SIM sender request includes `delivery_mode=foreground_only`. The normal release/default sender behavior remains unchanged and omits the new field, preserving the server default `foreground_and_apns` behavior for existing clients.
+
+The DEBUG sender accepts a foreground invite response only when the current request reports:
+
+```text
+delivery_mode=foreground_only
+foreground_delivery_succeeded=true
+apns_requested=false
+apns_provider_invoked=false
+apns_provider_accepted=false
+APNs_sent=false
+delivery_attempt_id_present=true
+```
+
+The proof is scoped to the response `delivery_attempt_id`, so aggregate or historical APNs markers are no longer accepted. Missing attempt IDs, mismatched attempt IDs, APNs requested, APNs provider invocation and APNs sent all fail the DEBUG helper guard. No invite is repeated automatically.
+
+The receiver bridge behavior from Stage 2D and Stage 2E remains unchanged:
+
+```text
+embeddedMatrixRTCAnswerBridgeEnabled=false_by_default
+receiver_debug_override_required=true
+incoming_answer_selects_presentExisting=true
+incoming_answer_selects_startNew=false
+manual_matrix_hangup_sent=false
+direct_livekit_credentials_requested=false
+direct_livekit_joined=false
+camera_permission_requested=false
+video_track_published=false
+```
+
+Focused iOS validation for R2:
+
+```text
+ios_focused_tests=62_passed
+debug_stage2f_sender_uses_foreground_only=true
+release_default_sender_behavior_unchanged=true
+helper_rejects_missing_delivery_attempt_id=true
+helper_rejects_mismatched_delivery_attempt_id=true
+helper_rejects_apns_requested=true
+helper_rejects_provider_invoked=true
+helper_rejects_apns_sent=true
+stage2e_regression_passed=true
+stage2d_regression_passed=true
+stage2c_regression_passed=true
+```
+
+R2D cleanup evidence before documentation and commit:
+
+```text
+sender_call_ui_active=false
+receiver_device_connected=true
+receiver_device_unlocked=true
+livekit_established_socket_count=0
+call_service_established_socket_count=0
+stale_matrixrtc_membership_detected=false
+```
+
+The physical receiver UI could not be screen-captured through `devicectl` without an invasive workflow, and unprivileged LiveKit admin room listing was unavailable without reading secrets. The cleanup classification therefore uses the strongest available non-mutating evidence and does not delete rooms, participants or Matrix state.
+
+R2D keeps the acceptance boundary closed:
+
+```text
+authenticated_invite_sent_during_r2=false
+APNs_sent_during_r2=false
+stage_2f_simulator_signaling_passed=false
+physical_two_way_audio_proven=false
+physical_stage_2f_still_required=true
+stage_2g_ready=false
+```

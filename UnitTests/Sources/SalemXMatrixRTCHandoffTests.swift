@@ -306,6 +306,147 @@ final class SalemXEmbeddedCallEndBridgeTests {
 }
 
 @MainActor
+final class SalemXStage2FSimulatorSignalingDebugTests {
+    @Test
+    func receiverBridgeOverrideIsDisabledByDefault() {
+        #expect(SalemXEmbeddedCallAnswerBridgeConfiguration().embeddedMatrixRTCAnswerBridgeEnabled == false)
+        #expect(ProcessInfo.isSalemXStage2FSimulatorReceiverBridgeEnabled(environment: [:], arguments: []) == false)
+    }
+
+    @Test
+    func receiverBridgeOverrideRequiresExplicitDebugLaunchArgumentOrEnvironment() {
+        #expect(ProcessInfo.isSalemXStage2FSimulatorReceiverBridgeEnabled(environment: ["SALEM_X_STAGE2F_SIM_RECEIVER_BRIDGE": "1"],
+                                                                          arguments: []) == true)
+        #expect(ProcessInfo.isSalemXStage2FSimulatorReceiverBridgeEnabled(environment: [:],
+                                                                          arguments: ["-salemx-stage2f-sim-receiver-bridge"]) == true)
+    }
+
+    @Test
+    func stage2FSimulatorSenderUsesUpstreamStartNewAudio() throws {
+        let source = try stage2FSimulatorSignalingDebugSource()
+
+        #expect(source.contains("userSessionFlowCoordinator.startCall(roomID: roomProxy.id, startMode: .audio)"))
+        #expect(source.contains("\"start_mode_audio=\\(senderStartModeAudio)\""))
+    }
+
+    @Test
+    func stage2FSimulatorSenderRequiresActiveEvidenceBeforeInvite() throws {
+        let source = try stage2FSimulatorSignalingDebugSource()
+        let waitCall = try #require(source.range(of: "guard await waitForActiveCallEvidence")?.lowerBound)
+        let readyMarker = try #require(source.range(of: "senderReadyToSendForegroundInvite = true")?.lowerBound)
+
+        #expect(source.contains("context.activeCallEvidenceSeen"))
+        #expect(source.contains("lastFailure = \"activeCallEvidenceTimeout\""))
+        #expect(waitCall < readyMarker)
+    }
+
+    @Test
+    func stage2FSimulatorInviteIsOneShotAndRealNonDev() throws {
+        let source = try stage2FSimulatorSignalingDebugSource()
+
+        #expect(source.contains("!context.foregroundInviteSent"))
+        #expect(source.contains("context.foregroundInviteSent"))
+        #expect(source.contains("foregroundInviteSentOnce = true"))
+        #expect(source.contains("realNonDevForegroundInviteUsed = true"))
+        #expect(!source.contains("/dev/invite"))
+    }
+
+    @Test
+    func stage2FSimulatorInviteRequestsForegroundOnlyDelivery() throws {
+        let source = try stage2FSimulatorSignalingDebugSource()
+        let serviceSource = try SalemXEmbeddedCallAnswerBridgeTests.source(named: "ElementX/Sources/Services/ElementCall/ElementCallService.swift")
+
+        #expect(source.contains("\"delivery_mode\": \"foreground_only\""))
+        #expect(source.contains("foregroundOnlyInviteResponseAccepted(response.payload)"))
+        #expect(!serviceSource.contains("\"delivery_mode\""))
+    }
+
+    @Test
+    func stage2FSimulatorForegroundOnlyResponseAcceptsCurrentAttempt() {
+        let payload = foregroundOnlyPayload()
+
+        #expect(SalemXStage2FSimulatorSignalingDebug.foregroundOnlyInviteResponseAccepted(payload,
+                                                                                          expectedDeliveryAttemptID: "attempt-current"))
+    }
+
+    @Test
+    func stage2FSimulatorForegroundOnlyResponseRejectsMissingAttempt() {
+        var payload = foregroundOnlyPayload()
+        payload.removeValue(forKey: "delivery_attempt_id")
+
+        #expect(!SalemXStage2FSimulatorSignalingDebug.foregroundOnlyInviteResponseAccepted(payload))
+    }
+
+    @Test
+    func stage2FSimulatorForegroundOnlyResponseRejectsDifferentAttempt() {
+        let payload = foregroundOnlyPayload()
+
+        #expect(!SalemXStage2FSimulatorSignalingDebug.foregroundOnlyInviteResponseAccepted(payload,
+                                                                                           expectedDeliveryAttemptID: "attempt-other"))
+    }
+
+    @Test
+    func stage2FSimulatorForegroundOnlyResponseRejectsAPNsRequested() {
+        #expect(!SalemXStage2FSimulatorSignalingDebug.foregroundOnlyInviteResponseAccepted(foregroundOnlyPayload(overrides: ["apns_requested": true])))
+    }
+
+    @Test
+    func stage2FSimulatorForegroundOnlyResponseRejectsProviderInvoked() {
+        #expect(!SalemXStage2FSimulatorSignalingDebug.foregroundOnlyInviteResponseAccepted(foregroundOnlyPayload(overrides: ["apns_provider_invoked": true])))
+    }
+
+    @Test
+    func stage2FSimulatorForegroundOnlyResponseRejectsAPNsSent() {
+        #expect(!SalemXStage2FSimulatorSignalingDebug.foregroundOnlyInviteResponseAccepted(foregroundOnlyPayload(overrides: ["APNs_sent": true])))
+    }
+
+    @Test
+    func stage2FSimulatorAdapterDoesNotUseForbiddenMediaPaths() throws {
+        let source = try stage2FSimulatorSignalingDebugSource()
+
+        #expect(!source.contains("requestMediaCredentials"))
+        #expect(!source.contains("LiveKitDirectCall"))
+        #expect(!source.contains("m.call.hangup"))
+        #expect(!source.contains("AVCaptureDevice.requestAccess"))
+        #expect(!source.contains("requestRecordPermission"))
+        #expect(!source.contains("startMode: .video"))
+    }
+
+    @Test
+    func stage2FSimulatorProofRecordsAnswerAndCleanupMarkers() throws {
+        let source = try stage2FSimulatorSignalingDebugSource()
+
+        #expect(source.contains("receiver_present_existing_selected=\\(receiverPresentExistingSelected)"))
+        #expect(source.contains("receiver_start_new_selected=\\(receiverStartNewSelected)"))
+        #expect(source.contains("matrixrtc_two_participants_seen=\\(matrixRTCTwoParticipantsSeen)"))
+        #expect(source.contains("sender_upstream_hangup_invoked=\\(senderUpstreamHangupInvoked)"))
+        #expect(source.contains("receiver_upstream_remote_end_seen=\\(receiverUpstreamRemoteEndSeen)"))
+        #expect(source.contains("receiver_callkit_ended_reported_once=\\(receiverCallKitEndedReportedOnce)"))
+        #expect(source.contains("matrixrtc_room_empty_or_closed=\\(matrixRTCRoomEmptyOrClosed)"))
+        #expect(source.contains("duplicate_callkit_end_reported=\\(duplicateCallKitEndReported)"))
+    }
+
+    private func stage2FSimulatorSignalingDebugSource() throws -> String {
+        try SalemXEmbeddedCallAnswerBridgeTests.source(named: "ElementX/Sources/Services/ElementCall/SalemXMatrixRTCHandoff.swift")
+    }
+
+    private func foregroundOnlyPayload(overrides: [String: Any] = [:]) -> [String: Any] {
+        var payload: [String: Any] = [
+            "delivery_mode": "foreground_only",
+            "foreground_delivery_succeeded": true,
+            "apns_requested": false,
+            "apns_provider_invoked": false,
+            "apns_provider_accepted": false,
+            "APNs_sent": false,
+            "delivery_attempt_id_present": true,
+            "delivery_attempt_id": "attempt-current"
+        ]
+        payload.merge(overrides) { _, new in new }
+        return payload
+    }
+}
+
+@MainActor
 final class SalemXMatrixRTCHandoffTests {
     @Test
     func claimedJoinedDMRoomHandsOffToAudioElementCall() async {
