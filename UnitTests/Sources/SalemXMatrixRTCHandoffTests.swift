@@ -416,6 +416,66 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
     }
 
     @Test
+    func stage2FReceiverAuthPreflightUsesCurrentSessionBearerRequest() throws {
+        let source = try stage2FSimulatorSignalingDebugSource()
+
+        #expect(source.contains("/direct-call/stage2f-sim/receiver-auth-preflight"))
+        #expect(source.contains("private static func preflightReceiverAuthentication"))
+        #expect(source.contains("receiverCurrentSessionPresent = true"))
+        #expect(source.contains("receiverCurrentAccessTokenPresent = true"))
+        #expect(source.contains("receiverClaimAuthHeaderReady = bearerAuthorizationHeader(accessToken: accessToken) != nil"))
+        #expect(source.contains("receiverClaimHomeserverMatchesSession"))
+        #expect(source.contains("receiverSameCredentialWhoamiAttempted = true"))
+        #expect(source.contains("receiverSameCredentialWhoamiSucceeded"))
+    }
+
+    @Test
+    func stage2FReceiverMetadataClaimRecordsHTTPAndDecodeBeforeActiveEvidence() throws {
+        let source = try stage2FSimulatorSignalingDebugSource()
+        let functionStart = try #require(source.range(of: "private static func claimReceiverMetadataAndReportCallKit")?.lowerBound)
+        let functionEnd = try #require(source.range(of: "private static func resolveDirectOneToOneDM")?.lowerBound)
+        let functionSource = source[functionStart..<functionEnd]
+        let claimSuccess = try #require(functionSource.range(of: "proof.receiverMetadataClaimSuccess = true")?.lowerBound)
+        let activeEvidence = try #require(functionSource.range(of: "let activeCallState: VerifiedIncomingCallBootstrapActiveCallState")?.lowerBound)
+        let callKitReport = try #require(functionSource.range(of: "salemXDebugReportStage2FSimulatorIncomingCall")?.lowerBound)
+
+        #expect(source.contains("proof.receiverMetadataClaimAttempted = true"))
+        #expect(source.contains("proof.receiverMetadataClaimHTTPStatus"))
+        #expect(source.contains("proof.receiverMetadataClaimResponseDecodeSucceeded = true"))
+        #expect(source.contains("proof.receiverMetadataClaimErrorBucket = \"none\""))
+        #expect(claimSuccess < activeEvidence)
+        #expect(activeEvidence < callKitReport)
+    }
+
+    @Test
+    func stage2FReceiverClaim401OrDecodeFailureDoesNotReportCallKit() throws {
+        let source = try stage2FSimulatorSignalingDebugSource()
+        let statusGuard = try #require(source.range(of: "guard (200..<300).contains(response.status ?? 0) else")?.lowerBound)
+        let decodeGuard = try #require(source.range(of: "guard let metadata = IncomingPendingMetadata(payload: response.payload) else")?.lowerBound)
+        let callKitReport = try #require(source.range(of: "salemXDebugReportStage2FSimulatorIncomingCall")?.lowerBound)
+
+        #expect(source.contains("proof.receiverMetadataClaimErrorBucket = metadataClaimErrorBucket(payload: response.payload, status: response.status)"))
+        #expect(source.contains("proof.receiverMetadataClaimErrorBucket = \"decode\""))
+        #expect(statusGuard < callKitReport)
+        #expect(decodeGuard < callKitReport)
+    }
+
+    @Test
+    func stage2FReceiverProofRecordsClaimPreflightAndFailureBuckets() throws {
+        let source = try stage2FSimulatorSignalingDebugSource()
+
+        #expect(source.contains("receiver_claim_auth_header_ready=\\(receiverClaimAuthHeaderReady)"))
+        #expect(source.contains("receiver_same_credential_whoami_succeeded=\\(receiverSameCredentialWhoamiSucceeded)"))
+        #expect(source.contains("receiver_metadata_claim_attempted=\\(receiverMetadataClaimAttempted)"))
+        #expect(source.contains("receiver_metadata_claim_http_status=\\(receiverMetadataClaimHTTPStatus)"))
+        #expect(source.contains("receiver_metadata_claim_error_bucket=\\(receiverMetadataClaimErrorBucket)"))
+        #expect(source.contains("receiver_active_call_evidence_seen=\\(receiverActiveCallEvidenceSeen)"))
+        #expect(!source.contains("metadata_reference=\\("))
+        #expect(!source.contains("access_token=\\("))
+        #expect(!source.contains("Authorization=\\("))
+    }
+
+    @Test
     func stage2FSimulatorForegroundOnlyResponseAcceptsCurrentAttempt() {
         let payload = foregroundOnlyPayload()
 

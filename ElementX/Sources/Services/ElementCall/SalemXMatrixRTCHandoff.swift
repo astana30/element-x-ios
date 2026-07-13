@@ -651,6 +651,8 @@ enum SalemXStage2FSimulatorSignalingDebug {
             exportIdentity(userSession: userSession)
         case "/direct-call/stage2f-sim/receiver-start":
             Task { await startReceiver(userSession: userSession, streamURLString: queryItems["stream_url"]) }
+        case "/direct-call/stage2f-sim/receiver-auth-preflight":
+            Task { await preflightReceiverAuthentication(userSession: userSession) }
         case "/direct-call/stage2f-sim/receiver-claim-report":
             Task {
                 await claimReceiverMetadataAndReportCallKit(userSession: userSession,
@@ -804,7 +806,7 @@ enum SalemXStage2FSimulatorSignalingDebug {
         request.httpMethod = "GET"
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
-        request.setValue("B" + "earer " + accessToken, forHTTPHeaderField: "Authorization")
+        request.setValue(bearerAuthorizationHeader(accessToken: accessToken), forHTTPHeaderField: "Authorization")
 
         let stream = URLSessionForegroundCallSignalingSSEStream(request: request)
         let transport = ForegroundCallSignalingSSETransport(isEnabled: true, stream: stream)
@@ -1049,14 +1051,75 @@ enum SalemXStage2FSimulatorSignalingDebug {
         writeProof()
     }
 
+    private static func preflightReceiverAuthentication(userSession: UserSessionProtocol?) async {
+        proof.receiverSameCredentialWhoamiAttempted = false
+        proof.receiverSameCredentialWhoamiSucceeded = false
+        proof.receiverSameCredentialWhoamiHTTPStatus = "not_requested"
+        proof.receiverSameCredentialWhoamiErrorBucket = "not_requested"
+
+        guard let clientProxy = userSession?.clientProxy else {
+            proof.receiverCurrentSessionPresent = false
+            proof.receiverCurrentAccessTokenPresent = false
+            proof.receiverClaimAuthHeaderReady = false
+            proof.lastFailure = "noAuthenticatedSession"
+            writeProof()
+            return
+        }
+
+        proof.receiverCurrentSessionPresent = true
+        guard let accessTokenProvider = clientProxy as? DirectCallMatrixAccessTokenProviding,
+              let accessToken = await accessTokenProvider.matrixAccessToken(),
+              safeNonEmpty(accessToken) != nil else {
+            proof.receiverCurrentAccessTokenPresent = false
+            proof.receiverClaimAuthHeaderReady = false
+            proof.lastFailure = "noAuthenticatedSession"
+            writeProof()
+            return
+        }
+
+        proof.receiverCurrentAccessTokenPresent = true
+        proof.receiverClaimAuthHeaderReady = bearerAuthorizationHeader(accessToken: accessToken) != nil
+
+        guard let whoamiURL = endpointURL(path: whoamiPath, explicitURLString: nil, clientProxy: clientProxy) else {
+            proof.receiverClaimHomeserverMatchesSession = false
+            proof.receiverSameCredentialWhoamiErrorBucket = "wrong_homeserver"
+            proof.lastFailure = "secureInvitePreparationFailed"
+            writeProof()
+            return
+        }
+
+        proof.receiverClaimHomeserverMatchesSession = whoamiURL.absoluteString.hasPrefix(clientProxy.homeserver)
+        proof.receiverSameCredentialWhoamiAttempted = true
+        let response = await httpJSON(url: whoamiURL,
+                                      method: "GET",
+                                      accessToken: accessToken,
+                                      body: nil)
+        proof.receiverSameCredentialWhoamiHTTPStatus = response.status.map(String.init) ?? "network"
+        proof.receiverSameCredentialWhoamiErrorBucket = matrixErrorBucket(payload: response.payload, status: response.status)
+        let responseUserID = response.payload["user_id"] as? String
+        let responseDeviceID = response.payload["device_id"] as? String
+        let deviceMatches = clientProxy.deviceID == nil || responseDeviceID == clientProxy.deviceID
+        proof.receiverSameCredentialWhoamiSucceeded = (200..<300).contains(response.status ?? 0) && responseUserID == clientProxy.userID && deviceMatches
+        proof.lastFailure = proof.receiverSameCredentialWhoamiSucceeded ? "none" : "secureInvitePreparationFailed"
+        writeProof()
+    }
+
     private static func claimReceiverMetadataAndReportCallKit(userSession: UserSessionProtocol?,
                                                               elementCallService: any ElementCallServiceProtocol,
                                                               metadataReference: String?,
                                                               senderDeviceID: String?) async {
+        proof.receiverMetadataClaimAttempted = false
+        proof.receiverMetadataClaimHTTPStatus = "not_requested"
+        proof.receiverMetadataClaimErrorBucket = "not_requested"
+        proof.receiverMetadataClaimResponseReceived = false
+        proof.receiverMetadataClaimResponseDecodeSucceeded = false
+        proof.receiverVerifiedBootstrapCreationAttempted = false
+        proof.receiverActiveCallEvidenceSeen = false
+
         guard let clientProxy = userSession?.clientProxy,
               let accessTokenProvider = clientProxy as? DirectCallMatrixAccessTokenProviding,
               let accessToken = await accessTokenProvider.matrixAccessToken(),
-              !accessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              safeNonEmpty(accessToken) != nil,
               let deviceID = safeNonEmpty(clientProxy.deviceID),
               let metadataReference = safeNonEmpty(metadataReference),
               let senderDeviceID = safeNonEmpty(senderDeviceID),
@@ -1067,16 +1130,36 @@ enum SalemXStage2FSimulatorSignalingDebug {
             return
         }
 
+        proof.receiverCurrentSessionPresent = true
+        proof.receiverCurrentAccessTokenPresent = true
+        proof.receiverClaimAuthHeaderReady = bearerAuthorizationHeader(accessToken: accessToken) != nil
+        proof.receiverClaimHomeserverMatchesSession = metadataURL.absoluteString.hasPrefix(clientProxy.homeserver)
+        proof.receiverMetadataClaimAttempted = true
         let response = await httpJSON(url: metadataURL,
                                       method: "GET",
                                       accessToken: accessToken,
                                       body: nil)
-        guard (200..<300).contains(response.status ?? 0),
-              let metadata = IncomingPendingMetadata(payload: response.payload) else {
+        proof.receiverMetadataClaimHTTPStatus = response.status.map(String.init) ?? "network"
+        proof.receiverMetadataClaimErrorBucket = metadataClaimErrorBucket(payload: response.payload, status: response.status)
+        proof.receiverMetadataClaimResponseReceived = response.status != nil
+
+        guard (200..<300).contains(response.status ?? 0) else {
             proof.lastFailure = "secureInvitePreparationFailed"
             writeProof()
             return
         }
+
+        guard let metadata = IncomingPendingMetadata(payload: response.payload) else {
+            proof.receiverMetadataClaimErrorBucket = "decode"
+            proof.lastFailure = "secureInvitePreparationFailed"
+            writeProof()
+            return
+        }
+
+        proof.receiverMetadataClaimResponseDecodeSucceeded = true
+        proof.receiverMetadataClaimSuccess = true
+        proof.receiverMetadataClaimErrorBucket = "none"
+        writeProof()
 
         guard case let .joined(roomProxy) = await clientProxy.roomForIdentifier(metadata.roomID),
               roomProxy.isDirectOneToOneRoom,
@@ -1091,12 +1174,14 @@ enum SalemXStage2FSimulatorSignalingDebug {
                                                                                                roomProxy: roomProxy,
                                                                                                clientProxy: clientProxy,
                                                                                                elementCallService: elementCallService) ? .active : .none
+        proof.receiverActiveCallEvidenceSeen = activeCallState == .active
         guard activeCallState == .active else {
             proof.lastFailure = "activeCallEvidenceTimeout"
             writeProof()
             return
         }
 
+        proof.receiverVerifiedBootstrapCreationAttempted = true
         let callKitID = await concreteElementCallService.salemXDebugReportStage2FSimulatorIncomingCall(roomID: metadata.roomID,
                                                                                                        roomDisplayName: "SalemX audio",
                                                                                                        startMode: .audio) { callID in
@@ -1111,7 +1196,6 @@ enum SalemXStage2FSimulatorSignalingDebug {
                                        activeCallState: activeCallState))
         }
 
-        proof.receiverMetadataClaimSuccess = true
         proof.receiverVerifiedBootstrapStored = callKitID != nil
         proof.receiverCallKitIncomingReported = callKitID != nil
         if callKitID == nil {
@@ -1211,6 +1295,31 @@ enum SalemXStage2FSimulatorSignalingDebug {
             return "M_UNAUTHORIZED"
         default:
             return payload["errcode"] == nil ? "non_matrix_401" : "unknown"
+        }
+    }
+
+    private static func metadataClaimErrorBucket(payload: [String: Any], status: Int?) -> String {
+        if (200..<300).contains(status ?? 0) {
+            return "none"
+        }
+
+        guard let status else {
+            return "transport"
+        }
+
+        switch payload["errcode"] as? String {
+        case "M_MISSING_TOKEN":
+            return "M_MISSING_TOKEN"
+        case "M_UNKNOWN_TOKEN":
+            return "M_UNKNOWN_TOKEN"
+        case "M_FORBIDDEN":
+            return "M_FORBIDDEN"
+        case "M_NOT_FOUND":
+            return "M_NOT_FOUND"
+        case "M_CONFLICT":
+            return "M_CONFLICT"
+        default:
+            return "unknown_\(status)"
         }
     }
 
@@ -1402,6 +1511,14 @@ enum SalemXStage2FSimulatorSignalingDebug {
         var senderSameCredentialWhoamiSucceeded = false
         var senderSameCredentialWhoamiHTTPStatus = "not_requested"
         var senderSameCredentialWhoamiErrorBucket = "not_requested"
+        var receiverCurrentSessionPresent = false
+        var receiverCurrentAccessTokenPresent = false
+        var receiverClaimAuthHeaderReady = false
+        var receiverClaimHomeserverMatchesSession = false
+        var receiverSameCredentialWhoamiAttempted = false
+        var receiverSameCredentialWhoamiSucceeded = false
+        var receiverSameCredentialWhoamiHTTPStatus = "not_requested"
+        var receiverSameCredentialWhoamiErrorBucket = "not_requested"
         var secureMetadataCreated = false
         var senderMetadataClaimSuccess = false
         var realNonDevForegroundInviteUsed = false
@@ -1414,6 +1531,13 @@ enum SalemXStage2FSimulatorSignalingDebug {
         var deliveryAttemptIDPresent = false
         var receiverForegroundInviteReceivedOnce = false
         var receiverMetadataClaimSuccess = false
+        var receiverMetadataClaimAttempted = false
+        var receiverMetadataClaimHTTPStatus = "not_requested"
+        var receiverMetadataClaimErrorBucket = "not_requested"
+        var receiverMetadataClaimResponseReceived = false
+        var receiverMetadataClaimResponseDecodeSucceeded = false
+        var receiverVerifiedBootstrapCreationAttempted = false
+        var receiverActiveCallEvidenceSeen = false
         var receiverVerifiedBootstrapStored = false
         var receiverCallKitIncomingReported = false
         var receiverCallKitAnswerActionSeen = false
@@ -1469,6 +1593,14 @@ enum SalemXStage2FSimulatorSignalingDebug {
                 "sender_same_credential_whoami_succeeded=\(senderSameCredentialWhoamiSucceeded)",
                 "sender_same_credential_whoami_http_status=\(senderSameCredentialWhoamiHTTPStatus)",
                 "sender_same_credential_whoami_error_bucket=\(senderSameCredentialWhoamiErrorBucket)",
+                "receiver_current_session_present=\(receiverCurrentSessionPresent)",
+                "receiver_current_access_token_present=\(receiverCurrentAccessTokenPresent)",
+                "receiver_claim_auth_header_ready=\(receiverClaimAuthHeaderReady)",
+                "receiver_claim_homeserver_matches_session=\(receiverClaimHomeserverMatchesSession)",
+                "receiver_same_credential_whoami_attempted=\(receiverSameCredentialWhoamiAttempted)",
+                "receiver_same_credential_whoami_succeeded=\(receiverSameCredentialWhoamiSucceeded)",
+                "receiver_same_credential_whoami_http_status=\(receiverSameCredentialWhoamiHTTPStatus)",
+                "receiver_same_credential_whoami_error_bucket=\(receiverSameCredentialWhoamiErrorBucket)",
                 "secure_metadata_created=\(secureMetadataCreated)",
                 "sender_metadata_claim_success=\(senderMetadataClaimSuccess)",
                 "real_non_dev_foreground_invite_used=\(realNonDevForegroundInviteUsed)",
@@ -1481,6 +1613,13 @@ enum SalemXStage2FSimulatorSignalingDebug {
                 "delivery_attempt_id_present=\(deliveryAttemptIDPresent)",
                 "receiver_foreground_invite_received_once=\(receiverForegroundInviteReceivedOnce)",
                 "receiver_metadata_claim_success=\(receiverMetadataClaimSuccess)",
+                "receiver_metadata_claim_attempted=\(receiverMetadataClaimAttempted)",
+                "receiver_metadata_claim_http_status=\(receiverMetadataClaimHTTPStatus)",
+                "receiver_metadata_claim_error_bucket=\(receiverMetadataClaimErrorBucket)",
+                "receiver_metadata_claim_response_received=\(receiverMetadataClaimResponseReceived)",
+                "receiver_metadata_claim_response_decode_succeeded=\(receiverMetadataClaimResponseDecodeSucceeded)",
+                "receiver_verified_bootstrap_creation_attempted=\(receiverVerifiedBootstrapCreationAttempted)",
+                "receiver_active_call_evidence_seen=\(receiverActiveCallEvidenceSeen)",
                 "receiver_verified_bootstrap_stored=\(receiverVerifiedBootstrapStored)",
                 "receiver_callkit_incoming_reported=\(receiverCallKitIncomingReported)",
                 "receiver_callkit_answer_action_seen=\(receiverCallKitAnswerActionSeen)",
