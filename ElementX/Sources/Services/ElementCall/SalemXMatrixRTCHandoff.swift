@@ -591,6 +591,7 @@ enum SalemXStage2FSimulatorSignalingDebug {
     private static let invitePath = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/invite"
     private static let senderClaimPath = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/sender/claim"
     private static let pendingMetadataPathPrefix = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata"
+    private static let whoamiPath = "/_matrix/client/v3/account/whoami"
     private static let proofFileName = "salemx-stage2f-sim-proof.txt"
     private static let identityHandoffFileName = "salemx-stage2f-sim-identity.json"
     private static let senderHandoffFileName = "salemx-stage2f-sim-sender-handoff.json"
@@ -665,6 +666,8 @@ enum SalemXStage2FSimulatorSignalingDebug {
                                   recipientUserID: queryItems["recipient_user_id"],
                                   recipientDeviceID: queryItems["recipient_device_id"])
             }
+        case "/direct-call/stage2f-sim/sender-auth-preflight":
+            Task { await preflightSenderAuthentication(userSession: userSession) }
         case "/direct-call/stage2f-sim/sender-send-invite":
             Task { await sendForegroundInvite(userSession: userSession, inviteURLString: queryItems["invite_url"]) }
         default:
@@ -992,6 +995,60 @@ enum SalemXStage2FSimulatorSignalingDebug {
         }
     }
 
+    private static func preflightSenderAuthentication(userSession: UserSessionProtocol?) async {
+        proof.senderSameCredentialWhoamiAttempted = false
+        proof.senderSameCredentialWhoamiSucceeded = false
+        proof.senderSameCredentialWhoamiHTTPStatus = "not_requested"
+        proof.senderSameCredentialWhoamiErrorBucket = "not_requested"
+
+        guard let clientProxy = userSession?.clientProxy else {
+            proof.senderCurrentSessionPresent = false
+            proof.senderCurrentAccessTokenPresent = false
+            proof.senderRequestAuthHeaderReady = false
+            proof.lastFailure = "noAuthenticatedSession"
+            writeProof()
+            return
+        }
+
+        proof.senderCurrentSessionPresent = true
+        guard let accessTokenProvider = clientProxy as? DirectCallMatrixAccessTokenProviding,
+              let accessToken = await accessTokenProvider.matrixAccessToken(),
+              safeNonEmpty(accessToken) != nil else {
+            proof.senderCurrentAccessTokenPresent = false
+            proof.senderRequestAuthHeaderReady = false
+            proof.lastFailure = "noAuthenticatedSession"
+            writeProof()
+            return
+        }
+
+        proof.senderCurrentAccessTokenPresent = true
+        proof.senderRequestAuthHeaderReady = bearerAuthorizationHeader(accessToken: accessToken) != nil
+        proof.requestTokenMatchesCurrentSessionToken = true
+
+        guard let whoamiURL = endpointURL(path: whoamiPath, explicitURLString: nil, clientProxy: clientProxy) else {
+            proof.requestHomeserverMatchesCurrentSessionHomeserver = false
+            proof.senderSameCredentialWhoamiErrorBucket = "wrong_homeserver"
+            proof.lastFailure = "secureInvitePreparationFailed"
+            writeProof()
+            return
+        }
+
+        proof.requestHomeserverMatchesCurrentSessionHomeserver = whoamiURL.absoluteString.hasPrefix(clientProxy.homeserver)
+        proof.senderSameCredentialWhoamiAttempted = true
+        let response = await httpJSON(url: whoamiURL,
+                                      method: "GET",
+                                      accessToken: accessToken,
+                                      body: nil)
+        proof.senderSameCredentialWhoamiHTTPStatus = response.status.map(String.init) ?? "network"
+        proof.senderSameCredentialWhoamiErrorBucket = matrixErrorBucket(payload: response.payload, status: response.status)
+        let responseUserID = response.payload["user_id"] as? String
+        let responseDeviceID = response.payload["device_id"] as? String
+        let deviceMatches = clientProxy.deviceID == nil || responseDeviceID == clientProxy.deviceID
+        proof.senderSameCredentialWhoamiSucceeded = (200..<300).contains(response.status ?? 0) && responseUserID == clientProxy.userID && deviceMatches
+        proof.lastFailure = proof.senderSameCredentialWhoamiSucceeded ? "none" : "secureInviteSendFailed"
+        writeProof()
+    }
+
     private static func claimReceiverMetadataAndReportCallKit(userSession: UserSessionProtocol?,
                                                               elementCallService: any ElementCallServiceProtocol,
                                                               metadataReference: String?,
@@ -1137,6 +1194,26 @@ enum SalemXStage2FSimulatorSignalingDebug {
         return summary.hasOngoingCall || !summary.activeRoomCallParticipants.isEmpty
     }
 
+    private static func matrixErrorBucket(payload: [String: Any], status: Int?) -> String {
+        guard status == 401 else {
+            if (200..<300).contains(status ?? 0) {
+                return "none"
+            }
+            return status == nil ? "network_failure" : "non_matrix_\(status ?? 0)"
+        }
+
+        switch payload["errcode"] as? String {
+        case "M_MISSING_TOKEN":
+            return "M_MISSING_TOKEN"
+        case "M_UNKNOWN_TOKEN":
+            return "M_UNKNOWN_TOKEN"
+        case "M_UNAUTHORIZED":
+            return "M_UNAUTHORIZED"
+        default:
+            return payload["errcode"] == nil ? "non_matrix_401" : "unknown"
+        }
+    }
+
     static func foregroundOnlyInviteResponseAccepted(_ payload: [String: Any], expectedDeliveryAttemptID: String? = nil) -> Bool {
         guard payload["delivery_mode"] as? String == "foreground_only",
               payload["foreground_delivery_succeeded"] as? Bool == true,
@@ -1156,6 +1233,13 @@ enum SalemXStage2FSimulatorSignalingDebug {
         return true
     }
 
+    static func bearerAuthorizationHeader(accessToken: String?) -> String? {
+        guard let accessToken = safeNonEmpty(accessToken) else {
+            return nil
+        }
+        return "B" + "earer " + accessToken
+    }
+
     private static func httpJSON(url: URL,
                                  method: String,
                                  accessToken: String,
@@ -1163,7 +1247,10 @@ enum SalemXStage2FSimulatorSignalingDebug {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("B" + "earer " + accessToken, forHTTPHeaderField: "Authorization")
+        guard let authorizationHeader = bearerAuthorizationHeader(accessToken: accessToken) else {
+            return .init(status: nil, payload: ["errcode": "missing_access_token"])
+        }
+        request.setValue(authorizationHeader, forHTTPHeaderField: "Authorization")
         if let body {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try? JSONSerialization.data(withJSONObject: body)
@@ -1306,6 +1393,15 @@ enum SalemXStage2FSimulatorSignalingDebug {
         var senderEmbeddedElementCallPresented = false
         var senderActiveCallEvidenceSeen = false
         var senderReadyToSendForegroundInvite = false
+        var senderCurrentSessionPresent = false
+        var senderCurrentAccessTokenPresent = false
+        var senderRequestAuthHeaderReady = false
+        var requestTokenMatchesCurrentSessionToken = false
+        var requestHomeserverMatchesCurrentSessionHomeserver = false
+        var senderSameCredentialWhoamiAttempted = false
+        var senderSameCredentialWhoamiSucceeded = false
+        var senderSameCredentialWhoamiHTTPStatus = "not_requested"
+        var senderSameCredentialWhoamiErrorBucket = "not_requested"
         var secureMetadataCreated = false
         var senderMetadataClaimSuccess = false
         var realNonDevForegroundInviteUsed = false
@@ -1364,6 +1460,15 @@ enum SalemXStage2FSimulatorSignalingDebug {
                 "sender_embedded_element_call_presented=\(senderEmbeddedElementCallPresented)",
                 "sender_active_call_evidence_seen=\(senderActiveCallEvidenceSeen)",
                 "sender_ready_to_send_foreground_invite=\(senderReadyToSendForegroundInvite)",
+                "sender_current_session_present=\(senderCurrentSessionPresent)",
+                "sender_current_access_token_present=\(senderCurrentAccessTokenPresent)",
+                "sender_request_auth_header_ready=\(senderRequestAuthHeaderReady)",
+                "request_token_matches_current_session_token=\(requestTokenMatchesCurrentSessionToken)",
+                "request_homeserver_matches_current_session_homeserver=\(requestHomeserverMatchesCurrentSessionHomeserver)",
+                "sender_same_credential_whoami_attempted=\(senderSameCredentialWhoamiAttempted)",
+                "sender_same_credential_whoami_succeeded=\(senderSameCredentialWhoamiSucceeded)",
+                "sender_same_credential_whoami_http_status=\(senderSameCredentialWhoamiHTTPStatus)",
+                "sender_same_credential_whoami_error_bucket=\(senderSameCredentialWhoamiErrorBucket)",
                 "secure_metadata_created=\(secureMetadataCreated)",
                 "sender_metadata_claim_success=\(senderMetadataClaimSuccess)",
                 "real_non_dev_foreground_invite_used=\(realNonDevForegroundInviteUsed)",

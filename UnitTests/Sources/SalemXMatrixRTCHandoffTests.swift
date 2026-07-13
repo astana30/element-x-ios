@@ -362,6 +362,60 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
     }
 
     @Test
+    func stage2FSimulatorAuthPreflightUsesCurrentSessionBearerRequest() throws {
+        let source = try stage2FSimulatorSignalingDebugSource()
+
+        #expect(source.contains("/direct-call/stage2f-sim/sender-auth-preflight"))
+        #expect(source.contains("private static let whoamiPath = \"/_matrix/client/v3/account/whoami\""))
+        #expect(source.contains("clientProxy as? DirectCallMatrixAccessTokenProviding"))
+        #expect(source.contains("accessTokenProvider.matrixAccessToken()"))
+        #expect(source.contains("method: \"GET\""))
+        #expect(source.contains("requestTokenMatchesCurrentSessionToken = true"))
+        #expect(source.contains("requestHomeserverMatchesCurrentSessionHomeserver"))
+        #expect(source.contains("senderSameCredentialWhoamiSucceeded"))
+    }
+
+    @Test
+    func stage2FSimulatorBearerHeaderRejectsMissingAndBlankToken() {
+        #expect(SalemXStage2FSimulatorSignalingDebug.bearerAuthorizationHeader(accessToken: nil) == nil)
+        #expect(SalemXStage2FSimulatorSignalingDebug.bearerAuthorizationHeader(accessToken: "") == nil)
+        #expect(SalemXStage2FSimulatorSignalingDebug.bearerAuthorizationHeader(accessToken: "   ") == nil)
+        #expect(SalemXStage2FSimulatorSignalingDebug.bearerAuthorizationHeader(accessToken: "current-session-token") == "Bearer current-session-token")
+    }
+
+    @Test
+    func stage2FSimulatorAuthPreflightBlocksMissingTokenBeforeNetwork() throws {
+        let source = try stage2FSimulatorSignalingDebugSource()
+
+        #expect(source.contains("proof.senderCurrentSessionPresent = true"))
+        #expect(source.contains("proof.senderCurrentAccessTokenPresent = false"))
+        #expect(source.contains("proof.senderRequestAuthHeaderReady = false"))
+        #expect(source.contains("return .init(status: nil, payload: [\"errcode\": \"missing_access_token\"])"))
+    }
+
+    @Test
+    func stage2FSimulatorInviteDoesNotRetryOn401OrCreateAttemptID() throws {
+        let source = try stage2FSimulatorSignalingDebugSource()
+
+        #expect(source.contains("guard (200..<300).contains(response.status ?? 0) else"))
+        #expect(source.contains("proof.lastFailure = \"secureInviteSendFailed\""))
+        #expect(source.contains("proof.foregroundInviteSentOnce = true"))
+        #expect(!source.contains("retryForegroundInvite"))
+        #expect(!source.contains("retryAccessToken"))
+    }
+
+    @Test
+    func stage2FSimulatorAuthPreflightProofDoesNotWriteRawToken() throws {
+        let source = try stage2FSimulatorSignalingDebugSource()
+
+        #expect(source.contains("sender_request_auth_header_ready=\\(senderRequestAuthHeaderReady)"))
+        #expect(source.contains("request_token_matches_current_session_token=\\(requestTokenMatchesCurrentSessionToken)"))
+        #expect(!source.contains("access_token=\\("))
+        #expect(!source.contains("Authorization=\\("))
+        #expect(!source.contains("Bearer \\("))
+    }
+
+    @Test
     func stage2FSimulatorForegroundOnlyResponseAcceptsCurrentAttempt() {
         let payload = foregroundOnlyPayload()
 
