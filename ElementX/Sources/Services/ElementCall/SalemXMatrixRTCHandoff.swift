@@ -808,6 +808,8 @@ enum SalemXStage2FSimulatorSignalingDebug {
         request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
         request.setValue(bearerAuthorizationHeader(accessToken: accessToken), forHTTPHeaderField: "Authorization")
 
+        receiverTransport?.stop(); proof.foregroundStreamActive = false; proof.foregroundStreamReady = false; writeProof()
+
         let stream = URLSessionForegroundCallSignalingSSEStream(request: request)
         let transport = ForegroundCallSignalingSSETransport(isEnabled: true, stream: stream)
         receiverTransport = transport
@@ -823,9 +825,9 @@ enum SalemXStage2FSimulatorSignalingDebug {
     private static func handleReceiverForegroundEvent(_ event: ForegroundCallSignalingTransportEvent) {
         switch event {
         case .ready:
-            proof.foregroundStreamReady = true
+            proof.foregroundStreamActive = true; proof.foregroundStreamReady = true
         case .stopped:
-            proof.foregroundStreamActive = false
+            proof.foregroundStreamActive = false; proof.foregroundStreamReady = false
         case .invite:
             receiverInviteCount += 1
             proof.receiverForegroundInviteReceivedOnce = receiverInviteCount == 1

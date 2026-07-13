@@ -550,6 +550,21 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
     }
 
     @Test
+    func stage2FReceiverForegroundStreamReadyIsFreshForEachLease() throws {
+        let source = try stage2FSimulatorSignalingDebugSource()
+        let receiverStart = try #require(source.range(of: "private static func startReceiver")?.lowerBound)
+        let staleReadyReset = try #require(source.range(of: "proof.foregroundStreamActive = false; proof.foregroundStreamReady = false; writeProof()")?.lowerBound)
+        let transportStart = try #require(source.range(of: "transport.start { event in")?.lowerBound)
+        let stoppedCase = try #require(source.range(of: "case .stopped:\n            proof.foregroundStreamActive = false; proof.foregroundStreamReady = false")?.lowerBound)
+
+        #expect(source.contains("receiverTransport?.stop()"))
+        #expect(source.contains("case .ready:\n            proof.foregroundStreamActive = true; proof.foregroundStreamReady = true"))
+        #expect(receiverStart < staleReadyReset)
+        #expect(staleReadyReset < transportStart)
+        #expect(transportStart < stoppedCase)
+    }
+
+    @Test
     func stage2FSimulatorForegroundOnlyResponseAcceptsCurrentAttempt() {
         let payload = foregroundOnlyPayload()
 
