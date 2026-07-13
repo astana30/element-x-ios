@@ -988,14 +988,20 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
         #expect(await waitUntil { action.fulfillCount == 1 })
         #expect(action.failCount == 0)
         #expect(answerBridge.calls.map(\.callID) == [callID])
-        #expect(callProvider.reportCallWithEndedAtReasonReceivedArguments?.reason == .remoteEnded)
-        #expect(bootstrapResolver.removedCallIDs == [callID])
+        #expect(callProvider.reportCallWithEndedAtReasonReceivedArguments == nil)
+        #expect(bootstrapResolver.removedCallIDs.isEmpty)
+        #expect(service.ongoingCallRoomIDPublisher.value == Self.roomID)
         #expect(!observedActions.contains { action in
             if case .startCall = action {
                 return true
             }
             return false
         })
+
+        service.handleEmbeddedMatrixRTCUpstreamTerminalEvent(callID: callID, source: .embeddedRemoteEnd)
+
+        #expect(callProvider.reportCallWithEndedAtReasonReceivedArguments?.reason == .remoteEnded)
+        #expect(bootstrapResolver.removedCallIDs == [callID])
     }
 
     @Test

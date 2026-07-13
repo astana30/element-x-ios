@@ -902,7 +902,6 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         salemXEmbeddedAnswerTasks.removeValue(forKey: callID)?.cancel()
         let actions = salemXEmbeddedAnswerActions.removeValue(forKey: callID) ?? []
         salemXEmbeddedAnswerActionIDs.removeValue(forKey: callID)
-        removeVerifiedBootstrapOnce(for: callID)
         endUnansweredCallTask?.cancel()
         #if DEBUG
         Task { @MainActor in
@@ -912,13 +911,33 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         #endif
 
         if result.isCallKitSuccess {
-            applySessionEvent(type: .accept, roomID: incomingCallID.roomID)
-            reportEmbeddedMatrixRTCCallEnded(callID: incomingCallID, reason: .remoteEnded)
+            promoteEmbeddedMatrixRTCAnsweredCall(incomingCallID)
             actions.forEach { $0.fulfill() }
         } else {
+            removeVerifiedBootstrapOnce(for: callID)
             reportEndedCall(incomingCallID: incomingCallID, reason: .failed)
             actions.forEach { $0.fail() }
         }
+    }
+
+    private func promoteEmbeddedMatrixRTCAnsweredCall(_ incomingCallID: CallID) {
+        if incomingCallID == self.incomingCallID {
+            self.incomingCallID = nil
+        }
+        ongoingCallID = incomingCallID
+        recentlyEndedCallID = nil
+        if let rtcNotificationID = incomingCallID.rtcNotificationID {
+            cacheRTCNotificationID(rtcNotificationID, for: incomingCallID.roomID)
+        }
+        if let remoteCallID = incomingCallID.remoteCallID {
+            cacheRemoteCallID(remoteCallID, for: incomingCallID.roomID)
+        }
+
+        openCallSession(roomID: incomingCallID.roomID,
+                        callKitID: incomingCallID.callKitID,
+                        direction: .incoming,
+                        remoteCallID: incomingCallID.remoteCallID)
+        applySessionEvent(type: .accept, roomID: incomingCallID.roomID)
     }
 
     private func cancelEmbeddedMatrixRTCAnswer(for callID: UUID?) {
