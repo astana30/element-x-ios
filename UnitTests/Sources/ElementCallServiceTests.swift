@@ -147,6 +147,81 @@ final class EmbeddedElementCallProductionHandoffTests {
 }
 
 @MainActor
+final class SalemXStage2FCallKitDebugBoundaryTests {
+    private let appSettings = AppSettings()
+    private var callProvider: CXProviderMock!
+    private var service: ElementCallService!
+
+    init() {
+        AppSettings.resetAllSettings()
+        callProvider = CXProviderMock(.init())
+        service = ElementCallService(appSettings: appSettings, callProvider: callProvider)
+    }
+
+    deinit {
+        callProvider = nil
+    }
+
+    @Test
+    func reportStoresBootstrapAndBlocksASecondIncomingCall() async throws {
+        callProvider.reportNewIncomingCallWithUpdateCompletionClosure = { _, _, completion in
+            completion(nil)
+        }
+        var storedCallIDs = [UUID]()
+
+        let firstResult = await service.salemXDebugReportStage2FSimulatorIncomingCall(roomID: "redacted-room",
+                                                                                      roomDisplayName: "Call",
+                                                                                      startMode: .audio) { callID in
+            storedCallIDs.append(callID)
+        }
+        let firstCallID = try #require(firstResult.reportedCallID)
+
+        #expect(storedCallIDs == [firstCallID])
+        #expect(firstResult.outcomeBucket == "reported")
+        #expect(service.salemXDebugStage2FCallKitLocalStateBucket == .incomingCallActive)
+
+        let secondResult = await service.salemXDebugReportStage2FSimulatorIncomingCall(roomID: "redacted-room",
+                                                                                       roomDisplayName: "Call",
+                                                                                       startMode: .audio) { callID in
+            storedCallIDs.append(callID)
+        }
+
+        #expect(secondResult == .blockedByExistingIncomingCall)
+        #expect(secondResult.outcomeBucket == "blocked_existing_incoming_call")
+        #expect(storedCallIDs == [firstCallID])
+        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
+        await service.declineIncomingCall()
+    }
+
+    @Test
+    func reportClassifiesProviderFailureAfterBootstrapStore() async {
+        let error = NSError(domain: CXErrorDomainIncomingCall,
+                            code: CXErrorCodeIncomingCallError.Code.filteredByDoNotDisturb.rawValue)
+        callProvider.reportNewIncomingCallWithUpdateCompletionClosure = { _, _, completion in
+            completion(error)
+        }
+        var storedCallIDs = [UUID]()
+
+        let result = await service.salemXDebugReportStage2FSimulatorIncomingCall(roomID: "redacted-room",
+                                                                                 roomDisplayName: "Call",
+                                                                                 startMode: .audio) { callID in
+            storedCallIDs.append(callID)
+        }
+
+        guard case .providerFailed(let callID, let errorBucket) = result else {
+            Issue.record("Expected a redacted provider failure")
+            return
+        }
+
+        #expect(storedCallIDs == [callID])
+        #expect(errorBucket == .filteredByDoNotDisturb)
+        #expect(result.outcomeBucket == "provider_failed_filtered_by_do_not_disturb")
+        #expect(service.salemXDebugStage2FCallKitLocalStateBucket == .idle)
+        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
+    }
+}
+
+@MainActor
 final class ElementCallServiceTests {
     private let appSettings = AppSettings()
     private var callProvider: CXProviderMock!

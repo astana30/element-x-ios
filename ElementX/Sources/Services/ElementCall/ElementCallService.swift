@@ -14,6 +14,65 @@ import MatrixRustSDK
 import PushKit
 import UIKit
 
+#if DEBUG
+enum SalemXStage2FCallKitLocalStateBucket: String, Equatable {
+    case idle
+    case incomingCallActive = "incoming_call_active"
+    case ongoingCallActive = "ongoing_call_active"
+}
+
+enum SalemXStage2FCallKitReportErrorBucket: String, Equatable {
+    case unknown
+    case unentitled
+    case callUUIDAlreadyExists = "call_uuid_already_exists"
+    case filteredByDoNotDisturb = "filtered_by_do_not_disturb"
+    case filteredByBlockList = "filtered_by_block_list"
+    case filteredDuringRestrictedSharingMode = "filtered_during_restricted_sharing_mode"
+    case callIsProtected = "call_is_protected"
+    case filteredBySensitiveParticipants = "filtered_by_sensitive_participants"
+    case other
+}
+
+enum SalemXStage2FCallKitReportResult: Equatable {
+    case reported(UUID)
+    case blockedByExistingIncomingCall
+    case blockedByExistingOngoingCall
+    case providerFailed(callID: UUID, errorBucket: SalemXStage2FCallKitReportErrorBucket)
+
+    var reportedCallID: UUID? {
+        guard case .reported(let callID) = self else {
+            return nil
+        }
+
+        return callID
+    }
+
+    var localStateBucket: SalemXStage2FCallKitLocalStateBucket {
+        switch self {
+        case .blockedByExistingIncomingCall:
+            .incomingCallActive
+        case .blockedByExistingOngoingCall:
+            .ongoingCallActive
+        case .reported, .providerFailed:
+            .idle
+        }
+    }
+
+    var outcomeBucket: String {
+        switch self {
+        case .reported:
+            "reported"
+        case .blockedByExistingIncomingCall:
+            "blocked_existing_incoming_call"
+        case .blockedByExistingOngoingCall:
+            "blocked_existing_ongoing_call"
+        case .providerFailed(_, let errorBucket):
+            "provider_failed_\(errorBucket.rawValue)"
+        }
+    }
+}
+#endif
+
 private enum CallSessionState: String, Equatable {
     case idle
     case outgoingRinging = "outgoing_ringing"
@@ -1630,13 +1689,29 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     }
 
     #if DEBUG
+    var salemXDebugStage2FCallKitLocalStateBucket: SalemXStage2FCallKitLocalStateBucket {
+        if incomingCallID != nil {
+            return .incomingCallActive
+        }
+
+        if ongoingCallID != nil {
+            return .ongoingCallActive
+        }
+
+        return .idle
+    }
+
     @MainActor
     func salemXDebugReportStage2FSimulatorIncomingCall(roomID: String,
                                                        roomDisplayName: String?,
                                                        startMode: ElementCallStartMode,
-                                                       storeBootstrap: (UUID) -> Void) async -> UUID? {
-        guard incomingCallID == nil, ongoingCallID == nil else {
-            return nil
+                                                       storeBootstrap: (UUID) -> Void) async -> SalemXStage2FCallKitReportResult {
+        if incomingCallID != nil {
+            return .blockedByExistingIncomingCall
+        }
+
+        if ongoingCallID != nil {
+            return .blockedByExistingOngoingCall
         }
 
         let nowDate = timeProvider.now()
@@ -1661,14 +1736,15 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
 
         return await withCheckedContinuation { continuation in
             callProvider.reportNewIncomingCall(with: callID.callKitID, update: update) { [weak self] error in
-                if error != nil {
+                if let error {
                     self?.clearIncomingCallState()
-                    continuation.resume(returning: nil)
+                    continuation.resume(returning: .providerFailed(callID: callID.callKitID,
+                                                                   errorBucket: Self.salemXDebugCallKitReportErrorBucket(error)))
                     return
                 }
 
                 self?.actionsSubject.send(.receivedIncomingCallRequest)
-                continuation.resume(returning: callID.callKitID)
+                continuation.resume(returning: .reported(callID.callKitID))
             }
 
             endUnansweredCallTask?.cancel()
@@ -1685,6 +1761,35 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
 
                 reportEndedCall(incomingCallID: incomingCallID, reason: .unanswered)
             }
+        }
+    }
+
+    private static func salemXDebugCallKitReportErrorBucket(_ error: Error) -> SalemXStage2FCallKitReportErrorBucket {
+        let error = error as NSError
+        guard error.domain == CXErrorDomainIncomingCall,
+              let code = CXErrorCodeIncomingCallError.Code(rawValue: error.code) else {
+            return .other
+        }
+
+        switch code {
+        case .unknown:
+            return .unknown
+        case .unentitled:
+            return .unentitled
+        case .callUUIDAlreadyExists:
+            return .callUUIDAlreadyExists
+        case .filteredByDoNotDisturb:
+            return .filteredByDoNotDisturb
+        case .filteredByBlockList:
+            return .filteredByBlockList
+        case .filteredDuringRestrictedSharingMode:
+            return .filteredDuringRestrictedSharingMode
+        case .callIsProtected:
+            return .callIsProtected
+        case .filteredBySensitiveParticipants:
+            return .filteredBySensitiveParticipants
+        @unknown default:
+            return .unknown
         }
     }
     #endif

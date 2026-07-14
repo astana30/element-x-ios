@@ -718,6 +718,11 @@ enum SalemXStage2FSimulatorSignalingDebug {
                 }
                 await preflightReceiverAuthentication(userSession: userSession)
             }
+        case "/direct-call/stage2f-sim/receiver-callkit-preflight":
+            guard validateReceiverExecutionNonce(queryItems["execution_nonce"]) else {
+                return true
+            }
+            preflightReceiverCallKitLocalState(elementCallService: elementCallService)
         case "/direct-call/stage2f-sim/receiver-claim-report":
             Task {
                 guard validateReceiverExecutionNonce(queryItems["execution_nonce"]) else {
@@ -1473,6 +1478,26 @@ enum SalemXStage2FSimulatorSignalingDebug {
         writeProof()
     }
 
+    private static func preflightReceiverCallKitLocalState(elementCallService: any ElementCallServiceProtocol) {
+        guard let elementCallService = elementCallService as? ElementCallService else {
+            proof.receiverCallKitLocalStateIdle = false
+            proof.receiverCallKitLocalStateBucket = "service_unavailable"
+            proof.receiverCallKitPreflightPassed = false
+            proof.lastFailure = "receiverCallKitPreflightUnavailable"
+            writeProof()
+            return
+        }
+
+        let stateBucket = elementCallService.salemXDebugStage2FCallKitLocalStateBucket
+        proof.receiverCallKitLocalStateIdle = stateBucket == .idle
+        proof.receiverCallKitLocalStateBucket = stateBucket.rawValue
+        proof.receiverCallKitPreflightPassed = stateBucket == .idle
+        if stateBucket != .idle {
+            proof.lastFailure = "receiverCallKitNotIdle"
+        }
+        writeProof()
+    }
+
     private static func claimReceiverMetadataAndReportCallKit(userSession: UserSessionProtocol?,
                                                               elementCallService: any ElementCallServiceProtocol,
                                                               metadataReference: String?,
@@ -1484,6 +1509,8 @@ enum SalemXStage2FSimulatorSignalingDebug {
         proof.receiverMetadataClaimResponseDecodeSucceeded = false
         proof.receiverVerifiedBootstrapCreationAttempted = false
         proof.receiverActiveCallEvidenceSeen = false
+        proof.receiverBootstrapStoreInvoked = false
+        proof.receiverCallKitReportOutcomeBucket = "not_attempted"
 
         guard let clientProxy = userSession?.clientProxy,
               let accessTokenProvider = clientProxy as? DirectCallMatrixAccessTokenProviding,
@@ -1552,9 +1579,10 @@ enum SalemXStage2FSimulatorSignalingDebug {
         }
 
         proof.receiverVerifiedBootstrapCreationAttempted = true
-        let callKitID = await concreteElementCallService.salemXDebugReportStage2FSimulatorIncomingCall(roomID: metadata.roomID,
-                                                                                                       roomDisplayName: "SalemX audio",
-                                                                                                       startMode: .audio) { callID in
+        let reportResult = await concreteElementCallService.salemXDebugReportStage2FSimulatorIncomingCall(roomID: metadata.roomID,
+                                                                                                          roomDisplayName: "SalemX audio",
+                                                                                                          startMode: .audio) { callID in
+            proof.receiverBootstrapStoreInvoked = true
             let claimedMetadata = SalemXMatrixRTCClaimedMetadata(roomID: metadata.roomID,
                                                                  localUserID: clientProxy.userID,
                                                                  peerUserID: metadata.peerUserID,
@@ -1566,6 +1594,14 @@ enum SalemXStage2FSimulatorSignalingDebug {
                                        activeCallState: activeCallState))
         }
 
+        proof.receiverCallKitLocalStateIdle = reportResult.localStateBucket == .idle
+        proof.receiverCallKitLocalStateBucket = reportResult.localStateBucket.rawValue
+        proof.receiverCallKitReportOutcomeBucket = reportResult.outcomeBucket
+        if case .providerFailed(let callID, _) = reportResult {
+            bootstrapStore.removeVerifiedBootstrap(for: callID)
+        }
+
+        let callKitID = reportResult.reportedCallID
         proof.receiverVerifiedBootstrapStored = callKitID != nil
         proof.receiverCallKitIncomingReported = callKitID != nil
         if callKitID == nil {
@@ -1966,6 +2002,11 @@ enum SalemXStage2FSimulatorSignalingDebug {
         var receiverMetadataClaimResponseReceived = false
         var receiverMetadataClaimResponseDecodeSucceeded = false
         var receiverVerifiedBootstrapCreationAttempted = false
+        var receiverCallKitLocalStateIdle = false
+        var receiverCallKitLocalStateBucket = "not_checked"
+        var receiverCallKitPreflightPassed = false
+        var receiverBootstrapStoreInvoked = false
+        var receiverCallKitReportOutcomeBucket = "not_attempted"
         var receiverActiveCallResolutionStarted = false, receiverActiveCallSnapshotChecked = false
         var receiverRemoteRoomSnapshotChecked = false, receiverRemoteRoomCallStateVisible = false
         var receiverActiveCallRoomMatchesClaimedMetadata = false
@@ -2080,6 +2121,11 @@ enum SalemXStage2FSimulatorSignalingDebug {
                 "receiver_metadata_claim_response_received=\(receiverMetadataClaimResponseReceived)",
                 "receiver_metadata_claim_response_decode_succeeded=\(receiverMetadataClaimResponseDecodeSucceeded)",
                 "receiver_verified_bootstrap_creation_attempted=\(receiverVerifiedBootstrapCreationAttempted)",
+                "receiver_callkit_local_state_idle=\(receiverCallKitLocalStateIdle)",
+                "receiver_callkit_local_state_bucket=\(receiverCallKitLocalStateBucket)",
+                "receiver_callkit_preflight_passed=\(receiverCallKitPreflightPassed)",
+                "receiver_bootstrap_store_invoked=\(receiverBootstrapStoreInvoked)",
+                "receiver_callkit_report_outcome_bucket=\(receiverCallKitReportOutcomeBucket)",
                 "receiver_active_call_resolution_started=\(receiverActiveCallResolutionStarted)",
                 "receiver_active_call_snapshot_checked=\(receiverActiveCallSnapshotChecked)",
                 "receiver_remote_room_snapshot_checked=\(receiverRemoteRoomSnapshotChecked)",
