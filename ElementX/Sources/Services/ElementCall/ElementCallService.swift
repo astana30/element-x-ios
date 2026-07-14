@@ -2372,10 +2372,14 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
 
                 let participants = Set(roomInfo.activeRoomCallParticipants)
                 let hasActiveCall = roomInfo.hasRoomCall || !participants.isEmpty
+                let hasLocalParticipant = participants.contains { self.participantBelongsToUser($0, userID: ownUserID) }
+                let hasRemoteParticipant = participants.contains { !self.participantBelongsToUser($0, userID: ownUserID) }
                 #if DEBUG
                 Task { @MainActor in
                     SalemXStage2FSimulatorSignalingDebug.recordMatrixRTCObservation(participantCount: participants.count,
-                                                                                    hasActiveCall: hasActiveCall)
+                                                                                    hasActiveCall: hasActiveCall,
+                                                                                    localParticipantPresent: hasLocalParticipant,
+                                                                                    remoteParticipantPresent: hasRemoteParticipant)
                 }
                 #endif
                 if hasActiveCall {
@@ -2383,7 +2387,6 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
                     return
                 }
 
-                let hasRemoteParticipant = participants.contains { $0 != ownUserID }
                 if hasRemoteParticipant {
                     tracker.hasSeenRemoteParticipant = true
                 }
@@ -2411,10 +2414,13 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
 
                 let participants = Set(roomInfo.activeRoomCallParticipants)
                 let hasActiveCall = roomInfo.hasRoomCall || !participants.isEmpty
+                let hasLocalParticipant = participants.contains { self.participantBelongsToUser($0, userID: ownUserID) }
                 #if DEBUG
                 Task { @MainActor in
                     SalemXStage2FSimulatorSignalingDebug.recordMatrixRTCObservation(participantCount: participants.count,
-                                                                                    hasActiveCall: hasActiveCall)
+                                                                                    hasActiveCall: hasActiveCall,
+                                                                                    localParticipantPresent: hasLocalParticipant,
+                                                                                    remoteParticipantPresent: participants.contains { !self.participantBelongsToUser($0, userID: ownUserID) })
                 }
                 #endif
                 if hasActiveCall {

@@ -846,6 +846,9 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
 
 extension UserSessionFlowCoordinator: EmbeddedElementCallRoomCallPresenting {
     func presentEmbeddedElementCall(roomID: String, startMode: ElementCallStartMode) async {
-        startCall(roomID: roomID, startMode: startMode)
+        #if DEBUG
+        SalemXStage2FSimulatorSignalingDebug.recordReceiverJoinExistingCallRequested()
+        #endif
+        await presentCallScreen(roomID: roomID, startMode: startMode)
     }
 }

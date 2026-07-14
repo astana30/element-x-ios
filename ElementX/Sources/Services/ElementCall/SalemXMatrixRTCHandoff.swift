@@ -765,7 +765,56 @@ enum SalemXStage2FSimulatorSignalingDebug {
         writeProof()
     }
 
-    static func recordMatrixRTCObservation(participantCount: Int, hasActiveCall: Bool) {
+    static func recordReceiverJoinExistingCallRequested() {
+        guard ProcessInfo.isSalemXStage2FSimulatorReceiverBridgeEnabled else {
+            return
+        }
+
+        proof.receiverJoinExistingCallRequested = true
+        writeProof()
+    }
+
+    static func recordReceiverElementCallReady() {
+        guard ProcessInfo.isSalemXStage2FSimulatorReceiverBridgeEnabled else {
+            return
+        }
+
+        proof.receiverElementCallReady = true
+        writeProof()
+    }
+
+    static func recordReceiverElementCallLoaded() {
+        guard ProcessInfo.isSalemXStage2FSimulatorReceiverBridgeEnabled else {
+            return
+        }
+
+        proof.receiverElementCallLoaded = true
+        writeProof()
+    }
+
+    static func recordReceiverMatrixRTCJoinStarted() {
+        guard ProcessInfo.isSalemXStage2FSimulatorReceiverBridgeEnabled else {
+            return
+        }
+
+        proof.receiverMatrixRTCJoinStarted = true
+        writeProof()
+    }
+
+    static func recordMatrixRTCObservation(participantCount: Int,
+                                           hasActiveCall: Bool,
+                                           localParticipantPresent: Bool = false,
+                                           remoteParticipantPresent: Bool = false) {
+        if ProcessInfo.isSalemXStage2FSimulatorReceiverBridgeEnabled {
+            if localParticipantPresent {
+                proof.receiverMatrixRTCMembershipPublished = true
+            }
+
+            if remoteParticipantPresent {
+                proof.receiverRemoteParticipantSeen = true
+            }
+        }
+
         if participantCount >= 2 {
             proof.matrixRTCTwoParticipantsSeen = true
         }
@@ -1737,6 +1786,12 @@ enum SalemXStage2FSimulatorSignalingDebug {
         var receiverPresentExistingSelected = false
         var receiverStartNewSelected = false
         var receiverEmbeddedElementCallPresented = false
+        var receiverJoinExistingCallRequested = false
+        var receiverElementCallReady = false
+        var receiverElementCallLoaded = false
+        var receiverMatrixRTCJoinStarted = false
+        var receiverMatrixRTCMembershipPublished = false
+        var receiverRemoteParticipantSeen = false
         var matrixRTCTwoParticipantsSeen = false
         var senderUpstreamHangupInvoked = false
         var receiverUpstreamRemoteEndSeen = false
@@ -1833,6 +1888,12 @@ enum SalemXStage2FSimulatorSignalingDebug {
                 "receiver_present_existing_selected=\(receiverPresentExistingSelected)",
                 "receiver_start_new_selected=\(receiverStartNewSelected)",
                 "receiver_embedded_element_call_presented=\(receiverEmbeddedElementCallPresented)",
+                "receiver_join_existing_call_requested=\(receiverJoinExistingCallRequested)",
+                "receiver_element_call_ready=\(receiverElementCallReady)",
+                "receiver_element_call_loaded=\(receiverElementCallLoaded)",
+                "receiver_matrixrtc_join_started=\(receiverMatrixRTCJoinStarted)",
+                "receiver_matrixrtc_membership_published=\(receiverMatrixRTCMembershipPublished)",
+                "receiver_remote_participant_seen=\(receiverRemoteParticipantSeen)",
                 "matrixrtc_two_participants_seen=\(matrixRTCTwoParticipantsSeen)",
                 "sender_upstream_hangup_invoked=\(senderUpstreamHangupInvoked)",
                 "receiver_upstream_remote_end_seen=\(receiverUpstreamRemoteEndSeen)",

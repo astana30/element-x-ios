@@ -241,6 +241,9 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
            decodedMessage.hasLoaded {
             // This means that the call room was joined succesfully, we can stop the timeout task
             timeoutTask = nil
+            #if DEBUG
+            SalemXStage2FSimulatorSignalingDebug.recordReceiverElementCallLoaded()
+            #endif
             MXLog.info("Element Call media diagnostics: content_loaded=true start_mode=\(configuration.startMode)")
         }
         
@@ -353,6 +356,9 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                         return
                     }
                     MXLog.info("Element Call media diagnostics: url_generated=true start_mode=\(configuration.startMode) direct_room=\(state.directRoomCallDetails != nil)")
+                    #if DEBUG
+                    SalemXStage2FSimulatorSignalingDebug.recordReceiverElementCallReady()
+                    #endif
                     state.url = url
                 case .failure(let error):
                     guard !Task.isCancelled, !isDismissingAfterLocalHangup else {
@@ -686,6 +692,9 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         case .join:
             hasJoinedWidgetCall = true
             timeoutTask = nil
+            #if DEBUG
+            SalemXStage2FSimulatorSignalingDebug.recordReceiverMatrixRTCJoinStarted()
+            #endif
             schedulePreferredAudioRouteEnforcement()
             await acknowledgeWidgetRequest(requestPayload)
         case .mediaState:

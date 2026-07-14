@@ -126,6 +126,13 @@ struct UserSessionFlowCoordinatorTests {
         #expect(detailNavigationStack?.rootCoordinator is RoomScreenCoordinator)
         #expect(detailCoordinator != nil)
     }
+
+    @Test
+    func embeddedElementCallPresentationAwaitsCallScreenOverlay() async {
+        await userSessionFlowCoordinator.presentEmbeddedElementCall(roomID: "1", startMode: .audio)
+
+        #expect(tabCoordinator?.overlayCoordinator is CallScreenCoordinator)
+    }
     
     @Test
     mutating func childRoomPresentation() async throws {

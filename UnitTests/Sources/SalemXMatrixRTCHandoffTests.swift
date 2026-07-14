@@ -755,6 +755,12 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
 
         #expect(source.contains("receiver_present_existing_selected=\\(receiverPresentExistingSelected)"))
         #expect(source.contains("receiver_start_new_selected=\\(receiverStartNewSelected)"))
+        #expect(source.contains("receiver_join_existing_call_requested=\\(receiverJoinExistingCallRequested)"))
+        #expect(source.contains("receiver_element_call_ready=\\(receiverElementCallReady)"))
+        #expect(source.contains("receiver_element_call_loaded=\\(receiverElementCallLoaded)"))
+        #expect(source.contains("receiver_matrixrtc_join_started=\\(receiverMatrixRTCJoinStarted)"))
+        #expect(source.contains("receiver_matrixrtc_membership_published=\\(receiverMatrixRTCMembershipPublished)"))
+        #expect(source.contains("receiver_remote_participant_seen=\\(receiverRemoteParticipantSeen)"))
         #expect(source.contains("matrixrtc_two_participants_seen=\\(matrixRTCTwoParticipantsSeen)"))
         #expect(source.contains("sender_upstream_hangup_invoked=\\(senderUpstreamHangupInvoked)"))
         #expect(source.contains("receiver_upstream_remote_end_seen=\\(receiverUpstreamRemoteEndSeen)"))
