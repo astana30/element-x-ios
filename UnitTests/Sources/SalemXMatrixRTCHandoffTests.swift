@@ -341,6 +341,24 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
     }
 
     @Test
+    func stage2FSimulatorSenderRevalidatesExactOngoingCallBeforeInvite() throws {
+        #expect(SalemXStage2FSimulatorSignalingDebug.senderActiveCallIsCurrent(contextRoomID: "redacted-room",
+                                                                               ongoingCallRoomID: "redacted-room"))
+        #expect(!SalemXStage2FSimulatorSignalingDebug.senderActiveCallIsCurrent(contextRoomID: "redacted-room",
+                                                                                ongoingCallRoomID: nil))
+        #expect(!SalemXStage2FSimulatorSignalingDebug.senderActiveCallIsCurrent(contextRoomID: "redacted-room",
+                                                                                ongoingCallRoomID: "different-room"))
+
+        let source = try stage2FSimulatorSignalingDebugSource()
+        let revalidation = try #require(source.range(of: "senderActiveCallRevalidatedBeforeInvite = senderActiveCallIsCurrent")?.lowerBound)
+        let inviteRequest = try #require(source.range(of: "let response = await httpJSON(url: inviteURL")?.lowerBound)
+
+        #expect(source.contains("ongoingCallRoomID: elementCallService.ongoingCallRoomIDPublisher.value"))
+        #expect(source.contains("lastFailure = \"activeCallEvidenceStale\""))
+        #expect(revalidation < inviteRequest)
+    }
+
+    @Test
     func stage2FSimulatorInviteIsOneShotAndRealNonDev() throws {
         let source = try stage2FSimulatorSignalingDebugSource()
 

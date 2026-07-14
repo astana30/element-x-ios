@@ -737,7 +737,11 @@ enum SalemXStage2FSimulatorSignalingDebug {
         case "/direct-call/stage2f-sim/sender-auth-preflight":
             Task { await preflightSenderAuthentication(userSession: userSession) }
         case "/direct-call/stage2f-sim/sender-send-invite":
-            Task { await sendForegroundInvite(userSession: userSession, inviteURLString: queryItems["invite_url"]) }
+            Task {
+                await sendForegroundInvite(userSession: userSession,
+                                           elementCallService: elementCallService,
+                                           inviteURLString: queryItems["invite_url"])
+            }
         default:
             return false
         }
@@ -1194,11 +1198,22 @@ enum SalemXStage2FSimulatorSignalingDebug {
         writeProof()
     }
 
-    private static func sendForegroundInvite(userSession: UserSessionProtocol?, inviteURLString: String?) async {
+    private static func sendForegroundInvite(userSession: UserSessionProtocol?,
+                                             elementCallService: any ElementCallServiceProtocol,
+                                             inviteURLString: String?) async {
         guard var context = senderContext,
               context.activeCallEvidenceSeen,
               !context.foregroundInviteSent else {
             proof.lastFailure = senderContext?.foregroundInviteSent == true ? "secureInviteSendFailed" : "activeCallEvidenceTimeout"
+            writeProof()
+            return
+        }
+
+        proof.senderActiveCallRevalidatedBeforeInvite = senderActiveCallIsCurrent(contextRoomID: context.roomID,
+                                                                                  ongoingCallRoomID: elementCallService.ongoingCallRoomIDPublisher.value)
+        guard proof.senderActiveCallRevalidatedBeforeInvite else {
+            proof.senderReadyToSendForegroundInvite = false
+            proof.lastFailure = "activeCallEvidenceStale"
             writeProof()
             return
         }
@@ -1275,6 +1290,10 @@ enum SalemXStage2FSimulatorSignalingDebug {
             proof.lastFailure = "secureInvitePreparationFailed"
         }
         writeProof()
+    }
+
+    static func senderActiveCallIsCurrent(contextRoomID: String, ongoingCallRoomID: String?) -> Bool {
+        ongoingCallRoomID == contextRoomID
     }
 
     private static func claimSenderMetadata(clientProxy: ClientProxyProtocol, context: SenderContext) async {
@@ -1857,6 +1876,7 @@ enum SalemXStage2FSimulatorSignalingDebug {
         var senderActiveCallEvidenceSeen = false
         var senderActiveCallSnapshotPresent = false, senderActiveCallStatePublished = false, metadataRoomMatchesSenderActiveCallRoom = false
         var senderReadyToSendForegroundInvite = false
+        var senderActiveCallRevalidatedBeforeInvite = false
         var senderCurrentSessionPresent = false
         var senderCurrentAccessTokenPresent = false
         var senderRequestAuthHeaderReady = false
@@ -1967,6 +1987,7 @@ enum SalemXStage2FSimulatorSignalingDebug {
                 "sender_active_call_state_published=\(senderActiveCallStatePublished)",
                 "metadata_room_matches_sender_active_call_room=\(metadataRoomMatchesSenderActiveCallRoom)",
                 "sender_ready_to_send_foreground_invite=\(senderReadyToSendForegroundInvite)",
+                "sender_active_call_revalidated_before_invite=\(senderActiveCallRevalidatedBeforeInvite)",
                 "sender_current_session_present=\(senderCurrentSessionPresent)",
                 "sender_current_access_token_present=\(senderCurrentAccessTokenPresent)",
                 "sender_request_auth_header_ready=\(senderRequestAuthHeaderReady)",
