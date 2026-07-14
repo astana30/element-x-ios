@@ -1449,6 +1449,10 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     }
 
     private func handleIncomingCallFallback(roomSummaries: [RoomSummary]) {
+        guard isUnauthenticatedIncomingFallbackEnabled else {
+            return
+        }
+
         guard let clientProxy else {
             return
         }
@@ -1510,6 +1514,10 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
                                                            roomDisplayName: String?,
                                                            isDirect: Bool,
                                                            candidate: ForegroundRoomIncomingCallCandidate) {
+        guard isUnauthenticatedIncomingFallbackEnabled else {
+            return
+        }
+
         guard foregroundRoomID == roomID,
               isDirect,
               incomingCallID == nil,
@@ -1554,6 +1562,10 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         }
 
         return nil
+    }
+
+    private var isUnauthenticatedIncomingFallbackEnabled: Bool {
+        !salemXAnswerBridgeConfiguration.embeddedMatrixRTCAnswerBridgeEnabled
     }
 
     private func isIncomingFallbackCandidate(roomSummary: RoomSummary, ownUserID: String) -> Bool {

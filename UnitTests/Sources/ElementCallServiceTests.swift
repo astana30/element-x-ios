@@ -1343,6 +1343,47 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
     }
 
     @Test
+    func secureAnswerBridgeSuppressesRoomSummaryIncomingFallback() async {
+        service = ElementCallService(appSettings: appSettings,
+                                     callProvider: callProvider,
+                                     timeProvider: TimeProvider(clock: testClock) { self.currentDate },
+                                     salemXAnswerBridgeConfiguration: .init(embeddedMatrixRTCAnswerBridgeEnabled: true))
+        let roomSummaryProvider = RoomSummaryProviderMock()
+        let roomSummaries = CurrentValueSubject<[RoomSummary], Never>([])
+        roomSummaryProvider.statePublisher = CurrentValueSubject<RoomSummaryProviderState, Never>(.loaded(totalNumberOfRooms: 1)).asCurrentValuePublisher()
+        roomSummaryProvider.roomListPublisher = roomSummaries.asCurrentValuePublisher()
+        clientProxy.roomSummaryProvider = roomSummaryProvider
+        service.setClientProxy(clientProxy)
+
+        roomSummaries.send([
+            makeRoomSummary(id: "redacted-room",
+                            isDirect: true,
+                            hasOngoingCall: true,
+                            participants: ["redacted-remote"],
+                            lastCallEvent: .init(state: .incoming, intent: .audio))
+        ])
+
+        #expect(await waitForIncomingCallReports(count: 1) == false)
+    }
+
+    @Test
+    func secureAnswerBridgeSuppressesForegroundIncomingFallback() async {
+        service = ElementCallService(appSettings: appSettings,
+                                     callProvider: callProvider,
+                                     timeProvider: TimeProvider(clock: testClock) { self.currentDate },
+                                     salemXAnswerBridgeConfiguration: .init(embeddedMatrixRTCAnswerBridgeEnabled: true))
+        let roomID = "redacted-room"
+        configureRoomSummaryProvider()
+        let room = configureJoinedRoomMock(roomID: roomID, activeParticipants: ["redacted-remote"])
+        service.setClientProxy(clientProxy)
+        service.observeForegroundRoom(roomProxy: room, roomDisplayName: "Room")
+
+        handleForegroundCall(roomID: roomID, deduplicationID: "redacted-current-call")
+
+        #expect(await waitForIncomingCallReports(count: 1) == false)
+    }
+
+    @Test
     func terminatedCallSuppressionDoesNotBlockFreshIncomingFallback() async {
         let roomID = "redacted-room"
         let remoteUserID = "redacted-remote"
