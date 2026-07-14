@@ -158,6 +158,54 @@ enum ElementCallRTCTransportDiagnosticsStage: String, Decodable, Equatable {
     case response
 }
 
+enum ElementCallRTCTransportRequestBoundary {
+    struct Policy: Equatable {
+        let shouldAuthorize: Bool
+        let shouldObserveCredentials: Bool
+    }
+
+    static let authorizationPaths = [
+        "/_matrix/client/unstable/org.matrix.msc4143/rtc/transports",
+        "/_matrix/client/v1/rtc/transports",
+        "/livekit/jwt"
+    ]
+
+    static let credentialObservationPaths = [
+        "/livekit/jwt/get_token",
+        "/livekit/jwt/sfu/get"
+    ]
+
+    static func policy(for requestURL: URL, homeserverURL: URL) -> Policy {
+        guard isSameOrigin(requestURL, homeserverURL) else {
+            return Policy(shouldAuthorize: false, shouldObserveCredentials: false)
+        }
+
+        return Policy(shouldAuthorize: authorizationPaths.contains(requestURL.path),
+                      shouldObserveCredentials: credentialObservationPaths.contains(requestURL.path))
+    }
+
+    private static func isSameOrigin(_ lhs: URL, _ rhs: URL) -> Bool {
+        lhs.scheme?.lowercased() == rhs.scheme?.lowercased() &&
+            lhs.host?.lowercased() == rhs.host?.lowercased() &&
+            effectivePort(for: lhs) == effectivePort(for: rhs)
+    }
+
+    private static func effectivePort(for url: URL) -> Int? {
+        if let port = url.port {
+            return port
+        }
+
+        switch url.scheme?.lowercased() {
+        case "http":
+            return 80
+        case "https":
+            return 443
+        default:
+            return nil
+        }
+    }
+}
+
 struct ElementCallRTCTransportDiagnosticsPayload: Decodable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case schemaVersion

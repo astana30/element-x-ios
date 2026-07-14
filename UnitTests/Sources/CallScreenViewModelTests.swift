@@ -93,6 +93,35 @@ final class CallScreenViewModelTests {
     }
 
     @Test
+    func elementCallRTCTransportRequestBoundarySeparatesAuthorizationFromCredentialObservation() throws {
+        let homeserverURL = try #require(URL(string: "https://matrix.example"))
+
+        for path in ElementCallRTCTransportRequestBoundary.authorizationPaths {
+            let requestURL = try #require(URL(string: path, relativeTo: homeserverURL)?.absoluteURL)
+            let policy = ElementCallRTCTransportRequestBoundary.policy(for: requestURL, homeserverURL: homeserverURL)
+            #expect(policy.shouldAuthorize)
+            #expect(!policy.shouldObserveCredentials)
+        }
+
+        for path in ElementCallRTCTransportRequestBoundary.credentialObservationPaths {
+            let requestURL = try #require(URL(string: path, relativeTo: homeserverURL)?.absoluteURL)
+            let policy = ElementCallRTCTransportRequestBoundary.policy(for: requestURL, homeserverURL: homeserverURL)
+            #expect(!policy.shouldAuthorize)
+            #expect(policy.shouldObserveCredentials)
+        }
+
+        let crossOriginURL = try #require(URL(string: "https://sfu.example/livekit/jwt/get_token"))
+        let crossOriginPolicy = ElementCallRTCTransportRequestBoundary.policy(for: crossOriginURL, homeserverURL: homeserverURL)
+        #expect(!crossOriginPolicy.shouldAuthorize)
+        #expect(!crossOriginPolicy.shouldObserveCredentials)
+
+        let nestedPathURL = try #require(URL(string: "/livekit/jwt/get_token/extra", relativeTo: homeserverURL)?.absoluteURL)
+        let nestedPathPolicy = ElementCallRTCTransportRequestBoundary.policy(for: nestedPathURL, homeserverURL: homeserverURL)
+        #expect(!nestedPathPolicy.shouldAuthorize)
+        #expect(!nestedPathPolicy.shouldObserveCredentials)
+    }
+
+    @Test
     func audioRoomCallRecordsRTCTransportCredentialRequestAndResponse() async throws {
         let harness = try makeAudioRoomCallViewModel()
 

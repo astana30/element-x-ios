@@ -35,21 +35,6 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         case earpiece
     }
     
-    private enum TransportAuthorization {
-        static let paths = [
-            "/_matrix/client/unstable/org.matrix.msc4143/rtc/transports",
-            "/_matrix/client/v1/rtc/transports",
-            "/livekit/jwt"
-        ]
-    }
-
-    private struct RTCTransportDiagnosticsScript {
-        let setup: String
-        let fetchObserverPrefix: String
-        let fetchObserverSuffix: String
-        let xmlHTTPRequest: String
-    }
-    
     private let elementCallService: ElementCallServiceProtocol
     private let configuration: ElementCallConfiguration
     private let isPictureInPictureAllowed: Bool
@@ -903,22 +888,26 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             return nil
         }
         
-        let transportPaths = TransportAuthorization.paths
+        let transportPaths = ElementCallRTCTransportRequestBoundary.authorizationPaths
+            .compactMap(javaScriptStringLiteral)
+            .joined(separator: ",\n")
+        let credentialPaths = ElementCallRTCTransportRequestBoundary.credentialObservationPaths
             .compactMap(javaScriptStringLiteral)
             .joined(separator: ",\n")
         let liveKitServiceURLLiteral = javaScriptStringLiteral(homeserverURL.appending(path: "/livekit/jwt").absoluteString)
+        let homeserverLiteral = javaScriptStringLiteral(clientProxy.homeserver)
         
-        guard let liveKitServiceURLLiteral else {
+        guard let liveKitServiceURLLiteral, let homeserverLiteral else {
             return nil
         }
 
-        let diagnostics = makeRTCTransportDiagnosticsScript()
+        let diagnosticsScript = makeRTCTransportDiagnosticsScript(credentialPaths: credentialPaths,
+                                                                  homeserverLiteral: homeserverLiteral)
         
         let authorizationScript: String
         if let clientProxy = clientProxy as? ClientProxy,
            let accessToken = clientProxy.accessToken,
-           let accessTokenLiteral = javaScriptStringLiteral(accessToken),
-           let homeserverLiteral = javaScriptStringLiteral(clientProxy.homeserver) {
+           let accessTokenLiteral = javaScriptStringLiteral(accessToken) {
             authorizationScript = [
                 "    const accessToken = \(accessTokenLiteral);",
                 "    const homeserverURL = new URL(\(homeserverLiteral));",
@@ -947,13 +936,13 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                 "                return originalFetch(input, init);",
                 "            }",
                 "            if (input instanceof Request) {",
-                "                return \(diagnostics.fetchObserverPrefix)originalFetch(new Request(input, Object.assign({}, init || {}, {",
+                "                return originalFetch(new Request(input, Object.assign({}, init || {}, {",
                 "                    headers: addAuthorizationHeader((init && init.headers) || input.headers)",
-                "                })))\(diagnostics.fetchObserverSuffix);",
+                "                })));",
                 "            }",
-                "            return \(diagnostics.fetchObserverPrefix)originalFetch(input, Object.assign({}, init || {}, {",
+                "            return originalFetch(input, Object.assign({}, init || {}, {",
                 "                headers: addAuthorizationHeader(init && init.headers)",
-                "            }))\(diagnostics.fetchObserverSuffix);",
+                "            }));",
                 "        };",
                 "    }",
                 "    const originalOpen = XMLHttpRequest.prototype.open;",
@@ -972,7 +961,6 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                 "    };",
                 "    XMLHttpRequest.prototype.send = function(body) {",
                 "        if (this.__elementXShouldAuthorizeRTCTransports && !this.__elementXHasAuthorizationHeader) {",
-                diagnostics.xmlHTTPRequest,
                 "            originalSetRequestHeader.call(this, \"Authorization\", authorizationValue);",
                 "        }",
                 "        return originalSend.call(this, body);",
@@ -994,7 +982,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             "        }",
             "    ];",
             "    globalThis.SALEMX_getRTCTransports = async () => rtcTransports;",
-            diagnostics.setup,
+            diagnosticsScript,
             authorizationScript,
             "})();"
         ]
@@ -1002,9 +990,23 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         .joined(separator: "\n")
     }
 
-    private static func makeRTCTransportDiagnosticsScript() -> RTCTransportDiagnosticsScript {
+    private static func makeRTCTransportDiagnosticsScript(credentialPaths: String, homeserverLiteral: String) -> String {
         #if DEBUG
-        let setup = [
+        return [
+            "    const rtcCredentialPaths = new Set([",
+            "        \(credentialPaths)",
+            "    ]);",
+            "    const rtcCredentialHomeserverURL = new URL(\(homeserverLiteral));",
+            "    const shouldObserveRTCTransport = (resource) => {",
+            "        try {",
+            "            const resourceURL = typeof resource === \"string\"",
+            "                ? new URL(resource, rtcCredentialHomeserverURL)",
+            "                : new URL(resource.url, rtcCredentialHomeserverURL);",
+            "            return resourceURL.origin === rtcCredentialHomeserverURL.origin && rtcCredentialPaths.has(resourceURL.pathname);",
+            "        } catch {",
+            "            return false;",
+            "        }",
+            "    };",
             "    const reportRTCTransport = (stage, httpStatus) => {",
             "        try {",
             "            const handler = window.webkit?.messageHandlers?.elementCallMediaDiagnostics;",
@@ -1025,20 +1027,32 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             "            reportRTCTransport(\"response\");",
             "            throw error;",
             "        });",
-            "    };"
-        ].joined(separator: "\n")
-        let xmlHTTPRequest = [
+            "    };",
+            "    const originalRTCTransportFetch = window.fetch && window.fetch.bind(window);",
+            "    if (originalRTCTransportFetch) {",
+            "        window.fetch = (input, init) => {",
+            "            const request = originalRTCTransportFetch(input, init);",
+            "            return shouldObserveRTCTransport(input) ? observeRTCTransportRequest(request) : request;",
+            "        };",
+            "    }",
+            "    const originalRTCTransportOpen = XMLHttpRequest.prototype.open;",
+            "    const originalRTCTransportSend = XMLHttpRequest.prototype.send;",
+            "    XMLHttpRequest.prototype.open = function(method, url, ...rest) {",
+            "        this.__elementXShouldObserveRTCCredentials = shouldObserveRTCTransport(url);",
+            "        return originalRTCTransportOpen.call(this, method, url, ...rest);",
+            "    };",
+            "    XMLHttpRequest.prototype.send = function(body) {",
+            "        if (this.__elementXShouldObserveRTCCredentials) {",
             "            reportRTCTransport(\"request\");",
             "            this.addEventListener(\"loadend\", () => {",
             "                reportRTCTransport(\"response\", this.status);",
-            "            }, { once: true });"
+            "            }, { once: true });",
+            "        }",
+            "        return originalRTCTransportSend.call(this, body);",
+            "    };"
         ].joined(separator: "\n")
-        return RTCTransportDiagnosticsScript(setup: setup,
-                                             fetchObserverPrefix: "observeRTCTransportRequest(",
-                                             fetchObserverSuffix: ")",
-                                             xmlHTTPRequest: xmlHTTPRequest)
         #else
-        return RTCTransportDiagnosticsScript(setup: "", fetchObserverPrefix: "", fetchObserverSuffix: "", xmlHTTPRequest: "")
+        return ""
         #endif
     }
     
