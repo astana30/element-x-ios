@@ -49,6 +49,9 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     private var shouldSendHangupOnStop = true
     private var isDismissingAfterLocalHangup = false
     private var hasRequestedEmbeddedWebContentReset = false
+    #if DEBUG
+    private var pendingReceiverWidgetJoinRequestID: String?
+    #endif
     
     private let actionsSubject: PassthroughSubject<CallScreenViewModelAction, Never> = .init()
     var actions: AnyPublisher<CallScreenViewModelAction, Never> {
@@ -149,6 +152,10 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             .receive(on: DispatchQueue.main)
             .sink { [weak self] receivedMessage in
                 guard let self else { return }
+
+                #if DEBUG
+                recordReceiverWidgetJoinDriverResponseIfNeeded(receivedMessage)
+                #endif
                 
                 Task {
                     await self.postJSONToWidget(receivedMessage)
@@ -218,6 +225,9 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     func stop() {
         timeoutTask = nil
         audioRouteEnforcementTask = nil
+        #if DEBUG
+        pendingReceiverWidgetJoinRequestID = nil
+        #endif
         resetEmbeddedWebContentIfNeeded()
         let pendingSetupCallTask = setupCallTask
         setupCallTask = nil
@@ -246,7 +256,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             #endif
             MXLog.info("Element Call media diagnostics: content_loaded=true start_mode=\(configuration.startMode)")
         }
-        
+
         if await handleNativeWidgetActionIfNeeded(message) {
             return
         }
@@ -277,6 +287,9 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         shouldSendHangupOnStop = false
         timeoutTask = nil
         audioRouteEnforcementTask = nil
+        #if DEBUG
+        pendingReceiverWidgetJoinRequestID = nil
+        #endif
         setupCallTask = nil
         resetEmbeddedWebContentIfNeeded()
         
@@ -648,13 +661,20 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         return json
     }
     
-    private func postJSONToWidget(_ json: String) async {
+    @discardableResult
+    private func postJSONToWidget(_ json: String) async -> Bool {
+        guard let javaScriptEvaluator = state.bindings.javaScriptEvaluator else {
+            return false
+        }
+
         do {
             let message = "postMessage(\(json), '*')"
-            let result = try await state.bindings.javaScriptEvaluator?(message)
+            let result = try await javaScriptEvaluator(message)
             MXLog.debug("Evaluated javascript: \(json) with result: \(String(describing: result))")
+            return true
         } catch {
             MXLog.error("Received javascript evaluation error: \(error)")
+            return false
         }
     }
     
@@ -693,10 +713,17 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             hasJoinedWidgetCall = true
             timeoutTask = nil
             #if DEBUG
+            pendingReceiverWidgetJoinRequestID = request.requestId
+            SalemXStage2FSimulatorSignalingDebug.recordReceiverWidgetJoinReceived()
             SalemXStage2FSimulatorSignalingDebug.recordReceiverMatrixRTCJoinStarted()
             #endif
             schedulePreferredAudioRouteEnforcement()
-            await acknowledgeWidgetRequest(requestPayload)
+            let joinAcknowledged = await acknowledgeWidgetRequest(requestPayload)
+            #if DEBUG
+            if joinAcknowledged {
+                SalemXStage2FSimulatorSignalingDebug.recordReceiverWidgetJoinAcknowledged()
+            }
+            #endif
             await forwardWidgetJoinRequestToDriver(message)
         case .mediaState:
             let audioEnabled = request.data?.audioEnabled ?? state.isMicrophoneEnabled
@@ -723,24 +750,42 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
 
     private func forwardWidgetJoinRequestToDriver(_ message: String) async {
         #if DEBUG
-        SalemXStage2FSimulatorSignalingDebug.recordReceiverMembershipSendAttempted()
+        SalemXStage2FSimulatorSignalingDebug.recordReceiverWidgetJoinDispatchAttempted()
         #endif
 
         switch await widgetDriver.handleMessage(message) {
         case .success:
             #if DEBUG
-            SalemXStage2FSimulatorSignalingDebug.recordReceiverMembershipSendCompleted()
+            SalemXStage2FSimulatorSignalingDebug.recordReceiverWidgetJoinDispatchCompleted()
             #endif
             MXLog.info("Element Call media diagnostics: widget_join_forwarded_to_driver=true start_mode=\(configuration.startMode)")
         case .failure(let error):
             #if DEBUG
-            SalemXStage2FSimulatorSignalingDebug.recordReceiverMembershipSendError(error)
+            SalemXStage2FSimulatorSignalingDebug.recordReceiverWidgetJoinDispatchError(error)
             #endif
             MXLog.error("Element Call media diagnostics: widget_join_forwarded_to_driver=false error=\(error) start_mode=\(configuration.startMode)")
         }
     }
+
+    #if DEBUG
+    private func recordReceiverWidgetJoinDriverResponseIfNeeded(_ message: String) {
+        guard let data = message.data(using: .utf8),
+              let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              payload["api"] as? String == ElementCallWidgetMessage.Direction.toWidget.rawValue,
+              payload["action"] as? String == NativeWidgetAction.join.rawValue,
+              payload["response"] != nil,
+              let requestID = payload["requestId"] as? String,
+              requestID == pendingReceiverWidgetJoinRequestID else {
+            return
+        }
+
+        pendingReceiverWidgetJoinRequestID = nil
+        SalemXStage2FSimulatorSignalingDebug.recordReceiverWidgetJoinDriverResponseReceived()
+    }
+    #endif
     
-    private func acknowledgeWidgetRequest(_ requestPayload: [String: Any], data: [String: Any]? = nil) async {
+    @discardableResult
+    private func acknowledgeWidgetRequest(_ requestPayload: [String: Any], data: [String: Any]? = nil) async -> Bool {
         var responsePayload = requestPayload
         responsePayload["response"] = [String: Any]()
         responsePayload["data"] = data ?? requestPayload["data"] ?? [String: Any]()
@@ -750,15 +795,15 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             data = try JSONSerialization.data(withJSONObject: responsePayload)
         } catch {
             MXLog.error("Failed encoding widget response with error: \(error)")
-            return
+            return false
         }
         
         guard let json = String(data: data, encoding: .utf8) else {
             MXLog.error("Invalid data for widget response")
-            return
+            return false
         }
         
-        await postJSONToWidget(json)
+        return await postJSONToWidget(json)
     }
     
     /// This function updates the list of available audio outputs on the web side

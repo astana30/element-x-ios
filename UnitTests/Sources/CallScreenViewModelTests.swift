@@ -180,10 +180,35 @@ final class CallScreenViewModelTests {
         #expect(evaluatedScripts[0].contains("\"requestId\":\"join-request\""))
         #expect(evaluatedScripts[0].contains("\"response\""))
 
-        let proof = try stage2FSimulatorProofText()
+        var proof = try stage2FSimulatorProofText()
+        #expect(proof.contains("receiver_widget_join_received=true"))
+        #expect(proof.contains("receiver_widget_join_acknowledged=true"))
+        #expect(proof.contains("receiver_widget_join_driver_response_received=false"))
+        #expect(proof.contains("receiver_widget_join_dispatch_attempted=true"))
+        #expect(proof.contains("receiver_widget_join_dispatch_completed=true"))
+        #expect(proof.contains("receiver_widget_join_dispatch_error_bucket=none"))
+        #expect(proof.contains("receiver_membership_send_marker_semantics=widget_driver_dispatch_only"))
         #expect(proof.contains("receiver_membership_send_attempted=true"))
         #expect(proof.contains("receiver_membership_send_completed=true"))
         #expect(proof.contains("receiver_membership_send_error_bucket=none"))
+
+        let mismatchedDriverResponse = """
+        {"api":"toWidget","action":"io.element.join","widgetId":"call-widget","requestId":"stale-request","response":{}}
+        """
+        harness.widgetDriver.messagePublisher.send(mismatchedDriverResponse)
+        await waitFor { evaluatedScripts.count == 2 }
+
+        proof = try stage2FSimulatorProofText()
+        #expect(proof.contains("receiver_widget_join_driver_response_received=false"))
+
+        let matchingDriverResponse = """
+        {"api":"toWidget","action":"io.element.join","widgetId":"call-widget","requestId":"join-request","response":{}}
+        """
+        harness.widgetDriver.messagePublisher.send(matchingDriverResponse)
+        await waitFor { evaluatedScripts.count == 3 }
+
+        proof = try stage2FSimulatorProofText()
+        #expect(proof.contains("receiver_widget_join_driver_response_received=true"))
 
         harness.viewModel.stop()
     }
@@ -212,6 +237,11 @@ final class CallScreenViewModelTests {
         }
 
         let proof = try stage2FSimulatorProofText()
+        #expect(proof.contains("receiver_widget_join_received=true"))
+        #expect(proof.contains("receiver_widget_join_acknowledged=false"))
+        #expect(proof.contains("receiver_widget_join_dispatch_attempted=true"))
+        #expect(proof.contains("receiver_widget_join_dispatch_completed=false"))
+        #expect(proof.contains("receiver_widget_join_dispatch_error_bucket=driverNotSetup"))
         #expect(proof.contains("receiver_membership_send_attempted=true"))
         #expect(proof.contains("receiver_membership_send_completed=false"))
         #expect(proof.contains("receiver_membership_send_error_bucket=driverNotSetup"))

@@ -758,10 +758,14 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
         #expect(source.contains("receiver_join_existing_call_requested=\\(receiverJoinExistingCallRequested)"))
         #expect(source.contains("receiver_element_call_ready=\\(receiverElementCallReady)"))
         #expect(source.contains("receiver_element_call_loaded=\\(receiverElementCallLoaded)"))
+        #expect(source.contains("receiver_widget_join_received=\\(receiverWidgetJoinReceived)"))
+        #expect(source.contains("receiver_widget_join_acknowledged=\\(receiverWidgetJoinAcknowledged)"))
+        #expect(source.contains("receiver_widget_join_driver_response_received=\\(receiverWidgetJoinDriverResponseReceived)"))
+        #expect(source.contains("receiver_widget_join_dispatch_attempted=\\(receiverWidgetJoinDispatchAttempted)"))
+        #expect(source.contains("receiver_widget_join_dispatch_completed=\\(receiverWidgetJoinDispatchCompleted)"))
+        #expect(source.contains("receiver_widget_join_dispatch_error_bucket=\\(receiverWidgetJoinDispatchErrorBucket)"))
         #expect(source.contains("receiver_matrixrtc_join_started=\\(receiverMatrixRTCJoinStarted)"))
-        #expect(source.contains("receiver_membership_send_attempted=\\(receiverMembershipSendAttempted)"))
-        #expect(source.contains("receiver_membership_send_completed=\\(receiverMembershipSendCompleted)"))
-        #expect(source.contains("receiver_membership_send_error_bucket=\\(receiverMembershipSendErrorBucket)"))
+        #expect(source.contains("receiver_membership_send_marker_semantics=widget_driver_dispatch_only"))
         #expect(source.contains("receiver_matrixrtc_membership_published=\\(receiverMatrixRTCMembershipPublished)"))
         #expect(source.contains("receiver_remote_participant_seen=\\(receiverRemoteParticipantSeen)"))
         #expect(source.contains("matrixrtc_two_participants_seen=\\(matrixRTCTwoParticipantsSeen)"))
@@ -794,15 +798,23 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
     }
 
     @Test
-    func stage2FSimulatorProofClearResetsMembershipSendMarkers() throws {
+    func stage2FSimulatorProofClearResetsWidgetJoinMarkers() throws {
         let clearURL = try #require(URL(string: "kz.salemx.msg://direct-call/stage2f-sim/clear"))
         setenv("SALEM_X_STAGE2F_SIM_RECEIVER_BRIDGE", "1", 1)
         defer { unsetenv("SALEM_X_STAGE2F_SIM_RECEIVER_BRIDGE") }
 
-        SalemXStage2FSimulatorSignalingDebug.recordReceiverMembershipSendAttempted()
-        SalemXStage2FSimulatorSignalingDebug.recordReceiverMembershipSendCompleted()
+        SalemXStage2FSimulatorSignalingDebug.recordReceiverWidgetJoinReceived()
+        SalemXStage2FSimulatorSignalingDebug.recordReceiverWidgetJoinAcknowledged()
+        SalemXStage2FSimulatorSignalingDebug.recordReceiverWidgetJoinDriverResponseReceived()
+        SalemXStage2FSimulatorSignalingDebug.recordReceiverWidgetJoinDispatchAttempted()
+        SalemXStage2FSimulatorSignalingDebug.recordReceiverWidgetJoinDispatchCompleted()
 
         var proof = try stage2FSimulatorProofText()
+        #expect(proof.contains("receiver_widget_join_received=true"))
+        #expect(proof.contains("receiver_widget_join_acknowledged=true"))
+        #expect(proof.contains("receiver_widget_join_driver_response_received=true"))
+        #expect(proof.contains("receiver_widget_join_dispatch_attempted=true"))
+        #expect(proof.contains("receiver_widget_join_dispatch_completed=true"))
         #expect(proof.contains("receiver_membership_send_attempted=true"))
         #expect(proof.contains("receiver_membership_send_completed=true"))
 
@@ -812,6 +824,12 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
                                                                elementCallService: ElementCallServiceMock(.init())))
 
         proof = try stage2FSimulatorProofText()
+        #expect(proof.contains("receiver_widget_join_received=false"))
+        #expect(proof.contains("receiver_widget_join_acknowledged=false"))
+        #expect(proof.contains("receiver_widget_join_driver_response_received=false"))
+        #expect(proof.contains("receiver_widget_join_dispatch_attempted=false"))
+        #expect(proof.contains("receiver_widget_join_dispatch_completed=false"))
+        #expect(proof.contains("receiver_widget_join_dispatch_error_bucket=not_requested"))
         #expect(proof.contains("receiver_membership_send_attempted=false"))
         #expect(proof.contains("receiver_membership_send_completed=false"))
         #expect(proof.contains("receiver_membership_send_error_bucket=not_requested"))

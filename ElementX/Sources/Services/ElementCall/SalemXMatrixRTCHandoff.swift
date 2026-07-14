@@ -792,6 +792,33 @@ enum SalemXStage2FSimulatorSignalingDebug {
         writeProof()
     }
 
+    static func recordReceiverWidgetJoinReceived() {
+        guard ProcessInfo.isSalemXStage2FSimulatorReceiverBridgeEnabled else {
+            return
+        }
+
+        proof.receiverWidgetJoinReceived = true
+        writeProof()
+    }
+
+    static func recordReceiverWidgetJoinAcknowledged() {
+        guard ProcessInfo.isSalemXStage2FSimulatorReceiverBridgeEnabled else {
+            return
+        }
+
+        proof.receiverWidgetJoinAcknowledged = true
+        writeProof()
+    }
+
+    static func recordReceiverWidgetJoinDriverResponseReceived() {
+        guard ProcessInfo.isSalemXStage2FSimulatorReceiverBridgeEnabled else {
+            return
+        }
+
+        proof.receiverWidgetJoinDriverResponseReceived = true
+        writeProof()
+    }
+
     static func recordReceiverMatrixRTCJoinStarted() {
         guard ProcessInfo.isSalemXStage2FSimulatorReceiverBridgeEnabled else {
             return
@@ -801,31 +828,31 @@ enum SalemXStage2FSimulatorSignalingDebug {
         writeProof()
     }
 
-    static func recordReceiverMembershipSendAttempted() {
+    static func recordReceiverWidgetJoinDispatchAttempted() {
         guard ProcessInfo.isSalemXStage2FSimulatorReceiverBridgeEnabled else {
             return
         }
 
-        proof.receiverMembershipSendAttempted = true
+        proof.receiverWidgetJoinDispatchAttempted = true
         writeProof()
     }
 
-    static func recordReceiverMembershipSendCompleted() {
+    static func recordReceiverWidgetJoinDispatchCompleted() {
         guard ProcessInfo.isSalemXStage2FSimulatorReceiverBridgeEnabled else {
             return
         }
 
-        proof.receiverMembershipSendCompleted = true
-        proof.receiverMembershipSendErrorBucket = "none"
+        proof.receiverWidgetJoinDispatchCompleted = true
+        proof.receiverWidgetJoinDispatchErrorBucket = "none"
         writeProof()
     }
 
-    static func recordReceiverMembershipSendError(_ error: ElementCallWidgetDriverError) {
+    static func recordReceiverWidgetJoinDispatchError(_ error: ElementCallWidgetDriverError) {
         guard ProcessInfo.isSalemXStage2FSimulatorReceiverBridgeEnabled else {
             return
         }
 
-        proof.receiverMembershipSendErrorBucket = String(describing: error)
+        proof.receiverWidgetJoinDispatchErrorBucket = String(describing: error)
         writeProof()
     }
 
@@ -1817,10 +1844,13 @@ enum SalemXStage2FSimulatorSignalingDebug {
         var receiverJoinExistingCallRequested = false
         var receiverElementCallReady = false
         var receiverElementCallLoaded = false
+        var receiverWidgetJoinReceived = false
+        var receiverWidgetJoinAcknowledged = false
+        var receiverWidgetJoinDriverResponseReceived = false
+        var receiverWidgetJoinDispatchAttempted = false
+        var receiverWidgetJoinDispatchCompleted = false
+        var receiverWidgetJoinDispatchErrorBucket = "not_requested"
         var receiverMatrixRTCJoinStarted = false
-        var receiverMembershipSendAttempted = false
-        var receiverMembershipSendCompleted = false
-        var receiverMembershipSendErrorBucket = "not_requested"
         var receiverMatrixRTCMembershipPublished = false
         var receiverRemoteParticipantSeen = false
         var matrixRTCTwoParticipantsSeen = false
@@ -1922,10 +1952,17 @@ enum SalemXStage2FSimulatorSignalingDebug {
                 "receiver_join_existing_call_requested=\(receiverJoinExistingCallRequested)",
                 "receiver_element_call_ready=\(receiverElementCallReady)",
                 "receiver_element_call_loaded=\(receiverElementCallLoaded)",
+                "receiver_widget_join_received=\(receiverWidgetJoinReceived)",
+                "receiver_widget_join_acknowledged=\(receiverWidgetJoinAcknowledged)",
+                "receiver_widget_join_driver_response_received=\(receiverWidgetJoinDriverResponseReceived)",
+                "receiver_widget_join_dispatch_attempted=\(receiverWidgetJoinDispatchAttempted)",
+                "receiver_widget_join_dispatch_completed=\(receiverWidgetJoinDispatchCompleted)",
+                "receiver_widget_join_dispatch_error_bucket=\(receiverWidgetJoinDispatchErrorBucket)",
                 "receiver_matrixrtc_join_started=\(receiverMatrixRTCJoinStarted)",
-                "receiver_membership_send_attempted=\(receiverMembershipSendAttempted)",
-                "receiver_membership_send_completed=\(receiverMembershipSendCompleted)",
-                "receiver_membership_send_error_bucket=\(receiverMembershipSendErrorBucket)",
+                "receiver_membership_send_marker_semantics=widget_driver_dispatch_only",
+                "receiver_membership_send_attempted=\(receiverWidgetJoinDispatchAttempted)",
+                "receiver_membership_send_completed=\(receiverWidgetJoinDispatchCompleted)",
+                "receiver_membership_send_error_bucket=\(receiverWidgetJoinDispatchErrorBucket)",
                 "receiver_matrixrtc_membership_published=\(receiverMatrixRTCMembershipPublished)",
                 "receiver_remote_participant_seen=\(receiverRemoteParticipantSeen)",
                 "matrixrtc_two_participants_seen=\(matrixRTCTwoParticipantsSeen)",
