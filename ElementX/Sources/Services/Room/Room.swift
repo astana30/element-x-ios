@@ -14,7 +14,12 @@ extension RoomProtocol {
         
         if isDirectRoom {
             if await hasActiveRoomCall() {
-                return .joinExisting
+                switch startMode {
+                case .audio:
+                    return .joinExistingDmVoice
+                case .video:
+                    return .joinExistingDm
+                }
             }
 
             // Direct calls should behave like regular 1:1 calls instead of persistent
