@@ -42,6 +42,13 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             "/livekit/jwt"
         ]
     }
+
+    private struct RTCTransportDiagnosticsScript {
+        let setup: String
+        let fetchObserverPrefix: String
+        let fetchObserverSuffix: String
+        let xmlHTTPRequest: String
+    }
     
     private let elementCallService: ElementCallServiceProtocol
     private let configuration: ElementCallConfiguration
@@ -278,6 +285,19 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     }
 
     private func handleElementCallMediaDiagnostics(message: String) {
+        #if DEBUG
+        if configuration.startMode == .audio,
+           let payload = ElementCallRTCTransportDiagnosticsPayload.decode(message: message) {
+            switch payload.stage {
+            case .request:
+                SalemXStage2FSimulatorSignalingDebug.recordReceiverRTCTransportCredentialsRequested()
+            case .response:
+                SalemXStage2FSimulatorSignalingDebug.recordReceiverRTCTransportCredentialsResponse(httpStatus: payload.httpStatus)
+            }
+            return
+        }
+        #endif
+
         guard configuration.startMode == .video,
               let payload = ElementCallWebMediaDiagnosticsPayload.decode(message: message) else {
             return
@@ -891,6 +911,8 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         guard let liveKitServiceURLLiteral else {
             return nil
         }
+
+        let diagnostics = makeRTCTransportDiagnosticsScript()
         
         let authorizationScript: String
         if let clientProxy = clientProxy as? ClientProxy,
@@ -925,13 +947,13 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                 "                return originalFetch(input, init);",
                 "            }",
                 "            if (input instanceof Request) {",
-                "                return originalFetch(new Request(input, Object.assign({}, init || {}, {",
+                "                return \(diagnostics.fetchObserverPrefix)originalFetch(new Request(input, Object.assign({}, init || {}, {",
                 "                    headers: addAuthorizationHeader((init && init.headers) || input.headers)",
-                "                })));",
+                "                })))\(diagnostics.fetchObserverSuffix);",
                 "            }",
-                "            return originalFetch(input, Object.assign({}, init || {}, {",
+                "            return \(diagnostics.fetchObserverPrefix)originalFetch(input, Object.assign({}, init || {}, {",
                 "                headers: addAuthorizationHeader(init && init.headers)",
-                "            }));",
+                "            }))\(diagnostics.fetchObserverSuffix);",
                 "        };",
                 "    }",
                 "    const originalOpen = XMLHttpRequest.prototype.open;",
@@ -950,6 +972,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                 "    };",
                 "    XMLHttpRequest.prototype.send = function(body) {",
                 "        if (this.__elementXShouldAuthorizeRTCTransports && !this.__elementXHasAuthorizationHeader) {",
+                diagnostics.xmlHTTPRequest,
                 "            originalSetRequestHeader.call(this, \"Authorization\", authorizationValue);",
                 "        }",
                 "        return originalSend.call(this, body);",
@@ -971,11 +994,52 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             "        }",
             "    ];",
             "    globalThis.SALEMX_getRTCTransports = async () => rtcTransports;",
+            diagnostics.setup,
             authorizationScript,
             "})();"
         ]
         .filter { !$0.isEmpty }
         .joined(separator: "\n")
+    }
+
+    private static func makeRTCTransportDiagnosticsScript() -> RTCTransportDiagnosticsScript {
+        #if DEBUG
+        let setup = [
+            "    const reportRTCTransport = (stage, httpStatus) => {",
+            "        try {",
+            "            const handler = window.webkit?.messageHandlers?.elementCallMediaDiagnostics;",
+            "            if (!handler) return;",
+            "            const payload = { schemaVersion: 1, kind: \"rtc_transport\", stage };",
+            "            if (Number.isInteger(httpStatus) && httpStatus >= 100 && httpStatus <= 599) {",
+            "                payload.httpStatus = httpStatus;",
+            "            }",
+            "            handler.postMessage(JSON.stringify(payload));",
+            "        } catch {}",
+            "    };",
+            "    const observeRTCTransportRequest = (request) => {",
+            "        reportRTCTransport(\"request\");",
+            "        return request.then((response) => {",
+            "            reportRTCTransport(\"response\", response.status);",
+            "            return response;",
+            "        }, (error) => {",
+            "            reportRTCTransport(\"response\");",
+            "            throw error;",
+            "        });",
+            "    };"
+        ].joined(separator: "\n")
+        let xmlHTTPRequest = [
+            "            reportRTCTransport(\"request\");",
+            "            this.addEventListener(\"loadend\", () => {",
+            "                reportRTCTransport(\"response\", this.status);",
+            "            }, { once: true });"
+        ].joined(separator: "\n")
+        return RTCTransportDiagnosticsScript(setup: setup,
+                                             fetchObserverPrefix: "observeRTCTransportRequest(",
+                                             fetchObserverSuffix: ")",
+                                             xmlHTTPRequest: xmlHTTPRequest)
+        #else
+        return RTCTransportDiagnosticsScript(setup: "", fetchObserverPrefix: "", fetchObserverSuffix: "", xmlHTTPRequest: "")
+        #endif
     }
     
     private static func javaScriptStringLiteral(_ value: String) -> String? {

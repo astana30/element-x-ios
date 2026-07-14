@@ -788,6 +788,9 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
         #expect(source.contains("receiver_membership_state_send_completed=\\(receiverMembershipStateSendCompleted)"))
         #expect(source.contains("receiver_membership_state_send_http_bucket=\\(receiverMembershipStateSendHTTPBucket)"))
         #expect(source.contains("receiver_membership_present_on_synapse=\\(receiverMembershipPresentOnSynapse)"))
+        #expect(source.contains("receiver_matrixrtc_credentials_requested=\\(receiverMatrixRTCCredentialsRequested)"))
+        #expect(source.contains("receiver_matrixrtc_credentials_2xx=\\(receiverMatrixRTCCredentials2xx)"))
+        #expect(source.contains("receiver_matrixrtc_credentials_http_bucket=\\(receiverMatrixRTCCredentialsHTTPBucket)"))
         #expect(source.contains("receiver_matrixrtc_membership_published=\\(receiverMatrixRTCMembershipPublished)"))
         #expect(source.contains("receiver_remote_participant_seen=\\(receiverRemoteParticipantSeen)"))
         #expect(source.contains("matrixrtc_two_participants_seen=\\(matrixRTCTwoParticipantsSeen)"))
@@ -832,6 +835,8 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
         SalemXStage2FSimulatorSignalingDebug.recordReceiverWidgetJoinDispatchCompleted()
         SalemXStage2FSimulatorSignalingDebug.recordReceiverMembershipStateSendAttempted()
         SalemXStage2FSimulatorSignalingDebug.recordReceiverMembershipStateSendCompleted()
+        SalemXStage2FSimulatorSignalingDebug.recordReceiverRTCTransportCredentialsRequested()
+        SalemXStage2FSimulatorSignalingDebug.recordReceiverRTCTransportCredentialsResponse(httpStatus: 200)
 
         var proof = try stage2FSimulatorProofText()
         #expect(proof.contains("receiver_widget_join_received=true"))
@@ -845,6 +850,9 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
         #expect(proof.contains("receiver_membership_state_send_completed=true"))
         #expect(proof.contains("receiver_membership_state_send_http_bucket=2xx"))
         #expect(proof.contains("receiver_membership_present_on_synapse=true"))
+        #expect(proof.contains("receiver_matrixrtc_credentials_requested=true"))
+        #expect(proof.contains("receiver_matrixrtc_credentials_2xx=true"))
+        #expect(proof.contains("receiver_matrixrtc_credentials_http_bucket=2xx"))
 
         #expect(SalemXStage2FSimulatorSignalingDebug.handleURL(clearURL,
                                                                userSession: nil,
@@ -865,6 +873,9 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
         #expect(proof.contains("receiver_membership_state_send_completed=false"))
         #expect(proof.contains("receiver_membership_state_send_http_bucket=not_requested"))
         #expect(proof.contains("receiver_membership_present_on_synapse=false"))
+        #expect(proof.contains("receiver_matrixrtc_credentials_requested=false"))
+        #expect(proof.contains("receiver_matrixrtc_credentials_2xx=false"))
+        #expect(proof.contains("receiver_matrixrtc_credentials_http_bucket=not_requested"))
     }
 
     private func stage2FSimulatorSignalingDebugSource() throws -> String {

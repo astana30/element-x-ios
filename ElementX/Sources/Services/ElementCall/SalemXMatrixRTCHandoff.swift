@@ -7,6 +7,8 @@
 
 import Foundation
 
+// swiftlint:disable file_length
+
 #if DEBUG
 import CryptoKit
 #endif
@@ -891,6 +893,33 @@ enum SalemXStage2FSimulatorSignalingDebug {
         writeProof()
     }
 
+    static func recordReceiverRTCTransportCredentialsRequested() {
+        guard ProcessInfo.isSalemXStage2FSimulatorReceiverBridgeEnabled else {
+            return
+        }
+
+        proof.receiverMatrixRTCCredentialsRequested = true
+        if !proof.receiverMatrixRTCCredentials2xx {
+            proof.receiverMatrixRTCCredentialsHTTPBucket = "pending"
+        }
+        writeProof()
+    }
+
+    static func recordReceiverRTCTransportCredentialsResponse(httpStatus: Int?) {
+        guard ProcessInfo.isSalemXStage2FSimulatorReceiverBridgeEnabled else {
+            return
+        }
+
+        proof.receiverMatrixRTCCredentialsRequested = true
+        if let httpStatus, (200..<300).contains(httpStatus) {
+            proof.receiverMatrixRTCCredentials2xx = true
+            proof.receiverMatrixRTCCredentialsHTTPBucket = "2xx"
+        } else if !proof.receiverMatrixRTCCredentials2xx {
+            proof.receiverMatrixRTCCredentialsHTTPBucket = rtcTransportCredentialsHTTPBucket(status: httpStatus)
+        }
+        writeProof()
+    }
+
     static func recordMatrixRTCObservation(participantCount: Int,
                                            hasActiveCall: Bool,
                                            localParticipantPresent: Bool = false,
@@ -934,6 +963,31 @@ enum SalemXStage2FSimulatorSignalingDebug {
             return "unauthorized"
         case 403:
             return "forbidden"
+        case 409:
+            return "conflict"
+        case 429:
+            return "rate_limited"
+        case 500...599:
+            return "server_error"
+        case 400...499:
+            return "client_error"
+        default:
+            return "unexpected_status"
+        }
+    }
+
+    private static func rtcTransportCredentialsHTTPBucket(status: Int?) -> String {
+        guard let status else {
+            return "transport_failure"
+        }
+
+        switch status {
+        case 401:
+            return "unauthorized"
+        case 403:
+            return "forbidden"
+        case 404:
+            return "not_found"
         case 409:
             return "conflict"
         case 429:
@@ -1937,6 +1991,9 @@ enum SalemXStage2FSimulatorSignalingDebug {
         var receiverMembershipStateSendCompleted = false
         var receiverMembershipStateSendHTTPBucket = "not_requested"
         var receiverMembershipPresentOnSynapse = false
+        var receiverMatrixRTCCredentialsRequested = false
+        var receiverMatrixRTCCredentials2xx = false
+        var receiverMatrixRTCCredentialsHTTPBucket = "not_requested"
         var receiverMatrixRTCMembershipPublished = false
         var receiverRemoteParticipantSeen = false
         var matrixRTCTwoParticipantsSeen = false
@@ -2054,6 +2111,9 @@ enum SalemXStage2FSimulatorSignalingDebug {
                 "receiver_membership_state_send_completed=\(receiverMembershipStateSendCompleted)",
                 "receiver_membership_state_send_http_bucket=\(receiverMembershipStateSendHTTPBucket)",
                 "receiver_membership_present_on_synapse=\(receiverMembershipPresentOnSynapse)",
+                "receiver_matrixrtc_credentials_requested=\(receiverMatrixRTCCredentialsRequested)",
+                "receiver_matrixrtc_credentials_2xx=\(receiverMatrixRTCCredentials2xx)",
+                "receiver_matrixrtc_credentials_http_bucket=\(receiverMatrixRTCCredentialsHTTPBucket)",
                 "receiver_matrixrtc_membership_published=\(receiverMatrixRTCMembershipPublished)",
                 "receiver_remote_participant_seen=\(receiverRemoteParticipantSeen)",
                 "matrixrtc_two_participants_seen=\(matrixRTCTwoParticipantsSeen)",

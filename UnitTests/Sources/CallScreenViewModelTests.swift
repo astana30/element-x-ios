@@ -74,6 +74,69 @@ final class CallScreenViewModelTests {
     }
 
     @Test
+    func elementCallRTCTransportDiagnosticsPayloadAcceptsOnlyRedactedContract() throws {
+        let request = try #require(ElementCallRTCTransportDiagnosticsPayload.decode(message: """
+        {"schemaVersion":1,"kind":"rtc_transport","stage":"request","ignored":"opaque-private-value"}
+        """))
+        #expect(request.stage == .request)
+        #expect(request.httpStatus == nil)
+
+        let response = try #require(ElementCallRTCTransportDiagnosticsPayload.decode(message: """
+        {"schemaVersion":1,"kind":"rtc_transport","stage":"response","httpStatus":200}
+        """))
+        #expect(response.stage == .response)
+        #expect(response.httpStatus == 200)
+
+        #expect(ElementCallRTCTransportDiagnosticsPayload.decode(message: """
+        {"schemaVersion":1,"kind":"other","stage":"request"}
+        """) == nil)
+    }
+
+    @Test
+    func audioRoomCallRecordsRTCTransportCredentialRequestAndResponse() async throws {
+        let harness = try makeAudioRoomCallViewModel()
+
+        setenv("SALEM_X_STAGE2F_SIM_RECEIVER_BRIDGE", "1", 1)
+        defer { unsetenv("SALEM_X_STAGE2F_SIM_RECEIVER_BRIDGE") }
+
+        let clearURL = try #require(URL(string: "kz.salemx.msg://direct-call/stage2f-sim/clear"))
+        #expect(SalemXStage2FSimulatorSignalingDebug.handleURL(clearURL,
+                                                               userSession: nil,
+                                                               userSessionFlowCoordinator: nil,
+                                                               elementCallService: ElementCallServiceMock(.init())))
+
+        harness.viewModel.context.send(viewAction: .elementCallMediaDiagnostics(message: """
+        {"schemaVersion":1,"kind":"rtc_transport","stage":"request"}
+        """))
+        await waitFor {
+            (try? self.stage2FSimulatorProofText().contains("receiver_matrixrtc_credentials_requested=true")) == true
+        }
+
+        var proof = try stage2FSimulatorProofText()
+        #expect(proof.contains("receiver_matrixrtc_credentials_2xx=false"))
+        #expect(proof.contains("receiver_matrixrtc_credentials_http_bucket=pending"))
+
+        harness.viewModel.context.send(viewAction: .elementCallMediaDiagnostics(message: """
+        {"schemaVersion":1,"kind":"rtc_transport","stage":"response","httpStatus":200}
+        """))
+        await waitFor {
+            (try? self.stage2FSimulatorProofText().contains("receiver_matrixrtc_credentials_2xx=true")) == true
+        }
+
+        proof = try stage2FSimulatorProofText()
+        #expect(proof.contains("receiver_matrixrtc_credentials_http_bucket=2xx"))
+
+        harness.viewModel.context.send(viewAction: .elementCallMediaDiagnostics(message: """
+        {"schemaVersion":1,"kind":"rtc_transport","stage":"response","httpStatus":503}
+        """))
+        proof = try stage2FSimulatorProofText()
+        #expect(proof.contains("receiver_matrixrtc_credentials_2xx=true"))
+        #expect(proof.contains("receiver_matrixrtc_credentials_http_bucket=2xx"))
+
+        harness.viewModel.stop()
+    }
+
+    @Test
     func roomCallEndCallSendsHangupToWidgetAndMatrixTermination() async throws {
         let harness = try makeAudioRoomCallViewModel()
 

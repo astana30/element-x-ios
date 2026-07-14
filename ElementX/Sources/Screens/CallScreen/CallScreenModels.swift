@@ -153,6 +153,56 @@ struct ElementCallWebMediaDiagnosticsPayload: Decodable, Equatable, CustomString
     }
 }
 
+enum ElementCallRTCTransportDiagnosticsStage: String, Decodable, Equatable {
+    case request
+    case response
+}
+
+struct ElementCallRTCTransportDiagnosticsPayload: Decodable, Equatable {
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case kind
+        case stage
+        case httpStatus
+    }
+
+    static let supportedSchemaVersion = 1
+    static let supportedKind = "rtc_transport"
+
+    let schemaVersion: Int
+    let stage: ElementCallRTCTransportDiagnosticsStage
+    let httpStatus: Int?
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 0
+        stage = try container.decode(ElementCallRTCTransportDiagnosticsStage.self, forKey: .stage)
+        let kind = try container.decode(String.self, forKey: .kind)
+        guard kind == Self.supportedKind else {
+            throw DecodingError.dataCorruptedError(forKey: .kind,
+                                                   in: container,
+                                                   debugDescription: "Unsupported RTC transport diagnostics kind")
+        }
+
+        if let decodedHTTPStatus = try container.decodeIfPresent(Int.self, forKey: .httpStatus),
+           (100...599).contains(decodedHTTPStatus) {
+            httpStatus = decodedHTTPStatus
+        } else {
+            httpStatus = nil
+        }
+    }
+
+    static func decode(message: String) -> Self? {
+        guard let data = message.data(using: .utf8),
+              let payload = try? JSONDecoder().decode(Self.self, from: data),
+              payload.schemaVersion == supportedSchemaVersion else {
+            return nil
+        }
+
+        return payload
+    }
+}
+
 /// Identifies each event handler used by the CallScreen webview
 ///
 /// The names of the enum need to always match the name of the handlers on the webview.
