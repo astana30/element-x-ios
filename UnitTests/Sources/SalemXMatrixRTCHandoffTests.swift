@@ -472,7 +472,7 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
     func stage2FReceiverRemoteActiveCallResolutionDoesNotRequireLocalElementCallRoom() throws {
         let source = try stage2FSimulatorSignalingDebugSource()
         let remoteStart = try #require(source.range(of: "private func salemXStage2FRemoteActiveCallEvidence")?.lowerBound)
-        let remoteEnd = try #require(source.range(of: "@MainActor\nenum SalemXStage2FSimulatorSignalingDebug")?.lowerBound)
+        let remoteEnd = try #require(source.range(of: "enum SalemXStage2FSimulatorSignalingDebug")?.lowerBound)
         let remoteSource = source[remoteStart..<remoteEnd]
 
         #expect(remoteSource.contains("info.hasRoomCall || !info.activeRoomCallParticipants.isEmpty"))
@@ -490,7 +490,7 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
         let timelineEnd = try #require(source.range(of: "private func salemXStage2FRemoteActiveCallEvent")?.lowerBound)
         let timelineSource = source[timelineStart..<timelineEnd]
         let stateStart = try #require(source.range(of: "private func salemXStage2FRemoteActiveCallEvent")?.lowerBound)
-        let stateEnd = try #require(source.range(of: "@MainActor\nenum SalemXStage2FSimulatorSignalingDebug")?.lowerBound)
+        let stateEnd = try #require(source.range(of: "enum SalemXStage2FSimulatorSignalingDebug")?.lowerBound)
         let stateSource = source[stateStart..<stateEnd]
 
         #expect(timelineSource.contains("roomProxy.timeline.timelineItemProvider.itemProxies"))
@@ -606,6 +606,99 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
     }
 
     @Test
+    func stage2FSimulatorExecutionNonceArmWritesHashOnlyCurrentNamespace() throws {
+        let nonce = "current-run-nonce"
+        let armURL = try #require(URL(string: "kz.salemx.msg://direct-call/stage2f-sim/arm-nonce?execution_nonce=\(nonce)"))
+        #expect(SalemXStage2FSimulatorSignalingDebug.handleURL(armURL,
+                                                               userSession: nil,
+                                                               userSessionFlowCoordinator: nil,
+                                                               elementCallService: ElementCallServiceMock(.init())))
+
+        let proof = try stage2FSimulatorProofText()
+        let fingerprint = try #require(SalemXStage2FSimulatorSignalingDebug.executionNonceFingerprint(for: nonce))
+
+        #expect(proof.contains("execution_nonce_present=true"))
+        #expect(proof.contains("execution_nonce_fingerprint=\(fingerprint)"))
+        #expect(proof.contains("execution_nonce_matches=true"))
+        #expect(!proof.contains(nonce))
+    }
+
+    @Test
+    func stage2FSimulatorClearRemovesExecutionNonceNamespaceAndStaleMarkers() throws {
+        let armURL = try #require(URL(string: "kz.salemx.msg://direct-call/stage2f-sim/arm-nonce?execution_nonce=stale-run"))
+        #expect(SalemXStage2FSimulatorSignalingDebug.handleURL(armURL,
+                                                               userSession: nil,
+                                                               userSessionFlowCoordinator: nil,
+                                                               elementCallService: ElementCallServiceMock(.init())))
+        SalemXStage2FSimulatorSignalingDebug.recordReceiverAnswerResult(.presentationAccepted)
+
+        let clearURL = try #require(URL(string: "kz.salemx.msg://direct-call/stage2f-sim/clear"))
+        #expect(SalemXStage2FSimulatorSignalingDebug.handleURL(clearURL,
+                                                               userSession: nil,
+                                                               userSessionFlowCoordinator: nil,
+                                                               elementCallService: ElementCallServiceMock(.init())))
+
+        let proof = try stage2FSimulatorProofText()
+
+        #expect(proof.contains("execution_nonce_present=false"))
+        #expect(proof.contains("execution_nonce_fingerprint=none"))
+        #expect(proof.contains("execution_nonce_matches=false"))
+        #expect(proof.contains("receiver_callkit_answered=false"))
+        #expect(proof.contains("receiver_present_existing_selected=false"))
+        #expect(proof.contains("last_failure=none"))
+    }
+
+    @Test
+    func stage2FSimulatorNewNonceRejectsOldMarkers() throws {
+        let oldNonce = "old-run"
+        let newNonce = "new-run"
+        let oldURL = try #require(URL(string: "kz.salemx.msg://direct-call/stage2f-sim/arm-nonce?execution_nonce=\(oldNonce)"))
+        let newURL = try #require(URL(string: "kz.salemx.msg://direct-call/stage2f-sim/arm-nonce?execution_nonce=\(newNonce)"))
+        #expect(SalemXStage2FSimulatorSignalingDebug.handleURL(oldURL,
+                                                               userSession: nil,
+                                                               userSessionFlowCoordinator: nil,
+                                                               elementCallService: ElementCallServiceMock(.init())))
+        SalemXStage2FSimulatorSignalingDebug.recordReceiverAnswerResult(.presentationAccepted)
+
+        #expect(SalemXStage2FSimulatorSignalingDebug.handleURL(newURL,
+                                                               userSession: nil,
+                                                               userSessionFlowCoordinator: nil,
+                                                               elementCallService: ElementCallServiceMock(.init())))
+
+        let proof = try stage2FSimulatorProofText()
+        let newFingerprint = try #require(SalemXStage2FSimulatorSignalingDebug.executionNonceFingerprint(for: newNonce))
+        let oldFingerprint = try #require(SalemXStage2FSimulatorSignalingDebug.executionNonceFingerprint(for: oldNonce))
+
+        #expect(proof.contains("execution_nonce_fingerprint=\(newFingerprint)"))
+        #expect(!proof.contains("execution_nonce_fingerprint=\(oldFingerprint)"))
+        #expect(proof.contains("receiver_callkit_answered=false"))
+        #expect(proof.contains("receiver_present_existing_selected=false"))
+    }
+
+    @Test
+    func stage2FSimulatorReceiverPreInviteGateRejectsMissingOrMismatchedNonce() throws {
+        let nonce = "current-gate"
+        let proof = try currentRunReceiverProofText(nonce: nonce)
+
+        #expect(!SalemXStage2FSimulatorSignalingDebug.receiverCurrentRunPreInviteProofAccepted(proof,
+                                                                                               expectedExecutionNonce: "other-gate"))
+        #expect(!SalemXStage2FSimulatorSignalingDebug.receiverCurrentRunPreInviteProofAccepted(proof,
+                                                                                               expectedExecutionNonce: " "))
+        #expect(!SalemXStage2FSimulatorSignalingDebug.receiverCurrentRunPreInviteProofAccepted(proof.replacing("execution_nonce_matches=true",
+                                                                                                               with: "execution_nonce_matches=false"),
+                                                                                               expectedExecutionNonce: nonce))
+    }
+
+    @Test
+    func stage2FSimulatorReceiverPreInviteGateAcceptsCurrentRunProof() throws {
+        let nonce = "accepted-gate"
+        let proof = try currentRunReceiverProofText(nonce: nonce)
+
+        #expect(SalemXStage2FSimulatorSignalingDebug.receiverCurrentRunPreInviteProofAccepted(proof,
+                                                                                              expectedExecutionNonce: nonce))
+    }
+
+    @Test
     func stage2FSimulatorForegroundOnlyResponseAcceptsCurrentAttempt() {
         let payload = foregroundOnlyPayload()
 
@@ -714,6 +807,26 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
         ]
         payload.merge(overrides) { _, new in new }
         return payload
+    }
+
+    private func currentRunReceiverProofText(nonce: String, overrides: [String: String] = [:]) throws -> String {
+        let fingerprint = try #require(SalemXStage2FSimulatorSignalingDebug.executionNonceFingerprint(for: nonce))
+        var fields = [
+            "execution_nonce_present": "true",
+            "execution_nonce_fingerprint": fingerprint,
+            "execution_nonce_matches": "true",
+            "receiver_same_credential_whoami_succeeded": "true",
+            "foreground_stream_active": "true",
+            "foreground_stream_ready": "true",
+            "delivery_attempt_id_present": "false",
+            "receiver_callkit_incoming_reported": "false",
+            "receiver_callkit_answer_action_seen": "false"
+        ]
+        fields.merge(overrides) { _, new in new }
+        return fields
+            .sorted { $0.key < $1.key }
+            .map { "\($0.key)=\($0.value)" }
+            .joined(separator: "\n")
     }
 }
 

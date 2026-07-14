@@ -7,6 +7,10 @@
 
 import Foundation
 
+#if DEBUG
+import CryptoKit
+#endif
+
 enum SalemXMatrixRTCHandoffDirection: Equatable, CustomStringConvertible {
     case incoming
     case outgoing
@@ -629,6 +633,7 @@ private func salemXStage2FRemoteActiveCallEvidence(roomID: String,
 }
 
 @MainActor
+// swiftlint:disable:next type_body_length
 enum SalemXStage2FSimulatorSignalingDebug {
     private static let streamPath = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/stream"
     private static let invitePath = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/invite"
@@ -643,6 +648,7 @@ enum SalemXStage2FSimulatorSignalingDebug {
     private static var proof = Proof()
     private static var senderContext: SenderContext?
     private static var receiverTransport: ForegroundCallSignalingSSETransport?
+    private static var receiverExecutionNonce: String?
     private static var receiverInviteCount = 0
     private static var receiverCallKitEndReportCount = 0
 
@@ -692,14 +698,29 @@ enum SalemXStage2FSimulatorSignalingDebug {
         switch path {
         case "/direct-call/stage2f-sim/clear":
             clear()
+        case "/direct-call/stage2f-sim/arm-nonce":
+            armExecutionNonce(queryItems["execution_nonce"])
         case "/direct-call/stage2f-sim/export-identity":
             exportIdentity(userSession: userSession)
         case "/direct-call/stage2f-sim/receiver-start":
-            Task { await startReceiver(userSession: userSession, streamURLString: queryItems["stream_url"]) }
+            Task {
+                guard validateReceiverExecutionNonce(queryItems["execution_nonce"]) else {
+                    return
+                }
+                await startReceiver(userSession: userSession, streamURLString: queryItems["stream_url"])
+            }
         case "/direct-call/stage2f-sim/receiver-auth-preflight":
-            Task { await preflightReceiverAuthentication(userSession: userSession) }
+            Task {
+                guard validateReceiverExecutionNonce(queryItems["execution_nonce"]) else {
+                    return
+                }
+                await preflightReceiverAuthentication(userSession: userSession)
+            }
         case "/direct-call/stage2f-sim/receiver-claim-report":
             Task {
+                guard validateReceiverExecutionNonce(queryItems["execution_nonce"]) else {
+                    return
+                }
                 await claimReceiverMetadataAndReportCallKit(userSession: userSession,
                                                             elementCallService: elementCallService,
                                                             metadataReference: queryItems["pending_metadata_reference"],
@@ -808,6 +829,7 @@ enum SalemXStage2FSimulatorSignalingDebug {
     private static func clear() {
         proof = Proof()
         senderContext = nil
+        receiverExecutionNonce = nil
         receiverInviteCount = 0
         receiverCallKitEndReportCount = 0
         receiverTransport?.stop()
@@ -816,6 +838,60 @@ enum SalemXStage2FSimulatorSignalingDebug {
         try? FileManager.default.removeItem(at: documentsURL(fileName: identityHandoffFileName))
         try? FileManager.default.removeItem(at: documentsURL(fileName: senderHandoffFileName))
         writeProof()
+    }
+
+    private static func armExecutionNonce(_ nonce: String?) {
+        guard let nonce = safeNonEmpty(nonce),
+              let fingerprint = executionNonceFingerprint(for: nonce) else {
+            proof = Proof()
+            receiverExecutionNonce = nil
+            proof.receiverDebugBridgeOverrideActive = ProcessInfo.isSalemXStage2FSimulatorReceiverBridgeEnabled
+            proof.executionNoncePresent = false
+            proof.executionNonceMatches = false
+            proof.lastFailure = "executionNonceMissing"
+            writeProof()
+            return
+        }
+
+        proof = Proof()
+        senderContext = nil
+        receiverExecutionNonce = nonce
+        receiverInviteCount = 0
+        receiverCallKitEndReportCount = 0
+        receiverTransport?.stop()
+        receiverTransport = nil
+        bootstrapStore.removeAll()
+        proof.receiverDebugBridgeOverrideActive = ProcessInfo.isSalemXStage2FSimulatorReceiverBridgeEnabled
+        proof.executionNoncePresent = true
+        proof.executionNonceFingerprint = fingerprint
+        proof.executionNonceMatches = true
+        proof.lastFailure = "none"
+        writeProof()
+    }
+
+    private static func validateReceiverExecutionNonce(_ nonce: String?) -> Bool {
+        guard let nonce = safeNonEmpty(nonce),
+              let fingerprint = executionNonceFingerprint(for: nonce) else {
+            proof.executionNonceMatches = false
+            proof.lastFailure = "executionNonceMissing"
+            writeProof()
+            return false
+        }
+
+        guard receiverExecutionNonce == nonce,
+              proof.executionNonceFingerprint == fingerprint else {
+            proof.executionNoncePresent = receiverExecutionNonce != nil
+            proof.executionNonceMatches = false
+            proof.lastFailure = "executionNonceMismatch"
+            writeProof()
+            return false
+        }
+
+        proof.executionNoncePresent = true
+        proof.executionNonceMatches = true
+        proof.lastFailure = "none"
+        writeProof()
+        return true
     }
 
     private static func exportIdentity(userSession: UserSessionProtocol?) {
@@ -1422,6 +1498,32 @@ enum SalemXStage2FSimulatorSignalingDebug {
         return "B" + "earer " + accessToken
     }
 
+    static func executionNonceFingerprint(for nonce: String?) -> String? {
+        guard let nonce = safeNonEmpty(nonce) else {
+            return nil
+        }
+
+        let digest = SHA256.hash(data: Data("salemx.stage2f.sim.\(nonce)".utf8))
+        return String(digest.map { String(format: "%02x", $0) }.joined().prefix(16))
+    }
+
+    static func receiverCurrentRunPreInviteProofAccepted(_ proofText: String, expectedExecutionNonce: String) -> Bool {
+        guard let expectedFingerprint = executionNonceFingerprint(for: expectedExecutionNonce) else {
+            return false
+        }
+
+        let fields = proofFields(from: proofText)
+        return fields["execution_nonce_present"] == "true" &&
+            fields["execution_nonce_fingerprint"] == expectedFingerprint &&
+            fields["execution_nonce_matches"] == "true" &&
+            fields["receiver_same_credential_whoami_succeeded"] == "true" &&
+            fields["foreground_stream_active"] == "true" &&
+            fields["foreground_stream_ready"] == "true" &&
+            fields["delivery_attempt_id_present"] == "false" &&
+            fields["receiver_callkit_incoming_reported"] == "false" &&
+            fields["receiver_callkit_answer_action_seen"] == "false"
+    }
+
     private static func httpJSON(url: URL,
                                  method: String,
                                  accessToken: String,
@@ -1494,6 +1596,16 @@ enum SalemXStage2FSimulatorSignalingDebug {
         return trimmed?.isEmpty == false ? trimmed : nil
     }
 
+    private static func proofFields(from proofText: String) -> [String: String] {
+        proofText.split(separator: "\n").reduce(into: [String: String]()) { fields, line in
+            let parts = line.split(separator: "=", maxSplits: 1).map(String.init)
+            guard parts.count == 2 else {
+                return
+            }
+            fields[parts[0]] = parts[1]
+        }
+    }
+
     private static func documentsURL(fileName: String) -> URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appending(component: fileName)
@@ -1563,6 +1675,9 @@ enum SalemXStage2FSimulatorSignalingDebug {
     private struct Proof {
         var bridgeDefaultOff = SalemXEmbeddedCallAnswerBridgeConfiguration().embeddedMatrixRTCAnswerBridgeEnabled == false
         var receiverDebugBridgeOverrideActive = false
+        var executionNoncePresent = false
+        var executionNonceFingerprint = "none"
+        var executionNonceMatches = false
         var authenticatedSessionPresent = false
         var receiverAuthenticatedSessionPresent = false
         var simulatorSenderAuthenticatedSessionPresent = false
@@ -1649,6 +1764,9 @@ enum SalemXStage2FSimulatorSignalingDebug {
                 "stage2f_sim_debug_adapter_present=true",
                 "bridge_default_off=\(bridgeDefaultOff)",
                 "receiver_debug_override_active=\(receiverDebugBridgeOverrideActive)",
+                "execution_nonce_present=\(executionNoncePresent)",
+                "execution_nonce_fingerprint=\(executionNonceFingerprint)",
+                "execution_nonce_matches=\(executionNonceMatches)",
                 "authenticated_session_present=\(authenticatedSessionPresent)",
                 "receiver_authenticated_session_present=\(receiverAuthenticatedSessionPresent)",
                 "simulator_sender_session_present=\(simulatorSenderAuthenticatedSessionPresent)",
