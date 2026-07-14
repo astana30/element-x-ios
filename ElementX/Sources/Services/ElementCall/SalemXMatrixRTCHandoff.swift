@@ -740,6 +740,7 @@ enum SalemXStage2FSimulatorSignalingDebug {
         proof.receiverPresentExistingSelected = true
         proof.receiverStartNewSelected = false
         proof.receiverEmbeddedElementCallPresented = true
+        proof.lastFailure = "none"
         writeProof()
     }
 

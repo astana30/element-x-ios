@@ -670,8 +670,35 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
         #expect(source.contains("duplicate_callkit_end_reported=\\(duplicateCallKitEndReported)"))
     }
 
+    @Test
+    func stage2FSimulatorProofClearsStaleAnswerFailureAfterSuccess() throws {
+        let clearURL = try #require(URL(string: "kz.salemx.msg://direct-call/stage2f-sim/clear"))
+        #expect(SalemXStage2FSimulatorSignalingDebug.handleURL(clearURL,
+                                                               userSession: nil,
+                                                               userSessionFlowCoordinator: nil,
+                                                               elementCallService: ElementCallServiceMock(.init())))
+
+        SalemXStage2FSimulatorSignalingDebug.recordReceiverAnswerResult(.timedOut)
+        var proof = try stage2FSimulatorProofText()
+        #expect(proof.contains("last_failure=timedOut"))
+
+        SalemXStage2FSimulatorSignalingDebug.recordReceiverAnswerResult(.presentationAccepted)
+        proof = try stage2FSimulatorProofText()
+
+        #expect(proof.contains("receiver_callkit_answered=true"))
+        #expect(proof.contains("receiver_present_existing_selected=true"))
+        #expect(proof.contains("last_failure=none"))
+        #expect(!proof.contains("last_failure=timedOut"))
+    }
+
     private func stage2FSimulatorSignalingDebugSource() throws -> String {
         try SalemXEmbeddedCallAnswerBridgeTests.source(named: "ElementX/Sources/Services/ElementCall/SalemXMatrixRTCHandoff.swift")
+    }
+
+    private func stage2FSimulatorProofText() throws -> String {
+        let proofURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("salemx-stage2f-sim-proof.txt")
+        return try String(contentsOf: proofURL, encoding: .utf8)
     }
 
     private func foregroundOnlyPayload(overrides: [String: Any] = [:]) -> [String: Any] {
