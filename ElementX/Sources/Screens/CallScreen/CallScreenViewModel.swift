@@ -722,10 +722,20 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     }
 
     private func forwardWidgetJoinRequestToDriver(_ message: String) async {
+        #if DEBUG
+        SalemXStage2FSimulatorSignalingDebug.recordReceiverMembershipSendAttempted()
+        #endif
+
         switch await widgetDriver.handleMessage(message) {
         case .success:
+            #if DEBUG
+            SalemXStage2FSimulatorSignalingDebug.recordReceiverMembershipSendCompleted()
+            #endif
             MXLog.info("Element Call media diagnostics: widget_join_forwarded_to_driver=true start_mode=\(configuration.startMode)")
         case .failure(let error):
+            #if DEBUG
+            SalemXStage2FSimulatorSignalingDebug.recordReceiverMembershipSendError(error)
+            #endif
             MXLog.error("Element Call media diagnostics: widget_join_forwarded_to_driver=false error=\(error) start_mode=\(configuration.startMode)")
         }
     }

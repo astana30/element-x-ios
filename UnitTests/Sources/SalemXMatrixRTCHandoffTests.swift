@@ -759,6 +759,9 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
         #expect(source.contains("receiver_element_call_ready=\\(receiverElementCallReady)"))
         #expect(source.contains("receiver_element_call_loaded=\\(receiverElementCallLoaded)"))
         #expect(source.contains("receiver_matrixrtc_join_started=\\(receiverMatrixRTCJoinStarted)"))
+        #expect(source.contains("receiver_membership_send_attempted=\\(receiverMembershipSendAttempted)"))
+        #expect(source.contains("receiver_membership_send_completed=\\(receiverMembershipSendCompleted)"))
+        #expect(source.contains("receiver_membership_send_error_bucket=\\(receiverMembershipSendErrorBucket)"))
         #expect(source.contains("receiver_matrixrtc_membership_published=\\(receiverMatrixRTCMembershipPublished)"))
         #expect(source.contains("receiver_remote_participant_seen=\\(receiverRemoteParticipantSeen)"))
         #expect(source.contains("matrixrtc_two_participants_seen=\\(matrixRTCTwoParticipantsSeen)"))
@@ -788,6 +791,30 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
         #expect(proof.contains("receiver_present_existing_selected=true"))
         #expect(proof.contains("last_failure=none"))
         #expect(!proof.contains("last_failure=timedOut"))
+    }
+
+    @Test
+    func stage2FSimulatorProofClearResetsMembershipSendMarkers() throws {
+        let clearURL = try #require(URL(string: "kz.salemx.msg://direct-call/stage2f-sim/clear"))
+        setenv("SALEM_X_STAGE2F_SIM_RECEIVER_BRIDGE", "1", 1)
+        defer { unsetenv("SALEM_X_STAGE2F_SIM_RECEIVER_BRIDGE") }
+
+        SalemXStage2FSimulatorSignalingDebug.recordReceiverMembershipSendAttempted()
+        SalemXStage2FSimulatorSignalingDebug.recordReceiverMembershipSendCompleted()
+
+        var proof = try stage2FSimulatorProofText()
+        #expect(proof.contains("receiver_membership_send_attempted=true"))
+        #expect(proof.contains("receiver_membership_send_completed=true"))
+
+        #expect(SalemXStage2FSimulatorSignalingDebug.handleURL(clearURL,
+                                                               userSession: nil,
+                                                               userSessionFlowCoordinator: nil,
+                                                               elementCallService: ElementCallServiceMock(.init())))
+
+        proof = try stage2FSimulatorProofText()
+        #expect(proof.contains("receiver_membership_send_attempted=false"))
+        #expect(proof.contains("receiver_membership_send_completed=false"))
+        #expect(proof.contains("receiver_membership_send_error_bucket=not_requested"))
     }
 
     private func stage2FSimulatorSignalingDebugSource() throws -> String {

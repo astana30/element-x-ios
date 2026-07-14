@@ -157,6 +157,15 @@ final class CallScreenViewModelTests {
             return true
         }
 
+        setenv("SALEM_X_STAGE2F_SIM_RECEIVER_BRIDGE", "1", 1)
+        defer { unsetenv("SALEM_X_STAGE2F_SIM_RECEIVER_BRIDGE") }
+
+        let clearURL = try #require(URL(string: "kz.salemx.msg://direct-call/stage2f-sim/clear"))
+        #expect(SalemXStage2FSimulatorSignalingDebug.handleURL(clearURL,
+                                                               userSession: nil,
+                                                               userSessionFlowCoordinator: nil,
+                                                               elementCallService: ElementCallServiceMock(.init())))
+
         let joinMessage = """
         {"api":"fromWidget","action":"io.element.join","widgetId":"call-widget","requestId":"join-request","data":{}}
         """
@@ -170,6 +179,42 @@ final class CallScreenViewModelTests {
         #expect(evaluatedScripts.count == 1)
         #expect(evaluatedScripts[0].contains("\"requestId\":\"join-request\""))
         #expect(evaluatedScripts[0].contains("\"response\""))
+
+        let proof = try stage2FSimulatorProofText()
+        #expect(proof.contains("receiver_membership_send_attempted=true"))
+        #expect(proof.contains("receiver_membership_send_completed=true"))
+        #expect(proof.contains("receiver_membership_send_error_bucket=none"))
+
+        harness.viewModel.stop()
+    }
+
+    @Test
+    func roomCallJoinActionRecordsMembershipSendFailureBucketWhenWidgetDriverFails() async throws {
+        let harness = try makeAudioRoomCallViewModel()
+        harness.widgetDriver.handleMessageReturnValue = .failure(.driverNotSetup)
+
+        setenv("SALEM_X_STAGE2F_SIM_RECEIVER_BRIDGE", "1", 1)
+        defer { unsetenv("SALEM_X_STAGE2F_SIM_RECEIVER_BRIDGE") }
+
+        let clearURL = try #require(URL(string: "kz.salemx.msg://direct-call/stage2f-sim/clear"))
+        #expect(SalemXStage2FSimulatorSignalingDebug.handleURL(clearURL,
+                                                               userSession: nil,
+                                                               userSessionFlowCoordinator: nil,
+                                                               elementCallService: ElementCallServiceMock(.init())))
+
+        let joinMessage = """
+        {"api":"fromWidget","action":"io.element.join","widgetId":"call-widget","requestId":"join-request","data":{}}
+        """
+
+        harness.viewModel.context.send(viewAction: .widgetAction(message: joinMessage))
+        await waitFor {
+            harness.widgetDriver.handleMessageCallsCount == 1
+        }
+
+        let proof = try stage2FSimulatorProofText()
+        #expect(proof.contains("receiver_membership_send_attempted=true"))
+        #expect(proof.contains("receiver_membership_send_completed=false"))
+        #expect(proof.contains("receiver_membership_send_error_bucket=driverNotSetup"))
 
         harness.viewModel.stop()
     }
@@ -229,5 +274,11 @@ final class CallScreenViewModelTests {
             }
             try? await Task.sleep(for: .milliseconds(50))
         }
+    }
+
+    private func stage2FSimulatorProofText() throws -> String {
+        let proofURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("salemx-stage2f-sim-proof.txt")
+        return try String(contentsOf: proofURL, encoding: .utf8)
     }
 }
